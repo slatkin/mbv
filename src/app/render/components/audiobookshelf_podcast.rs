@@ -270,8 +270,13 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     wide_hero_browser_border(frame, list_panel, focused);
 
     show_list.set_geometry(list_panel, content_area);
+    // Highlight gating follows the cursor's sub-panel (design.md D5): the show
+    // rail marks its selected show only while it, not the episode pane, holds
+    // the cursor. The panel FILLS keep following the library column's focus
+    // (`focused`) above.
+    let rail_focused = focused && !interaction.episode_focused;
     show_list.set_paint_policy(WideMediaListPaintPolicy::new(
-        focused,
+        rail_focused,
         SelectedRowSurface::ListBackdrop,
         None,
     ));
@@ -459,8 +464,10 @@ fn render_podcast_hero(
         // view (design.md D6); the painter only paints and retains the
         // current-frame hit geometry.
         episode_list.set_geometry(episode_area, episode_area);
+        // The episode pane marks its selected episode only while it holds the
+        // cursor (design.md D5); the show rail's highlight is the complement.
         episode_list.set_paint_policy(WideMediaListPaintPolicy::new(
-            focused,
+            focused && interaction.episode_focused,
             SelectedRowSurface::ListBackdrop,
             None,
         ));

@@ -507,3 +507,135 @@ fn podcast_viewport_anchor_round_trips_across_wide_narrow_wide() {
         "the selected-row screen offset returns to the wide arrangement"
     );
 }
+
+/// Whether any cell of `region` carries the media-list selected-row marker.
+fn region_has_selection_marker(
+    buffer: &ratatui::buffer::Buffer,
+    region: Rect,
+    glyph: &str,
+) -> bool {
+    (region.y..region.bottom())
+        .any(|y| (region.x..region.right()).any(|x| buffer[(x, y)].symbol() == glyph))
+}
+
+/// `unify-surface-colour` 3.3: the wide ABS podcast screen highlights the
+/// selected row of whichever sub-panel holds the cursor -- the show rail or
+/// the episode pane -- and never both, which is what "the selection moves
+/// inside a focused pane" requires. Every panel fill keeps following the
+/// library column's focus (row 3.2), so moving the cursor between the two
+/// sub-panels changes no fill.
+#[test]
+fn wide_podcast_selected_row_highlight_follows_the_cursor_subpanel() {
+    use crate::app::render::arrangements::wide_hero::{
+        wide_hero_browser_pane, PANE_PAD_X, PANE_PAD_Y,
+    };
+    use crate::app::render::components::list_rows::{selection_marker, MarkerEdge};
+    use tuirealm::component::Component;
+
+    // The marker the media-list painter writes on a focused selected row, and
+    // the roles it resolves: taken from the production primitive rather than
+    // hard-coded.
+    let marker = selection_marker(true, MarkerEdge::Left);
+    let marker_glyph = marker.content.to_string();
+    let marker_fg = marker.style.fg.expect("selected-row marker paints");
+    // Before 3.3 the show rail used the column focus for the paint policy, so
+    // it kept this marker while the episode pane held the cursor.
+    assert_ne!(
+        palette::list_selected_row_bg(),
+        palette::resolve_surface_focus(true),
+        "the selected-row surface must be distinguishable from a focused body"
+    );
+
+    let app = audiobookshelf_app();
+    let mut component = AudiobookshelfPodcastComponent::new();
+    if let Some(state) = app.audiobookshelf_browse.first() {
+        component.set_content(state, false);
+        component.set_focused(true);
+    }
+    let area = Rect::new(0, 0, 100, 30);
+    let mut term = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+
+    // Cursor on the show rail: only the show row is highlighted. The rail's
+    // single show is the first content row, flush with the panel edge.
+    term.draw(|f| component.view(f, area)).unwrap();
+    let browser = component.geometry().list_area;
+    let hero = component.geometry().hero_area;
+    let list_panel = wide_hero_browser_pane(browser, browser).list_panel;
+    assert!(
+        list_panel.width > 0 && hero.width > 0,
+        "the wide podcast layout must paint both panes"
+    );
+    let rail_selected = (list_panel.x, list_panel.y + PANE_PAD_Y);
+    let rail_fill = term.backend().buffer()[(list_panel.x, list_panel.y)].bg;
+    let hero_fill = term.backend().buffer()[(hero.x, hero.y)].bg;
+    assert_eq!(
+        rail_fill,
+        palette::resolve_surface_focus(true),
+        "show rail body follows the library column's focus"
+    );
+    assert_eq!(
+        hero_fill,
+        palette::resolve_surface_focus(true),
+        "hero pane follows the library column's focus"
+    );
+    assert_eq!(
+        term.backend().buffer()[rail_selected].symbol(),
+        marker_glyph.as_str(),
+        "the show rail marks its selected row while it holds the cursor"
+    );
+    assert_eq!(term.backend().buffer()[rail_selected].fg, marker_fg);
+    assert_eq!(
+        term.backend().buffer()[rail_selected].bg,
+        palette::list_selected_row_bg(),
+        "the marked show row punches through to its selected-row surface"
+    );
+    assert!(
+        component.episode_content_rect_for_test().is_none(),
+        "the episode pane paints no rows while the show rail holds the cursor"
+    );
+    assert!(
+        !region_has_selection_marker(term.backend().buffer(), hero, &marker_glyph),
+        "no episode selected row is marked while the show rail holds the cursor"
+    );
+
+    // Cursor in the episode pane: only the episode row is highlighted, and
+    // every fill is exactly what the rail-held position painted.
+    component.enter_episode_focus();
+    term.draw(|f| component.view(f, area)).unwrap();
+    let episode = component
+        .episode_content_rect_for_test()
+        .expect("the episode pane paints its rows while it holds the cursor");
+    let buffer = term.backend().buffer();
+    assert_eq!(
+        buffer[(list_panel.x, list_panel.y)].bg,
+        rail_fill,
+        "show rail body fill is unchanged when the episode pane takes the cursor"
+    );
+    assert_eq!(
+        buffer[(hero.x, hero.y)].bg,
+        hero_fill,
+        "hero pane fill is unchanged when the episode pane takes the cursor"
+    );
+    assert_eq!(
+        buffer[rail_selected].symbol(),
+        " ",
+        "the show rail no longer marks a selected row while the episode pane holds the cursor"
+    );
+    assert_eq!(
+        buffer[rail_selected].bg, rail_fill,
+        "the show rail's selected row is indistinguishable from its body"
+    );
+    // The episode owner's cursor sits on its first row.
+    let episode_selected = (episode.x, episode.y);
+    assert_eq!(
+        buffer[episode_selected].symbol(),
+        marker_glyph.as_str(),
+        "the episode pane marks its selected row while it holds the cursor"
+    );
+    assert_eq!(buffer[episode_selected].fg, marker_fg);
+    assert_eq!(
+        buffer[(episode.x.saturating_sub(PANE_PAD_X), episode.y)].bg,
+        palette::SURFACE_BACKDROP,
+        "the episode content box keeps its row-3.2 fill"
+    );
+}
