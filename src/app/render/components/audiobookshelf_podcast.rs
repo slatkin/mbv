@@ -270,9 +270,11 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     wide_hero_browser_border(frame, list_panel, focused);
 
     show_list.set_geometry(list_panel, content_area);
-    // Highlight gating follows the cursor's sub-panel (design.md D5): the show
-    // rail marks its selected show only while it, not the episode pane, holds
-    // the cursor. The panel FILLS keep following the library column's focus
+    // Highlight gating follows the cursor's sub-panel
+    // (openspec/changes/unify-surface-colour/specs/ui-design-language/spec.md,
+    // scenario "The selection moves inside a focused pane"): the show rail
+    // marks its selected show only while it, not the episode pane, holds the
+    // cursor. The panel FILLS keep following the library column's focus
     // (`focused`) above.
     let rail_focused = focused && !interaction.episode_focused;
     show_list.set_paint_policy(WideMediaListPaintPolicy::new(
@@ -465,7 +467,9 @@ fn render_podcast_hero(
         // current-frame hit geometry.
         episode_list.set_geometry(episode_area, episode_area);
         // The episode pane marks its selected episode only while it holds the
-        // cursor (design.md D5); the show rail's highlight is the complement.
+        // cursor, the complement of the show rail's mark
+        // (openspec/changes/unify-surface-colour/specs/ui-design-language/spec.md,
+        // scenario "The selection moves inside a focused pane").
         episode_list.set_paint_policy(WideMediaListPaintPolicy::new(
             focused && interaction.episode_focused,
             SelectedRowSurface::ListBackdrop,
