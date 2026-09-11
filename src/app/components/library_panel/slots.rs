@@ -16,6 +16,37 @@ use crate::app::render::{render_pill_bar, PillBar};
 
 use super::content::{ListControls, SelectorRow};
 
+/// Paints one pill-bar row from `labels` plus the active pill's index into
+/// `area`, pushing the painted pills' hitboxes into `hits` — the one shared
+/// pill-row painter for every panel site (Selector row, List controls row,
+/// pre-5.6 Workspace selector). `active: None` paints NO active pill (the
+/// `SelectorRow` contract in `content.rs`); an empty label list or a zero
+/// area paints nothing. The caller keeps its own `HitRegions` registry.
+pub(in crate::app) fn paint_pill_bar_row(
+    f: &mut Frame,
+    area: Rect,
+    labels: &[String],
+    active: Option<usize>,
+    hits: &mut HitRegions<usize>,
+) {
+    let ids: Vec<usize> = (0..labels.len()).collect();
+    // No active pill: a position past the end selects nothing, so every
+    // painted pill renders unselected.
+    let selected_pos = active.unwrap_or(labels.len());
+    for (rect, id) in render_pill_bar(
+        f,
+        area,
+        PillBar {
+            labels,
+            ids: &ids,
+            selected_pos,
+            prefix: None,
+        },
+    ) {
+        hits.push(rect, id);
+    }
+}
+
 /// Paints one Selector row: the single pill bar into `bar_area` — pushing
 /// the painted pills' hitboxes into `hits` — followed by the panel's spacer
 /// row. An empty pill list paints no bar (the row's place stays reserved for
@@ -28,20 +59,7 @@ pub(in crate::app) fn paint_selector_row(
     hits: &mut HitRegions<usize>,
 ) {
     if !row.pills.is_empty() && bar_area.height > 0 && bar_area.width > 0 {
-        let ids: Vec<usize> = (0..row.pills.len()).collect();
-        let selected = row.active.unwrap_or(0);
-        for (rect, id) in render_pill_bar(
-            f,
-            bar_area,
-            PillBar {
-                labels: &row.pills,
-                ids: &ids,
-                selected_pos: selected,
-                prefix: None,
-            },
-        ) {
-            hits.push(rect, id);
-        }
+        paint_pill_bar_row(f, bar_area, &row.pills, row.active, hits);
     }
     paint_pill_row_gap(f, spacer_area);
 }
@@ -75,19 +93,7 @@ pub(in crate::app) fn paint_list_controls_row(
     let area = Rect { height: 1, ..area };
     if let Some((pills, active)) = &controls.pills {
         if !pills.is_empty() {
-            let ids: Vec<usize> = (0..pills.len()).collect();
-            for (rect, id) in render_pill_bar(
-                f,
-                area,
-                PillBar {
-                    labels: pills,
-                    ids: &ids,
-                    selected_pos: *active,
-                    prefix: None,
-                },
-            ) {
-                hits.push(rect, id);
-            }
+            paint_pill_bar_row(f, area, pills, Some(*active), hits);
         }
     }
     if let Some(label) = &controls.label {
@@ -160,6 +166,39 @@ mod tests {
         // The spacer row paints the panel's gap band, not text.
         let gap_bg = palette::surface_colors(palette::Surface::PillRowGap, false).fill;
         assert_eq!(buf[(spacer.x, spacer.y)].bg, gap_bg);
+    }
+
+    #[test]
+    fn selector_row_with_active_none_paints_no_active_pill() {
+        let bar = Rect::new(2, 1, 20, 1);
+        let spacer = Rect::new(2, 2, 20, 1);
+        let row = SelectorRow {
+            pills: vec!["Movies".into(), "TV".into()],
+            active: None,
+        };
+        let mut hits = HitRegions::new();
+        let terminal = draw(24, 4, |f| {
+            paint_selector_row(f, bar, spacer, &row, &mut hits);
+        });
+        let buf = terminal.backend().buffer();
+        // Both pills paint (unselected); no cell anywhere in the bar carries
+        // the selected chip's surface, and every pill's label cell paints the
+        // unselected pill foreground.
+        assert!(text_in(buf, bar, "Movies") && text_in(buf, bar, "TV"));
+        assert_eq!(hits.regions().len(), 2, "both pills painted and retained");
+        for (rect, _) in hits.regions() {
+            for y in rect.top()..rect.bottom() {
+                for x in rect.left()..rect.right() {
+                    assert_ne!(
+                        buf[(x, y)].bg,
+                        palette::PILL_SELECTED_BG,
+                        "active: None must paint no active pill"
+                    );
+                }
+            }
+            let cell = &buf[(rect.x + 1, rect.y)];
+            assert_eq!(cell.style().fg, Some(palette::PILL_FG));
+        }
     }
 
     #[test]

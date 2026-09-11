@@ -9,7 +9,7 @@
 //! [`PanelList`] surface until task 5.8 formalizes the trait.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
@@ -17,14 +17,16 @@ use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::{
-    paint_wide_hero_text, place_media_list_below, render_inline_search, render_pill_bar,
-    render_placeholder, wide_hero_browser_border, wide_hero_browser_pane,
-    wide_hero_hero_content_box_with_surface, wide_hero_hero_pane, LeftPaneFocus, PillBar,
-    WideHeroContentBoxSurface, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
+    paint_wide_hero_text, place_media_list_below, render_inline_search, render_placeholder,
+    wide_hero_browser_border, wide_hero_browser_pane, wide_hero_hero_content_box_with_surface,
+    wide_hero_hero_pane, LeftPaneFocus, WideHeroContentBoxSurface, WrappedHeroLine, PANE_PAD_X,
+    PANE_PAD_Y,
 };
 
 use super::content::{LibraryPanelContent, ListSlot};
-use super::slots::{paint_list_controls_row, paint_pill_row_gap, paint_selector_row};
+use super::slots::{
+    paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
+};
 
 /// The skeleton's retained irregular-chrome hit registries, one per painted
 /// pill row (ADR 0024: the mounted panel owns gesture state and resolves the
@@ -60,16 +62,6 @@ pub(in crate::app) struct WideSkeletonGeometry {
     /// The Workspace box's (panel, content) rects, when one painted.
     pub workspace: Option<(Rect, Rect)>,
 }
-
-/// PRE-5.5 (task 5.5, design D5): the three meta colours the Emby headers
-/// already cycle; the header painter's `HERO_META_ROLES` theme roles land
-/// with the HeroHeader painter and replace this table.
-const PRE_HERO_META_ROLES: [Color; 3] = [
-    // Consts, not a per-call lookup: the roles are fixed by the theme.
-    palette::TEXT_DETAIL_META,
-    palette::TEXT_METADATA,
-    palette::TEXT_SECONDARY,
-];
 
 /// Paints the Wide Library panel skeleton into `area`. Returns the frame's
 /// role-rect geometry, or `None` when `area` does not fit the shared Wide
@@ -238,7 +230,8 @@ fn paint_pre_hero_placeholder(
     for (index, row) in facts.meta_rows.iter().enumerate() {
         lines.push(WrappedHeroLine {
             text: row,
-            style: Style::default().fg(PRE_HERO_META_ROLES[index % PRE_HERO_META_ROLES.len()]),
+            style: Style::default()
+                .fg(palette::PRE_HERO_META_ROLES[index % palette::PRE_HERO_META_ROLES.len()]),
         });
     }
     paint_wide_hero_text(f, hero_area, &lines)
@@ -261,20 +254,7 @@ fn paint_pre_workspace(
             ..workspace_rect
         };
         if !selector.pills.is_empty() && bar.height > 0 {
-            let ids: Vec<usize> = (0..selector.pills.len()).collect();
-            let selected = selector.active.unwrap_or(0);
-            for (rect, id) in render_pill_bar(
-                f,
-                bar,
-                PillBar {
-                    labels: &selector.pills,
-                    ids: &ids,
-                    selected_pos: selected,
-                    prefix: None,
-                },
-            ) {
-                hits.push(rect, id);
-            }
+            paint_pill_bar_row(f, bar, &selector.pills, selector.active, hits);
         }
         box_area = Rect {
             y: bar.bottom(),
@@ -481,6 +461,56 @@ mod wide_skeleton_tests {
     }
 
     #[test]
+    fn workspace_selector_with_active_none_paints_no_active_pill() {
+        let mut list = StubList::with_rows(vec!["Alpha"]);
+        let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
+        let mut content = LibraryPanelContent {
+            selector: None,
+            controls: None,
+            list: ListSlot::Media(&mut list),
+            hero: Some(HeroContent {
+                facts: hero_facts("Series"),
+                overview: None,
+                workspace: Some(Workspace {
+                    selector: Some(SelectorRow {
+                        pills: vec!["Seasons".into(), "Episodes".into()],
+                        active: None,
+                    }),
+                    list: &mut workspace_list,
+                    focused: true,
+                }),
+            }),
+        };
+        let (buf, _geo, hits) = draw_skeleton(&mut content);
+
+        // The workspace selector's pills paint and their hitboxes are kept;
+        // `active: None` paints no active pill — no cell in any retained
+        // pill rect carries the selected chip's surface, and every pill's
+        // label cell paints the unselected pill foreground.
+        assert_eq!(hits.workspace_selector.regions().len(), 2);
+        for (rect, _) in hits.workspace_selector.regions() {
+            for y in rect.top()..rect.bottom() {
+                for x in rect.left()..rect.right() {
+                    assert_ne!(
+                        buf[(x, y)].bg,
+                        palette::PILL_SELECTED_BG,
+                        "active: None must paint no active pill"
+                    );
+                }
+            }
+            let cell = &buf[(rect.x + 1, rect.y)];
+            assert_eq!(cell.style().fg, Some(palette::PILL_FG));
+        }
+        // A hit test inside a painted pill still resolves its index.
+        let (first_rect, first_id) = hits.workspace_selector.regions()[0];
+        let point = ratatui::layout::Position {
+            x: first_rect.x + 1,
+            y: first_rect.y,
+        };
+        assert_eq!(hits.workspace_selector.resolve(point), Some(&first_id));
+    }
+
+    #[test]
     fn focused_workspace_hero_uses_the_focused_surfaces() {
         let mut list = StubList::with_rows(vec!["Alpha"]);
         let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
@@ -643,9 +673,12 @@ mod wide_skeleton_tests {
             .unwrap();
         assert!(geometry.is_none());
         let buf = terminal.backend().buffer();
+        // Untouched: every cell still carries the empty terminal's style,
+        // compared relatively so no raw colour primitive is named here.
+        let untouched = buf[(0, 0)].bg;
         for y in 0..AREA.height {
             for x in 0..AREA.width {
-                assert_eq!(buf[(x, y)].bg, ratatui::style::Color::Reset);
+                assert_eq!(buf[(x, y)].bg, untouched);
             }
         }
     }
