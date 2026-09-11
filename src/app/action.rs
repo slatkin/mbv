@@ -20,6 +20,11 @@ use mbv_core::api::EmbyItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 
+/// The volume step the `-`/`+` keys dispatch and the `StatusBarPanel`
+/// volume pill's wheel mapping mirrors (single definition, review of
+/// tasks 2.1-2.2).
+pub(crate) const VOLUME_STEP: i64 = 5;
+
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Command {
     OpenIdleFeedLink,
@@ -151,8 +156,8 @@ pub(super) fn playback_command_for_key(
         KeyCode::Char('P') if gated => Some(Command::PreviousTrack),
         KeyCode::Char('z') if !ctrl => Some(Command::CycleOrToggleSubtitle),
         KeyCode::Char('m') => Some(Command::ToggleMute),
-        KeyCode::Char('-') => Some(Command::AdjustVolume(-5)),
-        KeyCode::Char('+') | KeyCode::Char('=') => Some(Command::AdjustVolume(5)),
+        KeyCode::Char('-') => Some(Command::AdjustVolume(-VOLUME_STEP)),
+        KeyCode::Char('+') | KeyCode::Char('=') => Some(Command::AdjustVolume(VOLUME_STEP)),
         KeyCode::Char('a') if gated && !ctrl => Some(Command::ToggleMuteOrCycleAudio),
         _ => None,
     }

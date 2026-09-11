@@ -102,11 +102,6 @@ impl Model {
                     self.dismiss_active_inline_search();
                     self.app.set_library_tab(tab_pos);
                 }
-                // Remote/status-bar pill click: toggle the Sessions sidebar
-                // (task 2.2, legacy remote-pill dispatch).
-                ShellRequest::ToggleSessions => {
-                    self.toggle_sidebar(super::super::SidebarId::Sessions)
-                }
                 ShellRequest::DismissHelp => self.umount_help(),
                 ShellRequest::OpenSettings => {
                     self.umount_help();

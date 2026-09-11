@@ -187,10 +187,9 @@ fn drawn_tab_harness() -> TickHarness {
     let mut app = crate::app::render::make_movie_app();
     app.tab = TabSelection::Home;
     let mut harness = TickHarness::new(app);
-    // The first sync cannot mount the panels: `root_frame` publishes only
-    // with the first drawn frame (compose_base_frame), so sync, draw, then
-    // sync + draw again with the placements current -- the steady-state
-    // loop order.
+    // The sync pass mounts the panels from paint-free chrome geometry; draw
+    // once with them mounted, then sync + draw again with the placements
+    // current -- the steady-state loop order.
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal
@@ -284,9 +283,9 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     app.ui_volume = 60;
     app.mute_on = false;
     let mut harness = TickHarness::new(app);
-    // The panels mount only after the first drawn frame publishes
-    // `root_frame`; sync + draw, then sync + draw again -- the steady-state
-    // loop order.
+    // The panels mount in the first sync pass from paint-free chrome
+    // geometry; draw with them mounted, then sync + draw again -- the
+    // steady-state loop order.
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal
@@ -366,6 +365,53 @@ fn tick_chrome_panels_mount_only_where_the_root_places_them() {
         .model()
         .application
         .mounted(&ComponentId::StatusBarPanel));
+}
+
+/// Review of tasks 2.1-2.2: the sync pass decides the chrome-panel mounts
+/// from paint-free chrome geometry, not from the draw-time-published
+/// `root_frame` — so a placement that just appears (crossing the mini-view
+/// threshold upward, which flips `effective_panel_mode` out of mini view)
+/// mounts the panels before the first draw that shows it, with no
+/// intervening frame missing them.
+#[test]
+fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
+    // Start below the mini-view threshold: `effective_panel_mode` follows
+    // `mini_view_focus` (Queue), so QueueOnly places no chrome panels.
+    let mut app = make_app_stub();
+    app.panel_mode = PanelMode::Both;
+    app.panel_focus = PanelFocus::Library;
+    app.terminal_width = 60;
+    app.terminal_height = 24;
+    let mut harness = TickHarness::new(app);
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    // A mini-view draw settles the narrow placements (which place no chrome
+    // panels); the following sync keeps both panels unmounted.
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness.model().application.mounted(&ComponentId::TabPanel));
+    assert!(!harness
+        .model()
+        .application
+        .mounted(&ComponentId::StatusBarPanel));
+
+    // Cross the threshold upward without drawing: the very next sync must
+    // see the wide placements and mount both panels, before any draw
+    // publishes `root_frame`.
+    harness.model_mut().app.terminal_width = 120;
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        harness.model().application.mounted(&ComponentId::TabPanel),
+        "the appearing tab placement must mount the panel in the sync pass, before any draw"
+    );
+    assert!(
+        harness
+            .model()
+            .application
+            .mounted(&ComponentId::StatusBarPanel),
+        "the appearing status-bar placement must mount the panel in the sync pass, before any draw"
+    );
 }
 
 /// Task 5.4 (D2 rung 2 exclusivity): with the context menu mounted, a wheel

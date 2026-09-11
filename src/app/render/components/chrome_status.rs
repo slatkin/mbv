@@ -526,7 +526,9 @@ pub(in crate::app) struct StatusBarRegions {
     pub volume: Option<Rect>,
     /// Mute pill: click toggles mute.
     pub mute: Option<Rect>,
-    /// Remote/session pill: click toggles the Sessions sidebar.
+    /// Remote/session pill region (retained verbatim; the production
+    /// projection always passes `show_session_pill: false`, so the pill
+    /// never paints and there is no click dispatch behind the region).
     pub remote: Option<Rect>,
 }
 

@@ -85,10 +85,6 @@ pub enum ShellRequest {
     /// the tab switch and its side effects; the panel only reports which tab
     /// was clicked.
     TabSelect(usize),
-    /// Toggle the Sessions sidebar (F3). Emitted by the mounted
-    /// `StatusBarPanel`'s remote/session pill click (task 2.2), restoring
-    /// the deleted legacy mouse dispatch's `request_sidebar_toggle`.
-    ToggleSessions,
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).

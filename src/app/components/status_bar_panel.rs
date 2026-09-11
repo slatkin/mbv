@@ -2,9 +2,11 @@
 //! (`RootFrame.status_bar` placement, task 2.2; design D10).
 //!
 //! Owns the status row's pointer regions: the volume pill (scroll adjusts
-//! the volume), the mute pill (click toggles mute) and the remote/session
-//! pill (click toggles the Sessions sidebar — legacy behaviour, restored
-//! with the regions). The pill/right-segment spans are shell-produced
+//! the volume) and the mute pill (click toggles mute). The remote/session
+//! pill region is retained verbatim, but it has no click dispatch:
+//! `show_session_pill` is hard-coded `false` (preserved from the base
+//! frame), so the pill never paints and the region stays `None`. The
+//! pill/right-segment spans are shell-produced
 //! content (`chrome_status.rs`), projected one-way by
 //! `Model::sync_status_bar_panel`; the component owns the overflow
 //! drop-order, pill geometry and event resolution. This replaces the
@@ -18,8 +20,9 @@ use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, PlaybackRequest, ShellRequest};
+use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
+use crate::app::action::VOLUME_STEP;
 use crate::app::render::{render_status_bar, StatusBarModel, StatusBarRegions};
 
 /// The status row panel: paints the status row where `RootFrame` places it
@@ -50,25 +53,20 @@ impl StatusBarPanel {
     fn handle_mouse(&mut self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
         let at = Position::new(event.column, event.row);
         match event.kind {
-            // Legacy wheel mapping: scroll down lowers the volume by 5, the
-            // same `Command::AdjustVolume` step the `-`/`+` keys dispatch.
+            // Legacy wheel mapping: scroll down lowers the volume by the
+            // shared `VOLUME_STEP`, the same `Command::AdjustVolume` step
+            // the `-`/`+` keys dispatch.
             MouseEventKind::ScrollDown if self.regions.volume.is_some_and(|r| r.contains(at)) => {
-                Some(Msg::Playback(PlaybackRequest::VolumeDelta(-5)))
+                Some(Msg::Playback(PlaybackRequest::VolumeDelta(-VOLUME_STEP)))
             }
             MouseEventKind::ScrollUp if self.regions.volume.is_some_and(|r| r.contains(at)) => {
-                Some(Msg::Playback(PlaybackRequest::VolumeDelta(5)))
+                Some(Msg::Playback(PlaybackRequest::VolumeDelta(VOLUME_STEP)))
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self.regions.mute.is_some_and(|r| r.contains(at)) =>
             {
                 // Same `Command::ToggleMute` the `m` key dispatches.
                 Some(Msg::Playback(PlaybackRequest::ToggleMute))
-            }
-            MouseEventKind::Down(MouseButton::Left)
-                if self.regions.remote.is_some_and(|r| r.contains(at)) =>
-            {
-                // Legacy remote-pill click: toggle the Sessions sidebar.
-                Some(Msg::Shell(ShellRequest::ToggleSessions))
             }
             _ => None,
         }
@@ -284,11 +282,11 @@ mod tests {
         );
     }
 
-    /// The remote/session pill participates only when the projection shows
-    /// it; a click on it emits the Sessions-sidebar toggle (legacy remote-
-    /// pill behaviour).
+    /// The retained remote/session region has no click dispatch: even a
+    /// hand-built model that shows the pill (the production projection
+    /// always passes `show_session_pill: false`) resolves a click to `None`.
     #[test]
-    fn click_on_the_remote_pill_emits_the_sessions_toggle() {
+    fn remote_pill_region_stays_absent_without_the_session_pill() {
         let mut panel = StatusBarPanel::new();
         let mut m = model(pill(" 60", palette::ACCENT), None);
         m.show_session_pill = true;
@@ -307,7 +305,8 @@ mod tests {
         });
         assert_eq!(
             panel.on(&mouse),
-            Some(Msg::Shell(ShellRequest::ToggleSessions))
+            None,
+            "the retained remote region has no click dispatch"
         );
     }
 
