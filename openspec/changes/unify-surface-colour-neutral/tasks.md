@@ -24,11 +24,11 @@
 
 ## 3. Migration units (each site keeps its own bool)
 
-- [ ] 3.1 Unit A — shared painters: `widgets`, `list_rows`,
+- [x] 3.1 Unit A — shared painters: `widgets`, `list_rows`,
   `media_list/wide` + `wide_row`, `card`, `artwork_placeholder`,
   `album_art`, `wide_hero`, `wide_hero_boundary`. Verify: buffer
   expectations byte-identical; no test-file edits.
-- [ ] 3.2 Unit B — shell chrome: `chrome.rs` backdrops (`queue_focused` stays
+- [x] 3.2 Unit B — shell chrome: `chrome.rs` backdrops (`queue_focused` stays
   the input), `queue_boundary`, `chrome_status`, `chrome_player`,
   `shell_playback`, `shell_draw`'s strip, `chrome_tabs`. Verify as 3.1.
 - [ ] 3.3 Unit C — screens: `home`, `music_wide`, `home_hero_emby`,
