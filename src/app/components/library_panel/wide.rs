@@ -204,13 +204,12 @@ pub(in crate::app) fn render_wide_skeleton(
         let next_row = paint_hero_pane_content(f, hero_area, &*hero);
         if let Some(workspace) = hero.workspace.as_mut() {
             // One blank row below the painted content before the Workspace
-            // box (task 5.6).
-            if let Some(workspace_rect) = place_media_list_below(
-                hero_area,
-                next_row.saturating_sub(1),
-                WORKSPACE_GAP_ROWS,
-                hero_area.height,
-            ) {
+            // box (task 5.6): `next_row` is the first *unpainted* row, and
+            // `place_media_list_below` adds `WORKSPACE_GAP_ROWS` blank rows
+            // above the box, so passing `next_row` leaves that row blank.
+            if let Some(workspace_rect) =
+                place_media_list_below(hero_area, next_row, WORKSPACE_GAP_ROWS, hero_area.height)
+            {
                 geometry.workspace = Some(paint_workspace_box(
                     f,
                     workspace_rect,
@@ -581,6 +580,53 @@ mod wide_skeleton_tests {
         assert_eq!(
             buf[(box_panel.x, box_panel.y)].bg,
             palette::surface_colors(palette::Surface::MainContentBox, false).fill
+        );
+    }
+
+    #[test]
+    fn workspace_box_sits_one_blank_row_below_the_hero_content() {
+        let mut list = StubList::with_rows(vec!["Alpha"]);
+        let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
+        let mut content = LibraryPanelContent {
+            selector: None,
+            controls: None,
+            list: ListSlot::Media(&mut list),
+            hero: Some(HeroContent {
+                facts: hero_facts("Dune"),
+                overview: None,
+                workspace: Some(Workspace {
+                    selector: None,
+                    list: &mut workspace_list,
+                    focused: false,
+                }),
+            }),
+        };
+        let (buf, geo, _hits) = draw_skeleton(&mut content);
+        let (box_panel, _) = geo.workspace.expect("workspace box painted");
+        assert!(rect_contains(geo.hero, box_panel));
+
+        // One blank row between the painted hero content's bottom and the
+        // Workspace box (task 5.6): the row directly above the box carries
+        // only the hero pane's resting fill across the pane's width.
+        let fill = palette::surface_colors(palette::Surface::HeroPane, false).fill;
+        let gap_row = box_panel.y - 1;
+        assert!(gap_row > geo.hero.y, "gap row inside the hero pane");
+        for x in geo.hero.left()..geo.hero.right() {
+            assert_eq!(
+                buf[(x, gap_row)].bg,
+                fill,
+                "row {gap_row} must stay blank between the content and the box"
+            );
+        }
+        // The row above the gap is the painted content's bottom — the meta
+        // row, compared by text, not by absolute coordinates.
+        let mut content_row = String::new();
+        for x in geo.hero.left()..geo.hero.right() {
+            content_row.push_str(buf[(x, gap_row - 1)].symbol());
+        }
+        assert!(
+            content_row.contains("2020"),
+            "content ends directly above the gap"
         );
     }
 

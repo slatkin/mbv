@@ -141,12 +141,26 @@ pub(crate) fn emby_hero_meta_rows_plain(item: &EmbyItem) -> Vec<String> {
     rows
 }
 
-fn emby_meta_row_styles() -> [ratatui::style::Color; 3] {
-    [
-        palette::TEXT_DETAIL_META,
-        palette::TEXT_SECONDARY,
-        palette::STATUS_AVAILABLE,
-    ]
+/// The legacy `Hero` painters' historical per-row colours by MEANING, in the
+/// row order [`emby_hero_meta_rows_plain`] emits: the Series year-range/
+/// genre line, then the release date, then the duration. Unlike the panel's
+/// `HeroHeader` painter (`hero_header.rs::paint_title_and_meta`), which
+/// cycles `HERO_META_ROLES[n % 3]` positionally, this path styles by row
+/// meaning — Movies/Episodes have no series row, so positional cycling would
+/// shift the date/duration colours. Two tables styling the same rows is a
+/// recorded judgement call until 9.1 converges them onto one painter.
+fn emby_meta_row_styles(item: &EmbyItem) -> Vec<ratatui::style::Color> {
+    let mut styles = Vec::new();
+    if item.item_type == "Series" {
+        styles.push(palette::TEXT_DETAIL_META);
+    }
+    if !item.premiere_date.is_empty() {
+        styles.push(palette::TEXT_SECONDARY);
+    }
+    if item.runtime_ticks > 0 {
+        styles.push(palette::STATUS_AVAILABLE);
+    }
+    styles
 }
 
 impl Hero for EmbyItem {
@@ -160,16 +174,19 @@ impl Hero for EmbyItem {
     }
 
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
-        // Rows keep the painters' historical per-row colours by position:
-        // series line, release date, then duration.
-        let styles = emby_meta_row_styles();
+        // Rows keep the painters' historical per-row colours by meaning
+        // (see `emby_meta_row_styles`).
+        let styles = emby_meta_row_styles(self);
         emby_hero_meta_rows_plain(self)
             .into_iter()
             .enumerate()
             .map(|(index, row)| {
                 vec![Span::styled(
                     trunc_str(&row, width as usize),
-                    Style::default().fg(styles[index % styles.len()]),
+                    Style::default().fg(styles
+                        .get(index)
+                        .copied()
+                        .unwrap_or(palette::TEXT_SECONDARY)),
                 )]
             })
             .collect()
