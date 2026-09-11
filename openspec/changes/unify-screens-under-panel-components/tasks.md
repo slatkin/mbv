@@ -42,14 +42,14 @@ one paint-free placement.
 
 *Unification:* removes shell-painted chrome and the `tabs_hitmap`/status-pill side channels.
 
-- [ ] 2.1 Create `TabPanel` (`src/app/components/tab_panel.rs`) that paints the tab bar (moved from
+- [x] 2.1 Create `TabPanel` (`src/app/components/tab_panel.rs`) that paints the tab bar (moved from
   `chrome_tabs.rs::render_tabs`, keeping `visible_tab_range` overflow arrows), retains its tab hit
   regions, and emits a tab-select `Msg` for clicks; mount it at the root; delete `render_tabs`' call in
   `paint_legacy_chrome`, `LayoutMain.tabs_hitmap`, and the shell tab-click path in `shell.rs`. Verify:
   tab buffer tests move to the component and pass; a tick integration test clicks a tab and asserts the
   destination changes; the tab panel fills its own placement with its surface (the full-column
   backdrop underneath is removed in 12.1, once every right-column panel fills itself).
-- [ ] 2.2 Create `StatusBarPanel` that paints the status row (moved from
+- [x] 2.2 Create `StatusBarPanel` that paints the status row (moved from
   `chrome_status.rs::render_status_bar`) and retains its volume/mute/remote pill regions; delete
   `LayoutPlayback.{ind_vol, ind_mu, ind_rc}` and the `render_status_bar` call in `render_main`. Verify:
   status-row buffer tests pass from the component; a tick test scrolls on the volume pill and asserts the
