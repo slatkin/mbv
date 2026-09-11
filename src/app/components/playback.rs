@@ -254,13 +254,13 @@ mod tests {
     fn painted_component() -> PlaybackComponent {
         let mut component = PlaybackComponent::new();
         component.set_projection(PlaybackProjection {
-            state: PlaybackState::default(),
+            // The table's PlaybackPanel resting fill (see
+            // `default_projection_carries_the_panel_resting_fill`); kept
+            // explicit alongside the other painted fields so the fixture
+            // does not depend on the `Default` under test.
+            panel_bg: PlaybackProjection::default().panel_bg,
             show_controls: true,
-            panel_bg: palette::surface_colors_for_column_focus(
-                palette::Surface::PlaybackPanel,
-                false,
-            )
-            .fill,
+            state: PlaybackState::default(),
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
@@ -331,13 +331,11 @@ mod tests {
     fn playback_chrome_projection_renders_without_player_authority() {
         let mut component = PlaybackComponent::new();
         component.set_projection(PlaybackProjection {
-            state: PlaybackState::default(),
+            // As in `painted_component`: the table's resting fill, not a
+            // second copy of the resolver call.
+            panel_bg: PlaybackProjection::default().panel_bg,
             show_controls: true,
-            panel_bg: palette::surface_colors_for_column_focus(
-                palette::Surface::PlaybackPanel,
-                false,
-            )
-            .fill,
+            state: PlaybackState::default(),
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],

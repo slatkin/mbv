@@ -1,33 +1,22 @@
 mod resolve_point {
     use super::super::{
-        InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow,
-        MediaSemanticState, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+        test_helpers::lifecycle_item, InlineMediaBrowser, InlineMediaBrowserPaintPolicy,
+        MediaListRow, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
     };
     use ratatui::backend::TestBackend;
     use ratatui::layout::{Position, Rect};
     use ratatui::Terminal;
     use tuirealm::component::Component;
 
-    fn item(target: &str) -> MediaListRow<String> {
-        MediaListRow::Item {
-            target: target.into(),
-            primary: target.into(),
-            trailing: None,
-            duration: None,
-            kind: MediaKind::Media,
-            semantic_state: MediaSemanticState::Ordinary,
-        }
-    }
-
     fn wide() -> WideMediaList<String> {
         let mut list = WideMediaList::new();
         list.set_content(vec![
             MediaListRow::Heading { text: "A".into() },
-            item("a"),
-            item("b"),
-            item("c"),
-            item("d"),
-            item("e"),
+            lifecycle_item("a"),
+            lifecycle_item("b"),
+            lifecycle_item("c"),
+            lifecycle_item("d"),
+            lifecycle_item("e"),
         ]);
         list
     }
@@ -99,10 +88,10 @@ mod resolve_point {
         let mut browser = InlineMediaBrowser::new();
         browser.set_content(vec![
             MediaListRow::Heading { text: "A".into() },
-            item("a"),
-            item("b"),
-            item("c"),
-            item("d"),
+            lifecycle_item("a"),
+            lifecycle_item("b"),
+            lifecycle_item("c"),
+            lifecycle_item("d"),
         ]);
         browser.select_target(&"b".to_string());
         browser

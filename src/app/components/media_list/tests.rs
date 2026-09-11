@@ -464,14 +464,7 @@ fn wide_selected_row_highlight_is_painted_only_while_focused() {
             let mut list = WideMediaList::<String>::new();
             list.set_content(vec![
                 MediaListRow::Heading { text: "A".into() },
-                MediaListRow::Item {
-                    target: "a".into(),
-                    primary: "a".into(),
-                    trailing: None,
-                    duration: None,
-                    kind: MediaKind::Media,
-                    semantic_state: MediaSemanticState::Ordinary,
-                },
+                lifecycle_item("a"),
             ]);
             list.select_first();
             let area = Rect {
