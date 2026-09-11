@@ -13,9 +13,9 @@ Facts that shape the approach, verified on `main` at `18e96392`:
 
 - **The frame is a legacy base frame plus overpaint.** `Model::draw_frame` (`src/app/shell_run.rs:60-100`)
   calls `App::compose_base_frame` (`shell_draw.rs:84`) → `render_main` (`:177`) → `paint_legacy_chrome`
-  (`:399`: `render_legacy_backdrops`, `render_tabs`), `render_card`, the queue-only
+  (`:419`: `render_legacy_backdrops`, `render_tabs`), `render_card`, the queue-only
   `render_player_panel` pair, `render_queue_panel_frame` + `render_queue_status`, `render_library`
-  (`widgets.rs:515`, now only publishing `layout.*_area`) and `render_status_bar`. Then a hand-ordered
+  (`widgets.rs:529`, now only publishing `layout.*_area`) and `render_status_bar`. Then a hand-ordered
   list of `render_*_component` calls paints the mounted components over it.
 - **`render_main` mutates state while painting**: `library_tab_pending` resolution, the
   `normalize_stale_browse_destination` fallback, and writes to `layout.card`, `layout.queue_*`,
@@ -42,8 +42,8 @@ Facts that shape the approach, verified on `main` at `18e96392`:
   library (`TvWorkspace` Wide, `Browser(TvShows)` Narrow) with a breakpoint hand-off
   (`hand_off_tv_breakpoint`, `apply_pending_inline_search_transfer`). The router (`router.rs`,
   `key_policy.rs`) references no destination id.
-- **Painting starts effects**: `render_card` (`card.rs:257`), `compact_banner_layout_with_overview`
-  (`detail.rs:173`), the Home hero (`home_hero_emby.rs:244,261`) and `paint_music_image`
+- **Painting starts effects**: `render_card` (`card.rs:264`), `compact_banner_layout_with_overview`
+  (`detail.rs:173`), the Home hero (`home_hero_emby.rs:246,263`) and `paint_music_image`
   (`album_art.rs:77`) call `fetch_card_image`, each with its own image-type chain and cache key.
 - **Dead branches**: `LibraryListRenderCtx.search_query` is `Some` only inside the Inline Search painter
   (`list_rows.rs:281` via `inline_search.rs:31`); Music/TV `ctx.list.is_search_active()` branches are
@@ -177,7 +177,7 @@ build while destinations 6–11 still use them.
 `paint_hero_content` + `wide_hero_slots` path, Music's `paint_wide_hero_text` + `wide_music_left_layout`),
 ABS/Feeds header painters (`paint_feed_hero`, `render_book_hero`, `render_podcast_hero`), per-producer
 styled metadata, and per-destination image chains and cache keys (Home `"{id}:pwr_kw"` +
-`keep_watching_hero_image_types`, `home_hero_emby.rs:244-262`; Music `inline_album_art_cache_key` +
+`keep_watching_hero_image_types`, `home_hero_emby.rs:246-264`; Music `inline_album_art_cache_key` +
 `MUSIC_ALBUM_IMAGE_TYPES`, `album_art.rs:77`; the `card.rs`/`detail.rs` chains).
 
 *One producer per content type.* `HeroContent` is built only by `hero_content(&item)` functions in the
@@ -251,8 +251,8 @@ destination may fill (Feeds: Watched filter pills; home videos: item-count label
 per-destination arm.
 
 **D9 — Image requests leave painting.** *Removes:* every paint-time fetch: `render_card`
-(`card.rs:257`), `compact_banner_layout_with_overview` (`detail.rs:173`), the Home hero
-(`home_hero_emby.rs:244,261`) and `paint_music_image` (`album_art.rs:77`). The shell's projection runs
+(`card.rs:264`), `compact_banner_layout_with_overview` (`detail.rs:173`), the Home hero
+(`home_hero_emby.rs:246,263`) and `paint_music_image` (`album_art.rs:77`). The shell's projection runs
 `artwork_policy` + `hero_artwork_box` for each projected hero and the queue visual slot, issues
 `fetch_card_image` there (TV already does this, `push_tv_workspace_content`), and projects image state
 into content. Painting reads projected state only.
@@ -358,19 +358,19 @@ enumeration behind "zero visible UI elements that are not components" (G1).
 | Element today (painter, site) | Owner at completion | Task |
 |---|---|---|
 | Left column backdrop (`render_legacy_backdrops`, `chrome.rs:16`) | Queue panel + Queue playback panel fills | 3.1, 3.5, 12.1 |
-| Right column backdrop (`render_legacy_backdrops`, `chrome.rs:37`) | Tab / Library / Library playback / Status bar panel fills | 12.1 (after 2.x, 4.1, 5.x) |
+| Right column backdrop (`render_legacy_backdrops`, `chrome.rs:42`) | Tab / Library / Library playback / Status bar panel fills | 12.1 (after 2.x, 4.1, 5.x) |
 | Tab bar + overflow arrows (`render_tabs`, `chrome_tabs.rs:34`) | Tab panel | 2.1 |
-| Status row + volume/mute/remote pills (`render_status_bar`, `chrome_status.rs:297`) | Status bar panel | 2.2 |
+| Status row + volume/mute/remote pills (`render_status_bar`, `chrome_status.rs:377`) | Status bar panel | 2.2 |
 | Right-column transport strip (`PlaybackComponent` at `player_area`) | Library playback panel | 4.1 |
-| Queue-only transport, wide + narrow (`render_player_panel`, `shell_draw.rs:276-319`) | Queue playback panel | 3.5 |
-| Queue visual slot: artwork/placeholder/visualizer (`render_card`, `card.rs:257`) | Queue playback panel | 3.4, 3.5 |
+| Queue-only transport, wide + narrow (`render_player_panel`, `shell_draw.rs:276-339`) | Queue playback panel | 3.5 |
+| Queue visual slot: artwork/placeholder/visualizer (`render_card`, `card.rs:264`) | Queue playback panel | 3.4, 3.5 |
 | Now-playing header row (new, folded change) | Queue playback panel | 3.5 |
-| Queue frame (`render_queue_panel_frame`, `widgets.rs:231`) | Queue panel | 3.1 |
-| Queue status pill row (`render_queue_status`, `queue.rs:290`) | Queue panel | 3.1 |
+| Queue frame (`render_queue_panel_frame`, `widgets.rs:233`) | Queue panel | 3.1 |
+| Queue status pill row (`render_queue_status`, `queue.rs:296`) | Queue panel | 3.1 |
 | Queue title row + list (`QueueComponent`) | Queue panel | 3.1 |
 | Queue column boundary (`QueueBoundaryComponent`, `shell_queue.rs:169`) | Queue boundary (root-placed) | 1.4 |
 | Wide hero gap boundary (`WideHeroBoundaryComponent`, `shell_library.rs:363`) | Library panel | 5.9 |
-| Library area publishing (`render_library`, `widgets.rs:515`) | deleted (paints nothing) | 12.1 |
+| Library area publishing (`render_library`, `widgets.rs:529`) | deleted (paints nothing) | 12.1 |
 | Home / Browser / TV / Music / Feeds / ABS Book / ABS Podcast bodies (component-wrapped free painters) | Library panel slots | 5.11, 6.1, 7.1, 8.2, 9.1, 10.1, 11.1 |
 | Overlays, modals, popups, sidebars (`render_overlay_stack`) | unchanged: already component views | — |
 
