@@ -43,7 +43,7 @@ path from one target to a list. *Alternative:* thread selection through
 each bespoke request — rejected; six parallel edits is the divergence the
 unify campaigns removed elsewhere.
 
-**D1 — Selection lives in `MediaList<Target>`.** A set of stable targets plus
+**D1 — Multi-selection lives in `MediaList<Target>`.** A set of stable targets plus
 an anchor target, next to the cursor. Visual mode is not a separate flag: it
 is "selection non-empty". *Alternative:* per-destination selection state —
 rejected; it would diverge per screen and break the one-owner rule.
@@ -58,7 +58,8 @@ switch away (focus loss of the list) and after any selection action runs.
 recomputes the selection. Right-click on a row outside the selection clears
 the selection and falls back to the single-row menu (Explorer behaviour).
 
-**D4 — Gestures carry modifiers.** `Click` gains a modifier field (Ctrl,
+**D4 — Gestures carry modifiers.** A click with Ctrl or Shift is never
+promoted to `DoubleClick` and never starts a drag grab (Queue). `Click` gains a modifier field (Ctrl,
 Shift); `RowLocalInput` gains `ToggleClick(Position)` and
 `RangeClick(Position)`. Following Explorer, the first Ctrl+Click adds both
 the prior cursor row and the clicked row to the selection.
@@ -69,17 +70,19 @@ setting (Ghostty `mouse-shift-capture`, kitty `terminal_select_modifiers`);
 accepted — mbv has no text worth native-selecting. Ctrl+Click over a
 terminal-detected hyperlink stays the terminal's; accepted (one link).
 
-**D6 — Keyboard: `V` enters visual mode.** `v` is taken by the visualizer
-toggle; `V` matches vim's linewise visual mode, which is the right analogue
-for rows. While a selection is active, key policy gives the focused list
-precedence for `Space` (toggle current row) and `Esc` (clear) ahead of
-`TogglePlayPause` / overlay-dismiss. Outside visual mode both keep their
-current meaning. *Alternative:* a non-`Space` toggle key — rejected; Space is
-the universal "mark" key and only loses play/pause while selecting.
+**D6 — Keyboard: `V` enters Visual mode.** `v` is taken by the visualizer
+toggle; `V` matches vim's linewise visual mode. In Visual mode the focused
+list consumes `Space` (toggle row) and `Esc` (exit Visual mode) outright:
+they neither fire nor arm the shell's double-tap play/pause/stop, and they
+override list-local Space meanings (e.g. ABS FocusOrPlay). Once Visual mode
+exits, every key behaves as before.
 
 **D7 — Menu shows only actions valid for all selected items.** Capability is
 derived per item (playable, queue-admissible, removable-from-this-list,
-supports played state) and intersected. Played state uses two bulk-set
+supports played state) and intersected. An action with no backend for a
+Service is simply not offered; Audiobookshelf and Feeds use the same
+target-keyed action path so backends can be added later without menu work.
+Bulk effects run off the UI thread and report partial failure. Played state uses two bulk-set
 entries, "Mark Played" and "Mark Unplayed" (user decision), each forcing
 one state on every item; matches the podcast bulk precedent.
 
@@ -89,12 +92,8 @@ are omitted there as they are self-referential.
 
 ## Risks / Trade-offs
 
-- [Space loses play/pause while a selection is active] → visual mode is
-  visible in the status row; Esc restores it.
 - [Shift+Click silently not delivered in some terminals] → keyboard `V` and
   Ctrl+Click remain; document terminal setting in help.
 - [Bulk admission may reject some items (media kind / Service setup)] →
   admission remains shell/Player-owned; rejected items are reported through
   existing enqueue feedback, admitted ones proceed in order.
-- [Conflict with `add-configurable-keybinds`] → register `V` as a named
-  command so it is rebindable; whichever change lands second rebases.

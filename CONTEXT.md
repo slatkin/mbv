@@ -299,6 +299,13 @@ subscribed, or given a ComponentId. The destination keeps Service content,
 chrome, workspace focus, effects, persistence, and typed intent translation.
 _Avoid_: generic list, generic media list, two-column list
 
+**Multi-selection**:
+The set of rows a user has picked in one MediaList for a bulk action, built by
+Ctrl+Click, Shift+Click, or keyboard Visual mode (`V`), keyed by stable
+targets and held by the MediaList beside its cursor. A non-empty
+multi-selection is Visual mode. "Selection" alone still means the cursor row.
+_Avoid_: marked rows, selection (for the set), checked items
+
 **WideMediaList**:
 The target provider-neutral, one-column fixed-row TuiRealm Component over a
 `MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It

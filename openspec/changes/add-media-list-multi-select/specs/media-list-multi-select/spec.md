@@ -2,7 +2,7 @@
 
 Lets users select several rows in any canonical media list with Explorer-style
 mouse gestures or a vim-style visual mode, and apply one context-menu action to
-the whole selection.
+the whole multi-selection.
 
 ## ADDED Requirements
 
@@ -20,28 +20,28 @@ menus. Feeds lists SHALL offer a row context menu.
 - **WHEN** the user presses the menu key on a Feeds entry row
 - **THEN** a context menu opens for that entry
 
-### Requirement: Selection is uniform across canonical lists
-Multi-row selection SHALL behave identically in every canonical media list and
-at every breakpoint variant (Wide, Inline, Grid). Selection SHALL be scoped to
+### Requirement: Multi-selection is uniform across canonical lists
+Multi-selection SHALL behave identically in every canonical media list and
+at every breakpoint variant (Wide, Inline, Grid). A multi-selection SHALL be scoped to
 one list and identified by stable item identity, not row position.
 
 #### Scenario: Same gestures everywhere
 - **WHEN** the user Ctrl+Clicks two rows in Home, then in a Music album list
 - **THEN** both lists show two selected rows with the same visual treatment
 
-#### Scenario: Refresh keeps surviving selection
+#### Scenario: Refresh keeps surviving multi-selection
 - **WHEN** a list refreshes while three rows are selected and one of those items disappears
 - **THEN** the two remaining items stay selected
 
-#### Scenario: Breakpoint change keeps selection
+#### Scenario: Breakpoint change keeps multi-selection
 - **WHEN** the terminal resizes across a breakpoint while rows are selected
 - **THEN** the same items remain selected
 
-### Requirement: Mouse gestures build a selection
-Ctrl+Click SHALL toggle the clicked row in the selection; the first Ctrl+Click
-with no selection SHALL select both the previously focused row and the clicked
+### Requirement: Mouse gestures build a multi-selection
+Ctrl+Click SHALL toggle the clicked row in the multi-selection; the first Ctrl+Click
+with no multi-selection SHALL select both the previously focused row and the clicked
 row. Shift+Click SHALL select the contiguous range from the anchor row to the
-clicked row. A plain Click SHALL clear the selection and select only the
+clicked row. A plain Click SHALL clear the multi-selection and select only the
 clicked row. While mouse capture is enabled, mbv SHALL request that the
 terminal deliver Shift+Click to the application, and SHALL release that
 request when mouse capture is disabled.
@@ -54,33 +54,38 @@ request when mouse capture is disabled.
 - **WHEN** the anchor is row 2 and the user Shift+Clicks row 6
 - **THEN** rows 2 through 6 are selected
 
+#### Scenario: Modified clicks never activate or drag
+- **WHEN** the user Ctrl+Clicks the same row twice quickly, or Shift+Clicks a Queue row
+- **THEN** the row toggles or the range is selected, and no play/activate or drag starts
+
 #### Scenario: Plain click clears
 - **WHEN** rows are selected and the user clicks a row without modifiers
-- **THEN** the selection is cleared and only the clicked row is focused
+- **THEN** the multi-selection is cleared and only the clicked row is focused
 
-### Requirement: Keyboard visual mode builds a selection
-`V` SHALL start a selection anchored at the focused row. While a selection is
-active, cursor movement SHALL extend the contiguous range from the anchor,
-`Space` SHALL toggle the focused row instead of play/pause, and `Esc` SHALL
-clear the selection. Outside an active selection these keys SHALL keep their
-existing meaning.
+### Requirement: Keyboard visual mode builds a multi-selection
+`V` SHALL start a multi-selection anchored at the focused row. While a
+multi-selection is active (Visual mode), cursor movement SHALL extend the
+contiguous range from the anchor, `Space` SHALL only toggle the focused row,
+and `Esc` SHALL only exit Visual mode by clearing the multi-selection. Keys
+consumed by Visual mode SHALL NOT trigger or arm any other behaviour,
+including double-tap play/pause or stop. After Visual mode exits, these keys
+SHALL behave exactly as before this change.
 
 #### Scenario: Visual range by keyboard
 - **WHEN** the user presses `V` on row 3 and then moves down twice
-- **THEN** rows 3 through 5 are selected
+- **THEN** rows 3 through 5 are in the multi-selection
 
-#### Scenario: Space toggles only while selecting
-- **WHEN** a selection is active and the user presses `Space`
-- **THEN** the focused row toggles in the selection and playback is not paused
+#### Scenario: Space only toggles in Visual mode
+- **WHEN** Visual mode is active and the user presses `Space` twice quickly
+- **THEN** the focused row toggles twice and playback state is unchanged
 
-#### Scenario: Esc clears
-- **WHEN** a selection is active and the user presses `Esc`
-- **THEN** the selection is cleared and `Space` again toggles play/pause
+#### Scenario: Esc only exits Visual mode
+- **WHEN** Visual mode is active and the user presses `Esc`
+- **THEN** the multi-selection is cleared, nothing else happens, and a following `Esc` behaves as it does outside Visual mode
 
 ### Requirement: Visual mode is indicated and dismissible
-While a list has a selection of one or more rows entered through a
-multi-select gesture, the status row SHALL show a visual-mode indicator with
-the selected count and a clickable control that clears the selection.
+While a list has a non-empty multi-selection, the status row SHALL show a visual-mode indicator with
+the selected count and a clickable control that clears the multi-selection.
 
 #### Scenario: Indicator count
 - **WHEN** four rows are selected
@@ -88,22 +93,23 @@ the selected count and a clickable control that clears the selection.
 
 #### Scenario: Clear by mouse
 - **WHEN** the user clicks the indicator's clear control
-- **THEN** the selection is cleared and the indicator disappears
+- **THEN** the multi-selection is cleared and the indicator disappears
 
-### Requirement: Context menu acts on the whole selection
+### Requirement: Context menu acts on the whole multi-selection
 Opening the context menu on a selected row SHALL offer only actions valid for
 every selected item, drawn from: Play, Shuffle, Add to Queue, Remove, Mark
-Played, Mark Unplayed. Opening it on a row outside the selection SHALL clear
-the selection and show that row's single-item menu. Running any selection
-action SHALL clear the selection.
+Played, Mark Unplayed. An action whose Service provides no backend for it
+SHALL NOT be offered. Opening it on a row outside the multi-selection SHALL clear
+the multi-selection and show that row's single-item menu. Running any multi-selection
+action SHALL clear the multi-selection.
 
-#### Scenario: Right-click inside selection
+#### Scenario: Right-click inside multi-selection
 - **WHEN** three rows are selected and the user right-clicks one of them
 - **THEN** the menu offers actions applying to all three items
 
-#### Scenario: Right-click outside selection
+#### Scenario: Right-click outside multi-selection
 - **WHEN** rows 2-4 are selected and the user right-clicks row 8
-- **THEN** the selection is cleared and row 8's normal menu opens
+- **THEN** the multi-selection is cleared and row 8's normal menu opens
 
 ### Requirement: Play, Shuffle and Add to Queue use list order
 Play SHALL replace the queue with the selected items in their list order and
@@ -131,10 +137,10 @@ all selected items. Library lists SHALL NOT offer Remove.
 ### Requirement: Played state is set in bulk
 Mark Played SHALL set every selected item to played and Mark Unplayed SHALL
 set every selected item to unplayed, regardless of each item's prior state.
-There SHALL be no per-item toggle action for a selection.
+There SHALL be no per-item toggle action for a multi-selection.
 
-#### Scenario: Mixed selection marked played
-- **WHEN** a selection contains two played and three unplayed items and the user chooses Mark Played
+#### Scenario: Mixed multi-selection marked played
+- **WHEN** a multi-selection contains two played and three unplayed items and the user chooses Mark Played
 - **THEN** all five items are played
 
 #### Scenario: Queue omits self-referential actions
