@@ -15,6 +15,14 @@ use mbv_core::config::ServiceKind;
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ComponentId {
     UiRoot,
+    /// The tab bar panel (`TabPanel`, task 2.1): paints the `RootFrame.tab`
+    /// placement and resolves tab clicks against its own painted hit
+    /// regions.
+    TabPanel,
+    /// The status row panel (`StatusBarPanel`, task 2.2): paints the
+    /// `RootFrame.status_bar` placement and owns the volume/mute/remote
+    /// pill regions.
+    StatusBarPanel,
     Playback,
     Queue,
     QueueBoundary,

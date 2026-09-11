@@ -64,22 +64,14 @@ impl App {
     }
 
     pub(super) fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
-        let widths = self.tab_title_widths();
-        let n = widths.len();
-        let start = self.tab_scroll.min(if n > 0 { n - 1 } else { 0 });
-        let left_w: u16 = if start > 0 { 2 } else { 0 };
-        let mut budget = avail_w.saturating_sub(left_w);
-        let mut end = start;
-        while end < n {
-            let tab_w: u16 = widths[end] + 2;
-            let right_w: u16 = if end + 1 < n { 2 } else { 0 };
-            if budget < tab_w + right_w && end > start {
-                break;
-            }
-            budget = budget.saturating_sub(tab_w);
-            end += 1;
-        }
-        (start, end)
+        // The shared tab-window computation (task 2.1): the same one the tab
+        // bar painter resolves the painted window and hit regions from, so
+        // the keyboard scroll anchor and the painted bar cannot drift.
+        crate::app::render::components::chrome_tabs::visible_tab_range(
+            &self.tab_title_widths(),
+            self.tab_scroll,
+            avail_w,
+        )
     }
 
     pub(super) fn ensure_tab_visible(&mut self) {

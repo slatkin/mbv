@@ -114,6 +114,11 @@ fn wide_hero_boundary_gap_is_visually_inert_on_a_wide_movies_surface() {
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
+    // Steady state: one throwaway draw publishes `root_frame`, the sync it
+    // gates mounts the chrome panels (tasks 2.1-2.2), and both recorded
+    // frames below are then drawn from the same mounted set.
+    let _priming = draw_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
 
     let with_boundary = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
@@ -158,6 +163,11 @@ fn wide_hero_boundary_arms_nothing_on_an_empty_feeds_surface() {
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    // Steady state: one throwaway draw publishes `root_frame`, the sync it
+    // gates mounts the chrome panels (tasks 2.1-2.2), and both recorded
+    // frames below are then drawn from the same mounted set.
+    let _priming = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
     let with_boundary = draw_frame(&mut harness);

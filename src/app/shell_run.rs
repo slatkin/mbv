@@ -29,6 +29,8 @@ impl Model {
         self.sync_audiobookshelf_book();
         self.sync_queue();
         self.sync_queue_boundary();
+        self.sync_tab_panel();
+        self.sync_status_bar_panel();
         self.sync_wide_hero_boundary();
         // Publish wide-TV geometry before other readers of `tv_wide_right_area`/
         // `tv_wide_left_area` (e.g. context-menu anchors) see this frame's
@@ -115,6 +117,11 @@ impl Model {
                 })
         });
         self.app.compose_base_frame(f, cursor_scroll);
+        // S1 (tasks 2.1-2.2): the tab bar and status row are painted by their
+        // mounted panels where `RootFrame` places them; the base frame no
+        // longer paints either (one painter per surface, design D10/D16).
+        self.render_tab_panel(f);
+        self.render_status_bar_panel(f);
         if music_resize {
             self.push_music_workspace_content();
         }

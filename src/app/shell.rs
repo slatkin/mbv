@@ -504,18 +504,12 @@ fn apply_terminal_observer(
         }
         TerminalObserverEvent::FocusGained => model.app.note_focus_gained(),
         TerminalObserverEvent::FocusLost => model.app.note_focus_lost(),
-        // Task 6.5: the tab bar is shell-painted chrome with no mounted
-        // component of its own, so it has no `mouse_sub()` claim to resolve
-        // through. A click outside `layout.tabs_area` (and therefore outside
-        // every published hit target) is a no-op here and falls through to
-        // whatever mounted component's own claim the same tick produced.
-        TerminalObserverEvent::MouseClick { column, row } => {
-            let point = ratatui::layout::Position { x: column, y: row };
-            if let Some(tab_pos) = model.app.layout.main.tab_at(point) {
-                model.dismiss_active_inline_search();
-                model.app.set_library_tab(tab_pos);
-            }
-        }
+        // Task 6.5's `MouseClick` observer signal resolved shell-painted tab
+        // chrome; the tab bar is a mounted `TabPanel` now (task 2.1) and the
+        // click reaches it through its `mouse_sub()` subscription, so a
+        // click here is only the observer's redraw echo (no shell geometry
+        // is read).
+        TerminalObserverEvent::MouseClick { .. } => {}
         TerminalObserverEvent::Key(_)
         | TerminalObserverEvent::NoOp
         | TerminalObserverEvent::MouseClaimed => {}

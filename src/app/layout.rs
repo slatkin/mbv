@@ -23,23 +23,19 @@ use ratatui::layout::Rect;
 
 use crate::app::render::arrangements::chrome::RootFrame;
 
-/// Seekbar rect, the two divider status indicators that still have a click
-/// target (remote-session and mute), the volume pill's scroll target, and
-/// the mouse hit targets for the one-row playback header's transport
-/// controls (play/pause glyph and next).
+/// Seekbar rect and the mouse hit targets for the one-row playback header's
+/// transport controls (play/pause glyph and next).
 /// The button/track/volume/subtitle/audio rects this used to hold were
 /// removed with the expanded playback view; see the "Tab bar restyle" commit
-/// that zeroed them out.
+/// that zeroed them out. The status-bar pill rects
+/// (`ind_vol`/`ind_mu`/`ind_rc`) moved to the mounted `StatusBarPanel`
+/// (task 2.2).
 #[derive(Default)]
 pub(crate) struct LayoutPlayback {
     pub player_area: Rect,
     /// Status-bar area used by the shell-mounted playback prompt component.
     pub status_area: Rect,
     pub seekbar_area: Rect,
-    pub ind_rc: Rect,
-    pub ind_mu: Rect,
-    /// Status-bar volume pill; scroll-wheel hit test.
-    pub ind_vol: Rect,
     /// Playback header play/pause glyph; always clickable when the row renders.
     pub play_pause_area: Rect,
     /// Playback header stop glyph; only wired to the action when
@@ -107,18 +103,10 @@ pub(crate) struct LayoutMain {
     /// Screen rect of the selected queue row. Owned by the queue renderer.
     pub queue_selected_item_rect: Option<Rect>,
     /// Pill/tab hitboxes published by the owning pill painters; placement and
-    /// width remain owned by the shared pill-bar component.
-    /// Pill/tab hitboxes published by the owning pill painters; placement and
     /// width remain owned by the shared pill-bar component. The music
     /// group-selector publishes these before paint.
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
-    /// Per-tab hit targets published by `render_tabs` (task 6.5). Each entry
-    /// is `(screen_rect, tab_position)` for a visible tab, using the tab's
-    /// real position (`all_names` index), not its visible-slot index. Does
-    /// not include the `«`/`»` scroll-indicator glyphs. Cleared and
-    /// repopulated every frame; paint-coupled by design.
-    pub tabs_hitmap: Vec<(Rect, usize)>,
     /// Bounding rect of the wide Music right pane's hero artwork area.
     /// Clicks here should not activate track selection or playback.
     pub wide_music_art_area: Rect,
@@ -160,16 +148,6 @@ pub(crate) struct LayoutMain {
     pub audiobookshelf_book_area: Rect,
 }
 
-impl LayoutMain {
-    /// Returns the tab position whose hit target contains `pos`, if any.
-    pub(crate) fn tab_at(&self, pos: ratatui::layout::Position) -> Option<usize> {
-        self.tabs_hitmap
-            .iter()
-            .find(|(rect, _)| rect.contains(pos))
-            .map(|(_, tab_pos)| *tab_pos)
-    }
-}
-
 /// Root/chrome frame geometry computed paint-free by
 /// `App::compute_frame_layout` and consumed by `App::render_main` and the
 /// chrome painters. This is the partial typed subresult of the staged
@@ -195,9 +173,6 @@ pub(crate) struct FrameChromeGeometry {
     pub left_content: Rect,
     /// Tab-bar box rect at the top of the right column.
     pub tab_bar_area: Rect,
-    /// Tab-bar hit targets (`AppLayout::tabs_area`), published only when the
-    /// right panel is visible; `Rect::default()` otherwise.
-    pub tabs_area: Rect,
     /// Player-panel rect directly below the tab bar (right column only).
     pub player_area: Rect,
     /// Status-bar rect at the bottom of the right panel.
@@ -219,7 +194,6 @@ pub(crate) struct FrameChromeGeometry {
 pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
     pub main: LayoutMain,
-    pub tabs_area: Rect,
     /// The last fully rendered frame's root panel placements (`RootFrame`).
     /// Published with the rest of the chrome checkpoint in
     /// `App::compose_base_frame` and read by the sync pass (the queue

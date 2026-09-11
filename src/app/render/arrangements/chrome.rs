@@ -43,10 +43,11 @@ pub(in crate::app) struct ChromeGeometryInput {
 
 /// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
 ///
-/// Shared by the chrome painter (`chrome_geometry` below) and the keyboard-path
-/// `App::ensure_tab_visible`, so the tab-scroll math matches what is painted
-/// rather than being re-derived (ADR 0022 Residual A). `PB_H` is the 2-column
-/// padding inside the coloured box, applied on both sides.
+/// Shared by the tab bar painter (`render_tab_bar`, task 2.1) and the
+/// keyboard-path `App::ensure_tab_visible`, so the tab-scroll math matches
+/// what is painted rather than being re-derived (ADR 0022 Residual A).
+/// `PB_H` is the 2-column padding inside the coloured box, applied on both
+/// sides.
 pub(in crate::app) fn tab_strip_text_width(tab_bar_width: u16) -> u16 {
     const PB_H: u16 = 2;
     tab_bar_width.saturating_sub(2 * PB_H + TABBAR_LEFT_RESERVE)
@@ -185,14 +186,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
             .saturating_sub(PLAYER_BOX_HEIGHT),
     };
 
-    // Tab bar at the very top of the right column.
-    let tab_bar_area = Rect {
-        x: right_area.x,
-        y: area.y,
-        width: right_area.width,
-        height: tab_h,
-    };
-
     // Player panel below the tab bar (right column only).
     let player_area = if right_visible {
         Rect {
@@ -213,22 +206,12 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         height: 1,
     };
 
-    // Tab-bar hit targets; only published when the tab bar actually paints.
-    let tabs_area = if right_visible {
-        let tab_row = Rect {
-            y: tab_bar_area.y + 1,
-            height: 1,
-            ..tab_bar_area
-        };
-        let tabs_x = tab_bar_area.x + 1;
-        let tabs_w = tab_strip_text_width(tab_bar_area.width);
-        Rect {
-            x: tabs_x,
-            width: tabs_w,
-            ..tab_row
-        }
-    } else {
-        Rect::default()
+    // Tab bar at the very top of the right column.
+    let tab_bar_area = Rect {
+        x: right_area.x,
+        y: area.y,
+        width: right_area.width,
+        height: tab_h,
     };
 
     // The library panel's placement. In LibraryOnly the playback strip is
@@ -306,7 +289,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         right_full_area,
         left_content,
         tab_bar_area,
-        tabs_area,
         player_area,
         status_area,
         right_visible,

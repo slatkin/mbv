@@ -221,6 +221,40 @@ fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
     }
 }
 
+/// S1 (tasks 2.1-2.2, D16): the tab bar and status row are painted solely by
+/// their mounted panels (`TabPanel`, `StatusBarPanel`). The legacy base frame
+/// still publishes the `RootFrame` placements, but paints nothing on either
+/// surface beyond the full-column backdrop that stays until task 12.1.
+#[test]
+fn tab_bar_and_status_row_legacy_base_frame_publish_placements_but_paint_no_panel() {
+    let mut app = make_movie_app();
+
+    let terminal = render_app_to_terminal(&mut app, 100, 20);
+
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 20));
+    let tab = chrome
+        .root
+        .tab
+        .expect("Both places the tab bar for the TabPanel");
+    let status = chrome
+        .root
+        .status_bar
+        .expect("Both places the status row for the StatusBarPanel");
+    let backdrop = palette::surface_colors(palette::Surface::LibraryColumn, false).fill;
+    let buf = terminal.backend().buffer();
+    for (label, rect) in [("tab bar", tab), ("status row", status)] {
+        for y in rect.y..rect.bottom() {
+            for x in rect.x..rect.right() {
+                assert_eq!(
+                    buf[(x, y)].bg,
+                    backdrop,
+                    "legacy base frame painted into the {label} at ({x}, {y})"
+                );
+            }
+        }
+    }
+}
+
 #[test]
 fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
     let mut app = make_app_stub();

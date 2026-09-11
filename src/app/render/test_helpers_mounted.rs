@@ -22,7 +22,15 @@ pub fn mounted_model_at(mut app: App, width: u16, height: u16) -> Model {
 
 /// Draw one full frame through `Model::draw_frame` (the live shell paint path)
 /// after re-syncing mounted surfaces, and return the painted buffer text.
+/// One throwaway draw runs first: the chrome panels mount only once a frame
+/// has published `root_frame` (tasks 2.1-2.2), so this mirrors the steady
+/// state — startup draw, then sync, then the loop draw.
 pub fn draw_mounted_frame(model: &mut Model, width: u16, height: u16) -> String {
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    // One throwaway draw publishes `root_frame`; the panels mount at the
+    // sync it gates, then the recorded draw paints them.
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
     model.sync_mounted_surfaces();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
@@ -34,6 +42,11 @@ pub fn draw_mounted_frame(model: &mut Model, width: u16, height: u16) -> String 
 /// the painted buffer. `draw_frame` is the live shell paint path, so the
 /// bottom status-bar row is painted (unlike a bare component `view`).
 pub fn draw_mounted_terminal(model: &mut Model, width: u16, height: u16) -> Terminal<TestBackend> {
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    // One throwaway draw publishes `root_frame` (tasks 2.1-2.2); the chrome
+    // panels mount at the sync it gates, then the recorded draw paints them.
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
     model.sync_mounted_surfaces();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();

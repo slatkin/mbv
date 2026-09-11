@@ -176,6 +176,14 @@ impl Model {
                 ids.push(id);
             }
         }
+        // The chrome panels paint only where `RootFrame` places them (tasks
+        // 2.1-2.2), and they are mounted exactly when a placement exists, so
+        // the mounted check is the painted-this-frame check.
+        for id in [ComponentId::TabPanel, ComponentId::StatusBarPanel] {
+            if self.application.mounted(&id) {
+                ids.push(id);
+            }
+        }
         if self.application.mounted(&ComponentId::WideHeroBoundary)
             && self.wide_hero_boundary_mouse_eligible()
         {

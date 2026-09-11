@@ -22,6 +22,10 @@ pub(in crate::app) use components::audiobookshelf_podcast::{
 pub(in crate::app) use components::chrome_player::{
     render_player_panel, render_title_row, PlaybackRenderContext,
 };
+pub(in crate::app) use components::chrome_status::{
+    render_status_bar, StatusBarModel, StatusBarRegions,
+};
+pub(in crate::app) use components::chrome_tabs::{render_tab_bar, TabBarModel};
 pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
 pub(in crate::app) use components::context_menu::render_context_menu_content;
 pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;

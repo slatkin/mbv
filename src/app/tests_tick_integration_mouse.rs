@@ -169,11 +169,10 @@ fn tick_blocking_remote_reanchor_modal_suppresses_underlying_mouse_activity() {
     assert_blocking_modal_suppresses_sidebar_clicks(&mut harness, &rows);
 }
 
-// --- Task 6.5: tab-bar click-to-switch. The tab bar is shell-painted chrome
-// with no mounted component, so it has no `mouse_sub()` claim; the click is
-// resolved by the shell against `layout.tabs_hitmap` via the `MouseClick`
-// observer signal, then driven through `set_library_tab` (the same entry
-// point keyboard tab-cycling uses).
+// --- Task 2.1: tab-bar click-to-switch. The tab bar is the mounted
+// `TabPanel` now: it resolves the click against its own painted hit regions
+// and emits `ShellRequest::TabSelect`, which the shell drives through
+// `set_library_tab` (the same entry point keyboard tab-cycling uses).
 
 fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
     let (mut music_resize, mut tv_resize) = (false, false);
@@ -184,24 +183,43 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
     }
 }
 
-#[test]
-fn tab_bar_click_switches_active_tab() {
+fn drawn_tab_harness() -> TickHarness {
     let mut app = crate::app::render::make_movie_app();
     app.tab = TabSelection::Home;
     let mut harness = TickHarness::new(app);
+    // The first sync cannot mount the panels: `root_frame` publishes only
+    // with the first drawn frame (compose_base_frame), so sync, draw, then
+    // sync + draw again with the placements current -- the steady-state
+    // loop order.
     harness.model_mut().sync_mounted_surfaces();
-
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness
+}
 
-    let (rect, tab_pos) = harness
+fn tab_panel_component(harness: &TickHarness) -> &crate::app::components::TabPanel {
+    harness
         .model()
-        .app
-        .layout
-        .main
-        .tabs_hitmap
+        .application
+        .get_component(&ComponentId::TabPanel)
+        .expect("TabPanel mounted when the library column is visible")
+        .as_any()
+        .downcast_ref::<crate::app::components::TabPanel>()
+        .expect("TabPanel component")
+}
+
+#[test]
+fn tab_bar_click_switches_active_tab() {
+    let mut harness = drawn_tab_harness();
+
+    let (rect, tab_pos) = tab_panel_component(&harness)
+        .hit_regions()
         .iter()
         .find(|(_, pos)| *pos == 1)
         .copied()
@@ -226,20 +244,17 @@ fn tab_bar_click_switches_active_tab() {
 
 #[test]
 fn tab_bar_click_outside_tabs_area_is_noop() {
-    let mut app = crate::app::render::make_movie_app();
-    app.tab = TabSelection::Home;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-
-    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
+    let mut harness = drawn_tab_harness();
 
     assert!(
-        !harness.model().app.layout.tabs_area.contains(
-            ratatui::layout::Position { x: 0, y: 0 }
-        ),
+        !harness
+            .model()
+            .app
+            .layout
+            .root_frame
+            .tab
+            .expect("library column visible: tab bar placed")
+            .contains(ratatui::layout::Position { x: 0, y: 0 }),
         "top-left corner must fall outside the tab bar for this assertion to be meaningful"
     );
 
@@ -255,8 +270,102 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
     assert_eq!(
         harness.model().app.tab,
         TabSelection::Home,
-        "a click outside tabs_area is a no-op"
+        "a click outside the tab bar placement is a no-op"
     );
+}
+
+// --- Task 2.2: volume-pill scroll. The mounted `StatusBarPanel` resolves
+// the scroll against its own painted volume pill and emits the volume
+// intent; the shell dispatches it through the same path the `-`/`+` keys
+// use.
+#[test]
+fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
+    let mut app = crate::app::render::make_movie_app();
+    app.ui_volume = 60;
+    app.mute_on = false;
+    let mut harness = TickHarness::new(app);
+    // The panels mount only after the first drawn frame publishes
+    // `root_frame`; sync + draw, then sync + draw again -- the steady-state
+    // loop order.
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+
+    let vol = tab_panel_status_regions(&harness)
+        .volume
+        .expect("volume pill painted and region retained");
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: vol.x + 1,
+        row: vol.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.messages.contains(&Msg::Playback(
+            crate::app::components::PlaybackRequest::VolumeDelta(-5)
+        )),
+        "the volume intent reaches the shell: {:?}",
+        outcome.messages
+    );
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(
+        harness.model().app.ui_volume, 55,
+        "scroll down lowers the volume by the legacy wheel step"
+    );
+}
+
+fn tab_panel_status_regions(
+    harness: &TickHarness,
+) -> crate::app::render::StatusBarRegions {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::StatusBarPanel)
+        .expect("StatusBarPanel mounted when the library column is visible")
+        .as_any()
+        .downcast_ref::<crate::app::components::StatusBarPanel>()
+        .expect("StatusBarPanel component")
+        .regions()
+}
+
+/// D1's mount rule through the live sync pass (tasks 2.1-2.2): the chrome
+/// panels mount exactly when the root places them. Queue-only places neither
+/// tab bar nor status row, so both are unmounted there; a library-visible
+/// mode mounts both.
+#[test]
+fn tick_chrome_panels_mount_only_where_the_root_places_them() {
+    let mut app = make_app_stub();
+    app.panel_mode = PanelMode::QueueOnly;
+    app.terminal_width = 120; // >= MINI_VIEW_THRESHOLD, so the mode applies
+    let mut harness = TickHarness::new(app);
+    // One draw publishes the queue-only placements; the sync it gates must
+    // keep both chrome panels unmounted.
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness.model().application.mounted(&ComponentId::TabPanel));
+    assert!(!harness
+        .model()
+        .application
+        .mounted(&ComponentId::StatusBarPanel));
+
+    // The library-visible counterpart mounts both.
+    let harness = drawn_tab_harness();
+    assert!(harness.model().application.mounted(&ComponentId::TabPanel));
+    assert!(harness
+        .model()
+        .application
+        .mounted(&ComponentId::StatusBarPanel));
 }
 
 /// Task 5.4 (D2 rung 2 exclusivity): with the context menu mounted, a wheel

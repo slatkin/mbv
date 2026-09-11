@@ -39,6 +39,8 @@ pub mod search_sidebar;
 pub mod selection_modal;
 pub mod sessions;
 pub mod settings;
+pub mod status_bar_panel;
+pub mod tab_panel;
 pub mod tv_workspace;
 pub mod user_event;
 pub mod wide_hero_boundary;
@@ -78,6 +80,8 @@ pub use self::sessions::SessionsComponent;
 pub(in crate::app) use self::settings::{
     ServiceRow, SettingsComponent, SettingsRow, SettingsSnapshot, SetupDraft,
 };
+pub use self::status_bar_panel::StatusBarPanel;
+pub use self::tab_panel::TabPanel;
 pub use self::tv_workspace::TvWorkspaceComponent;
 pub use self::user_event::UserEvent;
 pub use self::wide_hero_boundary::WideHeroBoundaryComponent;

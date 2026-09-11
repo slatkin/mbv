@@ -118,7 +118,6 @@ impl App {
             layout.main.left_area = chrome.left_area;
             layout.playback.player_area = chrome.player_area;
             layout.playback.status_area = chrome.status_area;
-            layout.tabs_area = chrome.tabs_area;
             // Task 1.3: the paint-free `RootFrame` panel placements publish
             // with the rest of the chrome checkpoint.
             layout.root_frame = chrome.root;
@@ -212,9 +211,8 @@ impl App {
             right_full_area: _,
             left_content,
             tab_bar_area: _,
-            tabs_area: _,
             player_area: _,
-            status_area,
+            status_area: _,
             right_visible,
             queue_focused,
             root: _,
@@ -226,7 +224,7 @@ impl App {
         // Pre-body legacy chrome (column backgrounds, tab bar) underpaints the
         // card/queue/library body below. The right-column player panel is
         // painted solely by the mounted `PlaybackComponent` (row 3.9).
-        self.paint_legacy_chrome(f, chrome, layout);
+        self.paint_legacy_chrome(f, chrome);
 
         let (lib_area, queue_geometry) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
             (right_area, Default::default())
@@ -382,38 +380,31 @@ impl App {
         if right_visible {
             self.render_library(f, render_lib_area, layout, cursor_scroll);
         }
-
-        // Status bar at the bottom of the right panel. Playback prompts are
-        // painted by the shell-mounted component after this legacy frame.
-        if status_area.width > 0 {
-            self.render_status_bar(f, status_area, playback, false);
-        }
+        // The status row is painted by the mounted `StatusBarPanel` from its
+        // `RootFrame.status_bar` placement (task 2.2); `render_main` paints
+        // nothing there.
     }
 
     /// Paints the pre-body legacy chrome that underpaints the card/queue/library
-    /// body: the left/right column backgrounds and the tab bar.
+    /// body: the left/right column backgrounds.
     ///
-    /// The right-column player panel is not painted here: the mounted
-    /// `PlaybackComponent` is its sole painter (row 3.9). The queue-only-mode
+    /// The tab bar is painted by the mounted `TabPanel` from its
+    /// `RootFrame.tab` placement (task 2.1), and the right-column player
+    /// panel by the mounted `PlaybackComponent` (row 3.9). The queue-only-mode
     /// player panels stay in `render_main` as the sole legacy renderer (D5),
     /// because `player_area` is empty in queue-only mode so the component
     /// cannot paint there.
     ///
     /// Called from within `render_main` at the root/chrome checkpoint, before
-    /// any body paint. `render_tabs` reads `self.tab`, which the sync pass
-    /// resolved before this draw (task 1.1); the draw path no longer
-    /// normalizes it.
+    /// any body paint.
     pub(in crate::app) fn paint_legacy_chrome(
         &mut self,
         f: &mut Frame,
         chrome: &FrameChromeGeometry,
-        layout: &mut LayoutMain,
     ) {
         let FrameChromeGeometry {
             left_area,
             right_full_area,
-            tab_bar_area,
-            tabs_area,
             right_visible,
             queue_focused,
             ..
@@ -427,10 +418,5 @@ impl App {
             self.effective_panel_mode() != PanelMode::LibraryOnly,
             right_visible,
         );
-
-        // Tab bar at the very top of the right column.
-        if right_visible {
-            self.render_tabs(f, tab_bar_area, tabs_area, layout);
-        }
     }
 }
