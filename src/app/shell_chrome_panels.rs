@@ -4,13 +4,15 @@
 //! when its `RootFrame` placement exists (design D1's mount rule, following
 //! the `sync_queue_boundary` precedent) and projects shell-owned content
 //! into it one-way; the draw path only hands each panel its placement.
+//! S3 (task 4.1): the right-column strip joins them as the mounted
+//! `LibraryPlaybackPanel`, mounted only when the queue column is hidden.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::component::AppComponent;
 
 use super::components::{
-    ComponentId, Msg, QueuePlaybackPanel, StatusBarPanel, TabPanel, UserEvent,
+    ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel, StatusBarPanel, TabPanel, UserEvent,
 };
 use super::*;
 use crate::app::layout::CardGeometry;
@@ -48,6 +50,7 @@ enum ChromePanel {
     Tab,
     StatusBar,
     QueuePlayback,
+    LibraryPlayback,
 }
 
 impl ChromePanel {
@@ -56,6 +59,7 @@ impl ChromePanel {
             Self::Tab => ComponentId::TabPanel,
             Self::StatusBar => ComponentId::StatusBarPanel,
             Self::QueuePlayback => ComponentId::QueuePlaybackPanel,
+            Self::LibraryPlayback => ComponentId::LibraryPlaybackPanel,
         }
     }
 
@@ -64,6 +68,7 @@ impl ChromePanel {
             Self::Tab => Box::new(TabPanel::new()),
             Self::StatusBar => Box::new(StatusBarPanel::new()),
             Self::QueuePlayback => Box::new(QueuePlaybackPanel::new()),
+            Self::LibraryPlayback => Box::new(LibraryPlaybackPanel::new()),
         }
     }
 }
@@ -271,6 +276,33 @@ impl Model {
     pub(super) fn render_tab_panel(&mut self, frame: &mut Frame) {
         let placement = self.app.layout.root_frame.tab;
         self.render_placed_panel(frame, placement, &ComponentId::TabPanel);
+    }
+
+    /// Mount/unmount the `LibraryPlaybackPanel` to the `RootFrame
+    /// .library_playback` placement and project the strip's transport facts
+    /// from the shared transport projection (task 4.1, D10). Mounted only
+    /// when the queue column is hidden — there the strip is the frame's one
+    /// transport; in every queue-visible layout the panel is unmounted and
+    /// the transport is the Queue playback panel's.
+    pub(super) fn sync_library_playback_panel(&mut self) {
+        let placement = self.sync_chrome_root().library_playback;
+        self.mount_to_placement(ChromePanel::LibraryPlayback, placement);
+        let id = ChromePanel::LibraryPlayback.id();
+        let transport = self.transport_projection();
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPlaybackPanel>() {
+                panel.set_projection(transport);
+            }
+        }
+    }
+
+    /// Paint the mounted `LibraryPlaybackPanel` into the `RootFrame
+    /// .library_playback` placement (task 4.1, D1's view rule). The panel
+    /// paints the whole placement — the `PLAYER_BOX_HEIGHT` strip band —
+    /// through the shared transport arrangement.
+    pub(super) fn render_library_playback_panel(&mut self, frame: &mut Frame) {
+        let placement = self.app.layout.root_frame.library_playback;
+        self.render_placed_panel(frame, placement, &ComponentId::LibraryPlaybackPanel);
     }
 
     /// Paint the mounted `StatusBarPanel` into the `RootFrame.status_bar`

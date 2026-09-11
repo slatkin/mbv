@@ -3,9 +3,8 @@ use std::time::{Duration, Instant};
 use super::action::{playback_command_for_key, Command};
 use super::components::msg::AlbumCursorKind;
 use super::components::{
-    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent,
-    QueueBoundaryComponent, ShellRequest, TerminalObserverEvent, UiRootComponent, UserEvent,
-    WideHeroBoundaryComponent,
+    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest,
+    TerminalObserverEvent, UiRootComponent, UserEvent, WideHeroBoundaryComponent,
 };
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
@@ -469,18 +468,6 @@ impl Model {
                 vec![],
             )
             .expect("mount WideHeroBoundary");
-        // Playback is also the stable attribute carrier for precedence gates.
-        model
-            .application
-            .mount(
-                ComponentId::Playback,
-                Box::new(PlaybackComponent::new()),
-                // `vec![]`: no non-mouse subscription (ADR 0024, see
-                // `fold_mouse_messages`); mouse eligibility comes from
-                // `sync_mouse_subscriptions`.
-                vec![],
-            )
-            .expect("mount Playback");
         model.update_settings_content();
         model
     }

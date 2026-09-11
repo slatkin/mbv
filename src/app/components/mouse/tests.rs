@@ -78,7 +78,7 @@ fn mouse_sub_forwards_every_kind_at_any_coordinate() {
         );
         let mut app: Application<ComponentId, Msg, UserEvent> = Application::init(cfg);
         app.mount(
-            ComponentId::Playback,
+            ComponentId::LibraryPlaybackPanel,
             Box::new(MouseProbe),
             vec![mouse_sub()],
         )

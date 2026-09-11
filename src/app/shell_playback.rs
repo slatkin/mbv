@@ -1,4 +1,4 @@
-use super::components::{PlaybackComponent, PlaybackProjection, PlaybackRequest};
+use super::components::{PlaybackProjection, PlaybackRequest};
 use super::shell::Model;
 use super::{palette, PanelFocus};
 
@@ -65,44 +65,6 @@ impl Model {
             stop_available: self.app.connected_session_id.is_some() || state.active,
             next_available: self.app.transport_prev_next_available().1,
         }
-    }
-
-    pub(super) fn sync_playback(&mut self) {
-        let id = super::components::ComponentId::Playback;
-        if !self.application.mounted(&id) {
-            self.application
-                .mount(id.clone(), Box::new(PlaybackComponent::new()), vec![])
-                .expect("mount Playback");
-        }
-        let projection = self.transport_projection();
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(playback) = comp.as_any_mut().downcast_mut::<PlaybackComponent>() {
-                playback.set_projection(projection);
-            }
-        }
-    }
-
-    pub(super) fn render_playback_component(&mut self, frame: &mut ratatui::Frame) {
-        let id = super::components::ComponentId::Playback;
-        if !self.application.mounted(&id) {
-            return;
-        }
-        // The strip renders only where `RootFrame` places it (task 3.5, D10):
-        // the right column of a queue-hidden layout. In every queue-visible
-        // layout the transport is the Queue playback panel's, and the strip
-        // band stays reserved but unpainted until task 4.1 reclaims the rows.
-        let Some(area) = self.app.layout.root_frame.library_playback else {
-            // The strip does not paint this frame: clear the transport hit
-            // geometry it retained from its last paint, so no stale geometry
-            // survives the layout switch (review of tasks 3.5-3.8).
-            if let Some(comp) = self.application.get_component_mut(&id) {
-                if let Some(playback) = comp.as_any_mut().downcast_mut::<PlaybackComponent>() {
-                    playback.clear_transport_hits();
-                }
-            }
-            return;
-        };
-        self.application.view(&id, frame, area);
     }
 
     pub(super) fn handle_playback_request(&mut self, request: PlaybackRequest) {

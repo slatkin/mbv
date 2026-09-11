@@ -1,6 +1,7 @@
 use super::test_helpers::*;
 use super::*;
 use crate::app::layout::LayoutPlayback;
+use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::tests::make_app_stub;
 use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
@@ -186,14 +187,15 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
     assert_eq!(layout.next_area.width, next_glyph.width() as u16);
 }
 
-/// `remove-migrated-surface-underpaint` 3.9 (D4): the right-column player
-/// chrome is painted solely by the mounted `PlaybackComponent`. The legacy
-/// base frame (`App::render`) still reserves `player_area` as the placement
-/// hand-off, but paints no seekbar or transport row there. Mirrors
-/// `wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
+/// Task 4.1 (D10): the right column reserves the playback strip's rows only
+/// where the strip paints — a `PLAYER_BOX_HEIGHT` band in library-only, none
+/// in a queue-visible layout, where the frame's one transport is the Queue
+/// playback panel's. The legacy base frame (`App::render`) paints no seekbar
+/// or transport row anywhere.
 #[test]
 fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
     let mut app = make_movie_app();
+    app.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
@@ -205,9 +207,9 @@ fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
     let terminal = render_app_to_terminal(&mut app, 100, 20);
 
     let player_area = app.layout.playback.player_area;
-    assert!(
-        player_area.height > 0 && player_area.width > 0,
-        "player_area must still be reserved for the component: {player_area:?}"
+    assert_eq!(
+        player_area.height, PLAYER_BOX_HEIGHT,
+        "library-only reserves exactly the strip band for the component: {player_area:?}"
     );
     let buf = terminal.backend().buffer();
     for y in player_area.y..player_area.y + player_area.height {
@@ -461,9 +463,9 @@ fn remote_status_spans_shows_local_device_name_when_off() {
 
 fn rendered_text(mut app: App, width: u16, height: u16) -> String {
     // The now-playing strip is painted solely by the mounted
-    // `PlaybackComponent`, and only where `RootFrame` places it (task 3.5):
-    // the right column of a queue-hidden layout. Render in library-only, the
-    // layout that shows the strip, through the shell path that syncs and
+    // `LibraryPlaybackPanel`, and only where `RootFrame` places it (task
+    // 4.1): the right column of a queue-hidden layout. Render in library-only,
+    // the layout that shows the strip, through the shell path that syncs and
     // paints it.
     app.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
     let mut model = crate::app::shell::Model::new(app);
@@ -472,11 +474,11 @@ fn rendered_text(mut app: App, width: u16, height: u16) -> String {
     terminal
         .draw(|f| model.app.compose_base_frame(f, None))
         .unwrap();
-    model.sync_playback();
+    model.sync_library_playback_panel();
     terminal
         .draw(|f| {
             model.app.compose_base_frame(f, None);
-            model.render_playback_component(f);
+            model.render_library_playback_panel(f);
         })
         .unwrap();
     let buf = terminal.backend().buffer();

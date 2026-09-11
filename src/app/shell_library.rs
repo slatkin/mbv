@@ -155,7 +155,7 @@ impl Model {
         }
 
         // Rung 3: the components painted this frame — active destination,
-        // Queue, and Playback (the transport chrome).
+        // Queue, and the playback panels (the transport chrome).
         let mut ids = Vec::new();
         let panel_mode = self.app.effective_panel_mode();
         if let Some(child) = self
@@ -168,26 +168,22 @@ impl Model {
             ComponentId::Queue,
             ComponentId::QueuePlaybackPanel,
             ComponentId::QueueBoundary,
-            ComponentId::Playback,
         ] {
             if self.application.mounted(&id)
                 && (id != ComponentId::QueueBoundary || self.queue_boundary_mouse_eligible())
-                && match id {
-                    // The strip paints only where `RootFrame` places it (task
-                    // 3.5): its placement is the painted-this-frame check, and
-                    // the hits it retains are cleared on every unpainted frame
-                    // (review of tasks 3.5-3.8).
-                    ComponentId::Playback => self.app.layout.root_frame.library_playback.is_some(),
-                    _ => panel_mode != super::PanelMode::LibraryOnly,
-                }
+                && panel_mode != super::PanelMode::LibraryOnly
             {
                 ids.push(id);
             }
         }
         // The chrome panels paint only where `RootFrame` places them (tasks
-        // 2.1-2.2), and they are mounted exactly when a placement exists, so
-        // the mounted check is the painted-this-frame check.
-        for id in [ComponentId::TabPanel, ComponentId::StatusBarPanel] {
+        // 2.1-2.2, 4.1), and they are mounted exactly when a placement exists,
+        // so the mounted check is the painted-this-frame check.
+        for id in [
+            ComponentId::TabPanel,
+            ComponentId::StatusBarPanel,
+            ComponentId::LibraryPlaybackPanel,
+        ] {
             if self.application.mounted(&id) {
                 ids.push(id);
             }

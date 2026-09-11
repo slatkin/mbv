@@ -1,8 +1,106 @@
 use super::test_helpers::*;
 use crate::app::palette;
+use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::tests::make_session;
 use crate::App;
 use ratatui::layout::Rect;
+
+/// Task 4.1 (D10): the right column reserves the playback strip's
+/// `PLAYER_BOX_HEIGHT` rows only in library-only. `both` reserves none — the
+/// library starts at the tab bar's bottom edge and the right column paints
+/// no transport while playback is active — `queue-only` reserves none, and
+/// library-only's strip band is exactly `PLAYER_BOX_HEIGHT` tall, sits
+/// between the tab bar and the library, and paints the frame's transport
+/// (the seekbar track glyph is its signature).
+#[test]
+fn strip_rows_are_reserved_only_in_library_only() {
+    fn active_app() -> App {
+        let app = make_queue_app(5);
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.queue_len = 5;
+        status.current_idx = 0;
+        status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
+        status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
+        drop(status);
+        app
+    }
+
+    // The seekbar's filled track is the transport's signature: a `▔` cell in
+    // the ACCENT foreground (the hero borders' `▔` frames use the track
+    // colour instead), collected together with the frame's panel placements.
+    fn transport_cells(buf: &ratatui::buffer::Buffer) -> Vec<(u16, u16)> {
+        let mut cells = Vec::new();
+        for y in 0..buf.area().height {
+            for x in 0..buf.area().width {
+                let cell = &buf[(x, y)];
+                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(palette::ACCENT) {
+                    cells.push((x, y));
+                }
+            }
+        }
+        cells
+    }
+
+    // `both`: no strip rows are reserved — the library starts directly below
+    // the tab bar, and no transport cell paints in the right column (the
+    // frame's one transport is the queue column's).
+    let mut app = active_app();
+    app.panel_mode = crate::app::PanelMode::Both;
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 40));
+    assert!(chrome.root.library_playback.is_none());
+    assert_eq!(
+        chrome.root.library.expect("library placed").y,
+        chrome.root.tab.expect("tab placed").bottom(),
+        "both: the library starts at the tab bar's bottom edge — no strip band reserved"
+    );
+    let library_x = chrome.root.library.unwrap().x;
+    let cells = transport_cells(term.backend().buffer());
+    assert!(!cells.is_empty(), "both: the queue-column transport paints");
+    assert!(
+        cells.iter().all(|&(x, _)| x < library_x),
+        "both: no transport cell paints in the right column: {cells:?}"
+    );
+
+    // `queue-only`: no strip at all.
+    let mut app = active_app();
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    let (_term, _) = render_queue_view_to_terminal(&mut app, 80, 40);
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 80, 40));
+    assert!(chrome.root.library_playback.is_none());
+    assert!(chrome.root.library.is_none());
+    assert!(chrome.root.tab.is_none());
+
+    // `library-only`: the strip band is exactly `PLAYER_BOX_HEIGHT`, sits
+    // between the tab bar and the library, and paints the frame's one
+    // transport.
+    let mut app = active_app();
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 40));
+    let strip = chrome
+        .root
+        .library_playback
+        .expect("library-only places the strip");
+    assert_eq!(strip.height, PLAYER_BOX_HEIGHT);
+    assert_eq!(strip.y, chrome.root.tab.expect("tab placed").bottom());
+    assert_eq!(
+        strip.bottom(),
+        chrome.root.library.expect("library placed").y
+    );
+    let cells = transport_cells(term.backend().buffer());
+    assert!(
+        !cells.is_empty(),
+        "library-only: the strip transport paints"
+    );
+    assert!(
+        cells.iter().all(|&(x, y)| strip.contains((x, y).into())),
+        "library-only: the strip paints the frame's only transport: {cells:?}"
+    );
+}
 
 #[test]
 fn short_window_keeps_queue_in_left_column() {

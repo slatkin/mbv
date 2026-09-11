@@ -71,14 +71,16 @@ pub(crate) struct RootFrame {
     /// Tab bar at the top of the library column (`TabPanel`, task 2.1).
     pub tab: Option<Rect>,
     /// The library column's content area (below the tab bar; below the
-    /// playback strip in LibraryOnly) (`LibraryPanel`, task 4.1). In Both the
-    /// strip panel is not placed but its rows are still reserved, so this
-    /// placement covers the strip band from the tab bar down — S0
-    /// intermediate; task 4.1 stops reserving the strip rows and re-derives
-    /// this.
+    /// playback strip in LibraryOnly) (`LibraryPanel`, task 4.1). The
+    /// strip's `PLAYER_BOX_HEIGHT` band is reserved only where the strip
+    /// paints (task 4.1): in LibraryOnly the library starts below it; in a
+    /// queue-visible layout the library starts at the tab bar's bottom edge
+    /// and no strip rows are reserved (the frame's one transport is the
+    /// Queue playback panel's).
     pub library: Option<Rect>,
     /// The right-column playback strip (`LibraryPlaybackPanel`, task 4.1):
-    /// placed only when the queue column is hidden.
+    /// placed — and its `PLAYER_BOX_HEIGHT` rows reserved — only when the
+    /// queue column is hidden.
     pub library_playback: Option<Rect>,
     /// The queue panel's placement below the queue column's playback region
     /// (`QueuePanel`, task 3.1).
@@ -225,18 +227,29 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
     };
 
     let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
+    // The playback strip's rows are reserved only where the strip paints
+    // (task 4.1, D10): a `PLAYER_BOX_HEIGHT` band between the tab bar and
+    // the library in LibraryOnly, nothing in a queue-visible layout — there
+    // the frame's one transport is the Queue playback panel's, and the
+    // library reclaims the band.
+    let strip_h = if input.panel_mode == PanelMode::LibraryOnly {
+        PLAYER_BOX_HEIGHT
+    } else {
+        0
+    };
     let right_area = Rect {
         x: area.x + left_w + COLUMN_GAP,
-        y: area.y + tab_h + PLAYER_BOX_HEIGHT,
+        y: area.y + tab_h + strip_h,
         width: right_w.saturating_sub(COLUMN_GAP),
         height: content_h
             .saturating_sub(1)
             .saturating_sub(tab_h)
-            .saturating_sub(PLAYER_BOX_HEIGHT),
+            .saturating_sub(strip_h),
     };
 
-    // Player panel below the tab bar (right column only).
-    let player_area = if right_visible {
+    // The playback strip's band below the tab bar (library column only;
+    // task 4.1).
+    let player_area = if input.panel_mode == PanelMode::LibraryOnly {
         Rect {
             x: right_area.x,
             y: area.y + tab_h,
@@ -263,22 +276,13 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         height: tab_h,
     };
 
-    // The library panel's placement. In LibraryOnly the playback strip is
-    // placed as `library_playback`, so the library starts below it. In Both
-    // the strip panel is not placed (D1: it mounts only when the queue column
-    // is hidden), but the legacy strip rows are still reserved in the right
-    // column; the library placement covers that band so the right column's
-    // present placements -- tab, library, status bar -- tile it with no
-    // unowned rows (S0 intermediate; task 4.1 stops reserving the strip rows).
-    let library_area = if input.panel_mode == PanelMode::LibraryOnly {
-        right_area
-    } else {
-        Rect {
-            y: tab_bar_area.bottom(),
-            height: right_area.bottom().saturating_sub(tab_bar_area.bottom()),
-            ..right_area
-        }
-    };
+    // The library panel's placement: the right column between the tab bar
+    // and the status row. In LibraryOnly it starts below the playback
+    // strip's band (placed as `library_playback`); in a queue-visible layout
+    // the band is not reserved (task 4.1), so the library starts at the tab
+    // bar's bottom edge. Either way the right column's present placements --
+    // tab, library, status bar -- tile it with no unowned rows.
+    let library_area = right_area;
 
     // Root panel placements (D1, task 1.3): which panels the current Panel
     // mode mounts, and where. The queue column splits into the Queue playback
@@ -480,15 +484,18 @@ mod root_frame_tests {
         assert_eq!(strip.bottom(), library.y);
         assert_eq!(library.bottom(), status.y);
         assert_eq!(status.bottom(), area().bottom());
+        // The strip is exactly the shared transport arrangement's four-row
+        // band (task 4.1, D10).
+        assert_eq!(strip.height, PLAYER_BOX_HEIGHT);
     }
 
     /// Both: the queue column's two placements tile it exactly (playback
     /// region above, queue panel below, sharing one column geometry), the
     /// boundary is the one-column divider beside the queue column, and the
     /// right column's placed panels -- tab, library, status bar -- tile it
-    /// exactly: the library starts at the tab bar's bottom edge and covers
-    /// the legacy strip band (whose panel mounts only when the queue column
-    /// is hidden — task 4.1 stops reserving those rows).
+    /// exactly from the tab bar's bottom edge down: the strip's rows are
+    /// reserved only where the strip paints (task 4.1), so the library
+    /// reclaims the band in a queue-visible layout.
     #[test]
     fn both_placements_tile_the_queue_column_and_bound_the_columns() {
         let f = frame(PanelMode::Both, true);
@@ -522,6 +529,9 @@ mod root_frame_tests {
         assert_eq!(library.bottom(), status.y);
         assert_eq!(status.bottom(), area().bottom());
         assert!(f.library_playback.is_none());
+        // No strip rows are reserved: the library spans the whole tab-to-status
+        // band with no gap for the strip it does not place (task 4.1).
+        assert_eq!(library.height, tab.bottom().abs_diff(status.y));
     }
 
     /// Queue-only: the queue column spans the full window, its two placements

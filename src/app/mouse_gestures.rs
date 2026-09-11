@@ -9,7 +9,7 @@ use mbv_core::remote_reconciliation::RemoteIntent;
 use std::time::{Duration, Instant};
 
 impl App {
-    /// Seek to a 0.0..=1.0 `fraction` of the runtime. `PlaybackComponent`
+    /// Seek to a 0.0..=1.0 `fraction` of the runtime. `LibraryPlaybackPanel`
     /// resolves the click column against its own painted `seekbar_area`, so the
     /// shell never reads that component-owned geometry.
     pub(super) fn seek_to_fraction(&mut self, fraction: f64) {

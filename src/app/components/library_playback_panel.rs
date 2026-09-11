@@ -1,3 +1,15 @@
+//! The Library playback panel (task 4.1, design D10): the right-column
+//! playback strip, mounted only when the queue column is hidden — there it
+//! is the frame's one transport. It owns its placement around the shared
+//! width-driven transport arrangement (a `PLAYER_BOX_HEIGHT` band between
+//! the tab bar and the library: no header row, no visual slot) while the
+//! arrangement decides what the transport shows at the panel's width, the
+//! same arrangement the Queue playback panel's queue-column transport calls.
+//! Transport hit geometry is the panel's own retained paint state.
+//!
+//! `PlaybackProjection` — the shared transport projection both playback
+//! panels consume — is also defined here.
+
 use std::time::{Duration, Instant};
 
 use ratatui::layout::Rect;
@@ -35,7 +47,7 @@ pub(in crate::app) struct PlaybackProjection {
     pub next_available: bool,
 }
 
-pub struct PlaybackComponent {
+pub struct LibraryPlaybackPanel {
     projection: PlaybackProjection,
     props: Props,
     last_space: Option<Instant>,
@@ -48,7 +60,7 @@ pub struct PlaybackComponent {
     marquee_started_at: Instant,
 }
 
-impl PlaybackComponent {
+impl LibraryPlaybackPanel {
     pub fn new() -> Self {
         Self {
             projection: PlaybackProjection {
@@ -81,17 +93,6 @@ impl PlaybackComponent {
 
     pub(in crate::app) fn set_projection(&mut self, projection: PlaybackProjection) {
         self.projection = projection;
-    }
-
-    /// Clears the transport hit geometry retained from the last paint
-    /// (review of tasks 3.5-3.8): the shell calls this whenever the strip
-    /// does not paint this frame, so no stale geometry survives a layout
-    /// switch.
-    pub(in crate::app) fn clear_transport_hits(&mut self) {
-        self.play_pause_area = Rect::default();
-        self.stop_area = Rect::default();
-        self.next_area = Rect::default();
-        self.seekbar_area = Rect::default();
     }
 
     /// Test-only: the retained transport hit geometry.
@@ -157,21 +158,21 @@ impl PlaybackComponent {
     }
 }
 
-impl Default for PlaybackComponent {
+impl Default for LibraryPlaybackPanel {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Component for PlaybackComponent {
+impl Component for LibraryPlaybackPanel {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        // The panel rect is paint-time geometry owned by the shell's base frame,
-        // so it arrives as this component's area. Carrying it in the projection
-        // instead meant the component painted with the rect published by the
-        // *previous* frame, which kept the old panel mode's chrome on top of the
-        // queue for one frame after `x`. `compose_base_frame` leaves the area
-        // empty in every mode where the legacy frame paints the panel itself.
-        let player_h = area.height.max(4);
+        // The strip's placement is the `RootFrame.library_playback` band
+        // (`PLAYER_BOX_HEIGHT` tall); it carries no header row and no visual
+        // slot — the shared width-driven transport arrangement decides which
+        // transport rows and indicators the band shows at its width (the same
+        // arrangement the queue-column transport calls, D10), and
+        // `render_player_panel` is its leaf painter.
+        let player_h = area.height.min(4);
         let mut playback = LayoutPlayback {
             player_area: area,
             ..LayoutPlayback::default()
@@ -222,7 +223,7 @@ impl Component for PlaybackComponent {
     }
 }
 
-impl AppComponent<Msg, UserEvent> for PlaybackComponent {
+impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
             Event::Keyboard(key) => self.key(key),
@@ -254,9 +255,9 @@ mod tests {
         })
     }
 
-    fn painted_component() -> PlaybackComponent {
-        let mut component = PlaybackComponent::new();
-        component.set_projection(PlaybackProjection {
+    fn painted_panel() -> LibraryPlaybackPanel {
+        let mut panel = LibraryPlaybackPanel::new();
+        panel.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
@@ -272,16 +273,16 @@ mod tests {
         });
         let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
         terminal
-            .draw(|frame| component.view(frame, Rect::new(10, 5, 40, 4)))
+            .draw(|frame| panel.view(frame, Rect::new(10, 5, 40, 4)))
             .unwrap();
-        component
+        panel
     }
 
     #[test]
     fn seekbar_click_resolves_a_fraction_against_the_painted_seekbar_area() {
-        let mut component = painted_component();
-        // seekbar_area == player_area row: x 10, width 40. Column 30 -> 0.5.
-        let message = component.on(&click(30, 5));
+        let mut panel = painted_panel();
+        // seekbar_area == panel row: x 10, width 40. Column 30 -> 0.5.
+        let message = panel.on(&click(30, 5));
         assert!(matches!(
             message,
             Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
@@ -290,28 +291,28 @@ mod tests {
 
     #[test]
     fn transport_button_click_emits_its_typed_intent() {
-        let mut component = painted_component();
-        // Play/pause glyph starts at player_area.x + 1 on the title row.
+        let mut panel = painted_panel();
+        // Play/pause glyph starts at the panel's x + 1 on the title row.
         assert!(matches!(
-            component.on(&click(11, 6)),
+            panel.on(&click(11, 6)),
             Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
         ));
     }
 
     #[test]
     fn playback_chrome_transport_intent_is_typed_and_player_free() {
-        let mut component = PlaybackComponent::new();
-        assert!(component.on(&key(Key::Char('m'))).is_some());
+        let mut panel = LibraryPlaybackPanel::new();
+        assert!(panel.on(&key(Key::Char('m'))).is_some());
         assert!(matches!(
-            component.on(&key(Key::Right)),
+            panel.on(&key(Key::Right)),
             Some(Msg::Playback(PlaybackRequest::Next))
         ));
     }
 
     #[test]
     fn playback_chrome_projection_renders_without_player_authority() {
-        let mut component = PlaybackComponent::new();
-        component.set_projection(PlaybackProjection {
+        let mut panel = LibraryPlaybackPanel::new();
+        panel.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
@@ -327,7 +328,7 @@ mod tests {
         });
         let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
         terminal
-            .draw(|frame| component.view(frame, frame.area()))
+            .draw(|frame| panel.view(frame, frame.area()))
             .unwrap();
         let output: String = terminal
             .backend()

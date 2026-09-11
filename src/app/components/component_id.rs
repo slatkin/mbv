@@ -23,7 +23,12 @@ pub enum ComponentId {
     /// `RootFrame.status_bar` placement and owns the volume/mute/remote
     /// pill regions.
     StatusBarPanel,
-    Playback,
+    /// The right-column playback strip (`LibraryPlaybackPanel`, task 4.1):
+    /// paints the `RootFrame.library_playback` placement — mounted only when
+    /// the queue column is hidden (D1's mount rule), where it is the frame's
+    /// one transport — and resolves transport clicks against its own
+    /// retained hit geometry.
+    LibraryPlaybackPanel,
     /// The Queue playback panel (`QueuePlaybackPanel`, task 3.5): paints the
     /// `RootFrame.queue_playback` placement — the always-painted header row,
     /// the visual slot's region and the queue-column transport — and resolves

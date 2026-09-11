@@ -202,7 +202,7 @@ impl App {
         // the queue/library body below. The queue column's playback region
         // (header row, visual slot, transport) is painted solely by the
         // mounted `QueuePlaybackPanel` (tasks 3.1/3.5); the right-column
-        // strip solely by the mounted `PlaybackComponent` where it is placed.
+        // strip solely by the mounted `LibraryPlaybackPanel` where it is placed.
         self.paint_legacy_chrome(f, chrome);
 
         // The queue column is the Queue panels' surface now (task 3.5): the
@@ -244,11 +244,10 @@ impl App {
     /// body: the left/right column backgrounds.
     ///
     /// The tab bar is painted by the mounted `TabPanel` from its
-    /// `RootFrame.tab` placement (task 2.1), and the right-column player
-    /// panel by the mounted `PlaybackComponent` (row 3.9). The queue-only-mode
-    /// player panels stay in `render_main` as the sole legacy renderer (D5),
-    /// because `player_area` is empty in queue-only mode so the component
-    /// cannot paint there.
+    /// `RootFrame.tab` placement (task 2.1), and the right-column playback
+    /// strip by the mounted `LibraryPlaybackPanel` from its
+    /// `RootFrame.library_playback` placement (task 4.1, mounted only when
+    /// the queue column is hidden).
     ///
     /// Called from within `render_main` at the root/chrome checkpoint, before
     /// any body paint.

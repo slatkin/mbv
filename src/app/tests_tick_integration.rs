@@ -88,7 +88,7 @@ fn arm_search_query(harness: &mut TickHarness, query: &str) {
 }
 
 /// Phase 1 delivery proof (task 2.7): with Queue focused, a click on the
-/// seek-bar row still reaches the unfocused `PlaybackComponent` through its
+/// seek-bar row still reaches the unfocused `LibraryPlaybackPanel` through its
 /// `mouse_sub()` subscription, and the component resolves the column against
 /// its own painted `seekbar_area` into a 0.0..=1.0 fraction. No other eligible
 /// surface claims the event (D2 exclusivity). The strip renders only where
@@ -105,7 +105,7 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
 
     let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
     terminal
-        .draw(|frame| harness.model_mut().render_playback_component(frame))
+        .draw(|frame| harness.model_mut().render_library_playback_panel(frame))
         .unwrap();
 
     harness.inject(Event::Mouse(MouseEvent {

@@ -24,8 +24,8 @@ use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::library_playback_panel::PlaybackProjection;
 use super::msg::{Msg, PlaybackRequest};
-use super::playback::PlaybackProjection;
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutPlayback;
 use crate::app::palette;

@@ -8,7 +8,7 @@ use ratatui::Terminal;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind, KeyModifiers};
 
 use crate::app::components::msg::PlaybackRequest;
-use crate::app::components::{ComponentId, Msg, QueuePlaybackPanel};
+use crate::app::components::{ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel};
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_playback::PlaybackState;
@@ -37,6 +37,7 @@ fn active_app(panel_mode: PanelMode) -> crate::app::App {
         status.active = true;
         status.queue_len = 3;
         status.current_idx = 0;
+        status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
         status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
     }
     app
@@ -77,12 +78,13 @@ fn drawn_harness(mut app: crate::app::App, width: u16, height: u16) -> (TickHarn
 /// Task 3.7: the Queue playback panel's transport resolves pointer input from
 /// its own retained geometry, in the layouts the panel paints it: `both` and
 /// mini-view `queue-only`. A collapsed (idle) panel's rows resolve nothing.
-/// Review of tasks 3.5-3.8: the right-column strip (`PlaybackComponent`)
-/// keeps no stale hit geometry across a layout switch either.
+/// Task 4.1: the right-column strip (`LibraryPlaybackPanel`) is mounted only
+/// while the queue column is hidden, so it keeps no hit geometry across a
+/// layout switch either.
 #[cfg(test)]
 mod strip_hits {
     use super::*;
-    use crate::app::components::PlaybackComponent;
+    use crate::app::components::LibraryPlaybackPanel;
 
     /// Draw one real library-only frame (the strip paints and retains its
     /// transport hit geometry), then switch to `both` and draw again.
@@ -108,37 +110,29 @@ mod strip_hits {
         let playback = harness
             .model()
             .application
-            .get_component(&ComponentId::Playback)
-            .and_then(|component| component.as_any().downcast_ref::<PlaybackComponent>())
-            .expect("strip mounted");
+            .get_component(&ComponentId::LibraryPlaybackPanel)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPlaybackPanel>())
+            .expect("strip mounted in a library-only layout");
         let (play_pause, seekbar) = playback.transport_hits();
         assert!(play_pause.width > 0 && seekbar.width > 0, "strip hits retained");
 
         // Switch to `both`: the queue column becomes visible and the strip
-        // stops painting — its placement disappears and the hits it retained
-        // must not survive the switch.
+        // stops painting — the D1 mount rule unmounts it, so neither the
+        // component nor its hits survive the switch.
         harness.model_mut().app.panel_mode = PanelMode::Both;
         harness.model_mut().sync_mounted_surfaces();
         terminal
             .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
             .unwrap();
-        let playback = harness
+        assert!(!harness
             .model()
             .application
-            .get_component(&ComponentId::Playback)
-            .and_then(|component| component.as_any().downcast_ref::<PlaybackComponent>())
-            .expect("strip still mounted");
-        let (play_pause, seekbar) = playback.transport_hits();
-        assert_eq!(
-            (play_pause.width, seekbar.width),
-            (0, 0),
-            "the unpainted strip retains no hit geometry"
-        );
+            .mounted(&ComponentId::LibraryPlaybackPanel));
         (harness, strip)
     }
 
     /// A click in the library column where the strip used to sit reaches no
-    /// `PlaybackComponent` once the layout stops painting it.
+    /// `LibraryPlaybackPanel` once the layout stops painting it.
     #[test]
     fn switching_from_library_only_to_both_leaves_the_old_strip_rows_inert() {
         let (mut harness, strip) = strip_to_both_harness();
@@ -242,4 +236,94 @@ fn a_click_in_a_collapsed_panels_rows_emits_nothing() {
         outcome.raw_messages
     );
     let _ = PlaybackState::default();
+}
+
+/// Task 4.1 (D10): exactly one transport paints per frame, owned by the
+/// expected panel — the Queue playback panel's in `both` and `queue-only`,
+/// the `LibraryPlaybackPanel`'s strip in `library-only`. The seekbar track's
+/// glyph is the transport's signature: every painted cell carrying it must
+/// lie inside the owning panel's placement.
+#[test]
+fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
+    for (mode, width) in [
+        (PanelMode::Both, 100),
+        (PanelMode::QueueOnly, 60),
+        (PanelMode::LibraryOnly, 100),
+    ] {
+        let queue_owned = mode != PanelMode::LibraryOnly;
+        let mut app = active_app(mode);
+        app.terminal_width = width;
+        app.terminal_height = 40;
+        let mut harness = TickHarness::new(app);
+        harness.model_mut().sync_mounted_surfaces();
+        let mut terminal = Terminal::new(TestBackend::new(width, 40)).unwrap();
+        // Two frames: the first draw publishes the visual slot's freshly
+        // painted size, the second reserves it in the Queue playback panel's
+        // placement (the shell's one-frame card publish).
+        for _ in 0..2 {
+            terminal
+                .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+                .unwrap();
+        }
+        let model = harness.model();
+        let root = &model.app.layout.root_frame;
+        // The expected panel is mounted and the other is not (the D1 mount
+        // rule), and its retained hits cover the transport it painted.
+        assert_eq!(
+            model.application.mounted(&ComponentId::QueuePlaybackPanel),
+            queue_owned,
+            "{mode:?}: Queue playback panel mounted exactly when the queue column is visible"
+        );
+        assert_eq!(
+            model.application.mounted(&ComponentId::LibraryPlaybackPanel),
+            !queue_owned,
+            "{mode:?}: the strip mounted exactly when the queue column is hidden"
+        );
+        let owner = if queue_owned {
+            let panel = model
+                .application
+                .get_component(&ComponentId::QueuePlaybackPanel)
+                .and_then(|component| component.as_any().downcast_ref::<QueuePlaybackPanel>())
+                .expect("Queue playback panel mounted");
+            let (play_pause, seekbar) = panel.transport_hits();
+            assert!(
+                play_pause.width > 0 && seekbar.width > 0,
+                "{mode:?}: queue-column transport painted"
+            );
+            root.queue_playback.expect("queue playback placed")
+        } else {
+            let panel = model
+                .application
+                .get_component(&ComponentId::LibraryPlaybackPanel)
+                .and_then(|component| component.as_any().downcast_ref::<LibraryPlaybackPanel>())
+                .expect("strip mounted");
+            let (play_pause, seekbar) = panel.transport_hits();
+            assert!(
+                play_pause.width > 0 && seekbar.width > 0,
+                "{mode:?}: strip transport painted"
+            );
+            root.library_playback.expect("strip placed")
+        };
+
+        // Every transport-signature cell in the frame — the seekbar's filled
+        // track, a `▔` in the ACCENT foreground — lies inside the owning
+        // panel's placement, and the transport painted at all: exactly one
+        // transport per frame.
+        let buf = terminal.backend().buffer();
+        let mut painted = 0;
+        for y in 0..buf.area().height {
+            for x in 0..buf.area().width {
+                let cell = &buf[(x, y)];
+                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(crate::app::palette::ACCENT)
+                {
+                    painted += 1;
+                    assert!(
+                        owner.contains((x, y).into()),
+                        "{mode:?}: transport cell ({x}, {y}) outside the owning panel {owner:?}"
+                    );
+                }
+            }
+        }
+        assert!(painted > 0, "{mode:?}: the seekbar track painted");
+    }
 }

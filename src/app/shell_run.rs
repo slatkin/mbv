@@ -23,7 +23,7 @@ impl Model {
         // `push_home_content` at the seams above.
         self.sync_modal_requests();
         self.sync_sidebar_overlays();
-        self.sync_playback();
+        self.sync_library_playback_panel();
         self.sync_feeds();
         self.sync_audiobookshelf_podcast();
         self.sync_audiobookshelf_book();
@@ -134,7 +134,7 @@ impl Model {
         if tv_resize {
             self.push_tv_workspace_content();
         }
-        self.render_playback_component(f);
+        self.render_library_playback_panel(f);
         self.render_home_component(f);
         self.render_feeds_component(f);
         self.render_audiobookshelf_podcast_component(f);
