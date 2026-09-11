@@ -34,9 +34,12 @@ can look different from its siblings except through the shape of its content.
   Where two Emby screens differ, the decision is recorded once in `design.md` and applied everywhere.
 - **Three Wide Hero header types**, chosen by the item's kind and never by the caller: Landscape
   (artwork above the text, full pane width), Portrait and Square (title and metadata on the left,
-  artwork on the right). Artwork always fills its box, cropped centred when its aspect differs. The
-  header type is derived in one place from a closed item kind the content carries; no destination can
-  supply it. The overview Main content box is the same for all three and is omitted when
+  artwork on the right). The type is the shape of the artwork one policy chooses for every item: Music
+  and podcasts always Square, everything else the first available of Landscape, Square, Portrait. One
+  hero producer per content type is used everywhere, Home included, so an item has the same facts,
+  image and header on every screen, Wide and Narrow. Metadata is plain rows coloured by the panel with
+  three repeating colours. Artwork always fills its box, cropped centred when its aspect differs.
+  **BREAKING (visual)**: Narrow Movies and TV show landscape art instead of posters. The overview Main content box is the same for all three and is omitted when
   the item has no overview. **BREAKING (visual)**: Home and Movies overviews move into the box;
   Music's side-by-side-or-stacked switch is replaced by the Square header.
 - **One Narrow inline hero form**: the content's image right-aligned with title, metadata and overview

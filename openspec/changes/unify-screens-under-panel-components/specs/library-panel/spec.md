@@ -71,6 +71,8 @@ destination SHALL render a second pill bar.
 
 While Inline Search is active in a searchable destination, the search box SHALL render in the Selector
 row's place and the results SHALL render in the list box's place, with the rest of the panel unchanged.
+The Selector row's place SHALL be reserved for the search box even when the destination supplies no
+Selector row.
 There SHALL be no other library search presentation inside the Library panel.
 
 #### Scenario: Inline Search opens on a Wide destination
@@ -78,43 +80,72 @@ There SHALL be no other library search presentation inside the Library panel.
 - **THEN** the search box occupies the Selector row and the results occupy the list box
 - **AND** the Hero pane continues to render the destination's selected item
 
-### Requirement: Wide Hero header has three types chosen by content kind
+### Requirement: Wide Hero header has three types chosen by the artwork policy
 
-The Wide Hero pane SHALL begin with a Hero header of exactly one of three types, determined by the kind
-of the item being shown and never selected by a destination or panel:
+The Wide Hero pane SHALL begin with a Hero header of exactly one of three types:
 
-- **Landscape** (Movies, Emby home videos, TV series, Emby items on Home): the artwork spans the pane's
-  content width at the top, followed by title and metadata.
-- **Portrait** (Audiobookshelf books): title and metadata on the left, a 2:3 artwork box on the right.
-- **Square** (Music albums, Audiobookshelf podcasts, Feeds entries): title and metadata on the left, a
-  1:1 artwork box on the right.
+- **Landscape**: the artwork spans the pane's content width at the top, followed by title and metadata.
+- **Portrait**: title and metadata on the left, a 2:3 artwork box on the right.
+- **Square**: title and metadata on the left, a 1:1 artwork box on the right.
 
-A destination SHALL supply the shown item's kind from one closed, provider-neutral set of item kinds;
-the header type SHALL be derived from that kind in exactly one place, and no destination SHALL be able
-to supply a header type directly. The type SHALL follow the item wherever it appears, including Home
-rows. The header SHALL render title and metadata through one presentation for all three types.
+The type SHALL be the shape of the artwork chosen by one artwork policy, applied in exactly one place
+for every item wherever it appears (including Home rows), and never selected by a destination:
+
+- Music (albums and tracks) and podcasts (Audiobookshelf podcast shows and episodes, and podcast Feeds
+  entries) SHALL always use Square artwork.
+- Every other item SHALL use the most preferred artwork shape its provider declares available, in the
+  order Landscape, then Square, then Portrait.
+- An item with no available artwork SHALL use Landscape (Square for Music and podcasts) with the
+  shared placeholder.
+
+Availability SHALL be decided from provider metadata before any image is fetched, so the header type
+does not change when the image arrives. The image the policy chooses SHALL be the same image for that
+item in the Wide header and the Narrow inline hero.
+
+The header SHALL render title and metadata through one presentation for all three types. Metadata is
+an ordered list of plain-text rows supplied by the destination; the panel SHALL colour row *n* with
+the *n*-th of three metadata colours, repeating from the first after the third, and SHALL own
+truncation and wrapping. A destination SHALL NOT style metadata.
 
 The artwork SHALL fill its box completely: an image whose aspect differs from its box SHALL be scaled
 to cover the box and cropped, centred, so no margin of the box shows. When images are disabled or the
-artwork is unavailable, the artwork box SHALL render the shared placeholder at the same size. When
+artwork is not loaded yet, the artwork box SHALL render the shared placeholder at the same size. When
 vertical space is constrained, the artwork SHALL shrink before a Workspace list viewport is removed.
 
 #### Scenario: A TV series is selected at Wide geometry
-- **WHEN** a TV series is the selected item in the Wide panel
+- **WHEN** a TV series with a landscape thumbnail is the selected item in the Wide panel
 - **THEN** a Landscape header renders its artwork above its title and metadata
 
 #### Scenario: An album is selected at Wide geometry
 - **WHEN** a Music album is the selected item in the Wide panel
 - **THEN** a Square header renders title and metadata on the left and square artwork on the right
 
-#### Scenario: An Audiobookshelf book appears in a Home row
-- **WHEN** an Audiobookshelf book is the selected Home row at Wide geometry
-- **THEN** a Portrait header renders, not a Landscape header
+#### Scenario: A podcast is selected at Wide geometry
+- **WHEN** an Audiobookshelf podcast show, or a podcast Feeds entry, is the selected item
+- **THEN** a Square header renders
 
-#### Scenario: A 16:9 image in a Square header
-- **WHEN** a Feeds entry's artwork is a 16:9 thumbnail
-- **THEN** it fills the Square header's 1:1 box, cropped at the left and right edges, with no empty
-  margin inside the box
+#### Scenario: An Audiobookshelf book appears in a Home row
+- **WHEN** an Audiobookshelf book with only its portrait cover is the selected Home row at Wide
+  geometry
+- **THEN** a Portrait header renders, the same header the Books tab renders for that book
+
+#### Scenario: A Movie with both a backdrop and a poster
+- **WHEN** a Movie declares both landscape and portrait artwork
+- **THEN** a Landscape header renders with the landscape artwork, on Home and on the Movies tab alike
+
+#### Scenario: An item without artwork
+- **WHEN** a video Feeds entry with no artwork is selected at Wide geometry
+- **THEN** a Landscape header renders with the shared placeholder in its artwork box
+
+#### Scenario: Metadata rows are coloured by position
+- **WHEN** a header shows four metadata rows
+- **THEN** rows one to three use the first, second and third metadata colours and row four uses the
+  first again, on every destination
+
+#### Scenario: A 4:3 image in a Landscape header
+- **WHEN** the chosen landscape artwork is 4:3 rather than 16:9
+- **THEN** it fills the 16:9 box, cropped at the top and bottom edges, with no empty margin inside the
+  box
 
 #### Scenario: Artwork has not loaded
 - **WHEN** a header's artwork is still loading or absent
@@ -164,9 +195,11 @@ renders the resting surface. No destination SHALL render a second Workspace box.
 ### Requirement: Narrow inline hero has one form
 
 In the Narrow library panel, the selected item's inline hero SHALL render one form for every
-destination: the item's image right-aligned with a size derived from the image's aspect, and title,
-metadata and overview wrapping around it, continuing at full width below the image. The Wide Hero
-header types SHALL NOT apply in Narrow. The inline hero SHALL NOT contain Selector rows, List controls,
+destination, derived by the panel from the same hero content the Wide panel uses: the image chosen by
+the artwork policy right-aligned with a size derived from its aspect, and title, the metadata rows
+(coloured as in Wide) and overview wrapping around it, continuing at full width below the image. The
+Wide Hero header types SHALL NOT apply in Narrow, and no destination SHALL supply a separate Narrow
+hero. The inline hero SHALL NOT contain Selector rows, List controls,
 or constituent-item rows.
 
 #### Scenario: Narrow Movie and Narrow podcast

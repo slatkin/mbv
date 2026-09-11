@@ -85,7 +85,9 @@ one paint-free placement.
   header row (status left, `on <host>` right, on `SURFACE_CHROME`), the visual slot
   (artwork/placeholder/visualizer) and the queue-column transport presentation, with placement: below
   100 columns stacked, 100+ side by side (slot left, 2-cell gap, panel height = max); while idle it paints
-  only the header row. Mount it at the root's Queue playback placement; delete `render_card` and both
+  only the header row. Extract one width-driven transport arrangement (which rows and indicators show
+  at a given width) that both this panel and the Library playback panel (4.1) call. Mount it at the
+  root's Queue playback placement; delete `render_card` and both
   queue-only `render_player_panel` calls from `render_main` and remove `narrow_player`. Verify: buffer
   tests at 80 and 100+ columns showing `PLAYING`/`PAUSED`/`IDLE` and the target; an idle frame paints the
   header row and nothing else of the panel; a remote-attached frame with the Local scope selected names
@@ -109,7 +111,7 @@ one paint-free placement.
 *Unification:* one transport painter per frame; the strip reserves rows only when it paints.
 
 - [ ] 4.1 Turn `PlaybackComponent` into `LibraryPlaybackPanel`, mounted only when the queue column is
-  hidden; `RootFrame` reserves `PLAYER_BOX_HEIGHT` in the library column only then. Verify: buffer
+  hidden and laying out its transport through the shared transport arrangement from 3.5; `RootFrame` reserves `PLAYER_BOX_HEIGHT` in the library column only then. Verify: buffer
   proof in `tests_queue.rs` that `both` reserves no strip rows, `library-only` exactly
   `PLAYER_BOX_HEIGHT`, `queue-only` none; a tick integration test draws `both`, `queue-only` and
   `library-only` and finds exactly one transport per frame, painted by the expected panel; strip clicks
@@ -135,25 +137,44 @@ choose a focus kind, pick a surface or lay out a pane.
   Inline Search painter with those rects. Verify: buffer tests for a read-only hero, a focused-workspace
   hero, and an active search (box in the Selector row's place, results in the list box, Hero pane
   unchanged); role-rect containment only (no coordinates).
-- [ ] 5.3 Implement `HeroHeader` Landscape / Portrait / Square with one title/meta painter
-  (`paint_hero_content`), placeholder at full box size while loading, artwork shrinking before a
-  Workspace viewport drops, and the overview Main content box rendered only when overview text exists.
-  Add the closed `HeroItemKind` and provider-neutral `HeroFacts` to the panel content, and the single
-  `HeroHeader::for_kind` derivation (Landscape: Movie, HomeVideo, Series, Episode, OtherEmby;
-  Portrait: AudiobookshelfBook; Square: MusicAlbum, AudiobookshelfPodcast, FeedEntry) as the arm's only
-  constructor; `HeroArtworkAspect` becomes a function of the arm. Implement cover fit: the image worker
-  `resize_to_fill`s the decoded image to the box's pixel size (box cells × picker font size), keyed by
-  box size, then paints with `Resize::Scale`. Verify: buffer tests per arm (art above vs art right),
-  overview present/absent, placeholder size; a unit test that a 16:9 source filled into a 1:1 box yields
-  a square image cropped at the sides; `HeroHeader` has no public constructor other than `for_kind`.
-- [ ] 5.4 Implement the Workspace: optional Selector row over one Main content box holding a
-  `WideMediaList`, accent-soft surface while focused, owning-surface selected row. Verify: buffer tests
-  for focused/unfocused box surface and selected-row surface; `WideHeroContentBoxSurface` deleted.
-- [ ] 5.5 Implement the Narrow skeleton and the one `InlineHero` form (right-aligned image sized from
-  its aspect, wrap-around text, full width below), with no selector, controls or constituent rows inside
-  it. Verify: buffer tests with a 2:3 poster, a 16:9 thumbnail and no image — all right-aligned
-  wrap-around.
-- [ ] 5.6 Mount `LibraryPanel` as `ComponentId::Library`: owner map keyed by `LibraryKey`, focus and
+- [ ] 5.3 Parse Emby image availability: add `ImageTags` (`Thumb`, `Primary`) and `BackdropImageTags`
+  (and, for episodes, the series' thumb/backdrop tags) to `EmbyItem` (`crates/mbv-core/src/api_types.rs`),
+  requesting them where the item `Fields` lists need it. Verify: `cargo nextest run -p mbv-core` with
+  parser tests on recorded item JSON with and without each tag.
+- [ ] 5.4 Implement the artwork policy and hero producers (design D5): `artwork_policy(&item) ->
+  HeroArtwork` (Music and podcasts Square; else first declared of Landscape > Square > Portrait; none →
+  Landscape, or Square for Music/podcasts), returning shape, Emby image-type chain and cache key; one
+  `hero_content(&item)` producer per content type (`EmbyItem`, `QueueItem`, ABS book, ABS podcast show
+  and episode, feed entry) filling `HeroFacts` with plain `meta_rows: Vec<String>`. Delete
+  `HeroArtworkAspect`. Verify: unit tests of the policy table (movie with backdrop + poster →
+  Landscape; poster only → Portrait; album with a thumb → Square; podcast episode → Square; book →
+  Portrait; feed entry → Landscape placeholder; podcast feed entry → Square), and that the Home path
+  and the Books tab produce identical `HeroContent` for the same ABS book.
+- [ ] 5.5 Implement `HeroHeader` Landscape / Portrait / Square, constructed only from the policy's
+  shape, with one title/meta painter that colours meta row *n* with `HERO_META_ROLES[n % 3]` (three
+  roles added to `render/theme`) and owns truncation/wrapping; placeholder at full box size while
+  loading; artwork shrinking before a Workspace viewport drops; the overview Main content box only when
+  overview text exists. Add the paint-free `hero_artwork_box(area, &HeroContent)` and cover fit (the
+  image worker `resize_to_fill`s to that box's pixel size, keyed by box size, then `Resize::Scale`).
+  Verify: buffer tests per arm (art above vs art right), four meta rows cycling colours 1-2-3-1,
+  overview present/absent, placeholder size; a unit test that a 4:3 source filled into a 16:9 box is
+  cropped top and bottom; `HeroHeader` has no public constructor.
+- [ ] 5.6 Implement the Workspace: optional Selector row over one Main content box holding a
+  `&mut dyn PanelList`, accent-soft surface while focused, owning-surface selected row. Verify: buffer
+  tests for focused/unfocused box surface and selected-row surface; `WideHeroContentBoxSurface` deleted.
+- [ ] 5.7 Implement the Narrow skeleton and the inline hero derived from the same `HeroContent` (policy
+  image right-aligned, sized from its aspect, wrap-around text in the three meta colours, full width
+  below), with no selector, controls or constituent rows inside it; the panel computes the Inline
+  `desired_detail_rows`. Verify: buffer tests with a portrait, a landscape and no image — all
+  right-aligned wrap-around — and a test that Wide and Narrow render the same title, meta rows and image
+  for one `HeroContent`.
+- [ ] 5.8 Add the object-safe `PanelList` trait (design D3) implemented once by the shared media-list
+  carrier for every `Target`; the panel calls `set_presentation(Wide | Inline, anchor)` from its own
+  breakpoint choice and sets the paint policy (focus, `SelectedRowSurface` by slot, throbber from
+  `ListSlot` loading state); remove the destination-side `MediaListCarrier::active` selection and
+  `Presentation::Grid`. Verify: the canonical-list re-anchor tests pass with the panel driving the
+  transition; `cargo check -p mbv` shows no `ListSlot`/`Workspace` arm per destination.
+- [ ] 5.9 Mount `LibraryPanel` as `ComponentId::Library`: owner map keyed by `LibraryKey`, focus and
   mouse subscription for the library area, slot events (`SelectorPicked`, `ControlPicked`,
   `WorkspaceSelectorPicked`, list delegation) routed to the active owner, the Wide split-boundary drag
   moved in from `WideHeroBoundaryComponent`, owner retention while the library is in the catalog (moved
@@ -162,15 +183,19 @@ choose a focus kind, pick a surface or lay out a pane.
   for focus following the active library, mouse eligibility, split drag
   (`tests_tick_integration_wide_split_resize.rs`), and an inactive owner keeping cursor/scroll across a
   tab change.
-- [ ] 5.7 Move image requests for Hero headers and inline heroes into the owners' shell projection
-  (`push_*`), generalizing TV's `push_tv_workspace_content` pattern; painting reads projected image
-  state. Verify: push tests assert one fetch per new key and none on repaint.
-- [ ] 5.8 Convert Home into `HomeContent` (embedded owner): section pills → Selector row, rows → list
-  slot, selected item → Landscape header (or its own kind), Narrow inline hero; delete
-  `render_home_content`, `HomeCarrier`, Home's `pill_regions`/spacer paint and `ComponentId::Home`.
-  Verify: `tests_home_characterization.rs`/`tests_home_inline.rs` rewritten to the panel output where
-  the overview box and header changed; `tests_tick_integration_home.rs` passes; pill clicks select
-  sections.
+- [ ] 5.10 Move image requests for Hero headers and inline heroes into the shell projection: for each
+  projected hero run `artwork_policy` + `hero_artwork_box` (with the Library panel's `RootFrame` area)
+  and issue `fetch_card_image` there, generalizing TV's `push_tv_workspace_content`; painting reads
+  projected image state. Verify: push tests assert one fetch per new key and none on repaint; a tick
+  test resizes the terminal and asserts one re-encode request at the new box size with the placeholder
+  shown for at most one frame.
+- [ ] 5.11 Convert Home into `HomeContent` (embedded owner): section pills → Selector row, rows → list
+  slot, selected item → the shared `hero_content` producer for its content type (Emby, ABS or Feeds),
+  Narrow inline hero from the same content; delete `render_home_content`, `HomeCarrier`,
+  `keep_watching_hero_image_types` and the `"{id}:pwr_kw"` key, Home's `pill_regions`/spacer paint and
+  `ComponentId::Home`. Verify: `tests_home_characterization.rs`/`tests_home_inline.rs` rewritten to the
+  panel output where header, artwork and overview changed; `tests_tick_integration_home.rs` passes; pill
+  clicks select sections.
 
 ## 6. Movies, home videos and generic Emby libraries (S5)
 
@@ -178,7 +203,7 @@ choose a focus kind, pick a surface or lay out a pane.
 Grid catalog.
 
 - [ ] 6.1 Convert `BrowserComponent` for Movies, HomeVideos and Generic into `BrowserContent`: letter
-  pills → Selector row, home-video count → List controls label, Landscape header, Inline Search as list
+  pills → Selector row, home-video count → List controls label, hero from the shared `EmbyItem` producer, Inline Search as list
   slot state; generic libraries use the Wide/Inline presentations (no Grid). Delete
   `browser/paint.rs::render_wide_movies`, the Movies/HomeVideos/Generic arms of
   `render_narrow_browse_with_ctx`, `CompactBannerLayout`, `render_compact_detail_with_ctx`, and the
@@ -192,24 +217,25 @@ Grid catalog.
 proves the slot types early.
 
 - [ ] 7.1 Convert `FeedsComponent` into `FeedsContent`: feed-group pills → Selector row, Watched filter
-  → List controls pills, entries → list slot, selected entry → Square header + overview box, Narrow
+  → List controls pills, entries → list slot, selected entry → shared feed-entry producer (Square for podcast feeds, Landscape placeholder otherwise) + overview box, Narrow
   inline hero. Delete `render_feeds_content`, its `render_selector_content` closure, `paint_feed_hero`,
   `LayoutMain.feeds_area`, and `ComponentId::Feeds`. Verify: `tests_feeds.rs` rewritten (one pill bar,
-  controls row, Square header); `feeds_component_tests.rs` and `tests_tick_integration_feeds.rs` pass;
+  controls row, policy header); `feeds_component_tests.rs` and `tests_tick_integration_feeds.rs` pass;
   the `w` key and a click on a Watched pill both change the filter.
 
 ## 8. TV (S7)
 
-*Unification:* removes the two-component TV split and TV's private header and poster painters.
+*Unification:* removes the two-component TV split and TV's private header and poster painters (Narrow TV now shows the policy's landscape art).
 
 - [ ] 8.1 Merge `TvWorkspaceComponent` and `BrowserComponent(TvShows)` into one `TvContent` owner:
   one series list owner (Wide + Inline presentations), episode list, season cursor, Inline Search
   session; delete `hand_off_tv_breakpoint`, the TV part of `apply_pending_inline_search_transfer`, and
   `ComponentId::TvWorkspace`. Verify: `tv_workspace_component_tests.rs` and the TV re-anchor tests pass
   (stable target across Wide↔Narrow); `tests_tick_integration_tv.rs` passes.
-- [ ] 8.2 Paint TV through the panel: letter pills → Selector row, Landscape header, overview box,
-  Workspace = season pills (Workspace Selector row) + episodes; Narrow inline hero with the series
-  poster; Narrow episodes only via the selection modal. Delete `tv_wide.rs::render_wide_tv_with_ctx`,
+- [ ] 8.2 Paint TV through the panel: letter pills → Selector row, hero from the shared `EmbyItem` producer, overview box,
+  Workspace = season pills (Workspace Selector row) + episodes; Narrow inline hero from the same hero
+  content (the policy's landscape art, no longer the poster); Narrow episodes only via the selection
+  modal. Delete `tv_wide.rs::render_wide_tv_with_ctx`,
   `render_series_inline_detail`, `SERIES_IMAGE_COLS/ROWS`, `NarrowInlineHero`, and
   `LayoutMain.tv_wide_*`. Verify: `tv_wide_tests.rs`/`detail_series_tests.rs` rewritten to panel output;
   season-pill and episode clicks resolve via tick tests.
@@ -260,8 +286,9 @@ conforms to Emby.
 - [ ] 12.1 Delete `compose_base_frame`, `render_main`, `paint_legacy_chrome`,
   `render_legacy_backdrops`, `render_library`, every shell `render_*_component` method, the transitional
   old-component branch in `RootFrame`, and the remaining legacy `ComponentId` arms
-  (`Browser`, `WideHeroBoundary`). Verify: `cargo check -p mbv`; `rg` finds none of these symbols
-  (manual check); one tick integration test per Panel mode (`both`, `queue-only`, `library-only`, mini
+  (`Browser`, `WideHeroBoundary`). Verify: `cargo check -p mbv`; `rg` finds none of these symbols and
+  no `fetch_card_image`/`fetch_*` call reachable from any component `view` or Render Component (manual
+  check); one tick integration test per Panel mode (`both`, `queue-only`, `library-only`, mini
   view) pre-fills the test buffer with a sentinel symbol, draws one frame, and asserts no sentinel cell
   remains inside any mounted panel's `RootFrame` placement.
 - [ ] 12.2 Delete `LayoutMain`, `LayoutPlayback` and `FrameChromeGeometry`'s paint-to-input use; answer

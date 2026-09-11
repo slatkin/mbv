@@ -4,7 +4,7 @@
 
 `InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, semantic painting delegation, and internal current-frame row and replacement geometry. Cursor, scroll, selected target, and other row-local state SHALL remain in the same logical owner used by the corresponding Wide presentation.
 
-The parent SHALL retain destination framing and establish current claim and row-flow rectangles through its arrangement. The presentation's `Component::view` SHALL paint the established row flow once and SHALL be its only ordinary-row painting entry point for a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment and desired detail admission; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
+The owning panel (the Library panel or the Queue panel) SHALL retain framing and establish current claim and row-flow rectangles through its arrangement, and SHALL select which presentation of the shared owner is active from its own breakpoint. The presentation's `Component::view` SHALL paint the established row flow once and SHALL be its only ordinary-row painting entry point for a frame. Before that call, the owning panel MAY supply only a closed semantic policy for focused/selected treatment and desired detail admission; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
 
 The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, admitted detail rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve ordinary and replacement targets from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no detail rectangle.
 
@@ -18,11 +18,11 @@ It SHALL remain distinct from Inline Search and SHALL NOT become a second mounte
 
 #### Scenario: Grouped Music consumes one admitted detail result
 
-- **WHEN** Grouped Music paints its Inline album list with a selected album
+- **WHEN** the Narrow library panel paints Grouped Music's Inline album list with a selected album
 - **THEN** its Inline presentation admits or falls back from detail within one view over the shared owner
-- **AND** Grouped Music reads only the current retained admitted-detail rectangle before painting its provider-owned detail
-- **AND** Grouped Music does not rerun list layout, reconstruct selectable-row geometry, or transfer interaction state from another presentation
-- **AND** existing framing and spacing are unchanged.
+- **AND** the Library panel reads only the current retained admitted-detail rectangle before painting the one inline hero form into it
+- **AND** neither the panel nor Grouped Music reruns list layout, reconstructs selectable-row geometry, or transfers interaction state from another presentation
+- **AND** Grouped Music paints no detail of its own.
 
 #### Scenario: Inline and Wide read one owner
 

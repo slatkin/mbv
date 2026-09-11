@@ -51,7 +51,7 @@ The right panel SHALL provide exactly two responsive hero presentations for ever
 
 A separate detail block SHALL NOT be an arrangement or fallback. A surface SHALL NOT reserve a hero in a separate full-width area above its browser. Every library is hero-bearing.
 
-The inline hero SHALL render one content shape across all surfaces: title, optional metadata line, optional overview text, and an optional image. Whatever image the surface supplies SHALL render right-aligned, sized from its aspect, with the text wrapping around it and continuing at full width below it; a surface without an image renders the same form without the image. No surface SHALL render structured lists (seasons, episodes, tracks, chapters), selector pills, or list controls inside the inline hero; structured lists SHALL be accessed via the inline-hero selection modal.
+The inline hero SHALL render one content shape across all surfaces: title, optional metadata line, optional overview text, and an optional image. The image chosen by the shared artwork policy (`library-panel`) SHALL render right-aligned, sized from its aspect, with the text wrapping around it and continuing at full width below it; a surface without an image renders the same form without the image. No surface SHALL render structured lists (seasons, episodes, tracks, chapters), selector pills, or list controls inside the inline hero; structured lists SHALL be accessed via the inline-hero selection modal.
 
 #### Scenario: A browse surface enters the narrow presentation
 

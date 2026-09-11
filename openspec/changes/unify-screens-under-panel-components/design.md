@@ -42,8 +42,9 @@ Facts that shape the approach, verified on `main` at `18e96392`:
   library (`TvWorkspace` Wide, `Browser(TvShows)` Narrow) with a breakpoint hand-off
   (`hand_off_tv_breakpoint`, `apply_pending_inline_search_transfer`). The router (`router.rs`,
   `key_policy.rs`) references no destination id.
-- **Painting starts effects**: `render_card` (`card.rs:257`) and
-  `compact_banner_layout_with_overview` (`detail.rs:173`) call `fetch_card_image`.
+- **Painting starts effects**: `render_card` (`card.rs:257`), `compact_banner_layout_with_overview`
+  (`detail.rs:173`), the Home hero (`home_hero_emby.rs:244,261`) and `paint_music_image`
+  (`album_art.rs:77`) call `fetch_card_image`, each with its own image-type chain and cache key.
 - **Dead branches**: `LibraryListRenderCtx.search_query` is `Some` only inside the Inline Search painter
   (`list_rows.rs:281` via `inline_search.rs:31`); Music/TV `ctx.list.is_search_active()` branches are
   unreachable. The Grid presentation (`GridMediaList`, `NarrowBrowseControl::Grid`) serves only non-hero
@@ -66,7 +67,7 @@ Facts that shape the approach, verified on `main` at `18e96392`:
 - Changing Service, Player, queue, persistence or protocol authority; changing keyboard precedence
   (the router and `key_policy.rs` are untouched except where a focus id is renamed).
 - Changing list-row painting, row mechanics, or the canonical media-list owner beyond deleting Grid.
-- Changing which image each content kind uses in Narrow (posters stay posters).
+- Adding artwork sources that do not exist today (Feeds entries have none; they keep the placeholder).
 - Removing the queue title bar (the folded change's deferred question stays deferred).
 - Any enforcement mechanism outside the code (tests of sameness, `ast-grep` rules, scripts, CI gates).
 
@@ -131,18 +132,29 @@ structs, `LayoutMain` threading. The active owner produces, per frame:
 LibraryPanelContent {
     selector: Option<SelectorRow>,        // one pill bar: labels, active index
     controls: Option<ListControls>,       // one row: optional pills + optional label
-    list:     ListSlot,                   // Media(&mut MediaList presentation) | Empty(Placeholder) | Search(&mut InlineSearch)
-    hero:     Option<HeroContent>,        // Wide only (Narrow reads its inline form)
+    list:     ListSlot,                   // Media(&mut dyn PanelList) | Empty { loading: bool, text } | Search(&mut InlineSearch)
+    hero:     Option<HeroContent>,        // breakpoint-neutral: Wide header AND Narrow inline hero
 }
-HeroContent { kind: HeroItemKind, facts: HeroFacts, overview: Option<String>, workspace: Option<Workspace> }
-HeroFacts   { title, meta_rows, artwork: ArtworkRequest }     // provider-neutral, every provider fills it
-Workspace   { selector: Option<SelectorRow>, list: &mut WideMediaList<_>, focused: bool }
+HeroContent { facts: HeroFacts, overview: Option<String>, workspace: Option<Workspace> }
+HeroFacts   { title: String, meta_rows: Vec<String>, artwork: HeroArtwork }   // plain data, no Span/Style/width
+HeroArtwork { shape: ArtworkShape, source: Option<ArtworkSource> }             // built only by the policy (D5)
+Workspace   { selector: Option<SelectorRow>, list: &mut dyn PanelList, focused: bool }
 ```
+
+`PanelList` is one object-safe trait over the canonical media-list presentations (view into a rect,
+resolve a point from retained geometry, current selected/detail rects, accept a closed paint policy,
+and `set_presentation(Wide | Inline, anchor)`), implemented once by the shared media-list carrier for
+every `Target`. It exists so per-destination `Target` types never force a per-destination `ListSlot`
+arm. The **panel** drives `set_presentation` from its own Wide/Narrow choice (today the destination
+sets `MediaListCarrier::active`, `carrier.rs:20-23`), computes the Inline `desired_detail_rows` from
+`HeroContent`, and sets the paint policy — focus, `SelectedRowSurface` by slot, and the throbber from
+`ListSlot` loading state; destinations pass none of these.
 
 The panel module owns these types and exposes no rect, surface, style, focus-kind, header-arm or
 variant field. `ListSlot::Search` makes the panel place the Inline Search box in the Selector row's rect
-and its results in the list box (today the destination passes `pill_area` to `render_inline_search`,
-`inline_search.rs:31`); the search component keeps its session and painter.
+— reserved for it even when the destination supplies no `SelectorRow` — and its results in the list box
+(today the destination passes `pill_area` to `render_inline_search`, `inline_search.rs:31`); the search
+component keeps its session and painter.
 The panel paints the skeleton, calls the embedded list presentations' `view` into slot rects it
 computed, retains slot geometry, and resolves pointer input into slot events
 (`SelectorPicked(i)`, `ControlPicked(i)`, `WorkspaceSelectorPicked(i)`, list delegation as today)
@@ -160,29 +172,54 @@ from S4, and become private to the panel's arrangement module in S11 (task 12.3)
 un-migrated destination painter that calls them is deleted — flipping privacy earlier would break the
 build while destinations 6–11 still use them.
 
-**D5 — Wide `HeroHeader` has three arms chosen by content kind.** (User decision.)
+**D5 — One hero producer per content type, one artwork policy, three header arms.** (User decisions.)
 *Removes:* three Emby header painters (`HeroData::render_content` wide path, TV's
-`paint_hero_content` + `wide_hero_slots` path, Music's `paint_wide_hero_text` + `wide_music_left_layout`)
-and ABS/Feeds header painters (`paint_feed_hero`, `render_book_hero`, `render_podcast_hero`).
-A destination supplies `HeroContent { kind: HeroItemKind, facts: HeroFacts, .. }`. `HeroItemKind` is
-one closed, provider-neutral enum (`Movie, HomeVideo, Series, Episode, OtherEmby, MusicAlbum,
-AudiobookshelfBook, AudiobookshelfPodcast, FeedEntry`); the **one** derivation `HeroHeader::for_kind`
-lives in the panel module and is the only constructor of the arm, so no destination can choose an arm
-(G3). Every provider fills the same `HeroFacts` — the Emby `Hero` impls (`hero_model.rs:44,112`) are
-joined by ABS and Feeds producers of the same struct, replacing their private hero painters — and
-`HeroArtworkAspect` (today only an image-type-chain selector) becomes a function of the arm. Landscape: 16:9 artwork
-full content width above title/meta. Portrait (2:3) and Square (1:1): title/meta left, artwork right.
-One title/meta painter (`paint_hero_content`) for all arms. Artwork shrinks before a Workspace viewport
-would drop (Music's existing rule, now universal). Mapping: Landscape = Movies, home videos, TV series,
-Emby Home items; Portrait = ABS books; Square = Music albums, ABS podcasts, Feeds entries; a Home row
-takes its item's kind.
+`paint_hero_content` + `wide_hero_slots` path, Music's `paint_wide_hero_text` + `wide_music_left_layout`),
+ABS/Feeds header painters (`paint_feed_hero`, `render_book_hero`, `render_podcast_hero`), per-producer
+styled metadata, and per-destination image chains and cache keys (Home `"{id}:pwr_kw"` +
+`keep_watching_hero_image_types`, `home_hero_emby.rs:244-262`; Music `inline_album_art_cache_key` +
+`MUSIC_ALBUM_IMAGE_TYPES`, `album_art.rs:77`; the `card.rs`/`detail.rs` chains).
+
+*One producer per content type.* `HeroContent` is built only by `hero_content(&item)` functions in the
+panel module, one per provider content type: `EmbyItem`, `QueueItem`, ABS book, ABS podcast show and
+episode, feed entry. Every destination calls the producer for its item — Home calls the same ABS-book
+producer the Books tab calls — so the same item has one set of facts, one artwork and one header
+everywhere. `impl Hero for QueueItem`/`EmbyItem` (`hero_model.rs:44,112`) become inputs to these
+producers, not a second path.
+
+*Metadata (user decision).* `meta_rows: Vec<String>`, plain text, one entry per row, no width. The
+header painter colours row *n* with `HERO_META_ROLES[n % 3]`, three theme roles defined once in
+`render/theme` (initially `TEXT_DETAIL_META`, `TEXT_METADATA`, `TEXT_SECONDARY`, the three colours the
+Emby headers already use), and owns truncation and wrapping. ABS progress (`42%`, `Finished`) is just
+text in a row.
+
+*Artwork policy (user decision), in one function `artwork_policy(&item) -> HeroArtwork`:* Music
+(albums, tracks) and podcasts (ABS podcast shows and episodes, podcast Feeds entries) → Square, always.
+Everything else → the first shape the provider declares available in the order **Landscape, Square,
+Portrait**; none available → Landscape (Square for Music/podcasts) with the placeholder. Declared
+availability comes from provider metadata, never from the fetched image, so the arm is stable before
+the image loads: Emby `ImageTags` (`Thumb`, `Primary`) and `BackdropImageTags` (plus the series'
+thumb/backdrop for episodes), which `EmbyItem` does not parse today (`api_types.rs:224`) and gains in
+task 5.3; ABS books declare a portrait cover and ABS podcasts a square cover; Feeds entries declare
+none (no artwork source exists). The policy returns the shape, the Emby image-type chain and the cache
+key; the arm is `HeroHeader::from(artwork.shape)`, its only constructor, so no destination can choose
+an arm, a chain or a key.
+
+*Arms.* Landscape: 16:9 artwork full content width above title/meta. Portrait (2:3) and Square (1:1):
+title/meta left, artwork right. One title/meta painter for all arms. Artwork shrinks before a
+Workspace viewport would drop (Music's existing rule, now universal). `HeroArtworkAspect` is deleted;
+its image-chain role moves into the policy.
 
 *Artwork fit is cover (user decision):* the image fills its box and the excess is cropped, centred.
 `ratatui-image` 11's `Resize::Crop` clips without scaling, so the cover step runs in the image worker:
-the decoded image is `DynamicImage::resize_to_fill`-ed to the box's pixel size (box cells × the
-picker's font size) and then painted with the existing `Resize::Scale`. The cache key includes the box
-size so a resized box re-encodes once. The Narrow inline hero (D7) is unaffected: its box takes the
-image's own aspect, so nothing is cropped there.
+the decoded image is `DynamicImage::resize_to_fill`-ed (`image` 0.25) to the box's pixel size and then
+painted with the existing `Resize::Scale`. The box size comes from **one paint-free function**
+`hero_artwork_box(area, &HeroContent) -> Rect` in the panel's arrangement module, called both by the
+shell projection (to request the fetch/encode at that size) and by the panel view (to paint), so no
+second layout site exists and no effect runs during paint. The projection passes the Library panel's
+current area from `RootFrame`; when the box changes (resize, split drag, Workspace shrink), the next sync
+pass requests a re-encode keyed by the new size and the view shows the placeholder for at most that one
+frame. The Narrow inline hero (D7) is not cropped: its box takes the chosen image's own aspect.
 
 **D6 — Workspace surface and focus are derived, not declared.**
 *Removes:* `LeftPaneFocus`, `WideHeroContentBoxSurface`, and per-caller `SelectedRowSurface`.
@@ -197,11 +234,13 @@ episode table become the one Workspace box.
 *Removes:* `CompactBannerLayout` + `render_compact_detail_with_ctx` (Movies),
 `render_series_inline_detail` + `SERIES_IMAGE_COLS/ROWS` (TV), `beside_image_hero_dims` right-half
 model (Home), `NarrowInlineHero`, ABS/Feeds inline painters, and every inline chapter/episode/pill
-render. `InlineHero { title, meta_rows, overview, image: Option<InlineImage> }` renders the image
-right-aligned at a size derived from its aspect (decoded size when cached, placeholder aspect
-otherwise), text wrapping around it and reclaiming full width below. Each content kind keeps its
-current image source. Constituent lists open only via `SelectionModal` (already supports
-Series/Album/Podcast/Book).
+render. There is no separate Narrow hero type or producer: the Narrow skeleton derives the inline hero
+from the same `HeroContent` (facts, coloured meta rows, overview, and the image the artwork policy
+chose), rendering the image right-aligned at a size derived from its aspect (decoded size when cached,
+the policy shape's aspect otherwise), text wrapping around it and reclaiming full width below.
+Constituent lists open only via `SelectionModal` (already supports Series/Album/Podcast/Book).
+**Visible change:** because the policy prefers landscape, Narrow Movies and TV show their landscape art
+instead of posters, matching Wide.
 
 **D8 — `SelectorRow` and `ListControls` are generic content.**
 *Removes:* Feeds' second pill bar (`render_selector_content` closure), three pill-hit stores, Home's
@@ -211,11 +250,12 @@ Option<usize> }` always paints one bar plus the panel's spacer; the panel retain
 destination may fill (Feeds: Watched filter pills; home videos: item-count label). Neither type has a
 per-destination arm.
 
-**D9 — Image requests leave painting.** *Removes:* fetches in `render_card` and
-`compact_banner_layout_with_overview`. The shell's `push_*` projection computes the artwork each
-projected content needs (queue visual slot, Hero header, inline hero), issues `fetch_card_image` there
-(TV already does this, `push_tv_workspace_content`), and projects image state into content. Painting
-reads projected state only.
+**D9 — Image requests leave painting.** *Removes:* every paint-time fetch: `render_card`
+(`card.rs:257`), `compact_banner_layout_with_overview` (`detail.rs:173`), the Home hero
+(`home_hero_emby.rs:244,261`) and `paint_music_image` (`album_art.rs:77`). The shell's projection runs
+`artwork_policy` + `hero_artwork_box` for each projected hero and the queue visual slot, issues
+`fetch_card_image` there (TV already does this, `push_tv_workspace_content`), and projects image state
+into content. Painting reads projected state only.
 
 **D10 — Queue column: `QueuePanel` + `QueuePlaybackPanel`; right column: `LibraryPlaybackPanel`,
 `TabPanel`, `StatusBarPanel`.** (User decision: the two playback panels are distinct components.)
@@ -229,9 +269,11 @@ header's owner is never unmounted). `RootFrame` sizes its placement from header 
 heights, and `QueuePanel` starts below it plus its separator row. It lands with the
 folded change's placement rules (below 100 columns stacked; 100+ side by side, visual slot left, 2-cell
 gap, panel height = max). `LibraryPlaybackPanel` (today's `PlaybackComponent`) is the strip, mounted
-only when the queue column is hidden. Both reuse the transport leaf Render Components (seekbar, title
-row, controls row, indicators) and each composes its own layout; each retains its own transport hit
-geometry. `TabPanel` owns tab layout, overflow arrows and tab hit regions (emits a tab-select `Msg`
+only when the queue column is hidden. Both call **one** width-driven transport arrangement (which rows
+and indicators appear at a given width, over the seekbar/title/controls/indicator leaf Render
+Components), so the strip and the queue column cannot drift in what they show at the same width; each
+panel owns its own placement around it (header and visual slot in the queue column) and retains its
+own transport hit geometry. `TabPanel` owns tab layout, overflow arrows and tab hit regions (emits a tab-select `Msg`
 instead of `layout.tabs_hitmap`); `StatusBarPanel` owns the status row and its volume/mute/remote pill
 regions. The folded change's D2–D6 and D9–D11 carry over unchanged in meaning (header row counted in
 `QueuePanelInputs`, `NowPlayingStatus`, one `playback_host_label()`, header follows playback target,
@@ -271,11 +313,15 @@ TV painters (`render_search_box` in pill rows, `render_plain_rows` result grid);
 | Pill hits in three stores; Home-only spacer | `SelectorRow` owns hits and spacer |
 | ABS Book chapters in a 2nd box; Podcast episode table | One Workspace box |
 | Narrow: Books render chapters inline; Podcast renders filter pills + episodes inline | Modal only (user; spec already required it for TV/Music) |
-| Wide header painted 3 ways (Home/Movies, TV, Music) + ABS + Feeds | `HeroHeader` Landscape/Portrait/Square (user) |
+| Wide header painted 3 ways (Home/Movies, TV, Music) + ABS + Feeds | `HeroHeader` Landscape/Portrait/Square from the artwork policy (user) |
+| Metadata styled per producer (spans, colours, wrapping) | Plain rows; three repeating theme colours (user) |
+| Image chain + cache key per destination; Home vs tab disagree for one item | One artwork policy: Music/podcasts Square, else Landscape > Square > Portrait (user) |
+| Home builds its own facts for ABS/Feeds items | One hero producer per content type, used by Home too |
+| Narrow posters vs Wide landscape for the same Movie/Series | Same policy-chosen image in both |
 | Overview: plain text (Home/Movies) vs box (TV) vs none (Music) | Box when present, omitted when absent (user) |
 | Narrow inline hero: 3 painters, right-half 16:9 model | One right-aligned wrap-around form (user) |
 | Music side-by-side-or-stacked art switch | Square header (no in-hero breakpoint) |
-| Feeds `paint_feed_hero` in its own box | Square header + overview box |
+| Feeds `paint_feed_hero` in its own box | Policy header (podcast feeds Square, others Landscape placeholder) + overview box |
 | TV two mounted components | One owner (D12) |
 | Two playback presentations by `narrow_player` flag | Two distinct panels (user) |
 | Non-hero Grid catalog | Deleted (no such library) |
@@ -323,9 +369,9 @@ enumeration behind "zero visible UI elements that are not components" (G1).
 | Queue status pill row (`render_queue_status`, `queue.rs:290`) | Queue panel | 3.1 |
 | Queue title row + list (`QueueComponent`) | Queue panel | 3.1 |
 | Queue column boundary (`QueueBoundaryComponent`, `shell_queue.rs:169`) | Queue boundary (root-placed) | 1.4 |
-| Wide hero gap boundary (`WideHeroBoundaryComponent`, `shell_library.rs:363`) | Library panel | 5.6 |
+| Wide hero gap boundary (`WideHeroBoundaryComponent`, `shell_library.rs:363`) | Library panel | 5.9 |
 | Library area publishing (`render_library`, `widgets.rs:515`) | deleted (paints nothing) | 12.1 |
-| Home / Browser / TV / Music / Feeds / ABS Book / ABS Podcast bodies (component-wrapped free painters) | Library panel slots | 5.8, 6.1, 7.1, 8.2, 9.1, 10.1, 11.1 |
+| Home / Browser / TV / Music / Feeds / ABS Book / ABS Podcast bodies (component-wrapped free painters) | Library panel slots | 5.11, 6.1, 7.1, 8.2, 9.1, 10.1, 11.1 |
 | Overlays, modals, popups, sidebars (`render_overlay_stack`) | unchanged: already component views | — |
 
 ## Risks / Trade-offs
