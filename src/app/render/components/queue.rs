@@ -33,7 +33,7 @@ pub(in crate::app) fn render_queue_body(
         QueuePresentation::Wide(list) => {
             list.set_paint_policy(WideMediaListPaintPolicy::new(
                 focused,
-                SelectedRowSurface::OwningSurface,
+                SelectedRowSurface::OwningQueueColumn,
                 throbber,
             ));
             Component::view(list, frame, area);

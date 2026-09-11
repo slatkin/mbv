@@ -30,6 +30,10 @@ pub const SURFACE_ACCENT_SOFT: Color = primitives::BG_GREEN_SOFT;
 pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
 pub const SURFACE_STATUS_PILL: Color = SURFACE_CHROME; // pills sit on the chrome status row; same bg
 pub const SURFACE_SIDEBAR: Color = primitives::PANEL_BG; // plain (non-hero) sidebar/panel background
+                                                         // Transitional: the surface table's `ArtworkPlaceholder` row carries this
+                                                         // value now; the name stays reachable for `artwork_placeholder_tests.rs`
+                                                         // until task 4.2 retires it.
+#[allow(dead_code)]
 pub const SURFACE_ARTWORK_PLACEHOLDER: Color = primitives::ARTWORK_PLACEHOLDER;
 
 // Accents
@@ -87,6 +91,11 @@ pub const SCROLLBAR: Color = primitives::SCROLLBAR;
 /// bool: the existing `PanelFocus` (which panel is focused) for
 /// inline screens with one focusable region, or `PanelFocus` combined
 /// with a pane bit (`left_focused`) for Wide hero screens with two.
+// Transitional: `resolve_surface_focus` and `list_selected_row_bg` are the
+// value-aliased resolvers the surface table replaced; `resolve_surface_focus`
+// still has unmigrated production callers, and `list_selected_row_bg` stays
+// reachable for `artwork_placeholder_tests.rs` until task 4.2 retires both.
+#[allow(dead_code)]
 pub fn resolve_surface_focus(focused: bool) -> Color {
     if focused {
         SURFACE_FOCUSED
@@ -102,6 +111,10 @@ pub fn resolve_surface_focus(focused: bool) -> Color {
 /// [`SURFACE_BACKDROP`], not `resolve_surface_focus(focused)`. Queue is the
 /// one non-library caller whose parent is itself focus-green; it passes
 /// [`SURFACE_FOCUSED`] directly instead of calling this.
+// Transitional: every production selected row now resolves through the
+// surface table's `SelectedRow` row; the name stays reachable for
+// `artwork_placeholder_tests.rs` until task 4.2 retires it.
+#[allow(dead_code)]
 pub fn list_selected_row_bg() -> Color {
     SURFACE_BACKDROP
 }

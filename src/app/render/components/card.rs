@@ -108,7 +108,13 @@ impl App {
         // for posters specifically, so this fills the full reserved area.
         if image_loading && reservation.height > 0 {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::BORDER_UNFOCUSED)),
+                Block::default().style(
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::ArtworkLoadingPlaceholder,
+                        false,
+                    )
+                    .fill),
+                ),
                 reservation,
             );
         }
@@ -242,10 +248,11 @@ impl App {
         left_align: bool,
     ) -> (u16, u16, bool) {
         let rect = self.card_reserved_rect(area, left_align);
-        let bg = palette::resolve_surface_focus(matches!(
-            self.effective_panel_focus(),
-            PanelFocus::Queue
-        ));
+        let bg = palette::surface_colors(
+            palette::Surface::QueueCardVisualizer,
+            matches!(self.effective_panel_focus(), PanelFocus::Queue),
+        )
+        .fill;
         self.render_visualizer(f, rect, bg);
         (rect.height, rect.width, false)
     }
@@ -667,7 +674,13 @@ mod tests {
             .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert_eq!(
             term.backend().buffer()[(0, 0)].style().bg,
-            Some(crate::app::palette::resolve_surface_focus(false)),
+            Some(
+                crate::app::palette::surface_colors(
+                    crate::app::palette::Surface::QueueCardVisualizer,
+                    false,
+                )
+                .fill
+            ),
             "an empty selected visualizer must still paint its reserved card"
         );
     }

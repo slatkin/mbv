@@ -184,7 +184,9 @@ pub(in crate::app) fn render_selected_block_borders(
         SelectedBlockBorderStyle::FocusedRail { focused } => (
             "\u{2594}",
             "\u{2581}",
-            Some(palette::resolve_surface_focus(focused)),
+            // The rail's background is the panel's own fill (the surface
+            // table's `LibraryPanel` border row).
+            Some(palette::surface_colors(palette::Surface::LibraryPanel, focused).fill),
         ),
     };
     let mut border_style = Style::default().fg(palette::PROGRESS_TRACK);
@@ -233,11 +235,7 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
         return Rect::default();
     }
 
-    let bg = if focused {
-        palette::SURFACE_ACCENT_SOFT
-    } else {
-        palette::SURFACE_BACKDROP
-    };
+    let bg = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
     area
@@ -248,13 +246,18 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
 /// appearance for every interactive pill selector (Home sections, feed
 /// groups, music groups, letter filters, and series seasons).
 fn selector_pill_style(selected: bool) -> Style {
-    if selected {
-        Style::default()
-            .fg(palette::PILL_SELECTED_FG)
-            .bg(palette::PILL_SELECTED_BG)
+    let chip = if selected {
+        palette::Surface::PillChipSelected
     } else {
-        Style::default().fg(palette::PILL_FG).bg(palette::PILL_BG)
-    }
+        palette::Surface::PillChip
+    };
+    Style::default()
+        .fg(if selected {
+            palette::PILL_SELECTED_FG
+        } else {
+            palette::PILL_FG
+        })
+        .bg(palette::surface_colors(chip, selected).fill)
 }
 
 /// Draws the shared " {count} items" header (SUBTLE) on the first row of
@@ -388,7 +391,9 @@ pub(in crate::app) fn render_pill_bar(
 
     // The row surface is part of the canonical shell.
     f.render_widget(
-        Block::default().style(Style::default().bg(palette::PILL_ROW_BG)),
+        Block::default().style(
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+        ),
         area,
     );
 
@@ -400,7 +405,7 @@ pub(in crate::app) fn render_pill_bar(
                 "  ",
                 Style::default()
                     .fg(palette::STATUS_AVAILABLE)
-                    .bg(palette::PILL_ROW_BG),
+                    .bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
             ));
         } else {
             spans.push(Span::styled(
@@ -439,34 +444,43 @@ pub(in crate::app) fn render_pill_bar(
             },
             id,
         ));
+        // The edge glyphs take the chip's own surface as their foreground and
+        // either the row's or the neighbouring chip's surface behind them.
+        let edge_fg = palette::surface_colors(
+            if selected {
+                palette::Surface::PillChipSelected
+            } else {
+                palette::Surface::PillChip
+            },
+            selected,
+        )
+        .fill;
+        let leading_bg = palette::surface_colors(
+            if abs_idx == 0 {
+                palette::Surface::PillRow
+            } else {
+                palette::Surface::PillChip
+            },
+            false,
+        )
+        .fill;
+        let trailing_bg = palette::surface_colors(
+            if is_last_pill {
+                palette::Surface::PillRow
+            } else {
+                palette::Surface::PillChip
+            },
+            false,
+        )
+        .fill;
         spans.push(Span::styled(
             "◢",
-            Style::default()
-                .fg(if selected {
-                    palette::PILL_SELECTED_BG
-                } else {
-                    palette::PILL_BG
-                })
-                .bg(if abs_idx == 0 {
-                    palette::PILL_ROW_BG
-                } else {
-                    palette::PILL_BG
-                }),
+            Style::default().fg(edge_fg).bg(leading_bg),
         ));
         spans.push(Span::styled(pill, style));
         spans.push(Span::styled(
             "◤",
-            Style::default()
-                .fg(if selected {
-                    palette::PILL_SELECTED_BG
-                } else {
-                    palette::PILL_BG
-                })
-                .bg(if is_last_pill {
-                    palette::PILL_ROW_BG
-                } else {
-                    palette::PILL_BG
-                }),
+            Style::default().fg(edge_fg).bg(trailing_bg),
         ));
         x_cursor += pill_w;
     }
@@ -486,7 +500,7 @@ pub(in crate::app) fn render_pill_bar(
     if remaining > 0 {
         spans.push(Span::styled(
             " ".repeat(remaining),
-            Style::default().bg(palette::PILL_ROW_BG),
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
         ));
     }
 

@@ -571,7 +571,7 @@ fn render_tv_series_selection(
     episodes.set_geometry(paint_area, episode_list_area);
     episodes.set_paint_policy(WideMediaListPaintPolicy::new(
         focused,
-        SelectedRowSurface::OwningSurface,
+        SelectedRowSurface::OwningLibraryPane,
         None,
     ));
     Component::view(episodes, f, episode_list_area);

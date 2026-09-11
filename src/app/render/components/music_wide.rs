@@ -535,7 +535,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
             track_list.set_geometry(track_panel, track_content_area);
             track_list.set_paint_policy(WideMediaListPaintPolicy::new(
                 left_focused,
-                SelectedRowSurface::OwningSurface,
+                SelectedRowSurface::OwningLibraryPane,
                 None,
             ));
             Component::view(track_list, f, track_area);
