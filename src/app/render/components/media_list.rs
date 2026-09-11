@@ -40,7 +40,7 @@ mod wide_row_regression_tests {
     /// title must land at column 2. These broke together when the painter was
     /// handed an already-inset content rect.
     #[test]
-    fn selected_row_spans_full_width_with_flush_marker_and_three_col_indent() {
+    fn selected_row_spans_full_width_with_two_col_indent() {
         const PX: u16 = 10;
         const PW: u16 = 40;
         let selected_bg = palette::SURFACE_RESTING;
@@ -70,10 +70,10 @@ mod wide_row_regression_tests {
 
             assert_eq!(
                 buf[(PX, 0)].symbol(),
-                "▎",
-                "edge marker must be flush at the panel x (duration={duration:?})"
+                " ",
+                "accent marker is gone; panel x is quiet indent (duration={duration:?})"
             );
-            // Skip the flush marker glyph itself; the title is the next
+            // Skip the 2-column quiet indent; the title is the next
             // non-blank cell.
             let first_text = (PX + 1..PX + PW)
                 .find(|&x| buf[(x, 0)].symbol().trim() != "")
@@ -129,11 +129,11 @@ mod wide_row_regression_tests {
             selected_row_rect,
             Some(Some(Rect::new(content.x, content.y, content.width, 1)))
         );
-        assert_eq!(buffer[(claim.x, content.y)].symbol(), "▎");
+        assert_eq!(buffer[(claim.x, content.y)].symbol(), " ");
         assert_eq!(buffer[(content.x, content.y)].symbol(), "S");
         assert_eq!(buffer[(claim.x, content.y)].bg, selected_bg);
         assert_eq!(buffer[(claim.right() - 1, content.y)].bg, selected_bg);
-        assert_ne!(buffer[(claim.x, claim.y)].symbol(), "▎");
+        assert_eq!(buffer[(claim.x, claim.y)].symbol(), " ");
         assert_ne!(buffer[(claim.x, content.y + 1)].bg, selected_bg);
     }
 

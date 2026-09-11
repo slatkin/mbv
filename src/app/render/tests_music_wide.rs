@@ -160,14 +160,15 @@ fn wide_music_selected_row_fills_the_whole_panel_width_when_focused() {
     let buffer = terminal.backend().buffer();
     // The canonical rail paints into the full panel row: `x` is 2 columns
     // (`PANE_PAD_X`) left of the padded content rect the layout publishes, so
-    // the flush edge marker and the selected background reach the panel
-    // border, and the title lands at the padded content edge (one column
-    // left of the old bespoke `padded_rect` + extra leading space).
+    // the selected background reaches the panel border (the accent marker
+    // glyph is gone, remove-marker-bleed), and the title lands at the padded
+    // content edge (one column left of the old bespoke `padded_rect` + extra
+    // leading space).
     let paint_x = rect.x - 2;
     assert_eq!(
         buffer[(paint_x, rect.y)].symbol(),
-        "\u{258e}",
-        "flush edge marker sits at the full-panel paint x"
+        " ",
+        "accent marker is gone; full-panel paint x is quiet indent"
     );
     assert_eq!(
         buffer[(rect.x, rect.y)].symbol(),

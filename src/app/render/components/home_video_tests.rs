@@ -33,9 +33,9 @@ fn home_video_item_characterization_covers_default_focused_narrow_and_selected_s
     );
     assert_eq!(
         render_item(24, 1, 1, true, true),
-        "▎ Birthday Clip         \n"
+        "  Birthday Clip         \n"
     );
-    assert_eq!(render_item(8, 1, 1, true, true), "▎ Bir…  \n");
+    assert_eq!(render_item(8, 1, 1, true, true), "  Bir…  \n");
     let expected = format!(
         "{}\n{:<width$}\n{:<width$}\n{:<width$}\n{:<width$}\n{}\n",
         "▁".repeat(24),

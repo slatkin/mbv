@@ -1,6 +1,5 @@
 use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 use crate::app::palette;
-use crate::app::render::components::list_rows::{selection_marker, MarkerEdge};
 use crate::app::ui_util::trunc_str;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -31,11 +30,11 @@ fn progress_for_now_playing(state: &MediaSemanticState) -> Option<String> {
 /// workspace lists pass `palette::resolve_surface_focus(focused)` so their
 /// selected row follows their owning workspace surface.
 ///
-/// Row geometry: the flush edge marker sits at the paint rect's `x` (the
-/// panel border) and the title text is indented `LEFT_INSET` (2) columns in
-/// — `[marker][1 space][title…]` — so the title lands at column 2 of the
-/// panel; the selected row's background fills the whole row via `List`'s
-/// row-style fill.
+/// Row geometry: the title text is indented 2 columns in — the old accent
+/// marker column is gone (remove-marker-bleed), leaving a 2-column quiet
+/// indent — so the title lands at column 2 of the panel; the selected row's
+/// background fills the whole row via `List`'s row-style fill and bleeds to
+/// both panel edges.
 pub(in crate::app) fn wide_media_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
@@ -48,8 +47,7 @@ pub(in crate::app) fn wide_media_row<Target>(
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
         MediaListRow::Heading { text } => ListItem::new(Line::from(vec![
-            selection_marker(false, MarkerEdge::Left),
-            Span::raw(" "),
+            Span::raw("  "),
             Span::styled(
                 text.clone(),
                 Style::default()
@@ -66,9 +64,10 @@ pub(in crate::app) fn wide_media_row<Target>(
             ..
         } => {
             // Canonical row geometry:
-            // `[marker][1 space][title…]  [FOAM trailing]  [green duration]`
-            // with the flush marker at the panel edge, the title at column 2,
-            // and a quiet gap before the right-aligned duration.
+            // `[2-col indent][title…]  [FOAM trailing]  [green duration]`
+            // with the title at column 2 (the accent marker column is gone,
+            // remove-marker-bleed) and a quiet gap before the right-aligned
+            // duration.
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
             const RIGHT_INSET: usize = 2;
@@ -137,7 +136,7 @@ pub(in crate::app) fn wide_media_row<Target>(
             );
 
             let selected = selected && focused;
-            let mut spans = vec![selection_marker(selected, MarkerEdge::Left), Span::raw(" ")];
+            let mut spans = vec![Span::raw("  ")];
             spans.push(Span::styled(
                 title,
                 Style::default().fg(

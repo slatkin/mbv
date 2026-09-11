@@ -81,20 +81,8 @@ pub(in crate::app::render) fn render_home_video_item(
         );
     }
 
-    let marker = super::list_rows::selection_marker(
-        selected && focused && !expanded,
-        super::list_rows::MarkerEdge::Left,
-    );
-    f.render_widget(
-        Paragraph::new(marker),
-        Rect {
-            x: content_area.x,
-            y: title_y,
-            width: 1,
-            height: 1,
-        },
-    );
-
+    // (remove-marker-bleed: the accent marker glyph at column 0 is gone;
+    // the selected row's background treatment alone marks selection.)
     let text_inset = if selected {
         SELECTED_BLOCK_SIDE_PADDING
     } else {

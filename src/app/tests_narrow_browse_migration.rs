@@ -473,9 +473,11 @@ fn feed_snapshot(width: u16, height: u16) -> String {
 
 fn selected_feed_row_region(output: &str, title: &str) -> String {
     let lines: Vec<_> = output.lines().collect();
+    // remove-marker-bleed: the selected ordinary row is identified by its
+    // 2-column selected inset instead of the removed accent marker glyph.
     let row = lines
         .iter()
-        .position(|line| line.contains('▎') && line.contains(title))
+        .position(|line| line.starts_with("  ") && line.contains(title))
         .unwrap_or_else(|| panic!("selected feed row must be rendered: {output}"));
     lines[row..row + 1].join("\n")
 }
@@ -670,7 +672,10 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
     let output = draw(&mut model, &mut term);
     let region = selected_feed_row_region(&output, "Video One");
     assert_eq!(region.matches("Video One").count(), 1);
-    assert!(region.contains('▎'));
+    assert!(
+        region.starts_with("  "),
+        "ordinary selected row keeps the 2-col selected inset (remove-marker-bleed)"
+    );
     assert!(!region.contains('▁') && !region.contains('▔'));
 }
 

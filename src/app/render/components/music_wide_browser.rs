@@ -38,8 +38,8 @@ pub(in crate::app) fn render_wide_right_album_browser_with_ctx(
         return;
     }
 
-    // The canonical rail owns the full panel row (selection markers and
-    // selected backgrounds reach the panel border); `browser_area` remains
+    // The canonical rail owns the full panel row (the selected background
+    // reaches the panel border); `browser_area` remains
     // the padded hit/scroll geometry.
     let paint_area = Rect {
         x: panel_area.x,

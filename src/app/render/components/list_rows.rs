@@ -1,9 +1,9 @@
 //! The `List` component (design.md "Component catalogue"): row rendering,
-//! the shared `SelectionMarker`, and the row/cell padding it composes with,
-//! extracted from and shared by movies/TV's list renderers
-//! (`list_letter_groups.rs`, `media_list.rs`, both consumers of
-//! `item_cell_spans`/`draw_column_selection_markers` below) and reused by
-//! the audiobookshelf show grid. `ListRenderCtx`/`DisplayRow` are its row
+//! the row/cell padding the lists share, and the selected-row background
+//! extension they compose with, extracted from and shared by movies/TV's list
+//! renderers (`list_letter_groups.rs`, `media_list.rs`, both consumers of
+//! `item_cell_spans`/`draw_column_selection_markers below) and reused by the
+//! audiobookshelf show grid. `ListRenderCtx`/`DisplayRow` are its row
 //! model; `render_right_scrollbar` (`widgets.rs`) is its `Scrollbar`.
 //! Screens still call these functions directly and record their own row hit
 //! targets on `LayoutMain` rather than getting one back from a single
@@ -14,8 +14,8 @@
 use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::text::Span;
+use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// Standard inset for every selected detail block.
@@ -329,8 +329,8 @@ impl LibraryListRenderCtx {
 /// between the two call sites). Every cell starts with a 1-column leading
 /// space; the selected cell carries the library backdrop from
 /// `palette::list_selected_row_bg()` in both one- and two-column mode. The
-/// marker glyph itself (the shared `SelectionMarker` component) is drawn
-/// separately, at the list's outer edge, by `draw_column_selection_markers`.
+/// selected row's background is extended to the list's outer edge, outside
+/// the row's own content area, by `draw_column_selection_markers`.
 pub(in crate::app::render) fn build_list_row_spans(
     title: String,
     dur_str: String,
@@ -390,32 +390,6 @@ pub(in crate::app::render) fn item_cell_spans(
     spans
 }
 
-/// Horizontal edge a `SelectionMarker` block sits at: the left edge for a
-/// single-column list, or a two-column list's left column; the right edge
-/// for a two-column list's right column.
-pub(in crate::app::render) enum MarkerEdge {
-    Left,
-    Right,
-}
-
-/// The shared `SelectionMarker` component (design.md decision 2): a thin
-/// `ACCENT`-role block, directional in two-column mode. `active` selects
-/// the accent glyph vs. a blank column so unselected rows keep standard
-/// alignment. Returns the styled span every list embeds as its marker;
-/// `draw_column_selection_markers` uses the same glyph/color definition to
-/// paint the library list's marker at the true outer edge, outside the
-/// row's own content area.
-pub(in crate::app::render) fn selection_marker(active: bool, edge: MarkerEdge) -> Span<'static> {
-    if !active {
-        return Span::raw(" ");
-    }
-    let glyph = match edge {
-        MarkerEdge::Left => "\u{258e}",
-        MarkerEdge::Right => "\u{1fb87}",
-    };
-    Span::styled(glyph, Style::default().fg(palette::ACCENT))
-}
-
 /// The screen rect of the selected cell in a column-aware list, derived from
 /// the same `item_rows`/`row_offset` inputs `draw_column_selection_markers`
 /// consumes plus the cell-width/column-gap geometry the renderer already
@@ -448,8 +422,8 @@ pub(in crate::app::render) fn selected_cell_rect(
     })
 }
 
-/// Draws the library list's column selection marker after the list has
-/// rendered, at the panel's outer edge: the left edge in single-column
+/// Draws the library list's selected-row background extension after the
+/// list has rendered, at the panel's outer edge: the left edge in single-column
 /// mode or for a left-column selection, the right edge for a right-column
 /// selection (symmetric). The background is extended to cover the gap
 /// between the marker and the cell content.
@@ -470,9 +444,11 @@ pub(in crate::app::render) fn draw_column_selection_markers(
     );
 }
 
-/// Draws selection markers with the selected row's surface. Most catalog
-/// lists use the library backdrop; Wide hero Feeds rows use their
-/// focus-resolved surface instead.
+/// Draws the selected row's background extension with the selected row's
+/// surface. Most catalog lists use the library backdrop; Wide hero Feeds
+/// rows use their focus-resolved surface instead.
+/// (remove-marker-bleed: the accent glyph is gone; what remains is the
+/// selected row's background bleeding 2 columns into the panel margin.)
 pub(in crate::app::render) fn draw_column_selection_markers_with_background(
     f: &mut Frame,
     content_area: Rect,
@@ -493,74 +469,23 @@ pub(in crate::app::render) fn draw_column_selection_markers_with_background(
         .unwrap_or(0);
 
     let row_y = content_area.y + row_idx as u16;
-
-    if col_in_row == 0 {
-        f.render_widget(
-            Block::default().style(Style::default().bg(background)),
-            Rect {
-                x: content_area.x.saturating_sub(2),
-                y: row_y,
-                width: 2,
-                height: 1,
-            },
-        );
-        f.render_widget(
-            Paragraph::new(Line::from(selection_marker(true, MarkerEdge::Left))),
-            Rect {
-                x: content_area.x.saturating_sub(2),
-                y: row_y,
-                width: 1,
-                height: 1,
-            },
-        );
-    } else {
-        f.render_widget(
-            Block::default().style(Style::default().bg(background)),
-            Rect {
-                x: content_area.x + content_area.width,
-                y: row_y,
-                width: 2,
-                height: 1,
-            },
-        );
-        f.render_widget(
-            Paragraph::new(Line::from(selection_marker(true, MarkerEdge::Right))),
-            Rect {
-                x: content_area.x + content_area.width + 1,
-                y: row_y,
-                width: 1,
-                height: 1,
-            },
-        );
-    }
-}
-
-#[cfg(test)]
-mod selection_marker_tests {
-    use super::*;
-
-    // Replaces `home_latest_row.rs`'s deleted `row_unselected_has_no_marker`
-    // (design.md decision 2 centralized every list's marker onto this one
-    // component, so the "unselected rows carry no marker glyph" guarantee
-    // belongs here now, not in a per-screen row painter).
-    #[test]
-    fn inactive_marker_is_blank() {
-        for edge in [MarkerEdge::Left, MarkerEdge::Right] {
-            let span = selection_marker(false, edge);
-            assert_eq!(span.content.as_ref(), " ");
-            assert_eq!(span.style.fg, None);
+    let rect = if col_in_row == 0 {
+        Rect {
+            x: content_area.x.saturating_sub(2),
+            y: row_y,
+            width: 2,
+            height: 1,
         }
-    }
-
-    #[test]
-    fn active_marker_uses_directional_glyph() {
-        assert_eq!(
-            selection_marker(true, MarkerEdge::Left).content.as_ref(),
-            "\u{258e}"
-        );
-        assert_eq!(
-            selection_marker(true, MarkerEdge::Right).content.as_ref(),
-            "\u{1fb87}"
-        );
-    }
+    } else {
+        Rect {
+            x: content_area.x + content_area.width,
+            y: row_y,
+            width: 2,
+            height: 1,
+        }
+    };
+    f.render_widget(
+        Block::default().style(Style::default().bg(background)),
+        rect,
+    );
 }

@@ -402,7 +402,8 @@ fn render_wide_tv(model: &mut Model) -> (ratatui::buffer::Buffer, Rect) {
 }
 
 /// Whether the accent selected-row marker glyph is painted anywhere in the
-/// right series rail band.
+/// right series rail band. (remove-marker-bleed: the glyph is gone, so this
+/// is now a negative guard — it must never appear in either focus state.)
 fn rail_has_selection_marker(buf: &ratatui::buffer::Buffer, rail: Rect) -> bool {
     (rail.y..rail.bottom()).any(|y| {
         (rail.x.saturating_sub(4)..rail.right()).any(|x| buf[(x, y)].symbol() == "\u{258e}")
@@ -442,8 +443,8 @@ fn wide_tv_focus_to_queue_drops_right_rail_treatment_via_shell_sync() {
         "focused right rail paints the focused surface"
     );
     assert!(
-        rail_has_selection_marker(&focused_buf, rail),
-        "focused right rail paints the selected-row marker"
+        !rail_has_selection_marker(&focused_buf, rail),
+        "focused right rail no longer paints a marker glyph (remove-marker-bleed)"
     );
 
     // Panel focus moves to Queue via the production sync sequence.

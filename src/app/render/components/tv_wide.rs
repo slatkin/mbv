@@ -313,8 +313,8 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
             list_panel,
         );
     }
-    // The canonical rail owns the full panel row: selection markers and
-    // selected backgrounds must reach the panel border, while the layout
+    // The canonical rail owns the full panel row: the selected background
+    // must reach the panel border, while the layout
     // area remains the padded hit/scroll geometry.
     let paint_area = Rect {
         x: list_panel.x,
