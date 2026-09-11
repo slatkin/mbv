@@ -37,3 +37,16 @@
 
 - [x] 6.1 Run the gates on the finished change: `cargo nextest run -p mbv`, `cargo check -p mbv`, `cargo clippy --workspace --all-targets`, `cargo fmt --all`, `ast-grep scan`. Verify: all pass with no new warnings, no test deleted or weakened, and no expected colour value changed except where a task states it should.
 - [x] 6.2 Post the migration report: the inventory's coverage, the aliases retired, the level edits that now reach every surface, and the roles left with more than one meaning. Verify: each claim is reproducible from the tree (a grep or a test name), and anything still aliased is recorded as an open item rather than left silent. The report must also carry the change's residuals, each with its evidence: the two surfaces pinned nowhere at buffer level (`WideSplitGutter`, `QueueCardVisualizer`) and which tests cover them instead; the load-sensitive SIGABRT flake that fired occasionally under parallel full-suite runs and passes in isolation; `ACCENT` still a mixed surface/foreground role; and the fact that row 4.5's single-painter property rests on the deletions plus the 5.1 guardrails rather than on a buffer assertion, because two identical fills are indistinguishable in a buffer.
+
+## Post-archive note (2026-09-11)
+
+A user-directed rework (former rows 7.1–7.8: every hero pane following its
+column's focus, a flat `#48584e` selected row, focus-following `PillRowGap` and
+`WideSplitGutter`, fixed `#3c4841` inset recesses, soft-white overview text)
+was implemented on this branch as 9bc41c92, sampled on screen, and declined.
+The branch was truncated back to the task-1–6 state before archiving, so the
+shipped colours match main's values everywhere the table does not state a
+focus behaviour that task 4.6 already declared. Two pieces of the rework were
+kept: the playback panel's pre-sync default fill (the review's P1, re-landed
+as 17797632) and the uncommitted test tidy-ups (re-landed as cc2da8a0). The
+declined rework remains retrievable in git history at 9bc41c92/11d70e3f.
