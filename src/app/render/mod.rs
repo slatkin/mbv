@@ -316,6 +316,8 @@ mod tests_home_inline;
 #[cfg(test)]
 mod tests_selection_modal;
 #[cfg(test)]
+mod tests_surface_conformance;
+#[cfg(test)]
 mod tests_wide_hero_pane_characterization;
 #[cfg(test)]
 mod tests_wide_hero_split_override;
