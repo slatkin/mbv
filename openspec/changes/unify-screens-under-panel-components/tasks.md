@@ -141,7 +141,7 @@ choose a focus kind, pick a surface or lay out a pane.
   (and, for episodes, the series' thumb/backdrop tags) to `EmbyItem` (`crates/mbv-core/src/api_types.rs`),
   requesting them where the item `Fields` lists need it. Verify: `cargo nextest run -p mbv-core` with
   parser tests on recorded item JSON with and without each tag.
-- [ ] 5.4 Implement the artwork policy and hero producers (design D5): `artwork_policy(&item) ->
+- [x] 5.4 Implement the artwork policy and hero producers (design D5): `artwork_policy(&item) ->
   HeroArtwork` (Music and podcasts Square; else first declared of Landscape > Square > Portrait; none →
   Landscape, or Square for Music/podcasts), returning shape, Emby image-type chain and cache key; one
   `hero_content(&item)` producer per content type (`EmbyItem`, `QueueItem`, ABS book, ABS podcast show
@@ -150,7 +150,7 @@ choose a focus kind, pick a surface or lay out a pane.
   Landscape; poster only → Portrait; album with a thumb → Square; podcast episode → Square; book →
   Portrait; feed entry → Landscape placeholder; podcast feed entry → Square), and that the Home path
   and the Books tab produce identical `HeroContent` for the same ABS book.
-- [ ] 5.5 Implement `HeroHeader` Landscape / Portrait / Square, constructed only from the policy's
+- [x] 5.5 Implement `HeroHeader` Landscape / Portrait / Square, constructed only from the policy's
   shape, with one title/meta painter that colours meta row *n* with `HERO_META_ROLES[n % 3]` (three
   roles added to `render/theme`) and owns truncation/wrapping; placeholder at full box size while
   loading; artwork shrinking before a Workspace viewport drops; the overview Main content box only when
@@ -159,7 +159,7 @@ choose a focus kind, pick a surface or lay out a pane.
   Verify: buffer tests per arm (art above vs art right), four meta rows cycling colours 1-2-3-1,
   overview present/absent, placeholder size; a unit test that a 4:3 source filled into a 16:9 box is
   cropped top and bottom; `HeroHeader` has no public constructor.
-- [ ] 5.6 Implement the Workspace: optional Selector row over one Main content box holding a
+- [x] 5.6 Implement the Workspace: optional Selector row over one Main content box holding a
   `&mut dyn PanelList`, accent-soft surface while focused, owning-surface selected row. Verify: buffer
   tests for focused/unfocused box surface and selected-row surface; `WideHeroContentBoxSurface` deleted.
 - [ ] 5.7 Implement the Narrow skeleton and the inline hero derived from the same `HeroContent` (policy
