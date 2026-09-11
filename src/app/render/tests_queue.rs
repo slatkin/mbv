@@ -142,7 +142,13 @@ fn narrowing_from_each_wide_mode_starts_queue_only_without_mutating_wide_state()
         let mut app = make_movie_app();
         app.panel_mode = mode;
         app.panel_focus = focus;
-        app.mini_view_focus = crate::app::PanelFocus::Library;
+        // Production order (task 1.2): a real Resize crossing into mini view
+        // runs the focus hand-off in the sync pass before the draw -- the
+        // draw path only reads geometry. The fixture performs that hand-off
+        // itself: the stored wide focus stays in `panel_focus`, and the
+        // mini-view focus moves to Queue exactly as
+        // `Model::sync_terminal_resize` does on a narrowing Resize event.
+        app.mini_view_focus = crate::app::PanelFocus::Queue;
 
         render_app_to_terminal(&mut app, crate::app::MINI_VIEW_THRESHOLD - 1, 20);
 

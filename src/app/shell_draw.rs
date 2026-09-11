@@ -8,7 +8,7 @@ use crate::app::render::arrangements::chrome::{
 use crate::app::render::arrangements::queue::{queue_panel_geometry, QueuePanelInputs};
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::{render_queue_panel_frame, right_panel_content_area};
-use crate::app::{palette, App, PanelFocus, PanelMode};
+use crate::app::{palette, App, PanelMode};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
@@ -27,9 +27,8 @@ impl App {
     /// frame before ANY mutation beyond the geometry bookkeeping, so
     /// `self.layout` keeps reflecting the last frame that rendered in full.
     /// Otherwise normalizes the frame-dependent geometry inputs (terminal
-    /// size, plus the mini-view crossing arm for frames that render before
-    /// their Resize event -- see the comment in the body) and computes the
-    /// root/chrome geometry into the typed partial subresult
+    /// size only) and computes the root/chrome geometry into the typed
+    /// partial subresult
     /// `FrameChromeGeometry`. Its former resize side effects
     /// (card-image clear, queue-column clamp + prefs save) moved to the sync
     /// pass (`Model::sync_terminal_resize`, task 1.2). `compose_base_frame`
@@ -45,16 +44,9 @@ impl App {
         if area.width == 0 || area.height == 0 {
             return None;
         }
-        // Mini-view crossing for a frame that renders before its Resize event
-        // could be dispatched (the startup draws, bare-frame render helpers).
-        // Real resizes hand focus to the queue in the sync pass instead
-        // (`Model::sync_terminal_resize`, task 1.2); this draw-path arm keeps
-        // the stored-width vs frame-width semantics for those renders.
-        if self.terminal_width >= crate::app::MINI_VIEW_THRESHOLD
-            && area.width < crate::app::MINI_VIEW_THRESHOLD
-        {
-            self.mini_view_focus = PanelFocus::Queue;
-        }
+        // The draw path only reads geometry (task 1.2): the mini-view focus
+        // hand-off on a real resize runs solely in the sync pass
+        // (`Model::sync_terminal_resize`), never here.
         self.terminal_width = area.width;
         self.terminal_height = area.height;
         Some(self.compute_chrome_geometry(area))
