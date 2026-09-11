@@ -14,21 +14,16 @@ pub(crate) trait Hero {
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>>;
     fn title_suffix(&self) -> Option<Span<'static>>;
     fn description(&self) -> Option<String>;
-    /// The default-aspect artwork request, i.e. `artwork_for(HeroArtworkAspect::Default)`.
-    fn artwork(&self) -> HeroArtwork<'_> {
-        self.artwork_for(HeroArtworkAspect::Default)
+    /// The default-aspect artwork request: the provider's primary image chain.
+    fn artwork(&self) -> HeroArtwork<'_>;
+    /// The landscape-aspect artwork request: the provider's wide-image chain
+    /// (Series overrides it with the `Thumb`-first chain). Task 5.4 deleted
+    /// the per-aspect enum; this method keeps the landscape-chain role with
+    /// the trait until the panel's artwork policy replaces this path when the
+    /// destination converts (task 8.2).
+    fn landscape_artwork(&self) -> HeroArtwork<'_> {
+        self.artwork()
     }
-    fn artwork_for(&self, aspect: HeroArtworkAspect) -> HeroArtwork<'_>;
-}
-
-/// Requested semantic shape for `Hero::artwork_for`'s resolved image
-/// (design.md D-D). `Landscape` asks the adapter to prefer a wide-aspect
-/// image via its locally verified per-item-type candidate chain; the layout
-/// requesting it owns the aspect ratio, not the provider's field names.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum HeroArtworkAspect {
-    Default,
-    Landscape,
 }
 
 pub(crate) enum HeroArtwork<'a> {
@@ -79,7 +74,7 @@ impl Hero for QueueItem {
         }
     }
 
-    fn artwork_for(&self, _aspect: HeroArtworkAspect) -> HeroArtwork<'_> {
+    fn artwork(&self) -> HeroArtwork<'_> {
         match self {
             QueueItem::Audiobookshelf(item) => item
                 .cover_path
@@ -103,11 +98,56 @@ impl Hero for QueueItem {
 }
 
 /// Canonical TV Wide Series image-type candidate chain: the `Thumb`-first
-/// landscape mapping `artwork_for(HeroArtworkAspect::Landscape)` declares.
-/// The shell prefetch requests this same item (not a copy) so it warms the
-/// identical key the painter fetches under `series_image_cache_key`.
+/// landscape chain `Hero::landscape_artwork` declares (task 5.4 deleted the
+/// per-aspect enum). The shell prefetch requests this same item (not a copy)
+/// so it warms the identical key the painter fetches under
+/// `series_image_cache_key`; the panel's artwork policy reuses it for Series
+/// landscape arms.
 pub(in crate::app) const SERIES_LANDSCAPE_IMAGE_TYPES: &[&str] =
     &["Thumb", "Primary", "Backdrop", "Logo"];
+
+/// The plain-text metadata rows (task 5.4, design D5): one entry per row, no
+/// width — the panel's header painter owns truncation and wrapping. Shared by
+/// the `Hero` impl below (which truncates and styles for the un-migrated
+/// painters) and the panel's Emby hero producer.
+pub(crate) fn emby_hero_meta_rows_plain(item: &EmbyItem) -> Vec<String> {
+    let mut rows = Vec::new();
+    if item.item_type == "Series" {
+        // Ported from `series_meta_line()` (`detail_series_view.rs`):
+        // year range (`production_year`..`end_year`) and uppercased
+        // genre, joined with two spaces, skipping empty parts.
+        let year_range = match (item.production_year, item.end_year) {
+            (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
+            (s, _) if s > 0 => format!("{}", s),
+            _ => String::new(),
+        };
+        let genre_upper = item.genre.to_uppercase();
+        let line = [year_range.as_str(), genre_upper.as_str()]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join("  ");
+        if !line.is_empty() {
+            rows.push(line);
+        }
+    }
+    if !item.premiere_date.is_empty() {
+        rows.push(format_release_date(&item.premiere_date));
+    }
+    if item.runtime_ticks > 0 {
+        rows.push(fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND));
+    }
+    rows
+}
+
+fn emby_meta_row_styles() -> [ratatui::style::Color; 3] {
+    [
+        palette::TEXT_DETAIL_META,
+        palette::TEXT_SECONDARY,
+        palette::STATUS_AVAILABLE,
+    ]
+}
 
 impl Hero for EmbyItem {
     fn title(&self) -> &str {
@@ -120,46 +160,19 @@ impl Hero for EmbyItem {
     }
 
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
-        let mut rows = Vec::new();
-        if self.item_type == "Series" {
-            // Ported from `series_meta_line()` (`detail_series_view.rs`):
-            // year range (`production_year`..`end_year`) and uppercased
-            // genre, joined with two spaces, skipping empty parts.
-            let year_range = match (self.production_year, self.end_year) {
-                (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
-                (s, _) if s > 0 => format!("{}", s),
-                _ => String::new(),
-            };
-            let genre_upper = self.genre.to_uppercase();
-            let line = [year_range.as_str(), genre_upper.as_str()]
-                .iter()
-                .filter(|s| !s.is_empty())
-                .copied()
-                .collect::<Vec<_>>()
-                .join("  ");
-            if !line.is_empty() {
-                rows.push(vec![Span::styled(
-                    trunc_str(&line, width as usize),
-                    Style::default().fg(palette::TEXT_DETAIL_META),
-                )]);
-            }
-        }
-        if !self.premiere_date.is_empty() {
-            rows.push(vec![Span::styled(
-                format_release_date(&self.premiere_date),
-                Style::default().fg(palette::TEXT_SECONDARY),
-            )]);
-        }
-        if self.runtime_ticks > 0 {
-            rows.push(vec![Span::styled(
-                trunc_str(
-                    &fmt_duration_approx(self.runtime_ticks / TICKS_PER_SECOND),
-                    width as usize,
-                ),
-                Style::default().fg(palette::STATUS_AVAILABLE),
-            )]);
-        }
-        rows
+        // Rows keep the painters' historical per-row colours by position:
+        // series line, release date, then duration.
+        let styles = emby_meta_row_styles();
+        emby_hero_meta_rows_plain(self)
+            .into_iter()
+            .enumerate()
+            .map(|(index, row)| {
+                vec![Span::styled(
+                    trunc_str(&row, width as usize),
+                    Style::default().fg(styles[index % styles.len()]),
+                )]
+            })
+            .collect()
     }
 
     fn title_suffix(&self) -> Option<Span<'static>> {
@@ -185,13 +198,24 @@ impl Hero for EmbyItem {
         (!d.is_empty()).then_some(d)
     }
 
-    fn artwork_for(&self, aspect: HeroArtworkAspect) -> HeroArtwork<'_> {
+    fn artwork(&self) -> HeroArtwork<'_> {
         if self.id.is_empty() {
             return HeroArtwork::Placeholder;
         }
-        let image_types = match (aspect, self.item_type.as_str()) {
-            (HeroArtworkAspect::Landscape, "Series") => SERIES_LANDSCAPE_IMAGE_TYPES,
-            _ => &["Primary", "Backdrop", "Logo"][..],
+        HeroArtwork::Image {
+            item_id: &self.id,
+            image_types: &["Primary", "Backdrop", "Logo"],
+        }
+    }
+
+    fn landscape_artwork(&self) -> HeroArtwork<'_> {
+        if self.id.is_empty() {
+            return HeroArtwork::Placeholder;
+        }
+        let image_types = if self.item_type == "Series" {
+            SERIES_LANDSCAPE_IMAGE_TYPES
+        } else {
+            &["Primary", "Backdrop", "Logo"]
         };
         HeroArtwork::Image {
             item_id: &self.id,
@@ -220,7 +244,7 @@ mod tests {
     fn series_landscape_prefers_thumb() {
         let series = item("Series");
         assert_eq!(
-            image_types(series.artwork_for(HeroArtworkAspect::Landscape)),
+            image_types(series.landscape_artwork()),
             &["Thumb", "Primary", "Backdrop", "Logo"]
         );
     }
@@ -229,20 +253,16 @@ mod tests {
     fn non_series_landscape_skips_thumb() {
         let movie = item("Movie");
         assert_eq!(
-            image_types(movie.artwork_for(HeroArtworkAspect::Landscape)),
+            image_types(movie.landscape_artwork()),
             &["Primary", "Backdrop", "Logo"]
         );
     }
 
     #[test]
-    fn default_aspect_is_unchanged_for_every_item_type() {
+    fn default_chain_is_unchanged_for_every_item_type() {
         for item_type in ["Series", "Movie", "Episode", "Audio"] {
             let it = item(item_type);
             assert_eq!(image_types(it.artwork()), &["Primary", "Backdrop", "Logo"]);
-            assert_eq!(
-                image_types(it.artwork_for(HeroArtworkAspect::Default)),
-                &["Primary", "Backdrop", "Logo"]
-            );
         }
     }
 }

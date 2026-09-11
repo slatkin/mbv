@@ -9,6 +9,8 @@
 //! destinations convert in 5.11+. No existing destination changes here.
 
 pub mod content;
+pub mod hero;
+pub mod hero_header;
 pub mod slots;
 pub mod wide;
 
@@ -16,6 +18,11 @@ pub mod wide;
 pub(in crate::app) use content::{
     ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroFacts, HeroHeader,
     LibraryPanelContent, ListControls, ListSlot, PanelList, SelectorRow, Workspace,
+};
+#[allow(unused_imports)]
+pub(in crate::app) use hero::{
+    emby_artwork_policy, hero_content_abs_book, hero_content_abs_episode, hero_content_abs_show,
+    hero_content_emby, hero_content_feed, hero_content_queue, HeroContentData,
 };
 #[allow(unused_imports)]
 pub(in crate::app) use slots::{paint_list_controls_row, paint_pill_row_gap, paint_selector_row};

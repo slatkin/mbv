@@ -9,7 +9,7 @@ use crate::app::render::arrangements::wide_hero::{
     self, place_media_list_below, PANE_PAD_X, PANE_PAD_Y,
 };
 use crate::app::render::components::hero::{wrap_overview_lines, HeroContent};
-use crate::app::render::components::hero_model::{Hero, HeroArtwork, HeroArtworkAspect};
+use crate::app::render::components::hero_model::{Hero, HeroArtwork};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::HomeImagePaint;
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
@@ -403,8 +403,9 @@ fn render_tv_series_selection(
         .saturating_add(PANE_PAD_Y * 2);
     let slots = wide_hero::wide_hero_slots(area, artwork_height, images_enabled);
 
-    let image_paint = slots.artwork.and_then(|artwork_area| {
-        match item.artwork_for(HeroArtworkAspect::Landscape) {
+    let image_paint = slots
+        .artwork
+        .and_then(|artwork_area| match item.landscape_artwork() {
             HeroArtwork::Placeholder if images_enabled => {
                 super::artwork_placeholder::render_artwork_placeholder(f, artwork_area);
                 None
@@ -416,8 +417,7 @@ fn render_tv_series_selection(
                 image_types,
             }),
             _ => None,
-        }
-    });
+        });
 
     let content_area = slots.overview;
     if content_area.height == 0 {

@@ -76,10 +76,11 @@ pub const TEXT_ACCENT_MUTED: Color = primitives::BG_GREEN; // "loaded"/"playing"
 pub const TEXT_DETAIL_META: Color = primitives::MUTED_GREEN; // detail-screen label/meta text
 pub const TEXT_METADATA: Color = primitives::FOAM; // secondary metadata (durations, pct, badges)
 
-// PRE-5.5 (task 5.5, design D5): the provisional cycling roles the Emby hero
-// headers' meta rows already use. The HeroHeader painter's real
-// `HERO_META_ROLES` (task 5.5) replaces this table — do not grow it.
-pub const PRE_HERO_META_ROLES: [Color; 3] = [TEXT_DETAIL_META, TEXT_METADATA, TEXT_SECONDARY];
+// Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
+// painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours
+// the Emby hero headers already used, defined once so destinations cannot style
+// metadata.
+pub const HERO_META_ROLES: [Color; 3] = [TEXT_DETAIL_META, TEXT_METADATA, TEXT_SECONDARY];
 
 // Status
 pub const STATUS_ERROR: Color = primitives::RED;

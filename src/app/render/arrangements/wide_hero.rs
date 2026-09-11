@@ -433,46 +433,25 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
     );
 }
 
-/// Semantic surface variants for the shared Wide hero content-box framing.
-/// `pub(in crate::app)`: the Library panel's skeleton (task 5.2) selects the
-/// surface the Workspace box paints with, and task 5.6 deletes the enum.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum WideHeroContentBoxSurface {
-    Backdrop,
-    FocusedTrackList,
-}
-
 /// Paints the Wide hero arrangement's main content box: the `MainContentBox`
-/// surface (the table's soft content body) inset within the Wide hero left
-/// pane, present on every Wide hero surface with a kind-dependent payload (the
-/// episode listing on TV, the track listing on Music, item description and
-/// metadata elsewhere) and one shared padding value (design.md D9, matching
-/// the pane inset from D6). Returns both rects so callers can use `panel` for
-/// full-bleed row backgrounds and `content` for text layout.
+/// surface's resting fill inset within the Wide hero left pane, present on every
+/// Wide hero surface with a kind-dependent payload (the episode listing on TV,
+/// the track listing on Music, item description and metadata elsewhere) and one
+/// shared padding value (design.md D9, matching the pane inset from D6).
+/// Returns both rects so callers can use `panel` for full-bleed row backgrounds
+/// and `content` for text layout.
 ///
-/// Shared by Music's track panel and Home's overview block, and by the
-/// Library panel's skeleton (task 5.2).
+/// The focused arm is gone with the deleted `WideHeroContentBoxSurface` (task
+/// 5.6, design D6): the Library panel derives the Workspace box's surface from
+/// its focus itself, and Music paints the same two fills directly until its
+/// conversion (task 9.1).
 pub(in crate::app) fn wide_hero_hero_content_box(f: &mut Frame, area: Rect) -> (Rect, Rect) {
-    wide_hero_hero_content_box_with_surface(f, area, WideHeroContentBoxSurface::Backdrop)
-}
-
-pub(in crate::app) fn wide_hero_hero_content_box_with_surface(
-    f: &mut Frame,
-    area: Rect,
-    surface: WideHeroContentBoxSurface,
-) -> (Rect, Rect) {
     let panel = Rect {
         x: area.x.saturating_add(PANE_PAD_X),
         width: area.width.saturating_sub(PANE_PAD_X * 2),
         ..area
     };
-    // Each declared variant is the one `MainContentBox` bool it describes:
-    // `FocusedTrackList` is the soft focused half, `Backdrop` the resting one.
-    let focused = match surface {
-        WideHeroContentBoxSurface::Backdrop => false,
-        WideHeroContentBoxSurface::FocusedTrackList => true,
-    };
-    let background = palette::surface_colors(palette::Surface::MainContentBox, focused).fill;
+    let background = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         panel,

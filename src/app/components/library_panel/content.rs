@@ -25,19 +25,30 @@ pub(in crate::app) enum ArtworkShape {
 /// Where a header's artwork comes from (design D3/D5). Built only by the
 /// artwork policy (task 5.4); plain data — an image-type chain and a cache
 /// key — so the shell projection (task 5.10) can fetch at projection time
-/// while the painter reads projected state only.
+/// while the painter reads projected state only. The Audiobookshelf arm
+/// carries the Service-scoped library item id the projection resolves to its
+/// server-scoped cache key (`App::audiobookshelf_{,book_}cover_key`); its
+/// image type is the fixed `Primary` cover chain.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(in crate::app) struct ArtworkSource {
-    /// Provider image types in priority order (e.g. Emby `Thumb`, then
-    /// `Primary`); the fetch walks the chain in order.
-    pub image_types: Vec<String>,
-    /// Stable cache key for the decoded image.
-    pub cache_key: String,
+pub(in crate::app) enum ArtworkSource {
+    /// An Emby image: fetch walks `image_types` (priority order, e.g. `Thumb`
+    /// then `Primary`) under `cache_key`, with `series_id` for the fetch's
+    /// series-fallback input.
+    Emby {
+        item_id: String,
+        series_id: String,
+        image_types: Vec<String>,
+        cache_key: String,
+    },
+    /// An Audiobookshelf cover (podcast episode/show `:cover:`, book
+    /// `:bookcover:`).
+    AudiobookshelfCover { library_item_id: String, book: bool },
 }
 
 /// Declared artwork for one hero (design D3/D5). `source: None` means no
-/// artwork source exists for the item (Feeds entries): the header renders
-/// the shared placeholder at the policy shape's box size.
+/// artwork source exists for the item (Feeds entries, an item with no
+/// declared image): the header renders the shared placeholder at the policy
+/// shape's box size.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroArtwork {
     pub shape: ArtworkShape,
@@ -56,7 +67,7 @@ pub(in crate::app) struct HeroFacts {
 
 /// The Wide Hero header (spec: exactly three types). Its arm is the artwork
 /// policy's shape and [`HeroHeader::from`] is the only constructor, so no
-/// destination can choose an arm (design D5). Task 5.5 adds the painting.
+/// destination can choose an arm (design D5); the painter dispatches on it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroHeader {
     arm: HeroHeaderArm,
@@ -83,6 +94,11 @@ impl HeroHeader {
                 ArtworkShape::Portrait => HeroHeaderArm::Portrait,
             },
         }
+    }
+
+    /// The arm, for the header painter's dispatch — not a constructor.
+    pub(in crate::app) fn arm(self) -> HeroHeaderArm {
+        self.arm
     }
 }
 
@@ -165,4 +181,19 @@ pub(in crate::app) trait PanelList {
     /// View the active presentation into `rect`, retaining its paint
     /// geometry.
     fn view(&mut self, frame: &mut Frame, rect: Rect);
+
+    /// View the active presentation with the panel's paint policy: the
+    /// focus bit and the slot's fixed selected-row surface (design D3/D6).
+    /// Provisional surface for this unit (task 5.6): the Workspace passes
+    /// the Wide policy vocabulary until task 5.8 formalizes the full D3
+    /// trait; the default keeps `view`'s behaviour.
+    fn view_with_policy(
+        &mut self,
+        frame: &mut Frame,
+        rect: Rect,
+        policy: crate::app::components::media_list::WideMediaListPaintPolicy,
+    ) {
+        let _ = policy;
+        self.view(frame, rect);
+    }
 }

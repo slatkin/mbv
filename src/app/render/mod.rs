@@ -124,9 +124,10 @@ pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::padded_rect;
 pub(in crate::app) use arrangements::wide_hero::{
     paint_wide_hero_text, place_media_list_below, wide_hero_browser_border, wide_hero_browser_pane,
-    wide_hero_fits, wide_hero_hero_content_box_with_surface, wide_hero_hero_pane, LeftPaneFocus,
-    WideHeroContentBoxSurface, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
+    wide_hero_fits, wide_hero_hero_content_box, wide_hero_hero_pane, LeftPaneFocus,
+    WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
+pub(in crate::app) use components::hero::wrap_overview_lines;
 pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
@@ -196,9 +197,9 @@ pub(crate) use screens::sort_filter::{
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
 pub(crate) use theme::{
-    ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, INDICATOR_AUDIO_FG,
-    INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG, PLAYBACK_META_FG,
-    PLAYBACK_THROBBER_FG, PLAYBACK_VALUE_FG, PRE_HERO_META_ROLES, PROGRESS_TRACK, SCROLLBAR,
+    ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, HERO_META_ROLES,
+    INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
+    PLAYBACK_META_FG, PLAYBACK_THROBBER_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK, SCROLLBAR,
     STATUS_AVAILABLE, STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_DETAIL_META, TEXT_EMPHASIS,
     TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,
     TEXT_STRONG,

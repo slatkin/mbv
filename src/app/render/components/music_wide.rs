@@ -525,13 +525,21 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
         );
         let track_area = left_layout.track_area;
         if track_area.height > 0 && track_area.width > 0 && !track_list.is_empty() {
-            let track_surface = if left_focused {
-                crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::FocusedTrackList
-            } else {
-                crate::app::render::arrangements::wide_hero::WideHeroContentBoxSurface::Backdrop
+            // The focused/resting `MainContentBox` pair painted directly: the
+            // surface-enum helper (`WideHeroContentBoxSurface`) is deleted in
+            // task 5.6 (design D6); Music keeps its old painter until 9.1.
+            let track_panel = Rect {
+                x: track_area.x.saturating_add(PANE_PAD_X),
+                width: track_area.width.saturating_sub(PANE_PAD_X * 2),
+                ..track_area
             };
-            let (track_panel, track_content_area) = crate::app::render::arrangements::wide_hero::
-                wide_hero_hero_content_box_with_surface(f, track_area, track_surface);
+            f.render_widget(
+                ratatui::widgets::Block::default().style(Style::default().bg(
+                    palette::surface_colors(palette::Surface::MainContentBox, left_focused).fill,
+                )),
+                track_panel,
+            );
+            let track_content_area = padded_rect(track_panel, PANE_PAD_X, PANE_PAD_Y);
             track_list.set_geometry(track_panel, track_content_area);
             track_list.set_paint_policy(WideMediaListPaintPolicy::new(
                 left_focused,

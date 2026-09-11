@@ -644,7 +644,10 @@ fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
     }
 }
 
-fn parse_item(raw: &Value) -> EmbyItem {
+/// The single raw-JSON-to-`EmbyItem` constructor. `pub` so the app crate's
+/// tests parse recorded item JSON (task 5.3's fixtures) the way the live
+/// parse path does (task 5.4's artwork-policy tests).
+pub fn parse_item(raw: &Value) -> EmbyItem {
     let ud = raw.get("UserData").unwrap_or(&Value::Null);
     let item_type = raw["Type"].as_str().unwrap_or("").to_string();
     let is_folder = raw["IsFolder"].as_bool().unwrap_or(false)

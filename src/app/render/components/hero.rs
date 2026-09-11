@@ -46,7 +46,7 @@ pub(in crate::app::render) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 /// Word-wraps text using a width that may change for each completed line.
 /// Inline heroes use this to narrow overview text beside a right-aligned
 /// image without making the wrapping policy screen-specific.
-pub(in crate::app::render) fn wrap_overview_lines(
+pub(in crate::app) fn wrap_overview_lines(
     text: &str,
     mut width_for_line: impl FnMut(usize) -> usize,
 ) -> Vec<String> {

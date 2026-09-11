@@ -10,23 +10,29 @@
 
 use ratatui::layout::Rect;
 use ratatui::style::Style;
+use ratatui::widgets::Block;
 use ratatui::Frame;
 
+use crate::app::components::media_list::{SelectedRowSurface, WideMediaListPaintPolicy};
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::{
-    paint_wide_hero_text, place_media_list_below, render_inline_search, render_placeholder,
-    wide_hero_browser_border, wide_hero_browser_pane, wide_hero_hero_content_box_with_surface,
-    wide_hero_hero_pane, LeftPaneFocus, WideHeroContentBoxSurface, WrappedHeroLine, PANE_PAD_X,
-    PANE_PAD_Y,
+    render_inline_search, render_placeholder, wide_hero_browser_border, wide_hero_browser_pane,
+    wide_hero_hero_pane, LeftPaneFocus, PANE_PAD_X, PANE_PAD_Y,
 };
 
 use super::content::{LibraryPanelContent, ListSlot};
+use super::hero_header::paint_hero_pane_content;
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
 };
+use crate::app::render::place_media_list_below;
+
+/// Blank rows between the header/overview content's painted bottom edge and
+/// the Workspace box (design D3: the Workspace sits below the overview).
+const WORKSPACE_GAP_ROWS: u16 = 1;
 
 /// The skeleton's retained irregular-chrome hit registries, one per painted
 /// pill row (ADR 0024: the mounted panel owns gesture state and resolves the
@@ -192,16 +198,20 @@ pub(in crate::app) fn render_wide_skeleton(
     };
 
     if let Some(hero) = content.hero.as_mut() {
-        let text_bottom = paint_pre_hero_placeholder(f, hero_area, &hero.facts);
+        // The Hero header (task 5.5): policy arm, placeholder artwork box,
+        // one title/meta painter, and the overview box when overview text
+        // exists. Returns the first unpainted row.
+        let next_row = paint_hero_pane_content(f, hero_area, &*hero);
         if let Some(workspace) = hero.workspace.as_mut() {
-            // One blank row below the text block before the Workspace box.
+            // One blank row below the painted content before the Workspace
+            // box (task 5.6).
             if let Some(workspace_rect) = place_media_list_below(
                 hero_area,
-                text_bottom.saturating_sub(1),
-                2,
+                next_row.saturating_sub(1),
+                WORKSPACE_GAP_ROWS,
                 hero_area.height,
             ) {
-                geometry.workspace = Some(paint_pre_workspace(
+                geometry.workspace = Some(paint_workspace_box(
                     f,
                     workspace_rect,
                     workspace,
@@ -213,35 +223,13 @@ pub(in crate::app) fn render_wide_skeleton(
     Some(geometry)
 }
 
-/// PRE-5.5 (task 5.5): a minimal facts placeholder — the title and meta rows
-/// through the shared Wide hero text painter — so the skeleton's buffers are
-/// testable before the real `HeroHeader` lands. Task 5.5 replaces this.
-/// Returns the first unpainted row ([`paint_wide_hero_text`]'s stop row).
-fn paint_pre_hero_placeholder(
-    f: &mut Frame,
-    hero_area: Rect,
-    facts: &super::content::HeroFacts,
-) -> u16 {
-    let mut lines: Vec<WrappedHeroLine> = Vec::with_capacity(1 + facts.meta_rows.len());
-    lines.push(WrappedHeroLine {
-        text: &facts.title,
-        style: Style::default().fg(palette::TEXT_STRONG),
-    });
-    for (index, row) in facts.meta_rows.iter().enumerate() {
-        lines.push(WrappedHeroLine {
-            text: row,
-            style: Style::default()
-                .fg(palette::PRE_HERO_META_ROLES[index % palette::PRE_HERO_META_ROLES.len()]),
-        });
-    }
-    paint_wide_hero_text(f, hero_area, &lines)
-}
-
-/// PRE-5.6 (task 5.6): the Workspace's box surface and list view. The
-/// optional workspace selector paints as one row over the box (the slot
-/// component owns its final form in 5.6, which also deletes
-/// `WideHeroContentBoxSurface`).
-fn paint_pre_workspace(
+/// The Workspace (task 5.6, design D6): an optional Selector row over one
+/// Main content box holding the Workspace's `&mut dyn PanelList`. The box's
+/// surface is derived, not declared — accent-soft while the workspace list
+/// holds focus, backdrop otherwise (user decision: Music's behaviour for
+/// all) — and the list's selected row is fixed to the owning surface by the
+/// slot. Returns the (panel, content) rects.
+fn paint_workspace_box(
     f: &mut Frame,
     workspace_rect: Rect,
     workspace: &mut super::content::Workspace<'_>,
@@ -262,15 +250,32 @@ fn paint_pre_workspace(
             ..workspace_rect
         };
     }
-    // Accent-soft while the workspace list holds focus, backdrop otherwise
-    // (design D6, user decision: Music's behaviour for all).
-    let surface = if workspace.focused {
-        WideHeroContentBoxSurface::FocusedTrackList
-    } else {
-        WideHeroContentBoxSurface::Backdrop
+    // The panel's own surface derivation (design D6): accent-soft while the
+    // workspace list holds focus, backdrop otherwise. The deleted
+    // `WideHeroContentBoxSurface` enum's focused arm is this one bool.
+    let panel = Rect {
+        x: box_area.x.saturating_add(PANE_PAD_X),
+        width: box_area.width.saturating_sub(PANE_PAD_X * 2),
+        ..box_area
     };
-    let (panel, content) = wide_hero_hero_content_box_with_surface(f, box_area, surface);
-    workspace.list.view(f, content);
+    let background =
+        palette::surface_colors(palette::Surface::MainContentBox, workspace.focused).fill;
+    f.render_widget(
+        Block::default().style(Style::default().bg(background)),
+        panel,
+    );
+    let content = padded_rect(panel, PANE_PAD_X, PANE_PAD_Y);
+    // The owning-surface selected row is fixed by the slot (design D6): the
+    // panel sets the paint policy, destinations pass none.
+    workspace.list.view_with_policy(
+        f,
+        content,
+        WideMediaListPaintPolicy::new(
+            workspace.focused,
+            SelectedRowSurface::OwningLibraryPane,
+            None,
+        ),
+    );
     (panel, content)
 }
 #[cfg(test)]
@@ -287,7 +292,9 @@ mod wide_skeleton_tests {
     use ratatui::widgets::Paragraph;
     use ratatui::Terminal;
 
-    const AREA: Rect = Rect::new(0, 0, 100, 18);
+    // Tall enough for a Landscape header (16:9 artwork box) to leave the
+    // title and meta rows visible below it.
+    const AREA: Rect = Rect::new(0, 0, 100, 30);
 
     /// A test double over [`PanelList`]: paints its rows and retains the rect
     /// it was viewed into.

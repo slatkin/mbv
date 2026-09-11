@@ -705,11 +705,64 @@ impl App {
     }
 }
 
+/// Cover fit for a hero artwork box (design D5, task 5.4): the decoded
+/// source image is scaled to cover the box's pixel size and centre-cropped,
+/// so the box shows no margin; painting then uses the existing
+/// `Resize::Scale`. The box's size comes from the panel's paint-free
+/// `hero_artwork_box` (task 5.5); the shell projection that calls this,
+/// keyed by the box size, lands in task 5.10.
+#[allow(dead_code)] // the shell projection calls it from task 5.10
+pub(in crate::app) fn cover_fill_hero_box(
+    source: &image::DynamicImage,
+    box_w: u16,
+    box_h: u16,
+) -> image::DynamicImage {
+    let (w, h) = (box_w.max(1) as u32, box_h.max(1) as u32);
+    source.resize_to_fill(w, h, image::imageops::FilterType::Lanczos3)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
+    use super::{cover_fill_hero_box, series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
     use crate::app::tests::make_app_stub;
     use std::time::{Duration, Instant};
+
+    /// A 4:3 source filled into a 16:9 box is cropped top and bottom (design
+    /// D5: the artwork fills its box; the excess is cropped, centred). The
+    /// source has white bands in its top and bottom eighths so a squashed or
+    /// letterboxed fit would show white at the box edges; only the cover
+    /// crop removes them.
+    #[test]
+    fn cover_fill_crops_a_4_3_source_into_a_16_9_box() {
+        let (w, h) = (800u32, 600u32);
+        let mut img = image::DynamicImage::new_rgb8(w, h);
+        for (_x, y, pixel) in img.as_mut_rgb8().unwrap().enumerate_pixels_mut() {
+            let white = y < h / 8 || y >= h * 7 / 8;
+            *pixel = if white {
+                image::Rgb([255, 255, 255])
+            } else {
+                image::Rgb([0, 0, 0])
+            };
+        }
+        let filled = cover_fill_hero_box(&img, 160, 90);
+        // The box is filled exactly: no letterbox margin remains.
+        use image::GenericImageView;
+        assert_eq!(filled.dimensions(), (160, 90));
+        let brightness = |pixel: &image::Rgb<u8>| {
+            let [r, g, b] = pixel.0;
+            (u16::from(r) + u16::from(g) + u16::from(b)) / 3
+        };
+        let rgb = filled.as_rgb8().unwrap();
+        // Cropped at the top: the white top band is gone (the visible top
+        // row maps inside the source's black middle; Lanczos ringing may
+        // bleed a little, so compare against the white band's brightness).
+        assert!(brightness(rgb.get_pixel(80, 0)) < 64, "top band cropped");
+        // Cropped at the bottom likewise.
+        assert!(
+            brightness(rgb.get_pixel(80, 89)) < 64,
+            "bottom band cropped"
+        );
+    }
 
     #[test]
     fn series_image_cache_key_pins_both_live_chains() {
