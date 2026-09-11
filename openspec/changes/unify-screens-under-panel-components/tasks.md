@@ -122,7 +122,7 @@ one paint-free placement.
 *Unification:* creates the only paint path for library screens; no destination can add a pill bar,
 choose a focus kind, pick a surface or lay out a pane.
 
-- [ ] 5.1 Create the panel module (`src/app/components/library_panel/`) with the content types of
+- [x] 5.1 Create the panel module (`src/app/components/library_panel/`) with the content types of
   design D3 (`LibraryPanelContent`, `SelectorRow`, `ListControls`, `ListSlot`, `HeroContent`,
   `HeroHeader`, `Workspace`) and the slot Render Components for Selector row (one pill bar + spacer,
   retained `HitRegions`) and List controls row (optional pills + optional label). The shared
@@ -130,14 +130,14 @@ choose a focus kind, pick a surface or lay out a pane.
   `wide_hero_hero_content_box`, `place_media_list_below`) stay public until 12.3, because un-migrated
   destinations still call them. Verify: buffer tests for each slot component (pill active state, label,
   empty row absent), and a hit test resolving a painted pill; `cargo check -p mbv` green.
-- [ ] 5.2 Implement the Wide skeleton: Browser pane (Selector row, List controls row, list box fill +
+- [x] 5.2 Implement the Wide skeleton: Browser pane (Selector row, List controls row, list box fill +
   `wide_hero_browser_border`, list presentation or empty placeholder), gap, Hero pane (resting surface;
   focused only when a Workspace is present and focused). For `ListSlot::Search` the panel places the
   Inline Search box in the Selector row's rect and its results in the list box, calling the existing
   Inline Search painter with those rects. Verify: buffer tests for a read-only hero, a focused-workspace
   hero, and an active search (box in the Selector row's place, results in the list box, Hero pane
   unchanged); role-rect containment only (no coordinates).
-- [ ] 5.3 Parse Emby image availability: add `ImageTags` (`Thumb`, `Primary`) and `BackdropImageTags`
+- [x] 5.3 Parse Emby image availability: add `ImageTags` (`Thumb`, `Primary`) and `BackdropImageTags`
   (and, for episodes, the series' thumb/backdrop tags) to `EmbyItem` (`crates/mbv-core/src/api_types.rs`),
   requesting them where the item `Fields` lists need it. Verify: `cargo nextest run -p mbv-core` with
   parser tests on recorded item JSON with and without each tag.
