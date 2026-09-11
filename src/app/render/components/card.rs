@@ -227,11 +227,13 @@ impl App {
         (rect.height, rect.width, false)
     }
 
-    /// Renders the visual slot and returns `(rows_used, cols_used,
-    /// image_loading)`. The projection owns every fetch (task 3.4, D9);
-    /// painting reads the projected slot plus the shell-resolved image
-    /// protocol handle — no fetch, no source resolution.
-    pub(in crate::app) fn render_card(
+    /// Renders the Queue playback panel's visual slot into `area` and
+    /// returns `(rows_used, cols_used, image_loading)` (task 3.5, D10: the
+    /// slot moved from the base frame's `render_card` into the panel's
+    /// paint path; the shell helper resolves the projected slot plus the
+    /// shell-resolved image protocol handle — no fetch, no source
+    /// resolution. The projection owns every fetch (task 3.4, D9)).
+    pub(in crate::app) fn render_queue_playback_slot(
         &mut self,
         f: &mut Frame,
         area: Rect,
@@ -473,7 +475,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut result = (0u16, 0u16, false);
         term.draw(|f| {
-            result = app.render_card(f, Rect::new(0, 0, 30, 20), false);
+            result = app.render_queue_playback_slot(f, Rect::new(0, 0, 30, 20), false);
         })
         .unwrap();
         result
@@ -724,7 +726,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut geometry = (0, 0, false);
         term.draw(|f| {
-            geometry = app.render_card(f, Rect::new(0, 0, 30, 20), false);
+            geometry = app.render_queue_playback_slot(f, Rect::new(0, 0, 30, 20), false);
         })
         .unwrap();
         let (h, w, loading) = geometry;

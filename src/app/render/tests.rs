@@ -256,145 +256,6 @@ fn tab_bar_and_status_row_legacy_base_frame_publish_placements_but_paint_no_pane
 }
 
 #[test]
-fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
-    let mut app = make_app_stub();
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    app.terminal_width = 120; // >= MINI_VIEW_THRESHOLD, so stored panel_mode applies
-    app.use_nerd_fonts = false;
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 1;
-        st.current_idx = 0;
-        st.runtime_ticks = 60 * TICKS_PER_SECOND;
-    }
-
-    let backend = TestBackend::new(60, 5);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
-    term.draw(|f| {
-        render_player_panel(
-            f,
-            app.playback_panel_context(
-                Rect::new(0, 0, 60, 5),
-                &mut layout,
-                4,
-                true,
-                &Some(("My Title".to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
-            ),
-        );
-    })
-    .unwrap();
-
-    let text = buffer_to_string(&term);
-    let lines: Vec<&str> = text.lines().collect();
-    // Title row (y+1) must NOT contain the title.
-    assert!(
-        !lines[1].contains("My Title"),
-        "title row held title:\n{}",
-        lines[1]
-    );
-    // Bottom row (y+3) must carry the prefixed title.
-    assert!(
-        lines[3].contains("On Now: My Title"),
-        "bottom row:\n{}",
-        lines[3]
-    );
-}
-
-#[test]
-fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
-    let mut app = make_app_stub();
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    app.terminal_width = 120;
-    app.use_nerd_fonts = false;
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 1;
-        st.current_idx = 0;
-        st.runtime_ticks = 60 * TICKS_PER_SECOND;
-    }
-    let long_title = "A Very Long Album Title That Cannot Possibly Fit";
-
-    let backend = TestBackend::new(30, 5);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
-    term.draw(|f| {
-        render_player_panel(
-            f,
-            app.playback_panel_context(
-                Rect::new(0, 0, 30, 5),
-                &mut layout,
-                4,
-                true,
-                &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
-            ),
-        );
-    })
-    .unwrap();
-
-    let text = buffer_to_string(&term);
-    let lines: Vec<&str> = text.lines().collect();
-    let bottom = lines[3];
-    // Indent: the row's first and last columns stay blank rather than
-    // butting text against the panel edges.
-    assert_eq!(
-        bottom.chars().next(),
-        Some(' '),
-        "no left indent:\n{bottom}"
-    );
-    assert_eq!(
-        bottom.chars().last(),
-        Some(' '),
-        "no right indent:\n{bottom}"
-    );
-    // Marquee: freshly opened (still in its initial hold), the window shows
-    // the start of the label rather than being hard-truncated with "...".
-    assert!(
-        bottom.contains("On Now: A Very"),
-        "expected marquee start of label:\n{bottom}"
-    );
-    assert!(
-        !bottom.contains('\u{2026}'),
-        "should not ellipsis-truncate marquee text:\n{bottom}"
-    );
-
-    // Advance the marquee clock past its initial hold, into the scroll.
-    // The "On Now: " prefix must stay put -- only the title pans.
-    app.marquee_started_at =
-        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 200 * 5);
-    let mut term2 = Terminal::new(TestBackend::new(30, 5)).unwrap();
-    term2
-        .draw(|f| {
-            render_player_panel(
-                f,
-                app.playback_panel_context(
-                    Rect::new(0, 0, 30, 5),
-                    &mut layout,
-                    4,
-                    true,
-                    &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                    palette::SURFACE_CHROME,
-                ),
-            );
-        })
-        .unwrap();
-    let text2 = buffer_to_string(&term2);
-    let bottom2: &str = text2.lines().collect::<Vec<_>>()[3];
-    assert!(
-        bottom2.trim().starts_with("On Now:"),
-        "prefix must stay fixed while title scrolls:\n{bottom2}"
-    );
-    assert!(
-        !bottom2.contains("On Now: A Very"),
-        "title window should have scrolled past its start:\n{bottom2}"
-    );
-}
-
-#[test]
 fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
     let mut app = make_app_stub();
     let long_title = "A Very Long Album Title That Cannot Possibly Fit In This Row";
@@ -598,12 +459,13 @@ fn remote_status_spans_shows_local_device_name_when_off() {
     assert!(!text.contains("remote:"));
 }
 
-fn rendered_text(app: App, width: u16, height: u16) -> String {
-    // The now-playing title is painted solely by the mounted
-    // `PlaybackComponent` (row 3.9), so render through the shell path that
-    // syncs and paints it rather than the legacy base frame alone. The first
-    // frame installs `layout.playback.player_area`; `sync_playback` projects
-    // that area into the component, mirroring the steady-state loop order.
+fn rendered_text(mut app: App, width: u16, height: u16) -> String {
+    // The now-playing strip is painted solely by the mounted
+    // `PlaybackComponent`, and only where `RootFrame` places it (task 3.5):
+    // the right column of a queue-hidden layout. Render in library-only, the
+    // layout that shows the strip, through the shell path that syncs and
+    // paints it.
+    app.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
     let mut model = crate::app::shell::Model::new(app);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();

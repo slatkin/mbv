@@ -26,20 +26,17 @@ pub(in crate::app) struct ChromeGeometryInput {
     pub panel_focus: PanelFocus,
     pub queue_column_width: u16,
     pub terminal_width: u16,
-    /// The queue card/visual-slot height as published by the last full frame
-    /// (`AppLayout::main.card`). The card's authoritative size is paint-coupled
-    /// until the visual slot moves into the Queue playback panel (tasks
-    /// 3.4/3.5); the root placements and the queue geometry share the row
-    /// count through `queue_playback_rows`, though the two still place the
-    /// queue panel at different offsets (the placement also spends the
-    /// playback header row) until S2 consumes the placement.
+    /// The queue visual slot's size as published by the last full frame
+    /// (`AppLayout::main.card`). The slot's authoritative size is paint-time
+    /// (the image protocol resolves it); the root placements and the queue
+    /// geometry share the row count through `queue_playback_rows`, while the
+    /// draw path's `Queue playback` paint recomputes it from the frame's
+    /// freshly published slot size.
     pub card_height: u16,
-    /// Whether playback is active (the idle collapse collapses the card to
-    /// zero rows).
+    /// Whether playback is active. Idle collapses the visual slot and the
+    /// transport to zero rows (task 3.6): the connected-idle exception is
+    /// deleted, so a connected but idle transport keeps only the header row.
     pub playback_active: bool,
-    /// Whether a connected remote/cast transport keeps the queue-only
-    /// playback panel visible while playback is idle.
-    pub transport_connected: bool,
 }
 
 /// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
@@ -99,31 +96,24 @@ fn placed_when(cond: bool, rect: Rect) -> Option<Rect> {
     cond.then_some(rect).filter(|r| r.width > 0 && r.height > 0)
 }
 
-/// Rows the queue column spends above the queue panel: the card/visual-slot
-/// rows plus, in queue-only layouts, the queue-only transport rows (stacked on
-/// narrow terminals, beside the card at 100+ columns, where the taller of the
-/// two governs). Shared by `render_main`'s authoritative frame computation
-/// and the root placements so both spend the same playback rows; the two
-/// still place the queue panel at different offsets (the placement also
-/// spends the playback header row) until S2 consumes the placement. Idle
-/// collapse collapses the card to zero rows; a connected transport keeps
-/// its queue-only panel.
+/// Rows the queue column spends on the visual slot and the transport, above
+/// the Queue panel (the header row is a separate, always-spent input). Stacked
+/// below 100 columns: slot rows plus the transport's `PLAYER_BOX_HEIGHT`;
+/// 100+ side by side: the taller of the two governs. Idle collapses both to
+/// zero rows (task 3.6); paused counts as active. Shared by the root
+/// placements and the Queue playback panel's draw-path paint.
 pub(in crate::app) fn queue_playback_rows(
-    queue_only: bool,
-    queue_only_wide: bool,
+    column_wide: bool,
     card_height: u16,
     playback_active: bool,
-    transport_connected: bool,
 ) -> u16 {
-    let card = if playback_active { card_height } else { 0 };
-    if queue_only && (playback_active || transport_connected) {
-        if queue_only_wide {
-            card.max(PLAYER_BOX_HEIGHT)
-        } else {
-            card.saturating_add(PLAYER_BOX_HEIGHT)
-        }
+    if !playback_active {
+        return 0;
+    }
+    if column_wide {
+        card_height.max(PLAYER_BOX_HEIGHT)
     } else {
-        card
+        card_height.saturating_add(PLAYER_BOX_HEIGHT)
     }
 }
 
@@ -241,17 +231,14 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
     // so they tile the queue column's content exactly.
     let queue_col_visible = input.panel_mode != PanelMode::LibraryOnly;
     let playback_rows = queue_playback_rows(
-        input.panel_mode == PanelMode::QueueOnly,
-        input.panel_mode == PanelMode::QueueOnly && left_area.width >= 100,
+        left_area.width >= 100,
         input.card_height,
         input.playback_active,
-        input.transport_connected,
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
         left_content,
         header_height: QUEUE_PLAYBACK_HEADER_ROWS,
         card_height: playback_rows,
-        narrow_player_height: 0,
     });
     let queue_playback_area = Rect {
         x: left_content.x,
@@ -315,7 +302,6 @@ mod root_frame_tests {
             terminal_width: area().width,
             card_height: 12,
             playback_active,
-            transport_connected: false,
         })
         .root
     }

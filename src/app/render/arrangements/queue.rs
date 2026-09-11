@@ -19,7 +19,6 @@ pub(in crate::app) struct QueuePanelInputs {
     /// transport heights.
     pub header_height: u16,
     pub card_height: u16,
-    pub narrow_player_height: u16,
 }
 
 /// The Queue panel's framed sub-areas inside its placement: the framed content
@@ -60,7 +59,7 @@ pub(in crate::app) fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePane
     // The header row (always present, idle included) plus the visual-slot and
     // transport rows sit above the panel, separated from it by one gap row;
     // the separator hides only when the whole playback region above is empty.
-    let playback_rows = input.header_height + input.card_height + input.narrow_player_height;
+    let playback_rows = input.header_height + input.card_height;
     let gap = u16::from(playback_rows > 0);
     let panel_area = Rect {
         y: input.left_content.y + playback_rows + gap,
@@ -108,7 +107,6 @@ mod tests {
                 left_content: left_content(30),
                 header_height: header,
                 card_height: card_rows,
-                narrow_player_height: 0,
             });
             // Header row (always) + card/transport rows + the separator row.
             assert_eq!(
@@ -168,7 +166,6 @@ mod tests {
             left_content: left,
             header_height: header,
             card_height: 0,
-            narrow_player_height: 0,
         });
         // Header row + separator gap + the panel's 3-row title band.
         assert_eq!(geometry.content_area.y, left.y + header + 1 + 3);

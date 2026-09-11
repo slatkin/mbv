@@ -24,6 +24,11 @@ pub enum ComponentId {
     /// pill regions.
     StatusBarPanel,
     Playback,
+    /// The Queue playback panel (`QueuePlaybackPanel`, task 3.5): paints the
+    /// `RootFrame.queue_playback` placement — the always-painted header row,
+    /// the visual slot's region and the queue-column transport — and resolves
+    /// transport clicks against its own retained hit geometry (task 3.7).
+    QueuePlaybackPanel,
     Queue,
     QueueBoundary,
     /// The Wide hero split's gap-columns gesture owner (add-mouse-wide-split-resize).

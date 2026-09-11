@@ -31,6 +31,7 @@ impl Model {
         self.sync_queue_boundary();
         self.sync_tab_panel();
         self.sync_status_bar_panel();
+        self.sync_queue_playback_panel();
         self.sync_wide_hero_boundary();
         // Publish wide-TV geometry before other readers of `tv_wide_right_area`/
         // `tv_wide_left_area` (e.g. context-menu anchors) see this frame's
@@ -122,6 +123,11 @@ impl Model {
         // longer paints either (one painter per surface, design D10/D16).
         self.render_tab_panel(f);
         self.render_status_bar_panel(f);
+        // Task 3.5: the queue column's playback surface (header row, visual
+        // slot, transport) paints from its `RootFrame.queue_playback`
+        // placement; the freshly painted slot size publishes for the queue
+        // panel's placement below and the next frame's chrome placements.
+        self.render_queue_playback_panel(f);
         if music_resize {
             self.push_music_workspace_content();
         }

@@ -176,8 +176,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
         let painted = painted(&term);
         let area = Rect::new(0, 0, 200, 30);
         let chrome = model.app.compute_chrome_geometry(area);
-        let _main = &model.app.layout.main;
-        let playback = &model.app.layout.playback;
+        let main = &model.app.layout.main;
         // The sites' own bit: the queue column's focus, exactly what the shell
         // hands `render_legacy_backdrops` and the panel painters.
         let queue_bit = chrome.queue_focused;
@@ -237,18 +236,29 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             Rect::new(list_panel.x + 1, list_panel.bottom() - 2, 1, 1),
         );
 
-        // The now-playing panel's body follows the queue column's bit.
+        // The queue column's transport band (task 3.5, D10): in Both the
+        // transport is the Queue playback panel's, stacked below the visual
+        // slot; the right-column strip reserves its rows but paints nothing
+        // until task 4.1 reclaims them. The band is the fixed chrome surface
+        // (focused == resting), and the bottom recess row is main's
+        // `PlaybackBottomRow`.
+        let transport = Rect {
+            x: chrome.left_content.x,
+            y: chrome.left_content.y + 1 + main.card.height,
+            width: chrome.left_content.width,
+            height: 4,
+        };
         painted.expect(
-            &format!("{label}/playback panel"),
-            palette::Surface::PlaybackPanel,
+            &format!("{label}/playback transport band"),
+            palette::Surface::QueueOnlyPlaybackPanel,
             queue_bit,
-            Rect::new(playback.player_area.x + 1, playback.player_area.y, 1, 1),
+            Rect::new(transport.x + 1, transport.y, 1, 1),
         );
         painted.expect(
-            &format!("{label}/playback recess row"),
-            palette::Surface::PlaybackRecess,
+            &format!("{label}/playback transport bottom row"),
+            palette::Surface::PlaybackBottomRow,
             queue_bit,
-            Rect::new(playback.player_area.x + 1, playback.player_area.y + 1, 1, 1),
+            Rect::new(transport.x + 1, transport.y + 3, 1, 1),
         );
 
         // Structural chrome (fixed rows; the bit is a formality).
@@ -365,11 +375,13 @@ fn queue_only_strip_and_queue_follow_the_table() {
     let area = Rect::new(0, 0, 120, 30);
     let chrome = model.app.compute_chrome_geometry(area);
     let main = &model.app.layout.main;
-    // The panel the shell paints beside the card in wide Queue-only (see
-    // `render_main`'s `is_wide` arm), reconstructed from published geometry.
+    // The transport band the shell's Queue playback panel paints beside the
+    // card in wide Queue-only (task 3.5), reconstructed from published
+    // geometry: beside the freshly painted slot, below the always-painted
+    // header row.
     let panel = Rect {
         x: chrome.left_content.x + main.card.width + 2,
-        y: chrome.left_content.y,
+        y: chrome.left_content.y + 1,
         width: chrome
             .left_content
             .width
@@ -482,7 +494,7 @@ fn mini_view_halves_follow_the_table() {
     let main = &model.app.layout.main;
     let panel = Rect {
         x: 2,
-        y: 1 + main.card.height,
+        y: 2 + main.card.height,
         width: 56,
         height: 4,
     };

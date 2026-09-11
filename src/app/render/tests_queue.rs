@@ -281,20 +281,34 @@ fn active_queue_area_y(app: &App) -> u16 {
     app.queue_panel_placement().content_area.y
 }
 
+/// Task 3.6 (D10): the connected-idle exception is deleted. A connected but
+/// idle transport keeps only the Queue playback panel's header row — the slot
+/// and the transport collapse exactly as in a disconnected idle frame, and
+/// the header names the connected target.
 #[test]
-fn connected_idle_queue_only_keeps_panel_but_collapses_card() {
+fn connected_idle_queue_only_collapses_to_the_header_row() {
     let mut app = make_queue_app(5);
     app.panel_mode = crate::app::PanelMode::QueueOnly;
     app.connected_session_state = Some(make_session("remote-host", "Emby"));
     app.connected_session_id = Some("remote-host".into());
-    let term = render_app_to_terminal(&mut app, 80, 40);
+    let (term, _) = render_queue_view_to_terminal(&mut app, 80, 40);
     let screen = buffer_to_string(&term);
 
     assert_eq!(app.layout.main.card.height, 0);
-    assert!(app.layout.playback.seekbar_area.height > 0);
-    assert!(screen.contains('\u{2594}'));
+    assert!(screen.contains("IDLE"), "the header states the idle status");
+    assert!(
+        screen.contains("on remote-host"),
+        "the header names the target"
+    );
+    assert!(
+        !screen.contains('\u{2594}'),
+        "no seekbar paints while idle, connected or not"
+    );
 }
 
+/// Task 3.6 (D10): paused counts as active — the slot and the transport stay
+/// painted (the transport routes through the shared width-driven arrangement
+/// the Library playback panel also uses).
 #[test]
 fn paused_queue_only_keeps_card_and_panel() {
     let mut app = make_queue_app(5);
@@ -304,12 +318,123 @@ fn paused_queue_only_keeps_card_and_panel() {
         status.active = true;
         status.paused = true;
     }
-    let term = render_app_to_terminal(&mut app, 80, 40);
+    let (term, _) = render_queue_view_to_terminal(&mut app, 80, 40);
     let screen = buffer_to_string(&term);
 
     assert!(app.layout.main.card.height > 0);
-    assert!(app.layout.playback.seekbar_area.height > 0);
-    assert!(screen.contains('\u{2594}'));
+    assert!(screen.contains('\u{2594}'), "the transport seekbar paints");
+    assert!(screen.contains("PAUSED"), "the header states PAUSED");
+}
+
+/// Task 3.6's `both` counterpart: paused playback in the two-panel layout
+/// keeps the slot and the transport in the queue column (the right-column
+/// strip paints only when the queue column is hidden, D10).
+#[test]
+fn paused_both_keeps_card_and_queue_column_transport() {
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::Both;
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.paused = true;
+    }
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let screen = buffer_to_string(&term);
+
+    assert!(app.layout.main.card.height > 0);
+    assert!(screen.contains('\u{2594}'), "the transport seekbar paints");
+    assert!(screen.contains("PAUSED"), "the header states PAUSED");
+    // The queue column's width at 100 columns is below the side-by-side
+    // threshold, so the transport stacks in the queue column — the right
+    // column's reserved strip band paints nothing (task 3.5, D10).
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 40));
+    assert!(chrome.root.queue_playback.is_some());
+}
+
+/// Task 3.5: the header states the status and the target at 80 and 100+
+/// columns alike, through the real shell path (the header is the Queue
+/// playback panel's always-painted row).
+#[test]
+fn queue_playback_header_states_status_and_target_at_both_widths() {
+    for (width, mode) in [
+        (80, crate::app::PanelMode::Both),
+        (120, crate::app::PanelMode::QueueOnly),
+        (120, crate::app::PanelMode::Both),
+    ] {
+        let mut app = make_queue_app(5);
+        app.panel_mode = mode;
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.paused = false;
+        }
+        let (term, _) = render_queue_view_to_terminal(&mut app, width, 40);
+        let screen = buffer_to_string(&term);
+        assert!(
+            screen.contains("PLAYING"),
+            "width {width} {mode:?}: the header states PLAYING"
+        );
+        assert!(
+            screen.contains(&format!("on {}", mbv_core::api::device_name())),
+            "width {width} {mode:?}: the header names the local target"
+        );
+    }
+}
+
+/// Task 3.5: the header follows the playback target, not the viewed queue —
+/// a remote-attached frame with the Local scope selected still names the
+/// remote target.
+#[test]
+fn remote_attached_header_names_the_remote_target_with_local_scope() {
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.connected_session_state = Some(make_session("remote-host", "Emby"));
+    app.connected_session_id = Some("remote-host".into());
+    assert_eq!(app.viewed_queue_scope(), crate::app::QueueScope::Local);
+    let (term, _) = render_queue_view_to_terminal(&mut app, 80, 40);
+    let screen = buffer_to_string(&term);
+    assert!(
+        screen.contains("on remote-host"),
+        "the header follows the playback target, not the viewed scope"
+    );
+    assert!(
+        !screen.contains("TRACKING"),
+        "no tracking suffix on the header"
+    );
+}
+
+/// Task 3.5 (D1 mount rule): the Queue playback panel is mounted in every
+/// queue-visible layout and unmounted in library-only.
+#[test]
+fn queue_playback_panel_unmounts_in_library_only() {
+    use crate::app::components::ComponentId;
+    use crate::app::shell::Model;
+
+    let mut app = make_queue_app(5);
+    app.terminal_width = 80;
+    app.terminal_height = 40;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    let mut model = Model::new(app);
+    model.sync_mounted_surfaces();
+    assert!(!model.application.mounted(&ComponentId::QueuePlaybackPanel));
+
+    for mode in [
+        crate::app::PanelMode::Both,
+        crate::app::PanelMode::QueueOnly,
+    ] {
+        let mut app = make_queue_app(5);
+        app.terminal_width = 80;
+        app.terminal_height = 40;
+        app.panel_mode = mode;
+        let mut model = Model::new(app);
+        model.sync_mounted_surfaces();
+        assert!(
+            model.application.mounted(&ComponentId::QueuePlaybackPanel),
+            "{mode:?}: the panel is mounted in every queue-visible layout"
+        );
+    }
 }
 
 #[test]

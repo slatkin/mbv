@@ -166,6 +166,7 @@ impl Model {
         }
         for id in [
             ComponentId::Queue,
+            ComponentId::QueuePlaybackPanel,
             ComponentId::QueueBoundary,
             ComponentId::Playback,
         ] {

@@ -216,5 +216,9 @@ mod tests_tick_integration_book; // Book ownership tick coverage
 mod tests_tick_integration_mouse_sidebar;
 
 #[cfg(test)]
+#[path = "tests_tick_integration_queue_playback.rs"]
+mod tests_tick_integration_queue_playback; // Queue playback panel ownership tick coverage (task 3.7)
+
+#[cfg(test)]
 #[path = "tests_narrow_browse_migration.rs"]
 mod tests_narrow_browse_migration;

@@ -91,13 +91,15 @@ fn arm_search_query(harness: &mut TickHarness, query: &str) {
 /// seek-bar row still reaches the unfocused `PlaybackComponent` through its
 /// `mouse_sub()` subscription, and the component resolves the column against
 /// its own painted `seekbar_area` into a 0.0..=1.0 fraction. No other eligible
-/// surface claims the event (D2 exclusivity).
+/// surface claims the event (D2 exclusivity). The strip renders only where
+/// `RootFrame` places it (task 3.5), so this frame is library-only.
 #[test]
 fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
     app.connected_session_id = Some("session-1".into());
-    app.layout.playback.player_area = Rect::new(10, 5, 40, 4);
+    app.layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
@@ -114,7 +116,7 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
     }));
     let outcome = harness.step();
 
-    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Queue));
+    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Home));
     let seeks: Vec<f64> = outcome
         .raw_messages
         .iter()

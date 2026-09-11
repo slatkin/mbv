@@ -44,6 +44,7 @@ pub(in crate::app) use components::help::{
 };
 pub(in crate::app) use components::home::{render_home_content, HomeCarrier};
 pub(in crate::app) use components::queue::{render_queue_body, QueuePresentation};
+pub(in crate::app) use components::queue_playback::render_playback_header;
 
 #[cfg(test)]
 pub(crate) fn reset_home_media_list_paints() {

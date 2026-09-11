@@ -140,6 +140,10 @@ fn unrelated_key_does_not_fire() {
     );
 }
 
+/// Task 3.8: the fourth input is the Queue playback panel's presence with
+/// nothing playing (`RouterSnapshot::queue_only_idle`'s shell-side fact): the
+/// gate follows the panel, not the panel mode, so the link is suppressed in
+/// idle `both` and `queue-only` alike.
 #[test]
 fn o_opens_an_idle_feed_link_only_when_available() {
     let o = key(KeyCode::Char('o'));

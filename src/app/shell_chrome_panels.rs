@@ -9,10 +9,14 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 use tuirealm::component::AppComponent;
 
-use super::components::{ComponentId, Msg, StatusBarPanel, TabPanel, UserEvent};
+use super::components::{
+    ComponentId, Msg, QueuePlaybackPanel, StatusBarPanel, TabPanel, UserEvent,
+};
 use super::*;
+use crate::app::layout::CardGeometry;
 use crate::app::render::arrangements::chrome::RootFrame;
 use crate::app::render::StatusBarModel;
+use crate::app::NowPlayingStatus;
 
 impl Model {
     /// Paint-free chrome geometry for the sync pass. `compute_chrome_geometry`
@@ -41,6 +45,7 @@ impl Model {
 enum ChromePanel {
     Tab,
     StatusBar,
+    QueuePlayback,
 }
 
 impl ChromePanel {
@@ -48,6 +53,7 @@ impl ChromePanel {
         match self {
             Self::Tab => ComponentId::TabPanel,
             Self::StatusBar => ComponentId::StatusBarPanel,
+            Self::QueuePlayback => ComponentId::QueuePlaybackPanel,
         }
     }
 
@@ -55,6 +61,7 @@ impl ChromePanel {
         match self {
             Self::Tab => Box::new(TabPanel::new()),
             Self::StatusBar => Box::new(StatusBarPanel::new()),
+            Self::QueuePlayback => Box::new(QueuePlaybackPanel::new()),
         }
     }
 }
@@ -159,6 +166,114 @@ impl Model {
                 panel.set_model(model);
             }
         }
+    }
+
+    /// Mount/unmount the `QueuePlaybackPanel` to the `RootFrame.queue_playback`
+    /// placement and project its content (task 3.5): the header row's status
+    /// word and playback target, and the transport facts from the shared
+    /// transport projection. Mounted in every queue-visible layout, idle
+    /// included, because the header is always painted (D10).
+    pub(super) fn sync_queue_playback_panel(&mut self) {
+        let placement = self.sync_chrome_root().queue_playback;
+        self.mount_to_placement(ChromePanel::QueuePlayback, placement);
+        let id = ChromePanel::QueuePlayback.id();
+        let mut transport = self.transport_projection();
+        // The queue column's transport band: the fixed chrome surface, in
+        // every queue-visible layout (D10).
+        transport.panel = crate::app::palette::Surface::QueueOnlyPlaybackPanel;
+        transport.panel_focused = false;
+        let status = self.app.now_playing_status();
+        let host = self.app.playback_host_label();
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
+                panel.set_header(status, host);
+                panel.set_transport(transport);
+            }
+        }
+    }
+
+    /// Paint the mounted `QueuePlaybackPanel` into the `RootFrame.queue_playback`
+    /// placement (task 3.5). The panel paints the header row itself; the shell
+    /// orchestrates the visual slot around it — the App-side slot adapter
+    /// (the moved `render_card`, task 3.4) paints the slot and returns its
+    /// freshly painted size, from which the transport rect is computed (side
+    /// by side at 100+ columns with the 2-cell gap, stacked below it
+    /// otherwise) and handed to the panel. While idle the slot and transport
+    /// collapse to zero rows (task 3.6) and only the header row paints.
+    pub(super) fn render_queue_playback_panel(&mut self, frame: &mut Frame) {
+        let id = ComponentId::QueuePlaybackPanel;
+        if !self.application.mounted(&id) {
+            return;
+        }
+        if self.app.layout.root_frame.queue_playback.is_none() {
+            return;
+        }
+        // The panel's paint geometry recomputes from the same paint-free
+        // checkpoint the root placements consume (`queue_panel_placement`'s
+        // seam); the `queue_playback` mount check above only gates painting.
+        let chrome = self.app.compute_chrome_geometry(ratatui::layout::Rect::new(
+            0,
+            0,
+            self.app.terminal_width,
+            self.app.terminal_height,
+        ));
+        let content = chrome.left_content;
+        let wide = chrome.left_area.width >= 100;
+        // Below the header row: the visual slot's maximal region and the
+        // separator row above the queue panel (task 3.2). The slot's
+        // `render` caps itself (the same 12/24-row budget the queue card
+        // always had), so the region hands it the rest of the column.
+        let slot_region = Rect {
+            y: content.y + 1,
+            height: content.height.saturating_sub(1),
+            ..content
+        };
+        let (transport_area, card): (Option<Rect>, CardGeometry) =
+            if self.app.now_playing_status() == NowPlayingStatus::Idle {
+                // Idle collapse (task 3.6): no visual slot, no transport — the
+                // panel paints only the header row, and the slot publishes zero
+                // geometry so the queue panel reclaims the rows.
+                (None, CardGeometry::default())
+            } else {
+                let (slot_h, slot_w, _) =
+                    self.app
+                        .render_queue_playback_slot(frame, slot_region, wide);
+                let card = CardGeometry {
+                    height: slot_h,
+                    width: slot_w,
+                };
+                let transport_area = if wide {
+                    Rect {
+                        x: content.x + card.width + 2,
+                        y: content.y + 1,
+                        width: content.width.saturating_sub(card.width + 2),
+                        height: card
+                            .height
+                            .max(crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT),
+                    }
+                } else {
+                    Rect {
+                        x: content.x,
+                        y: content.y + 1 + card.height,
+                        width: content.width,
+                        height: crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT,
+                    }
+                };
+                (Some(transport_area), card)
+            };
+        // The freshly painted slot size publishes for the queue panel's
+        // placement this frame (it recomputes from `AppLayout::main.card`
+        // after this pass) and for the next frame's chrome placements.
+        self.app.layout.main.card = card;
+        if let Some(comp) = self.application.get_component_mut(&id) {
+            if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
+                panel.set_transport_area(transport_area);
+            }
+        }
+        // The panel's `view` paints the header row (row 0 of the area) and
+        // the transport rect the shell just computed; the visual slot was
+        // already painted by the App-side adapter above.
+        self.application.view(&id, frame, content);
     }
 
     /// Paint the mounted `TabPanel` into the `RootFrame.tab` placement.

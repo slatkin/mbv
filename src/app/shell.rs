@@ -11,7 +11,6 @@ use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSn
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
 use super::types_playback::{HomeContent, HomeLatestSource};
-use super::types_settings::PanelMode;
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
@@ -291,7 +290,13 @@ impl Model {
                 || self.app.player.is_remote()
                 || self.app.is_cast_attached(),
             connected_session_id_present: self.app.connected_session_id.is_some(),
-            queue_only_idle: self.app.effective_panel_mode() == PanelMode::QueueOnly
+            // Task 3.8: the idle-feed open-link gate follows the Queue
+            // playback panel's presence, not the panel mode. The panel is
+            // mounted in every queue-visible layout (idle included), so the
+            // link is gated off whenever the queue column is visible and
+            // nothing is playing; in library-only the Library playback
+            // panel's strip displays the idle feed and the link opens.
+            queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
                 && !self.app.effective_playback_state().active,
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),

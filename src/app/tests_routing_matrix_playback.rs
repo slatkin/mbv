@@ -109,6 +109,12 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
         RouterOutcome::Swallow
     );
 }
+/// Task 3.8: the idle-feed open-link gate follows the Queue playback panel's
+/// presence, not the panel mode — `queue_only_idle` is the shell's
+/// "Queue playback panel mounted and nothing playing" fact (task 3.5 mounts
+/// the panel in every queue-visible layout, idle included). The link is
+/// suppressed in idle `both` and `queue-only`, and fires in idle
+/// `library-only`, where the Library playback panel's strip displays the feed.
 #[test]
 fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     let snapshot = RouterSnapshot {
@@ -129,6 +135,30 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
     assert_eq!(
         resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &queue_only_idle, None),
         RouterOutcome::FallThrough
+    );
+
+    // The gate follows the panel's presence, not the mode: the same panel
+    // present + idle fact in the two-panel layout is suppressed too.
+    let both_idle = RouterSnapshot {
+        panel_mode: crate::app::types_settings::PanelMode::Both,
+        queue_only_idle: true,
+        ..snapshot
+    };
+    assert_eq!(
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &both_idle, None),
+        RouterOutcome::FallThrough
+    );
+
+    // Library-only idle: the Queue playback panel is unmounted (the strip
+    // displays the feed), so the link opens.
+    let library_only_idle = RouterSnapshot {
+        panel_mode: crate::app::types_settings::PanelMode::LibraryOnly,
+        queue_only_idle: false,
+        ..snapshot
+    };
+    assert_eq!(
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &library_only_idle, None),
+        RouterOutcome::Command(Command::OpenIdleFeedLink)
     );
 
     let connected = RouterSnapshot {

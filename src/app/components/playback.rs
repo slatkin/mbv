@@ -25,7 +25,6 @@ pub(in crate::app) struct PlaybackProjection {
     /// the fill through the surface table instead of carrying a bare colour.
     pub panel: palette::Surface,
     pub panel_focused: bool,
-    pub narrow_player: bool,
     pub now_playing_title: Option<(String, Color)>,
     pub title_parts: Vec<(String, Color)>,
     pub status_indicators: Option<Vec<Span<'static>>>,
@@ -59,7 +58,6 @@ impl PlaybackComponent {
                 // `PlaybackPanel` row, bool false).
                 panel: palette::Surface::PlaybackPanel,
                 panel_focused: false,
-                narrow_player: false,
                 now_playing_title: None,
                 title_parts: Vec::new(),
                 status_indicators: None,
@@ -171,7 +169,6 @@ impl Component for PlaybackComponent {
                 now_playing_title: self.projection.now_playing_title.clone(),
                 panel: self.projection.panel,
                 panel_focused: self.projection.panel_focused,
-                narrow_player: self.projection.narrow_player,
                 progress: (
                     self.projection.state.position_ticks,
                     self.projection.state.runtime_ticks,
@@ -247,7 +244,6 @@ mod tests {
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
-            narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
             status_indicators: None,
@@ -303,7 +299,6 @@ mod tests {
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
-            narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
             status_indicators: None,

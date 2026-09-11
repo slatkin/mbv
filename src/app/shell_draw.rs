@@ -1,17 +1,12 @@
 use super::shell_queue::NOW_PLAYING_THROBBER_FRAMES;
-use crate::app::layout::{
-    AppLayout, CardGeometry, FrameChromeGeometry, LayoutMain, LayoutPlayback,
-};
-use crate::app::render::arrangements::chrome::{
-    chrome_geometry, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
-};
+use crate::app::layout::{AppLayout, FrameChromeGeometry, LayoutMain};
+use crate::app::render::arrangements::chrome::{chrome_geometry, ChromeGeometryInput};
 use crate::app::render::arrangements::queue::{queue_panel_subareas, QueuePanelGeometry};
 use crate::app::render::components::widgets::right_panel_content_area;
 use crate::app::{palette, App, PanelMode};
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::Span;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 use std::time::Instant;
 
@@ -71,8 +66,6 @@ impl App {
             // playback panel (tasks 3.4/3.5).
             card_height: self.layout.main.card.height,
             playback_active: self.effective_playback_state().active,
-            transport_connected: self.connected_session_id.is_some()
-                || self.cast_attachment.is_some(),
         })
     }
 
@@ -126,14 +119,6 @@ impl App {
         // holding a mix of fields from two different frames.
         let mut layout = AppLayout::default();
 
-        let active = self.player.status.lock().unwrap().active;
-        let show_controls =
-            active || self.connected_session_id.is_some() || self.cast_attachment.is_some();
-        let playing_panel = show_controls;
-        // Always reserve the player rows (title + controls) so
-        // that content doesn't shift when the player appears or disappears.
-        let player_h = PLAYER_BOX_HEIGHT;
-
         // Migrated root/chrome fields are published here from the subresult
         // (one authoritative computation). `render_main` bails on a frame too
         // short to draw (height < 4) without writing anything; publishing is
@@ -158,41 +143,10 @@ impl App {
             self.force_clear = true;
         }
 
-        let now_playing: Option<String> = if active {
-            let idx = self.player.status.lock().unwrap().current_idx;
-            let queue = self.playback_queue();
-            queue.item_at(idx).map(|item| item.title().to_string())
-        } else {
-            None
-        };
-        let title_color = palette::PLAYBACK_VALUE_FG;
-        let now_playing_title: Option<(String, Color)> = if playing_panel {
-            if active {
-                now_playing.map(|t| (t, title_color))
-            } else if let Some(ref cast) = self.cast_attachment {
-                self.cast_now_playing_title(cast).map(|t| (t, title_color))
-            } else if let Some(ref state) = self.connected_session_state {
-                state.now_playing.clone().map(|t| (t, title_color))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
         // Render dispatch (issue #275; folded into a single unconditional
         // call by #361 commit 2, since the deleted Standard view was the
         // only other arm).
-        self.render_main(
-            f,
-            area,
-            &chrome,
-            &mut layout.main,
-            &mut layout.playback,
-            player_h,
-            show_controls,
-            &now_playing_title,
-            cursor_scroll,
-        );
+        self.render_main(f, area, &chrome, &mut layout.main, cursor_scroll);
 
         // The Context menu is an owned TuiRealm component now (task 5.3c):
         // the shell mounts it from `pending_overlay` and paints it via the
@@ -211,10 +165,6 @@ impl App {
         area: Rect,
         chrome: &FrameChromeGeometry,
         layout: &mut LayoutMain,
-        playback: &mut LayoutPlayback,
-        player_h: u16,
-        show_controls: bool,
-        now_playing_title: &Option<(String, Color)>,
         cursor_scroll: Option<(usize, usize)>,
     ) {
         if area.height < 4 {
@@ -232,11 +182,11 @@ impl App {
         let FrameChromeGeometry {
             panel_area: _,
             panel_content_area: _,
-            left_area,
+            left_area: _,
             right_area,
             // Consumed by `paint_legacy_chrome` (via the `chrome` ref), not the body.
             right_full_area: _,
-            left_content,
+            left_content: _,
             tab_bar_area: _,
             player_area: _,
             status_area: _,
@@ -248,121 +198,20 @@ impl App {
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
 
-        // Pre-body legacy chrome (column backgrounds, tab bar) underpaints the
-        // card/queue/library body below. The right-column player panel is
-        // painted solely by the mounted `PlaybackComponent` (row 3.9).
+        // Pre-body legacy chrome (column backgrounds, tab bar) underpaints
+        // the queue/library body below. The queue column's playback region
+        // (header row, visual slot, transport) is painted solely by the
+        // mounted `QueuePlaybackPanel` (tasks 3.1/3.5); the right-column
+        // strip solely by the mounted `PlaybackComponent` where it is placed.
         self.paint_legacy_chrome(f, chrome);
 
-        let lib_area = if self.effective_panel_mode() == PanelMode::LibraryOnly {
-            right_area
-        } else {
-            // The card fills the top of the left column; the queue list takes
-            // the rows below it. Short terminals keep that same structure.
-            let is_queue_only = self.effective_panel_mode() == PanelMode::QueueOnly;
-            let is_wide = is_queue_only && left_area.width >= 100;
-            // The queue card is a now-playing visual, not a selected-item
-            // preview. Collapse it whenever playback is idle in every layout
-            // that shows the queue, including Both and narrow mini view. The
-            // status derives once per frame next to `effective_playback_state`
-            // (task 3.3): paused counts as active, so the card stays.
-            let idle_collapse = self.now_playing_status() == crate::app::NowPlayingStatus::Idle;
-            // The card's cache/size/fetch operation is authoritative for its
-            // dimensions. In an idle queue-visible frame there is no card to
-            // paint, so publish zero geometry without entering the renderer
-            // (and therefore without fetching artwork).
-            let (card_h, card_w) = if idle_collapse {
-                (0, 0)
-            } else {
-                let (height, width, _) = self.render_card(f, left_content, is_wide);
-                (height, width)
-            };
-            layout.card = CardGeometry {
-                height: card_h,
-                width: card_w,
-            };
-
-            // Queue-only mode has no right column, so the playback panel
-            // (seekbar + title + controls) renders here instead: stacked
-            // below the card on narrow terminals, or beside it on wide ones.
-            // A connected transport keeps its panel even when it is not
-            // currently active; only a genuinely idle queue-only frame hides
-            // both queue-only surfaces and returns their rows to the queue
-            // list. Narrow stacks the panel below the card; wide paints it
-            // beside the card, so the queue starts below whichever is taller.
-            if is_queue_only && (!idle_collapse || show_controls) {
-                if is_wide {
-                    let panel_area = Rect {
-                        x: left_content.x + layout.card.width + 2,
-                        y: left_content.y,
-                        width: left_content.width.saturating_sub(layout.card.width + 2),
-                        height: layout.card.height.max(player_h),
-                    };
-                    f.render_widget(
-                        Block::default().style(
-                            Style::default().bg(palette::surface_colors(
-                                palette::Surface::QueueOnlyPlaybackPanel,
-                                false,
-                            )
-                            .fill),
-                        ),
-                        panel_area,
-                    );
-                    crate::app::render::render_player_panel(
-                        f,
-                        self.playback_panel_context(
-                            panel_area,
-                            playback,
-                            player_h,
-                            show_controls,
-                            now_playing_title,
-                            // The context derives the panel's surface
-                            // identity (`QueueOnlyPlaybackPanel`) from the
-                            // mode; the colour parameter is the retained
-                            // characterization seam.
-                            palette::surface_colors(
-                                palette::Surface::QueueOnlyPlaybackPanel,
-                                false,
-                            )
-                            .fill,
-                        ),
-                    );
-                } else {
-                    let panel_area = Rect {
-                        x: left_content.x,
-                        y: left_content.y + layout.card.height,
-                        width: left_content.width,
-                        height: player_h,
-                    };
-                    crate::app::render::render_player_panel(
-                        f,
-                        self.playback_panel_context(
-                            panel_area,
-                            playback,
-                            player_h,
-                            show_controls,
-                            now_playing_title,
-                            // As above: the context derives the identity; the
-                            // colour parameter is the characterization seam.
-                            palette::surface_colors(
-                                palette::Surface::QueueOnlyPlaybackPanel,
-                                false,
-                            )
-                            .fill,
-                        ),
-                    );
-                }
-            }
-
-            // Both mode keeps the panel in the right column, so the left
-            // queue only ever sits below the card there. The queue panel no
-            // longer places itself here: the mounted `QueuePanel` paints the
-            // whole queue surface (frame, title, status, list) after the base
-            // frame publishes this frame's card geometry (task 3.1), placing
-            // itself below the Queue playback panel's placement plus its
-            // separator row (task 3.2) through the shared
-            // `queue_playback_rows`/`queue_panel_geometry` helpers.
-            right_area
-        };
+        // The queue column is the Queue panels' surface now (task 3.5): the
+        // base frame publishes no card/panel geometry here — the shell's
+        // `render_queue_playback_panel` paint step owns that (task 3.5). The
+        // queue panel places itself below the Queue playback panel's
+        // placement plus its separator row (task 3.2) through the shared
+        // `queue_playback_rows`/`queue_panel_geometry` helpers.
+        let lib_area = right_area;
 
         // Apply the shared horizontal padding once here, at the single point
         // where the tab content area is finalized, so every tab kind (and the

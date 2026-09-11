@@ -14,7 +14,7 @@ use crate::app::render::RENDER_FILTER;
 
 impl App {
     /// Image types to request for the Keep Watching hero panel, mirroring
-    /// the per-type conventions used for the queue card (`render_card`).
+    /// the per-type conventions used for the queue visual slot (`render_queue_playback_slot`).
     pub(in crate::app::render) fn keep_watching_hero_image_types(
         item: &mbv_core::api::EmbyItem,
     ) -> &'static [&'static str] {
