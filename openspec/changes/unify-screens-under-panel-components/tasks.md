@@ -17,24 +17,24 @@ tests; no test, rule or script checks one destination against another.
 *Unification:* removes the shell as a painter-with-side-effects, so every later panel is composed from
 one paint-free placement.
 
-- [ ] 1.1 Move `render_main`'s state mutations into the sync pass: the `library_tab_pending` resolution
+- [x] 1.1 Move `render_main`'s state mutations into the sync pass: the `library_tab_pending` resolution
   and `normalize_stale_browse_destination` run in `sync_mounted_surfaces` before any draw, and
   `render_main` no longer writes `self.tab`. Verify: the existing tab-restore and stale-destination tests
   pass unchanged, and a tick integration test with a pending tab asserts, after one `tick()` + sync pass
   and without drawing, that the tab is resolved.
-- [ ] 1.2 Move `compute_frame_layout`'s resize side effects (clearing `card_image_states`, queue-column
+- [x] 1.2 Move `compute_frame_layout`'s resize side effects (clearing `card_image_states`, queue-column
   clamp + `save_prefs`, forcing `mini_view_focus`) into the resize handling in the sync pass; the draw
   path only reads geometry. Verify: resize tests in `src/app/tests_tick_integration.rs` pass unchanged,
   plus a tick test that crosses the mini-view threshold and asserts, after `tick()` + sync and without
   drawing, that focus has moved.
-- [ ] 1.3 Introduce `RootFrame` in `src/app/render/arrangements/chrome.rs` as **data only**, extending
+- [x] 1.3 Introduce `RootFrame` in `src/app/render/arrangements/chrome.rs` as **data only**, extending
   `chrome_geometry`/`FrameChromeGeometry` with the placement of each panel (Tab, Library, Library
   playback, Queue, Queue playback, Status bar, Queue boundary) present in the current Panel mode, per the
   mount rule in design D1 (a panel absent from a mode has no placement, never an empty rect).
   `draw_frame` still delegates to `compose_base_frame`. Verify: relational unit tests in `chrome.rs`
   (present placements partition the terminal per mode, no overlap, no empty placement, the absent set per
   mode matches D1), and every existing render/tick test passes unchanged.
-- [ ] 1.4 Place `QueueBoundaryComponent` from `RootFrame` (two-panel layout only, unmounted otherwise)
+- [x] 1.4 Place `QueueBoundaryComponent` from `RootFrame` (two-panel layout only, unmounted otherwise)
   instead of `LayoutMain.queue_boundary_area`, and delete that field. Verify: queue-boundary drag tick
   tests pass; a tick test in `queue-only` and `library-only` finds the boundary unmounted.
 
