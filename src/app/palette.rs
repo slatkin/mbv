@@ -12,3 +12,10 @@ pub(crate) use crate::app::render::{
     TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,
     TEXT_STRONG,
 };
+// The closed surface table (`unify-surface-colour-neutral` D1/D2/D7): a paint
+// site names a `Surface` and calls the resolver instead of naming a role.
+// Transitional: no production call site names these yet, so the re-export is
+// unused until the migration units land; the allow keeps `cargo check`
+// warning-free until then.
+#[allow(unused_imports)]
+pub(in crate::app) use crate::app::render::{surface_colors, Surface};

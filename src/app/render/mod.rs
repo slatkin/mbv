@@ -198,6 +198,10 @@ pub(crate) use theme::{
     TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,
     TEXT_STRONG,
 };
+// The closed surface table (`unify-surface-colour-neutral` D1/D2/D7) is bridged
+// to `palette.rs` the same way. Its visibility is `crate::app`, so it is not
+// part of the wider `pub(crate)` role list above.
+pub(in crate::app) use theme::{surface_colors, Surface};
 
 use super::ui_util::natural_sort_key;
 use super::{palette, App};

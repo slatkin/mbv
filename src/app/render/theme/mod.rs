@@ -1,4 +1,14 @@
 mod primitives;
+mod surface;
+mod surface_resolve;
+mod surface_table;
+
+// The closed surface table (`unify-surface-colour-neutral` D1/D2/D7). A screen
+// names a `Surface` and calls the resolver; the `Level`/`Row`/`FocusSource`
+// machinery stays private to the theme. Re-exported here so `render/mod.rs` and
+// `palette.rs` can bridge the names to production call sites.
+pub(in crate::app) use surface::Surface;
+pub(in crate::app) use surface_resolve::surface_colors;
 
 use ratatui::style::Color;
 
