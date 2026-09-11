@@ -11,6 +11,26 @@ valid:
       let pick = focused_or_subtle(focused);
       let layout = resolve_inline_layout(area);
     }
+  # Test code pins values by naming the role it must keep: the same
+  # exemption the ignored `**/*tests*.rs` files get. An inline test module
+  # sits in an ordinary production file, so the rule itself has to skip it.
+  - |
+    #[cfg(test)]
+    mod tests {
+      fn render() {
+        let bg = palette::SURFACE_FOCUSED;
+        let lever = palette::resolve_surface_focus(false);
+        let styled = Style::default().bg(palette::SURFACE_RESTING);
+      }
+    }
+  - |
+    #[cfg(test)]
+    #[allow(clippy::items_after_test_module)]
+    mod wide_hero_pane_tests {
+      fn render() {
+        assert_eq!(cell.bg, palette::SURFACE_RESTING);
+      }
+    }
 invalid:
   - |
     fn render() {
@@ -35,4 +55,12 @@ invalid:
   - |
     fn render() {
       let bg = palette::list_selected_row_bg();
+    }
+  # A module that is not test code is still a paint site: the exemption is
+  # for test modules, not for every `mod` in the file.
+  - |
+    mod painters {
+      fn render() {
+        let bg = palette::SURFACE_RESTING;
+      }
     }

@@ -674,13 +674,7 @@ mod tests {
             .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert_eq!(
             term.backend().buffer()[(0, 0)].style().bg,
-            Some(
-                crate::app::palette::surface_colors(
-                    crate::app::palette::Surface::QueueCardVisualizer,
-                    false,
-                )
-                .fill
-            ),
+            Some(crate::app::palette::resolve_surface_focus(false)),
             "an empty selected visualizer must still paint its reserved card"
         );
     }

@@ -18,3 +18,14 @@ snapshots:
       style: primary
       start: 28
       end: 64
+  ? |
+    mod painters {
+      fn render() {
+        let style = Style::default().bg(palette::ACCENT);
+      }
+    }
+  : labels:
+    - source: Style::default().bg(palette::ACCENT)
+      style: primary
+      start: 47
+      end: 83

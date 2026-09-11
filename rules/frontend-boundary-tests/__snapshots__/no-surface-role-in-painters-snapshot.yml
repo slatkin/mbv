@@ -54,3 +54,14 @@ snapshots:
       style: primary
       start: 25
       end: 61
+  ? |
+    mod painters {
+      fn render() {
+        let bg = palette::SURFACE_RESTING;
+      }
+    }
+  : labels:
+    - source: SURFACE_RESTING
+      style: primary
+      start: 53
+      end: 68

@@ -43,8 +43,7 @@ mod wide_row_regression_tests {
     fn selected_row_spans_full_width_with_flush_marker_and_three_col_indent() {
         const PX: u16 = 10;
         const PW: u16 = 40;
-        let selected_bg =
-            palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false).fill;
+        let selected_bg = palette::SURFACE_RESTING;
 
         for duration in [None, Some("1:05".to_string())] {
             let mut list: WideMediaList<String> = WideMediaList::new();
@@ -107,8 +106,7 @@ mod wide_row_regression_tests {
     fn distinct_claim_and_content_geometry_keeps_rows_on_the_retained_flow() {
         let claim = Rect::new(6, 0, 30, 6);
         let content = Rect::new(8, 2, 26, 2);
-        let selected_bg =
-            palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false).fill;
+        let selected_bg = palette::SURFACE_RESTING;
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
             item("selected", "Selected", None),
@@ -145,8 +143,7 @@ mod wide_row_regression_tests {
     #[test]
     fn painter_persists_resolved_scroll_offset_across_frames() {
         let rect = Rect::new(0, 0, 40, 4);
-        let selected_bg =
-            palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false).fill;
+        let selected_bg = palette::SURFACE_RESTING;
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(
             (0..12)
@@ -176,8 +173,7 @@ mod wide_row_regression_tests {
     #[test]
     fn collection_row_suppresses_projected_duration_media_row_paints_it() {
         let rect = Rect::new(0, 0, 40, 4);
-        let selected_bg =
-            palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false).fill;
+        let selected_bg = palette::SURFACE_RESTING;
         let dur = crate::app::ui_util::list_duration_secs(272); // 4:32
         assert_eq!(dur.as_deref(), Some("4:32"));
         let mut list: WideMediaList<String> = WideMediaList::new();
@@ -265,7 +261,7 @@ mod wide_row_regression_tests {
                     rect,
                     &mut list,
                     true,
-                    palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false).fill,
+                    palette::SURFACE_RESTING,
                     Some('▌'),
                 );
             })
@@ -329,8 +325,7 @@ mod wide_row_regression_tests {
                         Rect::new(0, 0, 8, 1),
                         &mut list,
                         true,
-                        palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false)
-                            .fill,
+                        palette::SURFACE_RESTING,
                         Some(glyph),
                     );
                 })
@@ -359,7 +354,7 @@ mod wide_row_regression_tests {
                     Rect::new(0, 0, 1, 1),
                     &mut list,
                     true,
-                    palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false).fill,
+                    palette::SURFACE_RESTING,
                     Some(' '),
                 );
             })
@@ -371,8 +366,7 @@ mod wide_row_regression_tests {
     /// scrollbar must not shift it another column inwards.
     #[test]
     fn duration_right_inset_is_two_columns_with_and_without_scrollbar() {
-        let selected_bg =
-            palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, false).fill;
+        let selected_bg = palette::SURFACE_RESTING;
         for (rows_count, focused) in [(3usize, false), (3, true), (12, true)] {
             let rect = Rect::new(0, 0, 40, 4);
             let mut list: WideMediaList<String> = WideMediaList::new();

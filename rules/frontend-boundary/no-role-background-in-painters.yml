@@ -21,12 +21,33 @@ ignores:
   - "src/app/render/theme/**"
   - "src/app/palette.rs"
   - "src/app/render/mod.rs"
-  # Test code.
+  # Test code: pins a surface by naming the role it must keep. Named test
+  # files are ignored by path; inline `#[cfg(test)]` modules by the rule's
+  # `inside` exclusion below.
   - "**/*tests*.rs"
   - "**/test_helpers*.rs"
   - "**/*_test_support.rs"
   - "**/*_test_modules.rs"
 rule:
-  any:
-    - pattern: "$_.bg(palette::$ROLE)"
-    - pattern: "$_.bg(crate::app::palette::$ROLE)"
+  all:
+    - any:
+        - pattern: "$_.bg(palette::$ROLE)"
+        - pattern: "$_.bg(crate::app::palette::$ROLE)"
+    # Test code is not a paint site: an inline test module pins values by
+    # naming roles, exactly as the ignored test files do. Two shapes cover
+    # it: a `#[cfg(test)]` attribute immediately above the module (the
+    # attribute is a sibling of, not a child of, the `mod` item in
+    # tree-sitter-rust, hence `follows`), and a module whose own name
+    # contains `test` — the inline analogue of the `**/*tests*.rs` path
+    # ignores above, which matters when other attributes sit in between.
+    - not:
+        inside:
+          kind: mod_item
+          stopBy: end
+          any:
+            - follows:
+                kind: attribute_item
+                regex: "cfg\\(test\\)"
+            - has:
+                field: name
+                regex: "test"

@@ -7,6 +7,15 @@ valid:
       let from_local = Style::default().bg(fill);
       let fg = Style::default().fg(palette::ACCENT);
     }
+  # Test code pins values by naming the role it must keep (see rule A's
+  # fixtures); an inline test module sits in an ordinary production file.
+  - |
+    #[cfg(test)]
+    mod tests {
+      fn render() {
+        let style = Style::default().bg(palette::ACCENT);
+      }
+    }
 invalid:
   - |
     fn render() {
@@ -15,4 +24,11 @@ invalid:
   - |
     fn render() {
       let style = Style::default().bg(crate::app::palette::PILL_SELECTED_BG);
+    }
+  # A module that is not test code is still a paint site.
+  - |
+    mod painters {
+      fn render() {
+        let style = Style::default().bg(palette::ACCENT);
+      }
     }

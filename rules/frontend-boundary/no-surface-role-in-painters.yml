@@ -23,26 +23,49 @@ ignores:
   # The two re-export modules name roles in `use` lists only.
   - "src/app/palette.rs"
   - "src/app/render/mod.rs"
-  # Test code.
+  # Test code: a test pins a surface by naming the role it must keep, which
+  # is the neutrality oracle this change relies on. Named test files are
+  # ignored by path; inline `#[cfg(test)]` modules by the rule's `inside`
+  # exclusion below (the two files that hold the pre-existing buffer
+  # expectations are ordinary production files).
   - "**/*tests*.rs"
   - "**/test_helpers*.rs"
   - "**/*_test_support.rs"
   - "**/*_test_modules.rs"
 rule:
-  any:
-    # Surface roles: their values are reached through `surface_colors`.
-    - kind: identifier
-      regex: "^SURFACE_"
-    # Only the background-carrying pill roles; the `_FG` ones are foreground.
-    - kind: identifier
-      regex: "^PILL_(ROW_BG|BG|SELECTED_BG)$"
-    # Any other colour resolver reached through the `palette` re-export:
-    # `surface_colors` is the one permitted resolver (D4). The palette
-    # namespace is the discriminator — bare helper calls (layout resolvers,
-    # foreground pickers like `focused_or_subtle`) stay legal.
-    - pattern: "palette::$RES($$$ARGS)"
-      not:
-        regex: "^palette::surface_colors"
-    - pattern: "crate::app::palette::$RES($$$ARGS)"
-      not:
-        regex: "^crate::app::palette::surface_colors"
+  all:
+    - any:
+        # Surface roles: their values are reached through `surface_colors`.
+        - kind: identifier
+          regex: "^SURFACE_"
+        # Only the background-carrying pill roles; the `_FG` ones are foreground.
+        - kind: identifier
+          regex: "^PILL_(ROW_BG|BG|SELECTED_BG)$"
+        # Any other colour resolver reached through the `palette` re-export:
+        # `surface_colors` is the one permitted resolver (D4). The palette
+        # namespace is the discriminator — bare helper calls (layout resolvers,
+        # foreground pickers like `focused_or_subtle`) stay legal.
+        - pattern: "palette::$RES($$$ARGS)"
+          not:
+            regex: "^palette::surface_colors"
+        - pattern: "crate::app::palette::$RES($$$ARGS)"
+          not:
+            regex: "^crate::app::palette::surface_colors"
+    # Test code is not a paint site: an inline test module pins values by
+    # naming roles, exactly as the ignored test files do. Two shapes cover
+    # it: a `#[cfg(test)]` attribute immediately above the module (the
+    # attribute is a sibling of, not a child of, the `mod` item in
+    # tree-sitter-rust, hence `follows`), and a module whose own name
+    # contains `test` — the inline analogue of the `**/*tests*.rs` path
+    # ignores above, which matters when other attributes sit in between.
+    - not:
+        inside:
+          kind: mod_item
+          stopBy: end
+          any:
+            - follows:
+                kind: attribute_item
+                regex: "cfg\\(test\\)"
+            - has:
+                field: name
+                regex: "test"

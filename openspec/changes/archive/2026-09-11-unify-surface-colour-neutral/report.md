@@ -33,7 +33,19 @@ surface-colour-neutrality: ok: 166 pre-existing test files unchanged
 Main's buffer expectations therefore pass byte-identical, pinning today's
 values and today's focus reactivity. The only test additions are new modules
 and files (the table pins, `tests_surface_conformance.rs`, and the new
-fixtures), never edits to an existing test.
+fixtures).
+
+One pre-existing *inline* test module does differ, and proof 2 above does not
+see it: proof 2 keys on file paths containing `test`, while the wide hero pane,
+queue card and wide row expectations of this change live in `mod tests` blocks
+inside ordinary production files. Those expectations were migrated onto the
+table during the migration units and then reverted to main's role-named
+literals, so they still pin values independently of the code under test; what
+remains changed is `src/app/components/playback.rs`, whose two inline tests
+construct `PlaybackProjection` literally and so must name the fields the
+projection now carries (`panel`, `panel_focused` — the panel's surface
+identity and the site's focus bit, replacing the resolved colour). No
+assertion in that file changed.
 
 ## D5 proof 1 — Rgb multiset identity
 
