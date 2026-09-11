@@ -89,10 +89,15 @@ of the item being shown and never selected by a destination or panel:
 - **Square** (Music albums, Audiobookshelf podcasts, Feeds entries): title and metadata on the left, a
   1:1 artwork box on the right.
 
-The type SHALL follow the item wherever it appears, including Home rows. The header SHALL render title
-and metadata through one presentation for all three types. When images are disabled or the artwork is
-unavailable, the artwork box SHALL render the shared placeholder at the same size. When vertical space
-is constrained, the artwork SHALL shrink before a Workspace list viewport is removed.
+A destination SHALL supply the shown item's kind from one closed, provider-neutral set of item kinds;
+the header type SHALL be derived from that kind in exactly one place, and no destination SHALL be able
+to supply a header type directly. The type SHALL follow the item wherever it appears, including Home
+rows. The header SHALL render title and metadata through one presentation for all three types.
+
+The artwork SHALL fill its box completely: an image whose aspect differs from its box SHALL be scaled
+to cover the box and cropped, centred, so no margin of the box shows. When images are disabled or the
+artwork is unavailable, the artwork box SHALL render the shared placeholder at the same size. When
+vertical space is constrained, the artwork SHALL shrink before a Workspace list viewport is removed.
 
 #### Scenario: A TV series is selected at Wide geometry
 - **WHEN** a TV series is the selected item in the Wide panel
@@ -105,6 +110,11 @@ is constrained, the artwork SHALL shrink before a Workspace list viewport is rem
 #### Scenario: An Audiobookshelf book appears in a Home row
 - **WHEN** an Audiobookshelf book is the selected Home row at Wide geometry
 - **THEN** a Portrait header renders, not a Landscape header
+
+#### Scenario: A 16:9 image in a Square header
+- **WHEN** a Feeds entry's artwork is a 16:9 thumbnail
+- **THEN** it fills the Square header's 1:1 box, cropped at the left and right edges, with no empty
+  margin inside the box
 
 #### Scenario: Artwork has not loaded
 - **WHEN** a header's artwork is still loading or absent

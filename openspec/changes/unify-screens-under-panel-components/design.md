@@ -1,6 +1,15 @@
 ## Context
 
-See `proposal.md` — Why. Facts that shape the approach, verified on `main` at `18e96392`:
+See `proposal.md` — Why.
+
+**Implementation base: `main`** (user decision), starting from the commit that adds this change
+(`9e59a29a`, whose only code-tree parent is `18e96392`). The `refactor/unify-wide-hero-content-box-frame`
+branch (60 commits, including `arrangements/wide_hero_composition.rs`) is **not** merged and is
+discarded; nothing in this change depends on it, and none of its symbols (`compose_wide_hero`,
+`ListChromeVariant`, `WideHeroVariant`, `compose_list_chrome`) exist on the base. Task 0.1 re-verifies
+every citation below against the actual base before work begins.
+
+Facts that shape the approach, verified on `main` at `18e96392`:
 
 - **The frame is a legacy base frame plus overpaint.** `Model::draw_frame` (`src/app/shell_run.rs:60-100`)
   calls `App::compose_base_frame` (`shell_draw.rs:84`) → `render_main` (`:177`) → `paint_legacy_chrome`
@@ -14,7 +23,7 @@ See `proposal.md` — Why. Facts that shape the approach, verified on `main` at 
   clamps and saves the queue column width, and forces `mini_view_focus` on resize.
 - **`LayoutMain` (`layout.rs:67`) is a paint-to-input side channel**: ~30 rect fields written during
   paint and read by input (`tabs_hitmap`, `selector_tabs`, `left_item_rows`, `tv_wide_season_tabs`,
-  `queue_area`, `selected_item_rect`, …) in 41 files. `LayoutPlayback` does the same for transport and
+  `queue_area`, `selected_item_rect`, …) in 41 non-test files (75 including tests). `LayoutPlayback` does the same for transport and
   status-bar pill rects.
 - **Destination components wrap per-destination painters.** `TvWorkspaceComponent::view`
   (`components/tv_workspace/mod.rs:536`), `BrowserComponent::view` (`browser/mod.rs:470`),
@@ -82,6 +91,19 @@ become each panel's own fill. `compose_base_frame`, `render_main`, `paint_legacy
 Everything `render_main`/`compute_frame_layout` mutates moves to the sync pass
 (`sync_mounted_surfaces`) before the draw: tab-pending resolution, stale-destination normalization,
 resize handling (image-state clear, queue-width clamp + save, mini-view focus).
+
+*Incremental path:* `compose_base_frame`/`render_main` is one monolithic body, so S0 introduces
+`RootFrame` as **data only** and `draw_frame` keeps delegating to `compose_base_frame`; each later slice
+moves one panel's painting out of `render_main` into its component in the same commit (D16), until S11
+deletes the empty remainder.
+
+*Mount rule (live ICF: a mounted component never gets an empty rect):* `RootFrame` places a panel only
+in the Panel modes where it paints, and the sync pass mounts/unmounts it to match — Tab, Library and
+Status bar panels: library column visible; Library playback panel: queue column hidden; Queue panel
+and Queue playback panel: queue column visible; `QueueBoundary`: two-panel layout only. `QueueBoundary`
+stays the mounted boundary component it is today, but reads its rect from `RootFrame` instead of
+`LayoutMain.queue_boundary_area` (task 1.4).
+
 *Alternative rejected:* keep `compose_base_frame` as a thin "root" that calls panels — it keeps the
 shell as a painter and the `App` borrow in the draw path.
 
@@ -112,11 +134,15 @@ LibraryPanelContent {
     list:     ListSlot,                   // Media(&mut MediaList presentation) | Empty(Placeholder) | Search(&mut InlineSearch)
     hero:     Option<HeroContent>,        // Wide only (Narrow reads its inline form)
 }
-HeroContent { header: HeroHeader, overview: Option<String>, workspace: Option<Workspace> }
+HeroContent { kind: HeroItemKind, facts: HeroFacts, overview: Option<String>, workspace: Option<Workspace> }
+HeroFacts   { title, meta_rows, artwork: ArtworkRequest }     // provider-neutral, every provider fills it
 Workspace   { selector: Option<SelectorRow>, list: &mut WideMediaList<_>, focused: bool }
 ```
 
-The panel module owns these types and exposes no rect, surface, style, focus-kind or variant field.
+The panel module owns these types and exposes no rect, surface, style, focus-kind, header-arm or
+variant field. `ListSlot::Search` makes the panel place the Inline Search box in the Selector row's rect
+and its results in the list box (today the destination passes `pill_area` to `render_inline_search`,
+`inline_search.rs:31`); the search component keeps its session and painter.
 The panel paints the skeleton, calls the embedded list presentations' `view` into slot rects it
 computed, retains slot geometry, and resolves pointer input into slot events
 (`SelectorPicked(i)`, `ControlPicked(i)`, `WorkspaceSelectorPicked(i)`, list delegation as today)
@@ -129,20 +155,34 @@ single predicate. Wide skeleton: Browser pane (Selector row + spacer, List contr
 fill + border) | gap | Hero pane (resting or focused surface, Hero header, overview box, Workspace).
 Narrow skeleton: Selector row, List controls row, `InlineMediaBrowser` with the one inline hero form
 (D7). The existing arrangement primitives (`wide_hero_presentation`, `pill_bar_areas`,
-`wide_hero_browser_pane`, `wide_hero_hero_content_box`, `place_media_list_below`) become private to
-the panel's arrangement module; nothing outside the panel calls them.
+`wide_hero_browser_pane`, `wide_hero_hero_content_box`, `place_media_list_below`) are used by the panel
+from S4, and become private to the panel's arrangement module in S11 (task 12.3), once the last
+un-migrated destination painter that calls them is deleted — flipping privacy earlier would break the
+build while destinations 6–11 still use them.
 
 **D5 — Wide `HeroHeader` has three arms chosen by content kind.** (User decision.)
 *Removes:* three Emby header painters (`HeroData::render_content` wide path, TV's
 `paint_hero_content` + `wide_hero_slots` path, Music's `paint_wide_hero_text` + `wide_music_left_layout`)
-and ABS/Feeds header painters. `HeroHeader::{Landscape, Portrait, Square}` each carry the same
-`{ title, meta_rows, artwork: ArtworkRequest }`; the arm is produced by the item's kind
-(`Hero::header_kind()`), replacing the layout-requested `HeroArtworkAspect`. Landscape: 16:9 artwork
+and ABS/Feeds header painters (`paint_feed_hero`, `render_book_hero`, `render_podcast_hero`).
+A destination supplies `HeroContent { kind: HeroItemKind, facts: HeroFacts, .. }`. `HeroItemKind` is
+one closed, provider-neutral enum (`Movie, HomeVideo, Series, Episode, OtherEmby, MusicAlbum,
+AudiobookshelfBook, AudiobookshelfPodcast, FeedEntry`); the **one** derivation `HeroHeader::for_kind`
+lives in the panel module and is the only constructor of the arm, so no destination can choose an arm
+(G3). Every provider fills the same `HeroFacts` — the Emby `Hero` impls (`hero_model.rs:44,112`) are
+joined by ABS and Feeds producers of the same struct, replacing their private hero painters — and
+`HeroArtworkAspect` (today only an image-type-chain selector) becomes a function of the arm. Landscape: 16:9 artwork
 full content width above title/meta. Portrait (2:3) and Square (1:1): title/meta left, artwork right.
 One title/meta painter (`paint_hero_content`) for all arms. Artwork shrinks before a Workspace viewport
 would drop (Music's existing rule, now universal). Mapping: Landscape = Movies, home videos, TV series,
 Emby Home items; Portrait = ABS books; Square = Music albums, ABS podcasts, Feeds entries; a Home row
 takes its item's kind.
+
+*Artwork fit is cover (user decision):* the image fills its box and the excess is cropped, centred.
+`ratatui-image` 11's `Resize::Crop` clips without scaling, so the cover step runs in the image worker:
+the decoded image is `DynamicImage::resize_to_fill`-ed to the box's pixel size (box cells × the
+picker's font size) and then painted with the existing `Resize::Scale`. The cache key includes the box
+size so a resized box re-encodes once. The Narrow inline hero (D7) is unaffected: its box takes the
+image's own aspect, so nothing is cropped there.
 
 **D6 — Workspace surface and focus are derived, not declared.**
 *Removes:* `LeftPaneFocus`, `WideHeroContentBoxSurface`, and per-caller `SelectedRowSurface`.
@@ -181,8 +221,12 @@ reads projected state only.
 `TabPanel`, `StatusBarPanel`.** (User decision: the two playback panels are distinct components.)
 *Removes:* base-frame queue frame/title/status painting, the queue-only `render_player_panel` pair, the
 `narrow_player` flag, shell-painted tabs and status bar. `QueuePanel` (today's `QueueComponent`) owns
-its frame, title row, status pill row and list. `QueuePlaybackPanel` owns the header row, visual slot
-(artwork/visualizer, today's `render_card`) and the queue-column transport presentation, with the
+its frame, title row, status pill row and list. `QueuePlaybackPanel` is mounted in every queue-visible
+layout and owns the always-painted header row, the visual slot (artwork/visualizer, today's
+`render_card`) and the queue-column transport presentation; while idle it paints only the header row
+and its visual slot and transport take zero rows (resolves the header-vs-idle contradiction: the
+header's owner is never unmounted). `RootFrame` sizes its placement from header + slot + transport
+heights, and `QueuePanel` starts below it plus its separator row. It lands with the
 folded change's placement rules (below 100 columns stacked; 100+ side by side, visual slot left, 2-cell
 gap, panel height = max). `LibraryPlaybackPanel` (today's `PlaybackComponent`) is the strip, mounted
 only when the queue column is hidden. Both reuse the transport leaf Render Components (seekbar, title
@@ -241,12 +285,18 @@ TV painters (`render_search_box` in pill rows, `render_plain_rows` result grid);
 mounting/focus/subscription change gets real `Application::tick()` integration tests
 (`src/app/tests_tick_integration*.rs`); layout claims are role-rect containment or buffer content, never
 absolute coordinates. No test compares destinations to each other as a conformance check — sameness is
-a property of the types. Tests that assert deleted structures (`LayoutMain` fields, per-destination
+a property of the types. "Every cell is painted by a panel" is checked by one tick integration test
+per Panel mode that pre-fills the test buffer with a sentinel symbol, draws a frame, and asserts no
+sentinel cell remains inside any mounted panel's placement (each panel fills its own surface across its
+placement, D1); unwritten Ratatui cells are otherwise indistinguishable from painted blanks. Tests
+that need "before the frame paints" assert the observable state after one `tick()` + sync instead,
+since no pre-paint seam exists. `rg` checks named in tasks are manual confirmation, not gates. Tests that assert deleted structures (`LayoutMain` fields, per-destination
 painters, Grid) are deleted with them, not ported; tests pinning a deliberately changed presentation
 (D5–D8) are rewritten to the new presentation.
 
 **D16 — Slicing: the panel types land first, destinations move one per slice, the base frame goes
-last.** S0 moves draw-time mutations into sync and introduces `RootFrame`; S1 Tab + Status bar panels;
+last.** S0 moves draw-time mutations into sync and introduces `RootFrame` as data (still delegating
+to `compose_base_frame`); S1 Tab + Status bar panels;
 S2 Queue + Queue playback panels (the folded change); S3 Library playback panel; S4 `LibraryPanel`
 mounted with its content types and skeletons, hosting Home; S5–S10 one destination each (Movies/home
 videos/generic, Feeds, TV, Music, ABS Books, ABS Podcasts), Feeds early because it is the most
@@ -255,6 +305,28 @@ docs. During S4–S10 a destination not yet moved is still painted by its old mo
 the library rect the root gives it — one painter per surface throughout; no surface is ever painted by
 both. If a destination needs a slot or arm the content types lack, the slice stops and the type is
 changed for every destination (D0).
+
+**D17 — Base-frame element inventory: every element has one owner panel and one task.** This is the
+enumeration behind "zero visible UI elements that are not components" (G1).
+
+| Element today (painter, site) | Owner at completion | Task |
+|---|---|---|
+| Left column backdrop (`render_legacy_backdrops`, `chrome.rs:16`) | Queue panel + Queue playback panel fills | 3.1, 3.5, 12.1 |
+| Right column backdrop (`render_legacy_backdrops`, `chrome.rs:37`) | Tab / Library / Library playback / Status bar panel fills | 12.1 (after 2.x, 4.1, 5.x) |
+| Tab bar + overflow arrows (`render_tabs`, `chrome_tabs.rs:34`) | Tab panel | 2.1 |
+| Status row + volume/mute/remote pills (`render_status_bar`, `chrome_status.rs:297`) | Status bar panel | 2.2 |
+| Right-column transport strip (`PlaybackComponent` at `player_area`) | Library playback panel | 4.1 |
+| Queue-only transport, wide + narrow (`render_player_panel`, `shell_draw.rs:276-319`) | Queue playback panel | 3.5 |
+| Queue visual slot: artwork/placeholder/visualizer (`render_card`, `card.rs:257`) | Queue playback panel | 3.4, 3.5 |
+| Now-playing header row (new, folded change) | Queue playback panel | 3.5 |
+| Queue frame (`render_queue_panel_frame`, `widgets.rs:231`) | Queue panel | 3.1 |
+| Queue status pill row (`render_queue_status`, `queue.rs:290`) | Queue panel | 3.1 |
+| Queue title row + list (`QueueComponent`) | Queue panel | 3.1 |
+| Queue column boundary (`QueueBoundaryComponent`, `shell_queue.rs:169`) | Queue boundary (root-placed) | 1.4 |
+| Wide hero gap boundary (`WideHeroBoundaryComponent`, `shell_library.rs:363`) | Library panel | 5.6 |
+| Library area publishing (`render_library`, `widgets.rs:515`) | deleted (paints nothing) | 12.1 |
+| Home / Browser / TV / Music / Feeds / ABS Book / ABS Podcast bodies (component-wrapped free painters) | Library panel slots | 5.8, 6.1, 7.1, 8.2, 9.1, 10.1, 11.1 |
+| Overlays, modals, popups, sidebars (`render_overlay_stack`) | unchanged: already component views | — |
 
 ## Risks / Trade-offs
 

@@ -13,6 +13,18 @@ playback panel (the right-column strip) SHALL be two distinct panels, each with 
 the same playback content. In every frame at most one of them SHALL render a transport: the Queue
 playback panel's in queue-visible layouts, the Library playback panel's when the queue column is hidden.
 
+The Queue playback panel SHALL be present in every queue-visible layout, including while idle, because
+it owns the always-painted header row. While idle it renders only the header row; its visual slot and
+transport reserve zero rows. Throughout this capability and the `panel-mode` and `idle-feed-rotation`
+requirements that reference it, "the playback panel" (or "the panel") in a queue-visible layout means
+the Queue playback panel's transport (seekbar, title row, controls), not its header row.
+
+#### Scenario: Idle queue-visible layout keeps only the header
+- **WHEN** the queue column is visible and no transport is active
+- **THEN** the Queue playback panel paints its header row and nothing else
+- **AND** the Queue panel begins below the header row and the single separator row it places above
+  itself
+
 #### Scenario: Two-panel layout with active playback
 - **WHEN** both columns are visible and playback is active
 - **THEN** the transport renders in the Queue playback panel and the Library playback panel does not

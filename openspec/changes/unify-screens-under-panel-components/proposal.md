@@ -34,7 +34,9 @@ can look different from its siblings except through the shape of its content.
   Where two Emby screens differ, the decision is recorded once in `design.md` and applied everywhere.
 - **Three Wide Hero header types**, chosen by the item's kind and never by the caller: Landscape
   (artwork above the text, full pane width), Portrait and Square (title and metadata on the left,
-  artwork on the right). The overview Main content box is the same for all three and is omitted when
+  artwork on the right). Artwork always fills its box, cropped centred when its aspect differs. The
+  header type is derived in one place from a closed item kind the content carries; no destination can
+  supply it. The overview Main content box is the same for all three and is omitted when
   the item has no overview. **BREAKING (visual)**: Home and Movies overviews move into the box;
   Music's side-by-side-or-stacked switch is replaced by the Square header.
 - **One Narrow inline hero form**: the content's image right-aligned with title, metadata and overview
@@ -81,8 +83,12 @@ enforcement. Ordinary buffer tests and `Application::tick()` integration tests p
 ### Modified Capabilities
 
 - `interactive-component-framework`: adds composition ownership — the root composes every visible
-  surface from panel components with no legacy base frame, and no component view builds shell-wide
-  geometry or calls a per-destination free painter.
+  surface from panel components with no legacy base frame, panels absent from a Panel mode are
+  unmounted, and no component view builds shell-wide geometry or calls a per-destination free painter;
+  the existing completion definition is modified so a ledger of state ownership alone no longer counts
+  as complete.
+- `hero-big-text-title`: retired; the Octant BigText title was never implemented and the unified Hero
+  header uses one title presentation.
 - `right-panel-arrangements`: the overview box is omitted when empty; the Narrow inline hero has one
   image model; per-screen presentation declarations, the Feeds "preserve restore-feeds" requirement
   and the non-hero two-column carve-out are removed.
@@ -116,8 +122,12 @@ enforcement. Ordinary buffer tests and `Application::tick()` integration tests p
   painters in `render/components/` (`tv_wide.rs`, `music_wide*.rs`, `feeds.rs`,
   `audiobookshelf_*.rs`, `home*.rs`, `list*.rs`, `detail*.rs`, `card.rs`, `chrome*.rs`, `widgets.rs`)
   are replaced by slot Render Components; `ListChromeVariant`-style, `LeftPaneFocus`,
-  `WideHeroContentBoxSurface`, `NarrowInlineHero`, `CompactBannerLayout`, `HeroArtworkAspect` are
-  deleted or replaced by content types.
+  `WideHeroContentBoxSurface`, `NarrowInlineHero`, `CompactBannerLayout` are deleted or replaced by
+  content types; `HeroArtworkAspect` becomes a function of the Hero header type.
+- Image worker: Wide header artwork is cover-cropped to its box (`image` `resize_to_fill`) before
+  encoding; no new dependency.
+- Implementation base is `main`; the unmerged `refactor/unify-wide-hero-content-box-frame` branch is
+  discarded.
 - Docs: `CONTEXT.md`, `docs/adr/0022`–`0024`, `docs/architecture/interactive-surface-ledger.md`,
   `.agents/skills/mbv-frontend/SKILL.md`, `AGENTS.md` repository map.
 - `openspec/changes/add-now-playing-sidebar/` is removed; its requirements live here.

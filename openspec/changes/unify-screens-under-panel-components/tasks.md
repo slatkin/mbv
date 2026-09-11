@@ -4,6 +4,14 @@ destination, never add a destination-only arm. Before any TUI edit, follow
 `.agents/skills/mbv-frontend/SKILL.md`. Tests are ordinary buffer and `Application::tick()` integration
 tests; no test, rule or script checks one destination against another.
 
+## 0. Base
+
+- [ ] 0.1 Confirm the base is `main` at or after `9e59a29a` (not the discarded
+  `refactor/unify-wide-hero-content-box-frame` branch) and re-verify every `file:line` citation in
+  `design.md` Context and D17 against it; correct any that moved in `design.md` before starting 1.1.
+  Verify: `git merge-base --is-ancestor 9e59a29a HEAD` succeeds and each cited symbol is found at (or
+  re-cited to) its current line (manual check).
+
 ## 1. Root frame and draw-time state (S0)
 
 *Unification:* removes the shell as a painter-with-side-effects, so every later panel is composed from
@@ -12,18 +20,23 @@ one paint-free placement.
 - [ ] 1.1 Move `render_main`'s state mutations into the sync pass: the `library_tab_pending` resolution
   and `normalize_stale_browse_destination` run in `sync_mounted_surfaces` before any draw, and
   `render_main` no longer writes `self.tab`. Verify: the existing tab-restore and stale-destination tests
-  pass unchanged, and a new `shell_run` unit test drives one sync + draw with a pending tab and asserts
-  the tab is resolved before `draw_frame` is entered.
+  pass unchanged, and a tick integration test with a pending tab asserts, after one `tick()` + sync pass
+  and without drawing, that the tab is resolved.
 - [ ] 1.2 Move `compute_frame_layout`'s resize side effects (clearing `card_image_states`, queue-column
   clamp + `save_prefs`, forcing `mini_view_focus`) into the resize handling in the sync pass; the draw
   path only reads geometry. Verify: resize tests in `src/app/tests_tick_integration.rs` pass unchanged,
-  plus a tick test that crosses the mini-view threshold and asserts focus moves before the frame paints.
-- [ ] 1.3 Introduce `RootFrame` in `src/app/render/arrangements/chrome.rs`, extending
-  `chrome_geometry`/`FrameChromeGeometry` with one placement per panel (Tab, Library, Library playback,
-  Queue, Queue playback, Status bar, Queue boundary) for each Panel mode, and make `draw_frame` iterate
-  its placements in the order `RootFrame` records, calling the existing painters for not-yet-migrated
-  panels. Verify: relational unit tests in `chrome.rs` (panels partition the terminal area per mode,
-  no overlap), and every existing render/tick test passes unchanged.
+  plus a tick test that crosses the mini-view threshold and asserts, after `tick()` + sync and without
+  drawing, that focus has moved.
+- [ ] 1.3 Introduce `RootFrame` in `src/app/render/arrangements/chrome.rs` as **data only**, extending
+  `chrome_geometry`/`FrameChromeGeometry` with the placement of each panel (Tab, Library, Library
+  playback, Queue, Queue playback, Status bar, Queue boundary) present in the current Panel mode, per the
+  mount rule in design D1 (a panel absent from a mode has no placement, never an empty rect).
+  `draw_frame` still delegates to `compose_base_frame`. Verify: relational unit tests in `chrome.rs`
+  (present placements partition the terminal per mode, no overlap, no empty placement, the absent set per
+  mode matches D1), and every existing render/tick test passes unchanged.
+- [ ] 1.4 Place `QueueBoundaryComponent` from `RootFrame` (two-panel layout only, unmounted otherwise)
+  instead of `LayoutMain.queue_boundary_area`, and delete that field. Verify: queue-boundary drag tick
+  tests pass; a tick test in `queue-only` and `library-only` finds the boundary unmounted.
 
 ## 2. Tab panel and Status bar panel (S1)
 
@@ -34,7 +47,8 @@ one paint-free placement.
   regions, and emits a tab-select `Msg` for clicks; mount it at the root; delete `render_tabs`' call in
   `paint_legacy_chrome`, `LayoutMain.tabs_hitmap`, and the shell tab-click path in `shell.rs`. Verify:
   tab buffer tests move to the component and pass; a tick integration test clicks a tab and asserts the
-  destination changes; the right-column backdrop is painted by the panel, not `render_legacy_backdrops`.
+  destination changes; the tab panel fills its own placement with its surface (the full-column
+  backdrop underneath is removed in 12.1, once every right-column panel fills itself).
 - [ ] 2.2 Create `StatusBarPanel` that paints the status row (moved from
   `chrome_status.rs::render_status_bar`) and retains its volume/mute/remote pill regions; delete
   `LayoutPlayback.{ind_vol, ind_mu, ind_rc}` and the `render_status_bar` call in `render_main`. Verify:
@@ -51,9 +65,11 @@ one paint-free placement.
   paint the left backdrop from the panel, and move `LayoutMain.queue_{area,title_area,selected_item_rect}`
   into the component. Verify: `src/app/render/tests_queue.rs` and `queue_component_tests.rs` pass; the
   context-menu keyboard anchor for a queue row still opens at the selected row (existing test).
-- [ ] 3.2 Add `header_height` to `QueuePanelInputs` and offset `queue_panel_geometry` by it alongside
-  the visual-slot and transport heights. Verify: unit test in `arrangements/queue.rs` that the queue panel
-  starts one row below the header and the 1-row gap appears only when rows sit above it; at 24 rows
+- [ ] 3.2 Add `header_height` (always 1 in queue-visible layouts, idle included) to `QueuePanelInputs`
+  and offset `queue_panel_geometry` by it alongside the visual-slot and transport heights, so the Queue
+  panel always starts below the Queue playback panel's placement plus its separator row. Until 3.5 lands,
+  `render_main` leaves that header row blank. Verify: unit test in `arrangements/queue.rs` that the queue
+  panel starts below the header row and its separator in idle, paused and playing states; at 24 rows
   `short_window_keeps_queue_in_left_column` and `short_queue_panel_drops_padding_before_rows` pass with
   re-derived (not loosened) thresholds.
 - [ ] 3.3 Derive `NowPlayingStatus { Playing, Paused, Idle }` once per frame next to
@@ -65,13 +81,15 @@ one paint-free placement.
   `fetch_card_image` for the now-playing item and projects image state; painting reads it only.
   Verify: a push test asserts one fetch per new now-playing key and none on repaint; `render_card`'s
   replacement paints from projected state in a buffer test with no `App` access.
-- [ ] 3.5 Create `QueuePlaybackPanel` owning the header row (status left, `on <host>` right, on
-  `SURFACE_CHROME`), the visual slot (artwork/placeholder/visualizer) and the queue-column transport
-  presentation, with placement: below 100 columns stacked, 100+ side by side (slot left, 2-cell gap,
-  panel height = max); mount it at the root's Queue playback placement; delete `render_card` and both
+- [ ] 3.5 Create `QueuePlaybackPanel`, mounted in every queue-visible layout (idle included), owning the
+  header row (status left, `on <host>` right, on `SURFACE_CHROME`), the visual slot
+  (artwork/placeholder/visualizer) and the queue-column transport presentation, with placement: below
+  100 columns stacked, 100+ side by side (slot left, 2-cell gap, panel height = max); while idle it paints
+  only the header row. Mount it at the root's Queue playback placement; delete `render_card` and both
   queue-only `render_player_panel` calls from `render_main` and remove `narrow_player`. Verify: buffer
-  tests at 80 and 100+ columns showing `PLAYING`/`PAUSED`/`IDLE` and the target; a remote-attached frame
-  with the Local scope selected names the remote target; no header row in library-only.
+  tests at 80 and 100+ columns showing `PLAYING`/`PAUSED`/`IDLE` and the target; an idle frame paints the
+  header row and nothing else of the panel; a remote-attached frame with the Local scope selected names
+  the remote target; the panel is unmounted in library-only.
 - [ ] 3.6 Idle collapse in every queue-visible layout: no visual slot or transport while idle (the
   connected-idle exception is deleted); paused keeps both; playback start restores both. Verify:
   `connected_idle_queue_only_keeps_panel_but_collapses_card` becomes the inverse assertion;
@@ -105,20 +123,29 @@ choose a focus kind, pick a surface or lay out a pane.
 - [ ] 5.1 Create the panel module (`src/app/components/library_panel/`) with the content types of
   design D3 (`LibraryPanelContent`, `SelectorRow`, `ListControls`, `ListSlot`, `HeroContent`,
   `HeroHeader`, `Workspace`) and the slot Render Components for Selector row (one pill bar + spacer,
-  retained `HitRegions`) and List controls row (optional pills + optional label). Make
-  `wide_hero_presentation`, `pill_bar_areas`, `wide_hero_browser_pane`, `wide_hero_hero_content_box`,
-  `place_media_list_below` private to the panel's arrangement. Verify: buffer tests for each slot
-  component (pill active state, label, empty row absent), and a hit test resolving a painted pill.
+  retained `HitRegions`) and List controls row (optional pills + optional label). The shared
+  arrangement primitives (`wide_hero_presentation`, `pill_bar_areas`, `wide_hero_browser_pane`,
+  `wide_hero_hero_content_box`, `place_media_list_below`) stay public until 12.3, because un-migrated
+  destinations still call them. Verify: buffer tests for each slot component (pill active state, label,
+  empty row absent), and a hit test resolving a painted pill; `cargo check -p mbv` green.
 - [ ] 5.2 Implement the Wide skeleton: Browser pane (Selector row, List controls row, list box fill +
-  `wide_hero_browser_border`, list presentation or empty placeholder or Inline Search), gap, Hero pane
-  (resting surface; focused only when a Workspace is present and focused). Verify: buffer tests for a
-  read-only hero and a focused-workspace hero; role-rect containment tests only (no coordinates).
+  `wide_hero_browser_border`, list presentation or empty placeholder), gap, Hero pane (resting surface;
+  focused only when a Workspace is present and focused). For `ListSlot::Search` the panel places the
+  Inline Search box in the Selector row's rect and its results in the list box, calling the existing
+  Inline Search painter with those rects. Verify: buffer tests for a read-only hero, a focused-workspace
+  hero, and an active search (box in the Selector row's place, results in the list box, Hero pane
+  unchanged); role-rect containment only (no coordinates).
 - [ ] 5.3 Implement `HeroHeader` Landscape / Portrait / Square with one title/meta painter
-  (`paint_hero_content`), artwork placeholder at full size while loading, artwork shrinking before a
+  (`paint_hero_content`), placeholder at full box size while loading, artwork shrinking before a
   Workspace viewport drops, and the overview Main content box rendered only when overview text exists.
-  Add `Hero::header_kind()` from item kind (Landscape: Movie, home video, Series, Emby Home items;
-  Portrait: ABS book; Square: MusicAlbum, ABS podcast, feed entry), replacing `HeroArtworkAspect`.
-  Verify: buffer tests per arm (art above vs art right), overview present/absent, placeholder size.
+  Add the closed `HeroItemKind` and provider-neutral `HeroFacts` to the panel content, and the single
+  `HeroHeader::for_kind` derivation (Landscape: Movie, HomeVideo, Series, Episode, OtherEmby;
+  Portrait: AudiobookshelfBook; Square: MusicAlbum, AudiobookshelfPodcast, FeedEntry) as the arm's only
+  constructor; `HeroArtworkAspect` becomes a function of the arm. Implement cover fit: the image worker
+  `resize_to_fill`s the decoded image to the box's pixel size (box cells × picker font size), keyed by
+  box size, then paints with `Resize::Scale`. Verify: buffer tests per arm (art above vs art right),
+  overview present/absent, placeholder size; a unit test that a 16:9 source filled into a 1:1 box yields
+  a square image cropped at the sides; `HeroHeader` has no public constructor other than `for_kind`.
 - [ ] 5.4 Implement the Workspace: optional Selector row over one Main content box holding a
   `WideMediaList`, accent-soft surface while focused, owning-surface selected row. Verify: buffer tests
   for focused/unfocused box surface and selected-row surface; `WideHeroContentBoxSurface` deleted.
@@ -233,16 +260,20 @@ conforms to Emby.
 - [ ] 12.1 Delete `compose_base_frame`, `render_main`, `paint_legacy_chrome`,
   `render_legacy_backdrops`, `render_library`, every shell `render_*_component` method, the transitional
   old-component branch in `RootFrame`, and the remaining legacy `ComponentId` arms
-  (`Browser`, `WideHeroBoundary`). Verify: `cargo check -p mbv`; `rg` finds none of these symbols;
-  a tick integration test asserts a full frame's cells are painted with no base frame (each panel's
-  surface present in its placement in every Panel mode).
+  (`Browser`, `WideHeroBoundary`). Verify: `cargo check -p mbv`; `rg` finds none of these symbols
+  (manual check); one tick integration test per Panel mode (`both`, `queue-only`, `library-only`, mini
+  view) pre-fills the test buffer with a sentinel symbol, draws one frame, and asserts no sentinel cell
+  remains inside any mounted panel's `RootFrame` placement.
 - [ ] 12.2 Delete `LayoutMain`, `LayoutPlayback` and `FrameChromeGeometry`'s paint-to-input use; answer
   context-menu keyboard anchors from the owning component through the existing request path. Verify:
   `rg LayoutMain src` returns nothing; context-menu keyboard-anchor tests pass for a library row and a
   queue row.
 - [ ] 12.3 Delete the dead paths of design D13 (`GridMediaList`, `NarrowBrowseControl`,
-  `GridPaintPolicy`, `LeftPaneFocus`, `SelectedRowSurface` as a caller argument, `HeroArtworkAspect`) and
-  the tests that only exercised deleted structures, including `src/app/render/tests_conformance_matrix.rs`.
+  `GridPaintPolicy`, `LeftPaneFocus`, `SelectedRowSurface` as a caller argument) and the tests that only
+  exercised deleted structures, including `src/app/render/tests_conformance_matrix.rs`; make
+  `wide_hero_presentation`, `pill_bar_areas`, `wide_hero_browser_pane`, `wide_hero_hero_content_box` and
+  `place_media_list_below` private to the Library panel's arrangement module (no caller outside it
+  remains).
   Verify: `cargo clippy --workspace --all-targets` reports no dead code; `cargo nextest run -p mbv` green.
 
 ## 13. Docs and glossary (S12)
@@ -271,6 +302,7 @@ conforms to Emby.
 - [ ] 14.2 Gates: `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`,
   `cargo fmt --all -- --check`, `openspec validate unify-screens-under-panel-components --strict`, and no
   governed file over 800 lines. Verify: all clean.
-- [ ] 14.3 At archive, sync the deltas and confirm `openspec/specs/queue-only-playback/` is deleted and
+- [ ] 14.3 At archive, sync the deltas and confirm `openspec/specs/queue-only-playback/` and
+  `openspec/specs/hero-big-text-title/` are deleted and
   `openspec/specs/library-panel/` and `queue-playback-panel/` exist. Verify: `openspec validate --strict`
   clean after sync.
