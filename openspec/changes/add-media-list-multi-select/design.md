@@ -11,8 +11,8 @@ See proposal.md — Why. Relevant current state:
   `effective_panel_focus`. Bulk actions already exist for podcasts
   (`MarkItemsPlayed(Vec<_>)`, `MarkItemsUnplayed(Vec<_>)`), and the Player's
   queue append already takes a `Vec` of items.
-- `v` is bound to the queue artwork/visualizer toggle; `Space` is global
-  `TogglePlayPause` (FallThrough).
+- `v` is bound to the queue artwork/visualizer toggle; `Space`/`Esc`
+  double-tap fire play/pause/stop via the shell's FallThrough arm.
 
 ## Goals / Non-Goals
 
