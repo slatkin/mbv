@@ -3,12 +3,9 @@ use crate::app::layout::{
     AppLayout, CardGeometry, FrameChromeGeometry, LayoutMain, LayoutPlayback,
 };
 use crate::app::render::arrangements::chrome::{
-    chrome_geometry, queue_playback_rows, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
-    QUEUE_PLAYBACK_HEADER_ROWS,
+    chrome_geometry, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
 };
-use crate::app::render::arrangements::queue::{
-    queue_panel_geometry, QueuePanelGeometry, QueuePanelInputs,
-};
+use crate::app::render::arrangements::queue::{queue_panel_subareas, QueuePanelGeometry};
 use crate::app::render::components::widgets::right_panel_content_area;
 use crate::app::{palette, App, PanelMode};
 use ratatui::layout::Rect;
@@ -80,37 +77,31 @@ impl App {
     }
 
     /// The Queue panel's placement for the current frame (task 3.1): the
-    /// paint-free chrome checkpoint plus the last published card geometry,
-    /// through the shared `queue_playback_rows` + `queue_panel_geometry`
-    /// helpers (the same single source the root placements consume, task
-    /// 3.2's header-row offset included). The queue column's playback rows
-    /// come from the last published card geometry: authoritative once
+    /// chrome geometry's published `queue` placement — the same
+    /// `queue_playback_rows` + `queue_panel_geometry` result the root
+    /// placements consume (task 3.2) — not a second computation over the
+    /// same inputs (review of tasks 3.1-3.4). The queue column's playback
+    /// rows come from the last published card geometry: authoritative once
     /// `compose_base_frame` has published the current frame's card render
     /// (the queue panel's paint pass), one frame stale in the sync pass
     /// (the card's size is paint-coupled until the visual slot moves into
     /// the Queue playback panel, tasks 3.4/3.5).
     pub(in crate::app) fn queue_panel_placement(&self) -> QueuePanelGeometry {
-        let area = Rect::new(0, 0, self.terminal_width, self.terminal_height);
-        let chrome = self.compute_chrome_geometry(area);
-        let mode = self.effective_panel_mode();
-        let is_queue_only = mode == PanelMode::QueueOnly;
-        let playback = self.effective_playback_state();
-        let show_controls = playback.active
-            || self.connected_session_id.is_some()
-            || self.cast_attachment.is_some();
-        let playback_rows = queue_playback_rows(
-            is_queue_only,
-            is_queue_only && chrome.left_area.width >= 100,
-            self.layout.main.card.height,
-            playback.active,
-            show_controls,
-        );
-        queue_panel_geometry(QueuePanelInputs {
-            left_content: chrome.left_content,
-            header_height: QUEUE_PLAYBACK_HEADER_ROWS,
-            card_height: playback_rows,
-            narrow_player_height: 0,
-        })
+        let chrome = self.compute_chrome_geometry(Rect::new(
+            0,
+            0,
+            self.terminal_width,
+            self.terminal_height,
+        ));
+        let panel_area = chrome.root.queue.unwrap_or_default();
+        let (content_area, title_area, pill_row, title_reserved) = queue_panel_subareas(panel_area);
+        QueuePanelGeometry {
+            panel_area,
+            content_area,
+            title_area,
+            pill_row,
+            title_reserved,
+        }
     }
 
     /// Compose and paint the legacy base frame for one draw: the paint-free

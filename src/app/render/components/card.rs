@@ -237,7 +237,7 @@ impl App {
         area: Rect,
         left_align: bool,
     ) -> (u16, u16, bool) {
-        let projection = self.queue_card_projection.clone();
+        let mut projection = self.queue_card_projection.clone();
         if projection.visualizer {
             return self.render_card_visualizer(f, area, left_align);
         }
@@ -254,19 +254,23 @@ impl App {
         // placeholder when the fetch resolved empty or the slot is the
         // placeholder itself. Resolved from the image cache's authority —
         // a read, never a fetch.
-        let artwork_key = projection.cache_key.as_ref().filter(|key| {
+        let artwork_key = projection.cache_key.clone().filter(|key| {
             !self
                 .card_image_states
-                .get(*key)
+                .get(key)
                 .is_some_and(|entry| entry.img.is_none())
         });
         let placeholder_slot = artwork_key.is_none();
         if placeholder_slot {
             self.ensure_placeholder_card_image();
+            // The painter derives `placeholder_slot` from
+            // `projection.cache_key`; hand it the resolved-empty fact (a
+            // `Some` key whose fetch resolved empty means the placeholder)
+            // so the painter's fallback reservation matches the adapter's
+            // derivation (review of tasks 3.1-3.4).
+            projection.cache_key = None;
         }
-        let key = artwork_key
-            .map(String::as_str)
-            .unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
+        let key = artwork_key.as_deref().unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
         let loading = !placeholder_slot && self.card_image_loading.contains(key);
         let last_card = (self.last_card_height, self.last_card_width);
         let terminal_height = self.terminal_height;
@@ -763,6 +767,34 @@ mod tests {
                 .contains_key(QUEUE_CARD_PLACEHOLDER_KEY),
             "visualizer selection must not fall back to the bundled placeholder"
         );
+    }
+
+    /// A now-playing item whose fetch resolves empty must reserve the card
+    /// rect (the bundled placeholder) even with no prior card geometry, not
+    /// collapse to (0, 0) and hand its rows back to the queue panel (review
+    /// of tasks 3.1-3.4).
+    #[test]
+    fn now_playing_resolved_empty_art_reserves_the_placeholder_slot() {
+        let mut app = make_queue_app(3, 0);
+        app.image_protocol_enabled = true;
+        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        set_playback(&mut app, 1, false);
+        // The now-playing item's fetch resolved empty; nothing has been
+        // painted yet, so there is no prior card geometry.
+        app.card_image_states
+            .insert("id1:P".into(), CachedImage::empty());
+
+        let (h, w, loading) = render_card(&mut app);
+
+        assert!(
+            h > 0 && w > 0,
+            "a resolved-empty now-playing fetch must reserve the card rect, got ({h},{w})"
+        );
+        assert!(!loading);
+        assert!(app
+            .card_image_states
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
     }
 
     #[test]

@@ -154,4 +154,24 @@ mod tests {
         assert!(title.is_none() && pill.is_none() && !reserved);
         assert_eq!(content.height, 3);
     }
+
+    /// The idle queue-only pane-geometry chain (review of tasks 3.1-3.4,
+    /// moved from the queue render test): with no visual slot or transport
+    /// rows, the list content starts below the header row, its separator
+    /// gap and the panel's reserved title band — all from the arrangement's
+    /// own inputs, not pulled from a render-test buffer.
+    #[test]
+    fn idle_pane_starts_below_header_separator_and_title_band() {
+        let header = 1u16;
+        let left = left_content(30);
+        let geometry = queue_panel_geometry(QueuePanelInputs {
+            left_content: left,
+            header_height: header,
+            card_height: 0,
+            narrow_player_height: 0,
+        });
+        // Header row + separator gap + the panel's 3-row title band.
+        assert_eq!(geometry.content_area.y, left.y + header + 1 + 3);
+        assert_eq!(geometry.panel_area.bottom(), 30);
+    }
 }

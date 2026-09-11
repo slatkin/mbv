@@ -213,18 +213,6 @@ fn idle_queue_only_hides_card_and_panel_at_both_widths() {
         .lines()
         .take(layout.content_area.y as usize)
         .all(|row| !row.contains('\u{2594}') && !row.contains("On Now:")));
-
-    // With the card and panel collapsed, the header row and its separator are
-    // still reserved (task 3.2): the queue frame starts below them (1 row of
-    // column-box padding, then header + separator + frame top pad + title +
-    // title gap = 7 rows before the list).
-    let mut app = make_queue_app(5);
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    let (_term, layout) = render_queue_view_to_terminal(&mut app, 80, 40);
-    let left_area = app
-        .compute_chrome_geometry(Rect::new(0, 0, 80, 40))
-        .left_area;
-    assert_eq!(layout.content_area.y, left_area.y + 6);
 }
 
 #[test]
