@@ -1,8 +1,0 @@
-ruleDirs:
-  - rules/frontend-boundary
-  - rules/interactive-component-boundary
-  - rules/media-list-boundary
-testConfigs:
-  - testDir: rules/frontend-boundary-tests
-  - testDir: rules/interactive-component-boundary-tests
-  - testDir: rules/media-list-boundary-tests

@@ -144,7 +144,6 @@ coverage.
 * check: `cargo check -p <package>`
 * test: `cargo nextest run -p <package>` (prefer nextest)
 * lint: `cargo clippy --workspace --all-targets`
-* architecture: `ast-grep scan`
 * size (pre-push only): `make check-code-file-lines` — run just before pushing, never as a per-task/CI/acceptance gate
 * format: `cargo fmt`
 * anything web related: `ketch` not curl

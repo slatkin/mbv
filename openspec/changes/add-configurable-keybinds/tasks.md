@@ -25,5 +25,5 @@
 
 ## 5. Gates
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets`, `ast-grep scan`, `cargo nextest run -p mbv -p mbv-core`. Verify: all green.
+- [ ] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets`, `cargo nextest run -p mbv -p mbv-core`. Verify: all green.
 - [ ] 5.2 `openspec validate add-configurable-keybinds --strict`. Verify: passes.

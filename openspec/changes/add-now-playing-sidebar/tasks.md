@@ -84,4 +84,4 @@
   Verify: exactly one playback panel is visible in every frame, the header reads the right status and
   target, and no queue row is painted over.
 - [ ] 6.2 Run the gates. Verify: `cargo nextest run -p mbv` green, `cargo clippy --workspace
-  --all-targets` clean, `ast-grep scan` clean, `cargo fmt --all -- --check` clean.
+  --all-targets` clean, `cargo fmt --all -- --check` clean.

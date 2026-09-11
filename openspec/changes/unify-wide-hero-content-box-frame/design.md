@@ -82,11 +82,11 @@ remains a free rider on the retyping.
 *Consequence for this change's scope:* only the horizontal frame is ours. Surface naming, the
 resolver, and the guardrails belong to that change and must not be re-expressed here.
 
-**D6 — The guard is a cross-destination buffer invariant, not an ast-grep rule.** A syntactic rule
-can match presence but not an omission: every current call site passes a *valid* rect, so a scan
-cannot distinguish frames. The invariant ("at Wide geometry, the leftmost main-content-box column
-equals the pane's content edge") lives in `tests_conformance_matrix.rs`, which already harnesses
-the destinations, and is stated relationally so it cannot break on a deliberate layout change.
+**D6 — The guard is a cross-destination buffer invariant.** A syntactic check can match presence
+but not an omission: every current call site passes a *valid* rect, so a scan cannot distinguish
+frames. The invariant ("at Wide geometry, the leftmost main-content-box column equals the pane's
+content edge") lives in `tests_conformance_matrix.rs`, which already harnesses the destinations,
+and is stated relationally so it cannot break on a deliberate layout change.
 
 ## Risks / Trade-offs
 

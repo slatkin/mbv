@@ -58,10 +58,10 @@ terminal/Service/worker lifecycle, Player and canonical queue authority,
 persistence, and external effects.
 
 A component therefore never receives `App`, a Service client, `PlayerProxy`,
-`Config`, credentials, or an mpsc channel. `rules/interactive-component-boundary/`
-enforces that mechanically (`ast-grep scan`), but the reason matters more than
-the rule: this migration existed to delete an `App`-wide input snapshot, and every
-one of those handles is a way to grow it back.
+`Config`, credentials, or an mpsc channel. Nothing checks that mechanically, and
+the reason matters more than a rule could: this migration existed to delete an
+`App`-wide input snapshot, and every one of those handles is a way to grow it
+back.
 
 Data flows shell→component one way, through `sync_<surface>()` and `push_*`
 helpers that project validated snapshots. A `sync_*` that reads component-local
@@ -109,10 +109,8 @@ Legacy-endpoint removal is complete (archived at
 `openspec/changes/archive/2026-08-29-remove-legacy-keyboard-endpoint/`):
 `GlobalViewKey`, the raw `*Key` shell request variants, `CONTEXT_STACK`,
 `Model::handle_legacy_key`, and `src/app/components/typed_key.rs` are deleted.
-Do not reintroduce them — three scan gates enforce this:
-`no-crossterm-key-payloads`, `no-raw-fallback-variants`, and
-`no-second-router-site` (fixtures in
-`rules/interactive-component-boundary-tests/`).
+Do not reintroduce them; they are deleted from the tree, and nothing will flag
+them coming back.
 
 ## Mouse delivery (ADR 0024)
 
@@ -228,43 +226,31 @@ Style::default().fg(palette::ACCENT_ACTIVE).bg(Color::Rgb(20, 20, 20))
 Style::default().fg(if focused { palette::ACCENT_ACTIVE } else { palette::TEXT_PRIMARY })
 ```
 
-## What these checks do not catch
+## What the compiler does not catch
 
-Three mechanisms enforce this boundary, in descending strength. Know which
-one you're relying on:
+One mechanism enforces this boundary on its own, and its limits matter more
+than a second check that does not exist:
 
 1. **The compiler** — private theme primitives. A raw `Color` outside
    `theme/` is a compile error. Cannot be bypassed.
-2. **ast-grep**, run as `ast-grep scan` from the repo root over two rule
-   directories (`sgconfig.yml` registers both):
-   - `rules/frontend-boundary/` scopes to `src/app/render/screens/` and flags
-     `use ratatui::`, `render_widget`/`render_stateful_widget`, `Layout::...`,
-     `Rect` construction, and `buffer_mut()` in screen modules.
-   - `rules/interactive-component-boundary/` scopes to `src/app/components/` and
-     rejects `impl App`, `App` as a type, Service clients / `PlayerProxy` /
-     `RemotePlayer`, and `std::sync::mpsc`. Fixtures live in
-     `rules/interactive-component-boundary-tests/`; `ast-grep test` runs them,
-     and `ast-grep test -U` regenerates snapshots after an intentional rule
-     change.
 
-   The scan catches the common bypasses and nothing subtler. The bare
-   `ast-grep scan` gates the whole tree and must be clean. It does **not** catch:
-   - **Duplicated arrangement geometry** — a screen that calls an existing
-     arrangement correctly but a second, near-identical arrangement was added
-     elsewhere instead of extending the first one.
-   - **State smuggled through a sync** — a `sync_*` or push helper that carries
-     component-local interaction state back into `App`. This reads as ordinary
-     shell plumbing and only review catches it.
-   - **Hit targets drifted from painting** — a component's painted geometry
-     changes but its own `hit_test`/region arithmetic is not updated to match.
-   - Test files (`*tests*.rs`) and inline `#[cfg(test)] mod tests { ... }`
-     blocks inside an otherwise-production file are not distinguished by
-     these rules; a `#[cfg(test)]` block that legitimately builds a
-     `TestBackend` buffer will still be flagged if it lives in a
-     non-`*tests*`-named file. Prefer a dedicated `..._tests.rs` file for new
-     buffer tests so the check stays accurate.
-3. **Review**, against the checklist below — this is what catches the two
-   items above. A clean ast-grep run is not proof of conformance.
+Nothing else is checked mechanically. A `screens/` module importing ratatui,
+constructing a `Rect`, calling `render_widget`, or reaching for `buffer_mut()`
+compiles fine, so the module table above is a convention that this checklist and
+review carry. The following are review's responsibility too, and a green build
+is not evidence about any of them:
+
+- **Duplicated arrangement geometry** — a screen that calls an existing
+  arrangement correctly but a second, near-identical arrangement was added
+  elsewhere instead of extending the first one.
+- **State smuggled through a sync** — a `sync_*` or push helper that carries
+  component-local interaction state back into `App`. This reads as ordinary
+  shell plumbing and only review catches it.
+- **Hit targets drifted from painting** — a component's painted geometry
+  changes but its own `hit_test`/region arithmetic is not updated to match.
+- **A shell handle reintroduced into a component** — `App`, a Service client,
+  `PlayerProxy`, or an `mpsc` channel crossing back over the boundary. It
+  compiles; the module table above says it must not.
 
 ## Tests
 
@@ -282,9 +268,8 @@ coverage — delete it rather than update it.
 Before reporting a TUI change complete:
 
 - [ ] **Render boundary** — no `use ratatui::`, `render_widget`, `Layout::`,
-  `Rect` construction, or `buffer_mut()` was added to a `screens/` module. If
-  ast-grep flags something you added, fix it rather than widening an `ignores`
-  glob.
+  `Rect` construction, or `buffer_mut()` was added to a `screens/` module. This
+  reads as a convention now: only this checklist and review enforce it.
 - [ ] **Narrow-width behaviour** — the change was checked at the narrow/mini
   breakpoint, not only the default width.
 - [ ] **Interaction targets** — if painted geometry moved or resized, the

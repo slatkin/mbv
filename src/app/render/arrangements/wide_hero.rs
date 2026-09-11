@@ -136,8 +136,7 @@ mod tests {
 /// taking the remainder on the right, each floored at
 /// `WIDE_HERO_MIN_PANE_WIDTH`. A `Some` override replaces the ratio default
 /// after being clamped to the valid range for this `content_area`; callers
-/// reach it only through [`wide_hero_presentation`]/[`wide_library_panes`]
-/// (the `no-wide-hero-split-outside-arrangement` scan rule enforces that).
+/// reach it only through [`wide_hero_presentation`]/[`wide_library_panes`].
 /// The clamp lives in `src/app/list_pane_width.rs`.
 pub(in crate::app::render) fn wide_hero_split(
     content_area: Rect,

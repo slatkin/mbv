@@ -462,37 +462,26 @@ legacy interaction framework removed.
 
 ## Enforcement
 
-Compiler enforcement should use TuiRealm's `AppComponent` contract, private state,
+Compiler enforcement uses TuiRealm's `AppComponent` contract, private state,
 and narrow typed APIs. Interactive Component paths must not accept `&mut App`.
 
-Path-scoped ast-grep rules should reject, for Interactive Component modules:
+Interactive Component modules must not:
 
-- `impl App`;
-- importing or using `App` as a type;
-- direct Service-client or `PlayerProxy` dependencies;
-- direct `mpsc` channel ownership.
+- define `impl App` for a shell type;
+- import or use `App` as a type;
+- take a direct Service-client or `PlayerProxy` dependency;
+- own an `mpsc` channel.
 
-Provider lifecycle, protocol, persistence, and semantic-theme authority are review
-and compiler checks until a precise, low-false-positive static predicate exists.
-Do not add broad identifier or import bans to claim coverage for them.
+Nothing checks those mechanically. `App` and the Service clients stay visible
+from `src/app/components/**`, so this is a convention the reviewer carries, not a
+build failure — the build will not tell you when a new one appears.
 
-The existing frontend ast-grep rules only guard `render/screens` and do not enforce
-interactive ownership. They are not sufficient for this migration. Static checks
-are a ratchet, not proof; review still owns state-authority and duplicated-geometry
-questions.
-
-Rule files have the fixed location `rules/interactive-component-boundary/*.yml` and
-that directory must be added to `sgconfig.yml`. Their `files` matcher is
-`src/app/components/**/*.rs`. The required local command is `rtk ast-grep scan`;
-rule fixtures must demonstrate one accepted and one rejected case per rule.
-
-The complete-conversion change must add `.github/workflows/architecture-boundaries.yml`,
-with a PR/push job named `interactive-component-boundary` that installs the pinned
-ast-grep CLI version `0.44.1` and runs `ast-grep scan`.
+Provider lifecycle, protocol, persistence, and semantic-theme authority are
+review and compiler checks. State-authority and duplicated-geometry questions
+are review's for the same reason.
 
 Any exception to the no-new-debt or dependency rules requires maintainer approval
-recorded in issue #603 and linked from the affected ledger row. Widening an ignore
-glob or adding an inline suppression is not an exception process.
+recorded in issue #603 and linked from the affected ledger row.
 
 Tests should prefer the component boundary: local update/output tests, direct
 `TestBackend` render tests, and a small shell-routing integration test. They should

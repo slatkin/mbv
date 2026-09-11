@@ -74,6 +74,4 @@ None. Feed-entry state keeps its existing capability; only its storage changes.
   shell-authority enumeration (lines ~194, 200, 205).
 - **Docs**: `CONTEXT.md` (the six "Shared data and roaming" terms plus `FeedEntry`'s roaming
   sentence), `docs/architecture/interactive-tui-component-map.md` (three mentions).
-- **Architecture gates**: `rules/interactive-component-boundary/no-service-client-deps.yml`
-  names `SharedClient` in both its message and its regex and must be updated with the removal.
 - **Issues**: motivates a partial update to #687.

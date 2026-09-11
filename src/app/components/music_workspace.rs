@@ -165,7 +165,6 @@ impl MusicWorkspaceComponent {
         // Adjudicated discrete-boundary re-anchor (design.md D5): `re_anchor`
         // has already selected the shell's stable album target, so this one
         // seeded resting scroll is sanctioned rather than delegated.
-        // ast-grep-ignore: no-render-media-list-mutators
         self.carrier.set_scroll(scroll);
     }
 

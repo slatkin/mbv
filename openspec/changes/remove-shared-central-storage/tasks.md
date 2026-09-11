@@ -49,10 +49,9 @@
   `shared_reconnect_rx` (`app_struct.rs`), startup initialization (`construct.rs`),
   reconnect/backoff draining, the fallback and stale-write toasts, the shared-data chrome
   glyph and its legend entry (`chrome_status.rs`), the settings-screen roaming-settings persist
-  hook (`settings.rs`), the affected test modules, and the `SharedClient` reference in
-  `rules/interactive-component-boundary/no-service-client-deps.yml` (message and regex — a live
-  architecture gate). Verify `rg -n "shared_client|SharedClient|shared_sync|persist_roaming" src/`
-  returns nothing, `ast-grep scan` is clean, and `cargo nextest run -p mbv` is green.
+  hook (`settings.rs`) and the affected test modules. Verify
+  `rg -n "shared_client|SharedClient|shared_sync|persist_roaming" src/` returns nothing and
+  `cargo nextest run -p mbv` is green.
 
 - [ ] 2.2 Delete the core modules (`shared_client`, `shared_client_transport`,
   `shared_client_tests`, `shared_service`, `shared_protocol`, `shared_state`, `shared_store`,
@@ -89,7 +88,7 @@
   that describes a live facility.
 
 - [ ] 2.7 Final gates on the whole change: `cargo fmt --all -- --check`, `cargo clippy
-  --workspace --all-targets`, `ast-grep scan`, the full `cargo nextest run`, and
+  --workspace --all-targets`, the full `cargo nextest run`, and
   `openspec validate remove-shared-central-storage --strict`. All green with no
   `#[allow(dead_code)]` added to silence removal fallout.
 

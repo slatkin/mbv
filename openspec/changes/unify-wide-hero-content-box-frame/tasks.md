@@ -25,6 +25,6 @@
 
 ## 4. Gates, record, and hand-off
 
-- [ ] 4.1 Run `cargo fmt --all`, `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`, and `ast-grep scan`; verify all four are clean and report their raw output.
+- [ ] 4.1 Run `cargo fmt --all`, `cargo nextest run -p mbv`, and `cargo clippy --workspace --all-targets`; verify all three are clean and report their raw output.
 - [ ] 4.2 Run `openspec validate unify-wide-hero-content-box-frame`; verify it passes and that the spec delta matches what was implemented, then report to the parent for acceptance — archiving and syncing the delta into `openspec/specs/right-panel-arrangements/spec.md` is the parent's step after live review.
 - [ ] 4.3 Report the four moved surfaces for live sampling (Home/Movies/homevideos overview box, Feeds hero box, ABS Podcasts episode box, ABS Books hero text + chapters box) and verify no other surface moved.

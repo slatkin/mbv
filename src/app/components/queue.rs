@@ -125,13 +125,11 @@ impl QueueComponent {
     /// resting-scroll clamp are sanctioned rather than delegated.
     pub(in crate::app) fn set_cursor(&mut self, cursor: QueueCursorUpdate) {
         if let QueueCursorUpdate::Set(idx) = cursor {
-            // ast-grep-ignore: no-render-media-list-mutators
             self.carrier.select_index(idx);
         }
         let scroll = self.carrier.scroll();
         let clamped = scroll.min(self.carrier.cursor());
         if clamped != scroll {
-            // ast-grep-ignore: no-render-media-list-mutators
             self.carrier.set_scroll(clamped);
         }
     }

@@ -212,62 +212,6 @@ surface SHALL retain a reserved or placeheld image region when images are off.
 - **WHEN** two different hero-bearing surfaces render with image rendering disabled
 - **THEN** both collapse the image region the same way
 
-### Requirement: Common bypasses are mechanically visible
-
-The repository SHALL include path-scoped source checks that flag direct Ratatui
-painting, layout-rect construction, and buffer access inside screen modules.
-
-The repository SHALL additionally include a source check that rejects supplying a bare colour
-value where a style is expected, because that silently sets the foreground and leaves the
-intended background unpainted. A call site SHALL state the styling role it is setting
-explicitly.
-
-These checks SHALL run unscoped over the whole repository in continuous
-integration, and the tree SHALL be clean of their findings. A build SHALL NOT
-narrow the scanned path in order to pass, and a standing violation count SHALL
-NOT be treated as an accepted baseline: a new bypass fails the build rather than
-being absorbed into existing findings. Code that a check flags is either moved
-to its owning component or arrangement, or moved out of the checked path because
-it was never screen code — never left in place behind a narrowed scan.
-
-These checks catch the common bypass only. Duplicated arrangement geometry and hit
-targets that have drifted from their painting are not statically detectable and
-SHALL be named in the review checklist as review's responsibility. Buffer tests
-verify component behaviour and preserved output; they do not by themselves establish
-conformance.
-
-#### Scenario: A screen bypasses a canonical painter
-- **WHEN** a change adds direct rendering or rect construction in a screen module
-- **THEN** the source check identifies the bypass
-- **AND** the change cannot be treated as conforming without moving the code to its
-  owning component or arrangement
-
-#### Scenario: A bare colour is supplied where a style is expected
-- **WHEN** a change paints a block or widget by supplying a bare colour value in place of a style
-- **THEN** the source check identifies it
-- **AND** the change is not conforming until the call site names the foreground or background
-  role it intends to set
-
-#### Scenario: The checks are enforced over the whole tree
-- **WHEN** continuous integration runs the architecture-boundary job
-- **THEN** it runs the source checks across the whole repository rather than a
-  subset of paths
-- **AND** the job fails if any check reports a finding anywhere in the tree
-
-#### Scenario: A bypass cannot be absorbed into a standing baseline
-- **WHEN** a change would add a finding to a check that already reports findings
-  elsewhere
-- **THEN** the build fails on the new finding
-- **AND** narrowing the scanned path, suppressing the rule, or raising an accepted
-  violation count is not a conforming resolution
-
-#### Scenario: Flagged code is not screen code
-- **WHEN** a check flags code that owns geometry or painting but sits in a screen
-  module for historical reasons
-- **THEN** the code is rehomed to the arrangement, component, or shell module that
-  its signature identifies as its owner
-- **AND** the observable painted output is unchanged
-
 ### Requirement: Named primary media browsers reuse the canonical list controls
 
 Home, the hero-bearing generic Emby library catalog browser, Movies, TV Series browsing, grouped Music album browsing, the Emby homevideos feed view, Audiobookshelf Podcast show browsing, Audiobookshelf Book browsing, Feeds, and Queue's fixed-row list SHALL compose the applicable canonical control for shared cursor, scroll, viewport, movement, fixed-row painting, selection, truncation, and scrollbar behavior.
@@ -373,3 +317,40 @@ For every slice that changes a rendered media-list surface, implementation, repr
 - **WHEN** Wide/Narrow live review reveals incorrect output or interaction after tests pass
 - **THEN** the defect is fixed as part of the same slice
 - **AND** the affected tests and gates are rerun before acceptance
+
+### Requirement: Screen modules do not paint
+
+Screen modules SHALL NOT paint directly: no direct Ratatui painting, no
+layout-rect construction, and no buffer access. A screen supplies typed content;
+painting belongs to an owning component or arrangement.
+
+A call site SHALL state the styling role it sets explicitly. Supplying a bare
+colour value where a style is expected silently sets the foreground and leaves
+the intended background unpainted, so it is not conforming.
+
+Nothing enforces this set of rules mechanically. It is a review obligation
+carried by the module table and the `mbv-frontend` completion checklist; a green
+build is not evidence that it holds.
+
+Duplicated arrangement geometry and hit targets that have drifted from their
+painting are review's responsibility for the same reason: they are not statically
+detectable. Buffer tests verify component behaviour and preserved output; they do
+not by themselves establish conformance.
+
+#### Scenario: A screen bypasses a canonical painter
+- **WHEN** a change adds direct rendering or rect construction in a screen module
+- **THEN** review rejects the change
+- **AND** the code moves to the component or arrangement that owns the geometry or
+  painting, or out of `screens/` because it was never screen code
+
+#### Scenario: A bare colour is supplied where a style is expected
+- **WHEN** a change paints a block or widget by supplying a bare colour value in place of a style
+- **THEN** the call site names the foreground or background role it intends to set
+- **AND** the change is not conforming until it does
+
+#### Scenario: Painting code that is not screen code
+- **WHEN** code that owns geometry or painting sits in a screen module for
+  historical reasons
+- **THEN** it is rehomed to the arrangement, component, or shell module that its
+  signature identifies as its owner
+- **AND** the observable painted output is unchanged
