@@ -25,7 +25,7 @@
 //!     `chrome_tabs.rs:43`); the popup frame and its dim backdrop
 //!     (`modal_frame.rs:47`, `backdrop.rs:8-19`).
 //! (b) **`SelectedRowSurface` policy family** (`components/media_list/mod.rs:198`):
-//!     `ListBackdrop` resolves `list_selected_row_bg()` (the `SelectedRow`
+//!     `ListBackdrop` resolves the `SelectedRow` row (the punch-through),
 //!     row), `OwningSurface` resolves the containing surface's focus pair
 //!     (`media_list/wide.rs:202-203`). The `OwningSurface` callers declare
 //!     `SelectedRowOnQueueColumn` (`render/components/queue.rs:36`) or
@@ -258,15 +258,17 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_BACKDROP,
         },
-        // Main uses the `BORDER_UNFOCUSED` rule role as this fill
-        // (`render/components/card.rs:111`, `album_art.rs:183`,
-        // `detail_series_view.rs:125`, `home_hero_emby.rs:121,272,286`); the
-        // row records today's role, not a name from a later retirement.
+        // Main paints the artwork-loading inset's fill (the `OVERLAY` value):
+        // `card.rs:111`, `album_art.rs:183`, `detail_series_view.rs:125`,
+        // `home_hero_emby.rs:121,272,286`. The row resolves through the
+        // purpose-named `ARTWORK_LOADING_PLACEHOLDER` primitive (task 4.2),
+        // never the border role's `OVERLAY`, so a border edit cannot move the
+        // fill.
         Surface::ArtworkLoadingPlaceholder => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: BORDER_UNFOCUSED,
+            resting: primitives::ARTWORK_LOADING_PLACEHOLDER,
         },
         // --- chrome band ---
         Surface::StatusBar => Row {

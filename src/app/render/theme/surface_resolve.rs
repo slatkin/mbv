@@ -50,7 +50,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     let mut colors = if follow_focus {
         SurfaceColors::fill(if row.soft {
-            SURFACE_ACCENT_SOFT
+            primitives::SOFT_CONTENT_BODY_BG
         } else {
             row.level.focused_fill()
         })
@@ -107,8 +107,8 @@ mod tests {
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
             Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::QueuePanel => (SURFACE_ACCENT_SOFT, SURFACE_BACKDROP),
-            Surface::MainContentBox => (SURFACE_ACCENT_SOFT, SURFACE_BACKDROP),
+            Surface::QueuePanel => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
+            Surface::MainContentBox => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::QueueOnlyPlaybackPanel => (SURFACE_CHROME, SURFACE_CHROME),
@@ -119,7 +119,10 @@ mod tests {
             Surface::PlaybackBottomRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::ArtworkLoadingPlaceholder => (BORDER_UNFOCUSED, BORDER_UNFOCUSED),
+            Surface::ArtworkLoadingPlaceholder => (
+                primitives::ARTWORK_LOADING_PLACEHOLDER,
+                primitives::ARTWORK_LOADING_PLACEHOLDER,
+            ),
             Surface::StatusBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::StatusBarPill => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::QueuePanelBand => (SURFACE_CHROME, SURFACE_CHROME),
@@ -230,12 +233,12 @@ mod tests {
         for surface in soft_rows {
             assert_eq!(
                 surface_colors(surface, true).fill,
-                SURFACE_ACCENT_SOFT,
+                primitives::SOFT_CONTENT_BODY_BG,
                 "{surface:?} focused soft fill"
             );
         }
         // The soft variant is not the default focused content body.
-        assert_ne!(SURFACE_ACCENT_SOFT, SURFACE_FOCUSED);
+        assert_ne!(primitives::SOFT_CONTENT_BODY_BG, SURFACE_FOCUSED);
         assert_eq!(row(Surface::QueuePanel).resting, SURFACE_BACKDROP);
     }
 }

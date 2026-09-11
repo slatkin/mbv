@@ -104,8 +104,8 @@ pub(super) enum FocusSource {
 pub(super) struct Row {
     pub(super) level: Level,
     pub(super) focus: FocusSource,
-    /// Takes the soft content-body variant (`SURFACE_ACCENT_SOFT`, `#48584e`)
-    /// while focused, instead of the level's focused fill.
+    /// Takes the soft content-body variant (`SOFT_CONTENT_BODY_BG`,
+    /// `#48584e`) while focused, instead of the level's focused fill.
     pub(super) soft: bool,
     /// The value the row paints while resting: main's value for that surface.
     pub(super) resting: Color,

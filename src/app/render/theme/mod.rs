@@ -23,23 +23,27 @@ use ratatui::style::Color;
 // Surfaces
 pub const SURFACE_BACKDROP: Color = primitives::LIBRARY_SIDE_BG;
 pub const SURFACE_CHROME: Color = primitives::DARK_BG;
-pub const SURFACE_FOCUSED: Color = primitives::BG_GREEN;
+pub const SURFACE_FOCUSED: Color = primitives::SURFACE_FOCUSED_BG;
 pub const SURFACE_RESTING: Color = primitives::PLAYBACK_PANEL_BG; // resting-content / unfocused half
-                                                                  // Transitional: the surface table's `PlaybackPanel`/`QueueOnlyPlaybackPanel`
-                                                                  // rows carry this value now; `render/tests.rs` still passes the name into the
-                                                                  // characterization seam, so it stays reachable until task 4.2 retires it.
+                                                                  // Transitional: retired from production by task 4.2 (`SURFACE_PLAYBACK` was
+                                                                  // `SURFACE_RESTING`'s value alias); the name stays reachable only because the
+                                                                  // frozen `render/tests.rs` pins it, which the neutrality rule forbids editing.
+#[cfg(test)]
 #[allow(dead_code)]
 pub const SURFACE_PLAYBACK: Color = primitives::PLAYBACK_PANEL_BG; // now-playing-strip half
-pub const SURFACE_ACCENT_SOFT: Color = primitives::BG_GREEN_SOFT;
-pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
-// Transitional: the surface table's `StatusBarPill` row carries this value
-// now (pills sit on the chrome status row); task 4.2 retires the alias.
+                                                                   // Transitional: retired from production by task 4.2 (`SURFACE_ACCENT_SOFT`'s
+                                                                   // value duplicated `SCROLLBAR`'s; the soft variant resolves through
+                                                                   // `SOFT_CONTENT_BODY_BG` now); the name stays reachable only because three
+                                                                   // frozen test files pin it, which the neutrality rule forbids editing.
+#[cfg(test)]
 #[allow(dead_code)]
-pub const SURFACE_STATUS_PILL: Color = SURFACE_CHROME; // pills sit on the chrome status row; same bg
+pub const SURFACE_ACCENT_SOFT: Color = primitives::SOFT_CONTENT_BODY_BG;
+pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
 pub const SURFACE_SIDEBAR: Color = primitives::PANEL_BG; // plain (non-hero) sidebar/panel background
-                                                         // Transitional: the surface table's `ArtworkPlaceholder` row carries this
-                                                         // value now; the name stays reachable for `artwork_placeholder_tests.rs`
-                                                         // until task 4.2 retires it.
+                                                         // Transitional: retired from production by task 4.2 (`SURFACE_ARTWORK_PLACEHOLDER`
+                                                         // was `SURFACE_BACKDROP`'s value alias); the name stays reachable only because
+                                                         // the frozen `artwork_placeholder_tests.rs` pins it.
+#[cfg(test)]
 #[allow(dead_code)]
 pub const SURFACE_ARTWORK_PLACEHOLDER: Color = primitives::ARTWORK_PLACEHOLDER;
 
@@ -67,7 +71,8 @@ pub const TEXT_STRONG: Color = primitives::WHITE; // bold titles/headings
 pub const TEXT_EMPHASIS: Color = primitives::SOFT_WHITE; // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = primitives::YELLOW; // focused-row title accent
 pub const TEXT_ON_ACCENT: Color = primitives::BASE; // near-black text painted on a colored surface
-pub const TEXT_ACCENT_MUTED: Color = primitives::BG_GREEN; // "loaded"/"playing"/confirmed value text
+pub const TEXT_ACCENT_MUTED: Color = primitives::BG_GREEN; // "loaded"/"playing"/confirmed value text; deliberately
+                                                           // not the focused surface's `SURFACE_FOCUSED_BG` (task 4.2)
 pub const TEXT_DETAIL_META: Color = primitives::MUTED_GREEN; // detail-screen label/meta text
 pub const TEXT_METADATA: Color = primitives::FOAM; // secondary metadata (durations, pct, badges)
 
@@ -82,7 +87,7 @@ pub const INDICATOR_AUDIO_FG: Color = primitives::PURPLE;
 // Playback panel
 pub const PLAYBACK_VALUE_FG: Color = primitives::PLAYBACK_CONTENT_FG; // title/codec value
 pub const PLAYBACK_META_FG: Color = primitives::PLAYBACK_META_FG; // captions/time
-pub const PLAYBACK_THROBBER_FG: Color = primitives::AQUA; // now-playing liveness
+pub const PLAYBACK_THROBBER_FG: Color = primitives::PLAYBACK_THROBBER_FG; // now-playing liveness
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = primitives::SEEK_TRACK; // unplayed seek/progress track
@@ -98,10 +103,11 @@ pub const SCROLLBAR: Color = primitives::SCROLLBAR;
 /// bool: the existing `PanelFocus` (which panel is focused) for
 /// inline screens with one focusable region, or `PanelFocus` combined
 /// with a pane bit (`left_focused`) for Wide hero screens with two.
-// Transitional: `resolve_surface_focus` and `list_selected_row_bg` are the
-// value-aliased resolvers the surface table replaced; `resolve_surface_focus`
-// still has unmigrated production callers, and `list_selected_row_bg` stays
-// reachable for `artwork_placeholder_tests.rs` until task 4.2 retires both.
+// Transitional: `resolve_surface_focus` is the value-aliased resolver the
+// surface table replaced; every production caller was migrated, but the
+// frozen pre-existing tests still name it (the neutrality rule forbids
+// editing them), so it stays as a test-fed re-export.
+#[cfg(test)]
 #[allow(dead_code)]
 pub fn resolve_surface_focus(focused: bool) -> Color {
     if focused {
@@ -109,19 +115,4 @@ pub fn resolve_surface_focus(focused: bool) -> Color {
     } else {
         SURFACE_RESTING
     }
-}
-
-/// The focused selected-row background for a canonical media list. The row
-/// "punches through" to the surface *containing* the panel that holds the
-/// list, not the list panel itself. Library rails, Home, and Feeds sit on the
-/// library backdrop even while their list panel is focus-green, so this is
-/// [`SURFACE_BACKDROP`], not `resolve_surface_focus(focused)`. Queue is the
-/// one non-library caller whose parent is itself focus-green; it passes
-/// [`SURFACE_FOCUSED`] directly instead of calling this.
-// Transitional: every production selected row now resolves through the
-// surface table's `SelectedRow` row; the name stays reachable for
-// `artwork_placeholder_tests.rs` until task 4.2 retires it.
-#[allow(dead_code)]
-pub fn list_selected_row_bg() -> Color {
-    SURFACE_BACKDROP
 }
