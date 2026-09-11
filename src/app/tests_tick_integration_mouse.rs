@@ -430,6 +430,53 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     harness.model_mut().sync_mounted_surfaces();
 }
 
+// --- task 1.4: the boundary is a two-panel-layout component. RootFrame places
+// it (and the sync pass mounts it) only in the Both layout; queue-only and
+// library-only find it unmounted, and returning to Both remounts it.
+#[test]
+fn queue_boundary_unmounts_outside_the_two_panel_layout() {
+    for mode in [PanelMode::QueueOnly, PanelMode::LibraryOnly] {
+        let mut app = crate::app::render::make_queue_app(2);
+        app.panel_mode = mode;
+        let mut harness = TickHarness::new(app);
+        assert!(
+            harness
+                .model()
+                .application
+                .mounted(&ComponentId::QueueBoundary),
+            "the boundary starts mounted"
+        );
+        harness.model_mut().sync_mounted_surfaces();
+        assert!(
+            !harness
+                .model()
+                .application
+                .mounted(&ComponentId::QueueBoundary),
+            "{mode:?} unmounts the boundary"
+        );
+        harness.model_mut().app.panel_mode = PanelMode::Both;
+        harness.model_mut().sync_mounted_surfaces();
+        assert!(
+            harness
+                .model()
+                .application
+                .mounted(&ComponentId::QueueBoundary),
+            "returning to the two-panel layout remounts the boundary"
+        );
+    }
+
+    // Mini view derives its mode from `mini_view_focus`, never the stored
+    // Both: a narrow terminal in the Library mini view has no boundary either.
+    let mut mini = crate::app::render::make_queue_app(2);
+    mini.terminal_width = 70;
+    let mut harness = TickHarness::new(mini);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness
+        .model()
+        .application
+        .mounted(&ComponentId::QueueBoundary));
+}
+
 // --- add-mouse-column-resize 3.1: the root-owned one-column boundary is
 // exercised through the real Application::tick() path. Queue and Library are
 // both eligible beside it, but only the boundary receives its drag messages.
@@ -446,7 +493,13 @@ fn tick_queue_boundary_drag_live_width_then_persists_once_on_release() {
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
-    let boundary = harness.model().app.layout.main.queue_boundary_area;
+    let boundary = harness
+        .model()
+        .app
+        .layout
+        .root_frame
+        .queue_boundary
+        .expect("two-panel layout places the boundary in RootFrame");
     assert_eq!(boundary.width, 1, "the drag target is exactly one column");
     let start_width = harness.model().app.queue_column_width;
     let target = boundary.x.saturating_add(57);
@@ -521,7 +574,13 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
-    let boundary = harness.model().app.layout.main.queue_boundary_area;
+    let boundary = harness
+        .model()
+        .app
+        .layout
+        .root_frame
+        .queue_boundary
+        .expect("two-panel layout places the boundary in RootFrame");
     let width = harness.model().app.queue_column_width;
     harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
         title: "Block resize?".into(),

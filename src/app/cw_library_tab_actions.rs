@@ -2,6 +2,23 @@ use super::{App, PanelFocus, TabSelection};
 use mbv_core::api::EmbyItem;
 
 impl App {
+    /// Applies the tab saved from the previous session once libraries have
+    /// loaded. Runs in the sync pass before any draw (task 1.1); the draw
+    /// path no longer writes `self.tab`.
+    pub(super) fn resolve_library_tab_pending(&mut self) {
+        if self.library_tab_pending > 0
+            && (!self.libs.is_empty() || !self.audiobookshelf_libraries.is_empty())
+        {
+            let fp = self.feeds_tab_pos();
+            let emby = self.libs.len();
+            let audio = self.audiobookshelf_libraries.len();
+            let max_pos = fp.unwrap_or(emby + audio);
+            let pos = self.library_tab_pending.min(max_pos);
+            self.tab = TabSelection::from_position_with_counts(pos, emby, audio, fp.is_some());
+            self.library_tab_pending = 0;
+        }
+    }
+
     /// Normalizes a selected Service library index that no longer exists.
     ///
     /// A `TabSelection::EmbyLibrary(index)` with `index >= self.libs.len()`,

@@ -1,11 +1,22 @@
 use super::*;
 use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
 use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
+use crate::app::PanelFocus;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {
+        // Tasks 1.1/1.2: the draw-time state mutations run here, before any
+        // draw. The saved-tab resolution and the stale-destination fallback
+        // settle the active tab so every projection below -- and the frame --
+        // sees the resolved tab (`render_main` no longer writes `self.tab`),
+        // and the terminal-resize handling (card-image clear, queue-column
+        // clamp + prefs save, and the mini-view focus hand-off on a real
+        // Resize event) leaves the draw path, which now only reads geometry.
+        self.sync_terminal_resize();
+        self.app.resolve_library_tab_pending();
+        self.app.normalize_stale_browse_destination();
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
         // Home content/focus is projected event-driven by
@@ -39,6 +50,33 @@ impl Model {
         // ADR 0024 D2: mouse eligibility is derived off the same
         // active-destination derivation, in the same pass, right after it.
         self.sync_mouse_subscriptions();
+    }
+
+    /// Terminal-resize side effects, applied in the sync pass before any draw
+    /// (task 1.2). A size drift against the size this pass last handled runs
+    /// the former draw-time mutations: the card-image state clear and the
+    /// queue-column clamp + prefs save (this also picks up the startup draw's
+    /// size normalization and any direct-frame normalization). The mini-view
+    /// focus hand-off runs only when the Resize observer armed it -- the real
+    /// terminal-resize event, whose pre-resize width the marker still holds.
+    pub(super) fn sync_terminal_resize(&mut self) {
+        let size = (self.app.terminal_width, self.app.terminal_height);
+        let resize_event = std::mem::take(&mut self.pending_terminal_resize);
+        if self.handled_terminal_size == size && !resize_event {
+            return;
+        }
+        let was_wide = self.handled_terminal_size.0 >= crate::app::MINI_VIEW_THRESHOLD;
+        self.handled_terminal_size = size;
+        self.app.card_image_states.clear();
+        self.app.card_image_loading.clear();
+        // Crossing into mini view on a real resize hands focus to the queue;
+        // the stored wide focus is untouched.
+        if resize_event && was_wide && size.0 < crate::app::MINI_VIEW_THRESHOLD {
+            self.app.mini_view_focus = PanelFocus::Queue;
+        }
+        if self.app.clamp_queue_column_width() {
+            self.app.save_prefs();
+        }
     }
 
     /// The sole base-frame orchestrator (D3): legacy base paint, resize

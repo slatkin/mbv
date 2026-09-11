@@ -3,12 +3,12 @@ use crate::app::layout::{
     AppLayout, CardGeometry, FrameChromeGeometry, LayoutMain, LayoutPlayback,
 };
 use crate::app::render::arrangements::chrome::{
-    chrome_geometry, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
+    chrome_geometry, queue_playback_rows, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
 };
 use crate::app::render::arrangements::queue::{queue_panel_geometry, QueuePanelInputs};
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::{render_queue_panel_frame, right_panel_content_area};
-use crate::app::{palette, App, PanelFocus, PanelMode, TabSelection};
+use crate::app::{palette, App, PanelFocus, PanelMode};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::Span;
@@ -24,13 +24,18 @@ impl App {
     }
 
     /// Paint-free geometry seam entry (D2). Returns `None` on a zero-dimension
-    /// frame before ANY mutation, so `self.layout` keeps reflecting the last
-    /// frame that rendered in full. Otherwise updates the frame-dependent
-    /// inputs (terminal size, mini-view focus, queue column width) and then
-    /// computes the root/chrome geometry into the typed partial subresult
-    /// `FrameChromeGeometry`. `compose_base_frame` publishes the migrated chrome fields
-    /// into the fresh `AppLayout` and `render_main` consumes this subresult
-    /// instead of recomputing root/chrome geometry inline.
+    /// frame before ANY mutation beyond the geometry bookkeeping, so
+    /// `self.layout` keeps reflecting the last frame that rendered in full.
+    /// Otherwise normalizes the frame-dependent geometry inputs (terminal
+    /// size, plus the mini-view crossing arm for frames that render before
+    /// their Resize event -- see the comment in the body) and computes the
+    /// root/chrome geometry into the typed partial subresult
+    /// `FrameChromeGeometry`. Its former resize side effects
+    /// (card-image clear, queue-column clamp + prefs save) moved to the sync
+    /// pass (`Model::sync_terminal_resize`, task 1.2). `compose_base_frame`
+    /// publishes the migrated chrome fields into the fresh `AppLayout` and
+    /// `render_main` consumes this subresult instead of recomputing
+    /// root/chrome geometry inline.
     pub(in crate::app) fn compute_frame_layout(
         &mut self,
         area: Rect,
@@ -40,10 +45,11 @@ impl App {
         if area.width == 0 || area.height == 0 {
             return None;
         }
-        if area.width != self.terminal_width || area.height != self.terminal_height {
-            self.card_image_states.clear();
-            self.card_image_loading.clear();
-        }
+        // Mini-view crossing for a frame that renders before its Resize event
+        // could be dispatched (the startup draws, bare-frame render helpers).
+        // Real resizes hand focus to the queue in the sync pass instead
+        // (`Model::sync_terminal_resize`, task 1.2); this draw-path arm keeps
+        // the stored-width vs frame-width semantics for those renders.
         if self.terminal_width >= crate::app::MINI_VIEW_THRESHOLD
             && area.width < crate::app::MINI_VIEW_THRESHOLD
         {
@@ -51,9 +57,6 @@ impl App {
         }
         self.terminal_width = area.width;
         self.terminal_height = area.height;
-        if self.clamp_queue_column_width() {
-            self.save_prefs();
-        }
         Some(self.compute_chrome_geometry(area))
     }
 
@@ -71,6 +74,14 @@ impl App {
             panel_focus: self.effective_panel_focus(),
             queue_column_width: self.queue_column_width,
             terminal_width: self.terminal_width,
+            // The queue-column playback region is sized from the last full
+            // frame's published card geometry; the card's authoritative size
+            // is paint-coupled until the visual slot moves into the Queue
+            // playback panel (tasks 3.4/3.5).
+            card_height: self.layout.main.card.height,
+            playback_active: self.effective_playback_state().active,
+            transport_connected: self.connected_session_id.is_some()
+                || self.cast_attachment.is_some(),
         })
     }
 
@@ -113,10 +124,12 @@ impl App {
             layout.main.panel_area = chrome.panel_area;
             layout.main.panel_content_area = chrome.panel_content_area;
             layout.main.left_area = chrome.left_area;
-            layout.main.queue_boundary_area = chrome.queue_boundary_area;
             layout.playback.player_area = chrome.player_area;
             layout.playback.status_area = chrome.status_area;
             layout.tabs_area = chrome.tabs_area;
+            // Task 1.3: the paint-free `RootFrame` panel placements publish
+            // with the rest of the chrome checkpoint.
+            layout.root_frame = chrome.root;
         }
 
         // Clear expired toast before any rendering so the status bar sees the latest state.
@@ -189,24 +202,10 @@ impl App {
         if area.height < 4 {
             return;
         }
-        // Apply the tab saved from the previous session once libs have loaded.
-        if self.library_tab_pending > 0
-            && (!self.libs.is_empty() || !self.audiobookshelf_libraries.is_empty())
-        {
-            let fp = self.feeds_tab_pos();
-            let emby = self.libs.len();
-            let audio = self.audiobookshelf_libraries.len();
-            let max_pos = fp.unwrap_or(emby + audio);
-            let pos = self.library_tab_pending.min(max_pos);
-            self.tab = TabSelection::from_position_with_counts(pos, emby, audio, fp.is_some());
-            self.library_tab_pending = 0;
-        }
-        // A selected Service library index that no longer exists (async
-        // Service removal/replacement) becomes Home. Home needs no
-        // Service-specific library state, so we keep rendering the (now)
-        // Home view instead of aborting to a blank, mostly-default frame:
-        // the completed frame installs a full Home layout tagged Home below.
-        self.normalize_stale_browse_destination();
+        // The tab saved from the previous session and the stale-destination
+        // fallback are resolved in the sync pass before any draw (task 1.1):
+        // `render_main` no longer writes `self.tab`, and every projection --
+        // and this frame -- consumes the already-resolved tab.
 
         // Root/chrome geometry (left/right columns, tabs/player/status
         // placement, focus facts) comes from the paint-free subresult
@@ -216,7 +215,6 @@ impl App {
             panel_area: _,
             panel_content_area: _,
             left_area,
-            queue_boundary_area: _,
             right_area,
             // Consumed by `paint_legacy_chrome` (via the `chrome` ref), not the body.
             right_full_area: _,
@@ -227,6 +225,7 @@ impl App {
             status_area,
             right_visible,
             queue_focused,
+            root: _,
         } = *chrome;
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
@@ -271,8 +270,6 @@ impl App {
             // both queue-only surfaces and returns their rows to the queue
             // list. Narrow stacks the panel below the card; wide paints it
             // beside the card, so the queue starts below whichever is taller.
-            let mut top_rows = layout.card.height;
-            let mut stacked_rows = 0;
             if is_queue_only && (!idle_collapse || show_controls) {
                 if is_wide {
                     let panel_area = Rect {
@@ -310,7 +307,6 @@ impl App {
                             .fill,
                         ),
                     );
-                    top_rows = layout.card.height.max(player_h);
                 } else {
                     let panel_area = Rect {
                         x: left_content.x,
@@ -335,24 +331,25 @@ impl App {
                             .fill,
                         ),
                     );
-                    stacked_rows = player_h;
                 }
             }
 
             // Both mode keeps the panel in the right column, so the left
-            // queue only ever sits below the card there.
-            let (queue_card_rows, queue_narrow_rows) = if is_queue_only && is_wide {
-                (top_rows, 0)
-            } else if is_queue_only {
-                (layout.card.height, stacked_rows)
-            } else {
-                (layout.card.height, 0)
-            };
+            // queue only ever sits below the card there. The rows the queue
+            // column spends above the queue panel are derived once, from the
+            // same shared helper the root placements consume (`chrome.rs`).
+            let playback_rows = queue_playback_rows(
+                is_queue_only,
+                is_wide,
+                layout.card.height,
+                !idle_collapse,
+                show_controls,
+            );
 
             let queue_geometry = queue_panel_geometry(QueuePanelInputs {
                 left_content,
-                card_height: queue_card_rows,
-                narrow_player_height: queue_narrow_rows,
+                card_height: playback_rows,
+                narrow_player_height: 0,
             });
             (right_area, queue_geometry)
         };
@@ -410,12 +407,10 @@ impl App {
     /// because `player_area` is empty in queue-only mode so the component
     /// cannot paint there.
     ///
-    /// Called from within `render_main` at the root/chrome checkpoint -- after
-    /// the `self.tab` normalization block and `normalize_stale_browse_destination`,
-    /// before any body paint -- because `render_tabs` reads the normalized
-    /// `self.tab`. Task 2.3's `Model::draw_frame` will hoist this call out of
-    /// `render_main` and settle the `self.tab` normalization ordering so it can
-    /// run after the body.
+    /// Called from within `render_main` at the root/chrome checkpoint, before
+    /// any body paint. `render_tabs` reads `self.tab`, which the sync pass
+    /// resolved before this draw (task 1.1); the draw path no longer
+    /// normalizes it.
     pub(in crate::app) fn paint_legacy_chrome(
         &mut self,
         f: &mut Frame,

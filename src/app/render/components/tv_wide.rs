@@ -143,6 +143,10 @@ impl App {
                 panel_focus: self.effective_panel_focus(),
                 queue_column_width: self.queue_column_width,
                 terminal_width: self.terminal_width,
+                card_height: self.layout.main.card.height,
+                playback_active: self.effective_playback_state().active,
+                transport_connected: self.connected_session_id.is_some()
+                    || self.cast_attachment.is_some(),
             },
         );
         if !chrome.right_visible {

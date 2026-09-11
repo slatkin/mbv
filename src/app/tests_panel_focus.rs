@@ -30,6 +30,18 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
         })
     )));
 
+    // Production order (task 1.2): the resize observer message is dispatched
+    // and the sync pass runs before the next draw. The resize side effects --
+    // including the mini-view focus hand-off -- belong to the sync pass now;
+    // the draw path only reads geometry.
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
     let mut narrow_terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
     narrow_terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
@@ -45,12 +57,6 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
         "mini-view focus must not replace the stored wide focus"
     );
 
-    let (mut music_resize, mut tv_resize) = (false, false);
-    for message in outcome.messages {
-        harness
-            .model_mut()
-            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
-    }
     let mut widened_terminal = Terminal::new(TestBackend::new(100, 24)).unwrap();
     widened_terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
@@ -61,6 +67,39 @@ fn resize_tick_selects_mini_queue_without_changing_wide_focus() {
         "widening restores the prior wide focus"
     );
     assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
+}
+
+/// Task 1.2: the mini-view threshold crossing is a sync-pass side effect now.
+/// After one tick() + sync pass and without drawing, the ephemeral mini-view
+/// focus has moved to Queue while the stored wide focus is untouched.
+#[test]
+fn sync_pass_moves_mini_view_focus_across_the_threshold_without_a_draw() {
+    let mut app = make_app_stub();
+    app.terminal_width = 100;
+    app.panel_focus = PanelFocus::Library;
+    app.mini_view_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+
+    harness.inject(Event::WindowResize(60, 24));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        harness.model().app.mini_view_focus,
+        PanelFocus::Queue,
+        "crossing into mini view hands focus to the queue after tick() + sync, without a draw"
+    );
+    assert_eq!(
+        harness.model().app.panel_focus,
+        PanelFocus::Library,
+        "the stored wide focus is untouched"
+    );
 }
 
 #[test]

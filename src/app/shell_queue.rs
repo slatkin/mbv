@@ -168,9 +168,17 @@ impl Model {
 
     pub(super) fn render_queue_boundary(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::QueueBoundary;
-        if self.application.mounted(&id) {
-            self.application
-                .view(&id, frame, self.app.layout.main.queue_boundary_area);
+        // Task 1.4: the boundary paints where `RootFrame` places it -- the
+        // two-panel layout only; the sync pass unmounts it in every other
+        // Panel mode.
+        if let Some(area) = self
+            .app
+            .layout
+            .root_frame
+            .queue_boundary
+            .filter(|_| self.application.mounted(&id))
+        {
+            self.application.view(&id, frame, area);
         }
     }
 

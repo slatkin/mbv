@@ -21,6 +21,8 @@
 
 use ratatui::layout::Rect;
 
+use crate::app::render::arrangements::chrome::RootFrame;
+
 /// Seekbar rect, the two divider status indicators that still have a click
 /// target (remote-session and mute), the volume pill's scroll target, and
 /// the mouse hit targets for the one-row playback header's transport
@@ -79,8 +81,6 @@ pub(crate) struct LayoutMain {
     /// mouse hit-testing resolve cells from this between frames.
     pub left_item_rows: Vec<Vec<usize>>,
     pub left_area: Rect,
-    /// The exact full-height trailing column reserved for Queue boundary resizing.
-    pub queue_boundary_area: Rect,
     /// The full area `App::render_home_list` was given (hero + pills + list,
     /// not just the inner list). The shell reads this to re-paint the
     /// mounted `HomeComponent`'s `view()` over the same area right after
@@ -186,8 +186,6 @@ pub(crate) struct FrameChromeGeometry {
     pub panel_content_area: Rect,
     /// Left panel (card + queue) column rect.
     pub left_area: Rect,
-    /// Exact full-height trailing column reserved for the boundary component.
-    pub queue_boundary_area: Rect,
     /// Right panel (tabs, player, library, status) rect.
     pub right_area: Rect,
     /// Full-column right-panel background rect (tabs/player/library/status).
@@ -208,6 +206,10 @@ pub(crate) struct FrameChromeGeometry {
     pub right_visible: bool,
     /// Whether the queue panel holds panel focus this frame.
     pub queue_focused: bool,
+    /// The root frame's panel placements for the current Panel mode (design
+    /// D1, task 1.3): data only, consumed by later panel slices and by the
+    /// mounted `QueueBoundaryComponent` (task 1.4).
+    pub root: RootFrame,
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.
@@ -218,4 +220,9 @@ pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
     pub main: LayoutMain,
     pub tabs_area: Rect,
+    /// The last fully rendered frame's root panel placements (`RootFrame`).
+    /// Published with the rest of the chrome checkpoint in
+    /// `App::compose_base_frame` and read by the sync pass (the queue
+    /// boundary's mount/rect source, task 1.4).
+    pub root_frame: RootFrame,
 }

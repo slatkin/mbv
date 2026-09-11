@@ -123,6 +123,16 @@ pub struct Model {
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     pub(super) home_section_pending: Option<HomeLatestSource>,
     pub(super) home_context_item: Option<mbv_core::api::EmbyItem>,
+    /// The last terminal size the sync pass applied resize side effects for
+    /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
+    /// size never spuriously resize; the draw path's size normalization is
+    /// picked up at the next sync pass.
+    pub(super) handled_terminal_size: (u16, u16),
+    /// Armed by the Resize observer (the real terminal-resize event) and
+    /// consumed by the next sync pass, which then also applies the mini-view
+    /// focus hand-off (task 1.2). Size normalization without a resize event
+    /// (a direct frame, a fixture) never arms it.
+    pub(super) pending_terminal_resize: bool,
     /// Fingerprint of the inputs `sync_queue` last projected into the mounted
     /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
     /// row vec (slot clone + per-row `format!`) on a tick where nothing the
@@ -393,6 +403,7 @@ impl Model {
         let home_section = App::load_prefs()["home_section"]
             .as_str()
             .and_then(HomeLatestSource::from_pref_key);
+        let initial_terminal_size = (app.terminal_width, app.terminal_height);
         let mut model = Self {
             app,
             application,
@@ -412,6 +423,8 @@ impl Model {
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
             home_context_item: None,
+            handled_terminal_size: initial_terminal_size,
+            pending_terminal_resize: false,
             last_queue_projection: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
@@ -476,6 +489,10 @@ fn apply_terminal_observer(
 ) {
     match event {
         TerminalObserverEvent::Resize { width, height } => {
+            // The pre-resize width is only known here (task 1.2): the sync
+            // pass consumes the armed flag and compares it against the size
+            // it last handled.
+            model.pending_terminal_resize = true;
             model.app.terminal_width = width;
             model.app.terminal_height = height;
             model.app.force_clear = true;

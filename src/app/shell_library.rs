@@ -193,7 +193,34 @@ impl Model {
 
     pub(super) fn sync_queue_boundary(&mut self) {
         let id = ComponentId::QueueBoundary;
-        let area = self.app.layout.main.queue_boundary_area;
+        // Task 1.4: the boundary is a two-panel-layout component only.
+        // `RootFrame` places it (with its one-column rect) in the Both layout;
+        // every other Panel mode unmounts it here so a mounted component
+        // never outlives its placement (design D1's mount rule).
+        if self.app.effective_panel_mode() != PanelMode::Both {
+            if self.application.mounted(&id) {
+                let _ = self.application.umount(&id);
+            }
+            return;
+        }
+        if !self.application.mounted(&id) {
+            self.application
+                .mount(
+                    id.clone(),
+                    Box::new(super::components::QueueBoundaryComponent::new()),
+                    vec![],
+                )
+                .expect("mount QueueBoundary");
+        }
+        // The boundary reads its rect from `RootFrame` (the previous full
+        // frame's placement -- the same paint signal the layout side channel
+        // used to carry).
+        let area = self
+            .app
+            .layout
+            .root_frame
+            .queue_boundary
+            .unwrap_or_default();
         let enabled = self.queue_boundary_mouse_eligible() && area.width == 1 && area.height > 0;
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(boundary) = comp

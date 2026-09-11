@@ -31,6 +31,38 @@ fn key(code: Key) -> Event<UserEvent> {
     })
 }
 
+/// Task 1.1: the saved-tab restore runs in the sync pass, before any draw.
+/// After one tick() + sync pass and without drawing, the pending tab is
+/// resolved; `render_main` no longer writes `self.tab`.
+#[test]
+fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
+    let mut app = crate::app::render::make_movie_app();
+    app.library_tab_pending = 1;
+    let mut harness = TickHarness::new(app);
+
+    // One production tick (no events reach the app) + the sync pass; no draw
+    // in between.
+    harness.inject(Event::User(UserEvent::Clock(Instant::now())));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        harness.model().app.library_tab_pending, 0,
+        "the pending tab is consumed"
+    );
+    assert_eq!(
+        harness.model().app.tab,
+        TabSelection::EmbyLibrary(0),
+        "the pending position resolves onto the loaded library"
+    );
+}
+
 fn queue_focused_harness() -> TickHarness {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
@@ -162,13 +194,22 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     assert_eq!(library_harness.model().application.focus(), Some(&child));
 
     let mut stub_app = make_app_stub();
+    // Task 1.1: the sync pass normalizes a stale Service-library destination
+    // before the focus pass routes, so this stub's index-0 tab (no libraries
+    // loaded) resolves to Home in the pass, and focus follows the mounted
+    // Home destination instead of falling through to UiRoot.
     stub_app.tab = TabSelection::EmbyLibrary(0);
     stub_app.panel_focus = PanelFocus::Library;
     let mut stub_harness = TickHarness::new(stub_app);
     stub_harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
+        stub_harness.model().app.tab,
+        TabSelection::Home,
+        "the sync pass normalizes the stale destination before routing"
+    );
+    assert_eq!(
         stub_harness.model().application.focus(),
-        Some(&ComponentId::UiRoot)
+        Some(&ComponentId::Home)
     );
 }
 
