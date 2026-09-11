@@ -60,24 +60,24 @@ one paint-free placement.
 *Unification:* removes the base-frame queue painting, the queue-only-only transport, and the
 `narrow_player` flag; one Queue playback panel in every queue-visible layout.
 
-- [ ] 3.1 Move the queue frame, title row and status pill row into `QueuePanel` (today's
+- [x] 3.1 Move the queue frame, title row and status pill row into `QueuePanel` (today's
   `QueueComponent`): delete `render_queue_panel_frame`/`render_queue_status` calls from `render_main`,
   paint the left backdrop from the panel, and move `LayoutMain.queue_{area,title_area,selected_item_rect}`
   into the component. Verify: `src/app/render/tests_queue.rs` and `queue_component_tests.rs` pass; the
   context-menu keyboard anchor for a queue row still opens at the selected row (existing test).
-- [ ] 3.2 Add `header_height` (always 1 in queue-visible layouts, idle included) to `QueuePanelInputs`
+- [x] 3.2 Add `header_height` (always 1 in queue-visible layouts, idle included) to `QueuePanelInputs`
   and offset `queue_panel_geometry` by it alongside the visual-slot and transport heights, so the Queue
   panel always starts below the Queue playback panel's placement plus its separator row. Until 3.5 lands,
   `render_main` leaves that header row blank. Verify: unit test in `arrangements/queue.rs` that the queue
   panel starts below the header row and its separator in idle, paused and playing states; at 24 rows
   `short_window_keeps_queue_in_left_column` and `short_queue_panel_drops_padding_before_rows` pass with
   re-derived (not loosened) thresholds.
-- [ ] 3.3 Derive `NowPlayingStatus { Playing, Paused, Idle }` once per frame next to
+- [x] 3.3 Derive `NowPlayingStatus { Playing, Paused, Idle }` once per frame next to
   `effective_playback_state()`, and extract `playback_host_label()` from `queue_title_model` (queue title
   uses it; no tracking suffix, no uppercasing). Verify: unit test of the three states (unreachable
   `!active && paused` → `Idle`); `queue_title_characterization_tests.rs` green unchanged; the label for an
   attached session has no ` · TRACKING`.
-- [ ] 3.4 Move the visual slot's image fetch out of `render_card`: the queue projection issues
+- [x] 3.4 Move the visual slot's image fetch out of `render_card`: the queue projection issues
   `fetch_card_image` for the now-playing item and projects image state; painting reads it only.
   Verify: a push test asserts one fetch per new now-playing key and none on repaint; `render_card`'s
   replacement paints from projected state in a buffer test with no `App` access.
