@@ -51,7 +51,7 @@
 //! | `NonHeroSidebarBody` | — | pinned nowhere at buffer level (see below) |
 //! | `QueueCardVisualizer` | — | pinned nowhere at buffer level (see below) |
 //! | `PlaybackRecess` | yes (wide Both, both bools) | `tests.rs` panel suites |
-//! | `PlaybackBottomRow` | — | `tests.rs` narrow/mini now-playing suites |
+//! | `PlaybackBottomRow` | yes (QueueOnly strip, mini queue) | — (pinned only here at buffer level) |
 //! | `PlaybackStatusPill` | — | pinned nowhere at buffer level (see below) |
 //! | `ArtworkPlaceholder` | — | `components/artwork_placeholder_tests.rs::artwork_placeholder_paints_requested_extent` |
 //! | `ArtworkLoadingPlaceholder` | — | `components/tv_wide_tests.rs` (unpainted portrait cells) |
