@@ -158,7 +158,7 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) -> Vec<
         let style = if *selected {
             Style::default()
                 .fg(palette::PILL_SELECTED_FG)
-                .bg(palette::PILL_SELECTED_BG)
+                .bg(palette::surface_colors(palette::Surface::PillChipSelected, false).fill)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(palette::PILL_FG)

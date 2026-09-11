@@ -208,7 +208,13 @@ pub(in crate::app) fn render_feeds_content(
             paint_feed_hero(f, hero_content_area, entry, focused, model.images_enabled);
         }
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::LibraryPanel,
+                    focused,
+                )
+                .fill),
+            ),
             list_panel,
         );
         // `list_area` is the inset content rect (row/hit geometry); the
