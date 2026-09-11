@@ -26,7 +26,11 @@ pub(in crate::app) fn render_confirm_modal_content(
         title,
         60,
         7,
-        super::super::super::palette::SURFACE_FOCUSED,
+        super::super::super::palette::surface_colors(
+            super::super::super::palette::Surface::PopupFrame,
+            false,
+        )
+        .fill,
     );
     let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
     f.render_widget(

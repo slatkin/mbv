@@ -308,8 +308,13 @@ pub(in crate::app) fn render_wide_tv_with_ctx(
     layout.tv_wide_list_area = list_area;
     if list_panel.height > 0 {
         f.render_widget(
-            Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(right_focused))),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::LibraryPanel,
+                    right_focused,
+                )
+                .fill),
+            ),
             list_panel,
         );
     }
@@ -512,7 +517,13 @@ fn render_tv_series_selection(
     let (detail_panel, detail_area) = wide_hero::wide_hero_hero_content_box(f, media_list_area);
     if focused {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_ACCENT_SOFT)),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::MainContentBox,
+                    focused,
+                )
+                .fill),
+            ),
             detail_panel,
         );
     }
@@ -571,7 +582,7 @@ fn render_tv_series_selection(
     episodes.set_geometry(paint_area, episode_list_area);
     episodes.set_paint_policy(WideMediaListPaintPolicy::new(
         focused,
-        SelectedRowSurface::OwningSurface,
+        SelectedRowSurface::OwningLibraryPane,
         None,
     ));
     Component::view(episodes, f, episode_list_area);

@@ -153,7 +153,7 @@ pub(in crate::app) fn render_library_routes_content(
         title,
         width,
         height,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
 
     let hint = "Enter select  ·  Esc back/close";

@@ -261,7 +261,13 @@ pub(in crate::app) fn render_audiobookshelf_podcast_content(
     let content_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
     if list_panel.height > 0 {
         frame.render_widget(
-            Block::default().style(Style::default().bg(palette::resolve_surface_focus(focused))),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::LibraryPanel,
+                    focused,
+                )
+                .fill),
+            ),
             list_panel,
         );
     }

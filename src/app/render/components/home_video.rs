@@ -69,7 +69,7 @@ pub(in crate::app::render) fn render_home_video_item(
     let title_y = row_y + if expanded { 2 } else { 0 };
 
     if expanded {
-        let bg = palette::resolve_surface_focus(focused);
+        let bg = palette::surface_colors(palette::Surface::InlineHero, focused).fill;
         f.render_widget(
             Block::default().style(Style::default().bg(bg)),
             Rect {

@@ -535,7 +535,7 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
             track_list.set_geometry(track_panel, track_content_area);
             track_list.set_paint_policy(WideMediaListPaintPolicy::new(
                 left_focused,
-                SelectedRowSurface::OwningSurface,
+                SelectedRowSurface::OwningLibraryPane,
                 None,
             ));
             Component::view(track_list, f, track_area);
@@ -546,7 +546,10 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     }
 
     f.render_widget(
-        ratatui::widgets::Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+        ratatui::widgets::Block::default().style(
+            Style::default()
+                .bg(palette::surface_colors(palette::Surface::LibraryColumn, false).fill),
+        ),
         browser_panel,
     );
     let right_pane = wide_hero::wide_hero_browser_pane(browser_panel, browser_area);
@@ -577,8 +580,13 @@ pub(in crate::app) fn render_wide_music_group_with_ctx(
     output.content_height = Some(browser_area.height as usize);
     if list_panel.height > 0 {
         f.render_widget(
-            ratatui::widgets::Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(right_focused))),
+            ratatui::widgets::Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::LibraryPanel,
+                    right_focused,
+                )
+                .fill),
+            ),
             list_panel,
         );
     }

@@ -21,7 +21,10 @@ use crate::app::types_playback::PlaybackState;
 pub(in crate::app) struct PlaybackProjection {
     pub state: PlaybackState,
     pub show_controls: bool,
-    pub panel_bg: Color,
+    /// The panel surface plus the site's own focus bit; the painter resolves
+    /// the fill through the surface table instead of carrying a bare colour.
+    pub panel: palette::Surface,
+    pub panel_focused: bool,
     pub narrow_player: bool,
     pub now_playing_title: Option<(String, Color)>,
     pub title_parts: Vec<(String, Color)>,
@@ -52,7 +55,10 @@ impl PlaybackComponent {
             projection: PlaybackProjection {
                 state: PlaybackState::default(),
                 show_controls: false,
-                panel_bg: palette::SURFACE_PLAYBACK,
+                // The pre-sync default: the panel's resting fill (the table's
+                // `PlaybackPanel` row, bool false).
+                panel: palette::Surface::PlaybackPanel,
+                panel_focused: false,
                 narrow_player: false,
                 now_playing_title: None,
                 title_parts: Vec::new(),
@@ -163,7 +169,8 @@ impl Component for PlaybackComponent {
                 player_h,
                 show_controls: self.projection.show_controls,
                 now_playing_title: self.projection.now_playing_title.clone(),
-                panel_bg: self.projection.panel_bg,
+                panel: self.projection.panel,
+                panel_focused: self.projection.panel_focused,
                 narrow_player: self.projection.narrow_player,
                 progress: (
                     self.projection.state.position_ticks,
@@ -238,7 +245,8 @@ mod tests {
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
             show_controls: true,
-            panel_bg: palette::SURFACE_PLAYBACK,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
@@ -293,7 +301,8 @@ mod tests {
         component.set_projection(PlaybackProjection {
             state: PlaybackState::default(),
             show_controls: true,
-            panel_bg: palette::SURFACE_PLAYBACK,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
             narrow_player: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
             title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],

@@ -23,12 +23,12 @@ fn progress_for_now_playing(state: &MediaSemanticState) -> Option<String> {
 ///
 /// `selected_bg` is not a free per-caller choice: the focused selected row
 /// "punches through" to the surface *containing* the panel that holds the
-/// list, so it must be that parent container's background. Every library
-/// rail plus Home and Feeds sits on the library backdrop (even while the
-/// list panel itself is focus-green), so they pass
-/// `palette::list_selected_row_bg()` (`SURFACE_BACKDROP`). Queue and nested
-/// workspace lists pass `palette::resolve_surface_focus(focused)` so their
-/// selected row follows their owning workspace surface.
+/// list, so it must be that parent container's background. The surface table
+/// owns the mapping: library rails plus Home and Feeds pass the `SelectedRow`
+/// row (the library backdrop, even while the list panel itself is
+/// focus-green), while queue and nested workspace lists resolve their owning
+/// column's selected-row identity (`SelectedRowOnQueueColumn` /
+/// `SelectedRowOnLibraryPane`) so the row follows that column's focus.
 ///
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's

@@ -17,10 +17,10 @@ use tuirealm::state::State;
 /// deliberately private: the shell only receives resolved semantic widths.
 ///
 /// The gap is the shared arrangement's existing `WIDE_HERO_PANE_GAP` gutter,
-/// so this component paints it with the backdrop it already showed
-/// (`palette::SURFACE_BACKDROP`, the right-panel backdrop), adding no divider,
-/// gutter, hover treatment, or wider hit region. It is the sole painter and
-/// gesture owner of those columns; the panes' own hit geometry excludes them.
+/// so this component paints it with the surface it already showed (the
+/// surface table's `WideSplitGutter` row), adding no divider, gutter, hover
+/// treatment, or wider hit region. It is the sole painter and gesture owner
+/// of those columns; the panes' own hit geometry excludes them.
 pub struct WideHeroBoundaryComponent {
     area: Rect,
     pane_origin_x: u16,
@@ -118,7 +118,13 @@ impl Component for WideHeroBoundaryComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         if self.enabled && area.width > 0 && area.height > 0 {
             frame.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+                Block::default().style(
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::WideSplitGutter,
+                        false,
+                    )
+                    .fill),
+                ),
                 area,
             );
         }

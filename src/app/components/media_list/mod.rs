@@ -192,12 +192,16 @@ impl MediaSemanticState {
 
 /// Which semantic surface should receive the selected-row treatment.
 ///
-/// The policy is deliberately closed: callers choose a named surface role,
-/// never a raw Ratatui style or colour.
+/// The policy is deliberately closed: callers choose a named surface identity,
+/// never a raw Ratatui style or colour. An owning-surface selected row
+/// resolves its containing column's focus pair, so the caller names which
+/// column it sits in; the painter maps each variant to the table's declared
+/// selected-row identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectedRowSurface {
     ListBackdrop,
-    OwningSurface,
+    OwningQueueColumn,
+    OwningLibraryPane,
 }
 
 /// Semantic paint policy for one `WideMediaList` view.

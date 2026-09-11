@@ -141,10 +141,14 @@ coverage.
 
 ## Tooling
 
+* **No bespoke scripting.** Do not add shell/awk/python checkers, self-tests for
+  them, CI jobs or Makefile targets that wrap them, and never use one as a proof
+  mechanism. Verify through the conventional unit-testing framework
+  (`cargo nextest run -p <pkg>`); a proof that needs a new script needs the
+  user to ask for it explicitly, per request.
 * check: `cargo check -p <package>`
 * test: `cargo nextest run -p <package>` (prefer nextest)
 * lint: `cargo clippy --workspace --all-targets`
-* size (pre-push only): `make check-code-file-lines` — run just before pushing, never as a per-task/CI/acceptance gate
 * format: `cargo fmt`
 * anything web related: `ketch` not curl
 * docs/concept discovery (ADRs, openspec, CONTEXT.md): `qmd query "..."` (collection `mbv`); `rg` only for exact strings

@@ -57,7 +57,7 @@ fn render_feeds_manage_list(
         title,
         width,
         height,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
 
     f.render_widget(
@@ -168,7 +168,7 @@ fn render_feeds_manage_form(
         title,
         width,
         height,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
 
     let field_style = |focused: bool| {

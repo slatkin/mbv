@@ -50,7 +50,7 @@ pub(in crate::app) fn render_multiselect_content(
         title,
         width,
         height,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
 
     let hint = "Space toggle  ·  Esc / Enter close";
