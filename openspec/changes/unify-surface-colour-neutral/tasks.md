@@ -52,10 +52,10 @@
 
 ## 5. Verify
 
-- [ ] 5.1 Gates: `cargo nextest run -p mbv`, `cargo check -p mbv`,
+- [x] 5.1 Gates: `cargo nextest run -p mbv`, `cargo check -p mbv`,
   `cargo clippy --workspace --all-targets`, `cargo fmt --all -- --check`,
   `ast-grep scan`, `ast-grep test`. No new warnings.
-- [ ] 5.2 Neutrality audit (D5): the three proofs run and recorded in the
+- [x] 5.2 Neutrality audit (D5): the three proofs run and recorded in the
   report — test-diff emptiness, multiset identity, conformance coverage — plus
   the residuals list (unpinned surfaces, the known SIGABRT flake, the bool
   seam's provenance note).
