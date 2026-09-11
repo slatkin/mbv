@@ -12,18 +12,18 @@
 //! sites of design D3 are enumerated here, with their current evidence:
 //!
 //! (a) **Fixed-fill sites** (focused == resting): the library column gutter
-//!     (`render/components/chrome.rs:61`, `SURFACE_BACKDROP` in every frame on
+//!     (`render/components/chrome.rs:39`, `SURFACE_BACKDROP` in every frame on
 //!     main) and the wide Music browser container
 //!     (`render/components/music_wide.rs:549`); the wide hero split gap
 //!     (`components/wide_hero_boundary.rs:121`); the selected-row punch-through
-//!     (`render/components/widgets.rs:151`, `list_rows.rs:341,354,383,469`,
+//!     (`render/components/widgets.rs:136`, `list_rows.rs:341,354,383,469`,
 //!     `media_list/wide.rs:202,268`); the context menu's selected row
 //!     (`render/components/context_menu.rs:38`); the recess rows
 //!     (`chrome_player.rs:122,158,239`, `artwork_placeholder.rs:9`,
 //!     `card.rs:111`); every chrome band (`chrome_status.rs`,
 //!     `queue.rs`, `widgets.rs`, `hero.rs`, `home.rs:402`, `chrome.rs`,
 //!     `chrome_tabs.rs:43`); the popup frame and its dim backdrop
-//!     (`modal_frame.rs:50`, `backdrop.rs:16-28`).
+//!     (`modal_frame.rs:47`, `backdrop.rs:8-19`).
 //! (b) **`SelectedRowSurface` policy family** (`components/media_list/mod.rs:198`):
 //!     `ListBackdrop` resolves `list_selected_row_bg()` (the `SelectedRow`
 //!     row), `OwningSurface` resolves the containing surface's focus pair
@@ -42,7 +42,7 @@
 //!     the two match arms to the one bool it effectively computes (D3(d)).
 //!
 //! One appearance main has that this single-bool resolver cannot carry is the
-//! Queue-only playback strip (`shell_draw.rs:286,297,316`): with no right
+//! Queue-only playback strip (`shell_draw.rs:285,296,315`): with no right
 //! column on screen, the panel body and its recess rows paint
 //! `SURFACE_CHROME` in both bool states. That is a mode-driven appearance, not
 //! a focus-driven one, and it is deliberately recorded rather than encoded:
@@ -74,7 +74,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         },
         // Main never follows focus here: the shell paints the right column's
         // whole gutter as the app backdrop in every frame
-        // (`render/components/chrome.rs:61`) and the wide Music browser
+        // (`render/components/chrome.rs:39`) and the wide Music browser
         // container does the same (`render/components/music_wide.rs:549`), so
         // the row is fixed at `SURFACE_BACKDROP`.
         Surface::LibraryColumn => Row {
@@ -103,7 +103,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         },
         // The library punch-through: the backdrop beneath the list panel
         // shows through, never the panel's focus green. Evidence:
-        // `render/components/widgets.rs:151`, `list_rows.rs:341,354,383,469`,
+        // `render/components/widgets.rs:136`, `list_rows.rs:341,354,383,469`,
         // the `SelectedRowSurface::ListBackdrop` arm at
         // `media_list/wide.rs:202`, and the grid cell at `wide.rs:268`.
         Surface::SelectedRow => Row {
@@ -183,7 +183,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         // The now-playing panel body: the projection at
         // `shell_playback.rs:47-51`, the pre-sync default at
         // `components/playback.rs:55`, and the Queue-only strip
-        // (`shell_draw.rs:286,297,316` — see the module note).
+        // (`shell_draw.rs:285,296,315` — see the module note).
         Surface::PlaybackPanel => Row {
             level: Level::ContentBody,
             focus: FocusSource::QueueColumn,
@@ -228,7 +228,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         },
         // Main paints this row whenever the panel is four rows high
         // (`render/components/chrome_player.rs:122,158`), in every mode; only
-        // its "On Now" title is Mini-only (`:127`).
+        // its "On Now" title is Mini-only (`:125`).
         Surface::PlaybackBottomRow => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
@@ -332,7 +332,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         },
         // --- popup ---
         // Every modal caller passes `SURFACE_FOCUSED` as its frame background
-        // (`render/components/modal_frame.rs:50` and its ten callers, e.g.
+        // (`render/components/modal_frame.rs:47` and its nine callers, e.g.
         // `confirm_modal.rs:29`, `selection_modal.rs:65,96`).
         Surface::PopupFrame => Row {
             level: Level::Popup,
