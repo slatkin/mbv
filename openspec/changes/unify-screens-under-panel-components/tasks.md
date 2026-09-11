@@ -81,7 +81,7 @@ one paint-free placement.
   `fetch_card_image` for the now-playing item and projects image state; painting reads it only.
   Verify: a push test asserts one fetch per new now-playing key and none on repaint; `render_card`'s
   replacement paints from projected state in a buffer test with no `App` access.
-- [ ] 3.5 Create `QueuePlaybackPanel`, mounted in every queue-visible layout (idle included), owning the
+- [x] 3.5 Create `QueuePlaybackPanel`, mounted in every queue-visible layout (idle included), owning the
   header row (status left, `on <host>` right, on `SURFACE_CHROME`), the visual slot
   (artwork/placeholder/visualizer) and the queue-column transport presentation, with placement: below
   100 columns stacked, 100+ side by side (slot left, 2-cell gap, panel height = max); while idle it paints
@@ -92,16 +92,16 @@ one paint-free placement.
   tests at 80 and 100+ columns showing `PLAYING`/`PAUSED`/`IDLE` and the target; an idle frame paints the
   header row and nothing else of the panel; a remote-attached frame with the Local scope selected names
   the remote target; the panel is unmounted in library-only.
-- [ ] 3.6 Idle collapse in every queue-visible layout: no visual slot or transport while idle (the
+- [x] 3.6 Idle collapse in every queue-visible layout: no visual slot or transport while idle (the
   connected-idle exception is deleted); paused keeps both; playback start restores both. Verify:
   `connected_idle_queue_only_keeps_panel_but_collapses_card` becomes the inverse assertion;
   `idle_queue_only_hides_card_and_panel_at_both_widths`, `idle_both_hides_card_and_reclaims_queue_rows`,
   `idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts` and
   `paused_queue_only_keeps_card_and_panel` (plus a `both` counterpart) pass at narrow, 80 and 100+.
-- [ ] 3.7 Pointer input on the Queue playback panel transport from its own retained geometry. Verify:
+- [x] 3.7 Pointer input on the Queue playback panel transport from its own retained geometry. Verify:
   tick integration test clicks play/pause and the seekbar in `both` and mini-view `queue-only`
   (`TogglePlayPause`, `SeekTo`); a click in a collapsed panel's rows emits nothing.
-- [ ] 3.8 Re-point the idle-feed open-link gate at the playback panel's presence instead of the panel
+- [x] 3.8 Re-point the idle-feed open-link gate at the playback panel's presence instead of the panel
   mode (`action.rs:104-118`, `shell.rs:284`). Verify: `src/app/action_tests.rs` and
   `src/app/tests_routing_matrix_playback.rs` rows: suppressed in idle `both` and `queue-only`, fires in
   idle `library-only`.
