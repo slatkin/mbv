@@ -38,7 +38,7 @@ pub(in crate::app) fn render_save_playlist_content(
         title_text,
         52,
         7,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
     let label = "Name: ";
     let cursor = "▏";

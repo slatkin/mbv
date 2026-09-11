@@ -26,7 +26,7 @@ pub(in crate::app) fn render_daemon_lost_modal_content(
         " Daemon Lost ",
         64,
         10,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
 
     let mut lines = vec![Line::from(Span::styled(
