@@ -189,8 +189,8 @@ pub(in crate::app) fn render_plain_rows(
         );
     }
 
-    if plan.should_draw_selection_markers() {
-        crate::app::render::components::list_rows::draw_column_selection_markers(
+    if plan.should_extend_selection_background() {
+        crate::app::render::components::list_rows::draw_column_selection_bleed(
             f,
             content_area,
             cursor,

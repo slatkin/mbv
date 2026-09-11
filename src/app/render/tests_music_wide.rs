@@ -160,8 +160,8 @@ fn wide_music_selected_row_fills_the_whole_panel_width_when_focused() {
     let buffer = terminal.backend().buffer();
     // The canonical rail paints into the full panel row: `x` is 2 columns
     // (`PANE_PAD_X`) left of the padded content rect the layout publishes, so
-    // the selected background reaches the panel border (the accent marker
-    // glyph is gone, remove-marker-bleed), and the title lands at the padded
+    // the selected background reaches the panel border (no marker glyph),
+    // and the title lands at the padded
     // content edge (one column left of the old bespoke `padded_rect` + extra
     // leading space).
     let paint_x = rect.x - 2;

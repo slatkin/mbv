@@ -81,8 +81,7 @@ pub(in crate::app::render) fn render_home_video_item(
         );
     }
 
-    // (remove-marker-bleed: the accent marker glyph at column 0 is gone;
-    // the selected row's background treatment alone marks selection.)
+    // The selected row's background treatment alone marks selection.
     let text_inset = if selected {
         SELECTED_BLOCK_SIDE_PADDING
     } else {

@@ -30,8 +30,7 @@ fn progress_for_now_playing(state: &MediaSemanticState) -> Option<String> {
 /// workspace lists pass `palette::resolve_surface_focus(focused)` so their
 /// selected row follows their owning workspace surface.
 ///
-/// Row geometry: the title text is indented 2 columns in — the old accent
-/// marker column is gone (remove-marker-bleed), leaving a 2-column quiet
+/// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
 /// background fills the whole row via `List`'s row-style fill and bleeds to
 /// both panel edges.
@@ -65,8 +64,7 @@ pub(in crate::app) fn wide_media_row<Target>(
         } => {
             // Canonical row geometry:
             // `[2-col indent][title…]  [FOAM trailing]  [green duration]`
-            // with the title at column 2 (the accent marker column is gone,
-            // remove-marker-bleed) and a quiet gap before the right-aligned
+            // with the title at column 2 and a quiet gap before the right-aligned
             // duration.
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;

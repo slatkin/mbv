@@ -473,8 +473,7 @@ fn feed_snapshot(width: u16, height: u16) -> String {
 
 fn selected_feed_row_region(output: &str, title: &str) -> String {
     let lines: Vec<_> = output.lines().collect();
-    // remove-marker-bleed: the selected ordinary row is identified by its
-    // 2-column selected inset instead of the removed accent marker glyph.
+    // The selected ordinary row is identified by its 2-column selected inset.
     let row = lines
         .iter()
         .position(|line| line.starts_with("  ") && line.contains(title))
@@ -674,7 +673,7 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
     assert_eq!(region.matches("Video One").count(), 1);
     assert!(
         region.starts_with("  "),
-        "ordinary selected row keeps the 2-col selected inset (remove-marker-bleed)"
+        "ordinary selected row keeps the 2-col selected inset"
     );
     assert!(!region.contains('▁') && !region.contains('▔'));
 }

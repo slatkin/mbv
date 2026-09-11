@@ -231,8 +231,8 @@ pub(in crate::app) fn render_letter_grouped_rows(
         );
     }
 
-    if plan.should_draw_selection_markers() {
-        super::list_rows::draw_column_selection_markers(
+    if plan.should_extend_selection_background() {
+        super::list_rows::draw_column_selection_bleed(
             f,
             content_area,
             cursor,

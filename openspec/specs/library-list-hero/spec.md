@@ -10,19 +10,19 @@ single-column browser otherwise.
 
 ### Requirement: Selected cell indicator
 
-The selected cell in any list SHALL be identified by the unified selection marker — a thin AQUA
-block at the list's outer edge, directional in two-column mode (`▎` at the left column's left edge,
-`▏` at the right column's right edge) — rather than by a `▌` left-edge mark and a `##` title prefix.
-The `▌` mark and `##` prefix SHALL NOT appear on any selected cell. The cell's background SHALL use
-the ordinary list background, not the media-selected background — that treatment is reserved for the
-hero.
+The selected cell in any list SHALL be identified by the selected row's
+background alone, bleeding to the list's outer edge (a 2-column extension
+into the panel margin in single-column mode, directional in two-column
+mode), rather than by a marker glyph, a `▌` left-edge mark, or a `##` title
+prefix. No marker glyph SHALL appear on any selected cell. The marker-free
+background-bleed treatment is shared by ordinary rows, the feed group
+picker, and Wide hero list panes.
 
-#### Scenario: Selected cell marked without a background change
+#### Scenario: Selected cell marked without a marker glyph
 
 - **WHEN** a cell in a list is the current selection
-- **THEN** it shows the thin AQUA edge marker at its list edge, with the list's ordinary
-  (non-selected) background
-- **AND** it does NOT show a `▌` mark or a `##` title prefix
+- **THEN** its selected-row background extends to the list's outer edge
+- **AND** it does NOT show a marker glyph, a `▌` mark, or a `##` title prefix
 
 ### Requirement: Inline replacement tracks the current selection independent of scroll position
 
@@ -366,7 +366,7 @@ one painter.
 #### Scenario: Selected video has no metadata
 
 - **WHEN** the selected video has no runtime, genre, or overview
-- **THEN** the picker still renders one row per video with one selected marker
+- **THEN** the picker still renders one row per video with one selected row treatment
 - **AND** no framing or border row is painted outside that selection treatment
 
 #### Scenario: Tall selected row reaches the viewport bottom

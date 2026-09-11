@@ -2,7 +2,7 @@
 //! the row/cell padding the lists share, and the selected-row background
 //! extension they compose with, extracted from and shared by movies/TV's list
 //! renderers (`list_letter_groups.rs`, `media_list.rs`, both consumers of
-//! `item_cell_spans`/`draw_column_selection_markers below) and reused by the
+//! `item_cell_spans`/`draw_column_selection_bleed` below) and reused by the
 //! audiobookshelf show grid. `ListRenderCtx`/`DisplayRow` are its row
 //! model; `render_right_scrollbar` (`widgets.rs`) is its `Scrollbar`.
 //! Screens still call these functions directly and record their own row hit
@@ -183,7 +183,10 @@ impl<'a> InlineReplacementPlan<'a> {
             .collect()
     }
 
-    pub(in crate::app::render) fn should_draw_selection_markers(&self) -> bool {
+    /// Indicates whether the selected row's background extension should be
+    /// painted this frame: suppressed while an inline hero replaces the row's
+    /// own area, so the selected-row treatment does not fight the hero block.
+    pub(in crate::app::render) fn should_extend_selection_background(&self) -> bool {
         self.detail_rows == 0
     }
 }
@@ -330,7 +333,7 @@ impl LibraryListRenderCtx {
 /// space; the selected cell carries the library backdrop from
 /// `palette::list_selected_row_bg()` in both one- and two-column mode. The
 /// selected row's background is extended to the list's outer edge, outside
-/// the row's own content area, by `draw_column_selection_markers`.
+/// the row's own content area, by `draw_column_selection_bleed`.
 pub(in crate::app::render) fn build_list_row_spans(
     title: String,
     dur_str: String,
@@ -391,7 +394,7 @@ pub(in crate::app::render) fn item_cell_spans(
 }
 
 /// The screen rect of the selected cell in a column-aware list, derived from
-/// the same `item_rows`/`row_offset` inputs `draw_column_selection_markers`
+/// the same `item_rows`/`row_offset` inputs `draw_column_selection_bleed`
 /// consumes plus the cell-width/column-gap geometry the renderer already
 /// computed. Returns `None` when the cursor isn't on screen (e.g. it sits in
 /// a filtered-out bucket).
@@ -425,16 +428,16 @@ pub(in crate::app::render) fn selected_cell_rect(
 /// Draws the library list's selected-row background extension after the
 /// list has rendered, at the panel's outer edge: the left edge in single-column
 /// mode or for a left-column selection, the right edge for a right-column
-/// selection (symmetric). The background is extended to cover the gap
-/// between the marker and the cell content.
-pub(in crate::app::render) fn draw_column_selection_markers(
+/// selection (symmetric). The background is extended 2 columns into the panel
+/// margin so selection reaches the list's outer edge.
+pub(in crate::app::render) fn draw_column_selection_bleed(
     f: &mut Frame,
     content_area: Rect,
     cursor: usize,
     item_rows: &[Vec<usize>],
     row_offset: usize,
 ) {
-    draw_column_selection_markers_with_background(
+    draw_column_selection_bleed_with_background(
         f,
         content_area,
         cursor,
@@ -446,10 +449,9 @@ pub(in crate::app::render) fn draw_column_selection_markers(
 
 /// Draws the selected row's background extension with the selected row's
 /// surface. Most catalog lists use the library backdrop; Wide hero Feeds
-/// rows use their focus-resolved surface instead.
-/// (remove-marker-bleed: the accent glyph is gone; what remains is the
-/// selected row's background bleeding 2 columns into the panel margin.)
-pub(in crate::app::render) fn draw_column_selection_markers_with_background(
+/// rows use their focus-resolved surface instead. The background bleeds
+/// 2 columns into the panel margin.
+pub(in crate::app::render) fn draw_column_selection_bleed_with_background(
     f: &mut Frame,
     content_area: Rect,
     cursor: usize,
