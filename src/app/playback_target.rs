@@ -107,6 +107,20 @@ impl PlaybackTarget {
     }
 }
 
+/// The now-playing status word's source (design D10; folded change D2):
+/// derived once per frame next to `effective_playback_state()` and consumed
+/// by the Queue playback panel's header row and the idle collapse.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::app) enum NowPlayingStatus {
+    /// Active and not paused.
+    Playing,
+    /// Active and paused.
+    Paused,
+    /// No transport active. A stale `paused` flag on an inactive transport
+    /// is unreachable in practice and reads as `Idle`.
+    Idle,
+}
+
 impl App {
     /// Whether the connected transport is currently paused. For remote
     /// sessions, returns true once a single API poll has observed
@@ -176,6 +190,19 @@ impl App {
         }
     }
 
+    /// Derives the now-playing header status from the effective playback
+    /// state: active-and-unpaused `Playing`, active-and-paused `Paused`,
+    /// inactive `Idle` (a paused flag on an inactive transport is
+    /// unreachable and collapses to `Idle`).
+    pub(in crate::app) fn now_playing_status(&self) -> NowPlayingStatus {
+        let state = self.effective_playback_state();
+        match (state.active, state.paused) {
+            (true, false) => NowPlayingStatus::Playing,
+            (true, true) => NowPlayingStatus::Paused,
+            (false, _) => NowPlayingStatus::Idle,
+        }
+    }
+
     pub(super) fn pending_playback_slot(&self) -> Option<mbv_core::playback_queue::QueueSlotId> {
         self.queue_for_scope(self.playing_queue_scope())
             .pending_playback_slot
@@ -187,5 +214,39 @@ impl App {
         } else {
             super::PlaybackState::default()
         }
+    }
+}
+
+#[cfg(test)]
+mod now_playing_status_tests {
+    use super::*;
+    use crate::app::tests::make_app_stub;
+
+    fn app() -> App {
+        make_app_stub()
+    }
+
+    fn set_player(app: &App, active: bool, paused: bool) {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = active;
+        status.paused = paused;
+    }
+
+    #[test]
+    fn now_playing_status_covers_the_three_states() {
+        // Idle: nothing active — an unreachable stale `paused` flag still
+        // reads as Idle.
+        let app = app();
+        assert_eq!(app.now_playing_status(), NowPlayingStatus::Idle);
+        set_player(&app, false, true);
+        assert_eq!(app.now_playing_status(), NowPlayingStatus::Idle);
+
+        // Playing.
+        set_player(&app, true, false);
+        assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
+
+        // Paused counts as active.
+        set_player(&app, true, true);
+        assert_eq!(app.now_playing_status(), NowPlayingStatus::Paused);
     }
 }

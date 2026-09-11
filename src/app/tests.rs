@@ -233,6 +233,8 @@ pub(crate) fn make_app_stub() -> App {
         card_image_loading: std::collections::HashSet::new(),
         last_card_height: 0,
         last_card_width: 0,
+        queue_card_projection:
+            crate::app::render::components::card::QueueCardProjection::default(),
         card_image_tx,
         card_image_rx,
         resize_register_tx,
@@ -565,10 +567,13 @@ fn aggregate_surfaces_do_not_bleed_across_destinations() {
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
     term.draw(|f| app.compose_base_frame(f, None)).unwrap();
 
-    let main = &app.layout.main;
+    let _main = &app.layout.main;
     // Cross-surface bleed check: a nonzero queue area must not also be a
-    // nonzero music wide area (they are mutually exclusive destinations).
-    let queue_active = main.queue_area.width > 0 && main.queue_area.height > 0;
+    // nonzero music wide area (they are mutually exclusive destinations). The
+    // queue placement comes from the paint-free checkpoint (task 3.1 moved
+    // the component mirror out of `LayoutMain`).
+    let queue_placement = app.queue_panel_placement().panel_area;
+    let queue_active = queue_placement.width > 0 && queue_placement.height > 0;
     let music_wide_active = app.is_right_panel_wide();
     // A stub may render a degenerate frame; the invariant is that neither
     // surface's geometry is written by the other's producer.

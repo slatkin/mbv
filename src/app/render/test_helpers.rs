@@ -1,7 +1,9 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
-use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
+use crate::app::components::{
+    BrowserComponent, ComponentId, MusicWorkspaceComponent, QueueComponent, TvWorkspaceComponent,
+};
 use crate::app::layout::{AppLayout, LayoutPlayback};
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
@@ -294,39 +296,68 @@ pub fn render_view_to_terminal(
     width: u16,
     height: u16,
 ) -> (Terminal<TestBackend>, LayoutMain) {
-    // Mirror App::render(), which syncs terminal_width from the drawn Rect
-    // before render_main runs -- without this, effective_panel_mode()/
-    // effective_panel_focus() see whatever width the app was constructed
-    // with instead of the width this call is actually rendering at. Only
-    // terminal_width is touched here (the historical helper contract): the
-    // terminal-normalization side effects of `compute_frame_layout` (image
-    // cache clears, mini-view focus, queue-column clamping, terminal_height)
-    // would change card reservation geometry for tests that render a view
-    // at a different height than the stub default.
+    // Mirror the real shell path (task 3.1): the sync pass + `draw_frame`,
+    // which composes the base frame and paints the mounted components —
+    // including the queue panel, which now paints its own surface. Only
+    // terminal_width is touched before the Model is built (the historical
+    // helper contract); the shell path itself normalizes terminal size.
     app.terminal_width = width;
+    let mut model = Model::new(std::mem::replace(app, make_app_stub()));
+    model.sync_mounted_surfaces();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
-    term.draw(|f| {
-        // Root/chrome geometry comes from the same authoritative paint-free
-        // computation the live seam uses (task 2.1a).
-        let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, height));
-        layout.panel_area = chrome.panel_area;
-        layout.panel_content_area = chrome.panel_content_area;
-        app.render_main(
-            f,
-            Rect::new(0, 0, width, height),
-            &chrome,
-            &mut layout,
-            &mut LayoutPlayback::default(),
-            0,
-            false,
-            &None,
-            None,
-        );
-    })
-    .unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    let layout = model.app.layout.main.clone();
+    *app = model.app;
     (term, layout)
+}
+
+/// Queue panel geometry the mounted `QueuePanel` retained after a real shell
+/// draw (task 3.1): the framed list content area and the title band. The
+/// `LayoutMain.queue_*` mirror is gone — the panel owns its geometry.
+#[derive(Clone, Copy, Debug)]
+pub struct QueuePanelView {
+    pub content_area: Rect,
+    pub title_area: Option<Rect>,
+}
+
+/// Read the queue panel's component-retained geometry from a model.
+pub fn queue_panel_view(model: &Model) -> QueuePanelView {
+    let queue = model
+        .application
+        .get_component(&crate::app::components::ComponentId::Queue)
+        .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+        .expect("QueueComponent mounted");
+    QueuePanelView {
+        content_area: queue.content_area(),
+        title_area: queue.test_title_area(),
+    }
+}
+
+/// Render one frame through the real shell path (sync pass + `draw_frame`,
+/// which composes the base frame and paints the mounted `QueuePanel`) and
+/// return the terminal plus the panel's component-retained geometry. `app` is
+/// restored afterwards, so tests can keep reading published `AppLayout`
+/// fields.
+pub fn render_queue_view_to_terminal(
+    app: &mut App,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, QueuePanelView) {
+    // Only terminal_width is touched before the Model is built (the
+    // historical helper contract): the queue panel's paint pass reads the
+    // terminal sizes `compose_base_frame` normalized, so the placement
+    // follows the drawn frame while the card's reservation geometry keeps
+    // the stub's default height cap.
+    app.terminal_width = width;
+    let mut model = Model::new(std::mem::replace(app, make_app_stub()));
+    model.sync_mounted_surfaces();
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    let view = queue_panel_view(&model);
+    *app = model.app;
+    (term, view)
 }
 
 pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {

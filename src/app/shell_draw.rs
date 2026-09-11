@@ -4,10 +4,12 @@ use crate::app::layout::{
 };
 use crate::app::render::arrangements::chrome::{
     chrome_geometry, queue_playback_rows, ChromeGeometryInput, PLAYER_BOX_HEIGHT,
+    QUEUE_PLAYBACK_HEADER_ROWS,
 };
-use crate::app::render::arrangements::queue::{queue_panel_geometry, QueuePanelInputs};
-use crate::app::render::components::queue::render_queue_status;
-use crate::app::render::components::widgets::{render_queue_panel_frame, right_panel_content_area};
+use crate::app::render::arrangements::queue::{
+    queue_panel_geometry, QueuePanelGeometry, QueuePanelInputs,
+};
+use crate::app::render::components::widgets::right_panel_content_area;
 use crate::app::{palette, App, PanelMode};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -74,6 +76,40 @@ impl App {
             playback_active: self.effective_playback_state().active,
             transport_connected: self.connected_session_id.is_some()
                 || self.cast_attachment.is_some(),
+        })
+    }
+
+    /// The Queue panel's placement for the current frame (task 3.1): the
+    /// paint-free chrome checkpoint plus the last published card geometry,
+    /// through the shared `queue_playback_rows` + `queue_panel_geometry`
+    /// helpers (the same single source the root placements consume, task
+    /// 3.2's header-row offset included). The queue column's playback rows
+    /// come from the last published card geometry: authoritative once
+    /// `compose_base_frame` has published the current frame's card render
+    /// (the queue panel's paint pass), one frame stale in the sync pass
+    /// (the card's size is paint-coupled until the visual slot moves into
+    /// the Queue playback panel, tasks 3.4/3.5).
+    pub(in crate::app) fn queue_panel_placement(&self) -> QueuePanelGeometry {
+        let area = Rect::new(0, 0, self.terminal_width, self.terminal_height);
+        let chrome = self.compute_chrome_geometry(area);
+        let mode = self.effective_panel_mode();
+        let is_queue_only = mode == PanelMode::QueueOnly;
+        let playback = self.effective_playback_state();
+        let show_controls = playback.active
+            || self.connected_session_id.is_some()
+            || self.cast_attachment.is_some();
+        let playback_rows = queue_playback_rows(
+            is_queue_only,
+            is_queue_only && chrome.left_area.width >= 100,
+            self.layout.main.card.height,
+            playback.active,
+            show_controls,
+        );
+        queue_panel_geometry(QueuePanelInputs {
+            left_content: chrome.left_content,
+            header_height: QUEUE_PLAYBACK_HEADER_ROWS,
+            card_height: playback_rows,
+            narrow_player_height: 0,
         })
     }
 
@@ -214,7 +250,7 @@ impl App {
             player_area: _,
             status_area: _,
             right_visible,
-            queue_focused,
+            queue_focused: _,
             root: _,
         } = *chrome;
         // Header row removed — the tab bar above indicates current location.
@@ -226,8 +262,8 @@ impl App {
         // painted solely by the mounted `PlaybackComponent` (row 3.9).
         self.paint_legacy_chrome(f, chrome);
 
-        let (lib_area, queue_geometry) = if self.effective_panel_mode() == PanelMode::LibraryOnly {
-            (right_area, Default::default())
+        let lib_area = if self.effective_panel_mode() == PanelMode::LibraryOnly {
+            right_area
         } else {
             // The card fills the top of the left column; the queue list takes
             // the rows below it. Short terminals keep that same structure.
@@ -235,8 +271,10 @@ impl App {
             let is_wide = is_queue_only && left_area.width >= 100;
             // The queue card is a now-playing visual, not a selected-item
             // preview. Collapse it whenever playback is idle in every layout
-            // that shows the queue, including Both and narrow mini view.
-            let idle_collapse = !self.effective_playback_state().active;
+            // that shows the queue, including Both and narrow mini view. The
+            // status derives once per frame next to `effective_playback_state`
+            // (task 3.3): paused counts as active, so the card stays.
+            let idle_collapse = self.now_playing_status() == crate::app::NowPlayingStatus::Idle;
             // The card's cache/size/fetch operation is authoritative for its
             // dimensions. In an idle queue-visible frame there is no card to
             // paint, so publish zero geometry without entering the renderer
@@ -325,23 +363,14 @@ impl App {
             }
 
             // Both mode keeps the panel in the right column, so the left
-            // queue only ever sits below the card there. The rows the queue
-            // column spends above the queue panel are derived once, from the
-            // same shared helper the root placements consume (`chrome.rs`).
-            let playback_rows = queue_playback_rows(
-                is_queue_only,
-                is_wide,
-                layout.card.height,
-                !idle_collapse,
-                show_controls,
-            );
-
-            let queue_geometry = queue_panel_geometry(QueuePanelInputs {
-                left_content,
-                card_height: playback_rows,
-                narrow_player_height: 0,
-            });
-            (right_area, queue_geometry)
+            // queue only ever sits below the card there. The queue panel no
+            // longer places itself here: the mounted `QueuePanel` paints the
+            // whole queue surface (frame, title, status, list) after the base
+            // frame publishes this frame's card geometry (task 3.1), placing
+            // itself below the Queue playback panel's placement plus its
+            // separator row (task 3.2) through the shared
+            // `queue_playback_rows`/`queue_panel_geometry` helpers.
+            right_area
         };
 
         // Apply the shared horizontal padding once here, at the single point
@@ -363,20 +392,6 @@ impl App {
         // (`render_wide_music_group`), which `list.rs` still branches to
         // internally before reaching the inline presentation path.
 
-        if self.effective_panel_mode() != PanelMode::LibraryOnly {
-            render_queue_panel_frame(f, queue_geometry.panel_area, queue_focused);
-            layout.queue_title_area = queue_geometry.title_area;
-            layout.queue_area = queue_geometry.content_area;
-            layout.queue_selected_item_rect = None;
-            if let Some(pill_row) = queue_geometry.pill_row {
-                render_queue_status(
-                    f,
-                    pill_row,
-                    self.playlist_status_spans(),
-                    self.autosave_status_spans(),
-                );
-            }
-        }
         if right_visible {
             self.render_library(f, render_lib_area, layout, cursor_scroll);
         }

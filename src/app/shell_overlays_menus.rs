@@ -2,7 +2,8 @@ use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
     BrowserComponent, ComponentId, ContextMenuComponent, HomeComponent, LibraryRoutesComponent,
-    MultiselectComponent, OverlayId, PopupId, SelectionModalComponent, ShellRequest,
+    MultiselectComponent, OverlayId, PopupId, QueueComponent, SelectionModalComponent,
+    ShellRequest,
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{
@@ -78,6 +79,16 @@ impl Model {
             })
     }
 
+    /// Like `home_menu_geometry`, but for the mounted `QueueComponent` (task
+    /// 3.1, design D11): the queue panel answers the context-menu keyboard
+    /// anchor from its own retained geometry, not a shell mirror.
+    fn queue_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
+        self.application
+            .get_component(&ComponentId::Queue)
+            .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+            .map(|queue| (queue.content_area(), queue.selected_row_rect()))
+    }
+
     /// Compute the context menu's painted rect from the current anchor/entries
     /// and the owning surface's geometry. Replaces the old `layout.context_menu_rect`
     /// global written during `App::render` (task 5.3c); the component now owns
@@ -100,9 +111,7 @@ impl Model {
                             None => (layout.main.left_area, layout.main.selected_item_rect),
                         },
                     },
-                    PanelFocus::Queue => {
-                        (layout.main.queue_area, layout.main.queue_selected_item_rect)
-                    }
+                    PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),
                 };
                 (panel, selected)
             }
@@ -127,7 +136,10 @@ impl Model {
                         }
                     }
                     PanelFocus::Library => layout.main.left_area,
-                    PanelFocus::Queue => layout.main.queue_area,
+                    PanelFocus::Queue => self
+                        .queue_menu_geometry()
+                        .map(|(panel, _)| panel)
+                        .unwrap_or_default(),
                 };
                 (panel, None)
             }

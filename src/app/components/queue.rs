@@ -1,5 +1,6 @@
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Style;
+use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
@@ -20,6 +21,9 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::palette;
+use crate::app::render::arrangements::queue::queue_panel_subareas;
+use crate::app::render::components::queue::render_queue_status;
+use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{
     render_queue_body, render_queue_title_content, QueuePresentation, QueueRenderGeometry,
     QueueTitleModel,
@@ -46,10 +50,24 @@ pub struct QueueComponent {
     carrier: MediaListCarrier<QueueSlotId>,
     scope: QueueScope,
     focused: bool,
+    /// The panel surface's focused bit, projected per frame from the shell's
+    /// panel-focus fact (the same value the legacy base frame used for the
+    /// frame fill, task 3.1). The body rows keep the framework focus state;
+    /// a mounted overlay blurs the component without changing the column's
+    /// focused surface, exactly as before.
+    frame_focused: bool,
     empty_text: String,
     title: Option<QueueTitleModel>,
     title_area: Option<Rect>,
     area: Rect,
+    /// The framed list content area the panel derives from its placement each
+    /// `view()` (component-retained geometry, task 3.1): the list body, the
+    /// empty-state text, and the context-menu keyboard anchor panel.
+    content_area: Rect,
+    /// The projected status pill row (playlist source + autosave), pushed by
+    /// the queue projection and painted at the panel's own status row.
+    status_playlist: Vec<Span<'static>>,
+    status_autosave: Option<Vec<Span<'static>>>,
     geometry: QueueRenderGeometry,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
@@ -72,10 +90,14 @@ impl QueueComponent {
             carrier: MediaListCarrier::new(Presentation::Wide),
             scope: QueueScope::Local,
             focused: false,
+            frame_focused: false,
             empty_text: String::new(),
             title: None,
             title_area: None,
             area: Rect::default(),
+            content_area: Rect::default(),
+            status_playlist: Vec::new(),
+            status_autosave: None,
             geometry: QueueRenderGeometry::default(),
             pending_slot: None,
             drag_grab: None,
@@ -160,8 +182,35 @@ impl QueueComponent {
         self.area = area;
     }
 
-    pub(in crate::app) fn set_title_area(&mut self, area: Option<Rect>) {
-        self.title_area = area;
+    /// Project the panel surface's focused bit (task 3.1): the same panel-
+    /// focus fact the legacy base frame used for the frame fill.
+    pub(in crate::app) fn set_frame_focused(&mut self, focused: bool) {
+        self.frame_focused = focused;
+    }
+
+    /// Project the status pill row (playlist source + autosave), painted at
+    /// the panel's own status row each `view()` (task 3.1).
+    pub(in crate::app) fn set_status_pills(
+        &mut self,
+        playlist: Vec<Span<'static>>,
+        autosave: Option<Vec<Span<'static>>>,
+    ) {
+        self.status_playlist = playlist;
+        self.status_autosave = autosave;
+    }
+
+    /// The framed list content area the panel retained from its last paint:
+    /// the context-menu anchor's panel rect and the list body's own geometry
+    /// (task 3.1; the `LayoutMain.queue_area` mirror is gone).
+    pub(in crate::app) fn content_area(&self) -> Rect {
+        self.content_area
+    }
+
+    /// Test-only: the framed title band the panel retained from its last
+    /// paint.
+    #[cfg(test)]
+    pub(in crate::app) fn test_title_area(&self) -> Option<Rect> {
+        self.title_area
     }
 
     fn cursor_message(&self) -> Option<Msg> {
@@ -198,7 +247,7 @@ impl QueueComponent {
     /// carrier's presentation seam.
     fn ensure_carrier(&mut self) {
         self.carrier
-            .ensure_presentation(Presentation::Wide, self.area.height.max(1) as usize);
+            .ensure_presentation(Presentation::Wide, self.content_area.height.max(1) as usize);
     }
 
     fn move_cursor(&mut self, delta: i64) -> Option<Msg> {
@@ -252,10 +301,11 @@ impl QueueComponent {
                 return self.move_cursor(1);
             }
             Key::PageUp if key.modifiers.is_empty() => {
-                return self.move_cursor(-(self.area.height.saturating_sub(1).max(1) as i64));
+                return self
+                    .move_cursor(-(self.content_area.height.saturating_sub(1).max(1) as i64));
             }
             Key::PageDown if key.modifiers.is_empty() => {
-                return self.move_cursor(self.area.height.saturating_sub(1).max(1) as i64);
+                return self.move_cursor(self.content_area.height.saturating_sub(1).max(1) as i64);
             }
             Key::Home if key.modifiers.is_empty() => {
                 self.delegate_row_local_input(RowLocalInput::First, None);
@@ -491,11 +541,22 @@ impl Default for QueueComponent {
 
 impl Component for QueueComponent {
     fn view(&mut self, frame: &mut Frame, area: ratatui::layout::Rect) {
-        // The shell passes the current layout area every frame. Never reuse the
-        // previous area when this panel is hidden or resized: stale geometry
-        // would repaint the old queue panel and leave a ghost behind.
+        // The shell passes this panel's `RootFrame`-derived placement every
+        // frame (task 3.1). Never reuse the previous placement when this panel
+        // is hidden or resized: stale geometry would repaint the old queue
+        // panel and leave a ghost behind.
         self.area = area;
-        self.ensure_carrier();
+        // Component-retained geometry (task 3.1): the title band, status pill
+        // row and framed content area derive from the placement through the
+        // shared arrangement helper, replacing the `LayoutMain.queue_*`
+        // mirror.
+        let (content_area, title_area, pill_row, _title_reserved) = queue_panel_subareas(area);
+        self.content_area = content_area;
+        self.title_area = title_area;
+        // The panel fills its own placement: the left column's queue-panel
+        // backdrop (moved from `render_main`'s `render_queue_panel_frame`,
+        // task 3.1).
+        render_queue_panel_frame(frame, area, self.frame_focused);
         self.geometry = QueueRenderGeometry::default();
         if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
             render_queue_title_content(frame, title_area, title, &mut self.geometry);
@@ -509,21 +570,32 @@ impl Component for QueueComponent {
             self.scope_regions
                 .push(self.geometry.scope_remote_area, QueueScope::Remote);
         }
+        // The status pill row the projection pushed (moved from
+        // `render_main`'s `render_queue_status`, task 3.1).
+        if let Some(pill_row) = pill_row {
+            render_queue_status(
+                frame,
+                pill_row,
+                self.status_playlist.clone(),
+                self.status_autosave.clone(),
+            );
+        }
+        self.ensure_carrier();
         render_queue_body(
             frame,
-            area,
+            content_area,
             QueuePresentation::Wide(self.carrier.wide_mut()),
             self.focused,
             self.throbber,
         );
-        if area.height < 1 {
+        if content_area.height < 1 {
             return;
         }
         if self.carrier.is_empty() {
             frame.render_widget(
                 Paragraph::new(self.empty_text.clone())
                     .style(Style::default().fg(palette::TEXT_MUTED)),
-                area,
+                content_area,
             );
         }
         // The persistent canonical child is the sole Queue body painter and

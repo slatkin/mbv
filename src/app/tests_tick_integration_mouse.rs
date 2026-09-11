@@ -421,7 +421,9 @@ fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
 fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
-    app.layout.main.queue_area = Rect::new(0, 0, 40, 10);
+    // The queue panel retains its own geometry from its paint (task 3.1); the
+    // wheel eligibility below follows the painted surface, not a seeded
+    // `LayoutMain` rect.
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 

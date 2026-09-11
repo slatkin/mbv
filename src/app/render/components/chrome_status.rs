@@ -147,6 +147,20 @@ impl App {
         (icon, label)
     }
 
+    /// The playback target's host label, resolved the way the queue title
+    /// row already resolves it (design D10; folded change D2/D3): the
+    /// connected session's device name (falling back to its host), the
+    /// direct-remote route/label, or this machine's device name when playback
+    /// is local. No tracking suffix, no uppercasing — callers style and
+    /// extend it themselves (the queue title appends its own tracking
+    /// suffix; the header row shows it verbatim).
+    pub(in crate::app) fn playback_host_label(&self) -> String {
+        let remote_state = self.remote_slot_state();
+        let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
+        let (_, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
+        label.trim_start().to_string()
+    }
+
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let (label, on) = match &self.queue_source {
@@ -672,4 +686,50 @@ pub(in crate::app) fn render_status_bar(
         // segment yields first.)
     }
     regions
+}
+
+#[cfg(test)]
+mod playback_host_label_tests {
+    use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub, make_session};
+    use crate::app::QueueScope;
+
+    /// The playback target's host label (task 3.3): the same value the queue
+    /// title row resolves — the attached session's device name, with no
+    /// tracking suffix and no uppercasing.
+    #[test]
+    fn attached_session_label_has_no_tracking_suffix_or_uppercasing() {
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("sess-1".into());
+        app.connected_session_state = Some(make_session("living-room", "Emby"));
+
+        let label = app.playback_host_label();
+
+        assert_eq!(label, "living-room");
+        assert!(!label.contains(" · TRACKING"));
+        assert!(!label.contains("TRACKING"));
+    }
+
+    /// Local playback (no session, no direct remote) resolves to this
+    /// machine's device name, verbatim.
+    #[test]
+    fn local_playback_resolves_this_machine_device_name() {
+        let app = make_app_stub();
+        assert_eq!(app.playback_host_label(), mbv_core::api::device_name());
+    }
+
+    /// A direct-remote connection resolves the direct-remote label, and the
+    /// queue title still builds its own tracking suffix on top (the
+    /// characterization tests pin that unchanged).
+    #[test]
+    fn direct_remote_resolves_the_direct_label() {
+        let mut app = make_remote_app_stub(
+            vec![make_item("local", "Movie")],
+            vec![make_item("remote", "Movie")],
+        );
+        app.direct_remote_label = Some("direct-device".into());
+        app.queue_scope = QueueScope::Local;
+
+        assert_eq!(app.playback_host_label(), "direct-device");
+        assert!(!app.playback_host_label().contains(" · TRACKING"));
+    }
 }

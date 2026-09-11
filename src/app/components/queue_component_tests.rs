@@ -315,8 +315,10 @@ fn queue_component_page_up_from_bottom_reaches_top() {
         QueueTitleModel::default(),
     );
     component.set_focused(true);
-    component.set_area(ratatui::layout::Rect::new(0, 0, 40, 8));
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    // The page stride derives from the framed content area the panel retains
+    // from its own view (task 3.1): a 24-row placement leaves 18 body rows,
+    // so five PageUps from the bottom cursor reach the top.
+    let mut terminal = Terminal::new(TestBackend::new(40, 24)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
@@ -500,7 +502,10 @@ fn queue_scope_switch_resets_component_scroll() {
         QueueTitleModel::default(),
     );
     component.set_focused(true);
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    // The framed sub-areas derive from the placement the view receives (task
+    // 3.1); 14 rows leave eight body rows, enough for the bottom cursor to
+    // scroll against.
+    let mut terminal = Terminal::new(TestBackend::new(40, 14)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
@@ -533,7 +538,10 @@ fn queue_scope_switch_resets_component_scroll() {
         QueueTitleModel::default(),
     );
     component.set_focused(true);
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    // Same framed-subarea note (task 3.1): the in-view cursor below needs
+    // more than the two body rows a 40x8 placement leaves, so keep the body
+    // at eight rows via a 40x14 placement.
+    let mut terminal = Terminal::new(TestBackend::new(40, 14)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
@@ -595,7 +603,8 @@ fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
         title.clone(),
     );
     component.set_focused(true);
-    component.set_title_area(Some(ratatui::layout::Rect::new(0, 0, 40, 1)));
+    // The title band (and its scope pills) derive from the panel placement
+    // the view receives (task 3.1): no shell-pushed title area any more.
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))

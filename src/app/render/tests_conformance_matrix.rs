@@ -731,8 +731,8 @@ fn queue_legacy_base_frame_reserves_geometry_but_paints_no_slot_rows() {
             .draw(|frame| app.compose_base_frame(frame, None))
             .unwrap();
         assert!(
-            app.layout.main.queue_area.width > 0,
-            "base frame must reserve queue_area at {width}x{height}"
+            app.queue_panel_placement().panel_area.width > 0,
+            "the queue placement must reserve panel rows at {width}x{height}"
         );
         let output = buffer_to_string(&terminal);
         assert!(

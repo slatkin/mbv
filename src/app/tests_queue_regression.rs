@@ -10,7 +10,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
 #[test]
-fn shell_frame_publishes_queue_geometry_to_queue_component_and_layout() {
+fn shell_frame_leaves_queue_geometry_retained_in_the_queue_component() {
     let mut app = make_built_app();
     app.player_tab.set_items(
         vec![make_item("first", "Movie"), make_item("second", "Movie")],
@@ -26,10 +26,10 @@ fn shell_frame_publishes_queue_geometry_to_queue_component_and_layout() {
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
 
-    let layout_area = model.app.layout.main.queue_area;
+    let layout_area = queue_panel_content_area(&model);
     assert!(
         layout_area.height > 0,
-        "shell must publish a usable queue area"
+        "the queue panel must retain a usable content area"
     );
     let selected = model
         .application
@@ -44,10 +44,26 @@ fn shell_frame_publishes_queue_geometry_to_queue_component_and_layout() {
             && selected.bottom() <= layout_area.bottom(),
         "selected row must be inside queue area"
     );
-    assert_eq!(
-        model.app.layout.main.queue_selected_item_rect,
-        Some(selected)
-    );
+}
+
+/// The queue panel's framed content area, read from the mounted component
+/// (task 3.1: component-retained geometry, no `LayoutMain` mirror).
+fn mounted_queue_selected_row(model: &Model) -> ratatui::layout::Rect {
+    model
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+        .and_then(QueueComponent::selected_row_rect)
+        .expect("queue component retains its selected row")
+}
+
+fn queue_panel_content_area(model: &Model) -> ratatui::layout::Rect {
+    model
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+        .map(crate::app::components::QueueComponent::content_area)
+        .expect("QueueComponent mounted")
 }
 
 #[test]
@@ -84,13 +100,8 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
 
-    let queue_selected = model
-        .app
-        .layout
-        .main
-        .queue_selected_item_rect
-        .expect("shell must publish selected queue row");
-    assert!(queue_selected.y > model.app.layout.main.queue_area.y);
+    let queue_selected = mounted_queue_selected_row(&model);
+    assert!(queue_selected.y > queue_panel_content_area(&model).y);
     let message = Msg::Shell(ShellRequest::HomeContextMenu {
         home_cw_selected: false,
         target: crate::app::components::msg::HomeRowTarget { item_id: None, source: None, from_continue_watching: true },
@@ -113,7 +124,7 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
     ));
     let size = ContextMenu::rendered_size(menu.entries());
     let (x, y) = ContextMenu::place(
-        model.app.layout.main.queue_area,
+        queue_panel_content_area(&model),
         size,
         Some(&queue_selected),
         None,
@@ -159,7 +170,7 @@ fn queue_arrow_press_leaves_exactly_one_highlighted_row() {
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
     let buffer = terminal.backend().buffer();
-    let queue_area = model.app.layout.main.queue_area;
+    let queue_area = queue_panel_content_area(&model);
     let highlighted_rows = (queue_area.y..queue_area.bottom())
         .filter(|&y| {
             (queue_area.x..queue_area.right())
@@ -260,7 +271,7 @@ fn mini_view_queue_panel_paints_only_the_queue_not_the_library() {
         "the mini breakpoint must show the queue panel only"
     );
 
-    let queue_area = model.app.layout.main.queue_area;
+    let queue_area = queue_panel_content_area(&model);
     let buffer = terminal.backend().buffer();
     let queue_text = (queue_area.y..queue_area.bottom())
         .map(|y| {

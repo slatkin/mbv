@@ -114,9 +114,21 @@ impl Painted {
 }
 
 fn painted(term: &Terminal<TestBackend>) -> Painted {
-    Painted {
-        buffer: term.backend().buffer().clone(),
-    }
+    let buffer = term.backend().buffer().clone();
+    Painted { buffer }
+}
+
+/// The mounted queue panel's retained selected-row rect (task 3.1): the
+/// component answers the context-menu keyboard anchor from its own geometry,
+/// not a `LayoutMain` mirror.
+fn mounted_queue_selected_row(model: &crate::app::shell::Model) -> Rect {
+    use crate::app::components::{ComponentId, QueueComponent};
+    model
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+        .and_then(QueueComponent::selected_row_rect)
+        .expect("the mounted queue retains its selected row")
 }
 
 fn active_queue_app() -> App {
@@ -164,7 +176,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
         let painted = painted(&term);
         let area = Rect::new(0, 0, 200, 30);
         let chrome = model.app.compute_chrome_geometry(area);
-        let main = &model.app.layout.main;
+        let _main = &model.app.layout.main;
         let playback = &model.app.layout.playback;
         // The sites' own bit: the queue column's focus, exactly what the shell
         // hands `render_legacy_backdrops` and the panel painters.
@@ -190,16 +202,22 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             Rect::new(chrome.right_area.x, chrome.right_area.y + 1, 1, 1),
         );
 
-        // Panel bodies.
+        // Panel bodies (the queue panel's own retained geometry, task 3.1).
+        let queue_view = super::test_helpers::queue_panel_view(&model);
         painted.expect(
             &format!("{label}/queue panel body"),
             palette::Surface::QueuePanel,
             queue_bit,
-            Rect::new(main.queue_area.x + 1, main.queue_area.y + 1, 1, 1),
+            Rect::new(
+                queue_view.content_area.x + 1,
+                queue_view.content_area.y + 1,
+                1,
+                1,
+            ),
         );
-        let queue_title = main
-            .queue_title_area
-            .expect("Both publishes a queue title band");
+        let queue_title = queue_view
+            .title_area
+            .expect("the queue panel retains a title band");
         painted.expect(
             &format!("{label}/queue title band"),
             palette::Surface::QueuePanelBand,
@@ -249,9 +267,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
 
         // Selected rows are probed in the bool state their column holds.
         if queue_bit {
-            let row = main
-                .queue_selected_item_rect
-                .expect("focused queue publishes its selected row");
+            let row = mounted_queue_selected_row(&model);
             painted.expect(
                 &format!("{label}/queue selected row"),
                 palette::Surface::SelectedRowOnQueueColumn,
@@ -365,15 +381,21 @@ fn queue_only_strip_and_queue_follow_the_table() {
         "wide Queue-only must locate the playback strip, got {panel:?}"
     );
 
+    let queue_view = super::test_helpers::queue_panel_view(&model);
     painted.expect(
         "QueueOnly/queue panel body",
         palette::Surface::QueuePanel,
         true,
-        Rect::new(main.queue_area.x + 1, main.queue_area.y + 1, 1, 1),
+        Rect::new(
+            queue_view.content_area.x + 1,
+            queue_view.content_area.y + 1,
+            1,
+            1,
+        ),
     );
-    let queue_title = main
-        .queue_title_area
-        .expect("Queue-only publishes a queue title band");
+    let queue_title = queue_view
+        .title_area
+        .expect("the queue panel retains a title band");
     painted.expect(
         "QueueOnly/queue title band",
         palette::Surface::QueuePanelBand,
@@ -561,12 +583,7 @@ fn resting_queue_selected_row_paints_no_hole() {
     let painted = painted(&term);
     let chrome = model.app.compute_chrome_geometry(Rect::new(0, 0, 200, 30));
     assert!(!chrome.queue_focused, "the queue must rest for this pin");
-    let row = model
-        .app
-        .layout
-        .main
-        .queue_selected_item_rect
-        .expect("the resting queue still publishes its selected row");
+    let row = mounted_queue_selected_row(&model);
 
     let panel_body = palette::surface_colors(palette::Surface::QueuePanel, false).fill;
     let focused_hole =

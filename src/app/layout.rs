@@ -54,14 +54,14 @@ pub(crate) struct LayoutPlayback {
 /// this typed checkpoint records its dimensions in the fresh frame draft so
 /// downstream queue placement consumes the published dimensions instead of
 /// deriving them independently.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct CardGeometry {
     pub height: u16,
     pub width: u16,
 }
 
 /// Library panel, queue panel, and home-grid geometry.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(crate) struct LayoutMain {
     /// Card geometry published immediately after the card's authoritative
     /// cache/size/fetch render path.
@@ -92,16 +92,10 @@ pub(crate) struct LayoutMain {
     /// Selected-parent geometry only for inline replacement. Wide hero areas
     /// remain render bookkeeping and are intentionally not interactive.
     pub inline_hero_area: Rect,
-    /// Queue placement and scope areas published independently of mounted
-    /// component-local queue geometry.
-    pub queue_area: Rect,
-    pub queue_title_area: Option<Rect>,
     /// Screen rect of the selected row/cell in the library panel. The outer
     /// selectable renderer owns this; nested detail/hero renderers never
     /// overwrite it. Consumed by the context menu's keyboard anchor.
     pub selected_item_rect: Option<Rect>,
-    /// Screen rect of the selected queue row. Owned by the queue renderer.
-    pub queue_selected_item_rect: Option<Rect>,
     /// Pill/tab hitboxes published by the owning pill painters; placement and
     /// width remain owned by the shared pill-bar component. The music
     /// group-selector publishes these before paint.

@@ -196,6 +196,11 @@ pub struct App {
     pub(super) card_image_loading: std::collections::HashSet<String>,
     pub(super) last_card_height: u16,
     pub(super) last_card_width: u16,
+    /// The queue visual slot's image projection (task 3.4, D9): the queue
+    /// projection issues every fetch for the now-playing item and projects
+    /// the slot's image state; the painter reads this and paints. Refreshed
+    /// by `Model::sync_queue`'s push while playback is active.
+    pub(super) queue_card_projection: super::render::components::card::QueueCardProjection,
     pub(super) pending_image_fetches: std::collections::VecDeque<images::ImageFetchReq>,
     pub(super) image_fetches_active: usize,
     pub(super) card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,

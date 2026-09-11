@@ -1,3 +1,4 @@
+use super::queue::{queue_panel_geometry, QueuePanelInputs};
 use crate::app::layout::FrameChromeGeometry;
 use crate::app::render::components::chrome;
 use crate::app::render::components::widgets::COLUMN_GAP;
@@ -233,9 +234,11 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
 
     // Root panel placements (D1, task 1.3): which panels the current Panel
     // mode mounts, and where. The queue column splits into the Queue playback
-    // panel's region (header row + visual slot/transport rows) and the Queue
-    // panel below it; the separating gap row belongs to the playback region's
-    // spacing, so the two placements tile the queue column's content exactly.
+    // panel's region (header row + visual slot/transport rows plus the
+    // separating gap row) and the Queue panel below it. Both placements come
+    // from the shared `queue_panel_geometry` (task 3.2: the header row is one
+    // input alongside the visual-slot and transport heights, single source),
+    // so they tile the queue column's content exactly.
     let queue_col_visible = input.panel_mode != PanelMode::LibraryOnly;
     let playback_rows = queue_playback_rows(
         input.panel_mode == PanelMode::QueueOnly,
@@ -244,20 +247,17 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         input.playback_active,
         input.transport_connected,
     );
-    let gap = u16::from(playback_rows > 0);
+    let queue_geo = queue_panel_geometry(QueuePanelInputs {
+        left_content,
+        header_height: QUEUE_PLAYBACK_HEADER_ROWS,
+        card_height: playback_rows,
+        narrow_player_height: 0,
+    });
     let queue_playback_area = Rect {
         x: left_content.x,
         y: left_content.y,
         width: left_content.width,
-        height: (QUEUE_PLAYBACK_HEADER_ROWS + playback_rows + gap).min(left_content.height),
-    };
-    let queue_area = Rect {
-        x: left_content.x,
-        y: left_content.y + queue_playback_area.height,
-        width: left_content.width,
-        height: left_content
-            .height
-            .saturating_sub(queue_playback_area.height),
+        height: queue_geo.panel_area.y.saturating_sub(left_content.y),
     };
     let queue_boundary_area = Rect {
         x: area.x.saturating_add(left_w).saturating_sub(1),
@@ -269,9 +269,9 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         tab: placed_when(right_visible, tab_bar_area),
         library: placed_when(right_visible, library_area),
         library_playback: placed_when(input.panel_mode == PanelMode::LibraryOnly, player_area),
-        queue: placed_when(queue_col_visible, queue_area),
+        queue: placed_when(queue_col_visible, queue_geo.panel_area),
         queue_playback: placed_when(
-            queue_col_visible && queue_area.height > 0,
+            queue_col_visible && queue_geo.panel_area.height > 0,
             queue_playback_area,
         ),
         status_bar: placed_when(right_visible, status_area),
@@ -503,15 +503,20 @@ mod root_frame_tests {
     }
 
     /// Idle playback collapses the visual slot/transport rows to zero, so the
-    /// Queue playback placement is its header row alone (D10: the header is
-    /// painted in every queue-visible layout, idle included); the Queue panel
-    /// starts directly below it.
+    /// Queue playback placement is its header row plus the single separator
+    /// row above the Queue panel (D10: the header is painted in every
+    /// queue-visible layout, idle included); the Queue panel starts directly
+    /// below it.
     #[test]
     fn idle_queue_playback_placement_is_the_header_row() {
         let f = frame(PanelMode::Both, false);
         let queue_playback = f.queue_playback.expect("queue playback placed");
         let queue = f.queue.expect("queue placed");
-        assert_eq!(queue_playback.height, QUEUE_PLAYBACK_HEADER_ROWS);
+        assert_eq!(
+            queue_playback.height,
+            QUEUE_PLAYBACK_HEADER_ROWS + 1,
+            "idle placement is the always-painted header row plus the separator row"
+        );
         assert_eq!(queue_playback.bottom(), queue.y);
         assert_eq!(
             queue_playback.height + queue.height,
