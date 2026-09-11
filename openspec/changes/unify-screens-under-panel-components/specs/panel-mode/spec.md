@@ -21,7 +21,7 @@ In library-only state the library panel SHALL occupy the full window width and t
 
 ### Requirement: Queue-only hides the library column
 
-In queue-only state the queue panel SHALL render across the full window width. The tab bar, library list, status bar, and right-column player strip SHALL NOT be rendered. When playback is active, the playback panel SHALL be rendered within the queue column (see `now-playing-sidebar` for the placement and idle rules); fully idle queue-only state SHALL omit it so its rows belong to the Queue.
+In queue-only state the queue panel SHALL render across the full window width. The tab bar, library list, status bar, and right-column player strip SHALL NOT be rendered. When playback is active, the playback panel SHALL be rendered within the queue column (see `queue-playback-panel` for the placement and idle rules); fully idle queue-only state SHALL omit it so its rows belong to the Queue.
 
 #### Scenario: Full-width queue
 

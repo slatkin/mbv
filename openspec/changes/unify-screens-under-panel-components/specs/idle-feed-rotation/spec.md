@@ -2,7 +2,7 @@
 
 ### Requirement: Idle feed display in playback panel
 
-The system SHALL display the current feed item's title in the playback panel title row ONLY when playback is idle (nothing playing and no remote session connected), the playback panel is rendered, and the title row is drawn, replacing the otherwise blank title area. The panel's presence is defined by `now-playing-sidebar`: in a queue-visible layout an idle player collapses the panel, so the idle feed title SHALL NOT be displayed there; where the panel does render — the right-column player strip, which renders exactly when the queue column is hidden — the idle feed title SHALL display as today.
+The system SHALL display the current feed item's title in the playback panel title row ONLY when playback is idle (nothing playing and no remote session connected), the playback panel is rendered, and the title row is drawn, replacing the otherwise blank title area. The panel's presence is defined by `queue-playback-panel`: in a queue-visible layout an idle player collapses the panel, so the idle feed title SHALL NOT be displayed there; where the panel does render — the right-column player strip, which renders exactly when the queue column is hidden — the idle feed title SHALL display as today.
 
 #### Scenario: Idle state shows feed title
 

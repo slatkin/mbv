@@ -1,10 +1,26 @@
 ## Purpose
 
-The queue column's now-playing sidebar: the header row that always states playback status and target,
-the visual slot, the playback panel inside the queue column, and how all of them collapse when
-playback is idle.
+The Queue playback panel at the top of the queue column: the header row that always states playback
+status and target, the visual slot, the transport inside the queue column, how they collapse when
+playback is idle, and where the Library playback panel (the right-column strip) renders instead.
 
 ## ADDED Requirements
+
+### Requirement: Queue and Library playback panels are distinct, and exactly one transport renders
+
+The Queue playback panel (header row, visual slot and transport in the queue column) and the Library
+playback panel (the right-column strip) SHALL be two distinct panels, each with its own presentation of
+the same playback content. In every frame at most one of them SHALL render a transport: the Queue
+playback panel's in queue-visible layouts, the Library playback panel's when the queue column is hidden.
+
+#### Scenario: Two-panel layout with active playback
+- **WHEN** both columns are visible and playback is active
+- **THEN** the transport renders in the Queue playback panel and the Library playback panel does not
+  render
+
+#### Scenario: Library-only layout with active playback
+- **WHEN** the layout is library-only and playback is active
+- **THEN** the Library playback panel renders the transport and no Queue playback panel renders
 
 ### Requirement: Queue-visible layouts paint a now-playing header row
 
