@@ -110,7 +110,7 @@ one paint-free placement.
 
 *Unification:* one transport painter per frame; the strip reserves rows only when it paints.
 
-- [ ] 4.1 Turn `PlaybackComponent` into `LibraryPlaybackPanel`, mounted only when the queue column is
+- [x] 4.1 Turn `PlaybackComponent` into `LibraryPlaybackPanel`, mounted only when the queue column is
   hidden and laying out its transport through the shared transport arrangement from 3.5; `RootFrame` reserves `PLAYER_BOX_HEIGHT` in the library column only then. Verify: buffer
   proof in `tests_queue.rs` that `both` reserves no strip rows, `library-only` exactly
   `PLAYER_BOX_HEIGHT`, `queue-only` none; a tick integration test draws `both`, `queue-only` and
