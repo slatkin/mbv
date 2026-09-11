@@ -29,14 +29,25 @@ pub(in crate::app) fn render_legacy_backdrops(
             ..left_area
         };
         frame.render_widget(
-            Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(queue_focused))),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::QueueColumn,
+                    queue_focused,
+                )
+                .fill),
+            ),
             backdrop,
         );
     }
     if right_visible {
         frame.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::LibraryColumn,
+                    false,
+                )
+                .fill),
+            ),
             right_area,
         );
     }
@@ -152,6 +163,19 @@ pub(in crate::app) fn render_panel_shell_at(
     style: bool,
 ) -> Rect {
     f.render_widget(Clear, sidebar);
+    // The sidebar's two declared appearances: the expanded (F1-F4) sidebar
+    // body/bands, and the non-hero sidebar shell's own pair. Fixed rows —
+    // neither follows focus.
+    let body_bg = if style {
+        palette::surface_colors(palette::Surface::SidebarBody, false).fill
+    } else {
+        palette::surface_colors(palette::Surface::NonHeroSidebarBody, false).fill
+    };
+    let band_bg = if style {
+        palette::surface_colors(palette::Surface::SidebarBand, false).fill
+    } else {
+        palette::surface_colors(palette::Surface::NonHeroSidebarBand, false).fill
+    };
     // Too short to fit a title row, a content row, and the 2-row footer;
     // bail out rather than let `footer_y = sidebar.y + sidebar.height - 2`
     // underflow below.
@@ -163,11 +187,7 @@ pub(in crate::app) fn render_panel_shell_at(
         };
     }
     f.render_widget(
-        Block::default().style(Style::default().bg(if style {
-            palette::SURFACE_RESTING
-        } else {
-            palette::SURFACE_SIDEBAR
-        })),
+        Block::default().style(Style::default().bg(body_bg)),
         sidebar,
     );
     if !style {
@@ -193,11 +213,7 @@ pub(in crate::app) fn render_panel_shell_at(
     };
     let header_style = Style::default()
         .fg(palette::TEXT_PRIMARY)
-        .bg(if style {
-            palette::SURFACE_CHROME
-        } else {
-            palette::SURFACE_ITEM_FOCUSED
-        })
+        .bg(band_bg)
         .add_modifier(Modifier::BOLD);
     let header_area = if style {
         Rect {
@@ -220,17 +236,13 @@ pub(in crate::app) fn render_panel_shell_at(
         title.to_owned()
     };
     f.render_widget(
-        Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)])).style(if style {
-            Style::default().bg(palette::SURFACE_CHROME)
-        } else {
-            Style::default().bg(palette::SURFACE_ITEM_FOCUSED)
-        }),
+        Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)]))
+            .style(Style::default().bg(band_bg)),
         header_area,
     );
     if !style {
         f.render_widget(
-            Paragraph::new(Span::raw(" "))
-                .style(Style::default().bg(palette::SURFACE_ITEM_FOCUSED)),
+            Paragraph::new(Span::raw(" ")).style(Style::default().bg(band_bg)),
             Rect {
                 x: sidebar.x + sidebar.width - 1,
                 y: sidebar.y,
@@ -254,11 +266,7 @@ pub(in crate::app) fn render_panel_shell_at(
             },
         );
     }
-    let footer_bg = if style {
-        palette::SURFACE_CHROME
-    } else {
-        palette::SURFACE_ITEM_FOCUSED
-    };
+    let footer_bg = band_bg;
     f.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             trunc_str(hints, inner_w as usize),
@@ -274,7 +282,7 @@ pub(in crate::app) fn render_panel_shell_at(
     );
     if style {
         f.render_widget(
-            Paragraph::new(Span::raw("")).style(Style::default().bg(palette::SURFACE_RESTING)),
+            Paragraph::new(Span::raw("")).style(Style::default().bg(body_bg)),
             Rect {
                 x: sidebar.x,
                 y: sidebar.y + sidebar.height - 1,
@@ -285,8 +293,7 @@ pub(in crate::app) fn render_panel_shell_at(
     }
     if !style {
         f.render_widget(
-            Paragraph::new(Span::raw(" "))
-                .style(Style::default().bg(palette::SURFACE_ITEM_FOCUSED)),
+            Paragraph::new(Span::raw(" ")).style(Style::default().bg(band_bg)),
             Rect {
                 x: sidebar.x + sidebar.width - 1,
                 y: footer_y,

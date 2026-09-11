@@ -1,0 +1,66 @@
+id: no-surface-role-in-painters
+valid:
+  - |
+    fn render(focused: bool) {
+      let style = Style::default()
+        .bg(palette::surface_colors(palette::Surface::QueuePanel, focused).fill);
+      let fill = palette::surface_colors(palette::Surface::StatusBar, focused).fill;
+      let from_local = Style::default().bg(fill);
+      let fg = Style::default().fg(palette::TEXT_PRIMARY);
+      let pill_fg = Style::default().fg(palette::PILL_FG);
+      let pick = focused_or_subtle(focused);
+      let layout = resolve_inline_layout(area);
+    }
+  # Test code pins values by naming the role it must keep: the same
+  # exemption the ignored `**/*tests*.rs` files get. An inline test module
+  # sits in an ordinary production file, so the rule itself has to skip it.
+  - |
+    #[cfg(test)]
+    mod tests {
+      fn render() {
+        let bg = palette::SURFACE_FOCUSED;
+        let lever = palette::resolve_surface_focus(false);
+        let styled = Style::default().bg(palette::SURFACE_RESTING);
+      }
+    }
+  - |
+    #[cfg(test)]
+    #[allow(clippy::items_after_test_module)]
+    mod wide_hero_pane_tests {
+      fn render() {
+        assert_eq!(cell.bg, palette::SURFACE_RESTING);
+      }
+    }
+invalid:
+  - |
+    fn render() {
+      let bg = palette::SURFACE_FOCUSED;
+    }
+  - |
+    fn render() {
+      let bg = palette::SURFACE_ACCENT_SOFT;
+    }
+  - |
+    fn render() {
+      let bg = palette::PILL_SELECTED_BG;
+    }
+  - |
+    fn render() {
+      let bg = palette::resolve_surface_focus(true);
+    }
+  - |
+    fn render() {
+      let bg = crate::app::palette::resolve_surface_focus(false);
+    }
+  - |
+    fn render() {
+      let bg = palette::list_selected_row_bg();
+    }
+  # A module that is not test code is still a paint site: the exemption is
+  # for test modules, not for every `mod` in the file.
+  - |
+    mod painters {
+      fn render() {
+        let bg = palette::SURFACE_RESTING;
+      }
+    }

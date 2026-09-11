@@ -44,11 +44,10 @@ impl Model {
         let projection = PlaybackProjection {
             state,
             show_controls,
-            panel_bg: if focused {
-                palette::SURFACE_FOCUSED
-            } else {
-                palette::SURFACE_PLAYBACK
-            },
+            // The panel's own identity plus the site's focus bit, verbatim;
+            // the painter resolves the fill through the surface table.
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: focused,
             narrow_player: self.app.effective_panel_mode() == PanelMode::QueueOnly,
             now_playing_title: now_playing_title.clone(),
             title_parts: now_playing_title

@@ -62,7 +62,7 @@ pub(in crate::app) fn render_selection_modal_content(
         &title,
         width,
         height,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
 
     let filter_area = Rect {
@@ -93,7 +93,10 @@ pub(in crate::app) fn render_selection_modal_content(
     };
     if spacer_h > 0 {
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_FOCUSED)),
+            Block::default().style(
+                Style::default()
+                    .bg(palette::surface_colors(palette::Surface::PopupFrame, false).fill),
+            ),
             spacer_area,
         );
     }

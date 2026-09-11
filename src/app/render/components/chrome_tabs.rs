@@ -40,7 +40,9 @@ impl App {
     ) {
         // Fill the tab bar area with the tab box's own background.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(palette::Surface::TabBar, false).fill),
+            ),
             area,
         );
 

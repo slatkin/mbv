@@ -1,0 +1,71 @@
+# Rule A of unify-surface-colour-neutral's guardrails (design D4): a
+# production paint site names a `Surface` and calls the table
+# (`surface_colors`), never a surface role name or another colour resolver.
+# See `no-role-background-in-painters` for rule B.
+id: no-surface-role-in-painters
+language: rust
+severity: error
+message: >-
+  A production paint site must name a `Surface` and call the table
+  (`surface_colors(surface, focused)`), never a surface role name or any
+  colour resolver other than `surface_colors` (unify-surface-colour-neutral
+  design D4). Naming a role here removes the surface from the table: a level
+  edit silently skips it and no test names the surface that moved.
+  `resolve_surface_focus` and `list_selected_row_bg` are the value-aliased
+  resolvers the table replaces. Roles are named only in
+  `src/app/render/theme/`, the table's own home; foreground `.fg(...)` roles
+  stay legal.
+files:
+  - "src/**/*.rs"
+ignores:
+  # The theme itself legitimately names the roles it defines and resolves.
+  - "src/app/render/theme/**"
+  # The two re-export modules name roles in `use` lists only.
+  - "src/app/palette.rs"
+  - "src/app/render/mod.rs"
+  # Test code: a test pins a surface by naming the role it must keep, which
+  # is the neutrality oracle this change relies on. Named test files are
+  # ignored by path; inline `#[cfg(test)]` modules by the rule's `inside`
+  # exclusion below (the two files that hold the pre-existing buffer
+  # expectations are ordinary production files).
+  - "**/*tests*.rs"
+  - "**/test_helpers*.rs"
+  - "**/*_test_support.rs"
+  - "**/*_test_modules.rs"
+rule:
+  all:
+    - any:
+        # Surface roles: their values are reached through `surface_colors`.
+        - kind: identifier
+          regex: "^SURFACE_"
+        # Only the background-carrying pill roles; the `_FG` ones are foreground.
+        - kind: identifier
+          regex: "^PILL_(ROW_BG|BG|SELECTED_BG)$"
+        # Any other colour resolver reached through the `palette` re-export:
+        # `surface_colors` is the one permitted resolver (D4). The palette
+        # namespace is the discriminator — bare helper calls (layout resolvers,
+        # foreground pickers like `focused_or_subtle`) stay legal.
+        - pattern: "palette::$RES($$$ARGS)"
+          not:
+            regex: "^palette::surface_colors"
+        - pattern: "crate::app::palette::$RES($$$ARGS)"
+          not:
+            regex: "^crate::app::palette::surface_colors"
+    # Test code is not a paint site: an inline test module pins values by
+    # naming roles, exactly as the ignored test files do. Two shapes cover
+    # it: a `#[cfg(test)]` attribute immediately above the module (the
+    # attribute is a sibling of, not a child of, the `mod` item in
+    # tree-sitter-rust, hence `follows`), and a module whose own name
+    # contains `test` — the inline analogue of the `**/*tests*.rs` path
+    # ignores above, which matters when other attributes sit in between.
+    - not:
+        inside:
+          kind: mod_item
+          stopBy: end
+          any:
+            - follows:
+                kind: attribute_item
+                regex: "cfg\\(test\\)"
+            - has:
+                field: name
+                regex: "test"

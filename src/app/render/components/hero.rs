@@ -189,7 +189,7 @@ pub(in crate::app::render) fn selected_detail_shell(
     hero_rows: u16,
     focused: bool,
 ) {
-    let bg = palette::resolve_surface_focus(focused);
+    let bg = palette::surface_colors(palette::Surface::InlineHero, focused).fill;
     let visible = hero_rows as usize;
     let top_pad_abs = 1usize;
     let bottom_pad_abs = (hero_rows as usize).saturating_sub(2);
@@ -663,10 +663,12 @@ pub(in crate::app) fn render_search_box(f: &mut Frame, area: Rect, query: &str, 
         return;
     }
     f.render_widget(
-        Block::default().style(Style::default().bg(palette::PILL_ROW_BG)),
+        Block::default().style(
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+        ),
         area,
     );
-    let bg = Style::default().bg(palette::PILL_ROW_BG);
+    let bg = Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill);
     let input_text = if loading {
         format!("{query}█ [loading…]")
     } else {

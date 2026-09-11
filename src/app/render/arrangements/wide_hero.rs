@@ -271,7 +271,8 @@ pub(in crate::app) fn wide_hero_browser_pane(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) enum LeftPaneFocus {
     /// The pane is never focusable (Movies/home-videos/Emby-podcasts/
-    /// feed-group browser, Home, Feeds): always [`palette::SURFACE_RESTING`].
+    /// feed-group browser, Home, Feeds): always the HeroPane surface's
+    /// resting fill.
     ReadOnly,
     /// The pane belongs to a focusable workspace (TV, Music, ABS Books, ABS
     /// Podcasts); `true` when that workspace currently holds focus.
@@ -298,10 +299,13 @@ pub(in crate::app) fn wide_hero_hero_pane(
     let WideHeroPanes {
         hero: hero_panel, ..
     } = wide_hero_presentation(content_area, override_width)?;
-    let background = match focus {
-        LeftPaneFocus::ReadOnly => palette::SURFACE_RESTING,
-        LeftPaneFocus::Workspace(held) => palette::resolve_surface_focus(held),
+    // D3(d): `ReadOnly` and `Workspace(held)` describe the same HeroPane
+    // surface; the match collapses to the one bool the fill depends on.
+    let focused = match focus {
+        LeftPaneFocus::ReadOnly => false,
+        LeftPaneFocus::Workspace(held) => held,
     };
+    let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         hero_panel,
@@ -412,7 +416,7 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
     if list_panel.height == 0 {
         return;
     }
-    let background = palette::resolve_surface_focus(focused);
+    let background = palette::surface_colors(palette::Surface::LibraryPanel, focused).fill;
     for y in list_panel.y..list_panel.bottom() {
         for x in list_panel.x..list_panel.right() {
             let cell = f.buffer_mut().cell_mut((x, y)).expect("panel cell exists");
@@ -437,9 +441,9 @@ pub(in crate::app::render) enum WideHeroContentBoxSurface {
     FocusedTrackList,
 }
 
-/// Paints the Wide hero arrangement's main content box: a
-/// [`palette::SURFACE_BACKDROP`] inset within the Wide hero left pane,
-/// present on every Wide hero surface with a kind-dependent payload (the
+/// Paints the Wide hero arrangement's main content box: the `MainContentBox`
+/// surface (the table's soft content body) inset within the Wide hero left
+/// pane, present on every Wide hero surface with a kind-dependent payload (the
 /// episode listing on TV, the track listing on Music, item description and
 /// metadata elsewhere) and one shared padding value (design.md D9, matching
 /// the pane inset from D6). Returns both rects so callers can use `panel` for
@@ -463,10 +467,13 @@ pub(in crate::app::render) fn wide_hero_hero_content_box_with_surface(
         width: area.width.saturating_sub(PANE_PAD_X * 2),
         ..area
     };
-    let background = match surface {
-        WideHeroContentBoxSurface::Backdrop => palette::SURFACE_BACKDROP,
-        WideHeroContentBoxSurface::FocusedTrackList => palette::SURFACE_ACCENT_SOFT,
+    // Each declared variant is the one `MainContentBox` bool it describes:
+    // `FocusedTrackList` is the soft focused half, `Backdrop` the resting one.
+    let focused = match surface {
+        WideHeroContentBoxSurface::Backdrop => false,
+        WideHeroContentBoxSurface::FocusedTrackList => true,
     };
+    let background = palette::surface_colors(palette::Surface::MainContentBox, focused).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         panel,

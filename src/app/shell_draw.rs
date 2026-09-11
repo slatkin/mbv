@@ -282,7 +282,13 @@ impl App {
                         height: layout.card.height.max(player_h),
                     };
                     f.render_widget(
-                        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+                        Block::default().style(
+                            Style::default().bg(palette::surface_colors(
+                                palette::Surface::QueueOnlyPlaybackPanel,
+                                false,
+                            )
+                            .fill),
+                        ),
                         panel_area,
                     );
                     crate::app::render::render_player_panel(
@@ -293,7 +299,15 @@ impl App {
                             player_h,
                             show_controls,
                             now_playing_title,
-                            palette::SURFACE_CHROME,
+                            // The context derives the panel's surface
+                            // identity (`QueueOnlyPlaybackPanel`) from the
+                            // mode; the colour parameter is the retained
+                            // characterization seam.
+                            palette::surface_colors(
+                                palette::Surface::QueueOnlyPlaybackPanel,
+                                false,
+                            )
+                            .fill,
                         ),
                     );
                     top_rows = layout.card.height.max(player_h);
@@ -312,7 +326,13 @@ impl App {
                             player_h,
                             show_controls,
                             now_playing_title,
-                            palette::SURFACE_CHROME,
+                            // As above: the context derives the identity; the
+                            // colour parameter is the characterization seam.
+                            palette::surface_colors(
+                                palette::Surface::QueueOnlyPlaybackPanel,
+                                false,
+                            )
+                            .fill,
                         ),
                     );
                     stacked_rows = player_h;

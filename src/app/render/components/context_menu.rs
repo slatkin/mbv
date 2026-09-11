@@ -35,7 +35,10 @@ pub(in crate::app) fn render_context_menu_content(
             } else if i == cursor {
                 Style::default()
                     .fg(palette::TEXT_ON_ACCENT)
-                    .bg(palette::ACCENT_ACTIVE)
+                    .bg(
+                        palette::surface_colors(palette::Surface::ContextMenuSelectedRow, false)
+                            .fill,
+                    )
             } else {
                 Style::default().fg(palette::TEXT_PRIMARY)
             };

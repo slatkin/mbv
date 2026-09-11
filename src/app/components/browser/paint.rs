@@ -105,7 +105,8 @@ impl BrowserComponent {
         }
 
         if list_panel.height > 0 {
-            let list_bg = palette::resolve_surface_focus(self.focused);
+            let list_bg =
+                palette::surface_colors(palette::Surface::LibraryPanel, self.focused).fill;
             f.render_widget(
                 Block::default().style(Style::default().bg(list_bg)),
                 list_panel,

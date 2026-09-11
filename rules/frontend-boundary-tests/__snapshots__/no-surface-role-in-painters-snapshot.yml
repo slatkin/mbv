@@ -1,0 +1,67 @@
+id: no-surface-role-in-painters
+snapshots:
+  ? |
+    fn render() {
+      let bg = crate::app::palette::resolve_surface_focus(false);
+    }
+  : labels:
+    - source: crate::app::palette::resolve_surface_focus(false)
+      style: primary
+      start: 25
+      end: 74
+  ? |
+    fn render() {
+      let bg = palette::PILL_SELECTED_BG;
+    }
+  : labels:
+    - source: PILL_SELECTED_BG
+      style: primary
+      start: 34
+      end: 50
+  ? |
+    fn render() {
+      let bg = palette::SURFACE_ACCENT_SOFT;
+    }
+  : labels:
+    - source: SURFACE_ACCENT_SOFT
+      style: primary
+      start: 34
+      end: 53
+  ? |
+    fn render() {
+      let bg = palette::SURFACE_FOCUSED;
+    }
+  : labels:
+    - source: SURFACE_FOCUSED
+      style: primary
+      start: 34
+      end: 49
+  ? |
+    fn render() {
+      let bg = palette::list_selected_row_bg();
+    }
+  : labels:
+    - source: palette::list_selected_row_bg()
+      style: primary
+      start: 25
+      end: 56
+  ? |
+    fn render() {
+      let bg = palette::resolve_surface_focus(true);
+    }
+  : labels:
+    - source: palette::resolve_surface_focus(true)
+      style: primary
+      start: 25
+      end: 61
+  ? |
+    mod painters {
+      fn render() {
+        let bg = palette::SURFACE_RESTING;
+      }
+    }
+  : labels:
+    - source: SURFACE_RESTING
+      style: primary
+      start: 53
+      end: 68

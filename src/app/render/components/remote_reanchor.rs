@@ -28,7 +28,7 @@ pub(in crate::app) fn render_remote_reanchor_popup_content(
         title,
         width,
         height + 2,
-        palette::SURFACE_FOCUSED,
+        palette::surface_colors(palette::Surface::PopupFrame, false).fill,
     );
     f.render_widget(
         Paragraph::new(Span::styled(

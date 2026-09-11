@@ -327,8 +327,8 @@ impl LibraryListRenderCtx {
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
 /// between the two call sites). Every cell starts with a 1-column leading
-/// space; the selected cell carries the library backdrop from
-/// `palette::list_selected_row_bg()` in both one- and two-column mode. The
+/// space; the selected cell punches through to the library backdrop (the
+/// surface table's `SelectedRow` row) in both one- and two-column mode. The
 /// marker glyph itself (the shared `SelectionMarker` component) is drawn
 /// separately, at the list's outer edge, by `draw_column_selection_markers`.
 pub(in crate::app::render) fn build_list_row_spans(
@@ -337,8 +337,8 @@ pub(in crate::app::render) fn build_list_row_spans(
     selected: bool,
     fg: Color,
 ) -> Vec<Span<'static>> {
+    let bg = palette::surface_colors(palette::Surface::SelectedRow, selected).fill;
     let mut spans: Vec<Span> = if selected {
-        let bg = palette::list_selected_row_bg();
         let title_style = Style::default().fg(palette::TEXT_FOCUS_ACCENT).bg(bg);
         vec![
             Span::styled(" ", Style::default().bg(bg)),
@@ -349,9 +349,7 @@ pub(in crate::app::render) fn build_list_row_spans(
     };
     if !dur_str.is_empty() {
         let dur_style = if selected {
-            Style::default()
-                .fg(palette::TEXT_METADATA)
-                .bg(palette::list_selected_row_bg())
+            Style::default().fg(palette::TEXT_METADATA).bg(bg)
         } else {
             Style::default().fg(palette::TEXT_METADATA)
         };
@@ -380,7 +378,11 @@ pub(in crate::app::render) fn item_cell_spans(
         let pad_span = if selected {
             Span::styled(
                 " ".repeat(pad),
-                Style::default().bg(palette::list_selected_row_bg()),
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::SelectedRow,
+                    selected,
+                )
+                .fill),
             )
         } else {
             Span::raw(" ".repeat(pad))
@@ -466,7 +468,7 @@ pub(in crate::app::render) fn draw_column_selection_markers(
         cursor,
         item_rows,
         row_offset,
-        palette::list_selected_row_bg(),
+        palette::surface_colors(palette::Surface::SelectedRow, false).fill,
     );
 }
 
