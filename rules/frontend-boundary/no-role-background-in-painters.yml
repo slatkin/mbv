@@ -1,0 +1,32 @@
+# Rule B of unify-surface-colour-neutral's guardrails (design D4): a
+# background is a surface colour and comes from the table, never from a role.
+# Rule A (`no-surface-role-in-painters`) bans the surface role names; this
+# bans *any* role in a `.bg(...)` because a non-surface role can paint a
+# background too (the queue's selected scope pill and `palette::ACCENT`).
+id: no-role-background-in-painters
+language: rust
+severity: error
+message: >-
+  A production paint site must not fill a background straight from a theme
+  role (`Style::bg(palette::ROLE)`) (unify-surface-colour-neutral design D4).
+  A background is a surface colour and comes from the table, so call
+  `surface_colors(surface, focused).fill` (or `.bg()` a value the table
+  produced, including a local). A role here escapes a surface-name-only ban:
+  the queue's selected scope pill painted `palette::ACCENT` as a chip
+  background exactly this way. Foreground `.fg(role)` stays legal.
+files:
+  - "src/**/*.rs"
+ignores:
+  # The theme itself owns the roles and the table's values.
+  - "src/app/render/theme/**"
+  - "src/app/palette.rs"
+  - "src/app/render/mod.rs"
+  # Test code.
+  - "**/*tests*.rs"
+  - "**/test_helpers*.rs"
+  - "**/*_test_support.rs"
+  - "**/*_test_modules.rs"
+rule:
+  any:
+    - pattern: "$_.bg(palette::$ROLE)"
+    - pattern: "$_.bg(crate::app::palette::$ROLE)"

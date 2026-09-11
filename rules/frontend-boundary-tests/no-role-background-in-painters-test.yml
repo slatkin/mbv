@@ -1,0 +1,18 @@
+id: no-role-background-in-painters
+valid:
+  - |
+    fn render(surface: palette::Surface, focused: bool) {
+      let style = Style::default().bg(palette::surface_colors(surface, focused).fill);
+      let fill = palette::surface_colors(surface, focused).fill;
+      let from_local = Style::default().bg(fill);
+      let fg = Style::default().fg(palette::ACCENT);
+    }
+invalid:
+  - |
+    fn render() {
+      let style = Style::default().bg(palette::ACCENT);
+    }
+  - |
+    fn render() {
+      let style = Style::default().bg(crate::app::palette::PILL_SELECTED_BG);
+    }
