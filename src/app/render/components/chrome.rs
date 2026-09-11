@@ -29,14 +29,25 @@ pub(in crate::app) fn render_legacy_backdrops(
             ..left_area
         };
         frame.render_widget(
-            Block::default()
-                .style(Style::default().bg(palette::resolve_surface_focus(queue_focused))),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::QueueColumn,
+                    queue_focused,
+                )
+                .fill),
+            ),
             backdrop,
         );
     }
     if right_visible {
         frame.render_widget(
-            Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            Block::default().style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::LibraryColumn,
+                    false,
+                )
+                .fill),
+            ),
             right_area,
         );
     }

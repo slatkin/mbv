@@ -41,13 +41,13 @@
 //!     held bit. The row only carries its two values; the call site collapses
 //!     the two match arms to the one bool it effectively computes (D3(d)).
 //!
-//! One appearance main has that this single-bool resolver cannot carry is the
-//! Queue-only playback strip (`shell_draw.rs:285,296,315`): with no right
-//! column on screen, the panel body and its recess rows paint
-//! `SURFACE_CHROME` in both bool states. That is a mode-driven appearance, not
-//! a focus-driven one, and it is deliberately recorded rather than encoded:
-//! the migration unit that owns `shell_draw` dispositions it (D1 forbids a
-//! second input here).
+//! One appearance main has that the normal-mode panel pair cannot express is
+//! the Queue-only playback strip (`shell_draw.rs:285,296,315`): with no right
+//! column on screen, the panel body and its recess rows paint `SURFACE_CHROME`
+//! in both bool states. That is a mode-driven appearance, not a focus-driven
+//! one, so it is its own fixed identity (`QueueOnlyPlaybackPanel`) rather than
+//! a second input to the resolver: the queue-only branch names it, and its
+//! recess rects share the value through the panel context.
 
 #![cfg_attr(not(test), allow(dead_code))]
 
@@ -181,14 +181,25 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: SURFACE_RESTING,
         },
         // The now-playing panel body: the projection at
-        // `shell_playback.rs:47-51`, the pre-sync default at
-        // `components/playback.rs:55`, and the Queue-only strip
-        // (`shell_draw.rs:285,296,315` — see the module note).
+        // `shell_playback.rs:47-51` and the pre-sync default at
+        // `components/playback.rs:55`.
         Surface::PlaybackPanel => Row {
             level: Level::ContentBody,
             focus: FocusSource::QueueColumn,
             soft: false,
             resting: SURFACE_RESTING,
+        },
+        // The Queue-only playback strip (`shell_draw.rs:285,296,315`): with no
+        // right column on screen, the shell paints the panel body and its
+        // recess rows as a chrome band in every frame — the recess rects take
+        // the value through the panel context (`ctx.panel_bg`), not from their
+        // own focus. The value is the chrome band's (`DARK_BG`), so a chrome
+        // band edit reaches it; the fixed row pins focused == resting.
+        Surface::QueueOnlyPlaybackPanel => Row {
+            level: Level::ChromeBand,
+            focus: FocusSource::Fixed,
+            soft: false,
+            resting: SURFACE_CHROME,
         },
         // The expanded (F1-F4) sidebar body paints the resting content value
         // (`render/components/chrome.rs:166-170`).

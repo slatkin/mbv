@@ -1,6 +1,6 @@
 use super::chrome_player::PlaybackRenderContext;
 use crate::app::layout::LayoutPlayback;
-use crate::app::{palette, App, PanelMode};
+use crate::app::{palette, App, PanelFocus, PanelMode};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -13,15 +13,31 @@ impl App {
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, Color)>,
-        panel_bg: Color,
+        // The resolved colour this parameter used to carry is threaded as the
+        // panel's surface identity below. The parameter keeps its position
+        // and type because the characterization callers in
+        // `src/app/render/tests.rs` (which this change must not edit) pass it
+        // positionally; production callers name the surface through the mode
+        // match, so the colour is no longer read.
+        _panel_bg: Color,
     ) -> PlaybackRenderContext<'a> {
+        // The site's own focus input: the queue column's bit, the same
+        // expression the component projection path computes in
+        // `shell_playback`. The Queue-only strip is a fixed chrome band, so
+        // the row ignores the bit there (design D3(a)).
+        let panel_focused = matches!(self.effective_panel_focus(), PanelFocus::Queue);
+        let panel = match self.effective_panel_mode() {
+            PanelMode::QueueOnly => palette::Surface::QueueOnlyPlaybackPanel,
+            _ => palette::Surface::PlaybackPanel,
+        };
         PlaybackRenderContext {
             area,
             playback,
             player_h,
             show_controls,
             now_playing_title: now_playing_title.clone(),
-            panel_bg,
+            panel,
+            panel_focused,
             narrow_player: self.effective_panel_mode() == PanelMode::QueueOnly,
             progress: self.playback_progress(),
             use_nerd_fonts: self.use_nerd_fonts,

@@ -25,9 +25,16 @@ pub const SURFACE_BACKDROP: Color = primitives::LIBRARY_SIDE_BG;
 pub const SURFACE_CHROME: Color = primitives::DARK_BG;
 pub const SURFACE_FOCUSED: Color = primitives::BG_GREEN;
 pub const SURFACE_RESTING: Color = primitives::PLAYBACK_PANEL_BG; // resting-content / unfocused half
+                                                                  // Transitional: the surface table's `PlaybackPanel`/`QueueOnlyPlaybackPanel`
+                                                                  // rows carry this value now; `render/tests.rs` still passes the name into the
+                                                                  // characterization seam, so it stays reachable until task 4.2 retires it.
+#[allow(dead_code)]
 pub const SURFACE_PLAYBACK: Color = primitives::PLAYBACK_PANEL_BG; // now-playing-strip half
 pub const SURFACE_ACCENT_SOFT: Color = primitives::BG_GREEN_SOFT;
 pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
+// Transitional: the surface table's `StatusBarPill` row carries this value
+// now (pills sit on the chrome status row); task 4.2 retires the alias.
+#[allow(dead_code)]
 pub const SURFACE_STATUS_PILL: Color = SURFACE_CHROME; // pills sit on the chrome status row; same bg
 pub const SURFACE_SIDEBAR: Color = primitives::PANEL_BG; // plain (non-hero) sidebar/panel background
                                                          // Transitional: the surface table's `ArtworkPlaceholder` row carries this

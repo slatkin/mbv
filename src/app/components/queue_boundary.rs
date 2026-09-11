@@ -117,8 +117,13 @@ impl Component for QueueBoundaryComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         if self.enabled && area.width > 0 && area.height > 0 {
             frame.render_widget(
-                Block::default()
-                    .style(Style::default().bg(palette::resolve_surface_focus(self.focused))),
+                Block::default().style(
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::QueueColumn,
+                        self.focused,
+                    )
+                    .fill),
+                ),
                 area,
             );
         }

@@ -147,6 +147,9 @@ declare_surfaces!(
     MainContentBox,
     InlineHero,
     PlaybackPanel,
+    // The Queue-only playback strip: a mode-driven chrome-band appearance, not
+    // a focus-driven one (see `surface_table`'s row doc).
+    QueueOnlyPlaybackPanel,
     SidebarBody,
     NonHeroSidebarBody,
     // The queue card's now-playing content: an inset by geography, but it

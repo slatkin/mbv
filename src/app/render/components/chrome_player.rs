@@ -15,7 +15,11 @@ pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) player_h: u16,
     pub(in crate::app) show_controls: bool,
     pub(in crate::app) now_playing_title: Option<(String, Color)>,
-    pub(in crate::app) panel_bg: Color,
+    /// The panel surface this playback chrome sits on plus the site's own
+    /// focus bit; the painter resolves the fill through the surface table
+    /// (`surface_colors`) instead of carrying a bare colour.
+    pub(in crate::app) panel: palette::Surface,
+    pub(in crate::app) panel_focused: bool,
     pub(in crate::app) narrow_player: bool,
     pub(in crate::app) progress: (i64, i64, bool),
     pub(in crate::app) use_nerd_fonts: bool,
@@ -39,8 +43,13 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
         height: 1,
         ..ctx.area
     };
+    // The ctx-driven sites resolve the panel surface the context carries: the
+    // normal-mode panel's own fill (`PlaybackPanel`, the queue column's bit)
+    // or the Queue-only strip's fixed chrome band (`QueueOnlyPlaybackPanel`),
+    // whose recess rects share the value through this context.
+    let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
     if ctx.show_controls {
-        render_seekbar(frame, seek_area, ctx.playback, ctx.progress, ctx.panel_bg);
+        render_seekbar(frame, seek_area, ctx.playback, ctx.progress, panel_bg);
     } else {
         ctx.playback.seekbar_area = Rect::default();
         let bar = "\u{2594}".repeat(seek_area.width as usize);
@@ -49,7 +58,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
                 bar,
                 Style::default().fg(palette::PROGRESS_TRACK),
             ))
-            .style(Style::default().bg(ctx.panel_bg)),
+            .style(Style::default().bg(panel_bg)),
             seek_area,
         );
     }
@@ -62,7 +71,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
         };
         frame.render_widget(
             Paragraph::new(Span::raw(" ".repeat(title_row_area.width as usize)))
-                .style(Style::default().bg(ctx.panel_bg)),
+                .style(Style::default().bg(panel_bg)),
             title_row_area,
         );
         let title_area = Rect {
@@ -90,7 +99,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
                 );
                 frame.render_widget(
                     Paragraph::new(Line::from(spans))
-                        .style(Style::default().bg(ctx.panel_bg))
+                        .style(Style::default().bg(panel_bg))
                         .alignment(Alignment::Center),
                     title_area,
                 );
@@ -106,7 +115,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
         };
         frame.render_widget(
             Paragraph::new(Span::raw(" ".repeat(blank_area.width as usize)))
-                .style(Style::default().bg(ctx.panel_bg)),
+                .style(Style::default().bg(panel_bg)),
             blank_area,
         );
     }
@@ -118,8 +127,13 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             ..ctx.area
         };
         frame.render_widget(
-            Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize)))
-                .style(Style::default().bg(palette::SURFACE_BACKDROP)),
+            Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize))).style(
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::PlaybackBottomRow,
+                    false,
+                )
+                .fill),
+            ),
             bottom_area,
         );
         if ctx.narrow_player && ctx.show_controls {
@@ -155,7 +169,13 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
                 };
                 frame.render_widget(
                     Paragraph::new(line)
-                        .style(Style::default().bg(palette::SURFACE_BACKDROP))
+                        .style(
+                            Style::default().bg(palette::surface_colors(
+                                palette::Surface::PlaybackBottomRow,
+                                false,
+                            )
+                            .fill),
+                        )
                         .alignment(alignment),
                     inset_area,
                 );
@@ -236,7 +256,7 @@ pub(in crate::app) fn render_title_row(
     } else {
         palette::TEXT_MUTED
     };
-    let pill_bg = palette::SURFACE_BACKDROP;
+    let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
     let mut codec_value_next = false;
     let mut right = ctx
         .status_indicators
@@ -403,7 +423,8 @@ pub(in crate::app) fn render_title_row(
     left.push(Span::raw(" ".repeat(gap)));
     left.extend(right);
     frame.render_widget(
-        Paragraph::new(Line::from(left)).style(Style::default().bg(ctx.panel_bg)),
+        Paragraph::new(Line::from(left))
+            .style(Style::default().bg(palette::surface_colors(ctx.panel, ctx.panel_focused).fill)),
         area,
     );
 }

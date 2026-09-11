@@ -25,7 +25,7 @@ impl App {
             RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
         );
         let glyph_style = Style::default()
-            .bg(palette::SURFACE_STATUS_PILL)
+            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
             .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
@@ -60,10 +60,17 @@ impl App {
             } else {
                 ratatui::style::Color::Black
             })
-            .bg(palette::SURFACE_STATUS_PILL);
+            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(
+                " ",
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::StatusBarPill,
+                    false,
+                )
+                .fill),
+            ),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f1616}"
@@ -73,7 +80,14 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(
+                " ",
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::StatusBarPill,
+                    false,
+                )
+                .fill),
+            ),
         ]
     }
 
@@ -125,7 +139,7 @@ impl App {
             _ => (format!("{gap}none"), false),
         };
         let glyph_style = Style::default()
-            .bg(palette::SURFACE_STATUS_PILL)
+            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
             .fg(if on {
@@ -133,10 +147,17 @@ impl App {
             } else {
                 palette::TEXT_SECONDARY
             })
-            .bg(palette::SURFACE_STATUS_PILL);
+            .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(
+                " ",
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::StatusBarPill,
+                    false,
+                )
+                .fill),
+            ),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f03a}"
@@ -146,7 +167,14 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(
+                " ",
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::StatusBarPill,
+                    false,
+                )
+                .fill),
+            ),
         ]
     }
 
@@ -158,26 +186,54 @@ impl App {
         };
         if self.queue_dirty {
             Some(vec![
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(
+                    " ",
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
                 Span::styled(
                     " UNSAVED ",
                     Style::default()
                         .fg(palette::TEXT_FOCUS_ACCENT)
-                        .bg(palette::SURFACE_STATUS_PILL)
+                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(
+                    " ",
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
             ])
         } else if autosave_on {
             Some(vec![
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(
+                    " ",
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
                 Span::styled(
                     " AUTOSAVE ",
                     Style::default()
                         .fg(palette::ACCENT)
-                        .bg(palette::SURFACE_STATUS_PILL),
+                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
                 ),
-                Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                Span::styled(
+                    " ",
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
             ])
         } else {
             None
@@ -189,15 +245,32 @@ impl App {
             .displayed_mute(self)
             .then(|| {
                 vec![
-                    Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                    Span::styled(
+                        " ",
+                        Style::default().bg(palette::surface_colors(
+                            palette::Surface::StatusBarPill,
+                            false,
+                        )
+                        .fill),
+                    ),
                     Span::styled(
                         "muted",
                         Style::default()
                             .fg(palette::STATUS_ERROR)
-                            .bg(palette::SURFACE_STATUS_PILL)
+                            .bg(
+                                palette::surface_colors(palette::Surface::StatusBarPill, false)
+                                    .fill,
+                            )
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+                    Span::styled(
+                        " ",
+                        Style::default().bg(palette::surface_colors(
+                            palette::Surface::StatusBarPill,
+                            false,
+                        )
+                        .fill),
+                    ),
                 ]
             })
     }
@@ -215,18 +288,25 @@ impl App {
             "\u{1F50A}"
         };
         vec![
-            Span::styled(" ", Style::default().bg(palette::SURFACE_STATUS_PILL)),
+            Span::styled(
+                " ",
+                Style::default().bg(palette::surface_colors(
+                    palette::Surface::StatusBarPill,
+                    false,
+                )
+                .fill),
+            ),
             Span::styled(
                 icon,
                 Style::default()
                     .fg(palette::PLAYBACK_META_FG)
-                    .bg(palette::SURFACE_STATUS_PILL),
+                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
             ),
             Span::styled(
                 format!(" {volume}"),
                 Style::default()
                     .fg(palette::ACCENT)
-                    .bg(palette::SURFACE_STATUS_PILL)
+                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
                     .add_modifier(Modifier::BOLD),
             ),
         ]
@@ -302,7 +382,8 @@ impl App {
         show_session_pill: bool,
     ) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
-        let bar_style = Style::default().bg(palette::SURFACE_CHROME);
+        let bar_style =
+            Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
         f.render_widget(Block::default().style(bar_style), area);
         layout.ind_mu = Rect::default();
 
@@ -466,7 +547,11 @@ impl App {
                     &mut right_spans,
                     Span::styled(
                         format!(" {label} "),
-                        Style::default().fg(color).bg(palette::SURFACE_STATUS_PILL),
+                        Style::default().fg(color).bg(palette::surface_colors(
+                            palette::Surface::StatusBarPill,
+                            false,
+                        )
+                        .fill),
                     ),
                 );
             }
@@ -478,13 +563,13 @@ impl App {
                     " 🯅",
                     Style::default()
                         .fg(palette::TEXT_METADATA)
-                        .bg(palette::SURFACE_STATUS_PILL),
+                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
                 ));
                 right_spans.push(Span::styled(
                     format!(" {username} "),
                     Style::default()
                         .fg(palette::PLAYBACK_META_FG)
-                        .bg(palette::SURFACE_STATUS_PILL),
+                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
                 ));
             }
             // Service-state glyphs — Emby, Audiobookshelf, stay-alive, shared-data —
