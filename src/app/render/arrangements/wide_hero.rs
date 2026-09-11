@@ -434,8 +434,10 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
 }
 
 /// Semantic surface variants for the shared Wide hero content-box framing.
+/// `pub(in crate::app)`: the Library panel's skeleton (task 5.2) selects the
+/// surface the Workspace box paints with, and task 5.6 deletes the enum.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app::render) enum WideHeroContentBoxSurface {
+pub(in crate::app) enum WideHeroContentBoxSurface {
     Backdrop,
     FocusedTrackList,
 }
@@ -448,15 +450,13 @@ pub(in crate::app::render) enum WideHeroContentBoxSurface {
 /// the pane inset from D6). Returns both rects so callers can use `panel` for
 /// full-bleed row backgrounds and `content` for text layout.
 ///
-/// Shared by Music's track panel and Home's overview block.
-pub(in crate::app::render) fn wide_hero_hero_content_box(
-    f: &mut Frame,
-    area: Rect,
-) -> (Rect, Rect) {
+/// Shared by Music's track panel and Home's overview block, and by the
+/// Library panel's skeleton (task 5.2).
+pub(in crate::app) fn wide_hero_hero_content_box(f: &mut Frame, area: Rect) -> (Rect, Rect) {
     wide_hero_hero_content_box_with_surface(f, area, WideHeroContentBoxSurface::Backdrop)
 }
 
-pub(in crate::app::render) fn wide_hero_hero_content_box_with_surface(
+pub(in crate::app) fn wide_hero_hero_content_box_with_surface(
     f: &mut Frame,
     area: Rect,
     surface: WideHeroContentBoxSurface,
@@ -541,8 +541,8 @@ pub(in crate::app::render) fn hero_artwork_slot(area: Rect, images_enabled: bool
 /// Rect-only: no painting, no text measurement -- callers supply the
 /// already-measured overview bottom and desired height. Reusable by any
 /// Wide hero surface embedding a media list below its overview (TV's
-/// episode list; a future Music tracks / Audiobookshelf list).
-pub(in crate::app::render) fn place_media_list_below(
+/// episode list; the Library panel's Workspace, task 5.2).
+pub(in crate::app) fn place_media_list_below(
     content: Rect,
     overview_bottom: u16,
     gap: u16,
@@ -637,8 +637,9 @@ mod wide_hero_slots_tests {
 /// "Consequence": text wrapping moves into `Hero`, screens hand over
 /// unwrapped strings). Style is screen-chosen (e.g. focus-derived bold),
 /// matching how `HeroContent::meta_color` lets an inline browser pick its
-/// own colour.
-pub(in crate::app::render) struct WrappedHeroLine<'a> {
+/// own colour. `pub(in crate::app)`: the Library panel's pre-5.5 hero
+/// placeholder paints through it too.
+pub(in crate::app) struct WrappedHeroLine<'a> {
     pub text: &'a str,
     pub style: Style,
 }
@@ -646,7 +647,7 @@ pub(in crate::app::render) struct WrappedHeroLine<'a> {
 /// Paints `lines` wrapped to `area`'s width, top to bottom, stopping at
 /// `area`'s bottom edge; empty line text is skipped. Returns the first
 /// unpainted row.
-pub(in crate::app::render) fn paint_wide_hero_text(
+pub(in crate::app) fn paint_wide_hero_text(
     f: &mut Frame,
     area: Rect,
     lines: &[WrappedHeroLine],

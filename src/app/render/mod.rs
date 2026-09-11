@@ -123,8 +123,9 @@ pub(in crate::app) use screens::feeds_model::{
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::padded_rect;
 pub(in crate::app) use arrangements::wide_hero::{
-    wide_hero_browser_border, wide_hero_browser_pane, wide_hero_fits, wide_hero_hero_pane,
-    LeftPaneFocus, PANE_PAD_X, PANE_PAD_Y,
+    paint_wide_hero_text, place_media_list_below, wide_hero_browser_border, wide_hero_browser_pane,
+    wide_hero_fits, wide_hero_hero_content_box_with_surface, wide_hero_hero_pane, LeftPaneFocus,
+    WideHeroContentBoxSurface, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
 pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
@@ -161,7 +162,9 @@ pub(in crate::app) use components::settings_component::{
 pub(in crate::app) use components::tv_wide::{
     render_wide_tv_with_ctx, TvEpisodePresentation, TvSeriesPresentation, TvWideRenderCtx,
 };
-pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
+pub(in crate::app) use components::widgets::{
+    render_count_label, render_pill_bar, render_placeholder, PillBar,
+};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
 // Interactive Components in `crate::app::components` (task 3.2+).
@@ -176,8 +179,8 @@ pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sideba
 // and/or `use super::*` in render/tests.rs.
 pub use components::indicators;
 use components::widgets::{
-    render_placeholder, render_right_scrollbar, render_selected_block_background,
-    MUSIC_ALBUM_IMAGE_TYPES, RENDER_FILTER,
+    render_right_scrollbar, render_selected_block_background, MUSIC_ALBUM_IMAGE_TYPES,
+    RENDER_FILTER,
 };
 pub(in crate::app) use components::widgets::{
     render_selected_block_borders, SelectedBlockBorderStyle,

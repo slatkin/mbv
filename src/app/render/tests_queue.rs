@@ -1,6 +1,5 @@
 use super::test_helpers::*;
 use crate::app::palette;
-use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::tests::make_session;
 use crate::App;
 use ratatui::layout::Rect;
@@ -85,12 +84,9 @@ fn strip_rows_are_reserved_only_in_library_only() {
         .root
         .library_playback
         .expect("library-only places the strip");
-    assert_eq!(strip.height, PLAYER_BOX_HEIGHT);
-    assert_eq!(strip.y, chrome.root.tab.expect("tab placed").bottom());
-    assert_eq!(
-        strip.bottom(),
-        chrome.root.library.expect("library placed").y
-    );
+    // (The strip band's placement — exactly `PLAYER_BOX_HEIGHT` tall,
+    // between the tab bar and the library — is asserted once in
+    // `chrome.rs::root_frame_tests`; this test keeps the paint proof.)
     let cells = transport_cells(term.backend().buffer());
     assert!(
         !cells.is_empty(),

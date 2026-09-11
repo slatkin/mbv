@@ -21,6 +21,7 @@ pub mod feeds_manage;
 pub mod help;
 pub mod home;
 pub mod inline_search;
+pub mod library_panel;
 pub mod library_playback_panel;
 pub mod library_routes;
 pub mod media_list;
