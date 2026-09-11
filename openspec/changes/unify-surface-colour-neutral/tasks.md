@@ -41,11 +41,11 @@
 
 ## 4. Conformance and retirement
 
-- [ ] 4.1 Port the conformance test to the bool resolver (D5 proof 3);
+- [x] 4.1 Port the conformance test to the bool resolver (D5 proof 3);
   coverage table for all identities (35 after re-validation added `QueueOnlyPlaybackPanel`); the surfaces pinned nowhere at buffer
   level recorded, not hidden. Verify: planting another level's fill in a
   painter fails the test by name.
-- [ ] 4.2 Retire value-aliased role names and split shared primitives (the
+- [x] 4.2 Retire value-aliased role names and split shared primitives (the
   archived rows 4.3/5.1 substance, re-based onto main). Verify: Rgb multiset
   matches main with only split-count deltas; grep proves no production role
   name remains outside `theme/`.
