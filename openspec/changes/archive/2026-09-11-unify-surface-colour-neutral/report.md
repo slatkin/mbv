@@ -2,8 +2,8 @@
 
 Recorded at HEAD `5022e9a3`, branch `refactor/unify-surface-colour-neutral`,
 2026-09-11, against base ref `origin/main`. Every claim below is
-reproducible from the tree: by running the named script or test, or by the
-cited file and line.
+reproducible from the tree: by running the named command, or by the cited
+file and line.
 
 ## Gate battery (task 5.1)
 
@@ -22,13 +22,9 @@ residuals).
 ## D5 proof 2 — test-diff emptiness
 
 `git diff origin/main --` over every pre-existing test file is empty: 166 files
-at `origin/main` whose paths contain `test`, all byte-identical in this branch.
-Mechanically checked by proof 2 of
-`scripts/check-surface-colour-neutrality.sh`, which passes:
-
-```text
-surface-colour-neutrality: ok: 166 pre-existing test files unchanged
-```
+at `origin/main` whose paths contain `test`, all byte-identical in this branch,
+per `git diff --stat origin/main -- $(git ls-tree -r --name-only origin/main --
+src | grep -i test)` (no output):
 
 Main's buffer expectations therefore pass byte-identical, pinning today's
 values and today's focus reactivity. The only test additions are new modules
@@ -53,9 +49,10 @@ The multiset of raw `Color::Rgb(...)` literals across `src/` matches
 `origin/main` exactly, except for the five declared split literals of task 4.2,
 each appearing exactly one more time than the base and only where the base
 already carries the same bytes under another name (two names, identical bytes).
-Mechanically checked by proof 1 of
-`scripts/check-surface-colour-neutrality.sh`, which passes
-(`ok: Rgb literal multiset matches origin/main (plus declared splits)`).
+Checked by comparing the two sorted streams of `Color::Rgb(...)` matches
+(`git grep -h -o -E '<pattern>' origin/main -- src` against
+`grep -rhoE '<pattern>' src`, both `tr -d ' ' | sort`): the only differences
+are the five declared splits below, each appearing exactly one extra time.
 
 The five splits, each verified as base 1 / worktree 2 / delta +1
 (`theme/primitives.rs`):
@@ -72,8 +69,8 @@ The five splits, each verified as base 1 / worktree 2 / delta +1
   project blue `FOAM` (:37).
 
 Each split is purpose-named so a future edit to one primitive can never move
-another role's appearance while the two share a value today. No literal moved,
-was deleted, or was added outside this list — any such move fails the script.
+another role's appearance while the two share a value today. No literal moved
+or was deleted, and every added literal is on this list.
 
 ## D5 proof 3 — conformance coverage
 
