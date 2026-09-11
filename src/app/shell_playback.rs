@@ -74,11 +74,7 @@ impl Model {
                 .mount(id.clone(), Box::new(PlaybackComponent::new()), vec![])
                 .expect("mount Playback");
         }
-        let mut projection = self.transport_projection();
-        // The right-column strip's own identity: the queue column's focus bit
-        // (the strip is a right-column surface; task 3.5 moves the queue
-        // column's transport to the Queue playback panel).
-        projection.panel_focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
+        let projection = self.transport_projection();
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(playback) = comp.as_any_mut().downcast_mut::<PlaybackComponent>() {
                 playback.set_projection(projection);
@@ -96,6 +92,14 @@ impl Model {
         // layout the transport is the Queue playback panel's, and the strip
         // band stays reserved but unpainted until task 4.1 reclaims the rows.
         let Some(area) = self.app.layout.root_frame.library_playback else {
+            // The strip does not paint this frame: clear the transport hit
+            // geometry it retained from its last paint, so no stale geometry
+            // survives the layout switch (review of tasks 3.5-3.8).
+            if let Some(comp) = self.application.get_component_mut(&id) {
+                if let Some(playback) = comp.as_any_mut().downcast_mut::<PlaybackComponent>() {
+                    playback.clear_transport_hits();
+                }
+            }
             return;
         };
         self.application.view(&id, frame, area);

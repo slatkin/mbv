@@ -172,7 +172,14 @@ impl Model {
         ] {
             if self.application.mounted(&id)
                 && (id != ComponentId::QueueBoundary || self.queue_boundary_mouse_eligible())
-                && (id == ComponentId::Playback || panel_mode != super::PanelMode::LibraryOnly)
+                && match id {
+                    // The strip paints only where `RootFrame` places it (task
+                    // 3.5): its placement is the painted-this-frame check, and
+                    // the hits it retains are cleared on every unpainted frame
+                    // (review of tasks 3.5-3.8).
+                    ComponentId::Playback => self.app.layout.root_frame.library_playback.is_some(),
+                    _ => panel_mode != super::PanelMode::LibraryOnly,
+                }
             {
                 ids.push(id);
             }

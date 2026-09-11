@@ -18,6 +18,13 @@ pub(in crate::app) const PLAYER_BOX_HEIGHT: u16 = 4;
 /// placement already starts below the Queue playback panel's header.
 pub(in crate::app) const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 1;
 
+/// Columns at which the queue column's visual slot and transport render
+/// side by side rather than stacked (the folded change's placement rule).
+const QUEUE_PLAYBACK_WIDE_COLUMNS: u16 = 100;
+
+/// The gap between the side-by-side visual slot and the transport.
+const SLOT_TRANSPORT_GAP: u16 = 2;
+
 /// Resolved app state needed to place the frame chrome for one terminal area.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct ChromeGeometryInput {
@@ -96,6 +103,48 @@ fn placed_when(cond: bool, rect: Rect) -> Option<Rect> {
     cond.then_some(rect).filter(|r| r.width > 0 && r.height > 0)
 }
 
+/// Whether the queue column is wide enough for the side-by-side visual slot
+/// and transport arrangement. One source for the breakpoint: the root
+/// placements and the Queue playback panel's paint step both call this.
+pub(in crate::app) fn queue_playback_column_wide(left_area_width: u16) -> bool {
+    left_area_width >= QUEUE_PLAYBACK_WIDE_COLUMNS
+}
+
+/// The transport rect for one painted visual slot, within the queue playback
+/// rows below the header row (`slot_region`'s top row): side by side at 100+
+/// columns with the 2-cell gap, stacked below the slot otherwise. One
+/// function the root placements (through `queue_playback_rows`) and the
+/// Queue playback panel's paint step both call, so the breakpoint, the gap,
+/// and the side-by-side/stacked split cannot drift between them (review of
+/// tasks 3.5-3.8).
+pub(in crate::app) fn queue_playback_transport_area(
+    slot_region: Rect,
+    column_wide: bool,
+    card_width: u16,
+    card_height: u16,
+) -> Rect {
+    if column_wide {
+        Rect {
+            x: slot_region
+                .x
+                .saturating_add(card_width)
+                .saturating_add(SLOT_TRANSPORT_GAP),
+            y: slot_region.y,
+            width: slot_region
+                .width
+                .saturating_sub(card_width + SLOT_TRANSPORT_GAP),
+            height: card_height.max(PLAYER_BOX_HEIGHT),
+        }
+    } else {
+        Rect {
+            x: slot_region.x,
+            y: slot_region.y.saturating_add(card_height),
+            width: slot_region.width,
+            height: PLAYER_BOX_HEIGHT,
+        }
+    }
+}
+
 /// Rows the queue column spends on the visual slot and the transport, above
 /// the Queue panel (the header row is a separate, always-spent input). Stacked
 /// below 100 columns: slot rows plus the transport's `PLAYER_BOX_HEIGHT`;
@@ -110,11 +159,20 @@ pub(in crate::app) fn queue_playback_rows(
     if !playback_active {
         return 0;
     }
-    if column_wide {
-        card_height.max(PLAYER_BOX_HEIGHT)
-    } else {
-        card_height.saturating_add(PLAYER_BOX_HEIGHT)
-    }
+    // The rows are the transport's footprint in the slot region (the rows
+    // below the header row): side by side it starts on the slot region's
+    // first row, so its height governs; stacked it starts after the slot's
+    // rows, so its offset plus height governs. Derived from
+    // `queue_playback_transport_area` over an unbounded probe region (with
+    // the slot collapsed to zero width) so the row count and the painted
+    // transport rect cannot drift (review of tasks 3.5-3.8).
+    queue_playback_transport_area(
+        Rect::new(0, 0, u16::MAX, u16::MAX),
+        column_wide,
+        0,
+        card_height,
+    )
+    .bottom()
 }
 
 /// Computes the root/chrome geometry for one frame without reading app state.
@@ -231,7 +289,7 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
     // so they tile the queue column's content exactly.
     let queue_col_visible = input.panel_mode != PanelMode::LibraryOnly;
     let playback_rows = queue_playback_rows(
-        left_area.width >= 100,
+        queue_playback_column_wide(left_area.width),
         input.card_height,
         input.playback_active,
     );

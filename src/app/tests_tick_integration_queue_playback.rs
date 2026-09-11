@@ -74,6 +74,88 @@ fn drawn_harness(mut app: crate::app::App, width: u16, height: u16) -> (TickHarn
     (harness, play_pause, seekbar)
 }
 
+/// Task 3.7: the Queue playback panel's transport resolves pointer input from
+/// its own retained geometry, in the layouts the panel paints it: `both` and
+/// mini-view `queue-only`. A collapsed (idle) panel's rows resolve nothing.
+/// Review of tasks 3.5-3.8: the right-column strip (`PlaybackComponent`)
+/// keeps no stale hit geometry across a layout switch either.
+#[cfg(test)]
+mod strip_hits {
+    use super::*;
+    use crate::app::components::PlaybackComponent;
+
+    /// Draw one real library-only frame (the strip paints and retains its
+    /// transport hit geometry), then switch to `both` and draw again.
+    fn strip_to_both_harness() -> (TickHarness, ratatui::layout::Rect) {
+        let mut app = active_app(PanelMode::LibraryOnly);
+        app.panel_focus = PanelFocus::Library;
+        app.terminal_width = 100;
+        app.terminal_height = 40;
+        let mut harness = TickHarness::new(app);
+        harness.model_mut().sync_mounted_surfaces();
+        let mut terminal = Terminal::new(TestBackend::new(100, 40)).unwrap();
+        terminal
+            .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+            .unwrap();
+        // The strip painted this frame and retained real hit geometry.
+        let strip = harness
+            .model()
+            .app
+            .layout
+            .root_frame
+            .library_playback
+            .expect("the strip placed in a library-only layout");
+        let playback = harness
+            .model()
+            .application
+            .get_component(&ComponentId::Playback)
+            .and_then(|component| component.as_any().downcast_ref::<PlaybackComponent>())
+            .expect("strip mounted");
+        let (play_pause, seekbar) = playback.transport_hits();
+        assert!(play_pause.width > 0 && seekbar.width > 0, "strip hits retained");
+
+        // Switch to `both`: the queue column becomes visible and the strip
+        // stops painting — its placement disappears and the hits it retained
+        // must not survive the switch.
+        harness.model_mut().app.panel_mode = PanelMode::Both;
+        harness.model_mut().sync_mounted_surfaces();
+        terminal
+            .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+            .unwrap();
+        let playback = harness
+            .model()
+            .application
+            .get_component(&ComponentId::Playback)
+            .and_then(|component| component.as_any().downcast_ref::<PlaybackComponent>())
+            .expect("strip still mounted");
+        let (play_pause, seekbar) = playback.transport_hits();
+        assert_eq!(
+            (play_pause.width, seekbar.width),
+            (0, 0),
+            "the unpainted strip retains no hit geometry"
+        );
+        (harness, strip)
+    }
+
+    /// A click in the library column where the strip used to sit reaches no
+    /// `PlaybackComponent` once the layout stops painting it.
+    #[test]
+    fn switching_from_library_only_to_both_leaves_the_old_strip_rows_inert() {
+        let (mut harness, strip) = strip_to_both_harness();
+
+        // The old strip spanned the full right column; its seekbar row was
+        // the placement's first row. In `both` the click lands in the library
+        // column, past the queue column's 40 cells.
+        harness.inject(click(strip.x + 60, strip.y));
+        let outcome = harness.step();
+        assert!(
+            playback_intents(&outcome).is_empty(),
+            "the unpainted strip resolves nothing: {:?}",
+            outcome.raw_messages
+        );
+    }
+}
+
 #[test]
 fn tick_clicks_play_pause_and_the_seekbar_in_both() {
     let (mut harness, play_pause, seekbar) =

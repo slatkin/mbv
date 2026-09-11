@@ -83,6 +83,23 @@ impl PlaybackComponent {
         self.projection = projection;
     }
 
+    /// Clears the transport hit geometry retained from the last paint
+    /// (review of tasks 3.5-3.8): the shell calls this whenever the strip
+    /// does not paint this frame, so no stale geometry survives a layout
+    /// switch.
+    pub(in crate::app) fn clear_transport_hits(&mut self) {
+        self.play_pause_area = Rect::default();
+        self.stop_area = Rect::default();
+        self.next_area = Rect::default();
+        self.seekbar_area = Rect::default();
+    }
+
+    /// Test-only: the retained transport hit geometry.
+    #[cfg(test)]
+    pub(in crate::app) fn transport_hits(&self) -> (Rect, Rect) {
+        (self.play_pause_area, self.seekbar_area)
+    }
+
     fn double_tap(last: &mut Option<Instant>) -> bool {
         let now = Instant::now();
         let result =

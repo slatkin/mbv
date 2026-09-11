@@ -26,7 +26,11 @@ fn mouse_eligibility_rung3_is_painted_destination_plus_playback() {
     let child = model.emby_browser_id.clone().expect("browser mounted");
     let eligible: std::collections::HashSet<_> = model.mouse_eligible_ids().into_iter().collect();
     assert!(eligible.contains(&child));
-    assert!(eligible.contains(&ComponentId::Playback));
+    // The strip paints only where `RootFrame` places it (task 3.5): in the
+    // two-panel layout its `library_playback` placement is absent, so the
+    // mounted `Playback` component is not mouse-eligible (review of tasks
+    // 3.5-3.8).
+    assert!(!eligible.contains(&ComponentId::Playback));
     assert!(
         !eligible
             .iter()
@@ -187,7 +191,9 @@ fn sync_mouse_subscriptions_tracks_and_wipes_the_eligible_set() {
     model.sync_mouse_subscriptions();
     let child = model.emby_browser_id.clone().expect("browser mounted");
     assert!(model.mouse_subscribed.contains(&child));
-    assert!(model.mouse_subscribed.contains(&ComponentId::Playback));
+    // The strip is not painted in the two-panel layout (no
+    // `library_playback` placement), so it draws no subscription.
+    assert!(!model.mouse_subscribed.contains(&ComponentId::Playback));
 
     model
         .application
