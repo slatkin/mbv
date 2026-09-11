@@ -17,7 +17,7 @@
 
 ## 2. Guardrails
 
-- [ ] 2.1 Port both rules with D4's adjusted text (role names and any
+- [x] 2.1 Port both rules with D4's adjusted text (role names and any
   non-`surface_colors` resolver banned in painters; role backgrounds banned).
   Verify: both probes fire with ids and locations, then revert; `ast-grep
   test` passes.
