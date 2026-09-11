@@ -31,18 +31,18 @@
 - [x] 3.2 Unit B — shell chrome: `chrome.rs` backdrops (`queue_focused` stays
   the input), `queue_boundary`, `chrome_status`, `chrome_player`,
   `shell_playback`, `shell_draw`'s strip, `chrome_tabs`. Verify as 3.1.
-- [ ] 3.3 Unit C — screens: `home`, `music_wide`, `home_hero_emby`,
+- [x] 3.3 Unit C — screens: `home`, `music_wide`, `home_hero_emby`,
   `detail_series_view`, `search_sidebar`, `hero`, `playback`. The hero-pane
   match collapses to the one bool per D3(d). Verify as 3.1.
-- [ ] 3.4 Unit C2 — `queue.rs` bands and scope pills; the selected scope pill
+- [x] 3.4 Unit C2 — `queue.rs` bands and scope pills; the selected scope pill
   keeps the aqua through its declared row. Verify as 3.1.
-- [ ] 3.5 Unit D — `modal_frame` and its nine callers, `backdrop` dim,
+- [x] 3.5 Unit D — `modal_frame` and its nine callers, `backdrop` dim,
   `context_menu`, the sidebar bodies/bands in `chrome.rs`. Verify as 3.1.
 
 ## 4. Conformance and retirement
 
 - [ ] 4.1 Port the conformance test to the bool resolver (D5 proof 3);
-  coverage table for all 34 identities; the surfaces pinned nowhere at buffer
+  coverage table for all identities (35 after re-validation added `QueueOnlyPlaybackPanel`); the surfaces pinned nowhere at buffer
   level recorded, not hidden. Verify: planting another level's fill in a
   painter fails the test by name.
 - [ ] 4.2 Retire value-aliased role names and split shared primitives (the
