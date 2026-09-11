@@ -13,12 +13,11 @@ use tuirealm::state::State;
 use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutPlayback;
-#[cfg(test)]
 use crate::app::palette;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
     pub state: PlaybackState,
     pub show_controls: bool,
@@ -32,6 +31,34 @@ pub(in crate::app) struct PlaybackProjection {
     pub use_nerd_fonts: bool,
     pub stop_available: bool,
     pub next_available: bool,
+}
+
+impl Default for PlaybackProjection {
+    fn default() -> Self {
+        Self {
+            state: PlaybackState::default(),
+            show_controls: false,
+            // The projection's one pre-sync default: the shell's first startup
+            // draw renders this component before any sync pass runs, so the
+            // initial fill IS painted. It names the table's `PlaybackPanel`
+            // resting value (the old `SURFACE_PLAYBACK` literal's value);
+            // `sync_playback` replaces it with the frame-resolved fill.
+            panel_bg: palette::surface_colors_for_column_focus(
+                palette::Surface::PlaybackPanel,
+                false,
+            )
+            .fill,
+            narrow_player: false,
+            now_playing_title: None,
+            title_parts: Vec::new(),
+            status_indicators: None,
+            throbber: Span::raw(""),
+            idle_feed_title: None,
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+        }
+    }
 }
 
 pub struct PlaybackComponent {
@@ -50,10 +77,9 @@ pub struct PlaybackComponent {
 impl PlaybackComponent {
     pub fn new() -> Self {
         Self {
-            // `panel_bg` has no surface default: `sync_playback` always sets
-            // the table-resolved fill before the first frame, so the initial
-            // value is never rendered. (`Color::Reset`, from `Default`, paints
-            // nothing.)
+            // `panel_bg` defaults to the table's PlaybackPanel resting fill
+            // (see `Default for PlaybackProjection`): the first startup draw
+            // renders before `sync_playback` ever runs.
             projection: PlaybackProjection::default(),
             props: Props::default(),
             last_space: None,
@@ -281,6 +307,24 @@ mod tests {
             component.on(&key(Key::Right)),
             Some(Msg::Playback(PlaybackRequest::Next))
         ));
+    }
+
+    /// The projection's default fill is the table's PlaybackPanel resting
+    /// value — never `Color::Reset` — because the shell's first startup draw
+    /// renders the component before `sync_playback` runs.
+    #[test]
+    fn default_projection_carries_the_panel_resting_fill() {
+        assert_eq!(
+            PlaybackProjection::default().panel_bg,
+            palette::surface_colors_for_column_focus(palette::Surface::PlaybackPanel, false).fill
+        );
+        let mut component = PlaybackComponent::new();
+        let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let cell = terminal.backend().buffer()[(0, 2)].bg;
+        assert_eq!(cell, PlaybackProjection::default().panel_bg);
     }
 
     #[test]
