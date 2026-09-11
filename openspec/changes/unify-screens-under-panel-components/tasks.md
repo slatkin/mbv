@@ -6,7 +6,7 @@ tests; no test, rule or script checks one destination against another.
 
 ## 0. Base
 
-- [ ] 0.1 Confirm the base is `main` at or after `9e59a29a` (not the discarded
+- [x] 0.1 Confirm the base is `main` at or after `9e59a29a` (not the discarded
   `refactor/unify-wide-hero-content-box-frame` branch) and re-verify every `file:line` citation in
   `design.md` Context and D17 against it; correct any that moved in `design.md` before starting 1.1.
   Verify: `git merge-base --is-ancestor 9e59a29a HEAD` succeeds and each cited symbol is found at (or
