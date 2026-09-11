@@ -93,7 +93,7 @@ impl App {
         Self::set_status_pill_style(
             &mut local_spans,
             palette::TEXT_FOCUS_ACCENT,
-            palette::SURFACE_CHROME,
+            palette::surface_colors(palette::Surface::StatusBarPill, false).fill,
         );
         if let Some(icon) = local_spans.get_mut(1) {
             icon.style = icon.style.fg(palette::TEXT_METADATA);
@@ -163,7 +163,10 @@ pub(in crate::app) fn render_queue_title_content(
     geometry.scope_local_area = Rect::default();
     geometry.scope_remote_area = Rect::default();
     frame.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+        Block::default().style(
+            Style::default()
+                .bg(palette::surface_colors(palette::Surface::QueuePanelBand, false).fill),
+        ),
         Rect { height: 1, ..area },
     );
     let mut local_spans = vec![
@@ -172,7 +175,7 @@ pub(in crate::app) fn render_queue_title_content(
         Span::raw(model.local_label.clone()),
         Span::raw(" "),
     ];
-    let local_bg = palette::SURFACE_CHROME;
+    let local_bg = palette::surface_colors(palette::Surface::QueuePanelBand, false).fill;
     let local_fg = palette::TEXT_FOCUS_ACCENT;
     for span in &mut local_spans {
         span.style = Style::default().fg(local_fg).bg(local_bg);
@@ -216,7 +219,10 @@ pub(in crate::app) fn render_queue_title_content(
         ..area
     };
     frame.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+        Block::default().style(
+            Style::default()
+                .bg(palette::surface_colors(palette::Surface::QueuePanelBand, false).fill),
+        ),
         target_area,
     );
     frame.render_widget(
@@ -228,7 +234,7 @@ pub(in crate::app) fn render_queue_title_content(
                 } else {
                     palette::TEXT_FOCUS_ACCENT
                 })
-                .bg(palette::SURFACE_CHROME)
+                .bg(palette::surface_colors(palette::Surface::QueuePanelBand, false).fill)
                 .add_modifier(Modifier::BOLD),
         )])),
         target_area,
@@ -256,9 +262,9 @@ pub(in crate::app) fn render_queue_title_content(
         ..button_area
     };
     let local_bg = if model.local_selected {
-        palette::ACCENT
+        palette::surface_colors(palette::Surface::QueueScopePillSelected, false).fill
     } else {
-        palette::PILL_BG
+        palette::surface_colors(palette::Surface::PillChip, false).fill
     };
     let local_fg = if model.local_selected {
         palette::TEXT_FOCUS_ACCENT
@@ -266,9 +272,9 @@ pub(in crate::app) fn render_queue_title_content(
         palette::PILL_FG
     };
     let remote_bg = if model.local_selected {
-        palette::PILL_BG
+        palette::surface_colors(palette::Surface::PillChip, false).fill
     } else {
-        palette::ACCENT
+        palette::surface_colors(palette::Surface::QueueScopePillSelected, false).fill
     };
     let remote_fg = if model.local_selected {
         palette::PILL_FG
@@ -294,7 +300,10 @@ pub(in crate::app) fn render_queue_status(
     autosave: Option<Vec<Span<'static>>>,
 ) {
     frame.render_widget(
-        Block::default().style(Style::default().bg(palette::SURFACE_CHROME)),
+        Block::default().style(
+            Style::default()
+                .bg(palette::surface_colors(palette::Surface::QueuePanelBand, false).fill),
+        ),
         area,
     );
     frame.render_widget(Paragraph::new(Line::from(playlist)), area);
