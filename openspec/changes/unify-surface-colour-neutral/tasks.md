@@ -59,5 +59,5 @@
   report — test-diff emptiness, multiset identity, conformance coverage — plus
   the residuals list (unpinned surfaces, the known SIGABRT flake, the bool
   seam's provenance note).
-- [ ] 5.3 Sync the delta requirement into `openspec/specs/ui-design-language/
+- [x] 5.3 Sync the delta requirement into `openspec/specs/ui-design-language/
   spec.md` and archive the change.
