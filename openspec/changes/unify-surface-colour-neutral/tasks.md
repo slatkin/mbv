@@ -1,16 +1,16 @@
 ## 1. The table, locked to main's behaviour
 
-- [ ] 1.1 Port the three theme modules from the archived branch's 8dd8fa97
+- [x] 1.1 Port the three theme modules from the archived branch's 8dd8fa97
   (`surface.rs` / `surface_table.rs` / `surface_resolve.rs`), reshaping the
   resolver to `surface_colors(surface, focused: bool)` (D1). Re-walk the
   archived 2.1 inventory against main and correct the identity set before
   porting names. Verify: `cargo check -p mbv` with the modules
   `cfg_attr(not(test), allow(dead_code))` as the archived row 4.1 did.
-- [ ] 1.2 Derive every row per D2: focused fill = what main's site paints with
+- [x] 1.2 Derive every row per D2: focused fill = what main's site paints with
   its bit true; resting = with false; fixed sites pin focused == resting.
   Enumerate the special sites (D3) with file:line evidence in the row docs.
   Verify: the pinned-value test plants a change in one row and fails.
-- [ ] 1.3 Record the neutrality proofs as runnable checks from the start
+- [x] 1.3 Record the neutrality proofs as runnable checks from the start
   (D5): the Rgb multiset comparison scripted, and `git diff origin/main --`
   over existing test files asserted empty by the verify step of every
   migration task.
