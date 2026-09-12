@@ -229,7 +229,7 @@ proves the slot types early.
   still paints its legacy painter this step, so no output moves. Verify: unit tests of `content()` (one
   pill bar; the controls row only with a filter; Square/Landscape per feed kind); `tests_feeds.rs`,
   `feeds_component_tests.rs` and `tests_tick_integration_feeds.rs` pass unchanged.
-- [ ] 7.2 Paint Feeds through the panel: `FeedsComponent::view` becomes the shared Wide/Narrow skeleton
+- [x] 7.2 Paint Feeds through the panel: `FeedsComponent::view` becomes the shared Wide/Narrow skeleton
   over `content()`, keeping only its own pill/row hit store, and `render_feeds_content`, its
   `render_selector_content` closure and `paint_feed_hero` are deleted with `tests_feeds.rs` rewritten to
   the new output (the hero image is the projected `HeroImageState`, never a paint-time fetch). Verify:
