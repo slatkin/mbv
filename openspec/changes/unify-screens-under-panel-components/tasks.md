@@ -307,7 +307,7 @@ Books conforms to Emby.
   painting its legacy painter this step. Verify: unit tests of `content()` (one pill bar, Portrait
   artwork, progress as a plain meta row, chapters as the workspace); `tests_audiobookshelf_books.rs`,
   `audiobookshelf_book_component_tests.rs` and `tests_tick_integration_book.rs` pass unchanged.
-- [ ] 10.2 Paint Books through the panel: delete `render_audiobookshelf_book_content`,
+- [x] 10.2 Paint Books through the panel: delete `render_audiobookshelf_book_content`,
   `render_narrow_book`, `render_book_rows`' inline path and the private geometry struct, painting the
   shared skeleton instead, with `tests_audiobookshelf_books.rs` rewritten to panel output (Narrow
   inline hero without chapters, Enter opens the selection modal). Verify: buffer tests for the Wide
