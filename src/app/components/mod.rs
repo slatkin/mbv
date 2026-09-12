@@ -29,6 +29,7 @@ pub mod media_list;
 pub mod mouse;
 pub mod msg;
 pub mod multiselect;
+pub mod music_content;
 pub mod music_workspace;
 mod music_workspace_keys;
 pub mod playlists;

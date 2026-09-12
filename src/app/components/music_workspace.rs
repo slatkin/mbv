@@ -1,11 +1,13 @@
 //! Interactive Component for grouped Music's Wide workspace.
 //!
-//! One shared canonical album owner (a [`MediaListCarrier`]) moves between the
-//! Wide and Inline presentations and is authoritative for the album cursor,
-//! scroll, and selected target. The wide track table is a second canonical
-//! owner; the component keeps only the parent-owned track-pane focus, the group
-//! chrome, and typed shell intents. Row-local input reaches the owners through
-//! the common delegation seam (design.md D3/D5).
+//! The embedded [`MusicContent`] owner is authoritative for the album and
+//! track cursors, scroll, selected targets, track focus, and Inline Search
+//! session. The component keeps only legacy painter geometry, breakpoint
+//! presentation facts, group hit geometry, and typed shell intents until the
+//! later Music panel slices move painting and registration. Row-local input
+//! reaches the owner through the common delegation seam (design.md D3/D5).
+
+use std::ops::{Deref, DerefMut};
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -16,121 +18,64 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
-    RowLocalOutcome, WideMediaList,
-};
+use super::media_list::{Presentation, RowLocalInput, RowLocalOutcome};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest, TerminalObserverEvent};
+use super::music_content::MusicContent;
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
     render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, wide_hero_fits,
     MusicAlbumPresentation, MusicImagePaint, MusicTrackPresentation, MusicWideRenderCtx,
 };
-use crate::app::ui_util::list_duration_secs;
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
-
-fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
-    tracks
-        .iter()
-        .enumerate()
-        .map(|(index, track)| {
-            let number = if track.index_number > 0 {
-                track.index_number
-            } else {
-                index as i64 + 1
-            };
-            let duration = list_duration_secs(track.runtime_ticks / TICKS_PER_SECOND);
-            MediaListRow::Item {
-                target: track.id.clone(),
-                primary: format!("{number}. {}", track.name),
-                trailing: None,
-                duration,
-                kind: MediaKind::Media,
-                semantic_state: MediaSemanticState::Ordinary,
-            }
-        })
-        .collect()
-}
 
 pub struct MusicWorkspaceComponent {
-    pub(super) context: MusicWideRenderCtx,
+    /// The embedded content owner is the sole store for Music's content,
+    /// selection, track focus and Inline Search session. The component keeps
+    /// only legacy painter geometry and transitional paint state until tasks
+    /// 9.2–9.4 complete.
+    pub(super) content: MusicContent,
     pub(super) album_columns: usize,
     pub(super) page_rows: usize,
-    /// Parent-owned track-pane focus, separate from the track owner's selected
-    /// row (design.md D5). The track `MediaList` stays authoritative for the
-    /// selected track and its scroll whether or not this pane has focus.
-    pub(super) track_focused: bool,
-    /// Selected-album identity from the last pushed context. When it changes
-    /// (group switch, recursive-album activation, position restore), inline
-    /// track focus must reset: a focused track index refers to the previous
-    /// album's track list.
-    last_album_id: Option<String>,
     layout: LayoutMain,
     image_paint: Option<MusicImagePaint>,
     inline_track_focus_enabled: bool,
-    /// The one shared canonical owner of the grouped-album rows, carried by
-    /// exactly one of the Wide/Inline presentations (design.md D1/D2). It owns
-    /// the album cursor, scroll, and selected target across a breakpoint
-    /// change; the two adapters are never synchronized.
-    pub(super) carrier: MediaListCarrier<String>,
-    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
-    /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
-    /// The wide track table's persistent canonical control: the authoritative
-    /// track owner for selection/scroll/painting/retained hits (design.md D5).
-    pub(super) track_list: WideMediaList<String>,
-    /// The Wide presentation's last painted album-browser content height, as
-    /// returned by the render output (design.md D3/D6). Consumed as the
-    /// receiving viewport height at the next responsive hand-off instead of a
-    /// destination-side re-derivation of the arrangement.
     wide_browser_content_height: Option<usize>,
-    /// Group-pill rects (design.md D6), repopulated in `view()` from
-    /// `layout.selector_tabs` — the pill painter's own output — for both
-    /// breakpoints. The tag is the 0-based group index.
     pill_regions: HitRegions<usize>,
-    /// The embedded Inline Search control (design.md D1). See
-    /// `BrowserComponent::inline_search` for the migration-phase notes.
-    /// `pub(super)`, matching the sibling key module (split out for file
-    /// size), so `music_workspace_keys` can reach it.
-    pub(super) inline_search: InlineSearch,
     /// Session-only Wide hero list-pane width override (per-draw shell push,
     /// `None` = default ratio). Written onto the cloned render context in
     /// `view()` before the wide composer reads it; never stored clamped.
     list_pane_width: Option<u16>,
 }
 
+impl Deref for MusicWorkspaceComponent {
+    type Target = MusicContent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.content
+    }
+}
+
+impl DerefMut for MusicWorkspaceComponent {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.content
+    }
+}
+
 impl MusicWorkspaceComponent {
     pub fn new() -> Self {
         Self {
-            context: MusicWideRenderCtx::new(
-                crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
-                None,
-                String::new(),
-                Vec::new(),
-                0,
-                Vec::new(),
-                Vec::new(),
-                false,
-                None,
-                false,
-                false,
-            ),
+            content: MusicContent::new(),
             album_columns: 1,
             page_rows: 1,
-            track_focused: false,
-            last_album_id: None,
             layout: LayoutMain::default(),
             image_paint: None,
             inline_track_focus_enabled: false,
-            carrier: MediaListCarrier::new(Presentation::Inline),
             mouse_gestures: MouseGestureState::new(),
-            track_list: WideMediaList::new(),
             wide_browser_content_height: None,
             pill_regions: HitRegions::new(),
-            inline_search: InlineSearch::new(),
             list_pane_width: None,
         }
     }
@@ -202,46 +147,7 @@ impl MusicWorkspaceComponent {
     }
 
     pub(in crate::app) fn set_content(&mut self, context: MusicWideRenderCtx) {
-        let album_changed = self.last_album_id.as_deref()
-            != context
-                .selected_album
-                .as_ref()
-                .map(|album| album.id.as_str());
-        // Track-pane focus is owned here; a selected-album identity change
-        // (group switch, recursive-album activation, position restore) is the
-        // one content-driven reset -- a focused track refers to the previous
-        // album's track list. That is an event on content identity, not an
-        // echo test (design.md D5).
-        if album_changed {
-            self.track_focused = false;
-        }
-        self.last_album_id = context
-            .selected_album
-            .as_ref()
-            .map(|album| album.id.clone());
-        // Content projection never carries framework focus; preserve the
-        // component-owned value across the shell snapshot swap.
-        let focused = self.context.focused;
-        self.context = context;
-        self.context.focused = focused;
-        let album_rows = self.context.grouped_rows();
-        // The one shared album owner holds the projected rows; only its active
-        // presentation is fed, and an unchanged projection does not invalidate
-        // the retained frame (design.md D6).
-        if self.carrier.rows() != album_rows.as_slice() {
-            self.carrier.set_content(album_rows);
-        }
-        // The track owner is authoritative for the selected track and its
-        // scroll; `set_content` preserves the stable track target through an
-        // ordinary refresh and locally clamps. Only an album-identity change
-        // re-parks the track-pane selection at its first row.
-        let track_rows = build_track_rows(self.context.album_tracks.as_deref().unwrap_or_default());
-        if self.track_list.rows() != track_rows.as_slice() {
-            self.track_list.set_content(track_rows);
-        }
-        if album_changed {
-            self.track_list.select_first();
-        }
+        self.content.set_content(context);
     }
 
     /// Shell-driven re-anchor of the active album control at a navigation
@@ -256,7 +162,7 @@ impl MusicWorkspaceComponent {
             .list
             .items
             .get(cursor)
-            .map(|_| self.context.album_targets[cursor].clone())
+            .map(|_| self.context.album_targets[cursor].as_str().to_owned())
         {
             self.select_active_target(&target);
             self.set_active_scroll(scroll);
@@ -598,25 +504,28 @@ impl Component for MusicWorkspaceComponent {
                 .content_area
                 .height as usize
         };
-        self.carrier
+        let selected_album_index = self.selected_album_index();
+        let content = &mut self.content;
+        content
+            .carrier
             .set_presentation(target, incoming_height.max(1));
 
         // The active control owns the painted selection. Use its index for
         // render-derived detail content before cloning the shell snapshot.
-        self.context.list.set_cursor(self.selected_album_index());
+        content.context.list.set_cursor(selected_album_index);
 
-        let mut context = self.context.clone();
-        context.track_focused = self.track_focused;
+        let mut context = content.context.clone();
+        context.track_focused = content.track_focused;
         context.list.list_pane_width = self.list_pane_width;
-        if !wide && self.inline_search.is_active() {
+        if !wide && content.inline_search.is_active() {
             // Normal Music passes its whole list area to the shared search
             // painter (design.md D3); the ordinary grouped composer does not
             // also paint it.
-            let items = self.inline_search.ordered_items();
-            let query = self.inline_search.query().to_string();
-            let loading = self.inline_search.loading();
-            let cursor = self.inline_search.cursor();
-            let scroll_in = self.inline_search.scroll();
+            let items = content.inline_search.ordered_items();
+            let query = content.inline_search.query().to_string();
+            let loading = content.inline_search.loading();
+            let cursor = content.inline_search.cursor();
+            let scroll_in = content.inline_search.scroll();
             let areas = crate::app::render::arrangements::wide_hero::pill_bar_areas(area);
             let list_area = areas.content_area;
             let columns = crate::app::library_column_width::library_column_count(list_area.width);
@@ -629,11 +538,11 @@ impl Component for MusicWorkspaceComponent {
                 items,
                 cursor,
                 scroll_in,
-                self.context.focused,
+                content.context.focused,
                 columns,
-                self.inline_search.layout_mut(),
+                content.inline_search.layout_mut(),
             );
-            self.inline_search.set_scroll(new_scroll);
+            content.inline_search.set_scroll(new_scroll);
             self.image_paint = None;
         } else if !wide {
             let output = render_narrow_music_group_with_ctx(
@@ -641,7 +550,7 @@ impl Component for MusicWorkspaceComponent {
                 area,
                 &context,
                 &mut self.layout,
-                MusicAlbumPresentation::Inline(self.carrier.inline_mut()),
+                MusicAlbumPresentation::Inline(content.carrier.inline_mut()),
             );
             self.image_paint = output.image_paint;
         } else {
@@ -650,9 +559,9 @@ impl Component for MusicWorkspaceComponent {
                 area,
                 &context,
                 &mut self.layout,
-                MusicAlbumPresentation::Wide(self.carrier.wide_mut()),
-                MusicTrackPresentation::Wide(&mut self.track_list),
-                &mut self.inline_search,
+                MusicAlbumPresentation::Wide(content.carrier.wide_mut()),
+                MusicTrackPresentation::Wide(content.track_list.wide_mut()),
+                &mut content.inline_search,
             );
             self.image_paint = output.image_paint;
             if let Some(height) = output.content_height {

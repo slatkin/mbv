@@ -2,7 +2,7 @@ use super::music_workspace::MusicWorkspaceComponent;
 
 impl MusicWorkspaceComponent {
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
-        self.track_list.selected_display_row()
+        self.track_list.wide().selected_display_row()
     }
 
     pub(in crate::app) fn album_selected_row_rect(&self) -> Option<ratatui::layout::Rect> {

@@ -62,8 +62,9 @@ impl Model {
     }
 
     /// Event-scoped projection replacing the per-frame content mirror:
-    /// mirrors the active Music browse snapshot and panel geometry into the
-    /// mounted component, preserving its local cursor and track-focus state.
+    /// mirrors the active Music browse snapshot into the mounted component's
+    /// embedded `MusicContent` owner, preserving its local cursor and
+    /// track-focus state. Legacy painter geometry remains component-owned.
     pub(super) fn push_music_workspace_content(&mut self) {
         let Some(id) = self.music_workspace_id.as_ref() else {
             return;
