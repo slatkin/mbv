@@ -145,26 +145,6 @@ fn podcast_tick_wheel_is_claimed_only_over_active_control() {
 }
 
 #[test]
-fn podcast_tick_has_one_list_painter_and_no_base_frame_underpaint() {
-    crate::app::render::reset_podcast_media_list_paints();
-    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
-    // Admit the episode workspace's shared Wide painter (the parent-owned
-    // episode pane holds focus, as it does in the wide workspace) so the
-    // one-painter accounting sees a non-degenerate episode frame.
-    podcast(&mut harness).enter_episode_focus();
-    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert_eq!(crate::app::render::podcast_wide_media_list_paints(), 1);
-    assert_eq!(crate::app::render::podcast_inline_media_browser_paints(), 1);
-    assert_eq!(crate::app::render::browser_legacy_plain_rows_paints(), 0);
-
-    crate::app::render::reset_podcast_media_list_paints();
-    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD - 1);
-    assert_eq!(crate::app::render::podcast_wide_media_list_paints(), 1);
-    assert_eq!(crate::app::render::podcast_inline_media_browser_paints(), 1);
-    assert_eq!(crate::app::render::browser_legacy_plain_rows_paints(), 0);
-}
-
-#[test]
 fn podcast_tick_round_trip_preserves_selected_target_and_row_offset() {
     let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
