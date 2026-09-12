@@ -313,7 +313,7 @@ Books conforms to Emby.
   inline hero without chapters, Enter opens the selection modal). Verify: buffer tests for the Wide
   Workspace box and the Narrow hero; Narrow Enter opens the chapter modal;
   `audiobookshelf_book_component_tests.rs` still passes.
-- [ ] 10.3 Register Books as `LibraryKey::Service(AudiobookshelfBook)`: delete the mounted component, its
+- [x] 10.3 Register Books as `LibraryKey::Service(AudiobookshelfBook)`: delete the mounted component, its
   `ComponentId` arm, its hit store and `LayoutMain.audiobookshelf_book_area`, moving slot-event
   translation to the panel, and re-point the book component tests at the owner type. Verify: tick
   integration tests for focus, mouse eligibility and chapter-row clicks; the book owner keeps
