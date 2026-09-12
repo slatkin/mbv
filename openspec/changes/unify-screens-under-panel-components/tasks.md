@@ -256,7 +256,7 @@ proves the slot types early.
   pills + episodes), and `tv_wide.rs::render_wide_tv_with_ctx` with `LayoutMain.tv_wide_*` is deleted,
   `tv_wide_tests.rs` rewritten to panel output. Narrow keeps `render_series_inline_detail` this step.
   Verify: season-pill and episode clicks resolve through tick tests; the Narrow tests pass unchanged.
-- [ ] 8.3 TV Narrow through the panel: delete `render_series_inline_detail`, `SERIES_IMAGE_COLS/ROWS`,
+- [x] 8.3 TV Narrow through the panel: delete `render_series_inline_detail`, `SERIES_IMAGE_COLS/ROWS`,
   `NarrowInlineHero` and their tests; the inline hero derives from the same `HeroContent` (the policy's
   landscape art, no longer the poster) and episodes open only through `SelectionModal`. Verify:
   `detail_series_tests.rs` and the Narrow TV characterization rewritten to panel output; a Wide↔Narrow
