@@ -8,12 +8,14 @@
 //! shell projection (task 5.10) shares with the painter.
 
 use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
 use ratatui::Frame;
 
 use crate::app::palette;
 use crate::app::render::{
-    paint_wide_hero_text, render_artwork_placeholder, wide_hero_hero_content_box,
-    wrap_overview_lines, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
+    paint_wide_hero_text, render_artwork_placeholder, wrap_overview_lines, WrappedHeroLine,
+    PANE_PAD_X, PANE_PAD_Y,
 };
 
 use super::content::{HeroContent, HeroFacts, HeroHeader};
@@ -179,7 +181,27 @@ pub(in crate::app) fn paint_hero_pane_content(
                 height: box_height,
                 ..area
             };
-            let (_, box_content) = wide_hero_hero_content_box(f, box_area);
+            let panel = Rect {
+                x: box_area.x.saturating_add(PANE_PAD_X),
+                width: box_area.width.saturating_sub(PANE_PAD_X * 2),
+                ..box_area
+            };
+            f.render_widget(
+                Block::default().style(
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::MainContentBox,
+                        false,
+                    )
+                    .fill),
+                ),
+                panel,
+            );
+            let box_content = Rect {
+                x: panel.x.saturating_add(PANE_PAD_X),
+                y: panel.y.saturating_add(PANE_PAD_Y),
+                width: panel.width.saturating_sub(PANE_PAD_X * 2),
+                height: panel.height.saturating_sub(PANE_PAD_Y * 2),
+            };
             // Plain text, never destination-styled; the hero pane's own focus
             // (derived from the Workspace, design D6) picks the row colour.
             let focused = content

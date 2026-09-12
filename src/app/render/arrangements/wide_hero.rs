@@ -413,77 +413,11 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
 /// 5.6, design D6): the Library panel derives the Workspace box's surface from
 /// its focus itself, and Music paints the same two fills directly until its
 /// conversion (task 9.1).
-pub(in crate::app) fn wide_hero_hero_content_box(f: &mut Frame, area: Rect) -> (Rect, Rect) {
-    let panel = Rect {
-        x: area.x.saturating_add(PANE_PAD_X),
-        width: area.width.saturating_sub(PANE_PAD_X * 2),
-        ..area
-    };
-    let background = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
-    f.render_widget(
-        Block::default().style(Style::default().bg(background)),
-        panel,
-    );
-    let content = Rect {
-        x: panel.x.saturating_add(PANE_PAD_X),
-        y: panel.y.saturating_add(PANE_PAD_Y),
-        width: panel.width.saturating_sub(PANE_PAD_X * 2),
-        height: panel.height.saturating_sub(PANE_PAD_Y * 2),
-    };
-    (panel, content)
-}
-
-/// Named Rect-only extension points within a Wide hero content rect
-/// (design.md D-D): an optional artwork region and the overview text area
-/// filling the remainder. Placement only -- no painting, no Service/image
-/// effects, no list ownership.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct WideHeroSlots {
-    pub artwork: Option<Rect>,
-    pub overview: Rect,
-}
-
-/// Slices `content` top-to-bottom into `WideHeroSlots`: an `artwork_height`
-/// row artwork slot (omitted when `0`), and the overview slot filling the
-/// remainder. Callers place an embedded media list afterward via
-/// [`place_media_list_below`].
-pub(in crate::app::render) fn wide_hero_slots(
-    content: Rect,
-    artwork_height: u16,
-    images_enabled: bool,
-) -> WideHeroSlots {
-    let artwork_height = artwork_height.min(content.height);
-    let artwork = hero_artwork_slot(
-        Rect {
-            height: artwork_height,
-            ..content
-        },
-        images_enabled,
-    );
-    // One blank row between the artwork and the title below it, matching the
-    // wide Wide hero card (`prepare_wide_emby_hero_card`, which starts its
-    // metadata at `img_area.bottom() + 1`) and every other tab's hero.
-    let reserved_artwork_height = artwork.map_or(0, |area| area.height + 1);
-    let reserved_artwork_height = reserved_artwork_height.min(content.height);
-    let overview = Rect {
-        y: content.y.saturating_add(reserved_artwork_height),
-        height: content.height.saturating_sub(reserved_artwork_height),
-        ..content
-    };
-    WideHeroSlots { artwork, overview }
-}
-
-/// Applies the global image policy to an artwork region. Images-off removes
-/// the region entirely so its sibling can use the full content width.
-pub(in crate::app::render) fn hero_artwork_slot(area: Rect, images_enabled: bool) -> Option<Rect> {
-    (images_enabled && area.width > 0 && area.height > 0).then_some(area)
-}
-
 /// Places an embedded media-list box `gap` rows below `overview_bottom` (the
 /// caller's already-painted overview content's real bottom row -- not a
 /// pre-reserved slot height), sized to `height` rows and clamped to fit
 /// within `content`'s bottom edge. Returns `None` when there is no room
-/// (same "omitted when no room" convention as [`wide_hero_slots`]).
+/// (same "omitted when no room" convention as the other slot arrangements).
 ///
 /// Rect-only: no painting, no text measurement -- callers supply the
 /// already-measured overview bottom and desired height. Reusable by any
@@ -520,32 +454,6 @@ mod wide_hero_slots_tests {
             width: 30,
             height: 20,
         }
-    }
-
-    #[test]
-    fn splits_artwork_and_overview_slots() {
-        let slots = wide_hero_slots(content(), 5, true);
-        let artwork = slots.artwork.expect("artwork slot present");
-        assert_eq!(artwork.y, content().y);
-        assert_eq!(artwork.height, 5);
-        assert_eq!(slots.overview.y, artwork.bottom() + 1);
-        assert_eq!(slots.overview.bottom(), content().bottom());
-    }
-
-    #[test]
-    fn omits_absent_artwork_slot() {
-        let slots = wide_hero_slots(content(), 0, true);
-        assert!(slots.artwork.is_none());
-        assert_eq!(slots.overview, content());
-    }
-
-    #[test]
-    fn images_off_collapses_artwork_and_preserves_full_content_width() {
-        let area = content();
-        let slots = wide_hero_slots(area, 5, false);
-        assert!(slots.artwork.is_none());
-        assert_eq!(slots.overview, area);
-        assert_eq!(hero_artwork_slot(area, false), None);
     }
 
     #[test]
