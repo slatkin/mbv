@@ -46,6 +46,13 @@ pub(in crate::app) enum LibrarySlotEvent {
     WorkspaceSelectorPicked(usize),
     /// An already-normalized row-local input for the active owner's list.
     List(RowLocalInput),
+    /// An already-normalized pointer input inside the hero pane, delivered
+    /// when no painted pill row or list slot claimed it. The panel resolves
+    /// the pointer against the hero pane rect it painted; the owner decides
+    /// whether the point lies in its Workspace list (resolving the row's
+    /// stable target through its own carrier), in the pane but off every
+    /// row, or nowhere it claims.
+    HeroPane(RowLocalInput),
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot

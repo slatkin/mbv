@@ -1,9 +1,9 @@
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::inline_search::InlineSearchAction;
-use super::{Msg, Pane, ShellRequest, TvWorkspaceComponent};
+use super::{Msg, Pane, ShellRequest, TvContent};
 
-impl TvWorkspaceComponent {
+impl TvContent {
     /// Ctrl+P/S/A on the selected Inline Search result reuse the ordinary
     /// library result-row effects, resolved against the search cursor (result-
     /// row shortcut actions stay available while search is open).

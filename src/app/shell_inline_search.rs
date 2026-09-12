@@ -1,7 +1,5 @@
 use super::components::inline_search::InlineSearchHost;
-use super::components::{
-    BrowserComponent, ComponentId, MusicWorkspaceComponent, SearchPool, TvWorkspaceComponent,
-};
+use super::components::{BrowserComponent, ComponentId, MusicWorkspaceComponent, SearchPool};
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
 
@@ -21,17 +19,14 @@ impl Model {
                         .as_any()
                         .downcast_ref::<MusicWorkspaceComponent>()
                         .is_some_and(|host| host.inline_search().is_active())
-                    || component
-                        .as_any()
-                        .downcast_ref::<TvWorkspaceComponent>()
-                        .is_some_and(|host| host.inline_search().is_active())
             })
     }
 
     fn active_inline_search_host(&self) -> Option<ComponentId> {
         // Resolve through the same active-destination pointer used for focus.
-        // TV keeps both owners mounted across a breakpoint transition, but only
-        // the destination selected for this tab may receive search state.
+        // A panel-hosted owner (TV since task 8.4, like Movies) has no mounted
+        // search host, so the panel's keyboard forwarding owns its local
+        // session exactly as it owns the rest of its local interaction.
         self.library_child_id()
             .filter(|id| self.application.mounted(id))
     }
@@ -53,13 +48,6 @@ impl Model {
         if let Some(host) = component
             .as_any_mut()
             .downcast_mut::<MusicWorkspaceComponent>()
-        {
-            f(host);
-            return true;
-        }
-        if let Some(host) = component
-            .as_any_mut()
-            .downcast_mut::<TvWorkspaceComponent>()
         {
             f(host);
             return true;
@@ -87,11 +75,6 @@ impl Model {
             } else if let Some(host) = component
                 .as_any_mut()
                 .downcast_mut::<MusicWorkspaceComponent>()
-            {
-                host.close_inline_search();
-            } else if let Some(host) = component
-                .as_any_mut()
-                .downcast_mut::<TvWorkspaceComponent>()
             {
                 host.close_inline_search();
             }
@@ -184,12 +167,6 @@ impl Model {
                         component
                             .as_any()
                             .downcast_ref::<MusicWorkspaceComponent>()
-                            .and_then(|h| h.selected_inline_search_item())
-                    })
-                    .or_else(|| {
-                        component
-                            .as_any()
-                            .downcast_ref::<TvWorkspaceComponent>()
                             .and_then(|h| h.selected_inline_search_item())
                     })
             });

@@ -555,9 +555,11 @@ impl LibraryContentOwner for BrowserContent {
                     _ => None,
                 }
             }
-            LibrarySlotEvent::ControlPicked(_) | LibrarySlotEvent::WorkspaceSelectorPicked(_) => {
-                None
-            }
+            // The Browser owner has no List-controls row, no Workspace and
+            // no hero-pane input of its own.
+            LibrarySlotEvent::ControlPicked(_)
+            | LibrarySlotEvent::WorkspaceSelectorPicked(_)
+            | LibrarySlotEvent::HeroPane(_) => None,
         }
     }
 

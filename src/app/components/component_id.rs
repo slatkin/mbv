@@ -45,11 +45,6 @@ pub enum ComponentId {
     /// mounted destination stays the surface (the transitional branch).
     Library,
     Browser(BrowserKey),
-    /// The one merged TV owner (`TvWorkspaceComponent`, task 8.1, design
-    /// D12): mounted for a `tvshows` library at every breakpoint. Kept
-    /// distinct from `Browser(BrowserKey)` as its own `ComponentId` variant
-    /// (no `BrowserKind` still mounts `Browser` for TV).
-    TvWorkspace(BrowserKey),
     Overlay(OverlayId),
     Modal(ModalId),
     Popup(PopupId),

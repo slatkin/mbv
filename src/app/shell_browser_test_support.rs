@@ -128,7 +128,7 @@ fn mounted_tv_model() -> Model {
     app.terminal_width = 160;
     app.terminal_height = 40;
     let mut model = Model::new(app);
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
     model
 }
@@ -194,8 +194,24 @@ fn shell_music_ctrl_a_runs_library_enqueue_effect() {
 #[test]
 fn shell_tv_ctrl_w_runs_library_toggle_watched_effect() {
     let mut model = mounted_tv_model();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-    let request = dispatch_component_key(&mut model, &id, Key::Char('w'), KeyModifiers::CONTROL);
+    let request = model
+        .test_tv_owner_mut()
+        .test_key(&KeyEvent {
+            code: Key::Char('w'),
+            modifiers: KeyModifiers::CONTROL,
+        })
+        .and_then(|message| match message {
+            Msg::Shell(request) => Some(request),
+            _ => None,
+        })
+        .expect("Ctrl+W must emit a shell request");
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::Shell(request.clone()),
+        &mut music_resize,
+        &mut tv_resize,
+    );
 
     assert!(matches!(
         request,
@@ -207,8 +223,24 @@ fn shell_tv_ctrl_w_runs_library_toggle_watched_effect() {
 #[test]
 fn shell_tv_ctrl_s_runs_library_shuffle_effect() {
     let mut model = mounted_tv_model();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-    let request = dispatch_component_key(&mut model, &id, Key::Char('s'), KeyModifiers::CONTROL);
+    let request = model
+        .test_tv_owner_mut()
+        .test_key(&KeyEvent {
+            code: Key::Char('s'),
+            modifiers: KeyModifiers::CONTROL,
+        })
+        .and_then(|message| match message {
+            Msg::Shell(request) => Some(request),
+            _ => None,
+        })
+        .expect("Ctrl+S must emit a shell request");
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::Shell(request.clone()),
+        &mut music_resize,
+        &mut tv_resize,
+    );
 
     assert!(matches!(
         request,
@@ -241,8 +273,24 @@ fn shell_music_ctrl_r_runs_library_rescan_effect() {
 #[test]
 fn shell_tv_refresh_runs_library_refresh_effect() {
     let mut model = mounted_tv_model();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-    let request = dispatch_component_key(&mut model, &id, Key::Char('r'), KeyModifiers::NONE);
+    let request = model
+        .test_tv_owner_mut()
+        .test_key(&KeyEvent {
+            code: Key::Char('r'),
+            modifiers: KeyModifiers::NONE,
+        })
+        .and_then(|message| match message {
+            Msg::Shell(request) => Some(request),
+            _ => None,
+        })
+        .expect("r must emit a shell request");
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::Shell(request.clone()),
+        &mut music_resize,
+        &mut tv_resize,
+    );
 
     assert_eq!(request, ShellRequest::EmbyLibraryRefresh);
     assert!(model.app.libs[0].nav_stack[0].loading);

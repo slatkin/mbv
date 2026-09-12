@@ -44,7 +44,7 @@ pub mod sessions;
 pub mod settings;
 pub mod status_bar_panel;
 pub mod tab_panel;
-pub mod tv_workspace;
+pub mod tv_content;
 pub mod user_event;
 pub mod wide_hero_boundary;
 
@@ -84,7 +84,6 @@ pub(in crate::app) use self::settings::{
 };
 pub use self::status_bar_panel::StatusBarPanel;
 pub use self::tab_panel::TabPanel;
-pub use self::tv_workspace::TvWorkspaceComponent;
 pub use self::user_event::UserEvent;
 pub use self::wide_hero_boundary::WideHeroBoundaryComponent;
 
@@ -144,7 +143,7 @@ mod search_sidebar_component_tests;
 #[path = "selection_modal_component_tests.rs"]
 mod selection_modal_component_tests;
 #[cfg(test)]
-#[path = "tv_workspace_component_tests.rs"]
-mod tv_workspace_component_tests;
+#[path = "tv_content_component_tests.rs"]
+mod tv_content_component_tests;
 #[cfg(test)]
 mod wide_hero_boundary_component_tests;

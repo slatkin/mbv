@@ -13,18 +13,10 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         let mut model = mounted_tv_model();
         // Letter pills need a captured total for TvCycleLetterPill to run.
         model.app.libs[0].library_total = Some(1000);
-        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-        let request = model
-            .application
-            .get_component_mut(&id)
-            .expect("TV workspace component mounted")
-            .as_any_mut()
-            .downcast_mut::<TvWorkspaceComponent>()
-            .expect("TV workspace component type")
-            .on(&Event::Keyboard(KeyEvent {
-                code,
-                modifiers: KeyModifiers::NONE,
-            }));
+        let request = model.test_tv_owner_mut().test_key(&KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        });
         let Some(Msg::Shell(request)) = request else {
             panic!("TV key {code:?} must produce a typed shell request");
         };
@@ -42,11 +34,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         0,
         "TvMoveRows must not write the component cursor into App's browse level"
     );
-    let selected_id = model
-        .application
-        .get_component(&model.tv_workspace_id.clone().expect("TV workspace mounted"))
-        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-        .and_then(TvWorkspaceComponent::selected_item_id);
+    let selected_id = model.test_tv_owner().selected_item_id();
     assert_eq!(
         selected_id,
         Some("movie-second".into()),
@@ -67,11 +55,7 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         0,
         "TvJumpCursor must not write the component cursor into App's browse level"
     );
-    let selected_id = model
-        .application
-        .get_component(&model.tv_workspace_id.clone().expect("TV workspace mounted"))
-        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-        .and_then(TvWorkspaceComponent::selected_item_id);
+    let selected_id = model.test_tv_owner().selected_item_id();
     assert_eq!(
         selected_id,
         Some("movie-second".into()),
@@ -110,23 +94,15 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
 #[test]
 fn tv_series_enter_carries_the_component_selected_item() {
     let mut model = mounted_tv_model();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
 
     // Park the App browse cursor somewhere other than the component's
     // selection: the emitted TvActivate must carry the component's own
     // selected Series, not the (mirrored) App cursor's item.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
-    let request = model
-        .application
-        .get_component_mut(&id)
-        .expect("TV workspace component mounted")
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .expect("TV workspace component type")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let request = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    });
     let Some(Msg::Shell(ShellRequest::TvActivate { item })) = request else {
         panic!("series Enter must emit TvActivate carrying the selected item");
     };
@@ -140,7 +116,6 @@ fn tv_series_enter_carries_the_component_selected_item() {
 #[test]
 fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
     let mut model = mounted_tv_model();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
 
     // Seed detail for the second series so the pushed snapshot's target is
     // observable via the component's selected_series_snapshot().
@@ -155,17 +130,10 @@ fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
     // Component-local selection: move the component cursor onto the second
     // series (index 1) while the App browse cursor stays at 0 — the
     // divergence the removed mirror used to hide.
-    let moved = model
-        .application
-        .get_component_mut(&id)
-        .expect("TV workspace component mounted")
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .expect("TV workspace component type")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let moved = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
     assert!(matches!(
         moved,
         Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
@@ -180,10 +148,8 @@ fn push_tv_workspace_content_uses_component_selection_over_stale_app_cursor() {
     // authoritative selection, not the stale App cursor.
     model.push_tv_workspace_content();
     let pushed = model
-        .application
-        .get_component(&id)
-        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-        .and_then(TvWorkspaceComponent::selected_series_snapshot)
+        .test_tv_owner()
+        .selected_series_snapshot()
         .map(|item| item.id.clone());
     assert_eq!(
         pushed,
@@ -209,19 +175,11 @@ fn tv_season_move_fetches_uncached_episodes_for_component_selection() {
         },
     );
     model.push_tv_workspace_content();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
 
-    let enter = model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .unwrap()
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let enter = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    });
     let Some(Msg::Shell(request)) = enter else {
         panic!("series Enter must produce a typed request");
     };
@@ -229,17 +187,10 @@ fn tv_season_move_fetches_uncached_episodes_for_component_selection() {
 
     // Diverge the legacy App cursor: the component's selected series remains authoritative.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
-    let season = model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .unwrap()
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Char(']'),
-            modifiers: KeyModifiers::NONE,
-        }));
+    let season = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    });
     assert!(matches!(
         season,
         Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
@@ -283,35 +234,20 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         },
     );
     model.push_tv_workspace_content();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
 
-    let enter_series = model
-        .application
-        .get_component_mut(&id)
-        .expect("TV workspace component mounted")
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .expect("TV workspace component type")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let enter_series = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    });
     let Some(Msg::Shell(enter_series)) = enter_series else {
         panic!("series Enter must produce a typed request");
     };
     model.handle_tv_request(enter_series);
 
-    let season = model
-        .application
-        .get_component_mut(&id)
-        .expect("TV workspace component mounted")
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .expect("TV workspace component type")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Char(']'),
-            modifiers: KeyModifiers::NONE,
-        }));
+    let season = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Char(']'),
+        modifiers: KeyModifiers::NONE,
+    });
     assert!(matches!(
         season,
         Some(Msg::Shell(ShellRequest::TvSeasonMove { delta: 1 }))
@@ -321,12 +257,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
 
     let episode = model
-        .application
-        .get_component(&id)
-        .expect("TV workspace component mounted")
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .expect("TV workspace component type")
+        .test_tv_owner()
         .selected_episode_item()
         .expect("component-selected episode");
     assert_eq!(episode.id, "episode-2");
@@ -376,8 +307,8 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         );
 }
 
-/// Renders the wide TV workspace through the shell paint path and returns the
-/// painted buffer with the component-owned right series-rail rect.
+/// Renders the wide TV workspace through the library panel's paint path and
+/// returns the painted buffer with the panel-retained right series-rail rect.
 fn render_wide_tv(model: &mut Model) -> (ratatui::buffer::Buffer, Rect) {
     let area = model
         .app
@@ -385,17 +316,25 @@ fn render_wide_tv(model: &mut Model) -> (ratatui::buffer::Buffer, Rect) {
         .expect("wide TV area must be derived from the current frame");
     assert!(area.width > 0 && area.height > 0);
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 40)).unwrap();
-    terminal
-        .draw(|f| model.render_tv_workspace_component(f))
-        .unwrap();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    {
+        let panel = model
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .expect("library panel mounted")
+            .as_any_mut()
+            .downcast_mut::<crate::app::components::library_panel::LibraryPanel>()
+            .expect("LibraryPanel");
+        terminal
+            .draw(|f| tuirealm::component::Component::view(panel, f, area))
+            .unwrap();
+    }
     let rail = model
         .application
-        .get_component(&id)
-        .unwrap()
+        .get_component(&ComponentId::Library)
+        .expect("library panel mounted")
         .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .unwrap()
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("LibraryPanel")
         .test_wide_geometry()
         .expect("Wide skeleton geometry")
         .list_area;
@@ -411,15 +350,8 @@ fn rail_has_marker_glyph(buf: &ratatui::buffer::Buffer, rail: Rect) -> bool {
     })
 }
 
-fn tv_selected_id(model: &Model, id: &ComponentId) -> Option<String> {
-    model
-        .application
-        .get_component(id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .unwrap()
-        .selected_item_id()
+fn tv_selected_id(model: &Model) -> Option<String> {
+    model.test_tv_owner().selected_item_id()
 }
 
 /// Through the real shell synchronisation order: moving Panel focus to Queue
@@ -429,12 +361,8 @@ fn tv_selected_id(model: &Model, id: &ComponentId) -> Option<String> {
 fn wide_tv_focus_to_queue_drops_right_rail_treatment_via_shell_sync() {
     let mut model = mounted_tv_model();
     model.sync_mounted_surfaces();
-    let id = model
-        .tv_workspace_id
-        .clone()
-        .expect("wide TV workspace mounted");
-    assert_eq!(model.application.focus(), Some(&id));
-    let selected = tv_selected_id(&model, &id);
+    assert_eq!(model.application.focus(), Some(&ComponentId::Library));
+    let selected = tv_selected_id(&model);
     assert!(selected.is_some(), "a series row must be selected");
 
     let (focused_buf, rail) = render_wide_tv(&mut model);
@@ -465,7 +393,7 @@ fn wide_tv_focus_to_queue_drops_right_rail_treatment_via_shell_sync() {
     );
 
     assert_eq!(
-        tv_selected_id(&model, &id),
+        tv_selected_id(&model),
         selected,
         "selected series identity survives the focus change"
     );

@@ -87,8 +87,6 @@ fn render_browse_component(
     } else {
         let painted = if model.music_workspace_id.is_some() {
             super::test_helpers::mounted_music_layout(&model)
-        } else if model.tv_workspace_id.is_some() {
-            super::test_helpers::mounted_tv_layout(&model)
         } else {
             super::test_helpers::mounted_browser_layout(&model)
         };

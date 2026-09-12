@@ -53,8 +53,8 @@ impl<Tag> HitRegions<Tag> {
 
     /// The recorded rect/tag pairs in paint order. The panel's slot events
     /// resolve through [`HitRegions::resolve`]; the one production reader is
-    /// the still-mounted `TvWorkspaceComponent` (task 8.2), which adopts the
-    /// shared Workspace selector's painted pills into its own hit store.
+    /// the mounted `LibraryPanel` (task 8.4), which adopts the shared
+    /// Workspace selector's painted pills into its own hit store.
     pub(crate) fn regions(&self) -> &[(Rect, Tag)] {
         &self.regions
     }

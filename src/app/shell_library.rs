@@ -96,27 +96,19 @@ impl Model {
     fn emby_library_child_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
-        // TV focuses the merged `TvWorkspaceComponent` under its distinct
-        // `ComponentId::TvWorkspace` at every breakpoint now (task 8.1,
-        // design D12): the component is mounted whenever the library is
-        // `tvshows`, matching `tv_workspace_component_id`.
-        if kind == BrowserKind::TvShows {
-            return Some(ComponentId::TvWorkspace(BrowserKey {
-                service: ServiceKind::Emby,
-                library_id: library.library.id.clone(),
-                kind,
-            }));
-        }
         let mounted_surface = match kind {
             // Generic, Movies and HomeVideos moved to the embedded
             // `BrowserContent` owner inside the mounted `LibraryPanel` (task
             // 6.1, design D2): `emby_browser_component_id` never mounts the
             // standalone `BrowserComponent` for them, so their
             // `ComponentId::Browser(_)` collapses into `ComponentId::Library`.
-            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => {
-                return Some(ComponentId::Library)
-            }
-            BrowserKind::TvShows => unreachable!("handled above"),
+            // TV joined them in task 8.4 (`TvContent` under
+            // `LibraryKey::Service(TvShows)`), deleting the TV-specific
+            // component registration.
+            BrowserKind::Generic
+            | BrowserKind::Movies
+            | BrowserKind::HomeVideos
+            | BrowserKind::TvShows => return Some(ComponentId::Library),
             BrowserKind::Music => {
                 // Music mounts one component type at all widths (no TV-style
                 // split), so narrow Music is focusable too — the mount gate is

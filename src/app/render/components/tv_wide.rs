@@ -44,8 +44,8 @@ impl TvWideRenderCtx {
             series_detail,
             season_cursor,
             episode_cursor,
-            // Framework focus is owned by `TvWorkspaceComponent` and applied
-            // from `Attribute::Focus`; content projection never sets it.
+            // Framework focus is owned by the mounted `LibraryPanel` and
+            // applied from `Attribute::Focus`; content projection never sets it.
             focused: false,
             show_letter_pills,
             hero_image: HeroImageState::None,

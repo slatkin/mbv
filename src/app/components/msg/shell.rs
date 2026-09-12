@@ -297,7 +297,7 @@ pub enum ShellRequest {
     QueueScopeClick {
         scope: QueueScope,
     },
-    /// A TV-workspace row the user single-clicked. `TvWorkspaceComponent`
+    /// A TV-workspace row the user single-clicked. The library panel
     /// painted the two panes and resolved which pane + hit the click landed
     /// in (season pill, episode row, blank Episodes-pane space, or a series
     /// row resolved through the embedded `WideMediaList`); the shell applies

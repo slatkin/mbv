@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
+use crate::app::components::{BrowserComponent, MusicWorkspaceComponent};
 use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 use crate::app::PanelFocus;
 use std::sync::atomic::Ordering;
@@ -34,8 +34,10 @@ impl Model {
         self.sync_queue_playback_panel();
         self.sync_wide_hero_boundary();
         self.sync_emby_browser();
-        self.sync_tv_workspace();
         self.sync_music_workspace();
+        // Task 8.4: the TV owner is installed/pushed before the panel's
+        // owner-retention and active-pointer pass below.
+        self.sync_tv_content();
         // Task 5.9: the Library panel mounts with the library column and
         // drives its owner map (retention + the active pointer) before the
         // focus pass routes to the active surface.
@@ -103,12 +105,7 @@ impl Model {
                 .and_then(|id| self.application.get_component(&id))
                 .and_then(|c| c.as_any().downcast_ref::<BrowserComponent>())
                 .map(|c| (c.cursor(), c.scroll()))
-                .or_else(|| {
-                    self.tv_workspace_component_id()
-                        .and_then(|id| self.application.get_component(&id))
-                        .and_then(|c| c.as_any().downcast_ref::<TvWorkspaceComponent>())
-                        .map(|c| (c.cursor(), c.scroll()))
-                })
+                .or_else(|| self.tv_tv_content_cursor_scroll())
                 .or_else(|| {
                     self.music_workspace_component_id()
                         .and_then(|id| self.application.get_component(&id))
@@ -145,7 +142,6 @@ impl Model {
             self.render_audiobookshelf_podcast_component(f);
             self.render_audiobookshelf_book_component(f);
             self.render_emby_browser_component(f);
-            self.render_tv_workspace_component(f);
             self.render_music_workspace_component(f);
         }
         self.render_queue_component(f);

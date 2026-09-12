@@ -1,12 +1,11 @@
 use super::*;
-use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent, TvWorkspaceComponent};
+use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::make_movie_app;
 use crate::app::types_browse::BrowseResting;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 #[path = "shell_tv_workspace_group_tests.rs"]
 mod group_tests;
@@ -26,7 +25,7 @@ fn mounted_tv_model() -> Model {
     app.terminal_width = 160;
     app.terminal_height = 40;
     let mut model = Model::new(app);
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
     model
 }
@@ -35,18 +34,9 @@ fn mounted_tv_model() -> Model {
 fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
     let mut model = mounted_tv_model();
     model.app.image_protocol_enabled = true;
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
     model.push_tv_workspace_content();
-    let component = model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .unwrap();
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 30)).unwrap();
-    terminal.draw(|f| component.view(f, f.area())).unwrap();
-    assert!(component.take_panel_image_paint().is_none());
+    let paint = model.test_paint_library_panel(Rect::new(0, 0, 100, 30));
+    assert!(paint.is_none());
 
     model.app.card_image_states.insert(
         crate::app::images::series_image_cache_key(
@@ -56,15 +46,8 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
         crate::app::images::CachedImage::empty(),
     );
     model.push_tv_workspace_content();
-    let component = model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .unwrap();
-    terminal.draw(|f| component.view(f, f.area())).unwrap();
-    assert!(component.take_panel_image_paint().is_none());
+    let paint = model.test_paint_library_panel(Rect::new(0, 0, 100, 30));
+    assert!(paint.is_none());
 }
 
 #[test]
@@ -72,10 +55,36 @@ fn push_tv_workspace_projects_ready_narrow_series_image_paint() {
     use crate::app::images::series_image_cache_key;
     use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 
-    let mut model = mounted_tv_model();
-    model.app.terminal_width = 70;
-    model.app.terminal_height = 20;
-    model.app.image_protocol_enabled = true;
+    // Narrow TV: width 70 is below `MINI_VIEW_THRESHOLD`, so the mini view
+    // decides the Panel mode and the library owns it here; the size is set
+    // before `Model::new` so the sync pass's resize handling (task 1.2) never
+    // sees a drift and clears the planted image state.
+    let mut app = make_movie_app();
+    app.libs[0].library.collection_type = "tvshows".into();
+    for item in &mut app.libs[0].nav_stack[0].items {
+        item.item_type = "Series".into();
+        item.image_tags.thumb = "tag".into();
+    }
+    app.mini_view_focus = crate::app::PanelFocus::Library;
+    app.terminal_width = 70;
+    app.terminal_height = 30;
+    app.image_protocol_enabled = true;
+    let mut model = Model::new(app);
+
+    // Height 30 admits the shared inline hero's 14-row detail block (the
+    // panel's list area is `terminal height - 10`; the deleted component's
+    // tests painted the whole frame), so the block whose image box the paint
+    // seam then retains is re-derived, not loosened.
+    {
+        let backend = TestBackend::new(70, 30);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    }
+    model.sync_mounted_surfaces();
+    // The first projection issued the Series fetch (resolved synchronously by
+    // the fixture); the drain clears the key's reservation, then the planted
+    // entry is what the ready state reads.
+    let _ = model.drain_card_image_completions();
     let expected_key = series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES);
     let entry = model
         .app
@@ -84,22 +93,14 @@ fn push_tv_workspace_projects_ready_narrow_series_image_paint() {
         .app
         .card_image_states
         .insert(expected_key.clone(), entry);
-    model.push_tv_workspace_content();
+    model.sync_mounted_surfaces();
 
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-    let mut terminal = Terminal::new(TestBackend::new(70, 20)).unwrap();
-    let paint = {
-        let component = model
-            .application
-            .get_component_mut(&id)
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut::<TvWorkspaceComponent>()
-            .unwrap();
-        terminal.draw(|f| component.view(f, f.area())).unwrap();
-        component.take_panel_image_paint()
-    };
-    let paint = paint.expect("ready projected Narrow hero must retain image paint");
+    let area = model
+        .library_panel_content_area()
+        .expect("library placement after the frame publishes root_frame");
+    let paint = model
+        .test_paint_library_panel(area)
+        .expect("ready projected Narrow hero must retain image paint");
     assert_eq!(paint.cache_key, expected_key);
     assert!(paint.area.width > 0 && paint.area.height > 0);
 }
@@ -120,8 +121,16 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
 
     let mut model = mounted_tv_model();
     model.app.image_protocol_enabled = true;
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-    model.push_tv_workspace_content();
+    // The sync pass is the production projection seam (task 5.10's central
+    // hero projection owns the fetch for every migrated owner, TV included
+    // since task 8.4); one throwaway draw publishes the `RootFrame` placement
+    // it reads.
+    {
+        let backend = TestBackend::new(160, 40);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    }
+    model.sync_mounted_surfaces();
 
     let expected_key = series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES);
     assert!(
@@ -132,18 +141,7 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
     let active = model.app.image_fetches_active;
     let pending = model.app.pending_image_fetches.len();
 
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 30)).unwrap();
-    let paint = {
-        let component = model
-            .application
-            .get_component_mut(&id)
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut::<TvWorkspaceComponent>()
-            .unwrap();
-        terminal.draw(|f| component.view(f, f.area())).unwrap();
-        component.take_panel_image_paint()
-    };
+    let paint = model.test_paint_library_panel(Rect::new(0, 0, 100, 30));
     assert!(paint.is_none(), "loading projection paints no pixels yet");
     assert_eq!(
         model.app.card_image_loading, loading,
@@ -188,18 +186,10 @@ fn push_tv_workspace_content_fetches_uncached_selected_series_once() {
 #[test]
 fn push_tv_workspace_content_projects_selected_series_on_mount() {
     let model = mounted_tv_model();
-    let id = model
-        .tv_workspace_id
-        .as_ref()
-        .expect("TV workspace mounted");
-    let component = model
-        .application
-        .get_component(id)
-        .expect("TV workspace component mounted")
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .expect("TV workspace component type");
-    assert_eq!(component.selected_item_id(), Some("movie-focused".into()));
+    assert_eq!(
+        model.test_tv_owner().selected_item_id(),
+        Some("movie-focused".into())
+    );
 }
 
 /// keep-destination-components-mounted task 3.1: the TV workspace stays
@@ -210,31 +200,19 @@ fn push_tv_workspace_content_projects_selected_series_on_mount() {
 #[test]
 fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     let mut model = mounted_tv_model();
-    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-    let mounted_before = model.application.mounted(&id);
-    assert!(mounted_before);
+    assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
 
     // Move the component cursor to row 1 (movie-second) and Enter to the
     // Episodes pane: both are non-default state that a remount would reset.
-    let move_request = model
-        .application
-        .get_component_mut(&id)
-        .expect("TV workspace mounted")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let move_request = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
     assert!(matches!(
         move_request,
         Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
     ));
-    let selected_id = |model: &mut Model| {
-        model
-            .application
-            .get_component(&model.tv_workspace_id.clone().expect("TV workspace mounted"))
-            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-            .and_then(TvWorkspaceComponent::selected_item_id)
-    };
+    let selected_id = |model: &mut Model| model.test_tv_owner().selected_item_id();
     assert_eq!(selected_id(&mut model), Some("movie-second".into()));
 
     // Seed detail for the selected series (movie-second, the row the
@@ -255,26 +233,17 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
         },
     );
     model.push_tv_workspace_content();
-    let enter = model
-        .application
-        .get_component_mut(&id)
-        .expect("TV workspace mounted")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let enter = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    });
     assert!(matches!(
         enter,
         Some(Msg::Shell(ShellRequest::TvActivate { .. }))
     ));
     assert_eq!(
         model
-            .application
-            .get_component(&id)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<TvWorkspaceComponent>()
-            .unwrap()
+            .test_tv_owner()
             .selected_episode_item()
             .map(|episode| episode.id),
         Some("episode-1".into()),
@@ -286,29 +255,22 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     // two-component hand-off.
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
-    assert_eq!(
-        model.tv_workspace_id.as_ref(),
-        Some(&id),
-        "the merged TV owner keeps the same id across the narrow resize"
-    );
     assert!(
-        model.application.mounted(&id),
-        "the TV workspace must stay mounted across the narrow resize"
+        model.library_panel_has_owner(&model.test_tv_owner_key()),
+        "the TV owner stays installed across the narrow resize"
     );
 
     // Wide again: still the same component.
     model.app.terminal_width = 160;
     model.app.terminal_height = 40;
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
-    assert_eq!(
-        model.tv_workspace_id.as_ref(),
-        Some(&id),
-        "re-point must restore the same component id"
+    assert!(
+        model.library_panel_has_owner(&model.test_tv_owner_key()),
+        "the TV owner stays installed across the wide resize"
     );
-    assert!(model.application.mounted(&id));
     assert_eq!(
         selected_id(&mut model),
         Some("movie-second".into()),
@@ -316,12 +278,7 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
     );
     assert_eq!(
         model
-            .application
-            .get_component(&id)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<TvWorkspaceComponent>()
-            .unwrap()
+            .test_tv_owner()
             .selected_episode_item()
             .map(|episode| episode.id),
         Some("episode-1".into()),
@@ -331,7 +288,7 @@ fn tv_workspace_stays_mounted_and_preserves_pane_cursor_across_resize() {
 
 /// unify-screens-under-panel-components task 8.1 (design D12): resizing
 /// across the wide TV breakpoint and back keeps the visually-selected
-/// series. The merged `TvWorkspaceComponent` is the one owner at every
+/// series. The merged `TvContent` owner is the one owner at every
 /// breakpoint now; its shared `MediaListCarrier` preserves the selected
 /// target across the Wide<->Inline presentation switch on its own -- there
 /// is no cross-component hand-off left to carry it.
@@ -359,15 +316,10 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
 
     // Wide: move the TV workspace selection to row 1 (movie-second).
     model.sync_mounted_surfaces();
-    let tv_id = model.tv_workspace_id.clone().expect("wide TV workspace id");
-    let moved = model
-        .application
-        .get_component_mut(&tv_id)
-        .expect("TV workspace mounted")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let moved = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    });
     assert!(matches!(
         &moved,
         Some(Msg::Shell(ShellRequest::TvMoveRows { rows: 1 }))
@@ -383,10 +335,8 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     model.sync_mounted_surfaces();
 
     let wide_target = model
-        .application
-        .get_component(&tv_id)
-        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-        .and_then(TvWorkspaceComponent::selected_item_id)
+        .test_tv_owner()
+        .selected_item_id()
         .expect("wide TV workspace has a selected series");
     assert_eq!(wide_target, "movie-second");
 
@@ -395,16 +345,14 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     // presentation switch.
     widen(&mut model, false);
     model.sync_mounted_surfaces();
-    assert_eq!(model.tv_workspace_id.as_ref(), Some(&tv_id));
+    assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     let mut narrow_terminal = Terminal::new(TestBackend::new(80, 40)).unwrap();
     narrow_terminal
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
     let narrow_target = model
-        .application
-        .get_component(&tv_id)
-        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-        .and_then(TvWorkspaceComponent::selected_item_id)
+        .test_tv_owner()
+        .selected_item_id()
         .expect("narrow TV workspace has a selected series");
     assert_eq!(
         narrow_target, wide_target,
@@ -412,23 +360,17 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     );
 
     // Narrow: move the selection back to row 0 (movie-focused).
-    let up = model
-        .application
-        .get_component_mut(&tv_id)
-        .expect("TV workspace mounted")
-        .on(&Event::Keyboard(KeyEvent {
-            code: Key::Up,
-            modifiers: KeyModifiers::NONE,
-        }));
+    let up = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Up,
+        modifiers: KeyModifiers::NONE,
+    });
     let Some(Msg::Shell(request)) = up else {
         panic!("narrow Up must emit a typed shell request");
     };
     model.handle_browser_request(request);
     let narrow_return_target = model
-        .application
-        .get_component(&tv_id)
-        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-        .and_then(TvWorkspaceComponent::selected_item_id)
+        .test_tv_owner()
+        .selected_item_id()
         .expect("narrow TV workspace has a selected series after move");
     assert_eq!(narrow_return_target, "movie-focused");
 
@@ -436,12 +378,10 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     // narrow.
     widen(&mut model, true);
     model.sync_mounted_surfaces();
-    assert_eq!(model.tv_workspace_id.as_ref(), Some(&tv_id));
+    assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     let final_wide_target = model
-        .application
-        .get_component(&tv_id)
-        .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-        .and_then(TvWorkspaceComponent::selected_item_id)
+        .test_tv_owner()
+        .selected_item_id()
         .expect("wide TV workspace has a selected series after return");
     assert_eq!(
         final_wide_target, narrow_return_target,
@@ -449,7 +389,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     );
 }
 
-/// Entering a wide TV library must route straight to `TvWorkspaceComponent`
+/// Entering a wide TV library must route straight to the TV owner
 /// on the *first* `sync_mounted_surfaces()` after the tab flips — no
 /// one-frame narrow `BrowserComponent` flash. `App::wide_tv_library_area`
 /// alone is a previous-frame paint signal; `prime_wide_tv_geometry` publishes
@@ -476,23 +416,25 @@ fn entering_wide_tv_library_does_not_flash_the_narrow_browser() {
     app.tab = TabSelection::EmbyLibrary(0);
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
-    assert_eq!(model.tv_workspace_id, None, "Movies tab: no TV workspace");
+    assert!(
+        !model.library_panel_has_owner(&model.test_tv_owner_key_at(0)),
+        "Movies tab: no TV owner"
+    );
 
     // Flip to the wide TV library — the very next sync must land on the
-    // workspace, never the narrow browser.
+    // panel-hosted TV owner, never the narrow browser.
     model.app.tab = TabSelection::EmbyLibrary(1);
     model.sync_mounted_surfaces();
 
-    let tv_id = model
-        .tv_workspace_id
-        .clone()
-        .expect("wide TV workspace mounted on the first sync after entry");
-    assert!(matches!(tv_id, ComponentId::TvWorkspace(_)));
+    assert!(
+        model.library_panel_has_owner(&model.test_tv_owner_key()),
+        "the wide TV owner installs on the first sync after entry"
+    );
     assert_eq!(
         model.emby_browser_id, None,
         "no narrow browser flash for the wide TV library"
     );
-    assert_eq!(model.application.focus(), Some(&tv_id));
+    assert_eq!(model.application.focus(), Some(&ComponentId::Library));
 }
 
 /// Build a two-level stack: a Series parent list whose cursor is parked

@@ -1,9 +1,13 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
+use crate::app::components::library_panel::LibraryKey;
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::tv_content::TvContent;
 use crate::app::components::{
-    BrowserComponent, ComponentId, MusicWorkspaceComponent, QueueComponent, TvWorkspaceComponent,
+    BrowserComponent, ComponentId, MusicWorkspaceComponent, QueueComponent,
 };
+use crate::app::components::{BrowserKey, BrowserKind};
 use crate::app::layout::{AppLayout, LayoutPlayback};
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
@@ -17,6 +21,7 @@ use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::EmbyItem;
 use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
+use mbv_core::config::ServiceKind;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use ratatui::Terminal;
@@ -41,19 +46,40 @@ pub fn set_browser_cursor_for_test(model: &mut crate::app::shell::Model, cursor:
         .set_cursor_for_test(cursor);
 }
 
-/// Seed the merged TV owner's authoritative selection directly (mirrors
-/// `set_browser_cursor_for_test`, task 8.1: TV routes through
-/// `TvWorkspaceComponent` at every breakpoint now).
+/// The active TV library's owner key, derived exactly as production does
+/// (task 8.4: one `Service` key for a `tvshows` library; the owner lives
+/// inside the mounted `LibraryPanel`).
+fn tv_owner_key(model: &crate::app::shell::Model) -> LibraryKey {
+    let index = model
+        .app
+        .tab
+        .emby_library_index()
+        .expect("Emby library tab");
+    LibraryKey::Service(BrowserKey {
+        service: ServiceKind::Emby,
+        library_id: model.app.libs[index].library.id.clone(),
+        kind: BrowserKind::TvShows,
+    })
+}
+
+/// Seed the TV owner's authoritative selection directly (mirrors
+/// `set_browser_cursor_for_test`; task 8.4: the owner is addressed through
+/// the mounted panel's `LibraryKey`, not a `ComponentId`).
 pub fn set_tv_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
     model.sync_mounted_surfaces();
-    let id = model.tv_workspace_id.clone().expect("tv workspace mounted");
+    let key = tv_owner_key(model);
     model
         .application
-        .get_component_mut(&id)
-        .expect("tv workspace component")
+        .get_component_mut(&ComponentId::Library)
+        .expect("library panel mounted")
         .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .expect("tv workspace component type")
+        .downcast_mut::<LibraryPanel>()
+        .expect("LibraryPanel")
+        .owner_mut(&key)
+        .expect("tv owner installed")
+        .as_any_mut()
+        .downcast_mut::<TvContent>()
+        .expect("TvContent")
         .set_cursor_for_test(cursor);
 }
 

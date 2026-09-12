@@ -2,7 +2,9 @@
 
 use super::super::*;
 use super::buffer_to_string;
-use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::tv_content::TvContent;
+use crate::app::components::{BrowserComponent, ComponentId, MusicWorkspaceComponent};
 use crate::app::shell::Model;
 use crate::app::{App, PanelFocus};
 use ratatui::backend::TestBackend;
@@ -10,7 +12,7 @@ use ratatui::Terminal;
 
 /// Build a `Model` at an explicit terminal size with the library pane focused.
 /// Characterization tests whose surface is now painted by a mounted component
-/// (`BrowserComponent` / `MusicWorkspaceComponent` / `TvWorkspaceComponent`)
+/// (`BrowserComponent` / `MusicWorkspaceComponent` / embedded `TvContent`)
 /// instead of the legacy `render_library` arm start here, then draw with
 /// `draw_mounted_frame` and read geometry via `mounted_*_layout`.
 pub fn mounted_model_at(mut app: App, width: u16, height: u16) -> Model {
@@ -153,35 +155,39 @@ pub fn mounted_music_album_target_rows(model: &Model, target: usize) -> Vec<usiz
         .album_target_rows(target)
 }
 
-/// The mounted `TvWorkspaceComponent`'s own painted geometry.
-pub fn mounted_tv_layout(model: &Model) -> &LayoutMain {
-    let id = model
-        .tv_workspace_id
-        .as_ref()
-        .expect("tv workspace component mounted");
+/// The panel-hosted TV owner (task 8.4: reached through the mounted
+/// `LibraryPanel`'s `LibraryKey` map, never a `ComponentId`).
+pub fn tv_owner(model: &Model) -> &TvContent {
+    let key = super::test_helpers::tv_owner_key(model);
     model
         .application
-        .get_component(id)
-        .expect("tv workspace mounted")
+        .get_component(&ComponentId::Library)
+        .expect("library panel mounted")
         .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .expect("TvWorkspaceComponent")
-        .test_layout()
+        .downcast_ref::<LibraryPanel>()
+        .expect("LibraryPanel")
+        .owner(&key)
+        .expect("tv owner installed")
+        .as_any()
+        .downcast_ref::<TvContent>()
+        .expect("TvContent")
 }
 
-/// The scroll offset the mounted `TvWorkspaceComponent` settled on this
-/// frame (Wide or Narrow presentation alike).
-pub fn mounted_tv_scroll(model: &Model) -> usize {
-    let id = model
-        .tv_workspace_id
-        .as_ref()
-        .expect("tv workspace component mounted");
+/// The TV owner's painted geometry, surfaced as a `LayoutMain` so the shared
+/// role-rect assertions keep working: the mounted `LibraryPanel` owns the
+/// rects and publishes them through its own retained-geometry accessor.
+pub fn mounted_tv_layout(model: &Model) -> LayoutMain {
     model
         .application
-        .get_component(id)
-        .expect("tv workspace mounted")
+        .get_component(&ComponentId::Library)
+        .expect("library panel mounted")
         .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .expect("TvWorkspaceComponent")
-        .scroll()
+        .downcast_ref::<LibraryPanel>()
+        .expect("LibraryPanel")
+        .test_painted_layout()
+}
+
+/// The TV owner's series scroll offset this frame.
+pub fn mounted_tv_scroll(model: &Model) -> usize {
+    tv_owner(model).scroll()
 }

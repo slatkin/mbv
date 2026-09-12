@@ -574,8 +574,8 @@ impl App {
                         let ctx = self.wide_music_render_ctx(lib_idx, cursor_scroll);
                         ctx.publish_geometry(area, layout);
                     }
-                    // Wide TV's mounted `TvWorkspaceComponent` paints the
-                    // whole Wide hero workspace itself through the Library
+                    // Wide TV's mounted `LibraryPanel` paints the whole Wide
+                    // hero workspace through its embedded TV content owner
                     // panel's shared skeleton (task 8.2); the legacy base
                     // frame reserves only the destination area here and
                     // paints no workspace.

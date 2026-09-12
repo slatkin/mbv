@@ -192,11 +192,48 @@ impl LibraryPanel {
         &self.hits.controls
     }
 
+    /// The Workspace selector row's retained hit regions (task 8.4: TV's
+    /// season pills), for the pill-click test path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_workspace_selector_hits(
+        &self,
+    ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
+        &self.hits.workspace_selector
+    }
+
     /// The last painted Wide skeleton geometry, for the panel-output test
     /// path.
     #[cfg(test)]
     pub(in crate::app) fn test_wide_geometry(&self) -> Option<WideSkeletonGeometry> {
         self.wide_geometry.clone()
+    }
+
+    /// The last painted frame's role rects, in the legacy `LayoutMain` shape
+    /// the shared characterization helpers read (task 8.4: the panel owns
+    /// the rects the deleted destination component used to publish).
+    #[cfg(test)]
+    pub(in crate::app) fn test_painted_layout(&self) -> crate::app::layout::LayoutMain {
+        if let Some(wide) = self.wide_geometry.as_ref() {
+            return crate::app::layout::LayoutMain {
+                left_area: wide.list_area,
+                hero_area: wide.hero_area,
+                inline_hero_area: wide.hero_area,
+                selected_item_rect: wide.selected,
+                ..Default::default()
+            };
+        }
+        if let Some(narrow) = self.narrow_geometry.as_ref() {
+            let inline_hero = narrow.inline_hero.unwrap_or_default();
+            return crate::app::layout::LayoutMain {
+                left_area: narrow.list_area,
+                hero_area: inline_hero,
+                inline_hero_area: inline_hero,
+                selected_item_rect: narrow.selected,
+                selector_tabs: Vec::new(),
+                ..Default::default()
+            };
+        }
+        crate::app::layout::LayoutMain::default()
     }
 
     /// The last painted Narrow skeleton geometry, for the panel-output test
@@ -274,6 +311,13 @@ impl LibraryPanel {
                 .map(|geometry| geometry.list_area))
     }
 
+    /// The hero pane's rect from the last painted Wide frame, when one
+    /// painted (the Narrow skeleton replaces the hero pane with the inline
+    /// hero inside the list, so there is no Narrow rect).
+    fn hero_pane_rect(&self) -> Option<ratatui::layout::Rect> {
+        self.wide_geometry.as_ref().map(|geometry| geometry.hero)
+    }
+
     /// Route one already-normalized pointer input to the active owner's
     /// list. The owner performs the typed point resolution through its own
     /// carrier and translates the outcome into its `Msg`s.
@@ -341,6 +385,30 @@ impl LibraryPanel {
         }
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
+        }
+        // The hero pane's own input (e.g. the Workspace box's episode rows)
+        // resolves next: it is painted separately from the Browser pane's
+        // list slot, and the owner decides what inside it it claims.
+        let inside_hero = self.hero_pane_rect().is_some_and(|rect| rect.contains(at));
+        if inside_hero {
+            return match gesture {
+                MouseGesture::Click(at) => {
+                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::Click(at)))
+                }
+                MouseGesture::DoubleClick(at) => {
+                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::DoubleClick(at)))
+                }
+                MouseGesture::RightClick(at) => {
+                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::ContextClick(at)))
+                }
+                MouseGesture::Scroll { at, delta } => {
+                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::Wheel {
+                        at,
+                        delta,
+                    }))
+                }
+                _ => None,
+            };
         }
         let inside_list = self.list_rect().is_some_and(|rect| rect.contains(at));
         match gesture {

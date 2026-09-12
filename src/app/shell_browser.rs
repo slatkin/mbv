@@ -210,8 +210,8 @@ impl Model {
         // Generic, Movies and HomeVideos moved to the embedded
         // `BrowserContent` owner inside the mounted `LibraryPanel` (task 6.1,
         // design D2); this component no longer mounts for them. TV moved to
-        // the merged `TvWorkspaceComponent` at every breakpoint (task 8.1,
-        // design D12): no `BrowserKind` still mounts this component, but the
+        // the embedded `TvContent` at every breakpoint (task 8.1,
+        // design D12): no `BrowserKind` still mounts a standalone component, but the
         // gate stays kind-driven so a future kind can opt back in without
         // rewriting the mount/push/render seam.
         let owns = false;

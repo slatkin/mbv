@@ -1,7 +1,7 @@
-use super::TvWorkspaceComponent;
+use super::TvContent;
 use crate::app::components::media_list::RowLocalInput;
 
-impl TvWorkspaceComponent {
+impl TvContent {
     pub(super) fn move_episode(&mut self, delta: i64) {
         self.episodes.delegate(RowLocalInput::Move(delta), None);
     }
@@ -42,7 +42,7 @@ impl TvWorkspaceComponent {
     /// Inline presentation is one-column, so it strides one selectable row
     /// per painted row (mirrors `BrowserComponent::page_rows`).
     pub(super) fn narrow_page_rows(&self) -> i64 {
-        self.layout.left_area.height.saturating_sub(1).max(1) as i64
+        self.painted_viewport_height().saturating_sub(1).max(1) as i64
     }
 
     /// Move the shared owner by `item_rows` painted item rows (Narrow only)

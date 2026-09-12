@@ -10,9 +10,10 @@
 use super::test_helpers::{buffer_to_string, make_audiobookshelf_book_app, make_music_group_app};
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
+use crate::app::components::tv_content::TvContent;
 use crate::app::components::{
-    AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, MusicWorkspaceComponent,
-    TvWorkspaceComponent,
+    AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, BrowserKey, BrowserKind,
+    MusicWorkspaceComponent,
 };
 use crate::app::palette;
 use crate::app::render::arrangements::library::wide_library_panes;
@@ -21,7 +22,7 @@ use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::TvWideRenderCtx;
 use crate::app::tests::make_item;
 use crate::app::TWO_COLUMN_THRESHOLD;
-use mbv_core::config::{FeedKind, FeedSubscription};
+use mbv_core::config::{FeedKind, FeedSubscription, ServiceKind};
 use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -44,11 +45,12 @@ fn direct_terminal(mut draw: impl FnMut(&mut ratatui::Frame)) -> Terminal<TestBa
 
 /// TV already routes through `wide_library_panes(area, PANE_PAD_X,
 /// PANE_PAD_Y)` and `resolve_surface_focus` -- the one destination the
-/// standardization leaves visually unchanged (task 3.2).
+/// standardization leaves visually unchanged (task 3.2). Task 8.4 hosts the
+/// owner in the mounted panel.
 #[test]
 fn tv_wide_left_pane_unconditional_fill_shared_inset() {
-    let mut component = TvWorkspaceComponent::new();
-    component.set_content(TvWideRenderCtx::new(
+    let mut owner = TvContent::new();
+    owner.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![make_item("Focused Series", "Series")], 0, 0),
         None,
         None,
@@ -56,8 +58,16 @@ fn tv_wide_left_pane_unconditional_fill_shared_inset() {
         None,
         false,
     ));
+    let key = LibraryKey::Service(BrowserKey {
+        service: ServiceKind::Emby,
+        library_id: "lib".into(),
+        kind: BrowserKind::TvShows,
+    });
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(key.clone(), Box::new(owner));
+    panel.set_active(Some(key));
     let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
+    let terminal = direct_terminal(|f| Component::view(&mut panel, f, area));
     let buffer = terminal.backend().buffer();
 
     let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide fits");

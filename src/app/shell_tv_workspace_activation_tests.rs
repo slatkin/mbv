@@ -19,7 +19,7 @@ fn wide_tv_handoff_does_not_fetch_empty_series_id() {
 
     // This is the first wide-TV handoff, so the mounted component cannot have
     // already captured a valid ID before the guard is exercised.
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
 
     assert!(model.app.series_detail_loading.is_empty());
@@ -31,30 +31,19 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     let mut model = mounted_tv_model();
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
 
-    // Divergence: the mounted TvWorkspaceComponent selects index 0 while
+    // Divergence: the panel-hosted TvContent owner selects index 0 while
     // App's mirrored BrowseLevel cursor is stale at index 1. Resolve narrow
     // extras using the component-owned cursor, as the production seam does.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
-    let component_cursor = model
-        .application
-        .get_component(&model.tv_workspace_id.clone().expect("tv workspace mounted"))
-        .expect("tv workspace mounted")
-        .as_any()
-        .downcast_ref::<crate::app::components::TvWorkspaceComponent>()
-        .expect("tv workspace component")
-        .browse_cursor();
+    let component_cursor = model.test_tv_owner().browse_cursor();
     assert_eq!(component_cursor, 0);
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
 
     assert_eq!(
-        model
-            .application
-            .get_component(&model.tv_workspace_id.clone().expect("tv workspace mounted"))
-            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-            .and_then(TvWorkspaceComponent::selected_item_id),
+        model.test_tv_owner().selected_item_id(),
         Some("movie-focused".into()),
         "the shared TV owner resolves its own selected Series"
     );
@@ -127,7 +116,7 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     app.terminal_width = 160;
     app.terminal_height = 40;
     let mut model = Model::new(app);
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
 
     assert!(model.app.wide_tv_library_area(0).is_none());
@@ -151,7 +140,7 @@ fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
     let mut model = mounted_tv_model();
     model.app.terminal_width = 60;
     model.app.terminal_height = 24;
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
     assert!(model.app.wide_tv_library_area(0).is_none());
 

@@ -487,10 +487,11 @@ impl LibraryContentOwner for HomeContent {
                     _ => None,
                 }
             }
-            // Home has no List-controls row and no Workspace.
-            LibrarySlotEvent::ControlPicked(_) | LibrarySlotEvent::WorkspaceSelectorPicked(_) => {
-                None
-            }
+            // Home has no List-controls row, no Workspace and no hero-pane
+            // input of its own.
+            LibrarySlotEvent::ControlPicked(_)
+            | LibrarySlotEvent::WorkspaceSelectorPicked(_)
+            | LibrarySlotEvent::HeroPane(_) => None,
         }
     }
 

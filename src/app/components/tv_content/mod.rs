@@ -1,46 +1,42 @@
-//! Interactive Component for the merged TV content owner (task 8.1,
+//! The TV embedded content owner (tasks 8.1–8.4,
 //! unify-screens-under-panel-components; design.md D12).
 //!
-//! One mounted component now owns TV at every breakpoint: the series list
-//! (Wide and Inline presentations over one shared `MediaListCarrier`), the
-//! episode list, the season cursor, and the Inline Search session. Wide and
-//! Narrow both paint through the Library panel skeleton; a breakpoint flip is
-//! an ordinary `set_presentation` on the shared owner, not a component
-//! hand-off.
-
-use ratatui::layout::{Position, Rect};
-use ratatui::Frame;
-use tuirealm::command::{Cmd, CmdResult};
-use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, MouseEvent, MouseEventKind};
-use tuirealm::props::{AttrValue, Attribute, QueryResult};
-use tuirealm::state::State;
+//! One plain type owns TV at every breakpoint: the series list (Wide and
+//! Inline presentations over one shared `MediaListCarrier`), the episode
+//! list, the season cursor, and the Inline Search session. It is never
+//! mounted, focused, subscribed, or given a `ComponentId`: the mounted
+//! `LibraryPanel` hosts it under `LibraryKey::Service(TvShows)` and is the
+//! library area's one event boundary. Wide and Narrow both paint through the
+//! Library panel skeleton; a breakpoint flip is an ordinary
+//! `set_presentation` on the shared owner, not a component hand-off.
+//!
+//! Pointer resolution moved into the panel with the registration: the panel
+//! resolves the letter pills, season pills, series rows and hero-pane input
+//! it painted and hands over typed slot events; this owner resolves the
+//! row-local target through its own carriers and emits the same
+//! `ShellRequest::TvHit*` messages the deleted component emitted.
 
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use ratatui::layout::Position;
+use tuirealm::event::KeyEvent;
 
-use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
+use super::inline_search::InlineSearch;
 use super::library_panel::{
-    hero_content_emby, render_narrow_skeleton, render_wide_skeleton, HeroContent,
-    LibraryPanelContent, ListSlot, PanelHeroImagePaint, SelectorRow, SkeletonHits,
-    WideSkeletonGeometry, Workspace,
+    hero_content_emby, HeroContent, HeroContentData, HeroImageState, LibraryContentOwner,
+    LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
     ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
-use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
-use super::user_event::UserEvent;
-#[cfg(test)]
-use crate::app::layout::LayoutMain;
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{list_duration_secs, natural_sort_key};
 #[cfg(test)]
 use tuirealm::event::Key;
 
 mod keyboard;
-mod mouse;
 mod navigation;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -49,7 +45,7 @@ enum Pane {
     Episodes,
 }
 
-pub struct TvWorkspaceComponent {
+pub(in crate::app) struct TvContent {
     context: TvWideRenderCtx,
     /// The one shared series-row owner, holding both the Wide and Inline
     /// presentations (design.md D12): a breakpoint flip moves the same
@@ -70,40 +66,26 @@ pub struct TvWorkspaceComponent {
     pane: Pane,
     initialized: bool,
     last_series_id: Option<String>,
-    layout: crate::app::layout::LayoutMain,
-    /// The Wide frame's retained panel-skeleton geometry (task 8.2): the
-    /// mounted component's own hit resolution and viewport arithmetic read
-    /// the rects the shared skeleton painted.
-    wide_geometry: Option<WideSkeletonGeometry>,
-    /// The Wide hero image paint the shared skeleton retained (task 8.2): the
-    /// shell paints the projected protocol into the reserved box after
-    /// `view` returns (the same defer-the-pixel-paint seam the Library panel
-    /// uses).
-    panel_image_paint: Option<PanelHeroImagePaint>,
     viewport_height: usize,
+    /// The rows last handed to the series carrier (the 6.1
+    /// `last_projected_rows` pattern): an identical re-projection skips
+    /// `set_content`, which would otherwise invalidate the painted frame and
+    /// make a sync-without-draw frame unclaimable by pointer input (D6).
+    last_series_rows: Option<Vec<MediaListRow<String>>>,
+    /// The episode twin of [`TvContent::last_series_rows`].
+    last_episode_rows: Option<Vec<MediaListRow<String>>>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
-    /// Irregular Wide Episodes-pane chrome — season pills only (design.md
-    /// D6), repopulated in `view()` from the geometry the wide-TV painter
-    /// just produced. Both panes now have an embedded canonical control, so
-    /// row identity comes from each control's retained current-frame
-    /// geometry; the blank Episodes-pane fallback is resolved directly
-    /// against the retained Wide skeleton geometry in `resolve_hit`.
-    tv_chrome: HitRegions<TvHit>,
     /// The embedded Inline Search control (design.md D1). See
-    /// `BrowserComponent::inline_search` for the migration-phase notes.
+    /// `BrowserContent::inline_search` for the migration-phase notes.
     inline_search: InlineSearch,
     /// The breakpoint the shell pushed for this frame (`App::
     /// wide_tv_library_area`): `true` paints the pane-based Wide workspace,
-    /// `false` paints the flat Narrow series list. Defaults to `true` so a
-    /// component built and viewed without an explicit push (existing unit
+    /// `false` paints the flat Narrow series list. Defaults to `true` so an
+    /// owner built and viewed without an explicit push (existing unit
     /// tests) keeps painting the Wide workspace.
     is_wide: bool,
-    /// Narrow-only letter-pill hit regions — last-push-wins rectangles
-    /// (design.md D6), repopulated in `view()` from the pill rects the
-    /// Narrow composer just painted into `self.layout.selector_tabs`.
-    pill_regions: HitRegions<usize>,
 }
 
 /// Derives the Emby-specific semantic state for a Narrow series row (mirrors
@@ -153,9 +135,9 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
         .collect()
 }
 
-impl TvWorkspaceComponent {
+impl TvContent {
     pub fn new() -> Self {
-        let context = TvWideRenderCtx::new(
+        let mut context = TvWideRenderCtx::new(
             crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
             None,
             None,
@@ -163,6 +145,9 @@ impl TvWorkspaceComponent {
             None,
             false,
         );
+        // A bare owner (unit tests) starts focused; the shell pushes the real
+        // library-pane focus bit each sync pass (task 8.4).
+        context.focused = true;
         Self {
             context,
             carrier: MediaListCarrier::new(Presentation::Wide),
@@ -171,22 +156,18 @@ impl TvWorkspaceComponent {
             pane: Pane::Series,
             initialized: false,
             last_series_id: None,
-            layout: Default::default(),
-            wide_geometry: None,
-            panel_image_paint: None,
             viewport_height: 1,
+            last_series_rows: None,
+            last_episode_rows: None,
             mouse_gestures: MouseGestureState::new(),
-            tv_chrome: HitRegions::new(),
             inline_search: InlineSearch::new(),
             is_wide: true,
-            pill_regions: HitRegions::new(),
         }
     }
 
     /// Records the session-only Wide hero list-pane width override for the
-    /// next `view()`. Pushed each frame by `render_tv_workspace_component`;
-    /// it is a layout fact, not content, so it never enters the event-scoped
-    /// `set_content` projection.
+    /// next frame's content producer. Pushed each sync pass by the shell
+    /// beside the other per-frame facts; it is a layout fact, not content.
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
         self.context.list.list_pane_width = list_pane_width;
     }
@@ -277,7 +258,12 @@ impl TvWorkspaceComponent {
         // the local list from that stable target on first mount; thereafter
         // preserve the stable target already owned by the component.
         let restore_target = self.carrier.selected_target().cloned();
-        self.carrier.set_content(rows);
+        // The 6.1 `last_projected_rows` pattern: an identical re-projection
+        // skips `set_content` so the painted frame stays claimable (D6).
+        if self.last_series_rows.as_ref() != Some(&rows) {
+            self.carrier.set_content(rows.clone());
+            self.last_series_rows = Some(rows);
+        }
         if !self.initialized {
             // First mount seeds from the shell's stable target, not its
             // numeric display cursor (design.md D4/D5).
@@ -327,8 +313,12 @@ impl TvWorkspaceComponent {
         }
     }
 
-    /// Test-only: drive framework focus the way `Component::attr` does.
-    #[cfg(test)]
+    /// Records whether the library pane holds Panel focus this frame. Pushed
+    /// by the shell each sync pass, like `set_is_wide`: framework focus lives
+    /// on the mounted `LibraryPanel` (task 8.4), while this bit drives the
+    /// owner's focus-dependent painting (which pane's rows paint as focused)
+    /// and its local key claim — the same value `Component::attr(Focus)`
+    /// carried before the owner became embedded.
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.context.focused = focused;
     }
@@ -370,7 +360,14 @@ impl TvWorkspaceComponent {
     /// canonical machinery the series rail uses.
     fn refresh_episode_rows(&mut self) {
         let rows = build_episode_rows(self.current_season_episodes());
-        self.episodes.set_content(rows);
+        // The 6.1 `last_projected_rows` pattern: an identical re-projection
+        // skips `set_content`, which would otherwise invalidate the painted
+        // frame and make a sync-without-draw frame unclaimable by pointer
+        // input (design D6 frame invalidation).
+        if self.last_episode_rows.as_ref() != Some(&rows) {
+            self.episodes.set_content(rows.clone());
+            self.last_episode_rows = Some(rows);
+        }
     }
 
     /// This frame's typed Library panel content (design D3, task 8.2): the
@@ -472,14 +469,15 @@ impl TvWorkspaceComponent {
         self.carrier.viewport_anchor(viewport_height)
     }
 
+    /// The painted item-row height the owner's pagination strides by: the
+    /// active presentation's retained content rect from the last frame the
+    /// panel viewed it (ADR 0024: the owner reads only geometry it helped
+    /// paint), falling back to the height the shell last pushed content for.
     pub(in crate::app) fn painted_viewport_height(&self) -> usize {
-        let painted = if self.is_wide {
-            self.wide_geometry
-                .as_ref()
-                .map_or(0, |geometry| geometry.list_area.height) as usize
-        } else {
-            self.layout.left_area.height as usize
-        };
+        let painted = self
+            .carrier
+            .current_content_rect()
+            .map_or(0, |rect| rect.height) as usize;
         if painted == 0 {
             self.viewport_height
         } else {
@@ -495,13 +493,6 @@ impl TvWorkspaceComponent {
     /// The scroll offset the component tracks for its series list.
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
-    }
-
-    /// Take the Wide hero image paint the shared skeleton retained (task
-    /// 8.2): the shell paints the projected protocol into its reserved box
-    /// right after `view` returns (design D9).
-    pub(in crate::app) fn take_panel_image_paint(&mut self) -> Option<PanelHeroImagePaint> {
-        self.panel_image_paint.take()
     }
 
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
@@ -566,41 +557,166 @@ impl TvWorkspaceComponent {
         Some((series_id, season_id))
     }
 
-    /// Handle a mouse event against the component's painted workspace
-    /// geometry, dispatching by this frame's breakpoint (design.md D12).
-    fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        // Inline Search gets first refusal while active (design.md D6): it
-        // is painted over the same area the series rail (Wide) or the
-        // ordinary list (Narrow) would occupy, so neither ever mutates for
-        // points there.
+    /// Translate one resolved slot event from the panel into TV's existing
+    /// typed `Msg`s (design D2/D12). The panel resolved the pointer against
+    /// the pills, list slot and hero pane it painted; this owner resolves
+    /// the row-local target through its own carriers, exactly as the deleted
+    /// mounted component did.
+    fn handle_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D6): the
+        // panel paints the box in the Selector row's rect and the results in
+        // the list box, so a list-slot input belongs to the search session.
         if self.inline_search.is_active() {
-            return match self.inline_search.handle_mouse(mouse) {
-                Some(InlineSearchMouse::ContextMenu) => self
-                    .inline_search
-                    .selected_item()
-                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
-                Some(InlineSearchMouse::Consumed) => {
-                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-                }
-                None => None,
-            };
-        }
-        // TV does not consume hover-move (design.md D7).
-        if matches!(mouse.kind, MouseEventKind::Moved) {
+            if let LibrarySlotEvent::List(input) = event {
+                return self.handle_search_pointer(input);
+            }
             return None;
         }
-        if self.is_wide {
-            self.handle_mouse_wide(mouse)
-        } else {
-            self.handle_mouse_narrow(mouse)
+        match event {
+            // The letter pills are the one Selector row at both breakpoints.
+            LibrarySlotEvent::SelectorPicked(index) => Some(Msg::Shell(ShellRequest::TvHitClick {
+                hit: TvHit::LetterPill(index),
+            })),
+            // The season pills ride in the hero pane's Workspace Selector
+            // row (Wide only).
+            LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
+                self.apply_pane_click(TvHit::SeasonTab(index), Position::new(0, 0));
+                Some(Msg::Shell(ShellRequest::TvHitClick {
+                    hit: TvHit::SeasonTab(index),
+                }))
+            }
+            // The Browser pane's series list.
+            LibrarySlotEvent::List(input) => self.series_list_event(input),
+            // The hero pane: the episode box's rows, or the pane itself.
+            LibrarySlotEvent::HeroPane(input) => self.hero_pane_event(input),
+            LibrarySlotEvent::ControlPicked(_) => None,
         }
     }
 
-    /// Move the component's local pane + pane cursor to the clicked `hit`
-    /// (Wide only). A click in the unfocused pane moves local focus there; a
-    /// click in the already-focused pane keeps it. Clicking a season pill
-    /// also selects that season; blank Episodes-pane space is consumed
-    /// without changing the pane. Right-clicks never call this.
+    /// The series list's row-local input. Wide and Narrow share the one
+    /// carrier, so the resolved target and the emitted `TvHit` are the same
+    /// at both breakpoints; the shell's `TvHit*` arms do the rest.
+    fn series_list_event(&mut self, input: RowLocalInput) -> Option<Msg> {
+        match input {
+            RowLocalInput::Wheel { at, delta } => {
+                // The series rail is the only scrollable TV surface. Its
+                // canonical control claims the painted region.
+                if !self.carrier.claims_current_point(at) {
+                    return None;
+                }
+                self.move_rows(delta);
+                // Return a framework-visible claim after mutating local
+                // state; dropping the message would let the framework's
+                // mutation be discarded by the mouse fold.
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            RowLocalInput::Click(at) => {
+                let hit = self.resolve_series_hit(at)?;
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
+            }
+            RowLocalInput::DoubleClick(at) => {
+                let hit = self.resolve_series_hit(at)?;
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
+            }
+            RowLocalInput::ContextClick(at) => {
+                let hit = self.resolve_series_hit(at)?;
+                Some(Msg::Shell(ShellRequest::TvHitContextMenu {
+                    hit,
+                    anchor: (at.x, at.y),
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    /// The hero pane's row-local input: the Workspace episode box resolves
+    /// its row through its own carrier, and blank pane space is the
+    /// `EpisodesPane` hit the deleted `resolve_hit` fallback produced.
+    fn hero_pane_event(&mut self, input: RowLocalInput) -> Option<Msg> {
+        let at = match input {
+            RowLocalInput::Click(at)
+            | RowLocalInput::DoubleClick(at)
+            | RowLocalInput::ContextClick(at) => at,
+            // The series rail is the only scrollable TV surface; a wheel
+            // over the hero pane is unclaimed (legacy `handle_mouse_wide`).
+            RowLocalInput::Wheel { .. } => return None,
+            _ => return None,
+        };
+        let hit = if self.episodes.claims_current_point(at) {
+            self.episodes
+                .resolve_current_point(at)
+                .cloned()
+                .map(TvHit::EpisodeRow)?
+        } else {
+            TvHit::EpisodesPane
+        };
+        match input {
+            RowLocalInput::Click(_) => {
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
+            }
+            RowLocalInput::DoubleClick(_) => {
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
+            }
+            RowLocalInput::ContextClick(_) => Some(Msg::Shell(ShellRequest::TvHitContextMenu {
+                hit,
+                anchor: (at.x, at.y),
+            })),
+            _ => None,
+        }
+    }
+
+    /// Inline Search pointer handling (mirrors `BrowserContent::
+    /// handle_search_pointer`): the panel's own recognizer already collapsed
+    /// the raw event into a normalized `RowLocalInput`, so click /
+    /// double-click / right-click / wheel against a painted result row are
+    /// reproduced here.
+    fn handle_search_pointer(&mut self, input: RowLocalInput) -> Option<Msg> {
+        match input {
+            RowLocalInput::Click(at) => {
+                self.inline_search.select_row_at_point(at);
+                None
+            }
+            RowLocalInput::DoubleClick(at) => {
+                self.inline_search.select_row_at_point(at);
+                self.inline_search.selected_item().map(|item| {
+                    Msg::Shell(ShellRequest::InlineSearchActivate {
+                        id: item.id,
+                        item_type: item.item_type,
+                    })
+                })
+            }
+            RowLocalInput::ContextClick(at) => {
+                self.inline_search.select_row_at_point(at);
+                self.inline_search
+                    .selected_item()
+                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
+            }
+            RowLocalInput::Wheel { delta, .. } => {
+                self.inline_search.move_cursor_by(delta);
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            _ => None,
+        }
+    }
+
+    /// Resolve a click in the Browser pane's list slot to the series row it
+    /// landed on from the carrier's own retained frame geometry.
+    fn resolve_series_hit(&mut self, at: Position) -> Option<TvHit> {
+        self.carrier
+            .resolve_current_point(at)
+            .cloned()
+            .map(TvHit::SeriesRow)
+    }
+
+    /// Move the owner's local pane + pane cursor to the clicked `hit` (Wide
+    /// only). A click in the unfocused pane moves local focus there; a click
+    /// in the already-focused pane keeps it. Clicking a season pill also
+    /// selects that season; blank Episodes-pane space is consumed without
+    /// changing the pane. Right-clicks never call this.
     fn apply_pane_click(&mut self, hit: TvHit, at: Position) {
         match hit {
             TvHit::SeasonTab(index) => {
@@ -623,59 +739,35 @@ impl TvWorkspaceComponent {
         }
     }
 
-    /// Resolve a Wide workspace position to the pane + hit it lands in, from
-    /// the component's own painted geometry. `None` = outside every TV rect
-    /// (the clicks that remain unhandled).
-    fn resolve_hit(&self, position: Position) -> Option<TvHit> {
-        if let Some(hit) = self.tv_chrome.resolve(position).cloned() {
-            return Some(hit);
-        }
-        if self.carrier.claims_current_point(position) {
-            return self
-                .carrier
-                .resolve_current_point(position)
-                .cloned()
-                .map(TvHit::SeriesRow);
-        }
-        if self.episodes.claims_current_point(position) {
-            return self
-                .episodes
-                .resolve_current_point(position)
-                .cloned()
-                .map(TvHit::EpisodeRow);
-        }
-        if self
-            .wide_geometry
-            .as_ref()
-            .is_some_and(|geometry| geometry.hero.contains(position))
-        {
-            return Some(TvHit::EpisodesPane);
-        }
-        None
-    }
-
     #[cfg(test)]
-    pub(crate) fn test_layout(&self) -> &LayoutMain {
-        &self.layout
-    }
-
-    /// The last painted Wide skeleton geometry (task 8.2), for the
-    /// panel-output test path.
-    #[cfg(test)]
-    pub(in crate::app) fn test_wide_geometry(&self) -> Option<&WideSkeletonGeometry> {
-        self.wide_geometry.as_ref()
-    }
-
-    /// The season-pill hit regions the shared Workspace slot painted (task
-    /// 8.2), for the season-click test path.
-    #[cfg(test)]
-    pub(crate) fn test_season_hits(&self) -> &HitRegions<TvHit> {
-        &self.tv_chrome
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_episode_claim_rect(&self) -> Option<Rect> {
+    pub(crate) fn test_episode_claim_rect(&self) -> Option<ratatui::layout::Rect> {
         self.episodes.wide().current_claim_rect()
+    }
+
+    /// Test-only: the owner's local key interpretation, so shell tests can
+    /// drive it without importing `LibraryContentOwner`.
+    #[cfg(test)]
+    pub(in crate::app) fn test_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        self.handle_key(key)
+    }
+
+    /// Test-only: translate one panel slot event, so shell tests can drive
+    /// pointer semantics without importing `LibraryContentOwner`.
+    #[cfg(test)]
+    pub(in crate::app) fn test_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+        self.handle_slot_event(event)
+    }
+
+    /// Test-only: the embedded Inline Search session, for the component-level
+    /// search tests (the panel forwards the index/keyboard to it).
+    #[cfg(test)]
+    pub(crate) fn inline_search(&self) -> &InlineSearch {
+        &self.inline_search
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inline_search_mut(&mut self) -> &mut InlineSearch {
+        &mut self.inline_search
     }
 
     /// Test-only cursor seed (mirrors `BrowserComponent::set_cursor_for_test`):
@@ -704,119 +796,46 @@ impl TvWorkspaceComponent {
     }
 }
 
-impl Default for TvWorkspaceComponent {
+impl Default for TvContent {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl InlineSearchHost for TvWorkspaceComponent {
-    fn inline_search(&self) -> &InlineSearch {
-        &self.inline_search
+impl LibraryContentOwner for TvContent {
+    fn content(&mut self) -> LibraryPanelContent<'_> {
+        self.panel_content()
     }
 
-    fn inline_search_mut(&mut self) -> &mut InlineSearch {
-        &mut self.inline_search
-    }
-}
-
-impl Component for TvWorkspaceComponent {
-    fn view(&mut self, frame: &mut Frame, area: Rect) {
-        self.viewport_height = area.height as usize;
-        self.ensure_carrier();
-        self.layout = Default::default();
-        self.wide_geometry = None;
-        self.panel_image_paint = None;
-        if self.is_wide {
-            // The Library panel's shared Wide skeleton (task 8.2): the
-            // component supplies typed content and keeps only its own painted
-            // hit stores; the hero image is the shell-projected
-            // `HeroImageState`, never a paint-time fetch (design D9).
-            let browser_focused = self.context.focused && self.pane == Pane::Series;
-            let list_pane_width = self.context.list.list_pane_width;
-            let mut content = self.panel_content();
-            let mut hits = SkeletonHits::default();
-            if let Some(geometry) = render_wide_skeleton(
-                frame,
-                area,
-                &mut content,
-                browser_focused,
-                list_pane_width,
-                &mut hits,
-            ) {
-                self.panel_image_paint = geometry.hero_image.clone();
-                self.wide_geometry = Some(geometry);
-                // Adopt the season-pill chrome the shared Workspace slot
-                // just produced into the irregular-chrome registry
-                // (design.md D6); both list rows and the blank Episodes-pane
-                // fallback resolve directly in `resolve_hit`.
-                self.tv_chrome.clear();
-                for (rect, index) in hits.workspace_selector.regions() {
-                    self.tv_chrome.push(*rect, TvHit::SeasonTab(*index));
-                }
-                return;
-            }
-            // A Wide surface is owned exclusively by the Wide skeleton. If
-            // it declines (for example during a transient geometry change),
-            // clear its chrome and stop; never paint the Narrow skeleton over
-            // a Wide surface (8.2 P2).
-            self.tv_chrome.clear();
-            return;
-        }
-
-        // Narrow uses the same panel content producer and the panel's shared
-        // Inline skeleton as Wide. Episodes remain in the Workspace content
-        // and are therefore reachable only through SelectionModal.
-        let browser_focused = self.context.focused;
-        let mut content = self.panel_content();
-        let mut hits = SkeletonHits::default();
-        let geometry =
-            render_narrow_skeleton(frame, area, &mut content, browser_focused, &mut hits);
-        self.panel_image_paint = geometry.inline_hero_image.clone();
-        self.layout.left_area = geometry.list_area;
-        self.layout.inline_hero_area = geometry.inline_hero.unwrap_or_default();
-        self.layout.hero_area = geometry.inline_hero.unwrap_or_default();
-        self.layout.selected_item_rect = geometry.selected;
-        self.layout.selector_tabs = hits.selector.regions().to_vec();
-        self.pill_regions.clear();
-        for (rect, target) in hits.selector.regions() {
-            self.pill_regions.push(*rect, *target);
-        }
-        self.tv_chrome.clear();
+    /// Translate one resolved slot event from the panel into TV's existing
+    /// typed `Msg`s (design D2/D12). The panel hands over the pills, list
+    /// and hero-pane input it painted; this owner resolves the row-local
+    /// target through its own carriers.
+    fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+        self.handle_slot_event(event)
     }
 
-    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
-        None
+    /// This owner's local key interpretation, forwarded by the focused panel
+    /// (the merged component's `handle_key` contract, unchanged: the router
+    /// owns every global chord and keeps precedence).
+    fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        self.handle_key(key)
     }
 
-    fn attr(&mut self, attr: Attribute, value: AttrValue) {
-        if attr == Attribute::Focus {
-            self.context.focused = matches!(value, AttrValue::Flag(true));
-        }
+    fn hero_data(&mut self) -> Option<HeroContentData> {
+        self.context.selected_series.as_ref().map(hero_content_emby)
     }
 
-    fn state(&self) -> State {
-        State::None
+    fn set_hero_image(&mut self, state: HeroImageState) {
+        self.context.hero_image = state;
     }
 
-    fn perform(&mut self, _cmd: Cmd) -> CmdResult {
-        CmdResult::NoChange
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
-}
 
-impl AppComponent<Msg, UserEvent> for TvWorkspaceComponent {
-    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        match event {
-            Event::Keyboard(key) => {
-                self.ensure_carrier();
-                self.handle_key(key)
-            }
-            Event::Mouse(mouse) => {
-                self.ensure_carrier();
-                self.handle_mouse(mouse)
-            }
-            _ => None,
-        }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -827,8 +846,7 @@ mod tests {
     use crate::app::tests::make_item;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use tuirealm::component::Component;
-    use tuirealm::event::{Event, KeyEvent, KeyModifiers};
+    use tuirealm::event::{KeyEvent, KeyModifiers};
 
     /// Task 4.2d: the embedded episode `WideMediaList` field replaces the
     /// old `Option<usize>` episode cursor. This exercises the same
@@ -837,7 +855,7 @@ mod tests {
     /// must preserve it (target-preserving `WideMediaList::set_content`).
     #[test]
     fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
-        let mut component = TvWorkspaceComponent::new();
+        let mut component = TvContent::new();
         component.set_focused(true);
         let mut series = make_item("Series", "Series");
         series.id = "series-id".into();
@@ -868,14 +886,14 @@ mod tests {
             None,
             false,
         ));
-        component.on(&Event::Keyboard(KeyEvent {
+        component.test_key(&KeyEvent {
             code: Key::Right,
             modifiers: KeyModifiers::NONE,
-        }));
-        let message = component.on(&Event::Keyboard(KeyEvent {
+        });
+        let message = component.test_key(&KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
-        }));
+        });
         assert!(matches!(
             message,
             Some(Msg::Shell(ShellRequest::TvEpisodeMove { delta: 1 }))
@@ -895,7 +913,7 @@ mod tests {
 
     #[test]
     fn tv_workspace_series_change_resets_local_selection() {
-        let mut component = TvWorkspaceComponent::new();
+        let mut component = TvContent::new();
         component.set_focused(true);
         let mut season_one = make_item("Season 1", "Season");
         season_one.id = "season-1".into();
@@ -936,8 +954,7 @@ mod tests {
 
     #[test]
     fn tv_workspace_renders_the_wide_workspace_without_app() {
-        let mut component = TvWorkspaceComponent::new();
-        component.set_focused(true);
+        let mut component = TvContent::new();
         component.set_content(TvWideRenderCtx::new(
             LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
             None,
@@ -946,9 +963,29 @@ mod tests {
             None,
             false,
         ));
+        let mut panel = crate::app::components::library_panel::LibraryPanel::new();
+        panel.insert_owner(
+            crate::app::components::library_panel::LibraryKey::Service(
+                crate::app::components::BrowserKey {
+                    service: mbv_core::config::ServiceKind::Emby,
+                    library_id: "lib".into(),
+                    kind: crate::app::components::BrowserKind::TvShows,
+                },
+            ),
+            Box::new(component),
+        );
+        panel.set_active(Some(
+            crate::app::components::library_panel::LibraryKey::Service(
+                crate::app::components::BrowserKey {
+                    service: mbv_core::config::ServiceKind::Emby,
+                    library_id: "lib".into(),
+                    kind: crate::app::components::BrowserKind::TvShows,
+                },
+            ),
+        ));
         let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
         terminal
-            .draw(|frame| component.view(frame, frame.area()))
+            .draw(|frame| tuirealm::component::Component::view(&mut panel, frame, frame.area()))
             .unwrap();
         assert!(terminal
             .backend()
@@ -960,9 +997,8 @@ mod tests {
 
     #[test]
     fn tv_workspace_renders_the_narrow_series_list_without_app() {
-        let mut component = TvWorkspaceComponent::new();
+        let mut component = TvContent::new();
         component.set_is_wide(false);
-        component.set_focused(true);
         component.set_content(TvWideRenderCtx::new(
             LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
             None,
@@ -971,9 +1007,19 @@ mod tests {
             None,
             false,
         ));
+        let key = crate::app::components::library_panel::LibraryKey::Service(
+            crate::app::components::BrowserKey {
+                service: mbv_core::config::ServiceKind::Emby,
+                library_id: "lib".into(),
+                kind: crate::app::components::BrowserKind::TvShows,
+            },
+        );
+        let mut panel = crate::app::components::library_panel::LibraryPanel::new();
+        panel.insert_owner(key.clone(), Box::new(component));
+        panel.set_active(Some(key));
         let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
         terminal
-            .draw(|frame| component.view(frame, frame.area()))
+            .draw(|frame| tuirealm::component::Component::view(&mut panel, frame, frame.area()))
             .unwrap();
         assert!(terminal
             .backend()

@@ -5,7 +5,9 @@
 //! the pre-override frame — and that a `Some` override repaints the split.
 
 use super::test_helpers::buffer_to_string;
-use crate::app::components::TvWorkspaceComponent;
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
+use crate::app::components::tv_content::TvContent;
+use crate::app::components::{BrowserKey, BrowserKind};
 use crate::app::render::arrangements::library::wide_library_panes;
 use crate::app::render::arrangements::wide_hero::{
     wide_hero_split, WIDE_HERO_MIN_PANE_WIDTH, WIDE_HERO_PANE_GAP,
@@ -13,6 +15,7 @@ use crate::app::render::arrangements::wide_hero::{
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::TvWideRenderCtx;
 use crate::app::tests::make_item;
+use mbv_core::config::ServiceKind;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -28,10 +31,11 @@ fn wide_area() -> Rect {
 }
 
 /// Renders the representative wide TV surface with `override_width` pushed
-/// through the mounted component's per-draw override seam.
+/// through the mounted panel's per-frame override seam (task 8.4: the panel
+/// hosts the TV owner and receives the session width).
 fn render_tv_wide(override_width: Option<u16>) -> String {
-    let mut component = TvWorkspaceComponent::new();
-    component.set_content(TvWideRenderCtx::new(
+    let mut owner = TvContent::new();
+    owner.set_content(TvWideRenderCtx::new(
         LibraryListRenderCtx::from_items(vec![make_item("Series One", "Series")], 0, 0),
         None,
         None,
@@ -39,10 +43,20 @@ fn render_tv_wide(override_width: Option<u16>) -> String {
         None,
         true,
     ));
-    component.set_list_pane_width(override_width);
+    let key = LibraryKey::Service(BrowserKey {
+        service: ServiceKind::Emby,
+        library_id: "lib".into(),
+        kind: BrowserKind::TvShows,
+    });
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(key.clone(), Box::new(owner));
+    panel.set_active(Some(key));
+    panel.set_list_pane_width(override_width);
     let area = wide_area();
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
-    terminal.draw(|f| component.view(f, area)).unwrap();
+    terminal
+        .draw(|f| Component::view(&mut panel, f, area))
+        .unwrap();
     buffer_to_string(&terminal)
 }
 

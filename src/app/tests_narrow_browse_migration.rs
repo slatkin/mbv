@@ -17,7 +17,7 @@
 use super::*;
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{ComponentId, Msg, ShellRequest, TvWorkspaceComponent};
+use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::shell::Model;
 use crate::app::tests::*;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, TabSelection};
@@ -253,40 +253,21 @@ fn tv_shows_app() -> App {
     app
 }
 
-/// Regression 3: narrow TV `j` moves the painted selection. The merged
-/// `TvWorkspaceComponent` owns the surface at every breakpoint (task 8.1), so
-/// the painted selection lives in its own layout (`test_layout`), keyed off
-/// its component-local cursor.
+/// Regression 3: narrow TV `j` moves the painted selection. The panel-hosted
+/// `TvContent` owner owns the surface at every breakpoint (task 8.4), so the
+/// painted selection lives in the mounted panel's retained geometry, keyed
+/// off the owner's local cursor.
 #[test]
 fn narrow_tv_browse_j_moves_painted_selection() {
     let mut model = Model::new(tv_shows_app());
     model.sync_mounted_surfaces();
-    let id = model
-        .tv_workspace_id
-        .clone()
-        .expect("narrow TV workspace mounted");
     let mut term = narrow_backend();
 
     // Seed past the selected-Series inline hero (which swallows its own row)
     // so both samples are plain rows.
-    model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<TvWorkspaceComponent>()
-        .unwrap()
-        .set_cursor_for_test(1);
+    model.test_tv_owner_mut().set_cursor_for_test(1);
     draw(&mut model, &mut term);
-    let before = model
-        .application
-        .get_component(&id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .unwrap()
-        .test_layout()
-        .selected_item_rect;
+    let before = model.test_painted_library_layout().selected_item_rect;
     assert!(
         before.is_some(),
         "narrow TV browse must paint a selected row"
@@ -294,15 +275,7 @@ fn narrow_tv_browse_j_moves_painted_selection() {
 
     press(&mut model, Key::Char('j'));
     draw(&mut model, &mut term);
-    let after = model
-        .application
-        .get_component(&id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .unwrap()
-        .test_layout()
-        .selected_item_rect;
+    let after = model.test_painted_library_layout().selected_item_rect;
 
     assert_ne!(
         before, after,

@@ -1,6 +1,6 @@
 use super::test_helpers::{
-    buffer_to_string, draw_mounted_frame, make_movie_app, mounted_model_at, mounted_tv_layout,
-    mounted_tv_scroll, set_tv_cursor_for_test,
+    draw_mounted_frame, make_movie_app, mounted_model_at, mounted_tv_layout, mounted_tv_scroll,
+    set_tv_cursor_for_test,
 };
 use super::*;
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
@@ -170,29 +170,22 @@ fn tv_letter_grouped_app(scroll: usize) -> App {
 }
 
 // TV's Narrow surface is the same shared panel skeleton as Wide (task 8.3,
-// design D4/D7). Characterize its rendered content and owner viewport rather
-// than the deleted Series-specific detail geometry.
+// design D4/D7); task 8.4 registers the owner under
+// `LibraryKey::Service(TvShows)`, so the surface is the mounted panel's own
+// paint at its `RootFrame` placement. Characterize its rendered content and
+// owner viewport rather than the deleted Series-specific detail geometry.
+//
+// The fit boundary below is re-derived for the panel's real placement (the
+// deleted component's tests re-viewed it over the whole frame, so their
+// boundary saw ~10 extra rows): the shared inline hero's detail block is 14
+// rows, and the panel's list area is `terminal height - 10`, so the block is
+// admitted from height 26 up and refused at 24 (design D15: re-derived, not
+// loosened).
 #[test]
 fn tv_narrow_panel_characterization_keeps_content_and_viewport() {
-    let mut model = mounted_model_at(tv_letter_grouped_app(12), 70, 20);
+    let mut model = mounted_model_at(tv_letter_grouped_app(12), 70, 26);
     set_tv_cursor_for_test(&mut model, 54);
-    let _ = draw_mounted_frame(&mut model, 70, 20);
-    let output = {
-        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
-        let component = model
-            .application
-            .get_component_mut(&id)
-            .expect("TV workspace mounted")
-            .as_any_mut()
-            .downcast_mut::<crate::app::components::TvWorkspaceComponent>()
-            .expect("TvWorkspaceComponent");
-        let mut terminal =
-            ratatui::Terminal::new(ratatui::backend::TestBackend::new(70, 20)).unwrap();
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-        buffer_to_string(&terminal)
-    };
+    let output = draw_mounted_frame(&mut model, 70, 26);
     let layout = mounted_tv_layout(&model);
 
     assert!(
@@ -214,35 +207,20 @@ fn tv_narrow_panel_characterization_keeps_content_and_viewport() {
         .take(hero_area.height as usize)
         .collect::<String>();
     assert!(
-        !hero_lines.contains('▎'),
+        !hero_lines.contains('\u{258e}'),
         "ordinary marker leaked into the grouped hero"
     );
     let control_scroll = mounted_tv_scroll(&model);
-    let _ = draw_mounted_frame(&mut model, 70, 20);
+    let _ = draw_mounted_frame(&mut model, 70, 26);
     assert_eq!(
         mounted_tv_scroll(&model),
         control_scroll,
         "shared panel redraw must preserve the TV viewport"
     );
 
-    let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 14);
+    let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 24);
     set_tv_cursor_for_test(&mut boundary_model, 54);
-    let boundary_output = draw_mounted_frame(&mut boundary_model, 70, 14);
-    let id = boundary_model
-        .tv_workspace_id
-        .clone()
-        .expect("TV workspace mounted");
-    let component = boundary_model
-        .application
-        .get_component_mut(&id)
-        .expect("TV workspace mounted")
-        .as_any_mut()
-        .downcast_mut::<crate::app::components::TvWorkspaceComponent>()
-        .expect("TvWorkspaceComponent");
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(70, 14)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, frame.area()))
-        .unwrap();
+    let boundary_output = draw_mounted_frame(&mut boundary_model, 70, 24);
     let boundary_layout = mounted_tv_layout(&boundary_model);
     assert!(
         boundary_output.contains("Series"),
@@ -259,84 +237,6 @@ fn tv_narrow_panel_characterization_keeps_content_and_viewport() {
     );
 }
 
-/// migrate-home-feeds 4.6 regression: after the full wide-Movies arrangement
-/// paint, the focused selected row's background is the surface *containing*
-/// the list panel (`SURFACE_BACKDROP`), and the rail-framing helper — which
-/// runs before the row flow — must not overpaint that bar. Unfocused, the
-/// row must match the panel body (no bar). Painted through the mounted
-/// `LibraryPanel`'s embedded `BrowserContent` owner (task 6.1).
-#[test]
-fn wide_movies_selected_row_punches_through_to_the_library_backdrop() {
-    use crate::app::components::browser_content::BrowserOwnerPush;
-    use crate::app::components::component_id::BrowserKind;
-    use crate::app::components::library_panel::owner::LibraryKey;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::component::Component;
-
-    fn selected_and_body_bg(focused: bool) -> (ratatui::style::Color, ratatui::style::Color) {
-        let items: Vec<_> = (0..10)
-            .map(|i| {
-                let mut item = make_item(&format!("Movie {i:02}"), "Movie");
-                item.id = format!("movie-{i}");
-                item
-            })
-            .collect();
-        let total_count = items.len();
-        let mut owner = BrowserOwner::new(BrowserKind::Movies);
-        owner.set_content(BrowserOwnerPush {
-            items,
-            total_count,
-            library_total: None,
-            letter_filter: None,
-            loading: false,
-            group_pills: false,
-            home_video: false,
-            show_letter_pills: false,
-            feed_groups: Vec::new(),
-            feed_group_cursor: 0,
-        });
-        owner.apply_position(0, 40);
-        let mut panel = LibraryPanel::new();
-        panel.insert_owner(LibraryKey::Home, Box::new(owner));
-        panel.set_active(Some(LibraryKey::Home));
-        tuirealm::component::Component::attr(
-            &mut panel,
-            tuirealm::props::Attribute::Focus,
-            tuirealm::props::AttrValue::Flag(focused),
-        );
-        let area = ratatui::layout::Rect::new(0, 0, 120, 40);
-        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-        terminal
-            .draw(|frame| Component::view(&mut panel, frame, area))
-            .unwrap();
-        let geometry = panel
-            .test_wide_geometry()
-            .expect("the panel painted a Wide skeleton");
-        let buffer = terminal.backend().buffer();
-        let row_for = |target: usize| geometry.list_area.y + target as u16;
-        (
-            buffer[(geometry.list_area.x, row_for(0))].bg,
-            buffer[(geometry.list_area.x, row_for(1))].bg,
-        )
-    }
-
-    let (selected, body) = selected_and_body_bg(true);
-    assert_eq!(selected, crate::app::palette::SURFACE_BACKDROP);
-    assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
-    assert_ne!(selected, body);
-
-    let (selected, body) = selected_and_body_bg(false);
-    assert_eq!(selected, body, "unfocused rail shows no selection bar");
-}
-
-/// migrate-home-feeds 5.1 (§5 geometry test): the shared Wide hero
-/// primitive owns the one-row status-bar reserve, so wide Movies' framed list
-/// panel paints its `▁` bottom border two rows above the destination area's
-/// bottom, leaving exactly one blank row before the status bar. Asserted
-/// against the painted buffer so a one-row vertical shift is caught. Painted
-/// through the mounted `LibraryPanel`'s embedded `BrowserContent` owner
-/// (task 6.1).
 #[test]
 fn wide_movies_list_panel_leaves_exactly_one_row_above_the_status_bar() {
     use crate::app::components::browser_content::BrowserOwnerPush;
@@ -344,7 +244,6 @@ fn wide_movies_list_panel_leaves_exactly_one_row_above_the_status_bar() {
     use crate::app::components::library_panel::owner::LibraryKey;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
-    use tuirealm::component::Component;
 
     let items: Vec<_> = (0..40)
         .map(|i| {

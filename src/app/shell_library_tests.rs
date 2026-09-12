@@ -97,7 +97,7 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
             app.terminal_height = 24;
         }
         let mut model = Model::new(app);
-        model.sync_tv_workspace();
+        model.sync_tv_content();
         model.sync_emby_browser();
         model.sync_active_destination();
         let eligible: std::collections::HashSet<_> =
@@ -105,15 +105,15 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
         (model, eligible)
     };
 
+    // Task 8.4 (design D2): the TV surface is the mounted `LibraryPanel`
+    // under `ComponentId::Library` at every breakpoint; no `Browser` id is
+    // ever mounted for TV.
     let (wide, wide_eligible) = tv_child(true);
-    assert!(wide_eligible.contains(&wide.tv_workspace_id.clone().unwrap()));
+    assert!(wide_eligible.contains(&ComponentId::Library));
     assert!(wide.emby_browser_id.is_none());
 
-    // task 8.1 (design D12): the merged TV owner is eligible under the same
-    // `ComponentId::TvWorkspace` at every breakpoint now; no `Browser` id is
-    // ever mounted for TV.
     let (narrow, narrow_eligible) = tv_child(false);
-    assert!(narrow_eligible.contains(&narrow.tv_workspace_id.clone().unwrap()));
+    assert!(narrow_eligible.contains(&ComponentId::Library));
     assert!(narrow.emby_browser_id.is_none());
 
     let mut model = eligibility_model();
@@ -243,14 +243,12 @@ fn shell_routes_focus_to_the_active_destination_child() {
         .is_some());
 }
 
-/// unify-screens-under-panel-components task 8.1 (design D12): the merged
-/// TV owner routes to `TvWorkspaceComponent` under `ComponentId::TvWorkspace`
-/// at every breakpoint; no `Browser` id is ever mounted for a `tvshows`
-/// library.
+/// unify-screens-under-panel-components task 8.4 (design D2): the TV owner is
+/// registered under `LibraryKey::Service(TvShows)` inside the mounted
+/// `LibraryPanel` at every breakpoint; no standalone `Browser` or TV-specific
+/// component id is ever mounted for a `tvshows` library.
 #[test]
-fn narrow_and_wide_tv_library_both_route_to_tv_workspace() {
-    use crate::app::components::TvWorkspaceComponent;
-
+fn narrow_and_wide_tv_library_both_route_to_the_library_panel() {
     let build = |wide: bool| {
         let mut app = make_movie_app();
         app.libs[0].library.collection_type = "tvshows".into();
@@ -270,7 +268,7 @@ fn narrow_and_wide_tv_library_both_route_to_tv_workspace() {
             app.terminal_height = 24;
         }
         let mut model = Model::new(app);
-        model.sync_tv_workspace();
+        model.sync_tv_content();
         model.sync_emby_browser();
         model.sync_active_destination();
         model
@@ -279,16 +277,8 @@ fn narrow_and_wide_tv_library_both_route_to_tv_workspace() {
     for wide in [false, true] {
         let model = build(wide);
         assert_eq!(model.emby_browser_id, None);
-        let tv_id = model.tv_workspace_id.clone().expect("TV workspace");
-        assert!(matches!(tv_id, ComponentId::TvWorkspace(_)));
-        assert_eq!(model.application.focus(), Some(&tv_id));
-        assert!(model
-            .application
-            .get_component(&tv_id)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<TvWorkspaceComponent>()
-            .is_some());
+        assert_eq!(model.application.focus(), Some(&ComponentId::Library));
+        assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     }
 }
 
@@ -376,14 +366,12 @@ fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
     }
 }
 
-/// unify-screens-under-panel-components task 8.1 (design D12): drive a TV
+/// unify-screens-under-panel-components task 8.4 (design D2): drive a TV
 /// library through wide -> narrow -> wide via `sync_mounted_surfaces()` in
-/// production order. The merged owner keeps one `ComponentId::TvWorkspace`
-/// mounted and focused across every flip -- no second id is ever mounted.
+/// production order. The panel-hosted owner stays installed and focused
+/// across every flip -- no second id is ever mounted.
 #[test]
 fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
-    use crate::app::components::TvWorkspaceComponent;
-
     let mut app = make_movie_app();
     app.libs[0].library.collection_type = "tvshows".into();
     for item in &mut app.libs[0].nav_stack[0].items {
@@ -404,34 +392,25 @@ fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
     };
 
     let assert_tv_focused = |model: &Model| {
-        let tv_id = model.tv_workspace_id.clone().expect("TV workspace id");
-        assert!(matches!(tv_id, ComponentId::TvWorkspace(_)));
         assert_eq!(model.emby_browser_id, None);
-        assert_eq!(model.application.focus(), Some(&tv_id));
-        assert!(model
-            .application
-            .get_component(&tv_id)
-            .unwrap()
-            .as_any()
-            .downcast_ref::<TvWorkspaceComponent>()
-            .is_some());
-        tv_id
+        assert_eq!(model.application.focus(), Some(&ComponentId::Library));
+        assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     };
 
     // Wide.
     widen(&mut model, true);
     model.sync_mounted_surfaces();
-    let tv_id = assert_tv_focused(&model);
+    assert_tv_focused(&model);
 
-    // Narrow: the same owner stays mounted and focused.
+    // Narrow: the same owner stays installed and focused.
     widen(&mut model, false);
     model.sync_mounted_surfaces();
-    assert_eq!(assert_tv_focused(&model), tv_id);
+    assert_tv_focused(&model);
 
     // Wide again: still the same owner.
     widen(&mut model, true);
     model.sync_mounted_surfaces();
-    assert_eq!(assert_tv_focused(&model), tv_id);
+    assert_tv_focused(&model);
 }
 
 #[test]

@@ -52,9 +52,7 @@ impl Model {
             .mounted_destinations
             .iter()
             .filter_map(|id| match id {
-                ComponentId::Browser(key) | ComponentId::TvWorkspace(key)
-                    if !live.contains(key.library_id.as_str()) =>
-                {
+                ComponentId::Browser(key) if !live.contains(key.library_id.as_str()) => {
                     Some(id.clone())
                 }
                 _ => None,
@@ -81,7 +79,6 @@ impl Model {
     fn clear_destination_pointer(&mut self, id: &ComponentId) {
         for pointer in [
             &mut self.emby_browser_id,
-            &mut self.tv_workspace_id,
             &mut self.music_workspace_id,
             &mut self.abs_podcast_id,
             &mut self.abs_book_id,
@@ -146,7 +143,6 @@ mod tests {
         model.register_destination(&browser_id("lib-movies", BrowserKind::Generic));
         model.register_destination(&browser_id("lib-series", BrowserKind::TvShows));
         model.emby_browser_id = Some(browser_id("lib-movies", BrowserKind::Generic));
-        model.tv_workspace_id = Some(browser_id("lib-series", BrowserKind::TvShows));
         // `make_movie_app` seeds lib-movies at index 0; lib-series was pushed
         // at index 1. retain is the catalog index to KEEP: retain=0 keeps
         // lib-movies (drop lib-series = retire its browser), retain=1 keeps
@@ -195,13 +191,11 @@ mod tests {
         assert!(model.application.mounted(&kept));
         assert!(model.application.mounted(&retired));
         assert_eq!(model.emby_browser_id, Some(kept.clone()));
-        assert_eq!(model.tv_workspace_id, Some(retired.clone()));
 
         model.reconcile_destination_mounts();
 
-        // The dropped library's browser is gone and its pointer cleared.
+        // The dropped library's browser is gone.
         assert!(!model.application.mounted(&retired));
-        assert_eq!(model.tv_workspace_id, None);
         // The still-live library's browser is untouched.
         assert!(model.application.mounted(&kept));
         assert_eq!(model.emby_browser_id, Some(kept));
@@ -211,12 +205,8 @@ mod tests {
     fn reconcile_retires_unpointed_stale_browser() {
         let mut model = two_browser_model(0); // keep lib-movies, drop lib-series
         let stale_browser = browser_id("lib-series", BrowserKind::TvShows);
-        // Simulate the narrow/drill transition: the pointer was cleared but
-        // the component stays mounted and registered (keep-mounted).
-        model.tv_workspace_id = None;
 
         assert!(model.application.mounted(&stale_browser));
-        assert_eq!(model.tv_workspace_id, None);
         assert!(model.mounted_destinations.contains(&stale_browser));
 
         model.reconcile_destination_mounts();
@@ -359,7 +349,7 @@ mod tests {
 
     fn library_id_of(id: &ComponentId) -> &str {
         match id {
-            ComponentId::Browser(key) | ComponentId::TvWorkspace(key) => &key.library_id,
+            ComponentId::Browser(key) => &key.library_id,
             _ => panic!("expected a destination id"),
         }
     }

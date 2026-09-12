@@ -282,7 +282,7 @@ impl MusicWorkspaceComponent {
     }
 
     /// The album item under the component's own album cursor, cloned out of
-    /// the cached render context. Mirrors `TvWorkspaceComponent::selected_item()`
+    /// the cached render context. Mirrors the TV owner's `selected_item()`
     /// for outcome 3 readers (R16/R18): the shell supplies this instead of
     /// reading `BrowseLevel.cursor` for selected-album construction.
     /// First-mount fallback to App-derived item when the component is
