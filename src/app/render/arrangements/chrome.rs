@@ -66,7 +66,18 @@ pub(in crate::app) fn tab_strip_text_width(tab_bar_width: u16) -> u16 {
 /// library column is visible; Library playback only when the queue column is
 /// hidden; Queue and Queue playback only when the queue column is visible;
 /// Queue boundary only in the two-panel layout.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum PanelPlacement {
+    Tab(Rect),
+    Library(Rect),
+    LibraryPlayback(Rect),
+    Queue(Rect),
+    QueuePlayback(Rect),
+    StatusBar(Rect),
+    QueueBoundary(Rect),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RootFrame {
     /// Tab bar at the top of the library column (`TabPanel`, task 2.1).
     pub tab: Option<Rect>,
@@ -96,6 +107,31 @@ pub(crate) struct RootFrame {
     /// The one-column queue boundary between the two panels (the mounted
     /// `QueueBoundaryComponent`), placed only in the two-panel layout.
     pub queue_boundary: Option<Rect>,
+    /// Placements in paint order. The root consumes this single ordered list;
+    /// the individual fields above remain convenient named accessors for
+    /// sync, hit testing, and tests.
+    pub ordered: [Option<PanelPlacement>; 7],
+}
+
+impl Default for RootFrame {
+    fn default() -> Self {
+        Self {
+            tab: None,
+            library: None,
+            library_playback: None,
+            queue: None,
+            queue_playback: None,
+            status_bar: None,
+            queue_boundary: None,
+            ordered: [None; 7],
+        }
+    }
+}
+
+impl RootFrame {
+    pub(crate) fn placements(self) -> [Option<PanelPlacement>; 7] {
+        self.ordered
+    }
 }
 
 /// A panel placement that exists only when its mount-rule condition holds and
@@ -314,20 +350,37 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         width: 1,
         height: area.height,
     };
+    let tab = placed_when(right_visible, tab_bar_area);
+    let library = placed_when(right_visible, library_area);
+    let library_playback = placed_when(input.panel_mode == PanelMode::LibraryOnly, player_area);
+    let queue = placed_when(queue_col_visible, queue_geo.panel_area);
+    let queue_playback = placed_when(
+        queue_col_visible && queue_geo.panel_area.height > 0,
+        queue_playback_area,
+    );
+    let status_bar = placed_when(right_visible, status_area);
+    let queue_boundary = placed_when(
+        input.panel_mode == PanelMode::Both && left_w > 0,
+        queue_boundary_area,
+    );
+    let ordered = [
+        tab.map(PanelPlacement::Tab),
+        library_playback.map(PanelPlacement::LibraryPlayback),
+        library.map(PanelPlacement::Library),
+        queue_playback.map(PanelPlacement::QueuePlayback),
+        queue.map(PanelPlacement::Queue),
+        status_bar.map(PanelPlacement::StatusBar),
+        queue_boundary.map(PanelPlacement::QueueBoundary),
+    ];
     let root = RootFrame {
-        tab: placed_when(right_visible, tab_bar_area),
-        library: placed_when(right_visible, library_area),
-        library_playback: placed_when(input.panel_mode == PanelMode::LibraryOnly, player_area),
-        queue: placed_when(queue_col_visible, queue_geo.panel_area),
-        queue_playback: placed_when(
-            queue_col_visible && queue_geo.panel_area.height > 0,
-            queue_playback_area,
-        ),
-        status_bar: placed_when(right_visible, status_area),
-        queue_boundary: placed_when(
-            input.panel_mode == PanelMode::Both && left_w > 0,
-            queue_boundary_area,
-        ),
+        tab,
+        library,
+        library_playback,
+        queue,
+        queue_playback,
+        status_bar,
+        queue_boundary,
+        ordered,
     };
 
     FrameChromeGeometry {

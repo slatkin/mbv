@@ -294,9 +294,10 @@ pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Ter
     term.draw(|f| {
         model
             .app
-            .render_library(f, Rect::new(0, 0, 60, 20), layout, None);
-        model.render_library_panel(f);
-        model.render_music_workspace_component(f);
+            .reserve_library_area(f, Rect::new(0, 0, 60, 20), layout, None);
+        if let Some(area) = model.app.layout.root_frame.library {
+            model.render_library_panel_at(f, area);
+        }
     })
     .unwrap();
     *app = model.app;
@@ -324,9 +325,10 @@ pub fn render_library_to_string_sized(
     term.draw(|f| {
         model
             .app
-            .render_library(f, Rect::new(0, 0, width, height), layout, None);
-        model.render_library_panel(f);
-        model.render_music_workspace_component(f);
+            .reserve_library_area(f, Rect::new(0, 0, width, height), layout, None);
+        if let Some(area) = model.app.layout.root_frame.library {
+            model.render_library_panel_at(f, area);
+        }
     })
     .unwrap();
     *app = model.app;
@@ -405,7 +407,7 @@ pub fn render_queue_view_to_terminal(
 pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
+    term.draw(|f| app.compose_root_frame(f)).unwrap();
     term
 }
 
@@ -433,8 +435,10 @@ pub fn render_queue_shell(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_base_frame(f, None);
-        model.render_queue_component(f);
+        model.app.compose_root_frame(f);
+        if let Some(area) = model.app.layout.root_frame.queue {
+            model.render_queue_panel_at(f, area);
+        }
     })
     .unwrap();
     (model, term)
@@ -466,8 +470,10 @@ pub fn render_home_shell_with(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_base_frame(f, None);
-        model.render_library_panel(f);
+        model.app.compose_root_frame(f);
+        if let Some(area) = model.app.layout.root_frame.library {
+            model.render_library_panel_at(f, area);
+        }
     })
     .unwrap();
     (model, term)

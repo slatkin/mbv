@@ -21,7 +21,7 @@ fn render_library(app: &mut App, width: u16, height: u16) -> (Terminal<TestBacke
     let mut layout = LayoutMain::default();
     terminal
         .draw(|frame| {
-            app.render_library(frame, Rect::new(0, 0, width, height), &mut layout, None);
+            app.reserve_library_area(frame, Rect::new(0, 0, width, height), &mut layout, None);
         })
         .unwrap();
     (terminal, layout)
@@ -614,7 +614,7 @@ fn queue_legacy_base_frame_reserves_geometry_but_paints_no_slot_rows() {
         );
         let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
         terminal
-            .draw(|frame| app.compose_base_frame(frame, None))
+            .draw(|frame| app.compose_root_frame(frame))
             .unwrap();
         assert!(
             app.queue_panel_placement().panel_area.width > 0,

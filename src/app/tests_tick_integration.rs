@@ -105,7 +105,11 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
 
     let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
     terminal
-        .draw(|frame| harness.model_mut().render_library_playback_panel(frame))
+        .draw(|frame| {
+            harness
+                .model_mut()
+                .render_library_playback_panel_at(frame, Rect::new(10, 5, 40, 4))
+        })
         .unwrap();
 
     harness.inject(Event::Mouse(MouseEvent {

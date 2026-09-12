@@ -69,7 +69,7 @@ fn render_at(model: &mut Model, width: u16, height: u16) -> (u16, u16) {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_base_frame(f, None);
+        model.app.compose_root_frame(f);
         model.render_context_menu_overlay(f);
     })
     .unwrap();
@@ -152,7 +152,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     let mut term = Terminal::new(backend).unwrap();
     // Paint only the panel so its `view()` produces the authoritative placed
     // geometry while the legacy `AppLayout` copies stay untouched.
-    term.draw(|f| model.render_library_panel(f)).unwrap();
+    let area = model.app.layout.root_frame.library.unwrap();
+    term.draw(|f| model.render_library_panel_at(f, area)).unwrap();
 
     // Capture the panel-painted geometry the shell must anchor to, then
     // poison the corresponding legacy copies far outside the panel.
@@ -254,7 +255,8 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     let mut term = Terminal::new(backend).unwrap();
     // Paint only the panel so its `view()` produces the authoritative placed
     // geometry while the legacy `AppLayout` copies stay untouched.
-    term.draw(|f| model.render_library_panel(f)).unwrap();
+    let area = model.app.layout.root_frame.library.unwrap();
+    term.draw(|f| model.render_library_panel_at(f, area)).unwrap();
 
     // Capture the panel-painted geometry the shell must anchor to, then
     // poison the corresponding legacy copies far outside the panel.
@@ -326,7 +328,7 @@ fn context_menu_entries_render_below_the_reserved_top_row() {
     // paints via `render_context_menu_content` (task 2.5 / 5.3c).
     terminal
         .draw(|f| {
-            model.app.compose_base_frame(f, None);
+            model.app.compose_root_frame(f);
             model.render_context_menu_overlay(f);
         })
         .unwrap();

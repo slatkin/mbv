@@ -21,7 +21,7 @@ fn render_music_legacy(app: &mut App, width: u16, height: u16, _focused: bool) -
     let mut layout = LayoutMain::default();
     terminal
         .draw(|f| {
-            app.render_library(f, Rect::new(0, 0, width, height), &mut layout, None);
+            app.reserve_library_area(f, Rect::new(0, 0, width, height), &mut layout, None);
         })
         .unwrap();
     buffer_to_string(&terminal)

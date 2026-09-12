@@ -96,28 +96,42 @@ impl Model {
         // App-level `blocking_overlay_active` adapter, task 5.3d).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
         self.app.compose_root_frame(f);
-        self.render_tab_panel(f);
-        self.render_status_bar_panel(f);
-        self.render_queue_playback_panel(f);
         if music_resize {
             self.push_music_workspace_content();
         }
         if tv_resize {
             self.push_tv_workspace_content();
         }
-        self.render_library_playback_panel(f);
-        self.render_library_panel(f);
-        let queue_area = self.app.queue_panel_placement().panel_area;
-        if queue_area.width > 0
-            && queue_area.height > 0
-            && self
-                .application
-                .mounted(&crate::app::components::ComponentId::Queue)
-        {
-            self.application
-                .view(&crate::app::components::ComponentId::Queue, f, queue_area);
+        // Root composition is data-driven: this is the sole panel paint loop.
+        // The queue playback placement is deliberately handled by its panel
+        // method because it also publishes the visual-slot geometry used by
+        // the next frame's queue placement.
+        for placement in self.app.layout.root_frame.placements() {
+            let Some(placement) = placement else { continue };
+            match placement {
+                crate::app::render::arrangements::chrome::PanelPlacement::Tab(area) => {
+                    self.render_tab_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::Library(area) => {
+                    self.render_library_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::LibraryPlayback(area) => {
+                    self.render_library_playback_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::Queue(area) => {
+                    self.render_queue_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::QueuePlayback(_) => {
+                    self.render_queue_playback_panel(f)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::StatusBar(area) => {
+                    self.render_status_bar_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::QueueBoundary(area) => {
+                    self.render_queue_boundary_at(f, area)
+                }
+            }
         }
-        self.render_queue_boundary(f);
         self.render_overlay_stack(f);
     }
 

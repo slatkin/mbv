@@ -241,9 +241,6 @@ impl Model {
         let wide = queue_playback_column_wide(chrome.left_area.width);
         let (transport_area, card): (Option<Rect>, CardGeometry) =
             if self.app.now_playing_status() == NowPlayingStatus::Idle {
-                // Idle collapse (task 3.6): no visual slot, no transport — the
-                // panel paints only the header row, and the slot publishes zero
-                // geometry so the queue panel reclaims the rows.
                 (None, CardGeometry::default())
             } else {
                 let (slot_h, slot_w, _) =
@@ -257,25 +254,18 @@ impl Model {
                     queue_playback_transport_area(slot_region, wide, card.width, card.height);
                 (Some(transport_area), card)
             };
-        // The freshly painted slot size publishes for the queue panel's
-        // placement this frame (it recomputes from `AppLayout::main.card`
-        // after this pass) and for the next frame's chrome placements.
         self.app.layout.main.card = card;
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
                 panel.set_transport_area(transport_area);
             }
         }
-        // The panel's `view` paints the header row (row 0 of the placement)
-        // and the transport rect the shell just computed; the visual slot was
-        // already painted by the App-side adapter above.
         self.application.view(&id, frame, placement);
     }
 
     /// Paint the mounted `TabPanel` into the `RootFrame.tab` placement.
-    pub(super) fn render_tab_panel(&mut self, frame: &mut Frame) {
-        let placement = self.app.layout.root_frame.tab;
-        self.render_placed_panel(frame, placement, &ComponentId::TabPanel);
+    pub(super) fn render_tab_panel_at(&mut self, frame: &mut Frame, area: Rect) {
+        self.render_placed_panel(frame, Some(area), &ComponentId::TabPanel);
     }
 
     /// Mount/unmount the `LibraryPlaybackPanel` to the `RootFrame
@@ -300,15 +290,13 @@ impl Model {
     /// .library_playback` placement (task 4.1, D1's view rule). The panel
     /// paints the whole placement — the `PLAYER_BOX_HEIGHT` strip band —
     /// through the shared transport arrangement.
-    pub(super) fn render_library_playback_panel(&mut self, frame: &mut Frame) {
-        let placement = self.app.layout.root_frame.library_playback;
-        self.render_placed_panel(frame, placement, &ComponentId::LibraryPlaybackPanel);
+    pub(super) fn render_library_playback_panel_at(&mut self, frame: &mut Frame, area: Rect) {
+        self.render_placed_panel(frame, Some(area), &ComponentId::LibraryPlaybackPanel);
     }
 
     /// Paint the mounted `StatusBarPanel` into the `RootFrame.status_bar`
     /// placement.
-    pub(super) fn render_status_bar_panel(&mut self, frame: &mut Frame) {
-        let placement = self.app.layout.root_frame.status_bar;
-        self.render_placed_panel(frame, placement, &ComponentId::StatusBarPanel);
+    pub(super) fn render_status_bar_panel_at(&mut self, frame: &mut Frame, area: Rect) {
+        self.render_placed_panel(frame, Some(area), &ComponentId::StatusBarPanel);
     }
 }

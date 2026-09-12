@@ -547,7 +547,7 @@ fn aggregate_zero_area_render_leaves_layout_untouched() {
     let before_left = app.layout.main.left_area;
     let before_hero = app.layout.main.hero_area;
     let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
-    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
+    term.draw(|f| app.compose_root_frame(f)).unwrap();
     assert_eq!(
         app.layout.main.left_area, before_left,
         "zero-area render must not touch left_area"
@@ -565,7 +565,7 @@ fn aggregate_surfaces_do_not_bleed_across_destinations() {
     // cross-surface bleed from one destination into another.
     let mut app = make_app_stub();
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
+    term.draw(|f| app.compose_root_frame(f)).unwrap();
 
     let _main = &app.layout.main;
     // Cross-surface bleed check: a nonzero queue area must not also be a

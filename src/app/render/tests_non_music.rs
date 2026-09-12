@@ -98,7 +98,7 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
         let mut layout = LayoutMain::default();
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 40)).unwrap();
         term.draw(|f| {
-            app.render_library(
+            app.reserve_library_area(
                 f,
                 ratatui::layout::Rect::new(0, 0, 120, 40),
                 &mut layout,

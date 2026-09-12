@@ -199,14 +199,15 @@ impl Model {
     /// The transitional draw step: give the library rect to the mounted
     /// `LibraryPanel` when the active library's owner has migrated; otherwise
     /// the old destination components paint (the caller gates them).
-    pub(super) fn render_library_panel(&mut self, frame: &mut ratatui::Frame) {
+    pub(super) fn render_library_panel_at(&mut self, frame: &mut ratatui::Frame, area: Rect) {
         let id = ComponentId::Library;
         if !self.application.mounted(&id) {
             return;
         }
-        let Some(area) = self.library_panel_content_area() else {
-            return;
-        };
+        let area = crate::app::render::components::widgets::right_panel_content_area(
+            area,
+            self.app.effective_panel_mode() != PanelMode::Both,
+        );
         self.application.view(&id, frame, area);
         // The projected hero image's pixel paint (task 5.10, design D9): the
         // painters read projected state and reserve the box; the shell paints

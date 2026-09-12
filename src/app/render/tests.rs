@@ -472,14 +472,15 @@ fn rendered_text(mut app: App, width: u16, height: u16) -> String {
     let mut model = crate::app::shell::Model::new(app);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal
-        .draw(|f| model.app.compose_base_frame(f, None))
-        .unwrap();
+    terminal.draw(|f| model.app.compose_root_frame(f)).unwrap();
     model.sync_library_playback_panel();
     terminal
         .draw(|f| {
-            model.app.compose_base_frame(f, None);
-            model.render_library_playback_panel(f);
+            model.app.compose_root_frame(f);
+            model.render_library_playback_panel_at(
+                f,
+                model.app.layout.root_frame.library_playback.unwrap(),
+            );
         })
         .unwrap();
     let buf = terminal.backend().buffer();

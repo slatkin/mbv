@@ -74,13 +74,4 @@ impl App {
         }
         self.layout = layout;
     }
-
-    #[cfg(test)]
-    pub fn compose_base_frame(
-        &mut self,
-        frame: &mut Frame,
-        _cursor_scroll: Option<(usize, usize)>,
-    ) {
-        self.compose_root_frame(frame);
-    }
 }
