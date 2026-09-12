@@ -371,7 +371,7 @@ conforms to Emby.
   asserts no sentinel cell remains inside any mounted panel's `RootFrame` placement — fixing the panels
   that do not yet fill their own surface (what is left of the full-column backdrops). Verify: the four
   tests pass and each fails when a panel's fill is removed.
-- [ ] 12.3 Delete the list/cursor half of the remaining `LayoutMain` (`left_item_rows`, `hero_area`,
+- [x] 12.3 Delete the list/cursor half of the remaining `LayoutMain` (`left_item_rows`, `hero_area`,
   `inline_hero_area`, `selector_tabs`, `breadcrumbs`, `selected_item_rect` — whatever the destination
   slices have not already removed), answering context-menu keyboard anchors from the owning component
   through the existing request path. Verify: column-aware cursor and mouse-hit tests pass; `rg` finds no
