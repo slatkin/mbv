@@ -1,7 +1,5 @@
-use crate::app::render::components::hero::HERO_TITLE_ROWS;
 use crate::app::ui_util::list_duration_secs;
 use mbv_core::api::TICKS_PER_SECOND;
-use mbv_core::playback_queue::FeedEntry;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
@@ -81,58 +79,6 @@ pub(in crate::app) fn feed_duration_text(ticks: Option<u64>) -> Option<String> {
     ticks
         .map(|t| (t / TICKS_PER_SECOND as u64) as i64)
         .and_then(list_duration_secs)
-}
-
-/// Format a pub_date_secs value into a short date string for display.
-pub(super) fn format_pub_date(secs: Option<u64>) -> String {
-    match secs {
-        Some(s) => {
-            // Simple YYYY-MM-DD from unix seconds
-            let days = (s / 86400) as i64 + 719468;
-            let era = if days >= 0 { days } else { days - 146096 } / 146097;
-            let doe = days - era * 146097;
-            let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-            let y = yoe + era * 400;
-            let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-            let mp = (5 * doy + 2) / 153;
-            let d = doy - (153 * mp + 2) / 5 + 1;
-            let m = if mp < 10 { mp + 3 } else { mp - 9 };
-            let yr = if m <= 2 { y + 1 } else { y };
-            format!("{yr:04}-{m:02}-{d:02}")
-        }
-        None => String::new(),
-    }
-}
-
-/// Row budget for the feeds hero's text content: an optional title row
-/// (two-column lists only), a single metadata line, and its trailing spacer.
-/// The render call site decides whether artwork is enabled.
-pub(in crate::app::render) fn feed_hero_content_rows(show_title: bool) -> u16 {
-    let title_rows = if show_title { HERO_TITLE_ROWS } else { 0 };
-    title_rows + 2
-}
-
-/// The feeds hero's one metadata line: duration, publish date, MIME type,
-/// and watched state, in that order -- feeds' declared metadata set
-/// (design.md decision 6).
-pub(in crate::app::render) fn feed_entry_meta_line(entry: &FeedEntry) -> String {
-    let mut parts = Vec::new();
-    if let Some(duration) = feed_duration_text(entry.duration_ticks) {
-        parts.push(duration);
-    }
-    let date = format_pub_date(entry.pub_date_secs);
-    if !date.is_empty() {
-        parts.push(date);
-    }
-    if let Some(mime) = entry.mime_type.as_deref() {
-        if !mime.is_empty() {
-            parts.push(mime.to_string());
-        }
-    }
-    if entry.played {
-        parts.push("Watched".to_string());
-    }
-    parts.join("   ")
 }
 
 #[cfg(test)]

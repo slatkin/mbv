@@ -144,48 +144,17 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
     );
 }
 
-/// Feeds (task 2.3): the wide right hero pane fill is unconditional (D1) -- with
-/// entries present but nothing selected, the pane still fills
-/// `SURFACE_RESTING` (D3: read-only, never focus-green), with no hero
-/// content painted. `render_feeds_content` is called directly with
-/// `selected_entry: None` since the component's own cursor always resolves
-/// to an entry once entries exist.
+/// Feeds (task 7.2): the wide right hero pane fill is unconditional (D1) --
+/// with no selectable entry the panel still fills `SURFACE_RESTING` (D3:
+/// read-only, never focus-green) around the empty-slot placeholder. Feeds
+/// paints through the shared panel skeleton now, so `hero_area` is published
+/// whether or not a hero exists.
 #[test]
 fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
-    use crate::app::components::media_list::WideMediaList;
-    use crate::app::layout::LayoutMain;
-    use crate::app::render::{render_feeds_content, FeedsPresentation, FeedsRenderModel};
-    use crate::app::types_feed_tab::WatchedFilter;
-
-    let subscriptions = vec![FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
-    let entries = vec![feed_entry("entry-1", "Entry One")];
-    let mut layout = LayoutMain::default();
-    let mut canonical_list: WideMediaList<String> = WideMediaList::new();
+    let mut component = feed_component_with_entries(vec![]);
     let area = wide_area();
-    let terminal = direct_terminal(|f| {
-        render_feeds_content(
-            f,
-            area,
-            false,
-            &mut layout,
-            FeedsRenderModel {
-                subscriptions: &subscriptions,
-                visible_entries: &entries,
-                watched_filter: WatchedFilter::All,
-                selected_group: 0,
-                loading: false,
-                selected_entry: None,
-                images_enabled: true,
-            },
-            FeedsPresentation::Wide(&mut canonical_list),
-            None,
-        );
-    });
-    let hero = layout.hero_area;
+    let terminal = direct_terminal(|f| component.view(f, area));
+    let hero = component.layout().hero_area;
     assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
@@ -193,61 +162,7 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
         buffer[(hero.x, hero.bottom() - 1)].bg,
         palette::SURFACE_RESTING
     );
-
-    let mut focused_layout = LayoutMain::default();
-    let mut focused_list: WideMediaList<String> = WideMediaList::new();
-    let focused_terminal = direct_terminal(|f| {
-        render_feeds_content(
-            f,
-            area,
-            true,
-            &mut focused_layout,
-            FeedsRenderModel {
-                subscriptions: &subscriptions,
-                visible_entries: &entries,
-                watched_filter: WatchedFilter::All,
-                selected_group: 0,
-                loading: false,
-                selected_entry: None,
-                images_enabled: true,
-            },
-            FeedsPresentation::Wide(&mut focused_list),
-            None,
-        );
-    });
-    let focused_hero = focused_layout.hero_area;
-    let focused_buffer = focused_terminal.backend().buffer();
-    assert_eq!(
-        focused_buffer[(focused_hero.x, focused_hero.y)].bg,
-        palette::SURFACE_RESTING
-    );
-    assert_eq!(
-        focused_buffer[(focused_hero.x, focused_hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
-    );
-}
-
-/// Feeds with no entries to select: `feeds.rs:170-184` returns before the
-/// Wide hero pane is ever reached (a placeholder message paints instead),
-/// so no `hero_area` is published at all -- the broken empty-selection state
-/// task 2.3 fixes (D1: an unconditional pane fill even with nothing
-/// selected).
-#[test]
-fn feeds_wide_left_pane_unfilled_with_no_selected_entry() {
-    let mut component = feed_component_with_entries(vec![]);
-    let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
-    let hero = component.layout().hero_area;
-    assert_eq!(
-        hero,
-        Rect::default(),
-        "characterizes the pre-fix state: no hero pane is published with no entries"
-    );
-    let output = buffer_to_string(&terminal);
-    assert!(
-        output.contains("Press r to load feeds"),
-        "output={output:?}"
-    );
+    assert!(buffer_to_string(&terminal).contains("Press r to load feeds"));
 }
 
 /// ABS Books (task 2.2): the `.style(Color)` foreground-only bug is fixed --

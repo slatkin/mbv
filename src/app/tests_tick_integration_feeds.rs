@@ -155,8 +155,13 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
         let outcome = harness.step();
         assert!(!outcome.raw_messages.is_empty());
         draw(&mut harness, width);
-        assert_eq!(feeds(&harness).cursor(), before_cursor);
-        assert_eq!(feeds(&harness).layout().selected_item_rect, before_paint);
+        // A claimed wheel over the control moves through the shared owner's
+        // Wheel→Move path now that an identical sync no longer invalidates the
+        // painted frame (the 6.1 `last_projected_rows` skip).
+        assert_eq!(feeds(&harness).cursor(), before_cursor + 1);
+        // The claimed move re-selects the next row, so the painted selected-row
+        // rect necessarily moves with it.
+        assert_ne!(feeds(&harness).layout().selected_item_rect, before_paint);
     }
 }
 

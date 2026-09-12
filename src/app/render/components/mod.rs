@@ -21,7 +21,6 @@ pub(super) mod context_menu;
 pub(super) mod daemon_lost_modal;
 pub(super) mod detail;
 pub(super) mod detail_series_view;
-pub(super) mod feeds;
 pub(super) mod feeds_manage;
 pub(super) mod help;
 pub(super) mod hero;

@@ -298,10 +298,11 @@ impl Model {
             }
             TabSelection::Feeds => {
                 let area = self.app.layout.main.feeds_area;
-                // Mirrors `render_feeds_content`'s own wide-paint gate: the
-                // split is painted only with subscriptions and a non-empty
-                // *filtered* visible list, so a filter that empties the list
-                // disarms the boundary just like an empty library.
+                // The pre-panel painter skipped its wide branch on an empty
+                // *filtered* Feeds list, so a filter that empties the list
+                // disarms the boundary just like an empty library. The gate is
+                // retained unchanged until Feeds registers in the panel (task
+                // 7.3), which owns the boundary from then on.
                 (crate::app::render::wide_hero_fits(area)
                     && !self.app.feed_tab.subscriptions.is_empty()
                     && self.feeds_has_visible_entries())

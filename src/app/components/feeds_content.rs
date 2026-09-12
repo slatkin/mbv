@@ -7,12 +7,11 @@
 //! panel's slot events into the same typed `Msg`s the mounted
 //! `FeedsComponent` emits today.
 //!
-//! Slice position (design D16): this is the content step of the Feeds
-//! conversion, so the owner is embedded in the still-mounted
+//! Slice position (design D16): the owner is embedded in the still-mounted
 //! `FeedsComponent` — the shell's existing Feeds push fills it through
-//! `FeedsComponent::set_content`, and the legacy painter still paints it, so
-//! no output moves. Registering the owner in the panel's map (and deleting
-//! the mounted component) is task 7.3.
+//! `FeedsComponent::set_content`, and task 7.2's `view` paints it through the
+//! Library panel's shared Wide/Narrow skeleton. Registering the owner in the
+//! panel's map (and deleting the mounted component) is task 7.3.
 //!
 //! The selected entry's hero comes from the shared `hero_content_feed`
 //! producer (design D5) — Square for a podcast feed, the Landscape
@@ -37,13 +36,13 @@ use super::media_list::{
 };
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
-    current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow, FeedsPresentation,
+    current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
 };
 use crate::app::types_feed_tab::WatchedFilter;
 use crate::app::ui_util::trunc_str;
 
-/// Max feed-group pill label length (the legacy `render_selector_content`
-/// value, `render/components/feeds.rs`).
+/// Max feed-group pill label length. This owner is the one producer of the
+/// Selector row's labels (design D8: no destination-side pill vocabulary).
 const MAX_GROUP_LABEL: usize = 18;
 
 /// The owner's shell-projected snapshot (mirrors `FeedsComponent::set_content`'s
@@ -73,23 +72,14 @@ pub(in crate::app) struct FeedsContent {
     selected_group: usize,
     loading: bool,
     last_subscription_urls: Vec<String>,
+    /// The rows last handed to the carrier (the 6.1 `last_projected_rows`
+    /// pattern): an identical re-projection skips `set_content`, which would
+    /// otherwise invalidate the painted frame and make a sync-without-draw
+    /// frame unclaimable by pointer input.
+    last_projected_rows: Option<Vec<MediaListRow<String>>>,
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
     hero_image: HeroImageState,
-}
-
-/// The legacy painter's borrowed inputs for one frame (task 7.1 keeps
-/// `render_feeds_content` painting): the shell-owned content plus the active
-/// canonical presentation. Built in one borrow of the owner so the immutable
-/// content fields and the mutable carrier can be handed over together.
-pub(in crate::app) struct FeedsPaintInputs<'a> {
-    pub subscriptions: &'a [FeedSubscription],
-    pub visible_entries: &'a [FeedEntry],
-    pub watched_filter: WatchedFilter,
-    pub selected_group: usize,
-    pub loading: bool,
-    pub selected_entry: Option<&'a FeedEntry>,
-    pub presentation: FeedsPresentation<'a>,
 }
 
 impl FeedsContent {
@@ -104,6 +94,7 @@ impl FeedsContent {
             selected_group: 0,
             loading: false,
             last_subscription_urls: Vec::new(),
+            last_projected_rows: None,
             hero_image: HeroImageState::None,
         }
     }
@@ -198,40 +189,6 @@ impl FeedsContent {
         };
         self.carrier
             .set_presentation(target, viewport_height.max(1));
-    }
-
-    /// The legacy painter's inputs for one frame: configure the presentation
-    /// from the breakpoint, then hand the shell-owned content and the active
-    /// presentation over in one borrow.
-    pub(in crate::app) fn paint_inputs(
-        &mut self,
-        wide: bool,
-        viewport_height: usize,
-    ) -> FeedsPaintInputs<'_> {
-        self.ensure_presentation(wide, viewport_height);
-        // Cloned first so the carrier's immutable borrow ends before the
-        // mutable reborrow below (a `&self` method call would otherwise keep
-        // the whole owner borrowed).
-        let selected_target = self.carrier.selected_target().cloned();
-        let selected_entry = selected_target.as_ref().and_then(|target| {
-            self.visible_entries
-                .iter()
-                .find(|entry| entry.guid == *target)
-        });
-        let presentation = if self.carrier.active() == Presentation::Wide {
-            FeedsPresentation::Wide(self.carrier.wide_mut())
-        } else {
-            FeedsPresentation::Inline(self.carrier.inline_mut())
-        };
-        FeedsPaintInputs {
-            subscriptions: &self.subscriptions,
-            visible_entries: &self.visible_entries,
-            watched_filter: self.watched_filter,
-            selected_group: self.selected_group,
-            loading: self.loading,
-            selected_entry,
-            presentation,
-        }
     }
 
     /// The entry whose stable `guid` the shared owner selected. Effect
@@ -341,12 +298,14 @@ impl FeedsContent {
                 }
             })
             .collect();
-        // Task 7.1 keeps the legacy co-located-push semantics: the shell's
-        // existing per-sync Feeds projection re-issues identical content.
-        // The 6.1-style `last_projected_rows` skip (and the stale tick-test
-        // wheel assertion correction it requires) land in task 7.2 with the
-        // panel skeleton, where pointer semantics actually change.
-        self.carrier.set_content(rows);
+        // Ordinary refresh: an unchanged projection preserves the shared
+        // owner's painted frame instead of re-issuing it (the 6.1
+        // `last_projected_rows` skip; the shell pushes the same snapshot every
+        // sync, and re-setting it would invalidate the painted frame).
+        if self.last_projected_rows.as_ref() != Some(&rows) {
+            self.carrier.set_content(rows.clone());
+            self.last_projected_rows = Some(rows);
+        }
     }
 
     /// Park the shared owner at the first entry after a discrete group/filter

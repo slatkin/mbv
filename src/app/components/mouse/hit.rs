@@ -51,9 +51,10 @@ impl<Tag> HitRegions<Tag> {
             .map(|(_, tag)| tag)
     }
 
-    /// Test seam: the recorded rect/tag pairs, so component tests can derive
-    /// click coordinates from the same geometry the component resolves.
-    #[cfg(test)]
+    /// The recorded rect/tag pairs in paint order. The `LibraryPanel` and the
+    /// still-mounted destinations that paint a panel skeleton mirror them into
+    /// their own compatibility geometry; tests derive click coordinates from
+    /// the same geometry the component resolves.
     pub(crate) fn regions(&self) -> &[(Rect, Tag)] {
         &self.regions
     }
