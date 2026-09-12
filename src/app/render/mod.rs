@@ -10,10 +10,7 @@ mod theme;
 // the whole `render::components` module.
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
 pub(in crate::app) use components::audiobookshelf_book::book_rows;
-pub(in crate::app) use components::audiobookshelf_podcast::{
-    render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry,
-    PodcastEpisodePresentation, PodcastInteraction, PodcastShowPresentation,
-};
+
 #[allow(unused_imports)]
 pub(in crate::app) use components::chrome_player::{
     render_player_panel, render_title_row, PlaybackRenderContext,
@@ -111,7 +108,6 @@ pub(in crate::app) use components::hero::{
 };
 pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
-pub(in crate::app) use components::audiobookshelf_podcast::podcast_show_rows;
 pub(in crate::app) use components::media_list::{
     render_inline_media_browser_component, render_wide_media_list_component,
 };
@@ -290,8 +286,6 @@ mod queue_title_characterization_tests;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
-#[cfg(test)]
-mod tests_audiobookshelf_podcasts;
 #[cfg(test)]
 mod tests_conformance_matrix;
 #[cfg(test)]

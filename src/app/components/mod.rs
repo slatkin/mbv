@@ -98,9 +98,6 @@ pub use self::wide_hero_boundary::WideHeroBoundaryComponent;
 #[path = "audiobookshelf_podcast_component_tests.rs"]
 mod audiobookshelf_podcast_component_tests;
 #[cfg(test)]
-#[path = "audiobookshelf_podcast_geometry_tests.rs"]
-mod audiobookshelf_podcast_geometry_tests;
-#[cfg(test)]
 mod audiobookshelf_podcast_test_support;
 #[cfg(test)]
 #[path = "browser_component_tests.rs"]

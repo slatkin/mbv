@@ -19,6 +19,22 @@ use crate::app::types_audiobookshelf_browse::{
 };
 use crate::app::ui_util::clean_overview;
 
+pub(in crate::app) fn podcast_show_rows(
+    shows: &[mbv_core::audiobookshelf::AudiobookshelfShow],
+) -> Vec<MediaListRow<String>> {
+    shows
+        .iter()
+        .map(|show| MediaListRow::Item {
+            target: show.library_item_id.clone(),
+            primary: show.title.clone(),
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Collection,
+            semantic_state: MediaSemanticState::Ordinary,
+        })
+        .collect()
+}
+
 /// Plain owner for one Audiobookshelf podcast library. Content is projected by
 /// the shell; filter, focus, and list selection remain local interaction state.
 pub(in crate::app) struct PodcastContent {

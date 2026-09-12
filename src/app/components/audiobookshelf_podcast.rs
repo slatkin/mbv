@@ -17,21 +17,22 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEvent
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::library_panel::hero::hero_content_abs_show;
+use super::library_panel::{
+    render_narrow_skeleton, render_wide_skeleton, HeroContent, HeroImageState, LibraryPanelContent,
+    ListSlot, NarrowSkeletonGeometry, SelectorRow, SkeletonHits, WideSkeletonGeometry, Workspace,
+};
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
-    WideMediaList,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
     TerminalObserverEvent,
 };
+use super::podcast_content::podcast_show_rows;
 use super::user_event::UserEvent;
-use crate::app::render::{
-    podcast_show_rows, render_audiobookshelf_podcast_content, wide_hero_fits,
-    AudiobookshelfPodcastGeometry, HomeImagePaint, PodcastEpisodePresentation, PodcastInteraction,
-    PodcastShowPresentation,
-};
+use crate::app::render::{wide_hero_fits, HomeImagePaint};
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
@@ -54,7 +55,9 @@ pub struct AudiobookshelfPodcastComponent {
     /// `None` = default ratio). Forwarded into the shared split; never stored
     /// clamped.
     list_pane_width: Option<u16>,
-    geometry: AudiobookshelfPodcastGeometry,
+    wide_geometry: Option<WideSkeletonGeometry>,
+    narrow_geometry: Option<NarrowSkeletonGeometry>,
+    selector_regions: Vec<(Rect, usize)>,
     image_paint: Option<HomeImagePaint>,
     /// One shared canonical show owner, carried by exactly one of the Wide and
     /// Inline presentations (design.md D1/D2). It owns the show cursor, scroll,
@@ -64,7 +67,7 @@ pub struct AudiobookshelfPodcastComponent {
     /// The persistent canonical episode owner (design.md D5): authoritative for
     /// the selected episode, scrolling, painting, and retained hits. Its rows
     /// are projected from the selected, filtered episode snapshot before view.
-    episode_list: WideMediaList<String>,
+    episode_list: MediaListCarrier<String>,
     /// The presentation the last `view` painted; `None` before the first paint.
     wide: bool,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
@@ -88,10 +91,12 @@ impl AudiobookshelfPodcastComponent {
             focused: false,
             images_enabled: false,
             list_pane_width: None,
-            geometry: AudiobookshelfPodcastGeometry::default(),
+            wide_geometry: None,
+            narrow_geometry: None,
+            selector_regions: Vec::new(),
             image_paint: None,
             carrier: MediaListCarrier::new(Presentation::Inline),
-            episode_list: WideMediaList::new(),
+            episode_list: MediaListCarrier::new(Presentation::Wide),
             wide: false,
             mouse_gestures: MouseGestureState::new(),
         }
@@ -112,7 +117,17 @@ impl AudiobookshelfPodcastComponent {
     /// outgoing selected-row viewport offset (design.md D1); no cursor, scroll,
     /// or selection is copied between presentations.
     fn ensure_carrier(&mut self) {
-        let viewport_height = self.geometry.list_area.height.max(1) as usize;
+        let viewport_height = self
+            .wide_geometry
+            .as_ref()
+            .map(|geometry| geometry.list_area.height)
+            .or_else(|| {
+                self.narrow_geometry
+                    .as_ref()
+                    .map(|geometry| geometry.list_area.height)
+            })
+            .unwrap_or(1)
+            .max(1) as usize;
         self.carrier
             .set_presentation(self.active_presentation(), viewport_height);
     }
@@ -305,8 +320,29 @@ impl AudiobookshelfPodcastComponent {
     /// The geometry the component computed during its last `view`, exposed so
     /// the shell can anchor overlays / read painted areas. Immutable: the
     /// component owns painting; callers do not write back.
-    pub(in crate::app) fn geometry(&self) -> &AudiobookshelfPodcastGeometry {
-        &self.geometry
+    pub(in crate::app) fn geometry(&self) -> PodcastPaintGeometry {
+        let wide = self.wide_geometry.as_ref();
+        let narrow = self.narrow_geometry.as_ref();
+        PodcastPaintGeometry {
+            list_area: wide
+                .map(|g| g.list_area)
+                .or_else(|| narrow.map(|g| g.list_area))
+                .unwrap_or_default(),
+            hero_area: wide
+                .map(|g| g.hero_area)
+                .or_else(|| narrow.and_then(|g| g.inline_hero))
+                .unwrap_or_default(),
+            inline_hero_area: narrow.and_then(|g| g.inline_hero).unwrap_or_default(),
+            selected_item_rect: wide
+                .and_then(|g| g.selected)
+                .or_else(|| narrow.and_then(|g| g.selected)),
+            selector_tabs: self.selector_regions.clone(),
+            right_area: wide.map(|g| g.browser).unwrap_or_default(),
+        }
+    }
+
+    pub(in crate::app) fn selector_regions(&self) -> &[(Rect, usize)] {
+        &self.selector_regions
     }
 
     /// The one seam through which the component offers an already-normalized
@@ -410,7 +446,17 @@ impl AudiobookshelfPodcastComponent {
     }
 
     fn page_rows(&self) -> i64 {
-        self.geometry.list_area.height.saturating_sub(1).max(1) as i64
+        self.wide_geometry
+            .as_ref()
+            .map(|geometry| geometry.list_area.height)
+            .or_else(|| {
+                self.narrow_geometry
+                    .as_ref()
+                    .map(|geometry| geometry.list_area.height)
+            })
+            .unwrap_or(1)
+            .saturating_sub(1)
+            .max(1) as i64
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -555,8 +601,7 @@ impl AudiobookshelfPodcastComponent {
                     }
                 }
                 if let Some((_, bucket)) = self
-                    .geometry
-                    .selector_tabs
+                    .selector_regions
                     .iter()
                     .find(|(rect, _)| rect.contains(at))
                 {
@@ -613,7 +658,7 @@ impl AudiobookshelfPodcastComponent {
 
     #[cfg(test)]
     pub(crate) fn selected_row_offset_for_test(&self) -> Option<usize> {
-        let height = self.geometry.list_area.height.max(1) as usize;
+        let height = self.geometry().list_area.height.max(1) as usize;
         if self.carrier.active() == Presentation::Wide {
             self.carrier.wide().selected_row_offset(height)
         } else {
@@ -635,6 +680,16 @@ impl AudiobookshelfPodcastComponent {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+pub(in crate::app) struct PodcastPaintGeometry {
+    pub list_area: Rect,
+    pub right_area: Rect,
+    pub hero_area: Rect,
+    pub inline_hero_area: Rect,
+    pub selected_item_rect: Option<Rect>,
+    pub selector_tabs: Vec<(Rect, usize)>,
+}
+
 impl Default for AudiobookshelfPodcastComponent {
     fn default() -> Self {
         Self::new()
@@ -643,33 +698,122 @@ impl Default for AudiobookshelfPodcastComponent {
 
 impl Component for AudiobookshelfPodcastComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        // One shared show owner per logical flow (design.md D1): a breakpoint
-        // change reconfigures the same owner and preserves only the outgoing
-        // selected-row viewport offset.
         self.wide = wide_hero_fits(area);
         self.ensure_carrier();
-
-        let show_presentation = if self.wide {
-            PodcastShowPresentation::Wide(self.carrier.wide_mut())
+        self.wide_geometry = None;
+        self.narrow_geometry = None;
+        self.selector_regions.clear();
+        self.image_paint = None;
+        let hero = self.state.selected_show().map(|show| {
+            let mut data = hero_content_abs_show(show);
+            data.facts.artwork.image = HeroImageState::None;
+            HeroContent {
+                facts: data.facts,
+                overview: data.overview,
+                workspace: Some(Workspace {
+                    selector: Some(SelectorRow {
+                        pills: AudiobookshelfEpisodeFilter::ALL
+                            .iter()
+                            .map(|f| f.label().to_string())
+                            .collect(),
+                        active: Some(
+                            AudiobookshelfEpisodeFilter::ALL
+                                .iter()
+                                .position(|f| *f == self.episode_filter)
+                                .unwrap_or(0),
+                        ),
+                    }),
+                    list: &mut self.episode_list,
+                    focused: self.focused && self.episode_focused,
+                }),
+            }
+        });
+        let buckets =
+            crate::app::types_audiobookshelf_browse::build_show_title_buckets(&self.state.shows);
+        let selector = (!buckets.is_empty()).then(|| SelectorRow {
+            pills: buckets.iter().map(|b| b.label.to_string()).collect(),
+            active: Some(
+                buckets
+                    .iter()
+                    .position(|b| (b.start..b.end).contains(&self.state.cursor()))
+                    .unwrap_or(0),
+            ),
+        });
+        let list = if self.state.shows.is_empty() {
+            ListSlot::Empty {
+                loading: !self.state.loading_pages.is_empty(),
+                text: self
+                    .state
+                    .error
+                    .clone()
+                    .unwrap_or_else(|| "No podcasts".into()),
+            }
         } else {
-            PodcastShowPresentation::Inline(self.carrier.inline_mut())
+            ListSlot::Media(&mut self.carrier)
         };
-        let list_pane_width = self.list_pane_width;
-        self.image_paint = render_audiobookshelf_podcast_content(
-            frame,
-            area,
-            self.focused,
-            self.images_enabled,
-            &self.state,
-            PodcastInteraction {
-                episode_filter: self.episode_filter,
-                episode_focused: self.episode_focused,
-            },
-            show_presentation,
-            PodcastEpisodePresentation::Wide(&mut self.episode_list),
-            &mut self.geometry,
-            list_pane_width,
-        );
+        let mut content = LibraryPanelContent {
+            selector,
+            controls: None,
+            list,
+            hero,
+        };
+        let mut hits = SkeletonHits::default();
+        if self.wide {
+            self.wide_geometry = render_wide_skeleton(
+                frame,
+                area,
+                &mut content,
+                self.focused,
+                self.list_pane_width,
+                &mut hits,
+            );
+            if let Some(geometry) = &self.wide_geometry {
+                if let Some(show) = self.state.selected_show() {
+                    let image_area = geometry
+                        .hero_image
+                        .as_ref()
+                        .map(|image| image.area)
+                        .unwrap_or(geometry.hero_area);
+                    if self.images_enabled && !image_area.is_empty() {
+                        self.image_paint = Some(HomeImagePaint::AudiobookshelfCover {
+                            area: image_area,
+                            library_item_id: show.library_item_id.clone(),
+                            show_placeholder: true,
+                        });
+                    }
+                }
+            }
+        } else {
+            self.narrow_geometry = Some(render_narrow_skeleton(
+                frame,
+                area,
+                &mut content,
+                self.focused,
+                &mut hits,
+            ));
+            if let Some(show) = self.state.selected_show() {
+                let image_area = self
+                    .narrow_geometry
+                    .as_ref()
+                    .and_then(|g| g.inline_hero_image.as_ref())
+                    .map(|image| image.area)
+                    .or_else(|| self.narrow_geometry.as_ref().and_then(|g| g.inline_hero))
+                    .unwrap_or_default();
+                if self.images_enabled && !image_area.is_empty() {
+                    self.image_paint = Some(HomeImagePaint::AudiobookshelfCover {
+                        area: image_area,
+                        library_item_id: show.library_item_id.clone(),
+                        show_placeholder: true,
+                    });
+                }
+            }
+        }
+        self.selector_regions = hits
+            .selector
+            .regions()
+            .iter()
+            .map(|(rect, id)| (*rect, *id))
+            .collect();
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
