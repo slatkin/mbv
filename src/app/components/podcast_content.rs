@@ -332,7 +332,8 @@ impl LibraryContentOwner for PodcastContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => self.select_bucket(index),
-            LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
+            LibrarySlotEvent::WorkspaceSelectorPicked(index)
+            | LibrarySlotEvent::ControlPicked(index) => {
                 let filter = *AudiobookshelfEpisodeFilter::ALL.get(index)?;
                 self.episode_filter = filter;
                 self.project_episode_rows();
@@ -355,6 +356,7 @@ impl LibraryContentOwner for PodcastContent {
                     _ => return None,
                 };
                 if let Some(target) = self.episode_list.resolve_current_point(point).cloned() {
+                    self.episode_focused = true;
                     self.episode_list.delegate(input, Some(target));
                     if matches!(input, RowLocalInput::DoubleClick(_)) {
                         return Some(Msg::Shell(
@@ -369,7 +371,6 @@ impl LibraryContentOwner for PodcastContent {
                 }
                 None
             }
-            LibrarySlotEvent::ControlPicked(_) => None,
         }
     }
 
