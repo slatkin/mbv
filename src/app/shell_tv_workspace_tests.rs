@@ -67,6 +67,43 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
     assert!(component.take_panel_image_paint().is_none());
 }
 
+#[test]
+fn push_tv_workspace_projects_ready_narrow_series_image_paint() {
+    use crate::app::images::series_image_cache_key;
+    use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
+
+    let mut model = mounted_tv_model();
+    model.app.terminal_width = 70;
+    model.app.terminal_height = 20;
+    model.app.image_protocol_enabled = true;
+    let expected_key = series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES);
+    let entry = model
+        .app
+        .build_cached_image(&expected_key, Some(image::DynamicImage::new_rgb8(64, 64)));
+    model
+        .app
+        .card_image_states
+        .insert(expected_key.clone(), entry);
+    model.push_tv_workspace_content();
+
+    let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+    let mut terminal = Terminal::new(TestBackend::new(70, 20)).unwrap();
+    let paint = {
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut::<TvWorkspaceComponent>()
+            .unwrap();
+        terminal.draw(|f| component.view(f, f.area())).unwrap();
+        component.take_panel_image_paint()
+    };
+    let paint = paint.expect("ready projected Narrow hero must retain image paint");
+    assert_eq!(paint.cache_key, expected_key);
+    assert!(paint.area.width > 0 && paint.area.height > 0);
+}
+
 /// Task 2.1: the Wide push prefetches the identical canonical key the
 /// painter requests, so `paint_home_image` on the consumed `HomeImagePaint`
 /// starts no additional fetch and the reservation survives the paint.

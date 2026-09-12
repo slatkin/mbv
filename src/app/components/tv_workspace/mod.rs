@@ -772,6 +772,7 @@ impl Component for TvWorkspaceComponent {
         let mut hits = SkeletonHits::default();
         let geometry =
             render_narrow_skeleton(frame, area, &mut content, browser_focused, &mut hits);
+        self.panel_image_paint = geometry.inline_hero_image.clone();
         self.layout.left_area = geometry.list_area;
         self.layout.inline_hero_area = geometry.inline_hero.unwrap_or_default();
         self.layout.hero_area = geometry.inline_hero.unwrap_or_default();

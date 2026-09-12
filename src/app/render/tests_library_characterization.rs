@@ -1,5 +1,6 @@
 use super::test_helpers::{
-    draw_mounted_frame, make_movie_app, mounted_model_at, mounted_tv_scroll, set_tv_cursor_for_test,
+    buffer_to_string, draw_mounted_frame, make_movie_app, mounted_model_at, mounted_tv_layout,
+    mounted_tv_scroll, set_tv_cursor_for_test,
 };
 use super::*;
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
@@ -7,6 +8,7 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::ComponentId;
 use crate::app::tests::make_item;
 use crate::app::TabSelection;
+use tuirealm::component::Component;
 
 /// The mounted `LibraryPanel` (the migrated `BrowserContent` owner's host
 /// since task 6.1, mirroring the Home precedent).
@@ -174,7 +176,24 @@ fn tv_letter_grouped_app(scroll: usize) -> App {
 fn tv_narrow_panel_characterization_keeps_content_and_viewport() {
     let mut model = mounted_model_at(tv_letter_grouped_app(12), 70, 20);
     set_tv_cursor_for_test(&mut model, 54);
-    let output = draw_mounted_frame(&mut model, 70, 20);
+    let _ = draw_mounted_frame(&mut model, 70, 20);
+    let output = {
+        let id = model.tv_workspace_id.clone().expect("TV workspace mounted");
+        let component = model
+            .application
+            .get_component_mut(&id)
+            .expect("TV workspace mounted")
+            .as_any_mut()
+            .downcast_mut::<crate::app::components::TvWorkspaceComponent>()
+            .expect("TvWorkspaceComponent");
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(70, 20)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        buffer_to_string(&terminal)
+    };
+    let layout = mounted_tv_layout(&model);
 
     assert!(
         output.contains("Series"),
@@ -184,12 +203,59 @@ fn tv_narrow_panel_characterization_keeps_content_and_viewport() {
         !output.contains("Season") && !output.contains("Episode"),
         "Narrow TV must open episodes only through SelectionModal"
     );
+    let hero_area = layout.inline_hero_area;
+    assert!(
+        hero_area.height > 0,
+        "complete selected replacement should fit: hero={hero_area:?}\n{output}"
+    );
+    let hero_lines = output
+        .lines()
+        .skip(hero_area.y as usize)
+        .take(hero_area.height as usize)
+        .collect::<String>();
+    assert!(
+        !hero_lines.contains('▎'),
+        "ordinary marker leaked into the grouped hero"
+    );
     let control_scroll = mounted_tv_scroll(&model);
     let _ = draw_mounted_frame(&mut model, 70, 20);
     assert_eq!(
         mounted_tv_scroll(&model),
         control_scroll,
         "shared panel redraw must preserve the TV viewport"
+    );
+
+    let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 14);
+    set_tv_cursor_for_test(&mut boundary_model, 54);
+    let boundary_output = draw_mounted_frame(&mut boundary_model, 70, 14);
+    let id = boundary_model
+        .tv_workspace_id
+        .clone()
+        .expect("TV workspace mounted");
+    let component = boundary_model
+        .application
+        .get_component_mut(&id)
+        .expect("TV workspace mounted")
+        .as_any_mut()
+        .downcast_mut::<crate::app::components::TvWorkspaceComponent>()
+        .expect("TvWorkspaceComponent");
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(70, 14)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let boundary_layout = mounted_tv_layout(&boundary_model);
+    assert!(
+        boundary_output.contains("Series"),
+        "header fit boundary hides selected row: hero={:?}\n{boundary_output}",
+        boundary_layout.inline_hero_area
+    );
+    assert_eq!(
+        boundary_layout.inline_hero_area.height, 0,
+        "cannot-fit grouped detail restores ordinary rows"
+    );
+    assert!(
+        boundary_layout.selected_item_rect.is_some(),
+        "cannot-fit grouped detail retains the selected row target"
     );
 }
 
