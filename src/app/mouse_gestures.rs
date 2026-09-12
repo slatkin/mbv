@@ -215,6 +215,13 @@ impl App {
                 }
             }
             TvHit::EpisodesPane => {}
+            // Narrow-only letter-pill click (task 8.1): jump directly to the
+            // clicked pill, mirroring `handle_mouse_selector_click_emby`'s
+            // letter-pill arm.
+            TvHit::LetterPill(index) => {
+                self.set_panel_focus(super::PanelFocus::Library);
+                self.select_letter_pill(lib_idx, index);
+            }
         }
     }
 

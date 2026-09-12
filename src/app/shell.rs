@@ -3,8 +3,8 @@ use std::time::{Duration, Instant};
 use super::action::{playback_command_for_key, Command};
 use super::components::msg::AlbumCursorKind;
 use super::components::{
-    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest,
-    TerminalObserverEvent, UiRootComponent, UserEvent, WideHeroBoundaryComponent,
+    ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
+    UiRootComponent, UserEvent, WideHeroBoundaryComponent,
 };
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
@@ -36,15 +36,6 @@ const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
 /// in one cycle; the main thread still processes at most one per tick via
 /// `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
 const TERMINAL_LISTENER_MAX_POLL: usize = 60;
-
-/// One-shot transfer used only when TV changes its active destination at a breakpoint.
-#[derive(Clone, Debug)]
-pub(super) struct InlineSearchTransfer {
-    pub query: String,
-    pub selected_id: Option<String>,
-    pub selected_type: Option<String>,
-    pub row_offset: usize,
-}
 
 /// One-shot inline-track-focus transition the shell hands the Music workspace
 /// at the next content push. `Enter` is bound to the album it was raised for,
@@ -98,16 +89,6 @@ pub struct Model {
     /// content push never adopts the shell cursor; this is the explicit
     /// re-anchor that replaced the deleted echo-suppression test.
     pub(super) music_workspace_reanchor: bool,
-    /// One-shot shell→component re-anchor trigger for the mounted wide TV
-    /// workspace's series cursor/scroll, consumed at the next
-    /// `push_tv_workspace_content`. Set by the breakpoint hand-off
-    /// (`hand_off_tv_breakpoint`, migrate-narrow-browse task 2.3 / D5) when
-    /// the active-destination pointer flips from the narrow `BrowserComponent`
-    /// to `TvWorkspaceComponent`, so the kept-mounted workspace adopts the
-    /// resting position the narrow browser left behind instead of its stale
-    /// local cursor.
-    pub(super) tv_viewport_anchor: Option<ViewportAnchor<String>>,
-    pub(super) inline_search_transfer: Option<InlineSearchTransfer>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -420,8 +401,6 @@ impl Model {
             mouse_subscribed: std::collections::HashSet::new(),
             music_track_focus_request: None,
             music_workspace_reanchor: false,
-            tv_viewport_anchor: None,
-            inline_search_transfer: None,
             feeds_manage: None,
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),

@@ -96,11 +96,11 @@ impl Model {
     fn emby_library_child_id(&self, index: usize) -> Option<ComponentId> {
         let library = self.app.libs.get(index)?;
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
-        // Wide TV focuses `TvWorkspaceComponent` under its distinct
-        // `ComponentId::TvWorkspace`; narrow TV focuses the mounted
-        // `BrowserComponent` under `ComponentId::Browser` (D4). The two
-        // mount gates share `wide_tv_library_area(index)`, so mirror that split here.
-        if kind == BrowserKind::TvShows && self.app.wide_tv_library_area(index).is_some() {
+        // TV focuses the merged `TvWorkspaceComponent` under its distinct
+        // `ComponentId::TvWorkspace` at every breakpoint now (task 8.1,
+        // design D12): the component is mounted whenever the library is
+        // `tvshows`, matching `tv_workspace_component_id`.
+        if kind == BrowserKind::TvShows {
             return Some(ComponentId::TvWorkspace(BrowserKey {
                 service: ServiceKind::Emby,
                 library_id: library.library.id.clone(),
@@ -116,9 +116,7 @@ impl Model {
             BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => {
                 return Some(ComponentId::Library)
             }
-            // Narrow TV focuses the mounted BrowserComponent (D4), matching
-            // `emby_browser_component_id`.
-            BrowserKind::TvShows => true,
+            BrowserKind::TvShows => unreachable!("handled above"),
             BrowserKind::Music => {
                 // Music mounts one component type at all widths (no TV-style
                 // split), so narrow Music is focusable too — the mount gate is
@@ -333,8 +331,8 @@ impl Model {
         let library = self.app.libs.get(index)?;
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
         match kind {
-            // Wide TV (series list) paints the two-pane workspace; narrow TV
-            // is `BrowserComponent` and paints no split.
+            // Wide TV (series list) paints the two-pane workspace; Narrow TV
+            // is the same merged owner's flat list and paints no split.
             BrowserKind::TvShows => self
                 .app
                 .wide_tv_library_area(index)

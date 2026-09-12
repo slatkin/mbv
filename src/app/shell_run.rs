@@ -38,12 +38,8 @@ impl Model {
         // values, since those fields are otherwise a previous-frame paint
         // signal.
         self.prime_wide_tv_geometry();
-        self.hand_off_tv_breakpoint();
         self.sync_emby_browser();
         self.sync_tv_workspace();
-        // TV's narrow owner is already mounted, so consume its transfer only
-        // after the destination has received its current pool/loading state.
-        self.apply_pending_inline_search_transfer();
         self.sync_music_workspace();
         // Task 5.9: the Library panel mounts with the library column and
         // drives its owner map (retention + the active pointer) before the

@@ -74,42 +74,6 @@ impl Model {
         })
     }
 
-    pub(super) fn capture_inline_search_transfer(
-        &self,
-        id: &ComponentId,
-    ) -> Option<super::shell::InlineSearchTransfer> {
-        let component = self.application.get_component(id)?;
-        let search = component
-            .as_any()
-            .downcast_ref::<BrowserComponent>()
-            .map(|h| h.inline_search())
-            .or_else(|| {
-                component
-                    .as_any()
-                    .downcast_ref::<MusicWorkspaceComponent>()
-                    .map(|h| h.inline_search())
-            })
-            .or_else(|| {
-                component
-                    .as_any()
-                    .downcast_ref::<TvWorkspaceComponent>()
-                    .map(|h| h.inline_search())
-            })?;
-        // Only an open session transfers (design.md: a transfer moves an
-        // already-open session); a closed search must not open on the
-        // receiving host.
-        search.is_active().then_some(())?;
-        let (selected_id, selected_type) = search
-            .selected_target()
-            .map_or((None, None), |(id, ty)| (Some(id), Some(ty)));
-        Some(super::shell::InlineSearchTransfer {
-            query: search.query().to_string(),
-            selected_id,
-            selected_type,
-            row_offset: search.scroll(),
-        })
-    }
-
     pub(super) fn dismiss_active_inline_search(&mut self) {
         if let Some(id) = self.active_inline_search_host() {
             self.close_inline_search_host(&id);
@@ -132,39 +96,6 @@ impl Model {
                 host.close_inline_search();
             }
         }
-    }
-
-    pub(super) fn apply_inline_search_transfer(
-        &mut self,
-        id: &ComponentId,
-        transfer: super::shell::InlineSearchTransfer,
-    ) {
-        let target = transfer.selected_id.zip(transfer.selected_type);
-        if let Some(component) = self.application.get_component_mut(id) {
-            if let Some(host) = component.as_any_mut().downcast_mut::<BrowserComponent>() {
-                host.apply_inline_search_transfer(transfer.query, target, transfer.row_offset);
-            } else if let Some(host) = component
-                .as_any_mut()
-                .downcast_mut::<MusicWorkspaceComponent>()
-            {
-                host.apply_inline_search_transfer(transfer.query, target, transfer.row_offset);
-            } else if let Some(host) = component
-                .as_any_mut()
-                .downcast_mut::<TvWorkspaceComponent>()
-            {
-                host.apply_inline_search_transfer(transfer.query, target, transfer.row_offset);
-            }
-        }
-    }
-
-    pub(super) fn apply_pending_inline_search_transfer(&mut self) {
-        let Some(transfer) = self.inline_search_transfer.take() else {
-            return;
-        };
-        let Some(id) = self.active_inline_search_host() else {
-            return;
-        };
-        self.apply_inline_search_transfer(&id, transfer);
     }
 
     pub(super) fn push_inline_search_content(&mut self) {

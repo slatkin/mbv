@@ -168,3 +168,20 @@ pub fn mounted_tv_layout(model: &Model) -> &LayoutMain {
         .expect("TvWorkspaceComponent")
         .test_layout()
 }
+
+/// The scroll offset the mounted `TvWorkspaceComponent` settled on this
+/// frame (Wide or Narrow presentation alike).
+pub fn mounted_tv_scroll(model: &Model) -> usize {
+    let id = model
+        .tv_workspace_id
+        .as_ref()
+        .expect("tv workspace component mounted");
+    model
+        .application
+        .get_component(id)
+        .expect("tv workspace mounted")
+        .as_any()
+        .downcast_ref::<TvWorkspaceComponent>()
+        .expect("TvWorkspaceComponent")
+        .scroll()
+}

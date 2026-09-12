@@ -41,6 +41,22 @@ pub fn set_browser_cursor_for_test(model: &mut crate::app::shell::Model, cursor:
         .set_cursor_for_test(cursor);
 }
 
+/// Seed the merged TV owner's authoritative selection directly (mirrors
+/// `set_browser_cursor_for_test`, task 8.1: TV routes through
+/// `TvWorkspaceComponent` at every breakpoint now).
+pub fn set_tv_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
+    model.sync_mounted_surfaces();
+    let id = model.tv_workspace_id.clone().expect("tv workspace mounted");
+    model
+        .application
+        .get_component_mut(&id)
+        .expect("tv workspace component")
+        .as_any_mut()
+        .downcast_mut::<TvWorkspaceComponent>()
+        .expect("tv workspace component type")
+        .set_cursor_for_test(cursor);
+}
+
 pub fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
     let buf = term.backend().buffer();
     let area = *buf.area();

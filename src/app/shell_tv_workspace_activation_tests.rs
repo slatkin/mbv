@@ -34,20 +34,19 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     model.app.terminal_height = 24;
     model.sync_tv_workspace();
     model.sync_active_destination();
-    model.sync_emby_browser();
 
-    // Divergence: the mounted BrowserComponent selects index 0 while App's
-    // mirrored BrowseLevel cursor is stale at index 1. Resolve narrow extras
-    // using the component-owned cursor, as the production seam does.
+    // Divergence: the mounted TvWorkspaceComponent selects index 0 while
+    // App's mirrored BrowseLevel cursor is stale at index 1. Resolve narrow
+    // extras using the component-owned cursor, as the production seam does.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
     let component_cursor = model
         .application
-        .get_component(&model.emby_browser_id.clone().expect("browser mounted"))
-        .expect("browser mounted")
+        .get_component(&model.tv_workspace_id.clone().expect("tv workspace mounted"))
+        .expect("tv workspace mounted")
         .as_any()
-        .downcast_ref::<crate::app::components::BrowserComponent>()
-        .expect("browser component")
-        .cursor();
+        .downcast_ref::<crate::app::components::TvWorkspaceComponent>()
+        .expect("tv workspace component")
+        .browse_cursor();
     assert_eq!(component_cursor, 0);
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
 

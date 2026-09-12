@@ -1,6 +1,6 @@
 use super::test_helpers::{
-    draw_mounted_frame, make_movie_app, mounted_browser_layout, mounted_browser_scroll,
-    mounted_model_at, set_browser_cursor_for_test,
+    draw_mounted_frame, make_movie_app, mounted_model_at, mounted_tv_layout, mounted_tv_scroll,
+    set_tv_cursor_for_test,
 };
 use super::*;
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
@@ -168,14 +168,14 @@ fn tv_letter_grouped_app(scroll: usize) -> App {
     app
 }
 
-// TV's narrow browsing still routes through the mounted `BrowserComponent`
-// (task 8.1 migrates it); this characterization is unchanged by task 6.1.
+// TV's narrow browsing routes through the merged `TvWorkspaceComponent`
+// (task 8.1, design D12); this characterization is unchanged by task 6.1.
 #[test]
 fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_suppression() {
     let mut model = mounted_model_at(tv_letter_grouped_app(12), 70, 20);
-    set_browser_cursor_for_test(&mut model, 54);
+    set_tv_cursor_for_test(&mut model, 54);
     let output = draw_mounted_frame(&mut model, 70, 20);
-    let layout = mounted_browser_layout(&model);
+    let layout = mounted_tv_layout(&model);
 
     assert!(
         output.contains("Series"),
@@ -185,7 +185,7 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
         layout.hero_area.height > 0,
         "grouped complete replacement should fit"
     );
-    let control_scroll = mounted_browser_scroll(&model);
+    let control_scroll = mounted_tv_scroll(&model);
     assert!(
         control_scroll > 0,
         "mounted grouped control must retain scroll"
@@ -201,15 +201,15 @@ fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_s
     );
     let _ = draw_mounted_frame(&mut model, 70, 20);
     assert_eq!(
-        mounted_browser_scroll(&model),
+        mounted_tv_scroll(&model),
         control_scroll,
         "mounted grouped control scroll persists across redraws"
     );
 
     let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 14);
-    set_browser_cursor_for_test(&mut boundary_model, 54);
+    set_tv_cursor_for_test(&mut boundary_model, 54);
     let boundary_output = draw_mounted_frame(&mut boundary_model, 70, 14);
-    let boundary_layout = mounted_browser_layout(&boundary_model);
+    let boundary_layout = mounted_tv_layout(&boundary_model);
     assert!(
         boundary_output.contains("Series"),
         "header fit boundary hides selected row: hero={:?}\n{boundary_output}",

@@ -45,11 +45,10 @@ pub enum ComponentId {
     /// mounted destination stays the surface (the transitional branch).
     Library,
     Browser(BrowserKey),
-    /// Wide TV workspace (`TvWorkspaceComponent`). Distinct from
-    /// `Browser(BrowserKey { kind: TvShows })` -- which the narrow TV
-    /// `BrowserComponent` uses -- so both can stay mounted across a
-    /// wide<->narrow breakpoint flip (keep-mounted, D1) without one
-    /// component type shadowing the other under a shared id.
+    /// The one merged TV owner (`TvWorkspaceComponent`, task 8.1, design
+    /// D12): mounted for a `tvshows` library at every breakpoint. Kept
+    /// distinct from `Browser(BrowserKey)` as its own `ComponentId` variant
+    /// (no `BrowserKind` still mounts `Browser` for TV).
     TvWorkspace(BrowserKey),
     Overlay(OverlayId),
     Modal(ModalId),

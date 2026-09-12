@@ -17,7 +17,7 @@
 use super::*;
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{BrowserComponent, ComponentId, Msg, ShellRequest};
+use crate::app::components::{ComponentId, Msg, ShellRequest, TvWorkspaceComponent};
 use crate::app::shell::Model;
 use crate::app::tests::*;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, TabSelection};
@@ -253,17 +253,18 @@ fn tv_shows_app() -> App {
     app
 }
 
-/// Regression 3: narrow TV `j` moves the painted selection. Post-task-3.4 the
-/// mounted `BrowserComponent` owns the surface, so the painted selection lives
-/// in its own layout (`test_layout`), keyed off its component-local cursor.
+/// Regression 3: narrow TV `j` moves the painted selection. The merged
+/// `TvWorkspaceComponent` owns the surface at every breakpoint (task 8.1), so
+/// the painted selection lives in its own layout (`test_layout`), keyed off
+/// its component-local cursor.
 #[test]
 fn narrow_tv_browse_j_moves_painted_selection() {
     let mut model = Model::new(tv_shows_app());
     model.sync_mounted_surfaces();
     let id = model
-        .emby_browser_id
+        .tv_workspace_id
         .clone()
-        .expect("narrow TV browser mounted");
+        .expect("narrow TV workspace mounted");
     let mut term = narrow_backend();
 
     // Seed past the selected-Series inline hero (which swallows its own row)
@@ -273,7 +274,7 @@ fn narrow_tv_browse_j_moves_painted_selection() {
         .get_component_mut(&id)
         .unwrap()
         .as_any_mut()
-        .downcast_mut::<BrowserComponent>()
+        .downcast_mut::<TvWorkspaceComponent>()
         .unwrap()
         .set_cursor_for_test(1);
     draw(&mut model, &mut term);
@@ -282,7 +283,7 @@ fn narrow_tv_browse_j_moves_painted_selection() {
         .get_component(&id)
         .unwrap()
         .as_any()
-        .downcast_ref::<BrowserComponent>()
+        .downcast_ref::<TvWorkspaceComponent>()
         .unwrap()
         .test_layout()
         .selected_item_rect;
@@ -298,7 +299,7 @@ fn narrow_tv_browse_j_moves_painted_selection() {
         .get_component(&id)
         .unwrap()
         .as_any()
-        .downcast_ref::<BrowserComponent>()
+        .downcast_ref::<TvWorkspaceComponent>()
         .unwrap()
         .test_layout()
         .selected_item_rect;

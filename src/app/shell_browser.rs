@@ -207,17 +207,14 @@ impl Model {
         };
         let library = self.app.libs.get(index)?;
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
-        let owns = match kind {
-            // Generic, Movies and HomeVideos moved to the embedded
-            // `BrowserContent` owner inside the mounted `LibraryPanel` (task
-            // 6.1, design D2); this component no longer mounts for them.
-            // Narrow TV is a flat series list this component still handles
-            // (D4, task 8 migrates it). Wide TV routes to TvWorkspaceComponent
-            // instead; the two gates share `wide_tv_library_area(index)` so
-            // they are mutually exclusive for a TV library at every width.
-            BrowserKind::TvShows => !self.app.wide_tv_library_area(index).is_some(),
-            _ => false,
-        };
+        // Generic, Movies and HomeVideos moved to the embedded
+        // `BrowserContent` owner inside the mounted `LibraryPanel` (task 6.1,
+        // design D2); this component no longer mounts for them. TV moved to
+        // the merged `TvWorkspaceComponent` at every breakpoint (task 8.1,
+        // design D12): no `BrowserKind` still mounts this component, but the
+        // gate stays kind-driven so a future kind can opt back in without
+        // rewriting the mount/push/render seam.
+        let owns = false;
         if !owns {
             return None;
         }
@@ -226,10 +223,6 @@ impl Model {
             library_id: library.library.id.clone(),
             kind,
         });
-        debug_assert!(
-            self.tv_workspace_component_id().as_ref() != Some(&id),
-            "narrow BrowserComponent and wide TvWorkspaceComponent must not share a ComponentId"
-        );
         Some(id)
     }
 

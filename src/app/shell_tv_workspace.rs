@@ -1,6 +1,4 @@
-use super::components::{
-    BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest, TvWorkspaceComponent,
-};
+use super::components::{BrowserKey, BrowserKind, ComponentId, ShellRequest, TvWorkspaceComponent};
 use super::images::series_image_cache_key;
 use super::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use super::render::TvWideRenderCtx;
@@ -67,14 +65,15 @@ impl Model {
         }
     }
 
+    /// The one merged TV owner's `ComponentId` (design.md D12, task 8.1):
+    /// mounted for a `tvshows` library at every breakpoint, so the id no
+    /// longer depends on `App::wide_tv_library_area`.
     pub(super) fn tv_workspace_component_id(&self) -> Option<ComponentId> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        if library.library.collection_type != "tvshows"
-            || !self.app.wide_tv_library_area(index).is_some()
-        {
+        if library.library.collection_type != "tvshows" {
             return None;
         }
         Some(ComponentId::TvWorkspace(BrowserKey {
@@ -115,6 +114,9 @@ impl Model {
         }
     }
 
+    /// Mount/retire the one merged TV owner (design.md D12): unlike before
+    /// the merge, a Wide<->Narrow breakpoint flip never changes which
+    /// component is mounted, so there is no hand-off to perform here.
     pub(super) fn sync_tv_workspace(&mut self) {
         let next_id = self.tv_workspace_component_id();
         if self.tv_workspace_id != next_id {
@@ -127,120 +129,13 @@ impl Model {
                         self.register_destination(&id);
                     }
                     self.tv_workspace_id = Some(id.clone());
-                    self.push_tv_workspace_content();
-                    // On a narrow→wide flip the receiving workspace is
-                    // mounted during this sync, so the one-shot transfer
-                    // could not be applied by hand_off_tv_breakpoint.
-                    if let Some(transfer) = self.inline_search_transfer.take() {
-                        self.push_inline_search_content();
-                        self.apply_inline_search_transfer(&id, transfer);
-                        // Re-publish after restoring the query: restore_query
-                        // recomputes against the receiving host's pool, so the
-                        // pool must be present before the one-shot target
-                        // restoration and remains authoritative afterwards.
-                        self.push_inline_search_content();
-                    }
                 }
                 None => {
                     self.tv_workspace_id = None;
                 }
             }
         }
-        if self.tv_workspace_id.is_none() {
-            if let Some(anchor) = self.tv_viewport_anchor.take() {
-                if let Some(browser_id) = self.emby_browser_id.clone() {
-                    if let Some(component) = self
-                        .application
-                        .get_component_mut(&browser_id)
-                        .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
-                    {
-                        component.apply_viewport_anchor(anchor);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Breakpoint hand-off (migrate-narrow-browse task 2.3 / D5): when the
-    /// wide TV breakpoint flips while a TV library is active, the
-    /// active-destination pointer moves between `TvWorkspaceComponent` and
-    /// the narrow `BrowserComponent`, each owning its own selection cursor.
-    /// Carry the outgoing component's live cursor into the resting
-    /// `BrowseLevel` (the `persist_emby_browser_scroll` write-back shape) and
-    /// arm the incoming component's one-shot re-anchor (the
-    /// `music_workspace_reanchor` shape) so the selected series survives the
-    /// flip. Runs once per tick before `sync_emby_browser` / `sync_tv_workspace`
-    /// repoint the pointers.
-    pub(super) fn hand_off_tv_breakpoint(&mut self) {
-        let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
-            return;
-        };
-        let Some(library) = self.app.libs.get(lib_idx) else {
-            return;
-        };
-        if library.library.collection_type != "tvshows" {
-            return;
-        }
-        let wide = self.app.wide_tv_library_area(lib_idx).is_some();
-        // The pointers describe the presentation used by the previous sync.
-        // Only capture/apply state when that owner actually changes; both TV
-        // destinations remain mounted between transitions.
-        let switching =
-            (wide && self.tv_workspace_id.is_none()) || (!wide && self.tv_workspace_id.is_some());
-        if !switching {
-            return;
-        }
-        // Capture the outgoing host before the destination sync repoints it;
-        // this is a discrete owner handoff, never a per-frame mirror.
-        let outgoing = if wide {
-            self.emby_browser_id.clone()
-        } else {
-            self.tv_workspace_id.clone()
-        };
-        self.inline_search_transfer = outgoing
-            .as_ref()
-            .and_then(|id| self.capture_inline_search_transfer(id));
-        if let Some(id) = outgoing.as_ref() {
-            self.close_inline_search_host(id);
-        }
-        match (
-            wide,
-            self.tv_workspace_id.clone(),
-            self.emby_browser_id.clone(),
-        ) {
-            // wide -> narrow: persist the wide workspace's live cursor/scroll
-            // to the resting level so the narrow browser's `set_content`
-            // adopts it on the same tick.
-            (false, Some(id), _) => {
-                let Some(anchor) = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
-                    .and_then(|tv| tv.viewport_anchor(tv.painted_viewport_height()))
-                else {
-                    return;
-                };
-                // Deliver after destination sync so Browser adopts the target
-                // without mirroring component-local cursor state.
-                self.tv_viewport_anchor = Some(anchor);
-            }
-            // narrow -> wide: capture the Browser's painted anchor and deliver
-            // it to the kept-mounted wide workspace on its next paint.
-            (true, _, Some(id)) => {
-                let Some(anchor) = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
-                    .and_then(|browser| browser.viewport_anchor(browser.painted_viewport_height()))
-                else {
-                    return;
-                };
-                self.tv_viewport_anchor = Some(anchor);
-            }
-            _ => {
-                self.inline_search_transfer = None;
-            }
-        }
+        self.push_tv_workspace_content();
     }
 
     pub(super) fn push_tv_workspace_content(&mut self) {
@@ -253,11 +148,10 @@ impl Model {
         let Some(library) = self.app.libs.get(index) else {
             return;
         };
-        if library.library.collection_type != "tvshows"
-            || !self.app.wide_tv_library_area(index).is_some()
-        {
+        if library.library.collection_type != "tvshows" {
             return;
         }
+        let is_wide = self.app.wide_tv_library_area(index).is_some();
         let list = self.app.library_list_render_ctx(
             index,
             self.app.libs[index]
@@ -269,15 +163,6 @@ impl Model {
                 .last()
                 .map_or(0, |l| l.resting().scroll()),
         );
-        if let Some(anchor) = self.tv_viewport_anchor.take() {
-            if let Some(component) = self
-                .application
-                .get_component_mut(id)
-                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-            {
-                component.apply_viewport_anchor(anchor);
-            }
-        }
         // The TV component owns the selection cursor. Derive the pushed Series
         // snapshot from the component's authoritative selection (its own cursor
         // over its cached list), not the App browse cursor (which the removed
@@ -302,27 +187,34 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
-        if let Some(item) = selected_series
-            .as_ref()
-            .filter(|_| self.app.images_enabled())
-        {
-            self.app.fetch_card_image(
-                series_image_cache_key(&item.id, SERIES_LANDSCAPE_IMAGE_TYPES),
-                item.id.clone(),
-                String::new(),
-                SERIES_LANDSCAPE_IMAGE_TYPES,
-            );
+        // The Wide hero's landscape-chain fetch runs from this push
+        // (design D9's TV precedent); Narrow's own Primary-chain fetch stays
+        // a paint-time `HomeImagePaint` return (unchanged by this merge --
+        // task 5.10 generalizes both to the shell projection later).
+        let mut image_loading = false;
+        if is_wide {
+            if let Some(item) = selected_series
+                .as_ref()
+                .filter(|_| self.app.images_enabled())
+            {
+                self.app.fetch_card_image(
+                    series_image_cache_key(&item.id, SERIES_LANDSCAPE_IMAGE_TYPES),
+                    item.id.clone(),
+                    String::new(),
+                    SERIES_LANDSCAPE_IMAGE_TYPES,
+                );
+            }
+            image_loading = selected_series.as_ref().is_some_and(|item| {
+                self.app.images_enabled()
+                    && !self
+                        .app
+                        .card_image_states
+                        .contains_key(&series_image_cache_key(
+                            &item.id,
+                            SERIES_LANDSCAPE_IMAGE_TYPES,
+                        ))
+            });
         }
-        let image_loading = selected_series.as_ref().is_some_and(|item| {
-            self.app.images_enabled()
-                && !self
-                    .app
-                    .card_image_states
-                    .contains_key(&series_image_cache_key(
-                        &item.id,
-                        SERIES_LANDSCAPE_IMAGE_TYPES,
-                    ))
-        });
         let context = TvWideRenderCtx::new(
             list,
             selected_series,
@@ -334,6 +226,7 @@ impl Model {
         .with_image_state(self.app.images_enabled(), image_loading);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(tv) = comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>() {
+                tv.set_is_wide(is_wide);
                 tv.set_content(context);
             }
         }
@@ -343,16 +236,49 @@ impl Model {
         let Some(id) = self.tv_workspace_id.as_ref() else {
             return;
         };
-        let area = self.app.layout.main.tv_wide_area;
+        if !self.library_panel_visible() {
+            return;
+        }
+        let is_wide = self
+            .app
+            .tab
+            .emby_library_index()
+            .is_some_and(|idx| self.app.wide_tv_library_area(idx).is_some());
+        let area = if is_wide {
+            self.app.layout.main.tv_wide_area
+        } else {
+            self.app.layout.main.left_area
+        };
         if area.width == 0 || area.height == 0 {
             return;
         }
-        if let Some(comp) = self
-            .application
-            .get_component_mut(id)
-            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-        {
-            comp.set_list_pane_width(self.app.list_pane_width);
+        if is_wide {
+            if let Some(comp) = self
+                .application
+                .get_component_mut(id)
+                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+            {
+                comp.set_list_pane_width(self.app.list_pane_width);
+            }
+        } else {
+            let browse_cursor = self
+                .application
+                .get_component(id)
+                .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
+                .map_or(0, TvWorkspaceComponent::browse_cursor);
+            let extras = self
+                .app
+                .tab
+                .emby_library_index()
+                .map(|lib_idx| self.app.narrow_browse_extras(lib_idx, browse_cursor));
+            if let Some((comp, extras)) = self
+                .application
+                .get_component_mut(id)
+                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+                .zip(extras)
+            {
+                comp.set_narrow_extras(extras);
+            }
         }
         self.application.view(id, frame, area);
         let image_paint = self

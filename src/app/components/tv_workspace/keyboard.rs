@@ -1,4 +1,4 @@
-use tuirealm::event::Key;
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::inline_search::InlineSearchAction;
 use super::{Msg, Pane, ShellRequest, TvWorkspaceComponent};
@@ -7,12 +7,8 @@ impl TvWorkspaceComponent {
     /// Ctrl+P/S/A on the selected Inline Search result reuse the ordinary
     /// library result-row effects, resolved against the search cursor (result-
     /// row shortcut actions stay available while search is open).
-    fn inline_search_result_action(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
-        if !self.context.focused
-            || !key
-                .modifiers
-                .contains(tuirealm::event::KeyModifiers::CONTROL)
-        {
+    fn inline_search_result_action(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if !self.context.focused || !key.modifiers.contains(KeyModifiers::CONTROL) {
             return None;
         }
         let item = self.inline_search.selected_item()?;
@@ -28,7 +24,7 @@ impl TvWorkspaceComponent {
         Some(Msg::Shell(request))
     }
 
-    pub(super) fn handle_key(&mut self, key: &tuirealm::event::KeyEvent) -> Option<Msg> {
+    pub(super) fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         // Inline Search gets first refusal while active (design.md D4): the
         // component returns immediately after delegating, even when search
         // consumes the key without producing a message.
@@ -54,6 +50,15 @@ impl TvWorkspaceComponent {
         if !self.context.focused {
             return None;
         }
+        if self.is_wide {
+            self.handle_key_wide(key)
+        } else {
+            self.handle_key_narrow(key)
+        }
+    }
+
+    /// Wide pane-based keyboard handling (unchanged from before the merge).
+    fn handle_key_wide(&mut self, key: &KeyEvent) -> Option<Msg> {
         let request = match key.code {
             Key::Left | Key::Char('h') => {
                 self.pane = Pane::Series;
@@ -89,20 +94,16 @@ impl TvWorkspaceComponent {
             }
             Key::Char('[')
                 if self.pane == Pane::Episodes
-                    && !key
-                        .modifiers
-                        .contains(tuirealm::event::KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.move_season(-1);
                 Some(ShellRequest::TvSeasonMove { delta: -1 })
             }
             Key::Char(']')
                 if self.pane == Pane::Episodes
-                    && !key
-                        .modifiers
-                        .contains(tuirealm::event::KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.move_season(1);
                 Some(ShellRequest::TvSeasonMove { delta: 1 })
@@ -146,49 +147,25 @@ impl TvWorkspaceComponent {
             // Library effects use the component's selected item. TV keeps
             // the series-list selection authoritative even while the local
             // Episodes pane is focused, matching the legacy stack target.
-            Key::Char('p')
-                if key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
-            {
-                self.selected_item()
-                    .map(|item| ShellRequest::EmbyLibraryPlay { item })
-            }
-            Key::Char('a')
-                if key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
-            {
-                self.selected_item()
-                    .map(|item| ShellRequest::EmbyLibraryEnqueue { item })
-            }
-            Key::Char('w')
-                if key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
-            {
-                self.selected_item()
-                    .map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
-            }
-            Key::Char('s')
-                if key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
-            {
-                self.selected_item()
-                    .map(|item| ShellRequest::EmbyLibraryShuffle { item })
-            }
-            Key::Char('r')
-                if key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
-            {
+            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryPlay { item }),
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryEnqueue { item }),
+            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryToggleWatched { item }),
+            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryShuffle { item }),
+            Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 Some(ShellRequest::EmbyLibraryRescan)
             }
             Key::Char('r')
-                if !key.modifiers.intersects(
-                    tuirealm::event::KeyModifiers::CONTROL | tuirealm::event::KeyModifiers::ALT,
-                ) =>
+                if !key
+                    .modifiers
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
             {
                 Some(ShellRequest::EmbyLibraryRefresh)
             }
@@ -200,10 +177,93 @@ impl TvWorkspaceComponent {
                 Some(ShellRequest::OpenInlineSearch)
             }
             Key::Char(c @ ('[' | ']'))
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                Some(ShellRequest::TvCycleLetterPill {
+                    delta: if c == '[' { -1 } else { 1 },
+                })
+            }
+            _ => None,
+        };
+        request.map(Msg::Shell)
+    }
+
+    /// Narrow flat-list keyboard handling (mirrors `BrowserComponent::
+    /// handle_tui_key` before the merge, task 8.1): movement persists the
+    /// resting `BrowseLevel` cursor via `BrowserCursorIndex` (pagination and
+    /// position restore keep working exactly as before), while activation,
+    /// effects, refresh/rescan, context menu, search and letter-pill cycling
+    /// reuse the same requests Wide already emits.
+    fn handle_key_narrow(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if key.modifiers.contains(KeyModifiers::ALT)
+            && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
+        {
+            return None;
+        }
+        let request = match key.code {
+            Key::Up | Key::Char('k') => {
+                let index = self.move_by_item_rows_narrow(-1);
+                Some(ShellRequest::BrowserCursorIndex { index })
+            }
+            Key::Down | Key::Char('j') => {
+                let index = self.move_by_item_rows_narrow(1);
+                Some(ShellRequest::BrowserCursorIndex { index })
+            }
+            Key::PageUp => {
+                let rows = -self.narrow_page_rows();
+                let index = self.move_by_item_rows_narrow(rows);
+                Some(ShellRequest::BrowserCursorIndex { index })
+            }
+            Key::PageDown => {
+                let rows = self.narrow_page_rows();
+                let index = self.move_by_item_rows_narrow(rows);
+                Some(ShellRequest::BrowserCursorIndex { index })
+            }
+            Key::Home => {
+                let index = self.jump_cursor_narrow(false);
+                Some(ShellRequest::BrowserCursorIndex { index })
+            }
+            Key::End => {
+                let index = self.jump_cursor_narrow(true);
+                Some(ShellRequest::BrowserCursorIndex { index })
+            }
+            Key::Enter => self
+                .selected_item()
+                .map(|item| ShellRequest::TvActivate { item }),
+            Key::Esc | Key::Backspace => Some(ShellRequest::TvBack),
+            Key::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryPlay { item }),
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryEnqueue { item }),
+            Key::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryToggleWatched { item }),
+            Key::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => self
+                .selected_item()
+                .map(|item| ShellRequest::EmbyLibraryShuffle { item }),
+            Key::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                Some(ShellRequest::EmbyLibraryRescan)
+            }
+            Key::Char('r')
                 if !key
                     .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL)
-                    && !key.modifiers.contains(tuirealm::event::KeyModifiers::ALT) =>
+                    .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+            {
+                Some(ShellRequest::EmbyLibraryRefresh)
+            }
+            Key::Char('.') => Some(ShellRequest::EmbyLibraryContextMenu {
+                item: self.selected_item()?,
+            }),
+            Key::Char('/') => {
+                self.inline_search.open();
+                Some(ShellRequest::OpenInlineSearch)
+            }
+            Key::Char(c @ ('[' | ']'))
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 Some(ShellRequest::TvCycleLetterPill {
                     delta: if c == '[' { -1 } else { 1 },

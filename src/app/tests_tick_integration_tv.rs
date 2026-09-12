@@ -2,7 +2,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-use crate::app::components::{BrowserComponent, TvWorkspaceComponent};
+use crate::app::components::TvWorkspaceComponent;
 use crate::app::render::make_movie_app;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
@@ -25,6 +25,8 @@ fn tv_harness() -> TickHarness {
     harness
 }
 
+/// The one merged TV owner (task 8.1, design D12): mounted at every
+/// breakpoint under `ComponentId::TvWorkspace`.
 fn tv(harness: &TickHarness) -> &TvWorkspaceComponent {
     harness
         .model()
@@ -34,17 +36,6 @@ fn tv(harness: &TickHarness) -> &TvWorkspaceComponent {
         .as_any()
         .downcast_ref::<TvWorkspaceComponent>()
         .expect("TV workspace component")
-}
-
-fn browser(harness: &TickHarness) -> &BrowserComponent {
-    harness
-        .model()
-        .application
-        .get_component(harness.model().emby_browser_id.as_ref().expect("browser id"))
-        .expect("TV browser mounted")
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .expect("browser component")
 }
 
 fn draw(harness: &mut TickHarness) {
@@ -62,8 +53,8 @@ fn tv_narrow_tick_navigation_updates_the_painted_control() {
     harness.model_mut().app.terminal_width = 80;
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
-    let before = browser(&harness)
-        .viewport_anchor(browser(&harness).painted_viewport_height())
+    let before = tv(&harness)
+        .viewport_anchor(tv(&harness).painted_viewport_height())
         .expect("narrow TV selection");
 
     harness.inject(Event::Keyboard(KeyEvent {
@@ -73,13 +64,44 @@ fn tv_narrow_tick_navigation_updates_the_painted_control() {
     harness.step();
     draw(&mut harness);
 
-    let after = browser(&harness)
-        .viewport_anchor(browser(&harness).painted_viewport_height())
+    let after = tv(&harness)
+        .viewport_anchor(tv(&harness).painted_viewport_height())
         .expect("narrow TV selection after navigation");
     assert_ne!(after.selected_target, before.selected_target);
 
-    // Normal/Narrow TV is the BrowserComponent surface, not a second TV owner.
-    assert_eq!(harness.model().tv_workspace_id, None);
+    // Narrow TV is the same merged owner (task 8.1) -- no second component
+    // id, and the pointer never clears at any breakpoint.
+    assert!(harness.model().tv_workspace_id.is_some());
+}
+
+/// unify-screens-under-panel-components task 8.1 (design D12, stable-target
+/// re-anchor): the merged owner keeps its selected target across a
+/// Wide->Narrow->Wide breakpoint round trip driven through real ticks.
+#[test]
+fn tv_wide_narrow_wide_tick_navigation_keeps_the_selected_target() {
+    let mut harness = tv_harness();
+    draw(&mut harness);
+    assert_eq!(tv(&harness).selected_item_id(), Some("series-0".into()));
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+    draw(&mut harness);
+    assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
+
+    // Narrow: the same owner keeps the same selected target.
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+    assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
+
+    // Wide again: still the same target.
+    harness.model_mut().app.terminal_width = 160;
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+    assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
 }
 
 #[test]
