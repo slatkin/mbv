@@ -59,17 +59,23 @@ impl Model {
     }
 
     pub(super) fn push_music_workspace_content(&mut self) {
-        let Some(index) = self.app.tab.emby_library_index() else {
+        // Music projects only in the album-folder grouped view (the same
+        // gate `music_owner_key` applies): outside it there is no owner to
+        // push into, and the body below must not run its side effects
+        // (`wide_music_render_ctx`, `fetch_album_tracks`) for an unrelated
+        // Emby library/item.
+        let Some(key) = self.music_owner_key() else {
+            return;
+        };
+        let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
         // A freshly created owner (first push for this `LibraryKey`) has no
         // prior selection to preserve: adopt the shell's resting cursor once,
         // explicitly, exactly as the old mount-time trigger did. A re-point
         // at an already-installed owner keeps its divergent local cursor.
-        if let Some(key) = self.music_owner_key() {
-            if !self.library_panel_has_owner(&key) {
-                self.music_workspace_reanchor = true;
-            }
+        if !self.library_panel_has_owner(&key) {
+            self.music_workspace_reanchor = true;
         }
         let resting = self.app.libs[index]
             .nav_stack
@@ -114,23 +120,38 @@ impl Model {
         let wide = self.app.is_right_panel_wide();
         let request = self.music_track_focus_request.take();
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        self.update_music_owner(|owner| {
-            owner.set_content(context);
-            if let Some((c, s)) = reanchor {
-                owner.re_anchor(c, s);
-            }
-            owner.set_focused(focused);
-            owner.set_inline_track_focus_enabled(wide);
-            match request {
-                Some(MusicTrackFocusRequest::Clear) => owner.clear_track_focus(),
-                Some(MusicTrackFocusRequest::Enter { album_id })
-                    if wide && owner.selected_item().is_some_and(|a| a.id == album_id) =>
-                {
-                    owner.enter_track_focus()
+        // Activation can outrun the album's track fetch (its tracks are not
+        // yet cached when the one-shot Enter request is consumed): the
+        // closure only reaches the owner, so it reports back whether the
+        // request needs to stay armed (bound to this album) for the tracks
+        // re-push to retry, rather than re-arming `self` from inside.
+        let rearm = self
+            .update_music_owner(|owner| {
+                owner.set_content(context);
+                if let Some((c, s)) = reanchor {
+                    owner.re_anchor(c, s);
                 }
-                _ => {}
-            }
-        });
+                owner.set_focused(focused);
+                owner.set_inline_track_focus_enabled(wide);
+                match request {
+                    Some(MusicTrackFocusRequest::Clear) => {
+                        owner.clear_track_focus();
+                        None
+                    }
+                    Some(MusicTrackFocusRequest::Enter { album_id })
+                        if wide && owner.selected_item().is_some_and(|a| a.id == album_id) =>
+                    {
+                        owner.enter_track_focus();
+                        (wide && !owner.track_focused())
+                            .then_some(MusicTrackFocusRequest::Enter { album_id })
+                    }
+                    _ => None,
+                }
+            })
+            .flatten();
+        if let Some(rearm) = rearm {
+            self.music_track_focus_request = Some(rearm);
+        }
     }
 
     pub(super) fn sync_music_workspace(&mut self) {
@@ -151,3 +172,79 @@ impl Model {
         self.render_library_panel(frame);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::app::render::{make_movie_app, make_music_group_app};
+    use crate::app::shell::Model;
+    use mbv_core::api::{EmbyClient, EmbyCredentialExchange};
+    use mbv_core::service_runtime::EmbyRuntime;
+    use std::sync::{Arc, Mutex};
+
+    /// A configured-but-unroutable `EmbyClient` (design mirrors the retired
+    /// `push_music_workspace_fetches_selected_album_tracks` test): the
+    /// `album_tracks_loading` insert `fetch_album_tracks` performs happens
+    /// synchronously before the network attempt, so it is observable
+    /// immediately after the sync call without waiting on (or requiring)
+    /// the doomed connection to resolve.
+    fn ready_emby_runtime() -> EmbyRuntime {
+        let mut client = EmbyClient::new(crate::config::Config::default());
+        client.apply_credential_exchange(&EmbyCredentialExchange {
+            server_url: "http://127.0.0.1:1".into(),
+            user_id: "user-id".into(),
+            token: "token".into(),
+        });
+        EmbyRuntime::ready(Arc::new(Mutex::new(client)))
+    }
+
+    /// Regression: `push_music_workspace_content` must not run its
+    /// Music-only side effects (`wide_music_render_ctx`, `fetch_album_tracks`)
+    /// for a selection on a non-Music Emby library. Before the fix the guard
+    /// only checked `tab.emby_library_index()`, so every tick spawned a real
+    /// track fetch for whatever item was selected on ANY Emby library tab.
+    #[test]
+    fn push_music_workspace_content_is_a_no_op_outside_music_album_folder_view() {
+        let mut app = make_movie_app();
+        app.emby_runtime = ready_emby_runtime();
+        let mut model = Model::new(app);
+
+        model.sync_mounted_surfaces();
+
+        assert!(
+            model.music_owner().is_none(),
+            "a non-Music library must never install a Music owner"
+        );
+        assert!(
+            !model.app.album_tracks_loading.contains("movie-focused"),
+            "the selected movie's tracks must never be fetched"
+        );
+        assert!(
+            !model.app.album_tracks_cache.contains_key("movie-focused"),
+            "the selected movie's tracks must never be cached as an album"
+        );
+    }
+
+    /// Positive control for the guard above: a genuine Music album-folder
+    /// selection still fetches the selected album's tracks.
+    #[test]
+    fn push_music_workspace_content_fetches_the_selected_albums_tracks() {
+        let mut app = make_music_group_app();
+        app.emby_runtime = ready_emby_runtime();
+        let mut model = Model::new(app);
+
+        model.sync_mounted_surfaces();
+
+        assert!(
+            model.music_owner().is_some(),
+            "the Music album-folder view must install its owner"
+        );
+        assert!(
+            model.app.album_tracks_loading.contains("album-1"),
+            "the selected album's tracks must be fetched"
+        );
+    }
+}
+
+#[cfg(test)]
+#[path = "shell_music_workspace_owner_tests.rs"]
+mod owner_tests;

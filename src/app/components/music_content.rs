@@ -610,6 +610,23 @@ impl LibraryContentOwner for MusicContent {
                 self.inline_search.open();
                 Some(Msg::Shell(ShellRequest::OpenInlineSearch))
             }
+            // Context menu: the focused track's own menu while the track
+            // pane holds local focus, otherwise the selected album's
+            // generic library context menu (mirrors the retired
+            // `MusicWorkspaceComponent`'s '.' handling).
+            Key::Char('.') if self.track_focused => self
+                .selected_track_item()
+                .map(|track| Msg::Shell(ShellRequest::MusicTrackContextMenu { track })),
+            Key::Char('.') => self
+                .selected_item()
+                .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
+            Key::Char('r')
+                if !self.track_focused
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                Some(Msg::Shell(ShellRequest::EmbyLibraryRefresh))
+            }
             Key::Char('[') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }))
             }
