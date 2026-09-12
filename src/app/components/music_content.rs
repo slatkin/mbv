@@ -153,10 +153,12 @@ impl MusicContent {
         // Narrow painter remains in place. Reuse the same InlineSearch owner
         // for Wide rather than teaching the panel a Music-specific search arm.
         if let Some(query) = self.context.list.search_query.clone() {
-            if !self.library_search_active {
+            if !self.inline_search.is_active() {
                 self.inline_search.open();
                 self.inline_search
                     .set_pool(SearchPool::Items(self.context.list.items.clone()));
+                self.inline_search.restore_query(query);
+            } else if self.inline_search.query() != query {
                 self.inline_search.restore_query(query);
             }
             self.inline_search

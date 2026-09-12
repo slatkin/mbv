@@ -11,8 +11,10 @@
 use super::components::media_list::{PLAIN_ROWS_PAINTS, WIDE_MEDIA_LIST_PAINTS};
 use super::test_helpers::{buffer_to_string, make_music_group_app};
 use super::*;
+use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::MusicWorkspaceComponent;
 use crate::app::tests::make_item;
+use crate::app::tests_tick_harness::TickHarness;
 use crate::app::PanelFocus;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -117,33 +119,82 @@ fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_album_control() {
     // panel reserves its search slot and the ordinary album rail is not
     // painted or left with a selected-row hit. The track workspace is still
     // the panel's only Wide media-list view for this empty-track fixture.
-    let app = multi_artist_app();
-    let lib_idx = app.tab.emby_library_index().unwrap();
-    let mut context = app.wide_music_render_ctx(lib_idx, None);
-    context.list = context.list.with_search("al".into(), false);
+    let mut app = multi_artist_app();
+    app.terminal_width = W;
+    app.terminal_height = H;
+    let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
+    app.album_indexes.insert(
+        app.libs[0].library.id.clone(),
+        crate::app::AlbumIndexState::Ready(
+            albums
+                .into_iter()
+                .map(|album| crate::app::AlbumSearchEntry {
+                    search_text: album.display_name(),
+                    display_label: album.display_name(),
+                    album,
+                    ancestors: Vec::new(),
+                })
+                .collect(),
+        ),
+    );
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let id = harness
+        .model()
+        .music_workspace_id
+        .clone()
+        .expect("wide Music workspace mounted");
+    harness.model_mut().open_inline_search();
+    {
+        let workspace = harness
+            .model_mut()
+            .application
+            .get_component_mut(&id)
+            .expect("Music workspace mounted")
+            .as_any_mut()
+            .downcast_mut::<MusicWorkspaceComponent>()
+            .expect("Music workspace type");
+        workspace.inline_search_mut().restore_query("al".into());
+    }
+    // This is the same shell projection used after search open and async
+    // completions; do not manufacture search state in the render context.
+    harness.model_mut().push_inline_search_content();
+    harness.model_mut().push_music_workspace_content();
     WIDE_MEDIA_LIST_PAINTS.with(|c| c.set(0));
     PLAIN_ROWS_PAINTS.with(|c| c.set(0));
-    let mut component = MusicWorkspaceComponent::new();
-    component.set_content(context);
     let mut terminal = Terminal::new(TestBackend::new(W, H)).unwrap();
     terminal
-        .draw(|f| component.view(f, Rect::new(0, 0, W, H)))
+        .draw(|frame| {
+            harness
+                .model_mut()
+                .application
+                .view(&id, frame, Rect::new(0, 0, W, H));
+        })
         .unwrap();
 
-    assert_eq!(PLAIN_ROWS_PAINTS.with(std::cell::Cell::get), 1);
+    assert_eq!(
+        PLAIN_ROWS_PAINTS.with(std::cell::Cell::get),
+        1,
+        "search results use the plain result-row painter"
+    );
     assert_eq!(
         WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get),
         0,
         "search does not view the album rail through WideMediaList"
     );
-    let geometry = component
-        .test_wide_geometry()
+    let geometry = harness
+        .model()
+        .application
+        .get_component(&id)
+        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
+        .and_then(MusicWorkspaceComponent::test_wide_geometry)
         .expect("search still paints the Wide panel");
     assert!(
         geometry.selected.is_none(),
         "search owns album-row geometry"
     );
-    assert!(buffer_to_string(&terminal).contains("Alpha Album"));
+    let rendered = buffer_to_string(&terminal);
+    assert!(rendered.contains("Alpha Album"), "rendered={rendered}");
 }
 
 #[test]

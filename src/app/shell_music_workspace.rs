@@ -119,7 +119,25 @@ impl Model {
                 self.app.fetch_album_tracks(album.id.clone());
             }
         }
-        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, cursor_scroll);
+        let mut context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, cursor_scroll);
+        // Inline Search is owned by the mounted Music workspace until task
+        // 9.4. Project that live session into the context consumed by both
+        // the legacy Narrow painter and the Wide panel; otherwise Wide sees
+        // the ordinary grouped album carrier even while search is active.
+        let search = self
+            .application
+            .get_component(id)
+            .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+            .filter(|music| music.inline_search().is_active())
+            .map(|music| {
+                (
+                    music.inline_search().query().to_string(),
+                    music.inline_search().loading(),
+                )
+            });
+        if let Some((query, loading)) = search {
+            context.list = context.list.with_search(query, loading);
+        }
         let wide = self.app.is_right_panel_wide();
         // Grouped Music paints one full-width album row at a time in both
         // presentations, so navigation uses the same one-dimensional geometry.
