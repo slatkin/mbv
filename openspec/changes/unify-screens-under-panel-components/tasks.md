@@ -235,7 +235,7 @@ proves the slot types early.
   the new output (the hero image is the projected `HeroImageState`, never a paint-time fetch). Verify:
   one pill bar, one controls row and the policy header in the buffer; `w` and a click on a Watched pill
   both change the filter; `feeds_component_tests.rs` and `tests_tick_integration_feeds.rs` still pass.
-- [ ] 7.3 Register Feeds as `LibraryKey::Feeds`: delete `ComponentId::Feeds`, the mounted component, its
+- [x] 7.3 Register Feeds as `LibraryKey::Feeds`: delete `ComponentId::Feeds`, the mounted component, its
   hit store and `LayoutMain.feeds_area`, with slot-event translation and hit resolution moving to the
   panel, and re-point `feeds_component_tests.rs` at the owner type. Verify: tick integration tests for
   focus, mouse eligibility and a pill/row click through the panel, and owner retention across a tab
