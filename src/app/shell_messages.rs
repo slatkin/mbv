@@ -341,10 +341,21 @@ impl Model {
                         .map(|(_, active, _)| active);
                     if active_key.as_ref()
                         == Some(&crate::app::components::library_panel::LibraryKey::Service(
-                            key,
+                            key.clone(),
                         ))
                     {
-                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                        let Some(lib_idx) = self
+                            .app
+                            .libs
+                            .iter()
+                            .position(|lib| lib.library.id == key.library_id)
+                        else {
+                            return quit;
+                        };
+                        if self.app.tab.emby_library_index() != Some(lib_idx) {
+                            return quit;
+                        }
+                        {
                             self.app.persist_library_scroll(lib_idx, scroll);
                             // The owner already applied the movement; retain
                             // the resolved cursor for App-side effects only.

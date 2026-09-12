@@ -57,9 +57,13 @@ fn library_panel_wheel_persists_owner_resolved_scroll() {
             _ => None,
         })
         .expect("the panel returns the owner's cursor echo");
+    let expected_key = match &harness.model().active_migrated_browser_owner().unwrap().1 {
+        crate::app::components::library_panel::LibraryKey::Service(key) => key.clone(),
+        other => panic!("expected Emby service owner, got {other:?}"),
+    };
     assert!(matches!(
         harness.model().active_migrated_browser_owner().unwrap().1,
-        crate::app::components::library_panel::LibraryKey::Service(_)
+        crate::app::components::library_panel::LibraryKey::Service(ref key) if key == &expected_key
     ));
     apply(&mut harness, outcome);
     let library = harness.model().app.tab.emby_library_index().unwrap();
