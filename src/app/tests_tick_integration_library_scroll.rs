@@ -66,3 +66,42 @@ fn library_panel_wheel_persists_owner_resolved_scroll() {
     assert_eq!(resting.cursor(), index);
     assert_eq!(resting.scroll(), scroll);
 }
+
+#[test]
+fn library_panel_wheel_at_loaded_edge_fetches_next_page() {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    app.libs[0].nav_stack[0].total_count = 20;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+
+    let list = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_wide_geometry())
+        .expect("the panel paints a Wide list")
+        .list_area;
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: list.x + 1,
+        row: list.y,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| {
+        matches!(message, Msg::Shell(ShellRequest::LibraryScroll { .. }))
+    }));
+    apply(&mut harness, outcome);
+    assert!(
+        harness.model().app.libs[0].nav_stack[0].loading,
+        "wheel navigation at the loaded edge must start the next-page fetch"
+    );
+}

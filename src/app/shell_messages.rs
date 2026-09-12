@@ -344,6 +344,11 @@ impl Model {
                         ))
                     {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                            let now = Instant::now();
+                            let idle = now.duration_since(self.app.last_nav_at)
+                                >= crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
+                            self.app.last_nav_at = now;
+                            self.app.mark_library_navigation(now);
                             self.app.persist_library_scroll(lib_idx, scroll);
                             // The owner already applied the movement; retain
                             // the resolved cursor for App-side effects only.
@@ -358,6 +363,14 @@ impl Model {
                                     .last_mut()
                                     .expect("validated nav stack")
                                     .set_resting_cursor(index);
+                                self.app.save_default_library_position(lib_idx);
+                            }
+                            // Keep wheel navigation on the same pagination path
+                            // as keyboard cursor movement. The list owner has
+                            // already resolved and applied the index; this only
+                            // retains the shell-side effects.
+                            if idle {
+                                self.app.maybe_fetch_next_page(lib_idx, index);
                             }
                         }
                     }
