@@ -77,9 +77,9 @@ impl Model {
             // The Home owner is installed with the panel (Model::new), so
             // the Home tab always routes through the Library panel (task
             // 5.11); `None` is unreachable via the transitional branch's
-            // migrated check.
-            TabSelection::Home => None,
-            TabSelection::Feeds => Some(ComponentId::Feeds),
+            // migrated check. The Feeds owner is installed the same way
+            // (task 7.3).
+            TabSelection::Home | TabSelection::Feeds => None,
             TabSelection::EmbyLibrary(index) => self.emby_library_child_id(index),
             TabSelection::AudiobookshelfLibrary(index) => self.abs_library_child_id(index),
         }
@@ -296,18 +296,13 @@ impl Model {
                 let area = self.app.layout.main.home_area;
                 crate::app::render::wide_hero_fits(area).then_some(area)
             }
-            TabSelection::Feeds => {
-                let area = self.app.layout.main.feeds_area;
-                // The pre-panel painter skipped its wide branch on an empty
-                // *filtered* Feeds list, so a filter that empties the list
-                // disarms the boundary just like an empty library. The gate is
-                // retained unchanged until Feeds registers in the panel (task
-                // 7.3), which owns the boundary from then on.
-                (crate::app::render::wide_hero_fits(area)
-                    && !self.app.feed_tab.subscriptions.is_empty()
-                    && self.feeds_has_visible_entries())
-                .then_some(area)
-            }
+            // Feeds is registered in the panel (task 7.3), so the panel owns
+            // its Wide split: its painted geometry is the drag gate, and this
+            // shell-side boundary stays inert. The old gate also disarmed on
+            // an empty filtered list, which no longer matches the skeleton
+            // (it always paints the split) — the panel's own retained split
+            // replaces it with one painted truth.
+            TabSelection::Feeds => None,
             TabSelection::AudiobookshelfLibrary(index) => self.abs_wide_hero_content_area(index),
             TabSelection::EmbyLibrary(index) => self.emby_wide_hero_content_area(index),
         }

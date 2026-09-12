@@ -8,9 +8,11 @@
 //! or primitive change (ledger migration flow).
 
 use super::test_helpers::{buffer_to_string, make_audiobookshelf_book_app, make_music_group_app};
+use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::{
-    AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, FeedsComponent,
-    MusicWorkspaceComponent, TvWorkspaceComponent,
+    AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, MusicWorkspaceComponent,
+    TvWorkspaceComponent,
 };
 use crate::app::palette;
 use crate::app::render::arrangements::library::wide_library_panes;
@@ -97,7 +99,7 @@ fn music_wide_left_pane_unconditional_fill_no_horizontal_pad() {
     );
 }
 
-fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
+fn render_feeds_panel(entries: Vec<FeedEntry>) -> (Terminal<TestBackend>, Rect) {
     let subscriptions = vec![FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
@@ -105,10 +107,31 @@ fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
     }];
     let grouped = vec![entries];
     let all_entries = grouped[0].clone();
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &grouped, &all_entries, false);
-    component.set_focused(true);
-    component
+    let mut owner = FeedsContent::new();
+    owner.set_content(FeedsOwnerPush {
+        subscriptions,
+        entries: grouped,
+        all_entries,
+        loading: false,
+    });
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(LibraryKey::Feeds, Box::new(owner));
+    panel.set_active(Some(LibraryKey::Feeds));
+    tuirealm::component::Component::attr(
+        &mut panel,
+        tuirealm::props::Attribute::Focus,
+        tuirealm::props::AttrValue::Flag(true),
+    );
+    let area = wide_area();
+    let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
+    terminal
+        .draw(|f| Component::view(&mut panel, f, area))
+        .unwrap();
+    let hero = panel
+        .test_wide_geometry()
+        .expect("the panel painted a Wide skeleton")
+        .hero_area;
+    (terminal, hero)
 }
 
 fn feed_entry(guid: &str, title: &str) -> FeedEntry {
@@ -128,13 +151,11 @@ fn feed_entry(guid: &str, title: &str) -> FeedEntry {
 }
 
 /// Feeds with a selected entry: the fill and detail both paint (task 2.3's
-/// starting point).
+/// starting point). Painted through the mounted `LibraryPanel`'s embedded
+/// `FeedsContent` owner (task 7.3).
 #[test]
 fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
-    let mut component = feed_component_with_entries(vec![feed_entry("entry-1", "Entry One")]);
-    let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
-    let hero = component.layout().hero_area;
+    let (terminal, hero) = render_feeds_panel(vec![feed_entry("entry-1", "Entry One")]);
     assert!(hero.width > 0 && hero.height > 0);
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
@@ -151,10 +172,7 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
 /// whether or not a hero exists.
 #[test]
 fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
-    let mut component = feed_component_with_entries(vec![]);
-    let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
-    let hero = component.layout().hero_area;
+    let (terminal, hero) = render_feeds_panel(vec![]);
     assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
     let buffer = terminal.backend().buffer();
     assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);

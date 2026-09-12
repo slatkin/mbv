@@ -1,58 +1,46 @@
-use super::components::{ComponentId, FeedsComponent};
+use super::components::feeds_content::{FeedsContent, FeedsOwnerPush};
+use super::components::library_panel::{LibraryKey, LibraryPanel};
+use super::components::ComponentId;
 use super::shell::Model;
 
 impl Model {
-    pub(super) fn mount_feeds(&mut self) {
-        self.application
-            .mount(ComponentId::Feeds, Box::new(FeedsComponent::new()), vec![])
-            .expect("mount Feeds");
-    }
-
+    /// Event-scoped content projection for the Feeds owner inside the mounted
+    /// `LibraryPanel` (task 7.3, design D2), addressed by `LibraryKey::Feeds`.
+    /// The owner is retained across pushes, so its group/filter selection and
+    /// the shared list owner's cursor/scroll survive a refresh; a hidden tab
+    /// leaves the retained owner untouched.
     pub(super) fn sync_feeds(&mut self) {
         if !matches!(self.app.tab, super::TabSelection::Feeds) {
             return;
         }
         let state = &self.app.feed_tab;
-        if let Some(comp) = self.application.get_component_mut(&ComponentId::Feeds) {
-            if let Some(feeds) = comp.as_any_mut().downcast_mut::<FeedsComponent>() {
-                feeds.set_content(
-                    &state.subscriptions,
-                    &state.entries,
-                    &state.all_entries,
-                    state.loading,
-                );
-            }
-        }
+        let push = FeedsOwnerPush {
+            subscriptions: state.subscriptions.clone(),
+            entries: state.entries.clone(),
+            all_entries: state.all_entries.clone(),
+            loading: state.loading,
+        };
+        self.update_feeds_owner(|feeds| feeds.set_content(push));
     }
 
-    /// The boundary's painted-split fact for the Feeds surface: the active
-    /// group/watched filter left at least one entry for the painter to
-    /// project. Resolved at the Model boundary from the mounted
-    /// `FeedsComponent`, which owns that component-local state (the shell does
-    /// not mirror it). With no mounted Feeds component the fact defaults to
-    /// `false` (Feeds is mounted for the whole session, so this is only a
-    /// defensive fallback).
-    pub(super) fn feeds_has_visible_entries(&self) -> bool {
-        self.application
-            .get_component(&ComponentId::Feeds)
-            .and_then(|component| component.as_any().downcast_ref::<FeedsComponent>())
-            .is_some_and(FeedsComponent::has_visible_entries)
-    }
-
-    pub(super) fn render_feeds_component(&mut self, frame: &mut ratatui::Frame) {
-        if !matches!(self.app.tab, super::TabSelection::Feeds) {
-            return;
+    /// Mutate the Feeds owner inside the mounted `LibraryPanel` (design D2:
+    /// the shell pushes content addressed by `LibraryKey`), creating it on
+    /// first push. The owner is installed with the panel at startup (task
+    /// 7.3), so the create branch is defensive.
+    pub(super) fn update_feeds_owner<R>(
+        &mut self,
+        f: impl FnOnce(&mut FeedsContent) -> R,
+    ) -> Option<R> {
+        let key = LibraryKey::Feeds;
+        if !self.library_panel_has_owner(&key) {
+            self.push_library_owner(key.clone(), Box::new(FeedsContent::new()));
         }
-        let area = self.app.layout.main.feeds_area;
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-        if let Some(comp) = self.application.get_component_mut(&ComponentId::Feeds) {
-            if let Some(feeds) = comp.as_any_mut().downcast_mut::<FeedsComponent>() {
-                feeds.set_list_pane_width(self.app.list_pane_width);
-            }
-        }
-        self.application.view(&ComponentId::Feeds, frame, area);
+        let panel = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())?;
+        let owner = panel.owner_mut(&key)?;
+        owner.as_any_mut().downcast_mut::<FeedsContent>().map(f)
     }
 }
 
@@ -63,54 +51,48 @@ mod tests {
     use crate::app::PanelFocus;
     use mbv_core::config::{FeedKind, FeedSubscription};
 
-    #[test]
-    fn hidden_tab_does_not_overwrite_mounted_feeds_component() {
-        let mut model = Model::new(make_app_stub());
-        model.app.tab = super::super::TabSelection::Feeds;
-        model.app.feed_tab.subscriptions = vec![FeedSubscription {
-            name: "Visible Feed".into(),
-            url: "https://example.test/visible".into(),
+    fn subscription(name: &str) -> FeedSubscription {
+        FeedSubscription {
+            name: name.into(),
+            url: format!("https://example.test/{name}"),
             kind: FeedKind::Audio,
-        }];
-        model.sync_feeds();
+        }
+    }
 
-        model.app.tab = super::super::TabSelection::Home;
-        model.app.feed_tab.subscriptions = vec![FeedSubscription {
-            name: "Hidden Feed".into(),
-            url: "https://example.test/hidden".into(),
-            kind: FeedKind::Audio,
-        }];
-        model.sync_feeds();
-
-        let component = model
-            .application
-            .get_component(&ComponentId::Feeds)
-            .expect("Feeds component mounted")
-            .as_any()
-            .downcast_ref::<FeedsComponent>()
-            .expect("Feeds component type");
-        assert_eq!(component.subscription_names(), ["Visible Feed"]);
+    fn subscription_names(model: &mut Model) -> Vec<String> {
+        model
+            .update_feeds_owner(|feeds| {
+                feeds
+                    .subscription_names()
+                    .into_iter()
+                    .map(str::to_string)
+                    .collect()
+            })
+            .expect("Feeds owner installed")
     }
 
     #[test]
-    fn shell_syncs_feed_snapshot_into_mounted_component() {
+    fn hidden_tab_does_not_overwrite_retained_feeds_owner() {
         let mut model = Model::new(make_app_stub());
         model.app.tab = super::super::TabSelection::Feeds;
-        model.app.feed_tab.subscriptions = vec![FeedSubscription {
-            name: "Shell Feed".into(),
-            url: "https://example.test/feed".into(),
-            kind: FeedKind::Audio,
-        }];
+        model.app.feed_tab.subscriptions = vec![subscription("Visible Feed")];
         model.sync_feeds();
 
-        let component = model
-            .application
-            .get_component(&ComponentId::Feeds)
-            .expect("Feeds component mounted")
-            .as_any()
-            .downcast_ref::<FeedsComponent>()
-            .expect("Feeds component type");
-        assert_eq!(component.subscription_names(), ["Shell Feed"]);
+        model.app.tab = super::super::TabSelection::Home;
+        model.app.feed_tab.subscriptions = vec![subscription("Hidden Feed")];
+        model.sync_feeds();
+
+        assert_eq!(subscription_names(&mut model), ["Visible Feed"]);
+    }
+
+    #[test]
+    fn shell_syncs_feed_snapshot_into_retained_owner() {
+        let mut model = Model::new(make_app_stub());
+        model.app.tab = super::super::TabSelection::Feeds;
+        model.app.feed_tab.subscriptions = vec![subscription("Shell Feed")];
+        model.sync_feeds();
+
+        assert_eq!(subscription_names(&mut model), ["Shell Feed"]);
     }
 
     // Task 4.5: the FeedsRowClick arm pulls panel focus to the Library

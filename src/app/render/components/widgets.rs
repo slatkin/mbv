@@ -526,7 +526,10 @@ impl App {
                 layout.home_area = area;
             }
             TabSelection::Feeds => {
-                layout.feeds_area = area;
+                // Feeds is painted by its embedded owner inside the mounted
+                // `LibraryPanel` (task 7.3); the legacy base frame reserves
+                // nothing and paints no feed entry, selector pill or filter
+                // pill.
             }
             TabSelection::AudiobookshelfLibrary(_) => {
                 // The Book surface is painted by the mounted

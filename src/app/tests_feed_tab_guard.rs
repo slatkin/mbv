@@ -89,8 +89,8 @@ fn feeds_tab_does_not_route_into_library_behavior() {
         "a bounds-miss shuffle must not touch the queue"
     );
 
-    // 3. Feeds keys are now handled by the FeedsComponent; the legacy
-    // App::handle_key_feeds was deleted (task 8.1). The guard below
+    // 3. Feeds keys are now handled by the Library panel's Feeds owner; the
+    // legacy App::handle_key_feeds was deleted (task 8.1). The guard below
     // still proves the library cursor wasn't touched.
     let _key_down = crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Down,

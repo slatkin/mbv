@@ -1,11 +1,13 @@
-//! Feeds panel-output tests (task 7.2). Feeds paints through the shared
+//! Feeds panel-output tests (tasks 7.2/7.3). Feeds paints through the shared
 //! Wide/Narrow Library panel skeleton over `FeedsContent::content()`, so these
-//! assertions target the panel's own output — one Selector pill bar, one List
-//! controls row, and the policy hero header — instead of the deleted
-//! `render_feeds_content` chrome.
+//! assertions target the mounted `LibraryPanel`'s own output — one Selector
+//! pill bar, one List controls row, and the policy hero header — instead of
+//! the deleted `render_feeds_content` chrome or the deleted mounted Feeds
+//! destination component.
 
 use super::test_helpers::*;
-use crate::app::components::FeedsComponent;
+use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::config::{FeedKind, FeedSubscription};
@@ -17,6 +19,7 @@ use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
+use tuirealm::props::{AttrValue, Attribute};
 
 fn feed_entry(guid: &str, title: &str, played: bool) -> FeedEntry {
     FeedEntry {
@@ -34,7 +37,7 @@ fn feed_entry(guid: &str, title: &str, played: bool) -> FeedEntry {
     }
 }
 
-fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
+fn feed_owner_with_entries(entries: Vec<FeedEntry>) -> FeedsContent {
     let subscriptions = vec![FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
@@ -42,23 +45,35 @@ fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
     }];
     let entries = vec![entries];
     let all_entries = entries[0].clone();
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false);
-    component.set_focused(true);
-    component
+    let mut owner = FeedsContent::new();
+    owner.set_content(FeedsOwnerPush {
+        subscriptions,
+        entries,
+        all_entries,
+        loading: false,
+    });
+    owner
 }
 
-fn feed_component() -> FeedsComponent {
-    feed_component_with_entries(vec![
+fn feed_owner() -> FeedsContent {
+    feed_owner_with_entries(vec![
         feed_entry("entry-1", "Entry One", false),
         feed_entry("entry-2", "Played Entry Two", true),
     ])
 }
 
-fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Terminal<TestBackend> {
+fn panel_with(owner: FeedsContent, focused: bool) -> LibraryPanel {
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(LibraryKey::Feeds, Box::new(owner));
+    panel.set_active(Some(LibraryKey::Feeds));
+    Component::attr(&mut panel, Attribute::Focus, AttrValue::Flag(focused));
+    panel
+}
+
+fn terminal_for(panel: &mut LibraryPanel, width: u16, height: u16) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
+        .draw(|frame| Component::view(panel, frame, Rect::new(0, 0, width, height)))
         .unwrap();
     terminal
 }
@@ -78,42 +93,33 @@ fn area_contains(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> boo
 /// destination chrome.
 #[test]
 fn feeds_paints_one_pill_bar_one_controls_row_and_the_policy_header() {
-    let mut component = feed_component();
-    let terminal = terminal_for(&mut component, 120, 30);
-    let layout = component.layout().clone();
+    let mut panel = panel_with(feed_owner(), true);
+    let terminal = terminal_for(&mut panel, 120, 30);
+    let wide = panel
+        .test_wide_geometry()
+        .expect("the panel painted a Wide skeleton");
     let output = buffer_to_string(&terminal);
 
-    let rows: std::collections::BTreeSet<u16> = layout
-        .selector_tabs
-        .iter()
-        .map(|(rect, _)| rect.y)
-        .collect();
-    assert_eq!(
-        rows.len(),
-        2,
-        "one Selector bar + one List controls row: {rows:?}"
+    let group_hits = panel.test_selector_hits().regions();
+    assert!(
+        !group_hits.is_empty(),
+        "the feed-group Selector pills must paint"
     );
-    assert!(layout
-        .selector_tabs
-        .iter()
-        .all(|(rect, _)| rect.height == 1));
-    let group_row = *rows.iter().next().expect("group row");
-    let controls_row = *rows.iter().next_back().expect("controls row");
-    assert!(group_row < controls_row);
-    assert_eq!(
-        layout
-            .selector_tabs
-            .iter()
-            .filter(|(rect, _)| rect.y == controls_row)
-            .count(),
-        3,
-        "the Watched List controls row is one bar of three pills"
+    assert!(
+        group_hits.iter().all(|(rect, _)| rect.height == 1),
+        "the Selector row is one pill bar"
+    );
+    let controls = wide.controls.expect("the List controls row must paint");
+    assert_eq!(controls.height, 1);
+    assert!(
+        group_hits.iter().all(|(rect, _)| rect.y < controls.y),
+        "the Selector row sits above the controls row"
     );
 
     // The policy hero header paints the selected entry's title in the hero
     // pane (the artwork policy arm itself is covered by `feeds_content`).
     assert!(
-        area_contains(terminal.backend().buffer(), layout.hero_area, "Entry One"),
+        area_contains(terminal.backend().buffer(), wide.hero_area, "Entry One"),
         "the policy hero header must paint the selected entry title"
     );
     assert!(output.contains("Test Feed"), "missing feed-group pill");
@@ -123,53 +129,68 @@ fn feeds_paints_one_pill_bar_one_controls_row_and_the_policy_header() {
     );
 }
 
-/// Clicking the painted Watched pill changes the filter through the
-/// component's own retained pill hit store.
+/// Clicking the painted Watched pill changes the filter through the panel's
+/// slot-event resolution.
 #[test]
 fn watched_pill_click_changes_the_filter() {
-    let mut component = feed_component();
-    let _ = terminal_for(&mut component, 120, 30);
-    let layout = component.layout().clone();
-    let filter_base = component.group_count();
-    let watched = layout
-        .selector_tabs
-        .iter()
-        .find(|(_, id)| *id == filter_base + WatchedFilter::Watched.position())
-        .map(|(rect, _)| *rect)
+    let mut panel = panel_with(feed_owner(), true);
+    let terminal = terminal_for(&mut panel, 120, 30);
+    let controls = panel
+        .test_wide_geometry()
+        .expect("Wide skeleton")
+        .controls
+        .expect("controls row");
+    let buf = terminal.backend().buffer();
+    let watched_x = (controls.left()..controls.right())
+        .find(|&x| buf[(x, controls.y)].symbol() == "P")
         .expect("the Watched pill is painted");
+    let filter = |panel: &LibraryPanel| {
+        panel
+            .owner(&LibraryKey::Feeds)
+            .and_then(|owner| owner.as_any().downcast_ref::<FeedsContent>())
+            .map(FeedsContent::watched_filter)
+    };
+    assert_eq!(filter(&panel), Some(WatchedFilter::All));
 
-    let msg = component.on(&Event::Mouse(MouseEvent {
+    let msg = panel.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: watched.x + 1,
-        row: watched.y,
+        column: watched_x + 1,
+        row: controls.y,
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(msg, None);
-    assert_eq!(component.watched_filter(), WatchedFilter::Watched);
+    assert_eq!(filter(&panel), Some(WatchedFilter::Watched));
 }
 
-/// The `w` chord still changes the filter on the panel-painted surface.
+/// The `w` chord still changes the filter through the panel's keyboard
+/// forwarding.
 #[test]
 fn w_key_changes_the_filter() {
-    let mut component = feed_component();
-    let msg = component.on(&Event::Keyboard(KeyEvent {
+    let mut panel = panel_with(feed_owner(), true);
+    let msg = panel.on(&Event::Keyboard(KeyEvent {
         code: Key::Char('w'),
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(msg, None);
-    assert_eq!(component.watched_filter(), WatchedFilter::Watched);
+    let owner = panel
+        .owner_mut(&LibraryKey::Feeds)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<FeedsContent>())
+        .expect("Feeds owner installed");
+    assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
 }
 
-/// Narrow derives the inline hero from the same `HeroContent`; `hero_area`
-/// and `inline_hero_area` publish the admitted block.
+/// Narrow derives the inline hero from the same `HeroContent`; the admitted
+/// block is the Narrow geometry's `inline_hero`.
 #[test]
 fn narrow_feeds_render_the_inline_hero_from_the_same_content() {
-    let mut component = feed_component();
+    let mut panel = panel_with(feed_owner(), true);
     let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
-    let terminal = terminal_for(&mut component, width, 20);
-    let layout = component.layout().clone();
-    assert!(layout.inline_hero_area.height > 0);
-    assert_eq!(layout.inline_hero_area, layout.hero_area);
+    let terminal = terminal_for(&mut panel, width, 20);
+    let narrow = panel
+        .test_narrow_geometry()
+        .expect("the panel painted a Narrow skeleton");
+    let inline_hero = narrow.inline_hero.expect("admitted inline hero");
+    assert!(!inline_hero.is_empty());
     let output = buffer_to_string(&terminal);
     assert!(output.contains("Test Feed"));
     assert!(output.contains("Entry One"));
@@ -179,10 +200,19 @@ fn narrow_feeds_render_the_inline_hero_from_the_same_content() {
 /// List controls row, only the empty-slot placeholder.
 #[test]
 fn feeds_without_subscriptions_paints_no_pill_bar() {
-    let mut component = FeedsComponent::new();
-    let terminal = terminal_for(&mut component, 60, 20);
-    let layout = component.layout().clone();
-    assert!(layout.selector_tabs.is_empty());
+    let mut panel = panel_with(FeedsContent::new(), false);
+    let terminal = terminal_for(&mut panel, 120, 30);
+    let wide = panel
+        .test_wide_geometry()
+        .expect("the panel painted a Wide skeleton");
+    assert!(
+        panel.test_selector_hits().regions().is_empty(),
+        "no Selector bar without subscriptions"
+    );
+    assert!(
+        wide.controls.is_none(),
+        "no controls row without subscriptions"
+    );
     let output = buffer_to_string(&terminal);
     assert!(
         output.contains("No feed subscriptions configured"),

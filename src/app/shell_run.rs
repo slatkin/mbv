@@ -151,7 +151,6 @@ impl Model {
         if self.active_library_owner_migrated() {
             self.render_library_panel(f);
         } else {
-            self.render_feeds_component(f);
             self.render_audiobookshelf_podcast_component(f);
             self.render_audiobookshelf_book_component(f);
             self.render_emby_browser_component(f);

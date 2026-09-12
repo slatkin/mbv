@@ -113,6 +113,29 @@ fn panel_split(harness: &TickHarness) -> Option<(Rect, u16, u16, u16)> {
         .and_then(|panel| panel.test_split())
 }
 
+/// Drag the panel's painted split gap once and return the live width applied
+/// to the session override (task 7.3: the registered destination's panel owns
+/// the split gesture).
+fn drag_panel_gap_live(harness: &mut TickHarness) -> u16 {
+    let (gap, pane_origin_x, content_width, _width) =
+        panel_split(harness).expect("the panel painted a Wide split");
+    let content_area = Rect {
+        x: pane_origin_x,
+        width: content_width,
+        ..Rect::default()
+    };
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
+    let outcome = harness.step();
+    apply_outcome(harness, outcome);
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 6, gap.y));
+    let outcome = harness.step();
+    let expected = resolved_width(gap.x + 6, content_area).expect("a valid width");
+    assert_eq!(live_width(&outcome), Some(expected));
+    apply_outcome(harness, outcome);
+    assert_eq!(harness.model().app.list_pane_width, Some(expected));
+    expected
+}
+
 fn draw_frame(harness: &mut TickHarness) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
@@ -175,96 +198,59 @@ fn wide_hero_boundary_gap_is_visually_inert_on_a_wide_music_surface() {
     );
 }
 
-/// A surface that fits the wide breakpoint but paints no split (empty/loading
-/// Feeds) arms nothing, and its frame is likewise unchanged by the mounted
-/// boundary.
+/// An empty Feeds surface still paints the panel's shared Wide split (task
+/// 7.2: the skeleton paints the hero pane regardless of the filtered list),
+/// so the panel — not the old shell boundary — owns the split and drags it
+/// live. The shell boundary stays inert for the registered surface so the one
+/// painted gap never has two gesture owners.
 #[test]
-fn wide_hero_boundary_arms_nothing_on_an_empty_feeds_surface() {
+fn panel_owns_and_drags_an_empty_feeds_split() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Feeds;
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    // Steady state: one throwaway draw publishes `root_frame`, the sync it
-    // gates mounts the chrome panels (tasks 2.1-2.2), and both recorded
-    // frames below are then drawn from the same mounted set.
+    // Steady state: throwaway draws publish `root_frame` and mount the chrome
+    // panels before the geometry is read.
     let _priming = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
-
-    let with_boundary = draw_frame(&mut harness);
+    let _steady = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(
-        crate::app::render::wide_hero_fits(harness.model().app.layout.main.feeds_area),
-        "the breakpoint must fit so emptiness is the only reason to disarm"
-    );
+    let (gap, _origin, _width_area, _width) =
+        panel_split(&harness).expect("the empty Feeds surface still paints the panel's Wide split");
+    assert!(gap.width > 0 && gap.height > 0);
     assert!(
         !harness.model().wide_hero_boundary_mouse_eligible(),
-        "an empty Feeds surface must not arm the boundary"
+        "the shell boundary is inert for the registered Feeds surface"
+    );
+    assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
+    assert!(
+        harness
+            .model()
+            .mouse_subscribed
+            .contains(&ComponentId::Library),
+        "the panel that painted the split is mouse-eligible"
     );
     assert!(
         !harness
             .model()
             .mouse_subscribed
             .contains(&ComponentId::WideHeroBoundary),
-        "a disarmed boundary must not be mouse-subscribed"
+        "the inert shell boundary must not be mouse-subscribed"
     );
-    assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
 
-    // The disarmed boundary delivers nothing: a press-drag-release across the
-    // columns where the split would be must not resize (spec: "No resize
-    // target where no split is painted").
-    let would_be_gap = crate::app::render::wide_library_panes(
-        harness.model().app.layout.main.feeds_area,
-        0,
-        0,
-        None,
-    )
-    .expect("wide feeds")
-    .browser_panel
-    .right();
-    let probe_row = harness.model().app.layout.main.feeds_area.y + 1;
-    for kind in [
-        MouseEventKind::Down(MouseButton::Left),
-        MouseEventKind::Drag(MouseButton::Left),
-        MouseEventKind::Up(MouseButton::Left),
-    ] {
-        harness.inject(mouse(kind, would_be_gap, probe_row));
-        let outcome = harness.step();
-        assert_eq!(
-            live_width(&outcome),
-            None,
-            "an empty Feeds surface must never deliver a live width"
-        );
-        assert_no_pane_gesture(&outcome, "empty Feeds");
-        apply_outcome(&mut harness, outcome);
-    }
-    assert_eq!(harness.model().app.list_pane_width, None);
-
-    let preserved = with_boundary.backend().buffer().clone();
-    harness
-        .model_mut()
-        .application
-        .umount(&ComponentId::WideHeroBoundary)
-        .expect("umount boundary");
-    harness.model_mut().sync_mounted_surfaces();
-    let without_boundary = draw_frame(&mut harness);
-
-    assert_eq!(
-        *without_boundary.backend().buffer(),
-        preserved,
-        "no gap is painted, so the mounted boundary must be inert"
-    );
+    drag_panel_gap_live(&mut harness);
 }
 
-/// A Feeds surface whose group/watched filter empties the visible list paints
-/// no split — the painter's wide branch gates on the filtered
-/// `visible_entries`, not the unfiltered `all_entries` — so the boundary must
-/// not arm there either. The same populated surface does arm before the
-/// filter empties it, proving the fix does not over-disarm.
+/// A Feeds surface whose group/watched filter empties the visible list still
+/// paints the panel's Wide split, so the panel keeps owning the drag with the
+/// same painted geometry. This replaces the pre-registration
+/// `feeds_has_visible_entries` gate, which disarmed a split the skeleton
+/// still painted (task 7.3, recorded review obligation).
 #[test]
-fn wide_hero_boundary_arms_nothing_when_a_feed_filter_empties_the_visible_list() {
+fn panel_owns_a_filtered_empty_feeds_split() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Feeds;
     app.panel_mode = PanelMode::LibraryOnly;
@@ -281,19 +267,13 @@ fn wide_hero_boundary_arms_nothing_when_a_feed_filter_empties_the_visible_list()
 
     let _ = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
-
     assert!(
-        crate::app::render::wide_hero_fits(harness.model().app.layout.main.feeds_area),
-        "the breakpoint must fit so the filter is the only reason to disarm"
+        panel_split(&harness).is_some(),
+        "an unfiltered Feeds surface paints the panel split"
     );
-    assert!(
-        harness.model().wide_hero_boundary_mouse_eligible(),
-        "an unfiltered Feeds surface with entries paints the split and must arm"
-    );
-    assert!(harness.model().wide_hero_boundary_gap_rect().is_some());
 
     // Cycle the watched filter `All -> Played`; every entry is unplayed, so
-    // the painter's visible list is empty and its wide branch is skipped.
+    // the visible list is empty — the split is still painted and owned.
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('w'),
         modifiers: KeyModifiers::NONE,
@@ -303,17 +283,15 @@ fn wide_hero_boundary_arms_nothing_when_a_feed_filter_empties_the_visible_list()
     harness.model_mut().sync_mounted_surfaces();
 
     assert!(
-        !harness.model().wide_hero_boundary_mouse_eligible(),
-        "a filtered-to-empty Feeds surface must not arm the boundary"
+        panel_split(&harness).is_some(),
+        "a filtered-to-empty Feeds surface still paints the panel split"
     );
     assert!(
-        !harness
-            .model()
-            .mouse_subscribed
-            .contains(&ComponentId::WideHeroBoundary),
-        "a disarmed boundary must not be mouse-subscribed"
+        !harness.model().wide_hero_boundary_mouse_eligible(),
+        "the shell boundary stays inert for the registered surface"
     );
     assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
+    drag_panel_gap_live(&mut harness);
 }
 
 /// The boundary owns only the gap columns: a click on the pane column
@@ -719,11 +697,11 @@ fn tick_wide_hero_boundary_mid_drag_eligibility_loss_emits_no_stale_width() {
     assert_eq!(harness.model().app.list_pane_width, Some(expected));
 }
 
-/// A Feeds surface that fits the wide breakpoint but is still loading (no
-/// visible entries) paints no split: the boundary arms nothing and delivers
-/// no gesture, mirroring the empty state.
+/// A Feeds surface that is still loading still paints the panel's Wide split
+/// (the skeleton paints it whenever the breakpoint fits), so the panel owns
+/// and drags the split instead of the old shell gate disarming it.
 #[test]
-fn wide_hero_boundary_arms_nothing_and_delivers_nothing_while_feeds_load() {
+fn panel_owns_and_drags_a_loading_feeds_split() {
     let mut app = make_app_stub();
     app.tab = TabSelection::Feeds;
     app.panel_mode = PanelMode::LibraryOnly;
@@ -739,41 +717,20 @@ fn wide_hero_boundary_arms_nothing_and_delivers_nothing_while_feeds_load() {
     let _ = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    let area = harness.model().app.layout.main.feeds_area;
     assert!(
-        crate::app::render::wide_hero_fits(area),
-        "the breakpoint must fit so loading is the only reason to disarm"
+        panel_split(&harness).is_some(),
+        "a loading Feeds surface paints the panel split"
     );
     assert!(
         !harness.model().wide_hero_boundary_mouse_eligible(),
-        "a loading Feeds surface must not arm the boundary"
+        "the shell boundary stays inert for the registered surface"
     );
+    assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
     assert!(
         !harness
             .model()
             .mouse_subscribed
             .contains(&ComponentId::WideHeroBoundary)
     );
-    assert!(harness.model().wide_hero_boundary_gap_rect().is_none());
-
-    let would_be_gap = crate::app::render::wide_library_panes(area, 0, 0, None)
-        .expect("wide feeds")
-        .browser_panel
-        .right();
-    for kind in [
-        MouseEventKind::Down(MouseButton::Left),
-        MouseEventKind::Drag(MouseButton::Left),
-        MouseEventKind::Up(MouseButton::Left),
-    ] {
-        harness.inject(mouse(kind, would_be_gap, area.y + 1));
-        let outcome = harness.step();
-        assert_eq!(
-            live_width(&outcome),
-            None,
-            "a loading Feeds surface must never deliver a live width"
-        );
-        assert_no_pane_gesture(&outcome, "loading Feeds");
-        apply_outcome(&mut harness, outcome);
-    }
-    assert_eq!(harness.model().app.list_pane_width, None);
+    drag_panel_gap_live(&mut harness);
 }

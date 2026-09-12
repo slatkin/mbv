@@ -17,7 +17,6 @@ pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
-pub mod feeds;
 pub mod feeds_content;
 pub mod feeds_manage;
 pub mod help;
@@ -56,7 +55,6 @@ pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, Over
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;
-pub use self::feeds::FeedsComponent;
 pub use self::feeds_manage::FeedsManageComponent;
 pub use self::help::HelpComponent;
 pub(in crate::app) use self::inline_search::{InlineSearchHost, SearchPool};

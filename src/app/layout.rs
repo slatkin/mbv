@@ -82,9 +82,6 @@ pub(crate) struct LayoutMain {
     /// mounted `HomeComponent`'s `view()` over the same area right after
     /// `App::compose_base_frame` returns (task 3.4).
     pub home_area: Rect,
-    /// The full area passed to the Feeds renderer. The shell uses this to
-    /// repaint the mounted `FeedsComponent` over the legacy frame.
-    pub feeds_area: Rect,
     /// The selected item's hero geometry. Wide screens place it beside `left_area`;
     /// inline screens place the replacement inside the list and use it as the
     /// selected parent's activation geometry.

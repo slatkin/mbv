@@ -453,22 +453,25 @@ impl Model {
         // never made active directly: `sync_active_destination` routes focus
         // to it while a migrated library is active, and it paints only a
         // migrated owner's surface (the transitional branch, task 5.9).
-        // Home's owner is installed with the panel: the Home tab is always
-        // migrated, so `active_surface_id` routes it to the panel from the
-        // first sync (task 5.11). The other destinations install owners in
-        // their conversion slices (tasks 6.1+).
+        // Home's and Feeds' owners are installed with the panel: both tabs
+        // are always migrated, so `active_surface_id` routes them to the
+        // panel from the first sync (tasks 5.11, 7.3). The other destinations
+        // install owners in their conversion slices (tasks 8+).
         {
             let mut panel = super::components::library_panel::LibraryPanel::new();
             panel.insert_owner(
                 super::components::library_panel::LibraryKey::Home,
                 Box::new(super::components::home_content::HomeContent::new()),
             );
+            panel.insert_owner(
+                super::components::library_panel::LibraryKey::Feeds,
+                Box::new(super::components::feeds_content::FeedsContent::new()),
+            );
             model
                 .application
                 .mount(ComponentId::Library, Box::new(panel), vec![])
                 .expect("mount LibraryPanel");
         }
-        model.mount_feeds();
         model
             .application
             .mount(

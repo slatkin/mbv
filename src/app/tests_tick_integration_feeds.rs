@@ -1,12 +1,16 @@
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-use crate::app::components::{ComponentId, FeedsComponent, Msg, TerminalObserverEvent};
+use crate::app::components::feeds_content::FeedsContent;
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
+use crate::app::components::{ComponentId, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
+use crate::app::types_feed_tab::WatchedFilter;
 use crate::app::{PanelFocus, TabSelection};
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
@@ -54,41 +58,77 @@ fn draw(harness: &mut TickHarness, width: u16) {
     harness.model_mut().sync_mounted_surfaces();
 }
 
-fn feeds(harness: &TickHarness) -> &FeedsComponent {
+fn panel(harness: &TickHarness) -> &LibraryPanel {
     harness
         .model()
         .application
-        .get_component(&ComponentId::Feeds)
-        .expect("Feeds mounted")
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<FeedsComponent>()
-        .expect("Feeds component")
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type")
+}
+
+/// The registered Feeds owner inside the mounted `LibraryPanel` (task 7.3):
+/// the panel is the Feeds surface's one event boundary, and the feed state is
+/// read through the owner the panel hosts — never a destination component.
+fn feeds_owner(harness: &TickHarness) -> &FeedsContent {
+    panel(harness)
+        .owner(&LibraryKey::Feeds)
+        .and_then(|owner| owner.as_any().downcast_ref::<FeedsContent>())
+        .expect("Feeds owner installed")
+}
+
+fn list_rect(harness: &TickHarness) -> Rect {
+    panel(harness)
+        .test_wide_geometry()
+        .map(|geometry| geometry.list_area)
+        .or_else(|| {
+            panel(harness)
+                .test_narrow_geometry()
+                .map(|geometry| geometry.list_area)
+        })
+        .expect("the panel painted a list slot")
+}
+
+fn selected_rect(harness: &TickHarness) -> Option<Rect> {
+    panel(harness)
+        .test_wide_geometry()
+        .and_then(|geometry| geometry.selected)
+        .or_else(|| {
+            panel(harness)
+                .test_narrow_geometry()
+                .and_then(|geometry| geometry.selected)
+        })
 }
 
 #[test]
 fn feeds_tick_navigation_paints_selected_row_at_wide_and_narrow() {
     let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert_eq!(feeds(&harness).cursor(), 0);
+    assert_eq!(feeds_owner(&harness).cursor(), 0);
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     }));
     let _ = harness.step();
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert_eq!(feeds(&harness).cursor(), 1);
+    assert_eq!(feeds_owner(&harness).cursor(), 1);
 
     let narrow = crate::app::TWO_COLUMN_THRESHOLD - 1;
     draw(&mut harness, narrow);
-    assert_eq!(feeds(&harness).cursor(), 1);
+    assert_eq!(feeds_owner(&harness).cursor(), 1);
 }
 
 #[test]
 fn feeds_tick_click_resolves_painted_entry_and_blank_is_noop() {
-    for width in [crate::app::TWO_COLUMN_THRESHOLD, crate::app::TWO_COLUMN_THRESHOLD - 1] {
+    for width in [
+        crate::app::TWO_COLUMN_THRESHOLD,
+        crate::app::TWO_COLUMN_THRESHOLD - 1,
+    ] {
         let mut harness = harness(width);
         draw(&mut harness, width);
-        let selected = feeds(&harness).layout().selected_item_rect.expect("row");
+        let selected = selected_rect(&harness).expect("row");
         harness.inject(Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: selected.x + 1,
@@ -97,10 +137,10 @@ fn feeds_tick_click_resolves_painted_entry_and_blank_is_noop() {
         }));
         let outcome = harness.step();
         assert!(!outcome.raw_messages.is_empty());
-        assert_eq!(feeds(&harness).cursor(), 0);
+        assert_eq!(feeds_owner(&harness).cursor(), 0);
 
-        let before_cursor = feeds(&harness).cursor();
-        let before_paint = feeds(&harness).layout().selected_item_rect;
+        let before_cursor = feeds_owner(&harness).cursor();
+        let before_paint = selected_rect(&harness);
         harness.inject(Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 0,
@@ -115,18 +155,21 @@ fn feeds_tick_click_resolves_painted_entry_and_blank_is_noop() {
                 row: 0,
             })]
         );
-        assert_eq!(feeds(&harness).cursor(), before_cursor);
-        assert_eq!(feeds(&harness).layout().selected_item_rect, before_paint);
+        assert_eq!(feeds_owner(&harness).cursor(), before_cursor);
+        assert_eq!(selected_rect(&harness), before_paint);
     }
 }
 
 #[test]
 fn feeds_tick_wheel_is_claimed_only_over_active_control() {
-    for width in [crate::app::TWO_COLUMN_THRESHOLD, crate::app::TWO_COLUMN_THRESHOLD - 1] {
+    for width in [
+        crate::app::TWO_COLUMN_THRESHOLD,
+        crate::app::TWO_COLUMN_THRESHOLD - 1,
+    ] {
         let mut off_harness = harness(width);
         draw(&mut off_harness, width);
-        let before_cursor = feeds(&off_harness).cursor();
-        let before_paint = feeds(&off_harness).layout().selected_item_rect;
+        let before_cursor = feeds_owner(&off_harness).cursor();
+        let before_paint = selected_rect(&off_harness);
         off_harness.inject(Event::Mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 0,
@@ -138,14 +181,14 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
             outcome.raw_messages,
             vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)]
         );
-        assert_eq!(feeds(&off_harness).cursor(), before_cursor);
-        assert_eq!(feeds(&off_harness).layout().selected_item_rect, before_paint);
+        assert_eq!(feeds_owner(&off_harness).cursor(), before_cursor);
+        assert_eq!(selected_rect(&off_harness), before_paint);
 
         let mut harness = harness(width);
         draw(&mut harness, width);
-        let before_cursor = feeds(&harness).cursor();
-        let before_paint = feeds(&harness).layout().selected_item_rect;
-        let list = feeds(&harness).layout().left_area;
+        let before_cursor = feeds_owner(&harness).cursor();
+        let before_paint = selected_rect(&harness);
+        let list = list_rect(&harness);
         harness.inject(Event::Mouse(MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: list.x + 1,
@@ -158,10 +201,10 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
         // A claimed wheel over the control moves through the shared owner's
         // Wheel→Move path now that an identical sync no longer invalidates the
         // painted frame (the 6.1 `last_projected_rows` skip).
-        assert_eq!(feeds(&harness).cursor(), before_cursor + 1);
+        assert_eq!(feeds_owner(&harness).cursor(), before_cursor + 1);
         // The claimed move re-selects the next row, so the painted selected-row
         // rect necessarily moves with it.
-        assert_ne!(feeds(&harness).layout().selected_item_rect, before_paint);
+        assert_ne!(selected_rect(&harness), before_paint);
     }
 }
 
@@ -169,19 +212,133 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
 fn feeds_tick_round_trip_preserves_selected_target() {
     let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    harness.inject(Event::Keyboard(KeyEvent { code: Key::Down, modifiers: KeyModifiers::NONE }));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
     let _ = harness.step();
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD - 1);
-    assert_eq!(feeds(&harness).cursor(), 1);
+    assert_eq!(feeds_owner(&harness).cursor(), 1);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert_eq!(feeds(&harness).cursor(), 1);
+    assert_eq!(feeds_owner(&harness).cursor(), 1);
 }
 
 #[test]
 fn feeds_tick_has_one_painted_list_surface() {
     let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
-    assert!(feeds(&harness).layout().selected_item_rect.is_some());
+    assert!(selected_rect(&harness).is_some());
     draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD - 1);
-    assert!(feeds(&harness).layout().selected_item_rect.is_some());
+    assert!(selected_rect(&harness).is_some());
+}
+
+/// Focus and mouse eligibility follow the registered Feeds owner through the
+/// real sync pass: the Feeds tab routes framework focus and the mouse
+/// subscription to the mounted `LibraryPanel`, and the migrated component id
+/// no longer exists.
+#[test]
+fn feeds_tick_focus_and_mouse_eligibility_follow_the_panel() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    assert_eq!(
+        harness.model().application.focus().cloned(),
+        Some(ComponentId::Library),
+        "the registered Feeds tab routes focus to the Library panel"
+    );
+    assert!(
+        harness
+            .model()
+            .mouse_subscribed
+            .contains(&ComponentId::Library),
+        "the painted Feeds panel is mouse-eligible"
+    );
+}
+
+/// A Watched pill click resolves through the panel's List-controls slot into
+/// the owner's filter — no destination-side offset mirror.
+#[test]
+fn feeds_tick_watched_pill_click_changes_the_filter_through_the_panel() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    assert_eq!(feeds_owner(&harness).watched_filter(), WatchedFilter::All);
+    let watched = panel(&harness)
+        .test_control_hits()
+        .regions()
+        .iter()
+        .find(|(_, id)| *id == WatchedFilter::Watched.position())
+        .map(|(rect, _)| *rect)
+        .expect("the Watched pill is painted");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: watched.x + 1,
+        row: watched.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(
+        feeds_owner(&harness).watched_filter(),
+        WatchedFilter::Watched,
+        "the painted Watched pill must set the owner's filter"
+    );
+}
+
+/// A single row click resolves the painted row through the panel and emits
+/// the owner's `FeedsRowClick` request; the row's stable target is selected.
+#[test]
+fn feeds_tick_row_click_through_the_panel_emits_feeds_row_click() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    let list = list_rect(&harness);
+    // The first painted selectable row: scan up from the list bottom so a
+    // structural Heading/Spacer at the top is skipped.
+    let mut resolved = None;
+    for row in (list.y..list.bottom()).rev() {
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: list.x + 1,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        if outcome
+            .messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::Shell(ShellRequest::FeedsRowClick)))
+        {
+            resolved = Some(row);
+            break;
+        }
+    }
+    assert!(
+        resolved.is_some(),
+        "a painted selectable row must resolve FeedsRowClick through the panel"
+    );
+}
+
+/// The inactive Feeds owner keeps its cursor across a tab change: the owner
+/// map's retention rule (design D2) is driven through the real sync pass.
+#[test]
+fn feeds_owner_retained_across_a_tab_change() {
+    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
+    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(feeds_owner(&harness).cursor(), 1);
+    assert!(panel(&harness).has_owner(&LibraryKey::Feeds));
+
+    // Leave Feeds: the retained owner must survive the round trip.
+    harness.model_mut().app.tab = TabSelection::Home;
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(panel(&harness).has_owner(&LibraryKey::Feeds));
+
+    harness.model_mut().app.tab = TabSelection::Feeds;
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        feeds_owner(&harness).cursor(),
+        1,
+        "the retained Feeds owner keeps its cursor across a tab change"
+    );
 }

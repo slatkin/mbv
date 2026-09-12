@@ -4,10 +4,10 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
-use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::{
-    AudiobookshelfPodcastComponent, BrowserComponent, ComponentId, FeedsComponent,
-    MusicWorkspaceComponent,
+    AudiobookshelfPodcastComponent, BrowserComponent, ComponentId, MusicWorkspaceComponent,
 };
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
@@ -298,7 +298,7 @@ fn feed_app() -> App {
     app
 }
 
-fn feed_component() -> FeedsComponent {
+fn feed_owner() -> FeedsContent {
     let subscriptions = [FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
@@ -318,10 +318,58 @@ fn feed_component() -> FeedsComponent {
         played: false,
     }]];
     let all_entries = entries[0].clone();
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false);
-    component.set_focused(true);
-    component
+    let mut owner = FeedsContent::new();
+    owner.set_content(FeedsOwnerPush {
+        subscriptions: subscriptions.to_vec(),
+        entries,
+        all_entries,
+        loading: false,
+    });
+    owner
+}
+
+/// The embedded `FeedsContent` owner's painted geometry through the mounted
+/// `LibraryPanel` (task 7.3), surfaced as a `LayoutMain` so the shared
+/// conformance assertions still hold.
+fn render_feeds_panel(
+    owner: FeedsContent,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, LayoutMain) {
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(LibraryKey::Feeds, Box::new(owner));
+    panel.set_active(Some(LibraryKey::Feeds));
+    tuirealm::component::Component::attr(
+        &mut panel,
+        tuirealm::props::Attribute::Focus,
+        tuirealm::props::AttrValue::Flag(true),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| Component::view(&mut panel, frame, Rect::new(0, 0, width, height)))
+        .unwrap();
+    let selector_tabs = panel.test_selector_hits().regions().to_vec();
+    let layout = if let Some(wide) = panel.test_wide_geometry() {
+        LayoutMain {
+            left_area: wide.list_area,
+            hero_area: wide.hero_area,
+            selected_item_rect: wide.selected,
+            selector_tabs,
+            ..Default::default()
+        }
+    } else {
+        let narrow = panel
+            .test_narrow_geometry()
+            .expect("the panel painted a Wide or Narrow skeleton");
+        LayoutMain {
+            left_area: narrow.list_area,
+            hero_area: narrow.inline_hero.unwrap_or_default(),
+            selected_item_rect: narrow.selected,
+            selector_tabs,
+            ..Default::default()
+        }
+    };
+    (terminal, layout)
 }
 
 fn mixed_home_app() -> App {
@@ -391,25 +439,14 @@ fn assert_one_pill_row_and_spacer(
         .first()
         .unwrap_or_else(|| panic!("{surface} should publish pill targets"))
         .0;
-    if surface == "Feeds" {
-        assert!(layout
+    assert!(
+        layout
             .selector_tabs
             .iter()
-            .all(|(rect, _)| rect.height == 1));
-        assert!(layout
-            .selector_tabs
-            .iter()
-            .any(|(rect, _)| rect.y != first.y));
-    } else {
-        assert!(
-            layout
-                .selector_tabs
-                .iter()
-                .all(|(rect, _)| rect.y == first.y && rect.height == 1),
-            "pill targets must share one row: {:?}",
-            layout.selector_tabs
-        );
-    }
+            .all(|(rect, _)| rect.y == first.y && rect.height == 1),
+        "pill targets must share one row: {:?}",
+        layout.selector_tabs
+    );
 
     let buffer = terminal.backend().buffer();
     let painted_rows = (0..buffer.area().height)
@@ -420,15 +457,11 @@ fn assert_one_pill_row_and_spacer(
             })
         })
         .collect::<Vec<_>>();
-    if surface == "Feeds" {
-        assert_eq!(painted_rows.len(), 0, "Feeds uses separate chrome rows");
-    } else {
-        assert_eq!(
-            painted_rows,
-            vec![first.y],
-            "{surface} should paint exactly one pill bar"
-        );
-    }
+    assert_eq!(
+        painted_rows,
+        vec![first.y],
+        "{surface} should paint exactly one pill bar"
+    );
 
     let last = layout.selector_tabs.last().unwrap().0;
     assert!(first.bottom() < buffer.area().height);
@@ -644,12 +677,8 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
         "Home did not paint a buffer"
     );
 
-    let mut component = feed_component();
-    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 30)))
-        .unwrap();
-    assert_one_pill_row_and_spacer("Feeds", &terminal, component.layout());
+    let (terminal, layout) = render_feeds_panel(feed_owner(), 60, 30);
+    assert_one_pill_row_and_spacer("Feeds", &terminal, &layout);
     assert!(
         !buffer_to_string(&terminal).is_empty(),
         "Feeds did not paint a buffer"
@@ -767,12 +796,27 @@ fn abs_podcast_legacy_base_frame_publishes_geometry_but_paints_no_shows() {
     }
 }
 
-/// `remove-migrated-surface-underpaint` 3.7 (D4): the mounted `FeedsComponent`
-/// owns the Feeds picture. The Feeds arm of `render_library`
-/// (`src/app/render/components/widgets.rs:531`) only assigns `feeds_area` and
-/// never delegates to `render_list`, so the legacy base frame paints no feed
-/// entry, selector pill, or filter pill. (The `feeds.rs` component
-/// double-pill-bar fix in `33782e1e` was a separate, component-side bug.)
+/// `remove-migrated-surface-underpaint` 3.7 (D4): the registered Feeds owner
+/// inside the mounted `LibraryPanel` owns the Feeds picture (task 7.3). The
+/// Feeds arm of `render_library` (`src/app/render/components/widgets.rs`)
+/// reserves nothing and never delegates to `render_list`, so the legacy base
+/// frame paints no feed entry, selector pill, or filter pill.
+#[test]
+fn feeds_legacy_base_frame_paints_no_entries() {
+    for (width, height) in [(60, 20), (140, 30)] {
+        let mut app = feed_app();
+        let (terminal, _layout) = render_library(&mut app, width, height);
+        let output = buffer_to_string(&terminal);
+        assert!(
+            !output.contains("Entry One") && !output.contains("Test Feed") && !output.contains("◢"),
+            "legacy base frame must not paint the Feeds surface at {width}x{height}: {output:?}"
+        );
+    }
+}
+
+/// `remove-migrated-surface-underpaint` 3.7 (D4): the mounted `QueueComponent`
+/// owns the queue slot rows. The queue legacy base frame only publishes
+/// geometry and never paints the slot rows.
 #[test]
 fn queue_legacy_base_frame_reserves_geometry_but_paints_no_slot_rows() {
     for (width, height) in [(60, 20), (140, 30)] {
@@ -796,24 +840,6 @@ fn queue_legacy_base_frame_reserves_geometry_but_paints_no_slot_rows() {
         assert!(
             !output.contains("Item 0") && !output.contains("Item 1"),
             "QueueComponent must be the sole slot-row painter at {width}x{height}: {output:?}"
-        );
-    }
-}
-
-#[test]
-fn feeds_legacy_base_frame_publishes_geometry_but_paints_no_entries() {
-    for (width, height) in [(60, 20), (140, 30)] {
-        let mut app = feed_app();
-        let (terminal, layout) = render_library(&mut app, width, height);
-        assert_eq!(
-            layout.feeds_area,
-            Rect::new(0, 0, width, height),
-            "feeds geometry hand-off must stay reserved at {width}x{height}"
-        );
-        let output = buffer_to_string(&terminal);
-        assert!(
-            !output.contains("Entry One") && !output.contains("Test Feed") && !output.contains("◢"),
-            "legacy base frame must not paint the Feeds surface at {width}x{height}: {output:?}"
         );
     }
 }

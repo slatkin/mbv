@@ -99,7 +99,6 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::FeedsComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -108,8 +107,11 @@ mod tests {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
         });
-        let mut feeds = FeedsComponent::new();
-        assert!(feeds.on(&event).is_none());
+        // Any component whose local handler leaves the key unclaimed (here the
+        // status panel, which has no keyboard interpretation) must still be
+        // observed as processed by the root's terminal fold.
+        let mut panel = crate::app::components::status_bar_panel::StatusBarPanel::new();
+        assert!(panel.on(&event).is_none());
 
         let mut root = UiRootComponent::new();
         assert!(matches!(

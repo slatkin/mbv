@@ -4,14 +4,13 @@
 //! feed-group/Watched filter selection, and the one shared canonical
 //! `MediaList` owner of the active group's grouped-entry projection. It
 //! produces the panel's [`LibraryPanelContent`] per frame and translates the
-//! panel's slot events into the same typed `Msg`s the mounted
-//! `FeedsComponent` emits today.
+//! panel's slot events into the same typed `Msg`s the deleted mounted Feeds
+//! component emitted.
 //!
-//! Slice position (design D16): the owner is embedded in the still-mounted
-//! `FeedsComponent` — the shell's existing Feeds push fills it through
-//! `FeedsComponent::set_content`, and task 7.2's `view` paints it through the
-//! Library panel's shared Wide/Narrow skeleton. Registering the owner in the
-//! panel's map (and deleting the mounted component) is task 7.3.
+//! Task 7.3 registers the owner in the mounted `LibraryPanel`'s map under
+//! `LibraryKey::Feeds`: the panel is the library area's one event boundary,
+//! so hit resolution and the Wide split gesture happen there and this owner
+//! only translates the resolved slot events and forwarded chords.
 //!
 //! The selected entry's hero comes from the shared `hero_content_feed`
 //! producer (design D5) — Square for a podcast feed, the Landscape
@@ -23,6 +22,7 @@ use ratatui::layout::Position;
 
 use mbv_core::config::FeedSubscription;
 use mbv_core::playback_queue::FeedEntry;
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListControls, ListSlot, SelectorRow,
@@ -31,8 +31,8 @@ use super::library_panel::hero::hero_content_feed;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
-    RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
+    RowLocalInput, RowLocalOutcome,
 };
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
@@ -45,9 +45,10 @@ use crate::app::ui_util::trunc_str;
 /// Selector row's labels (design D8: no destination-side pill vocabulary).
 const MAX_GROUP_LABEL: usize = 18;
 
-/// The owner's shell-projected snapshot (mirrors `FeedsComponent::set_content`'s
-/// parameters). The Watched filter and the selected feed group are
-/// owner-local selection, not shell content, so they never cross this seam.
+/// The owner's shell-projected snapshot (the legacy Feeds component's
+/// `set_content` contract). The Watched filter and the selected feed group
+/// are owner-local selection, not shell content, so they never cross this
+/// seam.
 pub(in crate::app) struct FeedsOwnerPush {
     pub subscriptions: Vec<FeedSubscription>,
     pub entries: Vec<Vec<FeedEntry>>,
@@ -55,9 +56,8 @@ pub(in crate::app) struct FeedsOwnerPush {
     pub loading: bool,
 }
 
-/// The Feeds embedded content owner (design D2, task 7.1). Plain type; the
-/// still-mounted `FeedsComponent` hosts it during the content/paint steps and
-/// the mounted `LibraryPanel` will host it once Feeds registers (task 7.3).
+/// The Feeds embedded content owner (design D2, task 7.1). Plain type,
+/// hosted by the mounted `LibraryPanel` under `LibraryKey::Feeds` (task 7.3).
 pub(in crate::app) struct FeedsContent {
     subscriptions: Vec<FeedSubscription>,
     entries: Vec<Vec<FeedEntry>>,
@@ -100,7 +100,7 @@ impl FeedsContent {
     }
 
     /// Replace the shell-owned snapshot while preserving this owner's
-    /// render/input state shape (the legacy `FeedsComponent::set_content`
+    /// render/input state shape (the legacy Feeds component's `set_content`
     /// contract, unchanged).
     pub(in crate::app) fn set_content(&mut self, push: FeedsOwnerPush) {
         let subscription_urls: Vec<String> = push
@@ -151,12 +151,6 @@ impl FeedsContent {
             .iter()
             .map(|entry| entry.title.as_str())
             .collect()
-    }
-
-    /// Whether the active group/watched filter leaves any entry for the
-    /// painter to project (the mounted component's boundary fact).
-    pub(in crate::app) fn has_visible_entries(&self) -> bool {
-        !self.visible_entries.is_empty()
     }
 
     pub(in crate::app) fn subscription_names(&self) -> Vec<&str> {
@@ -247,6 +241,70 @@ impl FeedsContent {
             .and_then(|target| self.entry_for_target(target))
     }
 
+    /// This owner's local key interpretation, forwarded by the focused panel
+    /// (the legacy Feeds component's `handle_key` contract, unchanged: the
+    /// router owns every global chord and keeps precedence). Page movement
+    /// uses the shared owner's canonical page stride.
+    fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if key.modifiers.contains(KeyModifiers::CONTROL)
+            || key.modifiers.contains(KeyModifiers::ALT)
+        {
+            return None;
+        }
+        match key.code {
+            Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshFeeds)),
+            Key::Char('w') => {
+                self.cycle_watched_filter();
+                None
+            }
+            Key::Up | Key::Char('k') | Key::Left | Key::Char('h') => {
+                self.delegate_row_local_input(RowLocalInput::Move(-1), None);
+                None
+            }
+            Key::Down | Key::Char('j') | Key::Right | Key::Char('l') => {
+                self.delegate_row_local_input(RowLocalInput::Move(1), None);
+                None
+            }
+            Key::PageUp => {
+                self.delegate_row_local_input(RowLocalInput::Page(-1), None);
+                None
+            }
+            Key::PageDown => {
+                self.delegate_row_local_input(RowLocalInput::Page(1), None);
+                None
+            }
+            Key::Home => {
+                self.delegate_row_local_input(RowLocalInput::First, None);
+                None
+            }
+            Key::End => {
+                self.delegate_row_local_input(RowLocalInput::Last, None);
+                None
+            }
+            Key::Char('[') => {
+                self.cycle_group(-1);
+                None
+            }
+            Key::Char(']') => {
+                self.cycle_group(1);
+                None
+            }
+            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
+                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
+                    ShellRequest::FeedsPlay(self.entry_for_target(&target).cloned()),
+                )),
+                _ => Some(Msg::Shell(ShellRequest::FeedsPlay(None))),
+            },
+            Key::Char('e') => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
+                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
+                    ShellRequest::FeedsEnqueue(self.entry_for_target(&target).cloned()),
+                )),
+                _ => Some(Msg::Shell(ShellRequest::FeedsEnqueue(None))),
+            },
+            _ => None,
+        }
+    }
+
     fn rebuild_visible_entries(&mut self) {
         let source = if self.selected_group == 0 {
             &self.all_entries
@@ -263,7 +321,7 @@ impl FeedsContent {
             .collect();
 
         // Project grouped `FeedEntries` into the canonical row vocabulary
-        // (the legacy `FeedsComponent::rebuild_visible_entries` body).
+        // (the legacy Feeds `rebuild_visible_entries` body).
         let now = current_time_secs();
         let rows: Vec<MediaListRow<String>> = feed_display_rows(&self.visible_entries, now)
             .into_iter()
@@ -446,6 +504,10 @@ impl LibraryContentOwner for FeedsContent {
             // Feeds has no Workspace.
             LibrarySlotEvent::WorkspaceSelectorPicked(_) => None,
         }
+    }
+
+    fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        self.handle_key(key)
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

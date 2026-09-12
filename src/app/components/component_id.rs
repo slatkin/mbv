@@ -51,7 +51,6 @@ pub enum ComponentId {
     /// wide<->narrow breakpoint flip (keep-mounted, D1) without one
     /// component type shadowing the other under a shared id.
     TvWorkspace(BrowserKey),
-    Feeds,
     Overlay(OverlayId),
     Modal(ModalId),
     Popup(PopupId),

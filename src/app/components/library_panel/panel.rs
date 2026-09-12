@@ -183,6 +183,15 @@ impl LibraryPanel {
         &self.hits.selector
     }
 
+    /// The List-controls row's retained hit regions, for the pill-row test
+    /// path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_control_hits(
+        &self,
+    ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
+        &self.hits.controls
+    }
+
     /// The last painted Wide skeleton geometry, for the panel-output test
     /// path.
     #[cfg(test)]

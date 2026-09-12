@@ -43,8 +43,8 @@ impl App {
 
     /// After every subscription mutation (§6.4): resync shell-owned Feed
     /// data, clear fetched entries (no auto-fetch), and fall back to Home if
-    /// the last subscription was removed while Feeds is selected. The mounted
-    /// FeedsComponent resets its local selection when the subscription
+    /// the last subscription was removed while Feeds is selected. The Feeds
+    /// content owner resets its local selection when the subscription
     /// identity changes during the next shell sync.
     pub(super) fn after_feeds_mutation(&mut self) {
         self.sync_feed_subscriptions();
