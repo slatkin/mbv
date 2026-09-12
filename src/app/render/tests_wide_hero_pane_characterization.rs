@@ -7,13 +7,12 @@
 //! correct behaviour. Must land in its own commit before any Wide hero paint
 //! or primitive change (ledger migration flow).
 
-use super::test_helpers::{buffer_to_string, make_audiobookshelf_book_app, make_music_group_app};
+use super::test_helpers::{buffer_to_string, make_music_group_app};
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::{
-    AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, BrowserKey, BrowserKind,
-    MusicWorkspaceComponent,
+    AudiobookshelfPodcastComponent, BrowserKey, BrowserKind, MusicWorkspaceComponent,
 };
 use crate::app::palette;
 use crate::app::render::arrangements::library::wide_library_panes;
@@ -27,8 +26,7 @@ use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
-use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::component::Component;
 
 const WIDTH: u16 = 100;
 const HEIGHT: u16 = 30;
@@ -193,48 +191,6 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     assert!(buffer_to_string(&terminal).contains("Press r to load feeds"));
 }
 
-/// ABS Books (task 2.2): the `.style(Color)` foreground-only bug is fixed --
-/// the wide right hero pane is filled via `wide_hero_hero_pane`, focus-green
-/// (`LeftPaneFocus::Workspace`) only when a chapter is selected while
-/// focused.
-#[test]
-fn abs_books_wide_left_pane_fills_via_shared_primitive() {
-    let app = make_audiobookshelf_book_app();
-    let mut component = AudiobookshelfBookComponent::new();
-    if let Some(state) = app.audiobookshelf_book_browse.first() {
-        component.set_content(state, app.images_enabled());
-        component.set_focused(true);
-    }
-    let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
-    let geometry = component.geometry();
-    assert!(geometry.hero_area.is_some());
-    let panes = wide_library_panes(area, 0, PANE_PAD_Y, None).expect("wide fits");
-    let hero_panel = panes.hero_panel;
-    let buffer = terminal.backend().buffer();
-    // No chapter is selected in this fixture, so the workspace is not held:
-    // the pane stays resting, not focus-green.
-    assert_eq!(
-        buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::SURFACE_RESTING
-    );
-    assert_eq!(
-        buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
-        palette::SURFACE_RESTING
-    );
-
-    component.on(&Event::Keyboard(KeyEvent {
-        code: Key::Left,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let focused_terminal = direct_terminal(|f| component.view(f, area));
-    let focused_buffer = focused_terminal.backend().buffer();
-    assert_eq!(
-        focused_buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::SURFACE_FOCUSED
-    );
-}
-
 /// ABS Podcasts (task 2.1): the wide right hero pane fills via
 /// `wide_hero_hero_pane`.
 /// D8's gain: this surface goes focus-green when the episode workspace holds
@@ -269,21 +225,6 @@ fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
         focused_buffer[(hero.x, hero.y)].bg,
         palette::SURFACE_FOCUSED
     );
-}
-
-#[test]
-fn abs_book_wide_hero_keeps_text_with_images_on_or_off() {
-    let app = make_audiobookshelf_book_app();
-    for images_enabled in [true, false] {
-        let mut component = AudiobookshelfBookComponent::new();
-        component.set_content(
-            app.audiobookshelf_book_browse.first().expect("book state"),
-            images_enabled,
-        );
-        component.set_focused(true);
-        let terminal = direct_terminal(|f| component.view(f, wide_area()));
-        assert!(buffer_to_string(&terminal).contains("Alpha Tales"));
-    }
 }
 
 #[test]

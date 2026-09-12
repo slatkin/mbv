@@ -5,9 +5,6 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::ComponentId;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
-use tuirealm::component::Component;
 
 /// Seed the migrated Movies/HomeVideos/Generic owner's authoritative
 /// selection directly (mirrors `set_browser_cursor_for_test`'s old
@@ -258,53 +255,4 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
         !output.contains("Pilot"),
         "narrow inline hero must not show the episode table:\n{output}"
     );
-}
-
-/// migrate-home-feeds 5.1 (§5 geometry test): same one-blank-row reserve for
-/// the ABS Book tab. Book paints no framed list border at the pane bottom, so
-/// this checks the painted buffer directly: the last row before the status bar
-/// (`area.bottom() - 1`) is blank across the right pane, and the surname-bucket
-/// pill row the component publishes (`geometry.selector_tabs`) is actually
-/// painted at that row in the buffer. A one-row downward shift of the pane
-/// would paint the reserve row and move the pills off their published row.
-#[test]
-fn wide_book_panes_leave_exactly_one_row_above_the_status_bar() {
-    use crate::app::components::AudiobookshelfBookComponent;
-    let area = Rect::new(0, 0, 120, 30);
-    let app = make_audiobookshelf_book_app();
-    let mut component = AudiobookshelfBookComponent::new();
-    if let Some(state) = app.audiobookshelf_book_browse.first() {
-        component.set_content(state, app.images_enabled());
-        component.set_focused(true);
-    }
-    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-    terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let geometry = component.geometry();
-    let pill_rect = geometry
-        .selector_tabs
-        .first()
-        .map(|(rect, _)| *rect)
-        .expect("book pills painted");
-    let buffer = terminal.backend().buffer();
-
-    // The published pill row is really painted there (non-blank glyphs).
-    let pill_row: String = (pill_rect.x..pill_rect.right())
-        .map(|x| buffer[(x, pill_rect.y)].symbol())
-        .collect();
-    assert!(
-        !pill_row.trim().is_empty(),
-        "book pill row must be painted at its published row {}: {pill_row:?}",
-        pill_rect.y
-    );
-
-    // Exactly one blank row between the pane and the status bar: everything on
-    // `area.bottom() - 1` across the right pane is unpainted.
-    let reserve_y = area.bottom() - 1;
-    for x in pill_rect.x..area.right() {
-        assert_eq!(
-            buffer[(x, reserve_y)].symbol(),
-            " ",
-            "book reserve row {reserve_y} must be blank at x={x}"
-        );
-    }
 }

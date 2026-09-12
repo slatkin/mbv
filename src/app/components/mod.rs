@@ -8,8 +8,6 @@
 
 #![allow(dead_code)]
 
-#[cfg(test)]
-pub mod audiobookshelf_book;
 pub mod audiobookshelf_podcast;
 pub mod book_content;
 pub mod browser;
@@ -51,8 +49,6 @@ pub mod tv_content;
 pub mod user_event;
 pub mod wide_hero_boundary;
 
-#[cfg(test)]
-pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
 pub use self::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
 pub use self::browser::BrowserComponent;
 pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};

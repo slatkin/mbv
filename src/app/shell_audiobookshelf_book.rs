@@ -77,15 +77,18 @@ impl Model {
 
     pub(super) fn sync_audiobookshelf_book(&mut self) {
         // Books are retained as a LibraryPanel owner for the lifetime of the
-        // catalog entry; no destination component is mounted or subscribed.
-        self.push_audiobookshelf_book_content();
+        // catalog entry; content is pushed by discrete writers/events. The
+        // panel sync pass reconciles the active owner and focus separately.
     }
 
     pub(super) fn handle_audiobookshelf_book_request(&mut self, request: ShellRequest) {
-        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        // A request can arrive before the Books owner has been registered by
+        // its first discrete content push. Do not mutate shell focus on that
+        // handled no-op path.
         if self.abs_book_owner().is_none() {
             return;
         }
+        self.app.set_panel_focus(crate::app::PanelFocus::Library);
         match request {
             ShellRequest::AudiobookshelfBookMove(movement) => match movement {
                 AudiobookshelfBookMove::Book(Some(target)) => {

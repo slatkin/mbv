@@ -2,10 +2,7 @@
 //!
 //! `BookContent` owns the shell-projected book/chapter snapshot, the shared
 //! book and chapter list controls, local chapter-pane focus, and the surname
-//! bucket selection. It is a plain [`LibraryContentOwner`]; the legacy
-//! `AudiobookshelfBookComponent` temporarily borrows this owner for its
-//! existing painter until the later Books panel slices move painting and
-//! registration.
+//! bucket selection. It is a plain [`LibraryContentOwner`].
 
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
@@ -29,7 +26,7 @@ use crate::app::ui_util::clean_overview;
 /// selectable `Item` per visible row, keyed by its stable row discriminator.
 /// Chapters fall back to audio files when the book exposes no chapters
 /// (book-browsing spec: never an empty or broken list state). Rehomed from
-/// the legacy `AudiobookshelfBookComponent` (task 10.1).
+/// the Books panel owner (task 10.1).
 fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaListRow<usize>> {
     state
         .visible_rows(id)

@@ -532,9 +532,9 @@ impl App {
                 // pill.
             }
             TabSelection::AudiobookshelfLibrary(_) => {
-                // The Book surface is painted by the mounted
-                // `AudiobookshelfBookComponent` (task 5.3d.13) and the Podcast
-                // surface by the mounted `AudiobookshelfPodcastComponent` (task
+                // The Book surface is painted by the embedded LibraryPanel
+                // owner and the Podcast surface by the mounted
+                // `AudiobookshelfPodcastComponent` (task
                 // 5.3d.10, Unit E); the legacy App renderers were removed. This
                 // arm only reserves the destination content area the shell
                 // reads to place those component overlays.

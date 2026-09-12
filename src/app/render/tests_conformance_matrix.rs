@@ -1,9 +1,7 @@
 use super::test_helpers::{
-    buffer_to_string, make_audiobookshelf_book_app, make_movie_app, make_music_group_app,
-    render_home_shell_with,
+    buffer_to_string, make_movie_app, make_music_group_app, render_home_shell_with,
 };
 use super::*;
-use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::{
@@ -135,35 +133,6 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> LayoutMain {
             ..Default::default()
         }
     }
-}
-
-/// Render the Book surface through its mounted `AudiobookshelfBookComponent`
-/// (task 5.3d.13, render ownership) instead of the legacy `render_library`, and
-/// surface the component's geometry as a `LayoutMain` so the shared conformance
-/// assertions still hold. The component paints the hero, rows, and pills; the
-/// legacy `AppLayout` fields are reconstructed from `AudiobookshelfBookGeometry`.
-fn render_book_component(
-    app: &App,
-    width: u16,
-    height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let area = Rect::new(0, 0, width, height);
-    let mut component = AudiobookshelfBookComponent::new();
-    if let Some(state) = app.audiobookshelf_book_browse.first() {
-        component.set_content(state, app.images_enabled());
-        component.set_focused(true);
-    }
-    terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let geometry = component.geometry();
-    let layout = LayoutMain {
-        left_area: area,
-        hero_area: geometry.hero_area.unwrap_or_default(),
-        selected_item_rect: geometry.selected_item_rect,
-        selector_tabs: geometry.selector_tabs.clone(),
-        ..Default::default()
-    };
-    (terminal, layout)
 }
 
 fn render_podcast_component(
@@ -484,7 +453,6 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
             crate::app::tests_podcast::audiobookshelf_app(),
             "Show A",
         ),
-        ("Books", make_audiobookshelf_book_app(), "Alpha Tales"),
     ];
 
     for (surface, app, title) in cases {
@@ -492,9 +460,7 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
         // Movies/TV/Music route through `Model::draw_frame`, which reserves
         // chrome, so give them a slightly taller terminal whose *content* area
         // is still far shorter than any hero needs.
-        let (terminal, layout) = if surface == "Books" {
-            render_book_component(&app, 60, 4)
-        } else if surface == "Podcasts" {
+        let (terminal, layout) = if surface == "Podcasts" {
             render_podcast_component(&app, 60, 4)
         } else {
             render_browse_component(app, 60, 12)
@@ -520,28 +486,10 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     let cases = [
         ("Music", music, "First Album"),
         ("Podcasts", podcast_app_with_bottom_selection(), "Show 3"),
-        (
-            "Books",
-            {
-                let mut app = make_audiobookshelf_book_app();
-                let state = &mut app.audiobookshelf_book_browse[0];
-                let mut companion = state.books[2].clone();
-                companion.library_item_id = "book-z2".into();
-                companion.title = "Zenith Companion".into();
-                state.append_page_books(1, 4, vec![companion]);
-                app.select_audiobookshelf_book_bucket(2);
-                let state = &mut app.audiobookshelf_book_browse[0];
-                state.select(state.books.len() - 1);
-                app
-            },
-            "Zenith Companion",
-        ),
     ];
 
     for (surface, app, title) in cases {
-        let (terminal, layout) = if surface == "Books" {
-            render_book_component(&app, 70, 30)
-        } else if surface == "Podcasts" {
+        let (terminal, layout) = if surface == "Podcasts" {
             render_podcast_component(&app, 70, 30)
         } else {
             render_browse_component(app, 70, 30)
@@ -641,13 +589,10 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
             crate::app::tests_podcast::audiobookshelf_app(),
             60,
         ),
-        ("Books", make_audiobookshelf_book_app(), 60),
     ];
 
     for (surface, app, width) in cases {
-        let (terminal, layout) = if surface == "Books" {
-            render_book_component(&app, width, 30)
-        } else if surface == "Podcasts" {
+        let (terminal, layout) = if surface == "Podcasts" {
             render_podcast_component(&app, width, 30)
         } else if surface == "Music" {
             render_music_component(&app, width, 30)
@@ -690,7 +635,6 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
         ("TV", series_app()),
         ("Music", make_music_group_app()),
         ("Podcasts", crate::app::tests_podcast::audiobookshelf_app()),
-        ("Books", make_audiobookshelf_book_app()),
         ("Feeds", feed_app()),
     ];
     for (surface, mut app) in cases {

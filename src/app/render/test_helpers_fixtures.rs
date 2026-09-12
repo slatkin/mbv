@@ -241,8 +241,7 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
     app
 }
 
-/// Book surface app for conformance tests (moved here from the deleted
-/// `tests_audiobookshelf_books.rs` legacy-renderer suite, task 5.3d.13). Three
+/// Book surface app for panel-owner conformance tests (task 10.3). Three
 /// books span three surname buckets (Adams -> A-C, Mason -> J-L, Zephyr ->
 /// V-Z), so the A-C bucket is selected by default and only "Alpha Tales" is in
 /// range.
