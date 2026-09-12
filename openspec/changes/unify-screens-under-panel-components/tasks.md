@@ -272,7 +272,7 @@ proves the slot types early.
 *Unification:* removes Music's private header layout, its focused-box surface arm and dead search
 branches.
 
-- [ ] 9.1 `MusicContent`: move `MusicWorkspaceComponent`'s content state (group pills, albums, tracks,
+- [x] 9.1 `MusicContent`: move `MusicWorkspaceComponent`'s content state (group pills, albums, tracks,
   cursor, inline search) into a `LibraryContentOwner` (group pills → Selector row, albums → list slot,
   Square header, no overview box when the album has none, Workspace = tracks), filled by the shell's
   existing Music push; the component keeps painting its legacy painters this step. Verify: unit tests of
