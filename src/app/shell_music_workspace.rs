@@ -1,7 +1,7 @@
 use super::components::{
     BrowserKey, BrowserKind, ComponentId, InlineSearchHost, MusicWorkspaceComponent,
 };
-use super::render::{wide_hero_fits, MusicWideRenderCtx};
+use super::render::MusicWideRenderCtx;
 use super::shell::{Model, MusicTrackFocusRequest};
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -195,8 +195,8 @@ impl Model {
             return;
         }
         // The legacy Music destination receives the same Library panel area
-        // at both breakpoints; its view selects the shared Wide skeleton or
-        // keeps the legacy Narrow painter.
+        // at both breakpoints; its view paints the shared Narrow or Wide
+        // skeleton from the same content.
         let area = self.app.layout.main.left_area;
         if area.width == 0 || area.height == 0 {
             return;
@@ -219,42 +219,29 @@ impl Model {
             .get_component_mut(id)
             .and_then(|comp| comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>())
             .map(|music| {
-                let panel_image_paint = music.take_panel_image_paint();
-                let image_paint = music.take_image_paint();
-                let layout = music.layout();
-                let (album_cursor, album_order) = music.painted_album_cursor_and_order();
                 (
-                    panel_image_paint,
-                    image_paint,
-                    layout.selected_item_rect,
-                    album_cursor,
-                    album_order.to_vec(),
+                    music.take_panel_image_paint(),
+                    music.layout(),
+                    music.painted_album_cursor_and_order(),
                 )
             });
-        if let Some((
-            panel_image_paint,
-            image_paint,
-            selected_item_rect,
-            album_cursor,
-            album_order,
-        )) = projection
-        {
+        if let Some((panel_image_paint, layout, (album_cursor, album_order))) = projection {
+            let selected_item_rect = layout.selected_item_rect;
             if self.app.images_enabled() && !search_active {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     let context = self.app.wide_music_render_ctx(lib_idx, None);
                     self.app.prewarm_grouped_music_album_images(
                         &context.list.items,
                         album_cursor,
-                        &album_order,
+                        album_order,
                     );
                 }
             }
-            if wide_hero_fits(area) {
-                if let Some(paint) = panel_image_paint {
-                    self.app.paint_panel_hero_image(frame, &paint);
-                }
-            } else {
-                self.app.paint_music_image(frame, image_paint);
+            // One projected-pixel painter for both breakpoints (design D9):
+            // the panel reserved the image box, the projection fetched it,
+            // and painting reads the cached protocol only.
+            if let Some(paint) = panel_image_paint {
+                self.app.paint_panel_hero_image(frame, &paint);
             }
             self.app.layout.main.selected_item_rect = selected_item_rect;
         }

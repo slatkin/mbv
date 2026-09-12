@@ -8,7 +8,6 @@ mod theme;
 // `render::components::help`, but the `components` module is private. Re-export
 // them here so `crate::app::components::help` can import them without widening
 // the whole `render::components` module.
-pub(in crate::app) use components::album_art::MusicImagePaint;
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
 pub(in crate::app) use components::audiobookshelf_book::{
     book_rows, render_audiobookshelf_book_content, AudiobookshelfBookGeometry,
@@ -122,9 +121,7 @@ pub(in crate::app) use components::media_list::{
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
-pub(in crate::app) use components::music_wide::{
-    render_narrow_music_group_with_ctx, MusicAlbumPresentation, MusicWideRenderCtx,
-};
+pub(in crate::app) use components::music_wide::MusicWideRenderCtx;
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
     PlaylistsViewState,

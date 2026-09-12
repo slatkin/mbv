@@ -250,10 +250,14 @@ fn shell_executes_grouped_music_image_paint() {
 }
 
 #[test]
-fn narrow_music_workspace_emits_selected_album_image_request() {
+fn narrow_music_workspace_projects_selected_album_image_request() {
+    // Design D9: the Narrow hero's image request comes from the shell
+    // projection, never from painting. Painting reserves the box and reads
+    // the projected state only.
     let mut model = Model::new(make_music_group_app());
     model.app.image_protocol_enabled = true;
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 81, 20);
+    model.app.layout.root_frame.library = Some(ratatui::layout::Rect::new(0, 0, 81, 20));
     model.sync_music_workspace();
     model.sync_active_destination();
 
@@ -261,10 +265,27 @@ fn narrow_music_workspace_emits_selected_album_image_request() {
     terminal
         .draw(|frame| model.render_music_workspace_component(frame))
         .unwrap();
+    assert!(
+        !model.app.card_image_loading.contains("album-1:P"),
+        "painting must not fetch album art"
+    );
 
+    // The projection is the single request site for the narrow hero.
+    model.sync_library_hero_images();
     assert!(
         model.app.card_image_loading.contains("album-1:P"),
-        "narrow selected album must emit a typed image-loading request"
+        "the projection must emit the narrow selected album image request"
+    );
+
+    // Painting the projected state afterwards requests nothing new.
+    let loading_after_projection = model.app.card_image_loading.len();
+    terminal
+        .draw(|frame| model.render_music_workspace_component(frame))
+        .unwrap();
+    assert_eq!(
+        model.app.card_image_loading.len(),
+        loading_after_projection,
+        "repainting the projected hero must not re-request"
     );
 }
 

@@ -20,7 +20,6 @@ use crate::app::shell::Model;
 use crate::app::tests::make_item;
 use crate::app::PanelFocus;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::Component;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
@@ -226,8 +225,8 @@ fn narrow_music_image_bearing_fixture_emits_the_selected_album_art() {
             .app
             .card_image_loading
             .iter()
-            .any(|k| k.starts_with("album-1")),
-        "the selected album's hero art is requested: {:?}",
+            .any(|k| k == "alpha-1:P"),
+        "the selected album's projected hero art is requested: {:?}",
         model.app.card_image_loading
     );
 }
@@ -366,59 +365,99 @@ fn narrow_music_reused_model_paints_after_a_wide_to_narrow_resize() {
 }
 
 #[test]
-fn narrow_music_applies_the_flip_anchor_at_the_content_viewport_height() {
-    // The component applies a breakpoint anchor to the retained control using
-    // the content viewport height before the render path paints it.
-    use crate::app::components::media_list::{InlineMediaBrowser, ViewportAnchor};
-    use crate::app::layout::LayoutMain;
-    use crate::app::render::arrangements::wide_hero::pill_bar_areas;
+fn narrow_music_paints_only_through_the_shared_inline_presentation() {
+    use super::components::media_list::{
+        INLINE_MEDIA_BROWSER_PAINTS, PLAIN_ROWS_PAINTS, WIDE_MEDIA_LIST_PAINTS,
+    };
+    let app = multi_artist_app();
+    INLINE_MEDIA_BROWSER_PAINTS.with(|c| c.set(0));
+    PLAIN_ROWS_PAINTS.with(|c| c.set(0));
+    WIDE_MEDIA_LIST_PAINTS.with(|c| c.set(0));
+
+    let (terminal, _component) = render_narrow(&app, true, 0);
+
+    assert_eq!(
+        INLINE_MEDIA_BROWSER_PAINTS.with(std::cell::Cell::get),
+        1,
+        "the narrow album flow uses the canonical Inline presentation"
+    );
+    assert_eq!(
+        PLAIN_ROWS_PAINTS.with(std::cell::Cell::get),
+        0,
+        "the deleted narrow Music painter's plain-rows path must not run"
+    );
+    assert_eq!(
+        WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get),
+        0,
+        "the narrow surface must not paint the Wide rail"
+    );
+    assert!(buffer_to_string(&terminal).contains("First Album"));
+}
+
+/// The Narrow inline hero reads only the shell-projected image state (design
+/// D9): the painter reserves the policy's box and the shell paints the cached
+/// protocol into it, so no paint-time album-art fetch exists.
+#[test]
+fn narrow_music_inline_hero_uses_the_projected_image_state() {
+    use crate::app::components::library_panel::HeroImageState;
 
     let app = multi_artist_app();
     let lib_idx = app.tab.emby_library_index().unwrap();
-    let ctx = app.wide_music_render_ctx(lib_idx, None);
+    let mut context = app.wide_music_render_ctx(lib_idx, None);
+    context.focused = true;
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context);
+    component.set_focused(true);
+    component.re_anchor(0, 0);
+    // The projection's `Ready` state: the box is reserved and the shell
+    // paints the cached protocol after `view` returns.
+    component.set_hero_image(HeroImageState::Ready {
+        cache_key: "album-1:P".into(),
+        decoded: Some((600, 600)),
+    });
 
-    let rows = ctx.grouped_rows();
-    let target = ctx.list.items[27].id.clone();
-    let display_row = rows
-        .iter()
-        .position(|row| row.selectable_target() == Some(&target))
-        .expect("selected album is in the flow");
-
-    let mut browser: InlineMediaBrowser<String> = InlineMediaBrowser::new();
-    browser.set_content(rows);
-    browser.select_target(&target);
-
-    let area = Rect::new(0, 0, 60, 26);
-    let content_h = pill_bar_areas(area).content_area.height as usize;
-    let want_offset = 4usize;
-    let anchor = ViewportAnchor {
-        selected_target: target,
-        selected_row_offset: want_offset,
-    };
-    // Sanity: the two candidate heights really do clamp differently here.
-    let n_rows = browser.rows().len();
-    assert!(display_row - want_offset > n_rows - area.height as usize);
-    assert!(display_row - want_offset <= n_rows - content_h);
-    browser.apply_viewport_anchor(&anchor, content_h);
-
-    let mut layout = LayoutMain::default();
-    let mut terminal = Terminal::new(TestBackend::new(60, 26)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(NW, NH)).unwrap();
     terminal
-        .draw(|f| {
-            render_narrow_music_group_with_ctx(
-                f,
-                area,
-                &ctx,
-                &mut layout,
-                MusicAlbumPresentation::Inline(&mut browser),
-            );
-        })
+        .draw(|f| component.view(f, Rect::new(0, 0, NW, NH)))
         .unwrap();
 
-    assert_eq!(
-        display_row - browser.scroll(),
-        want_offset,
-        "the anchor landed the selected row at its requested content-viewport offset"
+    let paint = component
+        .take_panel_image_paint()
+        .expect("the inline hero reserves the projected image box");
+    assert_eq!(paint.cache_key, "album-1:P");
+    assert!(!paint.centered, "the narrow inline hero is right-aligned");
+    assert!(paint.area.width > 0 && paint.area.height > 0);
+    assert!(component.layout().hero_area.height > 0);
+}
+
+/// While the projection is still loading, the inline hero keeps its box and
+/// paints the shared placeholder — it neither fetches nor drops the block.
+#[test]
+fn narrow_music_inline_hero_keeps_the_box_while_the_image_loads() {
+    use crate::app::components::library_panel::HeroImageState;
+
+    let app = multi_artist_app();
+    let lib_idx = app.tab.emby_library_index().unwrap();
+    let mut context = app.wide_music_render_ctx(lib_idx, None);
+    context.focused = true;
+    let mut component = MusicWorkspaceComponent::new();
+    component.set_content(context);
+    component.set_focused(true);
+    component.re_anchor(0, 0);
+    component.set_hero_image(HeroImageState::Loading);
+
+    let mut terminal = Terminal::new(TestBackend::new(NW, NH)).unwrap();
+    terminal
+        .draw(|f| component.view(f, Rect::new(0, 0, NW, NH)))
+        .unwrap();
+
+    assert!(
+        component.take_panel_image_paint().is_none(),
+        "a loading image is not painted by the shell yet"
+    );
+    assert!(
+        component.layout().hero_area.height > 0,
+        "the inline hero block still reserves its box"
     );
 }
 

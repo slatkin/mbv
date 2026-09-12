@@ -19,7 +19,8 @@ use tuirealm::state::State;
 
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
 use super::library_panel::{
-    render_wide_skeleton, PanelHeroImagePaint, SkeletonHits, WideSkeletonGeometry,
+    render_narrow_skeleton, render_wide_skeleton, PanelHeroImagePaint, SkeletonHits,
+    WideSkeletonGeometry,
 };
 use super::media_list::{Presentation, RowLocalInput, RowLocalOutcome};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
@@ -28,10 +29,7 @@ use super::msg::{AlbumCursorKind, Msg, ShellRequest, TerminalObserverEvent};
 use super::music_content::MusicContent;
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
-use crate::app::render::{
-    render_narrow_music_group_with_ctx, wide_hero_fits, MusicAlbumPresentation, MusicImagePaint,
-    MusicWideRenderCtx,
-};
+use crate::app::render::{wide_hero_fits, MusicWideRenderCtx};
 
 pub struct MusicWorkspaceComponent {
     /// The embedded content owner is the sole store for Music's content,
@@ -42,7 +40,6 @@ pub struct MusicWorkspaceComponent {
     pub(super) album_columns: usize,
     pub(super) page_rows: usize,
     layout: LayoutMain,
-    image_paint: Option<MusicImagePaint>,
     inline_track_focus_enabled: bool,
     mouse_gestures: MouseGestureState,
     wide_browser_content_height: Option<usize>,
@@ -78,7 +75,6 @@ impl MusicWorkspaceComponent {
             album_columns: 1,
             page_rows: 1,
             layout: LayoutMain::default(),
-            image_paint: None,
             inline_track_focus_enabled: false,
             mouse_gestures: MouseGestureState::new(),
             wide_browser_content_height: None,
@@ -436,10 +432,6 @@ impl MusicWorkspaceComponent {
         (delta != 0).then_some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta }))
     }
 
-    pub(in crate::app) fn take_image_paint(&mut self) -> Option<MusicImagePaint> {
-        self.image_paint.take()
-    }
-
     pub(in crate::app) fn take_panel_image_paint(&mut self) -> Option<PanelHeroImagePaint> {
         self.panel_image_paint.take()
     }
@@ -538,13 +530,8 @@ impl Component for MusicWorkspaceComponent {
             .carrier
             .set_presentation(target, incoming_height.max(1));
 
-        // The active control owns the painted selection. Use its index for
-        // render-derived detail content before cloning the shell snapshot.
+        // The active control owns the painted selection.
         content.context.list.set_cursor(selected_album_index);
-
-        let mut context = content.context.clone();
-        context.track_focused = content.track_focused;
-        context.list.list_pane_width = self.list_pane_width;
         if wide {
             // Wide Music uses the shared Library panel skeleton while the
             // destination remains mounted as the event boundary until 9.4.
@@ -576,46 +563,32 @@ impl Component for MusicWorkspaceComponent {
                 return;
             }
         }
-        if !wide && content.inline_search.is_active() {
-            // Normal Music passes its whole list area to the shared search
-            // painter (design.md D3); the ordinary grouped composer does not
-            // also paint it.
-            let items = content.inline_search.ordered_items();
-            let query = content.inline_search.query().to_string();
-            let loading = content.inline_search.loading();
-            let cursor = content.inline_search.cursor();
-            let scroll_in = content.inline_search.scroll();
-            let areas = crate::app::render::arrangements::wide_hero::pill_bar_areas(area);
-            let list_area = areas.content_area;
-            let columns = crate::app::library_column_width::library_column_count(list_area.width);
-            let new_scroll = crate::app::render::render_inline_search(
-                frame,
-                areas.pills_area,
-                list_area,
-                &query,
-                loading,
-                items,
-                cursor,
-                scroll_in,
-                content.context.focused,
-                columns,
-                content.inline_search.layout_mut(),
-            );
-            content.inline_search.set_scroll(new_scroll);
-            self.image_paint = None;
-        } else if !wide {
-            let output = render_narrow_music_group_with_ctx(
-                frame,
-                area,
-                &context,
-                &mut self.layout,
-                MusicAlbumPresentation::Inline(content.carrier.inline_mut()),
-            );
-            self.image_paint = output.image_paint;
-        }
-        self.pill_regions.clear();
-        for (rect, target) in &self.layout.selector_tabs {
-            self.pill_regions.push(*rect, *target);
+        if !wide {
+            // Narrow Music uses the same panel skeleton and HeroContent as the
+            // Wide path. Search is a ListSlot state, so the panel owns both
+            // the search-box placement and ordinary row painting; no
+            // Music-specific fallback painter may paint this surface.
+            let focused = content.context.focused;
+            let mut panel_content = content.panel_content();
+            let mut hits = SkeletonHits::default();
+            let geometry =
+                render_narrow_skeleton(frame, area, &mut panel_content, focused, &mut hits);
+            self.panel_image_paint = geometry.inline_hero_image.clone();
+            self.layout.left_area = geometry.list_area;
+            self.layout.hero_area = geometry.inline_hero.unwrap_or_default();
+            self.layout.inline_hero_area = self.layout.hero_area;
+            self.layout.selected_item_rect = geometry.selected;
+            self.layout.selector_tabs.clear();
+            self.pill_regions.clear();
+            for (rect, target) in hits.selector.regions() {
+                self.pill_regions.push(*rect, *target);
+                self.layout.selector_tabs.push((*rect, *target));
+            }
+        } else {
+            self.pill_regions.clear();
+            for (rect, target) in &self.layout.selector_tabs {
+                self.pill_regions.push(*rect, *target);
+            }
         }
     }
 

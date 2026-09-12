@@ -179,7 +179,11 @@ fn music_workspace_enter_sets_track_focus_when_inline_track_focus_enabled() {
 }
 
 #[test]
-fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
+fn music_workspace_presentation_follows_shared_hero_gate_boundaries() {
+    // The shared `wide_hero_fits` predicate is the only breakpoint input
+    // (design D4): the component selects the Wide presentation exactly when
+    // the shared Wide skeleton can be placed, and the Narrow skeleton
+    // otherwise.
     for (width, height, wide) in [(81, 7, false), (82, 7, true), (82, 6, false)] {
         let mut component = MusicWorkspaceComponent::new();
         component.set_focused(true);
@@ -189,9 +193,14 @@ fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
             .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
             .unwrap();
         assert_eq!(
-            component.layout().left_area.width > 0 && component.layout().left_area.height > 0,
+            component.active_is_wide(),
             wide,
-            "component layout branch at {width}x{height}"
+            "component presentation at {width}x{height}"
+        );
+        assert_eq!(
+            crate::app::render::wide_hero_fits(Rect::new(0, 0, width, height)),
+            wide,
+            "the shared gate is the only breakpoint input at {width}x{height}"
         );
     }
 }

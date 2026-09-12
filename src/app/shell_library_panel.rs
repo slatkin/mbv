@@ -215,36 +215,35 @@ impl Model {
         };
         let list_pane_width = self.app.list_pane_width;
         // Music is still mounted as its legacy destination boundary in this
-        // slice, but its Wide view now paints the shared skeleton. Project its
-        // Square hero through the same shell-owned path as registered panel
-        // owners; Narrow continues to use its legacy image painter.
+        // slice, but its view paints the shared skeleton at both breakpoints.
+        // Project its Square hero through the same shell-owned path as
+        // registered panel owners; painting reads the projected state only
+        // (design D9).
         if !self.active_library_owner_migrated() {
-            if crate::app::render::wide_hero_fits(area) {
-                if let Some(id) = self.music_workspace_component_id() {
-                    let hero_data = self
-                        .application
-                        .get_component_mut(&id)
-                        .and_then(|component| {
-                            component
-                                .as_any_mut()
-                                .downcast_mut::<MusicWorkspaceComponent>()
-                        })
-                        .and_then(MusicWorkspaceComponent::hero_data);
-                    if let Some(data) = hero_data {
-                        let state =
-                            self.app
-                                .project_hero_image(&data.facts, true, area, list_pane_width);
-                        if let Some(music) =
-                            self.application
-                                .get_component_mut(&id)
-                                .and_then(|component| {
-                                    component
-                                        .as_any_mut()
-                                        .downcast_mut::<MusicWorkspaceComponent>()
-                                })
-                        {
-                            music.set_hero_image(state);
-                        }
+            if let Some(id) = self.music_workspace_component_id() {
+                let hero_data = self
+                    .application
+                    .get_component_mut(&id)
+                    .and_then(|component| {
+                        component
+                            .as_any_mut()
+                            .downcast_mut::<MusicWorkspaceComponent>()
+                    })
+                    .and_then(MusicWorkspaceComponent::hero_data);
+                if let Some(data) = hero_data {
+                    let state =
+                        self.app
+                            .project_hero_image(&data.facts, true, area, list_pane_width);
+                    if let Some(music) =
+                        self.application
+                            .get_component_mut(&id)
+                            .and_then(|component| {
+                                component
+                                    .as_any_mut()
+                                    .downcast_mut::<MusicWorkspaceComponent>()
+                            })
+                    {
+                        music.set_hero_image(state);
                     }
                 }
             }

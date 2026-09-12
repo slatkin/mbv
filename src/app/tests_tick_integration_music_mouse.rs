@@ -5,7 +5,7 @@ use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use crate::app::components::{MusicWorkspaceComponent, Msg, ShellRequest};
 use crate::app::render::make_music_group_app;
 use crate::app::tests::make_item;
-use crate::app::tests_tick_harness::TickHarness;
+use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
 use crate::app::{PanelFocus, PanelMode};
 
 /// The framed Wide track table is a second canonical control in Grouped Music:
@@ -264,4 +264,91 @@ fn music_narrow_album_uses_retained_geometry_for_live_mouse_gestures() {
         message,
         Msg::Shell(ShellRequest::MusicAlbumCursor { target: 1, .. })
     )));
+}
+
+/// Apply a step's folded messages the way the run loop does, so the shell's
+/// typed arms actually run.
+fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+}
+
+/// Narrow album activation opens the album's `SelectionModal` — the only
+/// route to a track list in Grouped Music (design D7/D14). The narrow hero
+/// paints no inline track rows or detail table.
+#[test]
+fn music_narrow_album_activation_opens_the_track_selection_modal() {
+    use crate::app::types_overlay::OverlayRequest;
+
+    let mut app = make_music_group_app();
+    let tracks: Vec<mbv_core::api::EmbyItem> = (0..2)
+        .map(|index| {
+            let mut track = make_item(&format!("Track {}", index + 1), "Audio");
+            track.id = format!("track-{}", index + 1);
+            track.index_number = index + 1;
+            track
+        })
+        .collect();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let music_id = harness
+        .model()
+        .music_workspace_id
+        .clone()
+        .expect("grouped Music child mounted");
+
+    let mut terminal = Terminal::new(TestBackend::new(80, 12)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    let selected = harness
+        .model()
+        .application
+        .get_component(&music_id)
+        .unwrap()
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .unwrap()
+        .layout()
+        .selected_item_rect
+        .expect("Inline album result retained its selected geometry");
+    let click = |column, row| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        })
+    };
+
+    // First down focuses the album row; the second at the same painted point
+    // is the activation gesture.
+    harness.inject(click(selected.x, selected.y));
+    let _ = harness.step();
+    harness.inject(click(selected.x, selected.y));
+    let outcome = harness.step();
+    assert!(
+        outcome.messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::MusicAlbumActivate { .. })
+        )),
+        "narrow double click activates the album"
+    );
+    apply_outcome(&mut harness, outcome);
+
+    assert!(
+        matches!(
+            harness.model().app.pending_overlay,
+            Some(OverlayRequest::SelectionModal(_))
+        ),
+        "narrow album activation opens the track selection modal, not an inline track list"
+    );
 }

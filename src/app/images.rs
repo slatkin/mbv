@@ -412,10 +412,6 @@ impl App {
         self.last_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
     }
 
-    pub(super) fn right_panel_image_renders_allowed(&self) -> bool {
-        self.last_library_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
-    }
-
     pub(super) fn mark_library_navigation(&mut self, at: Instant) {
         self.last_library_nav_at = at;
     }

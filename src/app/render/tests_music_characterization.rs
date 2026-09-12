@@ -89,6 +89,45 @@ fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint
     );
 }
 
+/// Task 9.3: the Narrow inline hero and the Wide header derive from one
+/// `HeroContent` (design D3/D7), so one resolved artist/year/title paints at
+/// both breakpoints and neither falls back to the raw folder name.
+#[test]
+fn narrow_and_wide_music_paint_the_same_resolved_album_hero() {
+    let narrow = render_narrow_music(folder_hero_app(), 60, 30);
+    let mut wide_model = mounted_model_at(folder_hero_app(), 160, 40);
+    let wide = draw_mounted_frame(&mut wide_model, 160, 40);
+
+    for expected in ["Folder Artist", "2024", "First Album"] {
+        assert!(
+            narrow.contains(expected),
+            "narrow hero missing {expected}:\n{narrow}"
+        );
+        assert!(
+            wide.contains(expected),
+            "wide hero missing {expected}:\n{wide}"
+        );
+    }
+    for output in [&narrow, &wide] {
+        assert!(
+            !output.contains("Folder Artist (2024) First Album"),
+            "the raw folder name must not paint as the hero title:\n{output}"
+        );
+    }
+}
+
+fn folder_hero_app() -> App {
+    let mut app = make_music_group_app();
+    app.libs[0].nav_stack[1].set_resting_cursor(0);
+    let album = &mut app.libs[0].nav_stack.last_mut().unwrap().items[0];
+    album.artist.clear();
+    album.name = "Folder Artist (2024) First Album".into();
+    album.production_year = 0;
+    app.album_artist_cache
+        .insert(album.id.clone(), "Folder Artist".into());
+    app
+}
+
 #[test]
 fn narrow_grouped_music_shows_group_pill_bar() {
     // Task 3.6a: the narrow branch reserves a group pill row above the album
