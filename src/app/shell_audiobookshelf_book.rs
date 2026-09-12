@@ -195,6 +195,37 @@ impl Model {
                 book.set_list_pane_width(self.app.list_pane_width);
             }
         }
+        // Books remains on the transitional destination path until task
+        // 10.3, so project its panel hero image here rather than through the
+        // mounted LibraryPanel image pass. The painter only consumes this
+        // projected state and the shell paints the cached pixels below.
+        let hero_data = self
+            .application
+            .get_component_mut(id)
+            .and_then(|component| {
+                component
+                    .as_any_mut()
+                    .downcast_mut::<AudiobookshelfBookComponent>()
+            })
+            .and_then(AudiobookshelfBookComponent::hero_data);
+        let hero_state = hero_data.map_or(
+            crate::app::components::library_panel::HeroImageState::None,
+            |data| {
+                self.app
+                    .project_hero_image(&data.facts, true, area, self.app.list_pane_width)
+            },
+        );
+        if let Some(book) = self
+            .application
+            .get_component_mut(id)
+            .and_then(|component| {
+                component
+                    .as_any_mut()
+                    .downcast_mut::<AudiobookshelfBookComponent>()
+            })
+        {
+            book.set_hero_image(hero_state);
+        }
         self.application.view(id, frame, area);
         // Component owns painting; read back its painted geometry so the
         // still-required legacy `LayoutMain` readers (overlay/menu anchors)
@@ -210,7 +241,7 @@ impl Model {
                     .downcast_mut::<AudiobookshelfBookComponent>()
             })
             .map(|component| {
-                let image_paint = component.take_image_paint();
+                let image_paint = component.take_panel_image_paint();
                 let geometry = component.geometry();
                 (
                     image_paint,
@@ -223,7 +254,12 @@ impl Model {
         if let Some((image_paint, left_area, hero_area, selected_item_rect, selector_tabs)) =
             projection
         {
-            self.app.paint_home_image(frame, image_paint);
+            // The projected hero image's pixel paint (task 5.10, design D9):
+            // the painter reserves the box, the shell paints the cached
+            // protocol into it right after `view` returns.
+            if let Some(paint) = image_paint {
+                self.app.paint_panel_hero_image(frame, &paint);
+            }
             self.app.layout.main.left_area = left_area;
             self.app.layout.main.hero_area = hero_area.unwrap_or_default();
             self.app.layout.main.selected_item_rect = selected_item_rect;

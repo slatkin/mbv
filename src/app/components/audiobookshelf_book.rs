@@ -2,10 +2,14 @@
 //!
 //! The embedded [`BookContent`] owner is authoritative for the book and
 //! chapter cursors, scroll, selected targets, chapter-pane focus, and the
-//! surname-bucket selection. The component keeps only legacy painter
-//! geometry, breakpoint presentation facts, and typed shell intents until the
-//! later Books panel slices move painting and registration. Row-local input
-//! reaches the owner through the common delegation seam (design.md D3/D5).
+//! surname-bucket selection. Painting runs through the shared Library panel
+//! skeleton (task 10.2): the component builds `BookContent::panel_content()`
+//! and hands it to `render_wide_skeleton`/`render_narrow_skeleton`, painting
+//! nothing itself. The component keeps only the panel's retained geometry,
+//! breakpoint presentation facts, and typed shell intents until the later
+//! Books panel slice (10.3) moves registration into the mounted
+//! `LibraryPanel`. Row-local input reaches the owner through the common
+//! delegation seam (design.md D3/D5).
 
 use std::ops::{Deref, DerefMut};
 
@@ -18,21 +22,38 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::book_content::BookContent;
+use super::library_panel::{
+    render_narrow_skeleton, render_wide_skeleton, PanelHeroImagePaint, SkeletonHits,
+};
 use super::media_list::{Presentation, RowLocalInput};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::msg::{AudiobookshelfBookIntent, Msg, ShellRequest};
 use super::user_event::UserEvent;
-use crate::app::render::{
-    render_audiobookshelf_book_content, wide_hero_fits, AudiobookshelfBookGeometry,
-    BookChapterPresentation, BookInteraction, BookPresentation, HomeImagePaint,
-};
+use crate::app::render::wide_hero_fits;
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
+
+/// The component's own retained paint geometry (task 10.2): the panel
+/// skeleton's role rects the shell still reads (page stride, context-menu
+/// anchor, pill hit resolution) until the component registers under the
+/// mounted `LibraryPanel` (task 10.3).
+#[derive(Default)]
+pub(in crate::app) struct AudiobookshelfBookGeometry {
+    pub selector_tabs: Vec<(Rect, usize)>,
+    /// The painted list box's row-flow rect: the Wide browser pane, or the
+    /// Narrow content area below the pill bar. This is the list geometry
+    /// `page_size()` derives its real stride from (2.1j).
+    pub left_area: Rect,
+    /// The painted hero rect (Wide right pane, or the Narrow inline detail
+    /// block), when one painted.
+    pub hero_area: Option<Rect>,
+    /// The selected-item rect the panel painted this frame (the context-menu
+    /// anchor's painted truth).
+    pub selected_item_rect: Option<Rect>,
+}
 
 pub struct AudiobookshelfBookComponent {
     /// The embedded content owner is the sole store for Books' content,
-    /// selection, chapter focus and surname-bucket selection. The component
-    /// keeps only legacy painter geometry and transitional paint state until
-    /// tasks 10.2–10.3 complete.
+    /// selection, chapter focus and surname-bucket selection.
     content: BookContent,
     /// Session-only Wide hero list-pane width override (per-draw shell push,
     /// `None` = default ratio). Forwarded into the shared split; never stored
@@ -43,7 +64,7 @@ pub struct AudiobookshelfBookComponent {
     /// Narrow layouts may retain chapter state across a projection, so input
     /// must follow the rendered wide/chapter geometry rather than that state.
     chapters_visible: bool,
-    image_paint: Option<HomeImagePaint>,
+    panel_image_paint: Option<PanelHeroImagePaint>,
     /// The presentation the last `view` painted; `None` before the first paint.
     wide: bool,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
@@ -72,7 +93,7 @@ impl AudiobookshelfBookComponent {
             list_pane_width: None,
             geometry: AudiobookshelfBookGeometry::default(),
             chapters_visible: false,
-            image_paint: None,
+            panel_image_paint: None,
             wide: false,
             mouse_gestures: MouseGestureState::new(),
         }
@@ -141,8 +162,16 @@ impl AudiobookshelfBookComponent {
         self.content.set_content(snapshot, images_enabled);
     }
 
-    pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
-        self.image_paint.take()
+    pub(in crate::app) fn take_panel_image_paint(&mut self) -> Option<PanelHeroImagePaint> {
+        self.panel_image_paint.take()
+    }
+
+    pub(in crate::app) fn hero_data(&mut self) -> Option<super::library_panel::HeroContentData> {
+        self.content.hero_data()
+    }
+
+    pub(in crate::app) fn set_hero_image(&mut self, state: super::library_panel::HeroImageState) {
+        self.content.set_hero_image(state);
     }
 
     /// The geometry the component computed during its last `view`, exposed so
@@ -367,31 +396,37 @@ impl Component for AudiobookshelfBookComponent {
         if !self.chapters_visible {
             self.content.chapter_focused = false;
         }
-        let wide = self.wide;
-        let focused = self.content.focused;
-        let images_enabled = self.content.images_enabled;
-        let interaction = BookInteraction {
-            chapter_focused: self.content.chapter_focused,
-            selected_bucket: self.content.selected_bucket,
-        };
-        let content = &mut self.content;
-        let book_presentation = if wide {
-            BookPresentation::Wide(content.carrier.wide_mut())
+        // The list pane loses its focused appearance while the chapter
+        // Workspace holds focus (design D6).
+        let browser_focused = self.content.focused && !self.content.chapter_focused;
+        self.geometry = AudiobookshelfBookGeometry::default();
+        self.panel_image_paint = None;
+        let mut panel_content = self.content.panel_content();
+        let mut hits = SkeletonHits::default();
+        if self.wide {
+            if let Some(geometry) = render_wide_skeleton(
+                frame,
+                area,
+                &mut panel_content,
+                browser_focused,
+                self.list_pane_width,
+                &mut hits,
+            ) {
+                self.panel_image_paint = geometry.hero_image.clone();
+                self.geometry.left_area = geometry.list_area;
+                self.geometry.hero_area = Some(geometry.hero_area);
+                self.geometry.selected_item_rect = geometry.selected;
+                self.geometry.selector_tabs = hits.selector.regions().to_vec();
+            }
         } else {
-            BookPresentation::Inline(content.carrier.inline_mut())
-        };
-        self.image_paint = render_audiobookshelf_book_content(
-            frame,
-            area,
-            focused,
-            &content.state,
-            interaction,
-            images_enabled,
-            &mut self.geometry,
-            book_presentation,
-            BookChapterPresentation::Wide(content.chapter_list.wide_mut()),
-            self.list_pane_width,
-        );
+            let geometry =
+                render_narrow_skeleton(frame, area, &mut panel_content, browser_focused, &mut hits);
+            self.panel_image_paint = geometry.inline_hero_image.clone();
+            self.geometry.left_area = geometry.list_area;
+            self.geometry.hero_area = geometry.inline_hero;
+            self.geometry.selected_item_rect = geometry.selected;
+            self.geometry.selector_tabs = hits.selector.regions().to_vec();
+        }
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

@@ -208,7 +208,7 @@ fn abs_books_wide_left_pane_fills_via_shared_primitive() {
     let area = wide_area();
     let terminal = direct_terminal(|f| component.view(f, area));
     let geometry = component.geometry();
-    assert!(geometry.wide);
+    assert!(geometry.hero_area.is_some());
     let panes = wide_library_panes(area, 0, PANE_PAD_Y, None).expect("wide fits");
     let hero_panel = panes.hero_panel;
     let buffer = terminal.backend().buffer();

@@ -9,10 +9,7 @@ mod theme;
 // them here so `crate::app::components::help` can import them without widening
 // the whole `render::components` module.
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
-pub(in crate::app) use components::audiobookshelf_book::{
-    book_rows, render_audiobookshelf_book_content, AudiobookshelfBookGeometry,
-    BookChapterPresentation, BookInteraction, BookPresentation,
-};
+pub(in crate::app) use components::audiobookshelf_book::book_rows;
 pub(in crate::app) use components::audiobookshelf_podcast::{
     render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry,
     PodcastEpisodePresentation, PodcastInteraction, PodcastShowPresentation,
