@@ -336,7 +336,7 @@ conforms to Emby.
   skeleton instead. Verify: `tests_audiobookshelf_podcasts.rs` and
   `audiobookshelf_podcast_geometry_tests.rs` rewritten to panel output; Narrow Enter opens the episode
   modal; the Wide filter pills are the Workspace Selector row.
-- [ ] 11.3 Register Podcasts as `LibraryKey::Service(AudiobookshelfPodcast)`: delete the mounted
+- [x] 11.3 Register Podcasts as `LibraryKey::Service(AudiobookshelfPodcast)`: delete the mounted
   component, its `ComponentId` arm, its hit store and `LayoutMain.audiobookshelf_podcast_area`, moving
   slot-event translation to the panel, and re-point the podcast component tests at the owner type.
   Verify: `tests_tick_integration_podcast.rs` passes through the panel; tick tests for focus and filter
