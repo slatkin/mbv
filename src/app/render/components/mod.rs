@@ -1,7 +1,5 @@
-pub(super) mod album_art;
 pub(super) mod artwork_placeholder;
 
-pub(super) mod album_detail;
 #[cfg(test)]
 #[path = "artwork_placeholder_tests.rs"]
 mod artwork_placeholder_tests;
