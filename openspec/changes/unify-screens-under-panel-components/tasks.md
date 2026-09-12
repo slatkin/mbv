@@ -301,7 +301,7 @@ branches.
 *Unification:* removes the second content box, the list-backdrop workspace row and inline chapters —
 Books conforms to Emby.
 
-- [ ] 10.1 `BookContent`: move `AudiobookshelfBookComponent`'s content state into a
+- [x] 10.1 `BookContent`: move `AudiobookshelfBookComponent`'s content state into a
   `LibraryContentOwner` (surname buckets → Selector row, Portrait header with progress in meta,
   overview box, Workspace = chapters), filled by the shell's existing Books push; the component keeps
   painting its legacy painter this step. Verify: unit tests of `content()` (one pill bar, Portrait
