@@ -111,10 +111,12 @@ fn wide_music_track_table_uses_one_retained_canonical_view() {
     assert!(buffer_to_string(&terminal).contains("Track 1"));
 }
 
-/*
-fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_wide_control() {
-    // Search mode is a separate, already-canonical path (`render_plain_rows`);
-    // it must stay working and must not double-paint the grouped control.
+#[test]
+fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_album_control() {
+    // Library search is adapted to the established InlineSearch owner, so the
+    // panel reserves its search slot and the ordinary album rail is not
+    // painted or left with a selected-row hit. The track workspace is still
+    // the panel's only Wide media-list view for this empty-track fixture.
     let app = multi_artist_app();
     let lib_idx = app.tab.emby_library_index().unwrap();
     let mut context = app.wide_music_render_ctx(lib_idx, None);
@@ -129,8 +131,38 @@ fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_wide_control() {
         .unwrap();
 
     assert_eq!(PLAIN_ROWS_PAINTS.with(std::cell::Cell::get), 1);
-    assert_eq!(WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get), 0);
-}*/
+    assert_eq!(
+        WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get),
+        0,
+        "search does not view the album rail through WideMediaList"
+    );
+    let geometry = component
+        .test_wide_geometry()
+        .expect("search still paints the Wide panel");
+    assert!(
+        geometry.selected.is_none(),
+        "search owns album-row geometry"
+    );
+    assert!(buffer_to_string(&terminal).contains("Alpha Album"));
+}
+
+#[test]
+fn wide_music_hero_uses_resolved_artist_year_and_folder_title() {
+    let mut app = make_music_group_app();
+    let album = &mut app.libs[0].nav_stack.last_mut().unwrap().items[0];
+    album.artist.clear();
+    album.name = "Folder Artist (2024) First Album".into();
+    album.production_year = 0;
+    app.album_artist_cache
+        .insert(album.id.clone(), "Folder Artist".into());
+
+    let (terminal, _component) = render_wide(&app, true, 0);
+    let rendered = buffer_to_string(&terminal);
+    assert!(rendered.contains("Folder Artist"));
+    assert!(rendered.contains("2024"));
+    assert!(rendered.contains("First Album"));
+    assert!(!rendered.contains("Folder Artist (2024) First Album"));
+}
 
 #[test]
 fn wide_music_headings_and_spacers_are_not_selectable_row_targets() {

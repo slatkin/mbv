@@ -9,7 +9,7 @@
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use tuirealm::event::KeyEvent;
 
-use super::inline_search::InlineSearch;
+use super::inline_search::{InlineSearch, SearchPool};
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
@@ -23,6 +23,36 @@ use super::msg::TerminalObserverEvent;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::{list_duration_secs, trunc_str};
+
+/// Strips the `Artist (Year) ` folder-name prefix from an album's display
+/// name, returning the bare title and resolved release year. Rehomed from the
+/// deleted `wide_album_metadata` (task 9.2) so the Wide hero keeps the
+/// established artist/year/title presentation through the shared panel
+/// without a second painter. `artist` is the resolved display artist the
+/// content projection already carries (`group_album_info`'s
+/// `album_artist_cache` fallback chain).
+pub(in crate::app) fn wide_album_metadata(album: &EmbyItem, artist: &str) -> (String, u32) {
+    let display_name = album.display_name();
+    if let Some((parsed_artist, parsed_year, title)) =
+        crate::app::render::parse_album_folder_name(&display_name)
+    {
+        let year_matches = album.production_year == 0 || album.production_year == parsed_year;
+        if parsed_artist == artist && year_matches {
+            return (title, album.production_year.max(parsed_year));
+        }
+    }
+
+    let prefix = if album.production_year > 0 {
+        format!("{artist} ({}) ", album.production_year)
+    } else {
+        format!("{artist} ")
+    };
+    let title = display_name
+        .strip_prefix(&prefix)
+        .unwrap_or(&display_name)
+        .to_string();
+    (title, album.production_year)
+}
 
 fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     tracks
@@ -58,6 +88,7 @@ pub struct MusicContent {
     last_album_id: Option<String>,
     pub(in crate::app) inline_search: InlineSearch,
     hero_image: HeroImageState,
+    library_search_active: bool,
 }
 
 impl MusicContent {
@@ -82,6 +113,7 @@ impl MusicContent {
             last_album_id: None,
             inline_search: InlineSearch::new(),
             hero_image: HeroImageState::None,
+            library_search_active: false,
         }
     }
 
@@ -116,6 +148,24 @@ impl MusicContent {
         if album_changed {
             self.track_list.select_first();
         }
+
+        // The legacy library-search projection still reaches Music while its
+        // Narrow painter remains in place. Reuse the same InlineSearch owner
+        // for Wide rather than teaching the panel a Music-specific search arm.
+        if let Some(query) = self.context.list.search_query.clone() {
+            if !self.library_search_active {
+                self.inline_search.open();
+                self.inline_search
+                    .set_pool(SearchPool::Items(self.context.list.items.clone()));
+                self.inline_search.restore_query(query);
+            }
+            self.inline_search
+                .set_loading(self.context.list.search_loading);
+            self.library_search_active = true;
+        } else if self.library_search_active {
+            self.inline_search.close();
+            self.library_search_active = false;
+        }
     }
 
     pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
@@ -142,8 +192,28 @@ impl MusicContent {
         self.context.focused = focused;
     }
 
+    fn resolved_hero_data(&self) -> Option<HeroContentData> {
+        let album = self.selected_item()?;
+        let mut data = hero_content_emby(&album);
+        if let Some((artist, _, _)) = self.context.album_info.get(self.selected_album_index()) {
+            let (title, year) = wide_album_metadata(&album, artist);
+            data.facts.title = title;
+            data.facts.meta_rows.clear();
+            if !artist.is_empty() && artist != "Unknown Artist" {
+                data.facts.meta_rows.push(artist.clone());
+            }
+            if year > 0 {
+                data.facts.meta_rows.push(year.to_string());
+            }
+        }
+        Some(data)
+    }
+
     pub(in crate::app) fn hero_data(&mut self) -> Option<HeroContentData> {
-        self.context.selected_album.as_ref().map(hero_content_emby)
+        self.resolved_hero_data().map(|mut data| {
+            data.facts.artwork.image = self.hero_image.clone();
+            data
+        })
     }
 
     pub(in crate::app) fn set_hero_image(&mut self, state: HeroImageState) {
@@ -153,11 +223,9 @@ impl MusicContent {
     pub(in crate::app) fn panel_content(&mut self) -> LibraryPanelContent<'_> {
         // Copy the selected snapshot and focus bit before borrowing either
         // list mutably for the returned slots.
-        let album = self.selected_item();
         let focused = self.context.focused;
         let track_focused = self.track_focused;
-        let hero = album.map(|album| {
-            let mut data = hero_content_emby(&album);
+        let hero = self.resolved_hero_data().map(|mut data| {
             data.facts.artwork.image = self.hero_image.clone();
             HeroContent {
                 facts: data.facts,
@@ -182,6 +250,10 @@ impl MusicContent {
             active: Some(self.context.group_cursor),
         });
         let list = if self.inline_search.is_active() {
+            // Search owns the result geometry for this frame; invalidate the
+            // ordinary album presentation so stale rail hits cannot survive
+            // a search transition.
+            self.carrier.invalidate_paint();
             ListSlot::Search(&mut self.inline_search)
         } else {
             ListSlot::Media(&mut self.carrier)
@@ -485,5 +557,39 @@ mod tests {
 
         owner.context.album_targets.clear();
         assert_eq!(owner.on_slot_event(event), None);
+    }
+
+    #[test]
+    fn wide_album_metadata_removes_artist_and_year_prefix() {
+        // The old `wide_album_metadata` characterization (rehomed here by task
+        // 9.2): a tagged album whose display name still carries the
+        // `Artist (Year) Title` folder prefix must present the bare title and
+        // the parsed release year, even though `derive_album_display_name`
+        // leaves a tagged album's name untouched.
+        let mut album = make_item("Bob Dylan (1970) New Morning", "MusicAlbum");
+        album.artist = "Bob Dylan".into();
+        album.production_year = 1970;
+
+        assert_eq!(
+            wide_album_metadata(&album, "Bob Dylan"),
+            ("New Morning".to_string(), 1970)
+        );
+    }
+
+    #[test]
+    fn resolved_hero_data_uses_parsed_title_year_and_cached_artist() {
+        // The `album_artist_cache` fallback names the artist; the folder-name
+        // parse supplies the title/year the Wide hero presents.
+        let mut owner = MusicContent::new();
+        let mut album = make_item("Folder Artist (2024) First Album", "MusicAlbum");
+        album.artist.clear();
+        album.production_year = 0;
+        let mut ctx = context(album, "overview");
+        ctx.album_info = vec![("Folder Artist".into(), "2024".into(), "First Album".into())];
+        owner.set_content(ctx);
+
+        let data = owner.hero_data().expect("hero data");
+        assert_eq!(data.facts.title, "First Album");
+        assert_eq!(data.facts.meta_rows, vec!["Folder Artist", "2024"]);
     }
 }

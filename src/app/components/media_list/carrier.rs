@@ -164,6 +164,15 @@ impl<Target> MediaListCarrier<Target> {
         }
     }
 
+    /// Invalidate the active presentation's retained paint geometry when a
+    /// different owner (such as Inline Search) takes over the surface.
+    pub fn invalidate_paint(&mut self) {
+        match self.active {
+            Presentation::Wide => self.wide.invalidate_paint(),
+            Presentation::Inline => self.inline.invalidate_paint(),
+        }
+    }
+
     /// Whether the active owner has no selectable rows.
     pub fn is_empty(&self) -> bool {
         match self.active {
