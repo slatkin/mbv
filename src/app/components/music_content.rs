@@ -194,6 +194,24 @@ impl MusicContent {
         self.context.focused = focused;
     }
 
+    /// Move the shared album owner through the common delegation seam
+    /// (design.md D3) and report the resulting selection as the shell's
+    /// `MusicAlbumCursor` request; the owner stays authoritative for the
+    /// selected album and scroll.
+    fn move_album(&mut self, input: RowLocalInput, kind: AlbumCursorKind) -> Option<Msg> {
+        self.carrier.delegate(input, None);
+        let target = self.carrier.selected_target()?;
+        let index = self
+            .context
+            .album_targets
+            .iter()
+            .position(|candidate| candidate == target)?;
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+            target: index,
+            kind,
+        }))
+    }
+
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
         let cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
         if let Some(target) = self.context.album_targets.get(cursor).cloned() {
@@ -422,7 +440,17 @@ impl MusicContent {
                 None
             }
             LibrarySlotEvent::HeroPane(input) => match input {
-                RowLocalInput::Wheel { .. } => None,
+                // The track owner is local to this workspace; the shell
+                // never recomputes a wheel step. Track-pane focus is not a
+                // selection and does not move here (mirrors the retired
+                // `MusicWorkspaceComponent`'s wheel handling).
+                RowLocalInput::Wheel { at, delta } => {
+                    if self.track_list.claims_current_point(at) {
+                        self.track_list
+                            .delegate(RowLocalInput::Wheel { at, delta }, None);
+                    }
+                    None
+                }
                 RowLocalInput::Click(at) | RowLocalInput::DoubleClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     self.track_focused = true;
@@ -501,6 +529,20 @@ impl LibraryContentOwner for MusicContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.inline_search.is_active() {
+            if key.modifiers.contains(KeyModifiers::CONTROL) {
+                if let Some(item) = self.inline_search.selected_item() {
+                    let request = match key.code {
+                        Key::Char('p') => Some(ShellRequest::EmbyLibraryPlay { item }),
+                        Key::Char('a') => Some(ShellRequest::EmbyLibraryEnqueue { item }),
+                        Key::Char('s') => Some(ShellRequest::EmbyLibraryShuffle { item }),
+                        _ => None,
+                    };
+                    if let Some(request) = request {
+                        self.inline_search.close();
+                        return Some(Msg::Shell(request));
+                    }
+                }
+            }
             return match self.inline_search.handle_key(key) {
                 Some(super::inline_search::InlineSearchAction::Activate { id, item_type }) => {
                     Some(Msg::Shell(ShellRequest::InlineSearchActivate {
@@ -574,6 +616,19 @@ impl LibraryContentOwner for MusicContent {
             Key::Char(']') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }))
             }
+            // Album-level navigation (unfocused track pane): the earlier
+            // `self.track_focused` arms above take precedence while the
+            // track pane holds local focus.
+            Key::Up | Key::Char('k') => {
+                self.move_album(RowLocalInput::Move(-1), AlbumCursorKind::Move)
+            }
+            Key::Down | Key::Char('j') => {
+                self.move_album(RowLocalInput::Move(1), AlbumCursorKind::Move)
+            }
+            Key::Home => self.move_album(RowLocalInput::First, AlbumCursorKind::Jump),
+            Key::End => self.move_album(RowLocalInput::Last, AlbumCursorKind::Jump),
+            Key::PageUp => self.move_album(RowLocalInput::Page(-1), AlbumCursorKind::Page),
+            Key::PageDown => self.move_album(RowLocalInput::Page(1), AlbumCursorKind::Page),
             _ => None,
         }
     }

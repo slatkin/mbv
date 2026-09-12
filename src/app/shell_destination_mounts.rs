@@ -284,36 +284,40 @@ mod tests {
         let mut model = Model::new(app);
         model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
 
-        // Album-folder view: the Music workspace is the destination.
-        model.sync_music_workspace();
-        let music_id = model
-            .music_workspace_id
-            .clone()
-            .expect("Music workspace mounted");
-        assert_eq!(library_id_of(&music_id), "lib-music");
-        assert!(model.application.mounted(&music_id));
-        assert!(model.mounted_destinations.contains(&music_id));
+        let music_key = crate::app::components::library_panel::LibraryKey::Service(BrowserKey {
+            service: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib-music".into(),
+            kind: BrowserKind::Music,
+        });
 
-        // Generic view: the Emby browser gate excludes the Music kind, so no
-        // second destination mounts for the same library — at most one
-        // non-search destination per library_id at a time (D1
-        // mutual-exclusion mitigation).
-        model.sync_emby_browser();
-        assert_eq!(model.emby_browser_id, None);
-        let mounted_for_lib: Vec<_> = model
-            .mounted_destinations
-            .iter()
-            .filter(|id| library_id_of(id) == "lib-music")
-            .collect();
-        assert_eq!(
-            mounted_for_lib.len(),
-            1,
-            "no two destination components may share a library_id after visiting both views"
+        // Album-folder view: Music is a `LibraryPanel`-embedded owner (task
+        // 9.4), never a mounted `ComponentId::Browser` destination.
+        model.sync_library_panel();
+        assert!(model.library_panel_has_owner(&music_key));
+        assert!(
+            !model
+                .mounted_destinations
+                .iter()
+                .any(|id| library_id_of(id) == "lib-music"),
+            "Music never registers a Browser destination for its library"
         );
 
-        // Simulate the risk scenario the D1 mitigation names: both keys the
-        // music library can produce are mounted (the generic-view fallback
-        // plus the album-folder Music workspace), sharing one library_id.
+        // Generic view: the Emby browser gate excludes the Music kind, so no
+        // Browser destination mounts for the library either — at most one
+        // non-search destination per library_id at a time (D1
+        // mutual-exclusion mitigation) still holds trivially since Music
+        // never contends for a `ComponentId`.
+        model.sync_emby_browser();
+        assert_eq!(model.emby_browser_id, None);
+        assert!(!model
+            .mounted_destinations
+            .iter()
+            .any(|id| library_id_of(id) == "lib-music"));
+
+        // Simulate the risk scenario the D1 mitigation names: the
+        // generic-view fallback browser mounts for the same library_id the
+        // panel-hosted Music owner already keys off — different registries,
+        // so no conflict is possible.
         let generic_id = browser_id("lib-music", BrowserKind::Generic);
         model
             .application
@@ -326,24 +330,28 @@ mod tests {
             )
             .expect("mount generic fallback browser");
         model.register_destination(&generic_id);
-        assert_ne!(music_id, generic_id);
-        assert!(model.application.mounted(&music_id));
         assert!(model.application.mounted(&generic_id));
+        assert!(model.library_panel_has_owner(&music_key));
 
-        // Retire the library: reconciliation keys on library_id presence, so
-        // BOTH destinations for the retired library are unmounted together.
+        // Retire the library: reconciliation retires the Browser destination,
+        // and the panel's owner-retention pass (driven by
+        // `sync_library_panel`) drops the retired library's Music owner. Move
+        // the tab off the removed library first, mirroring the shell's own
+        // `normalize_stale_browse_destination` pass so the push below never
+        // indexes the now-empty `libs`.
         model.app.libs.remove(0);
+        model.app.tab = TabSelection::Home;
         model.reconcile_destination_mounts();
-        assert!(
-            !model.application.mounted(&music_id),
-            "the Music destination must be retired"
-        );
+        model.sync_library_panel();
         assert!(
             !model.application.mounted(&generic_id),
             "the Generic destination must be retired"
         );
-        assert!(!model.mounted_destinations.contains(&music_id));
         assert!(!model.mounted_destinations.contains(&generic_id));
+        assert!(
+            !model.library_panel_has_owner(&music_key),
+            "the retired library's Music owner must be dropped"
+        );
     }
 
     fn library_id_of(id: &ComponentId) -> &str {

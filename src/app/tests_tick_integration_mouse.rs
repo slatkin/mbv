@@ -5,7 +5,7 @@ use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKi
 
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
-    ComponentId, ModalId, Msg, MusicWorkspaceComponent, OverlayId, QueueComponent, ShellRequest,
+    ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest,
 };
 use crate::app::render::make_music_group_app;
 use crate::app::tests::{make_app_stub, make_item};

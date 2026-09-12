@@ -71,14 +71,24 @@ fn render_narrow(
 fn press(model: &mut Model, code: Key) {
     let focused = model.application.focus().cloned();
     if let Some(id) = &focused {
-        let msg = model
-            .application
-            .get_component_mut(id)
-            .expect("focused component mounted")
-            .on(&Event::Keyboard(KeyEvent {
-                code,
-                modifiers: KeyModifiers::NONE,
-            }));
+        let msg = if matches!(id, ComponentId::Library) {
+            use crate::app::components::library_panel::owner::LibraryContentOwner;
+            model
+                .test_music_owner_mut()
+                .on_key(&tuirealm::event::KeyEvent {
+                    code,
+                    modifiers: tuirealm::event::KeyModifiers::NONE,
+                })
+        } else {
+            model
+                .application
+                .get_component_mut(id)
+                .expect("focused component mounted")
+                .on(&Event::Keyboard(KeyEvent {
+                    code,
+                    modifiers: KeyModifiers::NONE,
+                }))
+        };
         if let Some(msg) = msg {
             let mut music_resize = false;
             let mut tv_resize = false;
@@ -215,12 +225,16 @@ fn narrow_music_image_bearing_fixture_emits_the_selected_album_art() {
     app.image_protocol_enabled = true;
     let mut model = mounted_model_at(app, NW, NH);
     let _ = draw_mounted_frame(&mut model, NW, NH);
+    // The fixture's resting cursor (0) lands on "album-1" ("First Album"),
+    // the fixture's original first item; task 9.4's `sync_library_hero_images`
+    // projects only the selected album's own hero art (design D9: no
+    // paint-time neighbour pre-warm survives the panel migration).
     assert!(
         model
             .app
             .card_image_loading
             .iter()
-            .any(|k| k == "alpha-1:P"),
+            .any(|k| k == "album-1:P"),
         "the selected album's projected hero art is requested: {:?}",
         model.app.card_image_loading
     );
@@ -282,7 +296,7 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
     assert_eq!(album_cursor(&model, &id), last);
     let wide_scroll = mounted_music_scroll(&model);
     assert!(wide_scroll > 0, "the bottom album scrolls the wide rail");
-    let wide_offset = wide_anchor_offset(&model, &id);
+    let wide_offset = wide_anchor_offset(&model);
 
     // Wide -> Narrow: the selected album and its screen-row offset carry over.
     let narrow = resize_draw(&mut model, 60, 30);
@@ -312,7 +326,7 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
         "wide album_scroll recomputes to the identical bottom-anchored offset"
     );
     assert_eq!(
-        wide_anchor_offset(&model, &id),
+        wide_anchor_offset(&model),
         wide_offset,
         "the selected-row screen offset is preserved across the round trip"
     );
@@ -450,15 +464,11 @@ fn narrow_music_inline_hero_keeps_the_box_while_the_image_loads() {
     );
 }
 
-/// The wide selected-row screen offset the component published this frame
-/// (index of the selected album row below the artist header + earlier albums).
-fn wide_anchor_offset(model: &Model, id: &ComponentId) -> usize {
-    let component = model
-        .application
-        .get_component(id)
-        .and_then(|c| c.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .expect("music workspace");
-    let layout = component.layout();
+/// The wide selected-row screen offset the mounted `LibraryPanel` published
+/// this frame (index of the selected album row below the artist header +
+/// earlier albums).
+fn wide_anchor_offset(model: &Model) -> usize {
+    let layout = super::test_helpers::mounted_music_layout(model);
     let rect = layout.selected_item_rect.expect("wide selected-row rect");
     (rect.y - layout.left_area.y) as usize
 }

@@ -355,7 +355,7 @@ fn wide_music_harness() -> (TickHarness, ComponentId) {
 
 /// The focused track-pane row, or `None` when the track pane is unfocused
 /// (design.md D5: focus is parent state, the owner holds the selection).
-fn music_track_focus_row(harness: &TickHarness, id: &ComponentId) -> Option<usize> {
+fn music_track_focus_row(harness: &TickHarness, _id: &ComponentId) -> Option<usize> {
     let music = harness.model().test_music_owner();
     music
         .track_focused()
@@ -450,7 +450,7 @@ fn music_library_queue_library_round_trip_keeps_focus_and_pane_state() {
 /// rather than the ordinary album cursor.
 #[test]
 fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
-    let (mut harness, id) = wide_music_harness();
+    let (mut harness, _id) = wide_music_harness();
 
     // Open Inline Search from the focused Music workspace.
     harness.inject(key(Key::Char('/')));

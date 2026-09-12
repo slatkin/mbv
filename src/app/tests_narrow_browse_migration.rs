@@ -304,7 +304,7 @@ fn narrow_grouped_music_j_moves_painted_selection() {
     let mut term = narrow_backend();
 
     draw(&mut model, &mut term);
-    let before = model.app.layout.main.selected_item_rect;
+    let before = model.test_painted_library_layout().selected_item_rect;
     assert!(
         before.is_some(),
         "narrow grouped Music must paint a selected album row"
@@ -312,7 +312,7 @@ fn narrow_grouped_music_j_moves_painted_selection() {
 
     press(&mut model, Key::Char('j'));
     draw(&mut model, &mut term);
-    let after = model.app.layout.main.selected_item_rect;
+    let after = model.test_painted_library_layout().selected_item_rect;
 
     assert_ne!(
         before, after,

@@ -2,6 +2,7 @@
 
 use super::super::*;
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::library_panel::owner::LibraryContentOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::Msg;
 use crate::app::render::make_movie_app;
@@ -139,11 +140,17 @@ fn dispatch_component_key(
     code: Key,
     modifiers: KeyModifiers,
 ) -> ShellRequest {
-    let message = model
-        .application
-        .get_component_mut(id)
-        .expect("workspace mounted")
-        .on(&Event::Keyboard(KeyEvent { code, modifiers }));
+    let message = if matches!(id, ComponentId::Library) {
+        model
+            .test_music_owner_mut()
+            .on_key(&tuirealm::event::KeyEvent { code, modifiers })
+    } else {
+        model
+            .application
+            .get_component_mut(id)
+            .expect("workspace mounted")
+            .on(&Event::Keyboard(KeyEvent { code, modifiers }))
+    };
     let Some(Msg::Shell(request)) = message else {
         panic!("workspace key must emit a shell request");
     };

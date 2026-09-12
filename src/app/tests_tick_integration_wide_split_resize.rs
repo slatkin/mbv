@@ -9,9 +9,7 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::{
-    ComponentId, Msg, MusicWorkspaceComponent, ShellRequest, UserEvent,
-};
+use crate::app::components::{ComponentId, Msg, ShellRequest, UserEvent};
 use crate::app::render::make_movie_app;
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
@@ -168,7 +166,7 @@ fn wide_hero_boundary_gap_is_visually_inert_on_a_wide_music_surface() {
     let with_boundary = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(!harness.model().application.mounted(&ComponentId::WideHeroBoundary));
+    assert!(harness.model().application.mounted(&ComponentId::WideHeroBoundary));
     let gap = harness
         .model()
         .application
@@ -293,7 +291,7 @@ fn wide_hero_boundary_owns_the_gap_and_adjacent_panes_keep_their_gestures() {
     draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(!harness.model().application.mounted(&ComponentId::WideHeroBoundary));
+    assert!(harness.model().application.mounted(&ComponentId::WideHeroBoundary));
     let gap = harness
         .model()
         .application

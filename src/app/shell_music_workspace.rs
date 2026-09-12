@@ -62,6 +62,15 @@ impl Model {
         let Some(index) = self.app.tab.emby_library_index() else {
             return;
         };
+        // A freshly created owner (first push for this `LibraryKey`) has no
+        // prior selection to preserve: adopt the shell's resting cursor once,
+        // explicitly, exactly as the old mount-time trigger did. A re-point
+        // at an already-installed owner keeps its divergent local cursor.
+        if let Some(key) = self.music_owner_key() {
+            if !self.library_panel_has_owner(&key) {
+                self.music_workspace_reanchor = true;
+            }
+        }
         let resting = self.app.libs[index]
             .nav_stack
             .last()

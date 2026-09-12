@@ -137,9 +137,20 @@ fn narrow_grouped_music_shows_group_pill_bar() {
     let app = make_music_group_app();
     let mut model = mounted_model_at(app, 60, 30);
     let output = draw_mounted_frame(&mut model, 60, 30);
-    let layout = super::test_helpers::mounted_music_layout(&model);
+    let selector_tabs = model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .expect("Library panel mounted")
+        .test_selector_hits()
+        .regions()
+        .to_vec();
     assert!(
-        !layout.selector_tabs.is_empty(),
+        !selector_tabs.is_empty(),
         "narrow grouped Music must publish group selector pills:\n{output}"
     );
     assert!(

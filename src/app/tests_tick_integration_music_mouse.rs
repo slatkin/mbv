@@ -39,7 +39,7 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
         let music = harness.model().test_music_owner();
         (music.track_focused(), music.track_selected_row())
     };
-    let (track_point, second_track_point) = {
+    let (_track_point, second_track_point) = {
         let music = harness.model().test_music_owner();
         let content = music.track_list
             .current_content_rect()
@@ -127,7 +127,6 @@ fn music_wide_album_and_group_pill_use_their_own_retained_geometry() {
     app.panel_mode = PanelMode::LibraryOnly;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let music_id = ComponentId::Library;
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -251,7 +250,6 @@ fn music_narrow_album_activation_opens_the_track_selection_modal() {
     app.panel_mode = PanelMode::LibraryOnly;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let music_id = ComponentId::Library;
 
     let mut terminal = Terminal::new(TestBackend::new(80, 12)).unwrap();
     terminal

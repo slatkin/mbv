@@ -77,7 +77,7 @@ fn focused_music_track_falls_back_safely_when_cache_missing() {
     // Async fetch still in flight: `album_tracks_cache` has no entry for
     // "album-1" yet. The component holds no selected track and must not
     // panic; the shell target stays `None`.
-    let (mut model, id) = wide_track_focus_model(0);
+    let (mut model, _id) = wide_track_focus_model(0);
     // `push_tracks(.., 0)` inserts an empty vec; drop even that so the cache
     // genuinely has no entry for the selected album.
     model.app.album_tracks_cache.remove("album-1");

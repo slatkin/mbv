@@ -15,7 +15,7 @@ use super::test_helpers::{
     mounted_music_scroll,
 };
 use super::*;
-use crate::app::components::{ComponentId, MusicWorkspaceComponent};
+use crate::app::components::ComponentId;
 use crate::app::shell::Model;
 use crate::app::tests::make_item;
 use crate::app::PanelFocus;

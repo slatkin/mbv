@@ -67,7 +67,12 @@ pub use self::msg::{
     SettingsIntent, ShellRequest, TerminalObserverEvent,
 };
 pub use self::multiselect::MultiselectComponent;
+// `MusicContent`/`MusicWorkspaceComponent` are no longer mounted in
+// production (task 9.4 registered Music as a `LibraryPanel`-embedded owner);
+// these re-exports now serve test-only callers.
+#[cfg(test)]
 pub(in crate::app) use self::music_content::MusicContent;
+#[cfg(test)]
 pub use self::music_workspace::MusicWorkspaceComponent;
 pub use self::playlists::PlaylistsComponent;
 pub(in crate::app) use self::playlists::PlaylistsContent;
