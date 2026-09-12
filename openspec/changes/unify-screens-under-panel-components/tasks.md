@@ -208,7 +208,7 @@ choose a focus kind, pick a surface or lay out a pane.
 *Unification:* removes `render_wide_movies`, the Narrow Movie banner model, the count-label row and the
 Grid catalog.
 
-- [ ] 6.1 Convert `BrowserComponent` for Movies, HomeVideos and Generic into `BrowserContent`: letter
+- [x] 6.1 Convert `BrowserComponent` for Movies, HomeVideos and Generic into `BrowserContent`: letter
   pills → Selector row, home-video count → List controls label, hero from the shared `EmbyItem` producer, Inline Search as list
   slot state; generic libraries use the Wide/Inline presentations (no Grid). Delete
   `browser/paint.rs::render_wide_movies`, the Movies/HomeVideos/Generic arms of
