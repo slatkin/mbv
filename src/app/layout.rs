@@ -70,34 +70,28 @@ pub(crate) struct LayoutMain {
     pub panel_area: Rect,
     /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
     pub panel_content_area: Rect,
-    /// Item rows of the last-rendered flat library list (plain and
-    /// letter-grouped renderers), parallel to the display-row sequence:
-    /// each entry holds the item indices occupying that display row, left to
-    /// right (empty for headers/fillers). Column-aware cursor movement and
-    /// mouse hit-testing resolve cells from this between frames.
-    pub left_item_rows: Vec<Vec<usize>>,
     pub left_area: Rect,
     /// The full area `App::render_home_list` was given (hero + pills + list,
     /// not just the inner list). The shell reads this to re-paint the
     /// mounted `HomeComponent`'s `view()` over the same area right after
     /// Root frame composition returns (task 3.4).
     pub home_area: Rect,
-    /// The selected item's hero geometry. Wide screens place it beside `left_area`;
-    /// inline screens place the replacement inside the list and use it as the
-    /// selected parent's activation geometry.
+}
+
+/// Test-only row/hero/pill geometry shape, mirroring the fields the deleted
+/// destination components (Home/TV/Music) used to publish onto `LayoutMain`
+/// (task 12.3). It exists solely so the shared characterization test helpers
+/// keep one common return shape; production code never constructs it — each
+/// owning component answers real requests (mouse-hit, context-menu anchor)
+/// from its own retained fields instead.
+#[cfg(test)]
+#[derive(Clone, Default)]
+pub(crate) struct PaintedRowGeometry {
+    pub left_area: Rect,
     pub hero_area: Rect,
-    /// Selected-parent geometry only for inline replacement. Wide hero areas
-    /// remain render bookkeeping and are intentionally not interactive.
     pub inline_hero_area: Rect,
-    /// Screen rect of the selected row/cell in the library panel. The outer
-    /// selectable renderer owns this; nested detail/hero renderers never
-    /// overwrite it. Consumed by the context menu's keyboard anchor.
     pub selected_item_rect: Option<Rect>,
-    /// Pill/tab hitboxes published by the owning pill painters; placement and
-    /// width remain owned by the shared pill-bar component. The music
-    /// group-selector publishes these before paint.
     pub selector_tabs: Vec<(Rect, usize)>,
-    pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
 }
 
 /// Root/chrome frame geometry computed paint-free by

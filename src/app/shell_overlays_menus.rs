@@ -98,7 +98,12 @@ impl Model {
                         Some((panel, selected)) => (panel, selected),
                         None => match self.book_menu_geometry() {
                             Some((panel, selected)) => (panel, selected),
-                            None => (layout.main.left_area, layout.main.selected_item_rect),
+                            // No owning component publishes a selected-row
+                            // anchor for this destination yet; the panel
+                            // still places the menu, just without a row
+                            // anchor (matches the legacy `AppLayout` mirror's
+                            // behaviour, which never populated this field).
+                            None => (layout.main.left_area, None),
                         },
                     },
                     PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),

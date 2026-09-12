@@ -543,18 +543,12 @@ fn aggregate_zero_area_render_leaves_layout_untouched() {
     // frame left it — no fresh-draft install, no partial mutation.
     let mut app = make_app_stub();
     app.layout.main.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
-    app.layout.main.hero_area = ratatui::layout::Rect::new(1, 2, 30, 12);
     let before_left = app.layout.main.left_area;
-    let before_hero = app.layout.main.hero_area;
     let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
     term.draw(|f| app.compose_root_frame(f)).unwrap();
     assert_eq!(
         app.layout.main.left_area, before_left,
         "zero-area render must not touch left_area"
-    );
-    assert_eq!(
-        app.layout.main.hero_area, before_hero,
-        "zero-area render must not touch hero_area"
     );
 }
 

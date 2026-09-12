@@ -31,10 +31,9 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
                 row_ctx,
                 ctx.letter_filter.clone(),
                 ctx.true_total(),
-                layout,
             )
         } else {
-            super::media_list::render_plain_rows(f, row_ctx, layout)
+            super::media_list::render_plain_rows(f, row_ctx)
         }
     }
 }

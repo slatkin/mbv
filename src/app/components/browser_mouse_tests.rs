@@ -38,11 +38,11 @@ fn browser_reorder_preserves_stable_target_for_click() {
 /// Narrow canonical-list path (task 6.2): with `wide_movies` false and the
 /// hero-capable browse surface reserving an inline hero block
 /// (`hero_placeholder`), the active control is the embedded
-/// `InlineMediaBrowser`, not the generic two-column grid — `left_item_rows`
-/// stays empty and row identity comes from `inline_browser.resolve_point`
-/// (design.md D6). A left click below the reserved hero block must move the
-/// cursor to the clicked row and emit the resolved target, exactly like the
-/// wide rail's `browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks`.
+/// `InlineMediaBrowser`, not the generic two-column grid, and row identity
+/// comes from `inline_browser.resolve_point` (design.md D6). A left click
+/// below the reserved hero block must move the cursor to the clicked row and
+/// emit the resolved target, exactly like the wide rail's
+/// `browser_mouse_uses_the_painted_two_column_cell_for_left_and_right_clicks`.
 #[test]
 fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
     let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
@@ -56,10 +56,6 @@ fn narrow_canonical_list_click_moves_cursor_and_emits_row_click() {
     terminal
         .draw(|frame| browser.view(frame, frame.area()))
         .unwrap();
-    assert!(
-        browser.test_layout().left_item_rows.is_empty(),
-        "narrow canonical path must not populate the generic-grid row map"
-    );
 
     let (area, _targets) = browser.test_inline_targets();
     let target = browser.cursor();
@@ -191,8 +187,8 @@ fn narrow_canonical_list_pill_click_emits_pill_click() {
         .unwrap();
 
     let (rect, target) = browser
-        .test_layout()
-        .selector_tabs
+        .test_pill_regions()
+        .regions()
         .iter()
         .find(|(_, target)| *target == 2)
         .copied()

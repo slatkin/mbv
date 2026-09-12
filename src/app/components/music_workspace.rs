@@ -40,6 +40,13 @@ pub struct MusicWorkspaceComponent {
     pub(super) album_columns: usize,
     pub(super) page_rows: usize,
     layout: LayoutMain,
+    /// The selected item's hero geometry the last painted skeleton produced
+    /// (Wide places it beside `layout.left_area`; Narrow places it inside
+    /// the list as the selected parent's replacement).
+    hero_area: Rect,
+    /// Screen rect of the selected row/cell the last painted skeleton
+    /// produced.
+    selected_item_rect: Option<Rect>,
     inline_track_focus_enabled: bool,
     mouse_gestures: MouseGestureState,
     wide_browser_content_height: Option<usize>,
@@ -75,6 +82,8 @@ impl MusicWorkspaceComponent {
             album_columns: 1,
             page_rows: 1,
             layout: LayoutMain::default(),
+            hero_area: Rect::default(),
+            selected_item_rect: None,
             inline_track_focus_enabled: false,
             mouse_gestures: MouseGestureState::new(),
             wide_browser_content_height: None,
@@ -456,6 +465,20 @@ impl MusicWorkspaceComponent {
         &self.layout
     }
 
+    /// The selected item's hero geometry the last painted skeleton produced,
+    /// for the hero-boundary test path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_hero_area(&self) -> Rect {
+        self.hero_area
+    }
+
+    /// Screen rect of the selected row/cell the last painted skeleton
+    /// produced, for the selected-row test path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_selected_item_rect(&self) -> Option<Rect> {
+        self.selected_item_rect
+    }
+
     #[cfg(test)]
     pub(in crate::app) fn test_narrow_content_rect(&self) -> Rect {
         self.carrier
@@ -499,6 +522,8 @@ impl InlineSearchHost for MusicWorkspaceComponent {
 impl Component for MusicWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
+        self.hero_area = Rect::default();
+        self.selected_item_rect = None;
         self.wide_geometry = None;
         self.panel_image_paint = None;
         let wide = wide_hero_fits(area);
@@ -548,14 +573,12 @@ impl Component for MusicWorkspaceComponent {
             ) {
                 self.panel_image_paint = geometry.hero_image.clone();
                 self.layout.left_area = geometry.list_area;
-                self.layout.hero_area = geometry.hero_area;
-                self.layout.selected_item_rect = geometry.selected;
+                self.hero_area = geometry.hero_area;
+                self.selected_item_rect = geometry.selected;
                 self.wide_geometry = Some(geometry);
                 self.pill_regions.clear();
-                self.layout.selector_tabs.clear();
                 for (rect, target) in hits.selector.regions() {
                     self.pill_regions.push(*rect, *target);
-                    self.layout.selector_tabs.push((*rect, *target));
                 }
                 if let Some(height) = self.wide_geometry.as_ref().map(|g| g.list_area.height) {
                     self.wide_browser_content_height = Some(height as usize);
@@ -575,20 +598,16 @@ impl Component for MusicWorkspaceComponent {
                 render_narrow_skeleton(frame, area, &mut panel_content, focused, &mut hits);
             self.panel_image_paint = geometry.inline_hero_image.clone();
             self.layout.left_area = geometry.list_area;
-            self.layout.hero_area = geometry.inline_hero.unwrap_or_default();
-            self.layout.inline_hero_area = self.layout.hero_area;
-            self.layout.selected_item_rect = geometry.selected;
-            self.layout.selector_tabs.clear();
+            self.hero_area = geometry.inline_hero.unwrap_or_default();
+            self.selected_item_rect = geometry.selected;
             self.pill_regions.clear();
             for (rect, target) in hits.selector.regions() {
                 self.pill_regions.push(*rect, *target);
-                self.layout.selector_tabs.push((*rect, *target));
             }
         } else {
+            // The Wide skeleton painted nothing this frame (no geometry):
+            // nothing to adopt into the pill hit-registry.
             self.pill_regions.clear();
-            for (rect, target) in &self.layout.selector_tabs {
-                self.pill_regions.push(*rect, *target);
-            }
         }
     }
 

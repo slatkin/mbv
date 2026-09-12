@@ -6,6 +6,7 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::music_content::MusicContent;
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::{BrowserComponent, ComponentId};
+use crate::app::layout::PaintedRowGeometry;
 use crate::app::shell::Model;
 use crate::app::{App, PanelFocus};
 use ratatui::backend::TestBackend;
@@ -107,7 +108,7 @@ pub fn mounted_music_wide_geometry(
         .expect("wide Music skeleton painted")
 }
 
-pub fn mounted_music_layout(model: &Model) -> LayoutMain {
+pub fn mounted_music_layout(model: &Model) -> PaintedRowGeometry {
     model
         .application
         .get_component(&ComponentId::Library)
@@ -151,10 +152,10 @@ pub fn tv_owner(model: &Model) -> &TvContent {
         .expect("TvContent")
 }
 
-/// The TV owner's painted geometry, surfaced as a `LayoutMain` so the shared
+/// The TV owner's painted geometry, surfaced as `PaintedRowGeometry` so the shared
 /// role-rect assertions keep working: the mounted `LibraryPanel` owns the
 /// rects and publishes them through its own retained-geometry accessor.
-pub fn mounted_tv_layout(model: &Model) -> LayoutMain {
+pub fn mounted_tv_layout(model: &Model) -> PaintedRowGeometry {
     model
         .application
         .get_component(&ComponentId::Library)

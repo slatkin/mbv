@@ -166,7 +166,6 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
         .expect("panel painted geometry");
     let (panel, selected) = painted;
     model.app.layout.main.left_area = Rect::new(0, 0, 200, 200);
-    model.app.layout.main.selected_item_rect = Some(Rect::new(500, 500, 1, 1));
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -196,14 +195,11 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
         "menu must anchor to the component-painted Home geometry, got {rect:?}"
     );
 
-    // A fallback to the poisoned legacy geometry would land the menu at the
-    // panel's bottom-right corner instead of the component's placement.
-    let (px, py) = ContextMenu::place(
-        Rect::new(0, 0, 200, 200),
-        size,
-        Some(&Rect::new(500, 500, 1, 1)),
-        None,
-    );
+    // A fallback to the poisoned legacy `left_area` (the shell mirror no
+    // longer carries a `selected_item_rect` to poison at all) would land the
+    // menu at the panel's bottom-right corner instead of the component's
+    // placement.
+    let (px, py) = ContextMenu::place(Rect::new(0, 0, 200, 200), size, None, None);
     assert_ne!(
         (rect.x, rect.y),
         (px, py),
@@ -269,7 +265,6 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         .expect("panel painted geometry");
     let (panel, selected) = painted;
     model.app.layout.main.left_area = Rect::new(0, 0, 200, 200);
-    model.app.layout.main.selected_item_rect = Some(Rect::new(500, 500, 1, 1));
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -299,14 +294,11 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         "menu must anchor to the component-painted Narrow Home geometry, got {rect:?}"
     );
 
-    // A fallback to the poisoned legacy geometry would land the menu at the
-    // panel's bottom-right corner instead of the component's placement.
-    let (px, py) = ContextMenu::place(
-        Rect::new(0, 0, 200, 200),
-        size,
-        Some(&Rect::new(500, 500, 1, 1)),
-        None,
-    );
+    // A fallback to the poisoned legacy `left_area` (the shell mirror no
+    // longer carries a `selected_item_rect` to poison at all) would land the
+    // menu at the panel's bottom-right corner instead of the component's
+    // placement.
+    let (px, py) = ContextMenu::place(Rect::new(0, 0, 200, 200), size, None, None);
     assert_ne!(
         (rect.x, rect.y),
         (px, py),

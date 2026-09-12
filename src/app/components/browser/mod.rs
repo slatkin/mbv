@@ -48,6 +48,13 @@ pub struct BrowserComponent {
     last_identity: Option<BrowserIdentity>,
     focused: bool,
     layout: LayoutMain,
+    /// Selected-parent geometry for the inline replacement, published by the
+    /// narrow-browse composer; the parent-owned mouse-hit region for the
+    /// hero click a wheel/scroll gesture over the Inline presentation claims.
+    inline_hero_area: Rect,
+    /// Screen rect of the selected row/cell the narrow-browse composer last
+    /// painted, consumed by the context menu's keyboard anchor.
+    selected_item_rect: Option<Rect>,
     /// Runtime terminal-capability flag (config-derived), set by the shell so
     /// the component can paint the hero text like every other surface.
     use_nerd_fonts: bool,
@@ -76,7 +83,7 @@ pub struct BrowserComponent {
     mouse_gestures: MouseGestureState,
     /// Irregular painted chrome — the selector-pill row — as last-push-wins
     /// rectangles (design.md D6). Repopulated in `view()` from the pill rects
-    /// the narrow/wide composer just painted into `self.layout.selector_tabs`.
+    /// the narrow composer's returned geometry just painted.
     pill_regions: HitRegions<usize>,
     /// The embedded Inline Search control (design.md D1). `BrowserComponent`
     /// is its sole event boundary: it gets keyboard/mouse first refusal while
@@ -119,6 +126,8 @@ impl BrowserComponent {
             last_identity: None,
             focused: false,
             layout: LayoutMain::default(),
+            inline_hero_area: Rect::default(),
+            selected_item_rect: None,
             use_nerd_fonts: false,
             images_enabled: true,
             list_pane_width: None,
@@ -302,7 +311,7 @@ impl BrowserComponent {
                 // the Inline list).
                 let claimed = self.carrier.claims_current_point(at)
                     || (self.carrier.active() == Presentation::Inline
-                        && self.layout.inline_hero_area.contains(at));
+                        && self.inline_hero_area.contains(at));
                 if !claimed {
                     return None;
                 }
@@ -351,7 +360,7 @@ impl BrowserComponent {
     /// selection to the row under it (a blank/gap click leaves the selection
     /// unchanged, matching the legacy behaviour) and return `true`.
     fn claim_list_point(&mut self, at: Position) -> bool {
-        if !(self.layout.left_area.contains(at) || self.layout.inline_hero_area.contains(at)) {
+        if !(self.layout.left_area.contains(at) || self.inline_hero_area.contains(at)) {
             return false;
         }
         let Some(target) = self.resolve_row_target(at) else {
@@ -376,6 +385,12 @@ impl BrowserComponent {
     #[cfg(test)]
     pub(crate) fn test_layout(&self) -> &LayoutMain {
         &self.layout
+    }
+
+    /// The last painted frame's pill hitboxes, for the pill-click test path.
+    #[cfg(test)]
+    pub(crate) fn test_pill_regions(&self) -> &HitRegions<usize> {
+        &self.pill_regions
     }
 
     #[cfg(test)]
@@ -450,6 +465,9 @@ impl Component for BrowserComponent {
         // anchor transfer, no cursor/scroll seeding from a shell mirror.
         self.ensure_carrier();
         self.layout = LayoutMain::default();
+        self.inline_hero_area = Rect::default();
+        self.selected_item_rect = None;
+        self.pill_regions.clear();
         let mut context = self
             .context
             .clone()
@@ -492,24 +510,25 @@ impl Component for BrowserComponent {
             // only the poster image still needing paint (the shell executes it
             // via `App::paint_home_image`, mirroring the wide path and
             // `HomeComponent`).
-            let (_scroll, image_paint) = crate::app::render::render_narrow_browse_with_ctx(
-                frame,
-                area,
-                &context,
-                &self.narrow_extras,
-                self.focused,
-                &mut self.layout,
-                self.carrier.inline_mut(),
-            );
+            let (_scroll, image_paint, geometry) =
+                crate::app::render::render_narrow_browse_with_ctx(
+                    frame,
+                    area,
+                    &context,
+                    &self.narrow_extras,
+                    self.focused,
+                    &mut self.layout,
+                    self.carrier.inline_mut(),
+                );
             self.image_paint = image_paint;
-        }
+            self.inline_hero_area = geometry.inline_hero_area;
+            self.selected_item_rect = geometry.selected_item_rect;
 
-        // Adopt the selector-pill rects the composer just painted into the
-        // irregular-chrome registry (design.md D6). `selector_tabs` is the
-        // composer's own painted output for this frame.
-        self.pill_regions.clear();
-        for (rect, target) in &self.layout.selector_tabs {
-            self.pill_regions.push(*rect, *target);
+            // Adopt the selector-pill rects the composer just painted into
+            // the irregular-chrome registry (design.md D6).
+            for (rect, target) in &geometry.selector_tabs {
+                self.pill_regions.push(*rect, *target);
+            }
         }
     }
 

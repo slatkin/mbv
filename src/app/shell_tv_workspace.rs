@@ -150,7 +150,9 @@ impl Model {
     /// characterization tests that used to read the deleted component's
     /// geometry (task 8.4).
     #[cfg(test)]
-    pub(in crate::app) fn test_painted_library_layout(&self) -> crate::app::layout::LayoutMain {
+    pub(in crate::app) fn test_painted_library_layout(
+        &self,
+    ) -> crate::app::layout::PaintedRowGeometry {
         self.application
             .get_component(&ComponentId::Library)
             .expect("library panel mounted")

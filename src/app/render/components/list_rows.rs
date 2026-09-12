@@ -49,7 +49,6 @@ pub(in crate::app::render) struct InlineReplacementPlan<'a> {
     detail_rows: u16,
     total_display_rows: usize,
     offset: usize,
-    detail_screen_row: Option<usize>,
 }
 
 impl<'a> InlineReplacementPlan<'a> {
@@ -72,7 +71,7 @@ impl<'a> InlineReplacementPlan<'a> {
                 stored_offset,
             )
         });
-        let (detail_rows, offset, detail_screen_row) = match admitted.flatten() {
+        let (detail_rows, offset) = match admitted.flatten() {
             Some(flow) => {
                 let mut offset = flow.offset;
                 if matches!(
@@ -87,11 +86,7 @@ impl<'a> InlineReplacementPlan<'a> {
                         offset = header_offset;
                     }
                 }
-                (
-                    desired_detail_rows,
-                    offset,
-                    Some(selected_row.saturating_sub(offset)),
-                )
+                (desired_detail_rows, offset)
             }
             None => {
                 if selected_row >= display_rows.len() {
@@ -104,13 +99,12 @@ impl<'a> InlineReplacementPlan<'a> {
                         detail_rows: 0,
                         total_display_rows: display_rows.len(),
                         offset,
-                        detail_screen_row: None,
                     };
                 }
                 let visible_rows = visible_rows as usize;
                 let lower_bound = selected_row.saturating_sub(visible_rows.saturating_sub(1));
                 let offset = stored_offset.clamp(lower_bound, selected_row);
-                (0, offset, None)
+                (0, offset)
             }
         };
         let total_display_rows =
@@ -122,7 +116,6 @@ impl<'a> InlineReplacementPlan<'a> {
             detail_rows,
             total_display_rows,
             offset,
-            detail_screen_row,
         }
     }
 
@@ -136,14 +129,6 @@ impl<'a> InlineReplacementPlan<'a> {
 
     pub(in crate::app::render) fn total_display_rows(&self) -> usize {
         self.total_display_rows
-    }
-
-    pub(in crate::app::render) fn hero_area(&self, content_area: Rect) -> Option<Rect> {
-        self.detail_screen_row.map(|screen_row| Rect {
-            y: content_area.y + screen_row as u16,
-            height: self.detail_rows,
-            ..content_area
-        })
     }
 
     pub(in crate::app::render) fn display_row(
@@ -387,38 +372,6 @@ pub(in crate::app::render) fn item_cell_spans(
         spans.push(pad_span);
     }
     spans
-}
-
-/// The screen rect of the selected cell in a column-aware list, derived from
-/// the same `item_rows`/`row_offset` inputs `draw_column_selection_bleed`
-/// consumes plus the cell-width/column-gap geometry the renderer already
-/// computed. Returns `None` when the cursor isn't on screen (e.g. it sits in
-/// a filtered-out bucket).
-pub(in crate::app::render) fn selected_cell_rect(
-    content_area: Rect,
-    cursor: usize,
-    item_rows: &[Vec<usize>],
-    row_offset: usize,
-    cols: usize,
-    cell_width: u16,
-    column_gap: u16,
-) -> Option<Rect> {
-    let cursor_row = item_rows.iter().position(|row| row.contains(&cursor))?;
-    let row_idx = cursor_row.checked_sub(row_offset)?;
-    let col_in_row = item_rows[cursor_row]
-        .iter()
-        .position(|&idx| idx == cursor)
-        .unwrap_or(0);
-    let col = col_in_row.min(cols.saturating_sub(1));
-    let cell_x = content_area
-        .x
-        .saturating_add(col as u16 * cell_width.saturating_add(column_gap));
-    Some(Rect {
-        x: cell_x,
-        y: content_area.y + row_idx as u16,
-        width: cell_width,
-        height: 1,
-    })
 }
 
 /// Draws the library list's selected-row background extension after the

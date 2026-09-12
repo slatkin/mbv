@@ -5,7 +5,7 @@ use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::{BrowserComponent, ComponentId, MusicWorkspaceComponent};
-use crate::app::layout::LayoutMain;
+use crate::app::layout::{LayoutMain, PaintedRowGeometry};
 use crate::app::tests::make_item;
 use crate::app::{PanelFocus, SeriesDetail, TabSelection};
 use mbv_core::config::{FeedKind, FeedSubscription};
@@ -34,13 +34,14 @@ fn render_reserved_library_area(
 /// Render an Emby browse surface (Movies / TV / grouped Music) through the real
 /// `Model::draw_frame` shell path — the mounted `BrowserComponent` /
 /// `MusicWorkspaceComponent` is the sole painter after task 3.8 — and surface
-/// the active component's own painted geometry as a `LayoutMain` so the shared
-/// conformance assertions still hold (mirrors `render_music_component`).
+/// the active component's own painted geometry as a `PaintedRowGeometry` so
+/// the shared conformance assertions still hold (mirrors
+/// `render_music_component`).
 fn render_browse_component(
     mut app: App,
     width: u16,
     height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
+) -> (Terminal<TestBackend>, PaintedRowGeometry) {
     app.terminal_width = width;
     app.terminal_height = height;
     app.mini_view_focus = PanelFocus::Library;
@@ -79,9 +80,9 @@ fn render_browse_component(
 }
 
 /// The migrated `BrowserContent` owner's painted geometry, surfaced as a
-/// `LayoutMain` so the shared conformance assertions still hold (mirrors
-/// `render_browse_component`'s old-path shape).
-fn panel_browse_layout(model: &crate::app::shell::Model) -> LayoutMain {
+/// `PaintedRowGeometry` so the shared conformance assertions still hold
+/// (mirrors `render_browse_component`'s old-path shape).
+fn panel_browse_layout(model: &crate::app::shell::Model) -> PaintedRowGeometry {
     let panel = model
         .application
         .get_component(&ComponentId::Library)
@@ -89,7 +90,7 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> LayoutMain {
         .expect("Library panel mounted");
     let selector_tabs = panel.test_selector_hits().regions().to_vec();
     if let Some(wide) = panel.test_wide_geometry() {
-        LayoutMain {
+        PaintedRowGeometry {
             left_area: wide.list_area,
             hero_area: wide.hero_area,
             selected_item_rect: wide.selected,
@@ -100,7 +101,7 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> LayoutMain {
         let narrow = panel
             .test_narrow_geometry()
             .expect("the panel painted a Wide or Narrow skeleton");
-        LayoutMain {
+        PaintedRowGeometry {
             left_area: narrow.list_area,
             hero_area: narrow.inline_hero.unwrap_or_default(),
             selected_item_rect: narrow.selected,
@@ -113,12 +114,13 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> LayoutMain {
 /// Render the wide grouped Music workspace through its mounted
 /// `MusicWorkspaceComponent` (the sole wide-music painter, #613) instead of
 /// the legacy `render_library`, surfacing the component's own painted pill
-/// geometry as a `LayoutMain` so the shared conformance assertions still hold.
+/// geometry as a `PaintedRowGeometry` so the shared conformance assertions
+/// still hold.
 fn render_music_component(
     app: &App,
     width: u16,
     height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
+) -> (Terminal<TestBackend>, PaintedRowGeometry) {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let area = Rect::new(0, 0, width, height);
     let lib_idx = app.tab.emby_library_index().unwrap();
@@ -126,12 +128,11 @@ fn render_music_component(
     let mut component = MusicWorkspaceComponent::new();
     component.set_content(context);
     terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let painted = component.layout();
-    let layout = LayoutMain {
+    let layout = PaintedRowGeometry {
         left_area: area,
-        hero_area: painted.hero_area,
-        selected_item_rect: painted.selected_item_rect,
-        selector_tabs: painted.selector_tabs.clone(),
+        hero_area: component.test_hero_area(),
+        selected_item_rect: component.test_selected_item_rect(),
+        selector_tabs: component.test_pill_regions().to_vec(),
         ..Default::default()
     };
     (terminal, layout)
@@ -232,13 +233,13 @@ fn feed_owner() -> FeedsContent {
 }
 
 /// The embedded `FeedsContent` owner's painted geometry through the mounted
-/// `LibraryPanel` (task 7.3), surfaced as a `LayoutMain` so the shared
-/// conformance assertions still hold.
+/// `LibraryPanel` (task 7.3), surfaced as a `PaintedRowGeometry` so the
+/// shared conformance assertions still hold.
 fn render_feeds_panel(
     owner: FeedsContent,
     width: u16,
     height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
+) -> (Terminal<TestBackend>, PaintedRowGeometry) {
     let mut panel = LibraryPanel::new();
     panel.insert_owner(LibraryKey::Feeds, Box::new(owner));
     panel.set_active(Some(LibraryKey::Feeds));
@@ -253,7 +254,7 @@ fn render_feeds_panel(
         .unwrap();
     let selector_tabs = panel.test_selector_hits().regions().to_vec();
     let layout = if let Some(wide) = panel.test_wide_geometry() {
-        LayoutMain {
+        PaintedRowGeometry {
             left_area: wide.list_area,
             hero_area: wide.hero_area,
             selected_item_rect: wide.selected,
@@ -264,7 +265,7 @@ fn render_feeds_panel(
         let narrow = panel
             .test_narrow_geometry()
             .expect("the panel painted a Wide or Narrow skeleton");
-        LayoutMain {
+        PaintedRowGeometry {
             left_area: narrow.list_area,
             hero_area: narrow.inline_hero.unwrap_or_default(),
             selected_item_rect: narrow.selected,
@@ -335,7 +336,7 @@ fn mixed_home_latest() -> Vec<(
 fn assert_one_pill_row_and_spacer(
     surface: &str,
     terminal: &Terminal<TestBackend>,
-    layout: &LayoutMain,
+    layout: &PaintedRowGeometry,
 ) {
     let first = layout
         .selector_tabs
@@ -543,23 +544,6 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
 
 #[test]
 fn matrix_mini_presentations_do_not_admit_a_full_hero() {
-    let cases = vec![
-        ("Movies", make_movie_app()),
-        ("TV", series_app()),
-        ("Music", make_music_group_app()),
-        ("Feeds", feed_app()),
-    ];
-    for (surface, mut app) in cases {
-        app.terminal_width = 60;
-        app.terminal_height = 20;
-        let _terminal = super::test_helpers::render_app_to_terminal(&mut app, 60, 8);
-        assert_eq!(
-            app.layout.main.hero_area.height, 0,
-            "{surface} mini presentation should not admit a hero: {:?}",
-            app.layout.main.hero_area
-        );
-    }
-
     // Home (task 5.3d + 5.11) is painted by the mounted `LibraryPanel`, so
     // its mini-view hero is asserted from the panel's own geometry: the tiny
     // viewport admits no inline hero. The pill data is Model-owned

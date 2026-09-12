@@ -62,6 +62,6 @@ impl BrowserComponent {
 
     pub(in crate::app) fn menu_placement_geometry(&self) -> Option<(Rect, Option<Rect>)> {
         (self.layout.left_area.width > 0 && self.layout.left_area.height > 0)
-            .then_some((self.layout.left_area, self.layout.selected_item_rect))
+            .then_some((self.layout.left_area, self.selected_item_rect))
     }
 }

@@ -40,7 +40,6 @@ pub(super) mod list_rows;
 pub(super) mod media_list;
 pub(super) mod modal_frame;
 pub(super) mod multiselect;
-pub(in crate::app) mod music;
 pub(super) mod music_wide;
 pub(super) mod playlists;
 pub(in crate::app) mod queue;

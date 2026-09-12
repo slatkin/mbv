@@ -58,8 +58,8 @@
 //! | `StatusBar` | yes (Both, LibraryOnly, mini library) | `tests.rs` status suites |
 //! | `StatusBarPill` | — | residual (see below): its pill spans carry the status band's own value |
 //! | `QueuePanelBand` | yes (Both, wide QueueOnly) | `queue_title_characterization_tests.rs` |
-//! | `PillRow` | yes (wide music rail) | `test_helpers.rs::assert_surface_pills`, `tests_scroll_pills.rs` |
-//! | `PillChip` / `PillChipSelected` | — | `test_helpers.rs::assert_surface_pills`, `queue_title_characterization_tests.rs` |
+//! | `PillRow` | yes (wide music rail) | `tests_scroll_pills.rs` |
+//! | `PillChip` / `PillChipSelected` | — | `queue_title_characterization_tests.rs` |
 //! | `QueueScopePillSelected` | — | `components/queue_component_tests.rs` scope-pill suites |
 //! | `PillRowGap` | yes (wide music container pin) | `components/music_workspace_cursor_tests.rs` |
 //! | `SidebarBand` / `NonHeroSidebarBand` | yes (sidebar shells, component view) | — |

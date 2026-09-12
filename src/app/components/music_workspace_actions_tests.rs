@@ -296,7 +296,7 @@ fn music_workspace_wide_search_hides_grouped_rows_and_paints_flat_results() {
         "no artist heading painted in the search list area"
     );
     assert!(
-        component.layout().selector_tabs.is_empty(),
+        component.test_pill_regions().is_empty(),
         "group-pill hit regions are unavailable while search is active"
     );
     let frame_text: String = (0..buffer.area().height)

@@ -213,13 +213,15 @@ impl LibraryPanel {
         self.wide_geometry.clone()
     }
 
-    /// The last painted frame's role rects, in the legacy `LayoutMain` shape
-    /// the shared characterization helpers read (task 8.4: the panel owns
-    /// the rects the deleted destination component used to publish).
+    /// The last painted frame's role rects, in the shared test-only
+    /// `PaintedRowGeometry` shape the characterization helpers read (task
+    /// 8.4: the panel owns the rects the deleted destination component used
+    /// to publish; task 12.3: this no longer round-trips through the
+    /// shell's `LayoutMain`).
     #[cfg(test)]
-    pub(in crate::app) fn test_painted_layout(&self) -> crate::app::layout::LayoutMain {
+    pub(in crate::app) fn test_painted_layout(&self) -> crate::app::layout::PaintedRowGeometry {
         if let Some(wide) = self.wide_geometry.as_ref() {
-            return crate::app::layout::LayoutMain {
+            return crate::app::layout::PaintedRowGeometry {
                 left_area: wide.list_area,
                 hero_area: wide.hero_area,
                 inline_hero_area: wide.hero_area,
@@ -229,7 +231,7 @@ impl LibraryPanel {
         }
         if let Some(narrow) = self.narrow_geometry.as_ref() {
             let inline_hero = narrow.inline_hero.unwrap_or_default();
-            return crate::app::layout::LayoutMain {
+            return crate::app::layout::PaintedRowGeometry {
                 left_area: narrow.list_area,
                 hero_area: inline_hero,
                 inline_hero_area: inline_hero,
@@ -238,7 +240,7 @@ impl LibraryPanel {
                 ..Default::default()
             };
         }
-        crate::app::layout::LayoutMain::default()
+        crate::app::layout::PaintedRowGeometry::default()
     }
 
     /// The last painted Narrow skeleton geometry, for the panel-output test

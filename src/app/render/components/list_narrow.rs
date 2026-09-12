@@ -18,6 +18,21 @@ use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
+/// Mouse-hit and context-menu-anchor geometry `render_narrow_browse_with_ctx`
+/// publishes for the caller to adopt onto its own retained fields — the
+/// composer's row/hero geometry never round-trips through the shell's
+/// `LayoutMain` (task 12.3).
+#[derive(Default)]
+pub(in crate::app) struct NarrowBrowseGeometry {
+    /// Selected-parent geometry for the inline replacement (mouse-hit).
+    pub inline_hero_area: Rect,
+    /// Screen rect of the selected row/cell, consumed by the context menu's
+    /// keyboard anchor.
+    pub selected_item_rect: Option<Rect>,
+    /// Letter-pill hitboxes painted above the list, if any.
+    pub selector_tabs: Vec<(Rect, usize)>,
+}
+
 /// Full narrow TV series-list composition (`migrate-narrow-browse-to-components`
 /// task 3.3; Movies/HomeVideos/Generic moved to the embedded `BrowserContent`
 /// owner, task 6.1): the letter pill row, the browse row list with an inline
@@ -34,7 +49,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     focused: bool,
     layout: &mut LayoutMain,
     control: &mut InlineMediaBrowser<String>,
-) -> (usize, Option<HomeImagePaint>) {
+) -> (usize, Option<HomeImagePaint>, NarrowBrowseGeometry) {
     let content_area = area;
 
     // Narrow TV season grids keep their own single-column stride
@@ -70,17 +85,17 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
                 0
             };
     }
-    if extras.show_letter_pills {
+    let selector_tabs = if extras.show_letter_pills {
         paint_letter_pills_row(
             f,
             pills_area,
             ctx.letter_filter.as_ref().map(|flt| flt.index).unwrap_or(0),
-            layout,
-        );
-    }
+        )
+    } else {
+        Vec::new()
+    };
 
     layout.left_area = list_area;
-    layout.hero_area = Rect::default();
 
     if ctx.items.is_empty() {
         crate::app::render::render_placeholder(
@@ -88,7 +103,14 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             list_area,
             if ctx.loading { "Loading..." } else { "(empty)" },
         );
-        return (0, None);
+        return (
+            0,
+            None,
+            NarrowBrowseGeometry {
+                selector_tabs,
+                ..Default::default()
+            },
+        );
     }
 
     // The Inline presentation paints every narrow browse surface now that
@@ -111,22 +133,29 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             desired_detail_rows,
         ),
     );
-    layout.hero_area = if hero_presentation {
+    let hero_area = if hero_presentation {
         browser.current_detail_rect().unwrap_or_default()
     } else {
         Rect::default()
     };
-    layout.inline_hero_area = layout.hero_area;
-    layout.selected_item_rect = browser.current_selected_row_rect();
+    let selected_item_rect = browser.current_selected_row_rect();
     let final_offset = browser.current_flow_offset().unwrap_or(0);
 
-    if layout.hero_area.height > 0 {
-        selected_detail_shell(f, layout.hero_area, inline_hero_rows, focused);
+    if hero_area.height > 0 {
+        selected_detail_shell(f, hero_area, inline_hero_rows, focused);
     }
 
     // The transitional Browser path has no destination-owned hero painter;
     // migrated destinations use the Library panel's shared skeleton.
-    (final_offset, None)
+    (
+        final_offset,
+        None,
+        NarrowBrowseGeometry {
+            inline_hero_area: hero_area,
+            selected_item_rect,
+            selector_tabs,
+        },
+    )
 }
 
 /// Letter-range pill row above the narrow TV series list; the selected index
@@ -135,15 +164,13 @@ fn paint_letter_pills_row(
     f: &mut Frame,
     row_area: Rect,
     selected_pos: usize,
-    layout: &mut LayoutMain,
-) {
+) -> Vec<(Rect, usize)> {
     if row_area.width == 0 {
-        layout.selector_tabs = Vec::new();
-        return;
+        return Vec::new();
     }
     let labels = crate::app::render::LetterFilter::labels();
     let ids: Vec<usize> = (0..labels.len()).collect();
-    layout.selector_tabs = crate::app::render::render_pill_bar(
+    crate::app::render::render_pill_bar(
         f,
         row_area,
         crate::app::render::PillBar {
@@ -152,7 +179,7 @@ fn paint_letter_pills_row(
             selected_pos,
             prefix: Some(" \u{2318} "),
         },
-    );
+    )
 }
 
 impl App {

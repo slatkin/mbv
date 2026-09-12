@@ -146,13 +146,13 @@ fn narrow_music_publishes_full_flow_rows_and_viewport_offset_after_scroll() {
 fn narrow_music_admits_the_selected_album_detail_block() {
     let app = multi_artist_app();
     let (_terminal, component) = render_narrow(&app, true, 0);
-    let layout = component.layout();
+    let hero_area = component.test_hero_area();
 
     assert!(
-        layout.hero_area.height > 0,
+        hero_area.height > 0,
         "the selected album's inline detail block is admitted at a tall viewport"
     );
-    assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
+    assert_eq!(component.test_selected_item_rect(), Some(hero_area));
     // The selected row and detail geometry are retained by the control.
     assert!(component.album_flow_targets().iter().any(|t| t.is_some()));
 }
@@ -173,15 +173,14 @@ fn narrow_music_falls_back_to_the_ordinary_selected_row_when_the_block_cannot_fi
     let short = Rect::new(0, 0, NW, 8);
     let mut terminal = Terminal::new(TestBackend::new(NW, 8)).unwrap();
     terminal.draw(|f| component.view(f, short)).unwrap();
-    let layout = component.layout();
 
     assert_eq!(
-        layout.hero_area,
+        component.test_hero_area(),
         Rect::default(),
         "no detail block admitted"
     );
-    let selected = layout
-        .selected_item_rect
+    let selected = component
+        .test_selected_item_rect()
         .expect("ordinary selected-row rect published on fallback");
     assert_eq!(selected.height, 1, "fallback restores a one-line row");
     assert!(buffer_to_string(&terminal).contains("First Album"));
@@ -210,7 +209,7 @@ fn narrow_music_focused_selection_carries_the_canonical_highlight() {
     let mut ut = Terminal::new(TestBackend::new(NW, 8)).unwrap();
     ut.draw(|f| unfocused.view(f, area)).unwrap();
 
-    let rect = focused.layout().selected_item_rect.unwrap();
+    let rect = focused.test_selected_item_rect().unwrap();
     let fbg = ft.backend().buffer()[(rect.x + 4, rect.y)].bg;
     let ubg = ut.backend().buffer()[(rect.x + 4, rect.y)].bg;
     assert_ne!(
@@ -430,7 +429,7 @@ fn narrow_music_inline_hero_uses_the_projected_image_state() {
     assert_eq!(paint.cache_key, "album-1:P");
     assert!(!paint.centered, "the narrow inline hero is right-aligned");
     assert!(paint.area.width > 0 && paint.area.height > 0);
-    assert!(component.layout().hero_area.height > 0);
+    assert!(component.test_hero_area().height > 0);
 }
 
 /// While the projection is still loading, the inline hero keeps its box and
@@ -459,7 +458,7 @@ fn narrow_music_inline_hero_keeps_the_box_while_the_image_loads() {
         "a loading image is not painted by the shell yet"
     );
     assert!(
-        component.layout().hero_area.height > 0,
+        component.test_hero_area().height > 0,
         "the inline hero block still reserves its box"
     );
 }
