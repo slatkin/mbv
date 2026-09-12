@@ -215,8 +215,14 @@ impl LibraryPanel {
     pub(in crate::app) fn menu_geometry(
         &self,
     ) -> Option<(ratatui::layout::Rect, Option<ratatui::layout::Rect>)> {
-        let wide = self.wide_geometry.as_ref()?;
-        Some((wide.list_panel, wide.selected))
+        self.wide_geometry
+            .as_ref()
+            .map(|wide| (wide.list_panel, wide.selected))
+            .or_else(|| {
+                self.narrow_geometry
+                    .as_ref()
+                    .map(|narrow| (narrow.list_area, narrow.selected))
+            })
     }
 
     // ── Event interpretation ─────────────────────────────────────────────

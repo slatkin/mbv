@@ -184,9 +184,6 @@ pub(in crate::app) struct HeroContent<'a> {
 /// content plus `&mut` views into the active owner's media-list flow and
 /// search session; no rect, surface, style, focus-kind, header-arm or
 /// variant field.
-/// content plus `&mut` views into the active owner's media-list flow and
-/// search session; no rect, surface, style, focus-kind, header-arm or
-/// variant field.
 pub(in crate::app) struct LibraryPanelContent<'a> {
     /// The Browser pane's primary browse selector, if the destination
     /// supplies one.

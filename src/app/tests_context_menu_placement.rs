@@ -210,6 +210,108 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     );
 }
 
+/// Task 5.11 review correction: the Narrow-mode counterpart of
+/// `home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout`.
+/// `LibraryPanel::menu_geometry()` only read `wide_geometry`, so when Home is
+/// active in Narrow mode with `PanelFocus::Library` it returned `None` and the
+/// shell fell through to the poisoned legacy `AppLayout` copies. Force the
+/// Narrow skeleton (width below `TWO_COLUMN_THRESHOLD`) and prove the menu
+/// still anchors to the panel's own Narrow-painted geometry.
+#[test]
+fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow() {
+    use crate::app::types_context_menu::ContextMenu;
+    let _guard = crate::config::TestStateDirGuard::new();
+
+    let mut model = crate::app::shell::Model::new(make_app_stub());
+    model.app.tab = TabSelection::Home;
+    model.app.panel_focus = PanelFocus::Library;
+    model.home_content.continue_items = make_items(5);
+    model.handle_home_request(crate::app::components::ShellRequest::HomeContextMenu {
+        home_cw_selected: model.home_continue_watching_selected(),
+        target: crate::app::components::msg::HomeRowTarget {
+            item_id: Some("id0".into()),
+            source: None,
+            from_continue_watching: true,
+        },
+    });
+    assert!(
+        matches!(
+            model.app.pending_overlay,
+            Some(super::types_overlay::OverlayRequest::ContextMenu(_))
+        ),
+        "'.' should open the context menu"
+    );
+
+    model.sync_modal_requests();
+    model.push_home_content();
+    // Narrow enough (below `TWO_COLUMN_THRESHOLD`) to force the Narrow
+    // skeleton instead of the Wide split.
+    let library_area = Rect::new(0, 0, 60, 30);
+    model.app.layout.root_frame.library = Some(library_area);
+    model.sync_library_panel();
+
+    let backend = TestBackend::new(60, 30);
+    let mut term = Terminal::new(backend).unwrap();
+    // Paint only the panel so its `view()` produces the authoritative placed
+    // geometry while the legacy `AppLayout` copies stay untouched.
+    term.draw(|f| model.render_library_panel(f)).unwrap();
+
+    // Capture the panel-painted geometry the shell must anchor to, then
+    // poison the corresponding legacy copies far outside the panel.
+    let painted = model
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
+        .expect("Library panel mounted")
+        .menu_geometry()
+        .expect("panel painted geometry");
+    let (panel, selected) = painted;
+    model.app.layout.main.left_area = Rect::new(0, 0, 200, 200);
+    model.app.layout.main.selected_item_rect = Some(Rect::new(500, 500, 1, 1));
+
+    term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
+
+    let rect = mounted_context_menu_rect(&model);
+
+    let id = ComponentId::Overlay(OverlayId::ContextMenu);
+    let (size, anchor) = {
+        let comp = model
+            .application
+            .get_component(&id)
+            .expect("context menu mounted")
+            .as_any()
+            .downcast_ref::<ContextMenuComponent>()
+            .expect("context menu type");
+        (ContextMenu::rendered_size(comp.entries()), comp.anchor())
+    };
+    // Keyboard anchor: `SelectedItem(Library)` resolved to the component's
+    // painted panel + selected rect (no pointer).
+    assert!(matches!(
+        anchor,
+        ContextMenuAnchor::SelectedItem(PanelFocus::Library)
+    ));
+    let (ex, ey) = ContextMenu::place(panel, size, selected.as_ref(), None);
+    let expected = Rect::new(ex, ey, size.0, size.1);
+    assert_eq!(
+        rect, expected,
+        "menu must anchor to the component-painted Narrow Home geometry, got {rect:?}"
+    );
+
+    // A fallback to the poisoned legacy geometry would land the menu at the
+    // panel's bottom-right corner instead of the component's placement.
+    let (px, py) = ContextMenu::place(
+        Rect::new(0, 0, 200, 200),
+        size,
+        Some(&Rect::new(500, 500, 1, 1)),
+        None,
+    );
+    assert_ne!(
+        (rect.x, rect.y),
+        (px, py),
+        "menu must not fall back to the poisoned AppLayout geometry"
+    );
+}
+
 #[test]
 fn context_menu_entries_render_below_the_reserved_top_row() {
     let mut app = library_app();

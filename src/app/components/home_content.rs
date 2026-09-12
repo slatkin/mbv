@@ -460,9 +460,6 @@ impl LibraryContentOwner for HomeContent {
                 // `claim_row` contract (a blank/gap click leaves the
                 // selection unchanged).
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if let Some(target) = &target {
-                    self.carrier.select_target(target);
-                }
                 if let Some(at) = at {
                     self.carrier.delegate(RowLocalInput::Click(at), target);
                 }
