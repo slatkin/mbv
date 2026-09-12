@@ -95,8 +95,11 @@ resize handling (image-state clear, queue-width clamp + save, mini-view focus).
 
 *Incremental path:* `compose_base_frame`/`render_main` is one monolithic body, so S0 introduces
 `RootFrame` as **data only** and `draw_frame` keeps delegating to `compose_base_frame`; each later slice
-moves one panel's painting out of `render_main` into its component in the same commit (D16), until S11
-deletes the empty remainder.
+moves one panel's painting out of `render_main` into its component in the same commit (D16). S11 then
+lands as two required, independently shippable transitions: S11a deletes the dead destination
+identities, compatibility and superseded lifecycle; S11b makes panel order explicit data in `RootFrame`,
+composes it through one root loop while preserving root-owned deferred protocol-image painting, and
+deletes the empty base-frame remainder.
 
 *Mount rule (live ICF: a mounted component never gets an empty rect):* `RootFrame` places a panel only
 in the Panel modes where it paints, and the sync pass mounts/unmounts it to match — Tab, Library and
@@ -168,7 +171,7 @@ fill + border) | gap | Hero pane (resting or focused surface, Hero header, overv
 Narrow skeleton: Selector row, List controls row, `InlineMediaBrowser` with the one inline hero form
 (D7). The existing arrangement primitives (`wide_hero_presentation`, `pill_bar_areas`,
 `wide_hero_browser_pane`, `wide_hero_hero_content_box`, `place_media_list_below`) are used by the panel
-from S4, and become private to the panel's arrangement module in S11 (task 12.3), once the last
+from S4, and become private to the panel's arrangement module in S11 (task 12.6), once the last
 un-migrated destination painter that calls them is deleted — flipping privacy earlier would break the
 build while destinations 6–11 still use them.
 
@@ -346,11 +349,14 @@ to `compose_base_frame`); S1 Tab + Status bar panels;
 S2 Queue + Queue playback panels (the folded change); S3 Library playback panel; S4 `LibraryPanel`
 mounted with its content types and skeletons, hosting Home; S5–S10 one destination each (Movies/home
 videos/generic, Feeds, TV, Music, ABS Books, ABS Podcasts), Feeds early because it is the most
-divergent test of the slot types; S11 deletes the base frame, `LayoutMain`, Grid and dead paths; S12
-docs. During S4–S10 a destination not yet moved is still painted by its old mounted component inside
-the library rect the root gives it — one painter per surface throughout; no surface is ever painted by
-both. If a destination needs a slot or arm the content types lack, the slice stops and the type is
-changed for every destination (D0).
+divergent test of the slot types; S11a deletes dead Browser/WideHeroBoundary compatibility and
+lifecycle, then S11b makes `RootFrame`'s panel order executable through one root loop and deletes the
+base frame while preserving deferred protocol-image painting; the remaining S11 tasks delete
+`LayoutMain`, Grid and dead paths; S12 docs. Each S11 step is independently shippable and ends with one
+painter per surface; neither is optional compatibility. During S4–S10 a destination not yet moved is
+still painted by its old mounted component inside the library rect the root gives it — one painter per
+surface throughout; no surface is ever painted by both. If a destination needs a slot or arm the
+content types lack, the slice stops and the type is changed for every destination (D0).
 
 *Slicing inside one destination (tasks 7–11):* each destination is three steps, one per session. First
 the owner and its content mapping, still painted by the destination's legacy painter, so no output
@@ -367,8 +373,8 @@ enumeration behind "zero visible UI elements that are not components" (G1).
 
 | Element today (painter, site) | Owner at completion | Task |
 |---|---|---|
-| Left column backdrop (`render_legacy_backdrops`, `chrome.rs:16`) | Queue panel + Queue playback panel fills | 3.1, 3.5, 12.1, 12.2 |
-| Right column backdrop (`render_legacy_backdrops`, `chrome.rs:42`) | Tab / Library / Library playback / Status bar panel fills | 12.1, 12.2 (after 2.x, 4.1, 5.x) |
+| Left column backdrop (`render_legacy_backdrops`, `chrome.rs:16`) | Queue panel + Queue playback panel fills | 3.1, 3.5, 12.1b, 12.2 |
+| Right column backdrop (`render_legacy_backdrops`, `chrome.rs:42`) | Tab / Library / Library playback / Status bar panel fills | 12.1b, 12.2 (after 2.x, 4.1, 5.x) |
 | Tab bar + overflow arrows (`render_tabs`, `chrome_tabs.rs:34`) | Tab panel | 2.1 |
 | Status row + volume/mute/remote pills (`render_status_bar`, `chrome_status.rs:377`) | Status bar panel | 2.2 |
 | Right-column transport strip (`PlaybackComponent` at `player_area`) | Library playback panel | 4.1 |
@@ -379,8 +385,8 @@ enumeration behind "zero visible UI elements that are not components" (G1).
 | Queue status pill row (`render_queue_status`, `queue.rs:296`) | Queue panel | 3.1 |
 | Queue title row + list (`QueueComponent`) | Queue panel | 3.1 |
 | Queue column boundary (`QueueBoundaryComponent`, `shell_queue.rs:169`) | Queue boundary (root-placed) | 1.4 |
-| Wide hero gap boundary (`WideHeroBoundaryComponent`, `shell_library.rs:363`) | Library panel | 5.9 |
-| Library area publishing (`render_library`, `widgets.rs:529`) | deleted (paints nothing) | 12.1 |
+| Wide hero gap boundary (`WideHeroBoundaryComponent`, `shell_library.rs:363`) | Library panel | 5.9, 12.1a |
+| Library area publishing (`render_library`, `widgets.rs:529`) | deleted (paints nothing) | 12.1b |
 | Home / Browser / TV / Music / Feeds / ABS Book / ABS Podcast bodies (component-wrapped free painters) | Library panel slots | 5.11, 6.1, 7.2, 8.2, 8.3, 9.2, 9.3, 10.2, 11.2 |
 | Overlays, modals, popups, sidebars (`render_overlay_stack`) | unchanged: already component views | — |
 

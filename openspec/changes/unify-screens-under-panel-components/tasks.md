@@ -54,7 +54,7 @@ one paint-free placement.
   `paint_legacy_chrome`, `LayoutMain.tabs_hitmap`, and the shell tab-click path in `shell.rs`. Verify:
   tab buffer tests move to the component and pass; a tick integration test clicks a tab and asserts the
   destination changes; the tab panel fills its own placement with its surface (the full-column
-  backdrop underneath is removed in 12.1, once every right-column panel fills itself).
+  backdrop underneath is removed in 12.1b, once every right-column panel fills itself).
 - [x] 2.2 Create `StatusBarPanel` that paints the status row (moved from
   `chrome_status.rs::render_status_bar`) and retains its volume/mute/remote pill regions; delete
   `LayoutPlayback.{ind_vol, ind_mu, ind_rc}` and the `render_status_bar` call in `render_main`. Verify:
@@ -346,13 +346,26 @@ conforms to Emby.
 
 *Unification:* removes every remaining way to paint outside a panel.
 
-- [ ] 12.1 Delete the base frame composition: `compose_base_frame`, `render_main`,
-  `paint_legacy_chrome`, `render_legacy_backdrops`, `render_library`, every shell `render_*_component`
-  method, the transitional old-component branch in `RootFrame`, and the remaining legacy `ComponentId`
-  arms (`Browser`, `WideHeroBoundary`), so the draw path composes the `RootFrame` placements plus the
-  overlay stack only. Verify: `cargo check -p mbv`; `rg` finds none of these symbols; no
-  `fetch_card_image`/`fetch_*` call is reachable from any component `view` or Render Component (manual
-  check); one tick integration test per Panel mode asserts a non-empty frame.
+- [ ] 12.1a Delete the remaining destination compatibility and superseded lifecycle: remove
+  `ComponentId::{Browser, WideHeroBoundary}` and every mount, sync, focus, subscription, mouse and
+  render-routing path for them; remove the transitional owner-migrated branch, obsolete `cfg(test)`
+  browser/music render shims, tests tied only to them and routing fixtures coupled to those impossible
+  identities; and
+  remove the old Browser painter and paint-time image-prefetch reachability. Retain `BrowserKey` and
+  `BrowserKind` where they remain the Service `LibraryKey` identity. Verify: `cargo check -p mbv`;
+  `cargo nextest run -p mbv` green; `rg` finds no removed identity or shim; no
+  `fetch_card_image`/`fetch_*` call is reachable from a component `view` or Render Component (manual
+  check).
+- [ ] 12.1b Finish ordered root composition and delete the base frame: represent the ordered panel
+  placements as data in `RootFrame`, compose them through one root loop, and preserve the explicit
+  root-owned deferred protocol-image paint after its owning panel placement. Delete
+  `compose_base_frame`, `render_main`, `paint_legacy_chrome`, `render_legacy_backdrops`,
+  `render_library`, every shell `render_*_component` wrapper, the base-frame test APIs and the remaining
+  legacy painters, so the draw path contains only that root loop, deferred protocol-image painting and
+  the overlay stack. Verify: `cargo check -p mbv`; `cargo nextest run -p mbv` green; `rg` finds none of
+  the deleted symbols; one tick integration test per Panel mode (`both`, `queue-only`, `library-only`,
+  mini view) asserts a non-empty frame. These tests do not pre-fill or assert sentinel ownership; that
+  proof belongs exclusively to 12.2.
 - [ ] 12.2 Pass the sentinel test: one tick integration test per Panel mode (`both`, `queue-only`,
   `library-only`, mini view) pre-fills the test buffer with a sentinel symbol, draws one frame, and
   asserts no sentinel cell remains inside any mounted panel's `RootFrame` placement — fixing the panels
