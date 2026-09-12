@@ -3,7 +3,7 @@ use super::shell::Model;
 use super::{ConfirmAction, ConfirmModal, TabSelection};
 use crate::app::components::browser::{BrowserContent, BrowserIdentity};
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
-use crate::app::render::{wide_hero_fits, LibraryListRenderCtx};
+use crate::app::render::LibraryListRenderCtx;
 use mbv_core::config::ServiceKind;
 use std::time::Instant;
 
@@ -180,6 +180,14 @@ impl Model {
     }
 
     fn persist_emby_browser_scroll(&mut self, lib_idx: usize) {
+        if let Some((index, key, _kind)) = self.active_migrated_browser_owner() {
+            if index == lib_idx {
+                if let Some(scroll) = self.browser_owner_scroll(&key) {
+                    self.app.persist_library_scroll(lib_idx, scroll);
+                }
+            }
+            return;
+        }
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
@@ -200,11 +208,13 @@ impl Model {
         let library = self.app.libs.get(index)?;
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
         let owns = match kind {
-            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => true,
-            // Narrow TV is a flat series list this component already handles
-            // (D4). Wide TV routes to TvWorkspaceComponent instead; the two
-            // gates share `wide_tv_library_area(index)` so they are mutually exclusive
-            // for a TV library at every width.
+            // Generic, Movies and HomeVideos moved to the embedded
+            // `BrowserContent` owner inside the mounted `LibraryPanel` (task
+            // 6.1, design D2); this component no longer mounts for them.
+            // Narrow TV is a flat series list this component still handles
+            // (D4, task 8 migrates it). Wide TV routes to TvWorkspaceComponent
+            // instead; the two gates share `wide_tv_library_area(index)` so
+            // they are mutually exclusive for a TV library at every width.
             BrowserKind::TvShows => !self.app.wide_tv_library_area(index).is_some(),
             _ => false,
         };
@@ -251,6 +261,16 @@ impl Model {
                 self.app.ensure_lib_loaded_for(index);
             }
         }
+        // Generic/Movies/HomeVideos (task 6.1, design D2): install/refresh
+        // the embedded `BrowserContent` owner instead of mounting this
+        // component; the old id stays `None` for these kinds so
+        // `render_emby_browser_component`/`persist_emby_browser_scroll`
+        // no-op for them (the panel paints and persists instead).
+        if let Some((index, key, kind)) = self.active_migrated_browser_owner() {
+            self.emby_browser_id = None;
+            self.push_browser_owner_content(index, &key, kind);
+            return;
+        }
         let next_id = self.emby_browser_component_id();
         if self.emby_browser_id != next_id {
             match next_id {
@@ -288,6 +308,10 @@ impl Model {
     /// Movies rail stride is a per-draw layout fact pushed in
     /// `render_emby_browser_component` (D18 step 1).
     pub(super) fn push_emby_browser_content(&mut self) {
+        if let Some((index, key, kind)) = self.active_migrated_browser_owner() {
+            self.push_browser_owner_content(index, &key, kind);
+            return;
+        }
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };
@@ -396,33 +420,16 @@ impl Model {
         if !self.library_panel_visible() {
             return;
         }
-        // When the wide Movies/home-video layout is active, the component
-        // paints the full Wide hero rect; otherwise it paints the narrow
-        // inner list area. Derive the presentation from the same shared
-        // arrangement predicate used by BrowserComponent::view.
+        // This component now mounts only for narrow TV (task 6.1 moved
+        // Generic/Movies/HomeVideos to the embedded `BrowserContent` owner);
+        // it always paints the narrow inner list area.
         let area = self.app.layout.main.left_area;
-        let wide = wide_hero_fits(area);
         if area.width == 0 || area.height == 0 {
             return;
         }
-        // Per-draw adapter (D18 step 1): the legacy base frame and the mounted
-        // component share one paint, so the 1-column right-rail stride is
-        // consistent here. `home_video`/`letter_pills` tell the component
-        // which pill row to render in the wide right rail.
-        let (home_video, letter_pills) = if wide {
-            match self.app.tab.emby_library_index() {
-                Some(lib_idx) => (
-                    self.app.is_home_video_view(lib_idx),
-                    self.app.should_show_letter_pills(lib_idx),
-                ),
-                None => (false, false),
-            }
-        } else {
-            (false, false)
-        };
-        // Narrow generic/Movies/home-video: resolve the count label, letter
-        // pills and inline movie/series hero shell-side and push them to the
-        // component before its `view` composes the surface (task 3.3).
+        // Resolve the letter pills and inline series hero shell-side and push
+        // them to the component before its `view` composes the surface (task
+        // 3.3).
         let browser_cursor = self
             .application
             .get_component(id)
@@ -435,35 +442,16 @@ impl Model {
             .map(|lib_idx| self.app.narrow_browse_extras(lib_idx, browser_cursor));
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(browser) = comp.as_any_mut().downcast_mut::<BrowserComponent>() {
-                browser.configure_wide_movies(home_video, letter_pills);
                 browser.set_use_nerd_fonts(self.app.use_nerd_fonts);
                 browser.set_images_enabled(self.app.images_enabled());
                 browser.set_list_pane_width(self.app.list_pane_width);
                 if let Some(extras) = narrow_extras {
                     browser.set_narrow_extras(extras);
                 }
-                // Poster prefetch is an App/image-cache effect, so keep it
-                // beside the other shell-owned image effect. The component's
-                // cursor is authoritative; the mirrored library content only
-                // supplies the candidate window.
-                if !wide {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        let ctx = self.app.library_list_render_ctx(
-                            lib_idx,
-                            browser.cursor(),
-                            browser.scroll(),
-                        );
-                        if ctx
-                            .clone()
-                            .with_cursor_scroll(browser.cursor(), 0)
-                            .selected_item()
-                            .is_some_and(|item| item.item_type == "Movie" && !item.is_folder)
-                        {
-                            self.app
-                                .fetch_nearby_movie_posters(&ctx.items, browser.cursor());
-                        }
-                    }
-                }
+                // Poster prefetch (#287) is Movies-only and now lives on the
+                // embedded `BrowserContent` owner's push path
+                // (`push_browser_owner_content`); this component mounts only
+                // for narrow TV, which never selects a `Movie` item.
             }
         }
         self.application.view(id, frame, area);

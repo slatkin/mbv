@@ -12,7 +12,7 @@ use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::library_column_count;
 use crate::app::render::arrangements::{library, wide_hero};
 use crate::app::render::components::hero::{
-    selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS, HERO_TITLE_ROWS,
+    selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
 };
 use crate::app::render::components::list_rows::{
     LibraryListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
@@ -63,13 +63,6 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     };
 
     let mut inline_hero_rows: u16 = match &extras.inline_hero {
-        Some(NarrowInlineHero::Movie { layout: banner, .. }) if extras.feed_items.is_some() => {
-            extras.feed_selected_height.max(1)
-        }
-        Some(NarrowInlineHero::Movie { layout: banner, .. }) => {
-            banner.content_rows_with_title(HERO_TITLE_ROWS.saturating_mul((cols > 1) as u16)) as u16
-                + HERO_BLOCK_EXTRA_ROWS
-        }
         Some(NarrowInlineHero::Series {
             item,
             images_enabled,
@@ -180,19 +173,6 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             HERO_BLOCK_EXTRA_ROWS,
         );
         image_paint = match &extras.inline_hero {
-            Some(NarrowInlineHero::Movie {
-                item,
-                layout: banner,
-            }) => super::detail::render_compact_detail_with_ctx(
-                super::detail::CompactDetailCtx {
-                    item,
-                    layout: banner.clone(),
-                },
-                f,
-                content_rect,
-                focused,
-                true,
-            ),
             Some(NarrowInlineHero::Series {
                 item,
                 images_enabled,
@@ -336,37 +316,14 @@ impl App {
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
         let season_grid = self.is_viewing_season_grid(lib_idx);
 
-        let selected_movie = self.selected_movie_item(lib_idx, cursor).or_else(|| {
-            feed_items.as_ref().and_then(|items| {
-                let cursor = self.libs[lib_idx]
-                    .feed_home_video
-                    .as_ref()
-                    .map_or(0, |s| s.video_cursor);
-                items.get(cursor).cloned()
-            })
-        });
-        let selected_series = if selected_movie.is_none() {
-            self.selected_series_item(lib_idx, cursor)
-        } else {
-            None
-        };
+        // This composer now paints only narrow TV (task 6.1 moved
+        // Generic/Movies/HomeVideos to the embedded `BrowserContent` owner,
+        // which derives its inline hero generically from `HeroContent`), so
+        // the only inline hero this function still resolves is a selected
+        // Series.
+        let selected_series = self.selected_series_item(lib_idx, cursor);
 
-        let inline_hero = if let Some(item) = selected_movie {
-            let truncate_overview =
-                self.is_home_video_view(lib_idx) || self.is_podcast_library(lib_idx);
-            let panel_width = self
-                .layout
-                .main
-                .left_area
-                .width
-                .saturating_sub(2 * SELECTED_BLOCK_SIDE_PADDING);
-            let banner =
-                self.compact_banner_layout_with_overview(&item, panel_width, truncate_overview);
-            Some(NarrowInlineHero::Movie {
-                item,
-                layout: banner,
-            })
-        } else if let Some(item) = selected_series {
+        let inline_hero = if let Some(item) = selected_series {
             let images_enabled = self.images_enabled();
             // Narrow keeps its own `Primary`-chain entry (the chain
             // `detail_series_view` paints); it must never read Wide's
@@ -383,21 +340,7 @@ impl App {
             None
         };
 
-        let feed_selected_height = if feed_group_view {
-            match &inline_hero {
-                Some(NarrowInlineHero::Movie { layout: banner, .. }) => {
-                    let rows = banner.content_rows();
-                    if rows == 0 {
-                        0
-                    } else {
-                        banner.content_rows_with_title(1) as u16 + 5
-                    }
-                }
-                _ => 0,
-            }
-        } else {
-            0
-        };
+        let feed_selected_height = 0;
 
         // Every hero-capable browse destination, including folder/channel
         // selections without a resolved leaf hero, uses the inline

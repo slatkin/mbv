@@ -315,62 +315,6 @@ fn grid_handoff_preserves_the_two_column_selected_row_offset() {
     );
 }
 
-/// Wide-Movies exact parity: a Movies-keyed component on a >=82-wide
-/// rendered list uses its own kind and painted geometry, and the right
-/// rail strides ONE item per row, matching its painted one-column geometry.
-/// Down from 0 lands at 1, not 2, and returns the typed rows request;
-/// Left/Right/h/l stay unbound locally.
-#[test]
-fn browser_local_navigation_strides_one_column_for_wide_movies() {
-    let mut browser = BrowserComponent::new_for_kind(BrowserKind::Movies);
-    browser.set_content(BrowserContent::from_items(make_items(12)));
-    browser.set_focused(true);
-    browser.configure_wide_movies(false, false);
-    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    terminal
-        .draw(|frame| browser.view(frame, frame.area()))
-        .unwrap();
-
-    let message = browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    });
-    assert_eq!(
-        browser.cursor(),
-        1,
-        "wide-Movies rail Down must stride one item, not two"
-    );
-    assert_eq!(
-        message,
-        Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 })),
-        "wide-Movies Down must return the typed rows request"
-    );
-
-    browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    });
-    assert_eq!(browser.cursor(), 2);
-    browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Up,
-        modifiers: KeyModifiers::NONE,
-    });
-    assert_eq!(browser.cursor(), 1);
-
-    for key in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
-        let message = browser.handle_tui_key(TuiKeyEvent {
-            code: key,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(
-            browser.cursor(),
-            1,
-            "wide-Movies rail {key:?} must stay unbound locally"
-        );
-        assert_eq!(message, None, "wide-Movies {key:?} must stay unclaimed");
-    }
-}
-
 #[test]
 fn browser_alt_navigation_stays_unclaimed() {
     let mut browser = BrowserComponent::new();

@@ -82,8 +82,8 @@
 //! table's own unit tests; only a rendered-fill assertion is impossible.
 
 use super::test_helpers::{
-    draw_mounted_terminal, make_movie_app, make_music_group_app, make_queue_app,
-    mounted_browser_layout, mounted_model_at, mounted_music_layout,
+    draw_mounted_terminal, make_movie_app, make_music_group_app, make_queue_app, mounted_model_at,
+    mounted_music_layout,
 };
 use super::*;
 use crate::app::{PanelFocus, PanelMode};
@@ -143,17 +143,22 @@ fn active_queue_app() -> App {
     app
 }
 
-/// The library rail's list panel for a wide-hero presentation: the pane the
-/// shared `wide_hero_browser_pane` places the pill row and rail in, derived
-/// from the component's published `browser_area` with the same production
-/// arrangement the painter used.
-fn browser_list_panel(browser_area: Rect) -> Rect {
-    let browser_panel = Rect {
-        y: browser_area.y.saturating_sub(PANE_PAD_Y),
-        height: browser_area.height + PANE_PAD_Y * 2,
-        ..browser_area
-    };
-    wide_hero_browser_pane(browser_panel, browser_area).list_panel
+/// The migrated `BrowserContent` owner's Wide skeleton geometry (task 6.1):
+/// Movies moved from the mounted `BrowserComponent` to the panel, which
+/// retains the framed list panel rect directly.
+fn panel_wide_geometry(
+    model: &crate::app::shell::Model,
+) -> crate::app::components::library_panel::WideSkeletonGeometry {
+    model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.test_wide_geometry())
+        .expect("Library panel painted a Wide skeleton")
 }
 
 /// `unify-surface-colour-neutral` 4.1: the two columns, the panels and the
@@ -223,8 +228,8 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             queue_bit,
             Rect::new(queue_title.right() - 1, queue_title.y, 1, 1),
         );
-        let browser = mounted_browser_layout(&model);
-        let list_panel = browser_list_panel(browser.movies_wide_right_area);
+        let browser = panel_wide_geometry(&model);
+        let list_panel = browser.list_panel;
         assert!(
             list_panel.width > 2 && list_panel.height > 3,
             "{label}: wide Both must locate the library rail, got {list_panel:?}"
@@ -286,7 +291,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             );
         } else {
             let row = browser
-                .selected_item_rect
+                .selected
                 .expect("focused library rail publishes its selected row");
             painted.expect(
                 &format!("{label}/library selected row"),
@@ -315,8 +320,8 @@ fn wide_library_only_hero_and_rail_follow_the_table() {
     let library_area = model.app.layout.main.left_area;
     let panes = wide_library_panes(library_area, PANE_PAD_X, PANE_PAD_Y, None)
         .expect("wide LibraryOnly fits the two-pane split");
-    let browser = mounted_browser_layout(&model);
-    let list_panel = browser_list_panel(browser.movies_wide_right_area);
+    let browser = panel_wide_geometry(&model);
+    let list_panel = browser.list_panel;
 
     painted.expect(
         "LibraryOnly/library gutter",
@@ -337,7 +342,7 @@ fn wide_library_only_hero_and_rail_follow_the_table() {
         Rect::new(list_panel.x + 1, list_panel.bottom() - 2, 1, 1),
     );
     let row = browser
-        .selected_item_rect
+        .selected
         .expect("focused library rail publishes its selected row");
     painted.expect(
         "LibraryOnly/selected row",

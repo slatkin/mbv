@@ -10,7 +10,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::{
-    BrowserComponent, ComponentId, Msg, MusicWorkspaceComponent, ShellRequest, UserEvent,
+    ComponentId, Msg, MusicWorkspaceComponent, ShellRequest, UserEvent,
 };
 use crate::app::render::make_movie_app;
 use crate::app::tests::make_app_stub;
@@ -96,6 +96,23 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<UserEvent> {
     })
 }
 
+/// The split geometry the mounted `LibraryPanel` retained from its last
+/// painted Wide frame: (gap, pane-origin x, content width, list-pane width)
+/// — the facts the old `WideHeroBoundaryComponent::sync` carried, now on the
+/// panel's own painted skeleton (task 5.9/6.1).
+fn panel_split(harness: &TickHarness) -> Option<(Rect, u16, u16, u16)> {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.test_split())
+}
+
 fn draw_frame(harness: &mut TickHarness) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
     terminal
@@ -105,11 +122,16 @@ fn draw_frame(harness: &mut TickHarness) -> Terminal<TestBackend> {
 }
 
 /// A representative wide surface's gap is unchanged by the boundary painting
+/// A representative wide surface's gap is unchanged by the boundary painting
 /// it: with the boundary mounted and eligible, the frame is byte-identical to
 /// the same frame with the boundary unmounted (the pre-change baseline).
+/// Task 6.1 moved the Movies surface's split to the `LibraryPanel` (which
+/// paints the whole skeleton and has no separate gap painter), so the
+/// boundary-inertness property runs on grouped Music — the standing
+/// still-mounted destination the boundary serves.
 #[test]
-fn wide_hero_boundary_gap_is_visually_inert_on_a_wide_movies_surface() {
-    let mut app = make_movie_app();
+fn wide_hero_boundary_gap_is_visually_inert_on_a_wide_music_surface() {
+    let mut app = crate::app::render::make_music_group_app();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
@@ -129,12 +151,12 @@ fn wide_hero_boundary_gap_is_visually_inert_on_a_wide_movies_surface() {
         .mounted(&ComponentId::WideHeroBoundary));
     assert!(
         harness.model().wide_hero_boundary_mouse_eligible(),
-        "a painted wide Movies split must arm the boundary"
+        "a painted wide Music split must arm the boundary"
     );
     let gap = harness
         .model()
         .wide_hero_boundary_gap_rect()
-        .expect("the wide Movies surface paints a split");
+        .expect("the wide Music surface paints a split");
     assert!(gap.width > 0 && gap.height > 0);
 
     let preserved = with_boundary.backend().buffer().clone();
@@ -403,7 +425,9 @@ fn wide_hero_boundary_owns_the_gap_and_adjacent_panes_keep_their_gestures() {
 
 /// The split is session-only: a full press/drag/release on the gap moves the
 /// live split but writes no preference or config value, and the generic
-/// preferences writer has no field to serialize it under.
+/// preferences writer has no field to serialize it under. Task 6.1: the
+/// Movies surface's split gesture lives on the mounted `LibraryPanel`, so
+/// the drag is driven through the panel's own painted gap geometry.
 #[test]
 fn wide_split_drag_never_writes_preferences() {
     let mut app = make_movie_app();
@@ -414,14 +438,13 @@ fn wide_split_drag_never_writes_preferences() {
     let _ = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    let gap = harness
-        .model()
-        .wide_hero_boundary_gap_rect()
-        .expect("the wide Movies surface paints a split");
-    let content_area = harness
-        .model()
-        .wide_hero_boundary_content_area()
-        .expect("wide Movies content area");
+    let (gap, pane_origin_x, content_width, _width) = panel_split(&harness)
+        .expect("the wide Movies surface paints a panel split");
+    let content_area = Rect {
+        x: pane_origin_x,
+        width: content_width,
+        ..Rect::default()
+    };
     let prefs_path = crate::config::prefs_path();
     let before = std::fs::read(&prefs_path).ok();
 
@@ -481,9 +504,9 @@ fn wide_split_drag_never_writes_preferences() {
 
 /// A full press-drag-release on the gap tracks the pointer at one-column
 /// precision through the real `Application::tick()` path: each drag step
-/// delivers exactly the boundary owner's resolved live width (asserted
+/// delivers exactly the panel split's resolved live width (asserted
 /// exactly, and with no pane claim), the session override follows, the
-/// release is a live-only no-op, and the Movies destination's own cursor and
+/// release is a live-only no-op, and the Movies owner's own cursor and
 /// scroll never move.
 #[test]
 fn tick_wide_hero_boundary_press_drag_release_tracks_exact_live_widths() {
@@ -495,29 +518,27 @@ fn tick_wide_hero_boundary_press_drag_release_tracks_exact_live_widths() {
     let _ = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    let browser_id = harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("the Movies browser is mounted");
-    let gap = harness
-        .model()
-        .wide_hero_boundary_gap_rect()
-        .expect("the wide Movies surface paints a split");
-    let content_area = harness
-        .model()
-        .wide_hero_boundary_content_area()
-        .expect("wide Movies content area");
+    let (gap, pane_origin_x, content_width, _width) = panel_split(&harness)
+        .expect("the wide Movies surface paints a panel split");
+    let content_area = Rect {
+        x: pane_origin_x,
+        width: content_width,
+        ..Rect::default()
+    };
     let browser_state = |harness: &mut TickHarness| {
-        let browser = harness
-            .model_mut()
+        let (_, key, _) = harness
+            .model()
+            .active_migrated_browser_owner()
+            .expect("the Movies owner has migrated");
+        harness
+            .model()
             .application
-            .get_component_mut(&browser_id)
-            .expect("browser mounted")
-            .as_any_mut()
-            .downcast_mut::<BrowserComponent>()
-            .expect("browser component type");
-        (browser.cursor(), browser.scroll())
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+            .and_then(|panel| panel.owner(&key))
+            .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::browser_content::BrowserContent>())
+            .map(|owner| (owner.cursor(), owner.scroll()))
+            .expect("browser owner installed")
     };
     let before = browser_state(&mut harness);
 
@@ -576,8 +597,9 @@ fn tick_wide_hero_boundary_press_drag_release_tracks_exact_live_widths() {
 /// Overlay arbitration (mouse-input spec: "Overlay arbitration suppresses the
 /// boundary"): while a panel-covering overlay is mounted, a
 /// press-drag-release across the gap columns delivers no gesture to the
-/// boundary owner and leaves the split unchanged. Outcomes are deliberately
-/// not applied so the overlay stays mounted for every pointer event.
+/// panel's split gesture and leaves the split unchanged. Outcomes are
+/// deliberately not applied so the overlay stays mounted for every pointer
+/// event.
 #[test]
 fn tick_wide_hero_boundary_gap_drag_is_suppressed_while_a_panel_overlay_is_mounted() {
     let mut app = make_movie_app();
@@ -587,11 +609,10 @@ fn tick_wide_hero_boundary_gap_drag_is_suppressed_while_a_panel_overlay_is_mount
     harness.model_mut().sync_mounted_surfaces();
     let _ = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
-    let gap = harness
-        .model()
-        .wide_hero_boundary_gap_rect()
-        .expect("the wide Movies surface paints a split");
-    assert!(harness.model().wide_hero_boundary_mouse_eligible());
+    let (gap, _origin, _content_width, _width) = panel_split(&harness)
+        .expect("the wide Movies surface paints a panel split");
+    assert!(harness.model().panel_mouse_eligible());
+    assert!(harness.model().mouse_subscribed.contains(&ComponentId::Library));
 
     harness.model_mut().mount_sidebar(SidebarId::Search);
     harness.model_mut().sync_mounted_surfaces();
@@ -599,13 +620,12 @@ fn tick_wide_hero_boundary_gap_drag_is_suppressed_while_a_panel_overlay_is_mount
         !harness.model().panel_mouse_eligible(),
         "a mounted overlay arbitrates the panel surfaces"
     );
-    assert!(!harness.model().wide_hero_boundary_mouse_eligible());
     assert!(
         !harness
             .model()
             .mouse_subscribed
-            .contains(&ComponentId::WideHeroBoundary),
-        "the obscured boundary must not be mouse-subscribed"
+            .contains(&ComponentId::Library),
+        "the obscured panel must not be mouse-subscribed"
     );
 
     for kind in [
@@ -629,7 +649,7 @@ fn tick_wide_hero_boundary_gap_drag_is_suppressed_while_a_panel_overlay_is_mount
     );
 }
 
-/// Losing eligibility mid-drag (an overlay mount) resets the boundary's
+/// Losing eligibility mid-drag (an overlay mount) resets the panel's split
 /// gesture state before the next delivery, so no stale width can be emitted
 /// after eligibility ends — not while suppressed, and not once eligibility
 /// returns: a drag without a fresh press is inert. A new press arms again.
@@ -642,14 +662,13 @@ fn tick_wide_hero_boundary_mid_drag_eligibility_loss_emits_no_stale_width() {
     harness.model_mut().sync_mounted_surfaces();
     let _ = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
-    let gap = harness
-        .model()
-        .wide_hero_boundary_gap_rect()
-        .expect("the wide Movies surface paints a split");
-    let content_area = harness
-        .model()
-        .wide_hero_boundary_content_area()
-        .expect("wide Movies content area");
+    let (gap, pane_origin_x, content_width, _width) = panel_split(&harness)
+        .expect("the wide Movies surface paints a panel split");
+    let content_area = Rect {
+        x: pane_origin_x,
+        width: content_width,
+        ..Rect::default()
+    };
 
     // Arm a drag on the gap.
     harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
@@ -661,7 +680,7 @@ fn tick_wide_hero_boundary_mid_drag_eligibility_loss_emits_no_stale_width() {
     // is reset before the drag is delivered.
     harness.model_mut().mount_sidebar(SidebarId::Search);
     harness.model_mut().sync_mounted_surfaces();
-    assert!(!harness.model().wide_hero_boundary_mouse_eligible());
+    assert!(!harness.model().panel_mouse_eligible());
 
     harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 30, gap.y));
     let outcome = harness.step();
@@ -677,7 +696,7 @@ fn tick_wide_hero_boundary_mid_drag_eligibility_loss_emits_no_stale_width() {
     // anchor is gone: a drag without a fresh press emits nothing.
     harness.model_mut().dismiss_sidebar(SidebarId::Search);
     harness.model_mut().sync_mounted_surfaces();
-    assert!(harness.model().wide_hero_boundary_mouse_eligible());
+    assert!(harness.model().panel_mouse_eligible());
     harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 30, gap.y));
     let outcome = harness.step();
     assert_eq!(

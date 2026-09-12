@@ -188,12 +188,14 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     library_app.panel_mode = PanelMode::Both;
     let mut library_harness = TickHarness::new(library_app);
     library_harness.model_mut().sync_mounted_surfaces();
-    let child = library_harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("movie browser child mounted");
-    assert_eq!(library_harness.model().application.focus(), Some(&child));
+    // Task 6.1: Movies moved into the mounted `LibraryPanel` as the
+    // `BrowserContent` owner, so its library tab routes to the panel (the
+    // old-destination-child focus for un-migrated libraries is covered by
+    // `tests_tick_integration_library_panel::library_panel_focus_follows_the_active_library`).
+    assert_eq!(
+        library_harness.model().application.focus(),
+        Some(&ComponentId::Library)
+    );
 
     let mut stub_app = make_app_stub();
     // Task 1.1: the sync pass normalizes a stale Service-library destination

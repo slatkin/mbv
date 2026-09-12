@@ -20,7 +20,7 @@ use crate::app::render::TvWideRenderCtx;
 use crate::app::tests::make_item;
 use crate::app::TWO_COLUMN_THRESHOLD;
 use mbv_core::config::{FeedKind, FeedSubscription};
-use mbv_core::playback_queue::{FeedEntry, QueueItem};
+use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;

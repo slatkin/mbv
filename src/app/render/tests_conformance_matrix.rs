@@ -4,6 +4,7 @@ use super::test_helpers::{
 };
 use super::*;
 use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
     AudiobookshelfPodcastComponent, BrowserComponent, ComponentId, FeedsComponent,
     MusicWorkspaceComponent,
@@ -49,7 +50,25 @@ fn render_browse_component(
         .map_or(0, |level| level.resting().cursor());
     let mut model = crate::app::shell::Model::new(app);
     model.sync_mounted_surfaces();
-    if let Some(id) = model.emby_browser_id.clone() {
+    // Generic/Movies/HomeVideos (task 6.1) route through the embedded
+    // `BrowserContent` owner inside the mounted `LibraryPanel` instead of a
+    // mounted `BrowserComponent`; seed its cursor there when that owner is
+    // the active one.
+    if let Some((_, key, _)) = model.active_migrated_browser_owner() {
+        if let Some(owner) = model
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(|panel| panel.owner_mut(&key))
+            .and_then(|owner| {
+                owner
+                    .as_any_mut()
+                    .downcast_mut::<crate::app::components::browser_content::BrowserContent>()
+            })
+        {
+            owner.set_cursor_for_test(seed_cursor);
+        }
+    } else if let Some(id) = model.emby_browser_id.clone() {
         if let Some(browser) = model
             .application
             .get_component_mut(&id)
@@ -63,25 +82,61 @@ fn render_browse_component(
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
     let list_area = model.app.layout.main.left_area;
-    let painted = if model.music_workspace_id.is_some() {
-        super::test_helpers::mounted_music_layout(&model)
-    } else if model.tv_workspace_id.is_some() {
-        super::test_helpers::mounted_tv_layout(&model)
+    let layout = if model.active_library_owner_migrated() {
+        panel_browse_layout(&model)
     } else {
-        super::test_helpers::mounted_browser_layout(&model)
-    };
-    let layout = LayoutMain {
-        left_area: if painted.left_area.width > 0 {
-            painted.left_area
+        let painted = if model.music_workspace_id.is_some() {
+            super::test_helpers::mounted_music_layout(&model)
+        } else if model.tv_workspace_id.is_some() {
+            super::test_helpers::mounted_tv_layout(&model)
         } else {
-            list_area
-        },
-        hero_area: painted.hero_area,
-        selected_item_rect: painted.selected_item_rect,
-        selector_tabs: painted.selector_tabs.clone(),
-        ..Default::default()
+            super::test_helpers::mounted_browser_layout(&model)
+        };
+        LayoutMain {
+            left_area: if painted.left_area.width > 0 {
+                painted.left_area
+            } else {
+                list_area
+            },
+            hero_area: painted.hero_area,
+            selected_item_rect: painted.selected_item_rect,
+            selector_tabs: painted.selector_tabs.clone(),
+            ..Default::default()
+        }
     };
     (terminal, layout)
+}
+
+/// The migrated `BrowserContent` owner's painted geometry, surfaced as a
+/// `LayoutMain` so the shared conformance assertions still hold (mirrors
+/// `render_browse_component`'s old-path shape).
+fn panel_browse_layout(model: &crate::app::shell::Model) -> LayoutMain {
+    let panel = model
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .expect("Library panel mounted");
+    let selector_tabs = panel.test_selector_hits().regions().to_vec();
+    if let Some(wide) = panel.test_wide_geometry() {
+        LayoutMain {
+            left_area: wide.list_area,
+            hero_area: wide.hero_area,
+            selected_item_rect: wide.selected,
+            selector_tabs,
+            ..Default::default()
+        }
+    } else {
+        let narrow = panel
+            .test_narrow_geometry()
+            .expect("the panel painted a Wide or Narrow skeleton");
+        LayoutMain {
+            left_area: narrow.list_area,
+            hero_area: narrow.inline_hero.unwrap_or_default(),
+            selected_item_rect: narrow.selected,
+            selector_tabs,
+            ..Default::default()
+        }
+    }
 }
 
 /// Render the Book surface through its mounted `AudiobookshelfBookComponent`

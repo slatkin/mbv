@@ -274,6 +274,24 @@ impl InlineSearch {
         self.cursor = move_cursor(self.cursor, delta, self.order.len());
     }
 
+    /// Move the result cursor by `delta` rows (a Library-panel-slot wheel
+    /// gesture's normalized delta; the panel's own `MouseGestureState` has
+    /// already collapsed the raw event, so this is the position-free
+    /// counterpart of the `MouseGesture::Scroll` arm in
+    /// [`InlineSearch::handle_mouse`]).
+    pub(in crate::app) fn move_cursor_by(&mut self, delta: i64) {
+        self.move_cursor(delta);
+    }
+
+    /// Move the result cursor to the row painted at `at`, if `at` is inside
+    /// the last painted result area (the Library-panel-slot counterpart of
+    /// [`InlineSearch::select_row_at`], exposed for an embedded owner that
+    /// only receives the panel's already-normalized `RowLocalInput::Click`
+    /// position, not the raw `MouseEvent` `handle_mouse` resolves against).
+    pub(in crate::app) fn select_row_at_point(&mut self, at: Position) -> bool {
+        self.select_row_at(at)
+    }
+
     /// Page size for PageUp/PageDown, derived from the last painted result
     /// area (falls back to one row before the first paint).
     fn page_size(&self) -> i64 {

@@ -41,13 +41,6 @@ impl BrowserComponent {
         self.layout.left_area.height as usize
     }
 
-    /// Records the wide layout's pill-row presentation from validated shell
-    /// content; whether the layout is wide is derived locally in `view()`.
-    pub(in crate::app) fn configure_wide_movies(&mut self, home_video: bool, letter_pills: bool) {
-        self.wide_movies_home_video = home_video;
-        self.wide_movies_letter_pills = letter_pills;
-    }
-
     /// Runtime terminal-capability flag (task 5.3d.17a): mirrors
     /// `HomeComponent::set_use_nerd_fonts` so the component can paint the
     /// wide hero text.

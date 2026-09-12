@@ -138,6 +138,11 @@ impl Model {
         let active = self.active_library_key();
         let live = self.live_library_keys();
         let list_pane_width = self.app.list_pane_width;
+        // The split gesture's eligibility-loss reset is decided before the
+        // panel borrow (mirrors `WideHeroBoundaryComponent::sync`, which the
+        // panel's split drag moved in from): an overlay mount mid-drag must
+        // not leave a stale armed drag behind.
+        let mouse_eligible = self.panel_mouse_eligible();
         let Some(panel) = self
             .application
             .get_component_mut(&id)
@@ -152,6 +157,7 @@ impl Model {
         panel.retain_owners(&live);
         panel.set_active(active);
         panel.set_list_pane_width(list_pane_width);
+        panel.sync_mouse_eligibility(mouse_eligible);
     }
 
     /// The library content rect the old destinations paint — the same

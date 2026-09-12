@@ -138,9 +138,12 @@ fn movies_key() -> LibraryKey {
 
 /// A Home tab whose owner has migrated: the fixture owner is pushed into the
 /// mounted panel and one sync pass routes focus/eligibility to
-/// `ComponentId::Library`.
+/// `ComponentId::Library`. The base app's one Emby library is grouped Music
+/// — still mounted as its old destination (task 8), so the fixture's
+/// un-migrated branch is a real un-migrated library after task 6.1 moved
+/// Movies into the panel.
 fn migrated_home() -> (TickHarness, Rc<RefCell<FixtureLog>>) {
-    let mut app = crate::app::render::make_movie_app();
+    let mut app = crate::app::render::make_music_group_app();
     app.panel_mode = crate::app::PanelMode::LibraryOnly;
     app.panel_focus = crate::app::PanelFocus::Library;
     app.tab = crate::app::TabSelection::Home;
@@ -187,7 +190,9 @@ fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> 
 
 /// Focus follows the active library through the real sync pass: the migrated
 /// tab routes to `ComponentId::Library`, an un-migrated tab routes to its old
-/// destination child, and back again.
+/// destination child, and back again. Task 6.1 migrated Movies, so the
+/// un-migrated fixture is the grouped Music library (task 8 still mounts its
+/// workspace).
 #[test]
 fn library_panel_focus_follows_the_active_library() {
     let (mut harness, _log) = migrated_home();
@@ -205,7 +210,12 @@ fn library_panel_focus_follows_the_active_library() {
     assert!(
         focus
             .as_ref()
-            .is_some_and(|id| matches!(id, ComponentId::Browser(_))),
+            .is_some_and(|id| {
+                matches!(
+                    id,
+                    ComponentId::Browser(key) if key.kind == crate::app::components::BrowserKind::Music
+                )
+            }),
         "an un-migrated library focuses its old destination child, got {focus:?}"
     );
 

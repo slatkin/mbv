@@ -35,8 +35,10 @@ const HERO_MIN_TEXT_COLS: u16 = 16;
 /// Landscape fills the content width at the top with its 16:9 height; the
 /// Portrait (2:3) and Square (1:1) boxes are sized from the available height
 /// and right-aligned, capped so the text block keeps room. A present
-/// Workspace caps the box height first, so the artwork shrinks before a
-/// Workspace viewport would drop.
+/// Workspace caps the box height first (the artwork shrinks before a
+/// Workspace viewport would drop), and the Landscape box additionally
+/// shrinks before the wrapped title/meta block below it is starved out of
+/// the pane (the legacy wide Emby card's rule, now universal).
 ///
 /// One layout site: the header painter calls this and the shell projection
 /// (task 5.10) calls it with the Library panel's area, so the fetched image
@@ -53,7 +55,15 @@ pub(in crate::app) fn hero_artwork_box(area: Rect, content: &HeroContent<'_>) ->
         super::content::HeroHeaderArm::Landscape => {
             // 16:9 in terminal cells (cells are ~2x taller than wide).
             let h = (area.width.saturating_mul(9).saturating_add(31) / 32).max(1);
-            (area.width, h.min(max_h))
+            // The artwork shrinks before the title/meta block below it is
+            // starved out of the pane: the box keeps room for the wrapped
+            // text rows plus the gap row between the two blocks.
+            let text_rows = wrapped_text_rows(area.width, &content.facts);
+            let room_for_text = area
+                .height
+                .saturating_sub(text_rows)
+                .saturating_sub(ARTWORK_TEXT_GAP_ROWS);
+            (area.width, h.min(max_h).min(room_for_text))
         }
         super::content::HeroHeaderArm::Portrait => box_from_height(max_h, 4, 3, area),
         super::content::HeroHeaderArm::Square => box_from_height(max_h, 2, 1, area),
@@ -78,6 +88,19 @@ fn box_from_height(max_h: u16, num: u16, den: u16, area: Rect) -> (u16, u16) {
     let w = ((max_h.saturating_mul(num).saturating_add(den - 1)) / den).min(cap_w);
     let h = (w.saturating_mul(den) / num).min(max_h);
     (w, h)
+}
+
+/// Rows the Landscape title/meta block needs once wrapped to the content
+/// width — the same wrap [`paint_wide_hero_text`] applies (`width - 1`),
+/// so the box's text-starvation cap matches what the painter actually
+/// paints below it.
+fn wrapped_text_rows(width: u16, facts: &HeroFacts) -> u16 {
+    let wrap_width = (width as usize).saturating_sub(1).max(1);
+    std::iter::once(&facts.title)
+        .chain(facts.meta_rows.iter())
+        .filter(|line| !line.is_empty())
+        .map(|line| textwrap::wrap(line, wrap_width).len() as u16)
+        .sum()
 }
 
 /// Paints the Hero header and — when overview text exists — the overview
@@ -425,13 +448,37 @@ mod hero_header_tests {
             }),
         };
         let with_workspace = hero_artwork_box(small, &constrained);
-        // The landscape box would fill the pane; a present Workspace caps it
-        // so the Workspace keeps its minimum rows.
-        assert_eq!(without_workspace.height, small.height);
+        // The landscape box no longer fills the pane even without a
+        // Workspace: it leaves room for the wrapped title/meta rows below
+        // it, and a present Workspace caps it further so the Workspace
+        // keeps its minimum rows.
+        assert!(without_workspace.height < small.height);
         assert_eq!(
             with_workspace.height,
             small.height.saturating_sub(WORKSPACE_MIN_ROWS)
         );
+    }
+
+    #[test]
+    fn landscape_artwork_shrinks_before_the_title_meta_block_is_starved() {
+        // A wide, short pane: the raw 16:9 box (113 wide → 32 rows) would
+        // fill the whole pane and leave the title/meta block no rows.
+        let pane = content(ArtworkShape::Landscape);
+        let small = Rect::new(0, 0, 113, 19);
+        let artwork = hero_artwork_box(small, &pane);
+        assert!(
+            artwork.height < small.height,
+            "artwork leaves room for the text block below it"
+        );
+        // The title and meta paint below the capped box.
+        let buf = draw_pane(small.width, small.height, &pane);
+        let below = Rect {
+            y: artwork.bottom(),
+            height: small.bottom() - artwork.bottom(),
+            ..small
+        };
+        assert!(text_in(&buf, below, "Dune"));
+        assert!(text_in(&buf, below, "2021"));
     }
 
     #[test]

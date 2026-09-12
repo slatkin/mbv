@@ -1,4 +1,4 @@
-use super::test_helpers::{buffer_to_string, home_owner, render_home_shell_with};
+use super::test_helpers::{buffer_to_string, render_home_shell_with};
 use super::*;
 use crate::app::tests::make_app_stub;
 use crate::app::types_playback::HomeLatestSource;
@@ -37,18 +37,9 @@ fn wide_home_audiobookshelf_hero_paints_cover_slot_and_subtitle() {
     // The shared ABS-book producer's Portrait header paints (task 5.11): the
     // same facts the Books tab renders for the same book. Images may be
     // disabled globally; the artwork box renders the shared placeholder.
-    let geometry = home_panel(&model).test_wide_geometry().unwrap_or_else(|| {
-        eprintln!(
-            "DBG root_frame.library={:?} panel_mode={:?} migrated={}",
-            model.app.layout.root_frame.library,
-            model.app.effective_panel_mode(),
-            {
-                use crate::app::components::library_panel::LibraryKey;
-                home_panel(&model).has_owner(&LibraryKey::Home)
-            }
-        );
-        panic!("wide Home paints the Wide skeleton");
-    });
+    let geometry = home_panel(&model)
+        .test_wide_geometry()
+        .expect("wide Home paints the Wide skeleton");
     let hero = geometry.hero_area;
     let placeholder = palette::surface_colors(palette::Surface::ArtworkPlaceholder, false).fill;
     assert!(

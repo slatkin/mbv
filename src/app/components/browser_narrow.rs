@@ -9,16 +9,12 @@
 //! [`crate::app::render::render_narrow_browse_with_ctx`] and forwards the
 //! returned [`HomeImagePaint`] to the shell (mirrors `HomeComponent`).
 
-use crate::app::render::CompactBannerLayout;
-
-/// The selected item's inline hero, already resolved by the shell.
+/// The selected item's inline hero, already resolved by the shell. Only
+/// `Series` survives task 6.1 (Movies/HomeVideos/Generic moved to the
+/// embedded `BrowserContent` owner, which derives its Narrow inline hero
+/// generically from `HeroContent`, design D7); this component now mounts
+/// only for narrow TV.
 pub(in crate::app) enum NarrowInlineHero {
-    /// A leaf movie/home-video/podcast item: its compact banner layout was
-    /// computed shell-side (the only image-cache-touching step).
-    Movie {
-        item: mbv_core::api::EmbyItem,
-        layout: CompactBannerLayout,
-    },
     /// A selected Series on a `tvshows` library.
     Series {
         item: mbv_core::api::EmbyItem,

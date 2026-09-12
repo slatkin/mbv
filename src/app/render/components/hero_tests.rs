@@ -1,6 +1,4 @@
-use super::hero::{
-    paint_hero_content, render_home_hero_meta_block, HeroContent, HeroImage, HeroLine,
-};
+use super::hero::{paint_hero_content, HeroContent, HeroImage, HeroLine};
 use crate::app::palette;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -51,33 +49,5 @@ fn inline_hero_image_has_shared_top_right_and_gutter_geometry() {
         buffer[(8, 4)].symbol(),
         " ",
         "text did not resume full width"
-    );
-}
-
-#[test]
-fn wide_hero_overview_reflows_at_recessed_content_width() {
-    let backend = TestBackend::new(16, 8);
-    let mut terminal = Terminal::new(backend).unwrap();
-    terminal
-        .draw(|frame| {
-            render_home_hero_meta_block(
-                frame,
-                Rect::new(0, 0, 16, 8),
-                Rect::new(0, 0, 16, 8),
-                &[],
-                "",
-                None,
-                vec![],
-                &[("ABC".to_string(), false), ("DEF".to_string(), false)],
-                2,
-                true,
-            );
-        })
-        .unwrap();
-    let buffer = terminal.backend().buffer();
-    let row: String = (0..16).map(|x| buffer[(x, 2)].symbol()).collect();
-    assert!(
-        row.contains("ABC") && row.contains("DEF"),
-        "expected joined flow: {row:?}"
     );
 }

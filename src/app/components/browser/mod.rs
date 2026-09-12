@@ -31,12 +31,11 @@ use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
-use crate::app::render::{effective_sort_str, wide_hero_fits, HomeImagePaint};
+use crate::app::render::{effective_sort_str, HomeImagePaint};
 
 mod content;
 mod keyboard;
 mod navigation;
-mod paint;
 mod state;
 
 pub(in crate::app) use content::{BrowserContent, BrowserIdentity};
@@ -49,12 +48,6 @@ pub struct BrowserComponent {
     last_identity: Option<BrowserIdentity>,
     focused: bool,
     layout: LayoutMain,
-    /// Whether the component's kind and painted geometry select Wide hero layout.
-    wide_movies: bool,
-    /// Whether the wide layout's pill row is a home-video count label.
-    wide_movies_home_video: bool,
-    /// Whether the wide layout shows the letter-range pill row.
-    wide_movies_letter_pills: bool,
     /// Runtime terminal-capability flag (config-derived), set by the shell so
     /// the component can paint the hero text like every other surface.
     use_nerd_fonts: bool,
@@ -126,9 +119,6 @@ impl BrowserComponent {
             last_identity: None,
             focused: false,
             layout: LayoutMain::default(),
-            wide_movies: false,
-            wide_movies_home_video: false,
-            wide_movies_letter_pills: false,
             use_nerd_fonts: false,
             images_enabled: true,
             list_pane_width: None,
@@ -256,16 +246,13 @@ impl BrowserComponent {
         self.carrier.set_content(rows);
     }
 
-    /// The presentation the component's kind and breakpoint select right now
-    /// (design.md D2). The Grid presentation was deleted as unreachable
-    /// (design D13): every narrow browse surface paints the Inline
-    /// presentation.
+    /// The presentation this component always paints now (design.md D2). The
+    /// Grid presentation was deleted as unreachable (design D13), and the
+    /// Wide hero presentation moved to the embedded `BrowserContent` owner
+    /// (task 6.1): this component mounts only for narrow TV, so it always
+    /// paints the Inline presentation.
     fn active_presentation(&self) -> Presentation {
-        if self.wide_movies {
-            Presentation::Wide
-        } else {
-            Presentation::Inline
-        }
+        Presentation::Inline
     }
 
     /// Move the shared owner into the active presentation when they diverge.
@@ -457,10 +444,6 @@ impl InlineSearchHost for BrowserComponent {
 
 impl Component for BrowserComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        let wide = (matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
-            || self.narrow_extras.feed_items.is_some())
-            && wide_hero_fits(area);
-        self.wide_movies = wide;
         // One shared owner per logical row flow (design.md D1): a responsive
         // presentation change reconfigures the same owner and preserves only
         // the outgoing selected-row viewport offset — no owner-to-owner
@@ -485,14 +468,7 @@ impl Component for BrowserComponent {
                 self.scroll(),
             );
         }
-        // Task 5.3d.17a: when the wide Movies/home-video Wide hero layout
-        // is active (this component's own `kind` AND the area is wide enough
-        // for the shared split), paint the full hero + pills + list layout
-        // itself instead of just the inner list rows; otherwise keep the
-        // narrow list-row behavior.
-        if wide {
-            self.render_wide_movies(frame, area, &context);
-        } else if self.inline_search.is_active() {
+        if self.inline_search.is_active() {
             // Normal/non-Hero catalogs pass their whole list area to the
             // shared search painter (design.md D3); the ordinary narrow
             // composer does not also paint it.

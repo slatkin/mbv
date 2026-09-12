@@ -1,10 +1,31 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::ComponentId;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::Component;
+
+/// Seed the migrated Movies/HomeVideos/Generic owner's authoritative
+/// selection directly (mirrors `set_browser_cursor_for_test`'s old
+/// `BrowserComponent` contract, now against the embedded owner).
+fn set_home_video_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
+    model.sync_mounted_surfaces();
+    let (_, key, _) = model
+        .active_migrated_browser_owner()
+        .expect("a migrated browser owner is active");
+    model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        .and_then(|panel| panel.owner_mut(&key))
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserOwner>())
+        .expect("browser owner installed")
+        .set_cursor_for_test(cursor);
+}
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
@@ -35,12 +56,21 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
     app.libs[0].nav_stack[0].items[1].overview = "The selected home video overview.".into();
     app.libs[0].nav_stack[0].set_resting_cursor(1);
     let mut model = mounted_model_at(app, 70, 30);
-    set_browser_cursor_for_test(&mut model, 1);
+    set_home_video_cursor_for_test(&mut model, 1);
     let output = draw_mounted_frame(&mut model, 70, 30);
-    let layout = mounted_browser_layout(&model);
+    let layout = model
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("Library panel type")
+        .test_narrow_geometry()
+        .expect("the panel painted a Narrow skeleton");
 
+    let hero_area = layout.inline_hero.unwrap_or_default();
     assert!(
-        layout.hero_area.height > 0,
+        hero_area.height > 0,
         "selected Home Video detail disappeared"
     );
     assert!(
@@ -49,18 +79,11 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
     );
 }
 
-#[test]
-fn wide_home_video_uses_a_left_detail_and_right_rail() {
-    // Wide Movies / home-video geometry is published by the mounted
-    // `BrowserComponent` now (task 3.8): the legacy base frame only reserves
-    // `left_area`. Read the right rail off the component's own painted layout.
-    let mut model = mounted_model_at(make_home_video_app(), 200, 40);
-    let _ = draw_mounted_frame(&mut model, 200, 40);
-    let layout = mounted_browser_layout(&model);
-
-    assert!(layout.movies_wide_right_area.width > 0);
-    assert!(layout.movies_wide_right_area.height > 0);
-}
+// wide_home_video_uses_a_left_detail_and_right_rail deleted (task 6.1):
+// HomeVideos' Wide hero geometry moved to the embedded `BrowserContent`
+// owner painted through the mounted `LibraryPanel`; the equivalent coverage
+// now lives in `tests_library_characterization.rs` against the panel's
+// `test_wide_geometry()`.
 
 /// `remove-migrated-surface-underpaint` 3.2 (D4): at the wide Wide hero
 /// breakpoint the mounted `BrowserComponent` owns the Movies / home-video
@@ -121,15 +144,11 @@ fn wide_emby_podcast_does_not_publish_tv_geometry() {
 }
 
 #[test]
-fn podcast_and_home_video_use_inline_when_wide_height_is_unavailable() {
+fn podcast_uses_inline_when_wide_height_is_unavailable() {
     let mut podcast = make_movie_app();
     podcast.libs[0].library.collection_type = "podcasts".into();
     let podcast_layout = render_view(&mut podcast, 200, 8);
     assert_eq!(podcast_layout.tv_wide_left_area.width, 0);
-
-    let mut home_video = make_home_video_app();
-    let home_video_layout = render_view(&mut home_video, 200, 8);
-    assert_eq!(home_video_layout.movies_wide_right_area.width, 0);
 }
 
 #[test]

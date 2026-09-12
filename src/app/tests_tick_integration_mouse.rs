@@ -3,9 +3,9 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
-    BrowserComponent, ComponentId, ModalId, Msg, MusicWorkspaceComponent, OverlayId, QueueComponent,
-    ShellRequest,
+    ComponentId, ModalId, Msg, MusicWorkspaceComponent, OverlayId, QueueComponent, ShellRequest,
 };
 use crate::app::render::make_music_group_app;
 use crate::app::tests::{make_app_stub, make_item};
@@ -487,11 +487,10 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
-    let library_child = harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("movie browser child mounted");
+    // Task 6.1: the library surface is the mounted `LibraryPanel` (the
+    // Movies owner is embedded inside it), so both eligible surfaces are
+    // Queue and the panel.
+    let library_child = ComponentId::Library;
     let eligible = &harness.model().mouse_subscribed;
     assert!(
         eligible.contains(&ComponentId::Queue) && eligible.contains(&library_child),
@@ -516,15 +515,12 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         .expect("queue painted selected row");
 
     let library_point = harness
-        .model_mut()
+        .model()
         .application
-        .get_component_mut(&library_child)
-        .expect("library child mounted")
-        .as_any_mut()
-        .downcast_mut::<BrowserComponent>()
-        .expect("browser component type")
-        .test_layout()
-        .left_area;
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_list_rect())
+        .expect("the Library panel must have painted a list slot");
     assert!(
         library_point.width > 0 && library_point.height > 0,
         "the Library destination must have painted a non-empty list area"
@@ -565,9 +561,10 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         "focus follows the click onto Queue"
     );
 
-    // A click inside Library's painted list resolves to a Library-specific
-    // message and focus follows back onto the Library destination.
-    harness.inject(click(library_point.x, library_point.y));
+    // A click inside Library's painted list resolves through the Library
+    // panel's slot-event path — never through Queue — and a blank area of
+    // the list claims nothing.
+    harness.inject(click(library_point.x, library_point.bottom().saturating_sub(1)));
     let outcome = harness.step();
     assert!(
         outcome
@@ -785,23 +782,16 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
-    let library_child = harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("movie browser child mounted");
-
+    // Task 6.1: the Movies surface paints inside the mounted `LibraryPanel`,
+    // whose retained skeleton geometry is the click-resolution truth.
     let browser_test_layout = |harness: &mut TickHarness| {
         harness
-            .model_mut()
+            .model()
             .application
-            .get_component_mut(&library_child)
-            .expect("library child mounted")
-            .as_any_mut()
-            .downcast_mut::<BrowserComponent>()
-            .expect("browser component type")
-            .test_layout()
-            .left_area
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.test_list_rect())
+            .expect("the panel painted a list slot")
     };
 
     let click = |column, row| {
@@ -825,7 +815,10 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         "the wide breakpoint must have painted a non-empty list area"
     );
 
-    harness.inject(click(wide_list_area.x, wide_list_area.y));
+    // The panel's list rect starts at the painted row flow (the old
+    // component's `left_area` included the pill row above it), so the blank
+    // probe is the area below the fixture's two rows: it must not claim.
+    harness.inject(click(wide_list_area.x, wide_list_area.bottom().saturating_sub(1)));
     let outcome = harness.step();
     assert!(
         outcome
@@ -880,10 +873,12 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
     );
     apply_outcome(&mut harness, outcome);
 
-    // A click inside the NEW narrow list area must resolve through the
-    // now-mounted `InlineMediaBrowser`, proving the current geometry (not
-    // memory of the old control) is what actually governs resolution.
-    harness.inject(click(narrow_list_area.x, narrow_list_area.y));
+    // A click below the fixture's two painted rows — inside the list slot's
+    // rect but past its last row — must not claim without a resolved target,
+    // proving resolution consults the freshly painted narrow layout (the
+    // hero block replaces the selected row at the flow's top; blank space
+    // below the rows claims nothing).
+    harness.inject(click(narrow_list_area.x, narrow_list_area.bottom().saturating_sub(1)));
     let outcome = harness.step();
     assert!(
         outcome

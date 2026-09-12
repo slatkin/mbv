@@ -10,25 +10,22 @@ use mbv_core::api::TICKS_PER_SECOND;
 /// Provider-neutral content exposed to the shared hero presentation.
 pub(crate) trait Hero {
     fn title(&self) -> &str;
-    fn subtitle(&self) -> Option<&str>;
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>>;
-    fn title_suffix(&self) -> Option<Span<'static>>;
     fn description(&self) -> Option<String>;
     /// The default-aspect artwork request: the provider's primary image chain.
-    fn artwork(&self) -> HeroArtwork<'_>;
+    fn artwork(&self) -> HeroArtwork;
     /// The landscape-aspect artwork request: the provider's wide-image chain
     /// (Series overrides it with the `Thumb`-first chain). Task 5.4 deleted
     /// the per-aspect enum; this method keeps the landscape-chain role with
     /// the trait until the panel's artwork policy replaces this path when the
     /// destination converts (task 8.2).
-    fn landscape_artwork(&self) -> HeroArtwork<'_> {
+    fn landscape_artwork(&self) -> HeroArtwork {
         self.artwork()
     }
 }
 
-pub(crate) enum HeroArtwork<'a> {
+pub(crate) enum HeroArtwork {
     Image {
-        item_id: &'a str,
         /// Ordered Emby image-type candidate chain, same shape and
         /// precedent as `card.rs::card_image_types`.
         image_types: &'static [&'static str],
@@ -39,14 +36,6 @@ pub(crate) enum HeroArtwork<'a> {
 impl Hero for QueueItem {
     fn title(&self) -> &str {
         self.title()
-    }
-
-    fn subtitle(&self) -> Option<&str> {
-        match self {
-            QueueItem::Audiobookshelf(item) => item.show_title.as_deref(),
-            QueueItem::AudiobookshelfBook(item) => item.author.as_deref(),
-            _ => None,
-        }
     }
 
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
@@ -63,10 +52,6 @@ impl Hero for QueueItem {
             .unwrap_or_default()
     }
 
-    fn title_suffix(&self) -> Option<Span<'static>> {
-        None
-    }
-
     fn description(&self) -> Option<String> {
         match self {
             QueueItem::Audiobookshelf(item) => item.description.clone(),
@@ -74,21 +59,19 @@ impl Hero for QueueItem {
         }
     }
 
-    fn artwork(&self) -> HeroArtwork<'_> {
+    fn artwork(&self) -> HeroArtwork {
         match self {
             QueueItem::Audiobookshelf(item) => item
                 .cover_path
                 .as_deref()
-                .map(|id| HeroArtwork::Image {
-                    item_id: id,
+                .map(|_| HeroArtwork::Image {
                     image_types: &["Primary"],
                 })
                 .unwrap_or(HeroArtwork::Placeholder),
             QueueItem::AudiobookshelfBook(item) => item
                 .cover_path
                 .as_deref()
-                .map(|id| HeroArtwork::Image {
-                    item_id: id,
+                .map(|_| HeroArtwork::Image {
                     image_types: &["Primary"],
                 })
                 .unwrap_or(HeroArtwork::Placeholder),
@@ -168,11 +151,6 @@ impl Hero for EmbyItem {
         &self.name
     }
 
-    fn subtitle(&self) -> Option<&str> {
-        (self.item_type == "Episode" && !self.series_name.is_empty())
-            .then_some(self.series_name.as_str())
-    }
-
     fn meta_rows(&self, width: u16) -> Vec<Vec<Span<'static>>> {
         // Rows keep the painters' historical per-row colours by meaning
         // (see `emby_meta_row_styles`).
@@ -192,40 +170,21 @@ impl Hero for EmbyItem {
             .collect()
     }
 
-    fn title_suffix(&self) -> Option<Span<'static>> {
-        let glyph = if self.played {
-            "●"
-        } else if self.playback_position_ticks > 0 {
-            "◐"
-        } else {
-            "○"
-        };
-        let color = if self.played {
-            palette::ACCENT
-        } else if self.playback_position_ticks > 0 {
-            palette::TEXT_FOCUS_ACCENT
-        } else {
-            palette::STATUS_ERROR
-        };
-        Some(Span::styled(glyph, Style::default().fg(color)))
-    }
-
     fn description(&self) -> Option<String> {
         let d = clean_overview(&self.overview);
         (!d.is_empty()).then_some(d)
     }
 
-    fn artwork(&self) -> HeroArtwork<'_> {
+    fn artwork(&self) -> HeroArtwork {
         if self.id.is_empty() {
             return HeroArtwork::Placeholder;
         }
         HeroArtwork::Image {
-            item_id: &self.id,
             image_types: &["Primary", "Backdrop", "Logo"],
         }
     }
 
-    fn landscape_artwork(&self) -> HeroArtwork<'_> {
+    fn landscape_artwork(&self) -> HeroArtwork {
         if self.id.is_empty() {
             return HeroArtwork::Placeholder;
         }
@@ -234,10 +193,7 @@ impl Hero for EmbyItem {
         } else {
             &["Primary", "Backdrop", "Logo"]
         };
-        HeroArtwork::Image {
-            item_id: &self.id,
-            image_types,
-        }
+        HeroArtwork::Image { image_types }
     }
 }
 
@@ -250,7 +206,7 @@ mod tests {
         make_item("Test", item_type)
     }
 
-    fn image_types(artwork: HeroArtwork<'_>) -> &'static [&'static str] {
+    fn image_types(artwork: HeroArtwork) -> &'static [&'static str] {
         match artwork {
             HeroArtwork::Image { image_types, .. } => image_types,
             HeroArtwork::Placeholder => panic!("expected HeroArtwork::Image"),

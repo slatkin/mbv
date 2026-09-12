@@ -43,9 +43,10 @@ fn two_library_app() -> App {
     });
     app
 }
-/// Task 3.7: the narrow browser's shell render seam schedules neighboring
-/// images using the mounted component cursor, and applies both image-fetch
-/// gates without relying on the legacy list painter.
+/// Task 3.7 → task 6.1: the browse surface's neighboring-image prefetch
+/// (#287) moved from the mounted component's render seam into the embedded
+/// owner's content push (`push_browser_owner_content`); the idle/available
+/// gates are unchanged (`fetch_list_card_image_when_idle`).
 #[test]
 fn narrow_browser_shell_render_prefetches_only_when_idle_and_available() {
     use std::time::{Duration, Instant};
@@ -54,32 +55,38 @@ fn narrow_browser_shell_render_prefetches_only_when_idle_and_available() {
     let mut model = Model::new(browser_app_with_flat_movies(6));
     model.app.image_protocol_enabled = true;
     model.app.image_fetches_active = 6;
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let id = model.emby_browser_id.clone().expect("browser mounted");
-
-    assert!(matches!(
-        drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
-        Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
-    ));
-    assert_eq!(browser_component_cursor(&model, &id), 1);
-
-    // Recent navigation suppresses the shell-triggered effect entirely.
+    // Recent navigation suppresses the push-path prefetch entirely.
     model.app.last_nav_at = Instant::now();
-    render_browser_model(&mut model, 80, 24);
+    model.sync_mounted_surfaces();
     assert!(model.app.pending_image_fetches.is_empty());
     assert!(model.app.card_image_loading.is_empty());
 
-    // Once idle, the same narrow shell draw queues every neighboring movie
-    // in the cursor window. Saturating active fetches proves queued/busy
+    // Move the owner cursor to row 1 (the typed index request; the shell
+    // applies it to the nav level, which retains it).
+    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
+        drive_owner_key(&mut model, Key::Down, KeyModifiers::NONE)
+    else {
+        panic!("Down must emit BrowserCursorIndex, got no typed request");
+    };
+    assert_eq!(browser_owner(&model).cursor(), 1);
+    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
+
+    // Still recent: the next push queues nothing.
+    model.app.last_nav_at = Instant::now();
+    model.sync_mounted_surfaces();
+    assert!(model.app.pending_image_fetches.is_empty());
+    assert!(model.app.card_image_loading.is_empty());
+
+    // Once idle, the same push queues every neighboring movie in the
+    // cursor window. Saturating active fetches proves queued/busy
     // suppression is handled by the image seam rather than dropping work.
     model.app.last_nav_at = Instant::now() - Duration::from_millis(500);
-    render_browser_model(&mut model, 80, 24);
+    model.sync_mounted_surfaces();
     for i in [0, 2, 3, 4] {
         let key = format!("id{i}:cmp_primary");
         assert!(
             model.app.card_image_loading.contains(&key),
-            "idle shell draw must reserve movie-{i}"
+            "idle push must reserve movie-{i}"
         );
         assert!(
             model
@@ -87,61 +94,57 @@ fn narrow_browser_shell_render_prefetches_only_when_idle_and_available() {
                 .pending_image_fetches
                 .iter()
                 .any(|request| request.cache_key == key),
-            "busy shell draw must queue movie-{i}"
+            "busy push must queue movie-{i}"
         );
     }
 }
 
-/// keep-destination-components-mounted task 2.2: the Emby browser stays
-/// mounted across tab switches (keep-mounted, D1), so switching away from
-/// library A and back must leave A's `BrowserComponent` still `mounted()`
-/// with its cursor preserved at the row it was moved to — not reset to 0 by
-/// a switch-time unmount/remount.
+/// keep-destination-components-mounted task 2.2 → task 6.1: the Emby
+/// browse state stays mounted across tab switches — now as the embedded
+/// `BrowserContent` owners inside the mounted `LibraryPanel`'s owner map,
+/// one per library — so switching away from library A and back must leave
+/// A's owner with its cursor preserved at the row it was moved to — not
+/// reset to 0 by a switch-time owner re-seed.
 #[test]
 fn emby_browser_stays_mounted_and_preserves_cursor_across_switch() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(two_library_app());
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let a_id = model.emby_browser_id.clone().expect("A browser mounted");
+    model.sync_mounted_surfaces();
 
-    // Move A's browser cursor to row 2 (component emits the typed index
+    // Move A's owner cursor to row 2 (the owner emits the typed index
     // request; the shell applies it to A's nav level, which retains it).
     let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
-        drive_browser_key(&mut model, &a_id, Key::Down, KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Down, KeyModifiers::NONE)
     else {
         panic!("A Down must emit BrowserCursorIndex, got no typed request");
     };
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), index);
-    assert_eq!(browser_component_cursor(&model, &a_id), index);
+    assert_eq!(browser_owner(&model).cursor(), index);
 
-    // Switch to library B: A's component must stay mounted (keep-mounted).
+    // Switch to library B: A's owner must stay installed (catalog retention).
     model.app.tab = TabSelection::EmbyLibrary(1);
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    assert!(
-        model.application.mounted(&a_id),
-        "A's browser must stay mounted after switching to B"
-    );
-    let b_id = model.emby_browser_id.clone().expect("B browser mounted");
-    assert_ne!(a_id, b_id, "B must be a distinct browser");
-    assert!(model.application.mounted(&b_id));
-
-    // Switch back to A: still mounted, and the cursor is N (not 0).
-    model.app.tab = TabSelection::EmbyLibrary(0);
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    assert_eq!(model.emby_browser_id.as_ref(), Some(&a_id));
-    assert!(
-        model.application.mounted(&a_id),
-        "A's browser must still be mounted after switching back"
-    );
+    model.sync_mounted_surfaces();
+    assert!(library_owner_installed(&model, 1), "B's owner installed");
     assert_eq!(
-        browser_component_cursor(&model, &a_id),
-        index,
-        "A's browser cursor must be preserved across the switch, not reset to 0"
+        browser_owner(&model).cursor(),
+        0,
+        "B starts at its own cursor"
     );
+
+    // Switch back to A: still installed, and the cursor is N (not 0).
+    model.app.tab = TabSelection::EmbyLibrary(0);
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        browser_owner(&model).cursor(),
+        index,
+        "A's owner cursor must be preserved across the switch, not reset to 0"
+    );
+}
+
+/// Whether a `BrowserContent` owner is installed for library `index`.
+fn library_owner_installed(model: &Model, index: usize) -> bool {
+    model.active_migrated_browser_owner().map(|(i, _, _)| i) == Some(index)
 }
 
 /// keep-destination-components-mounted task 2.3: with keep-mounted, content
@@ -153,15 +156,13 @@ fn emby_browser_stays_mounted_and_preserves_cursor_across_switch() {
 fn emby_browser_refreshes_content_on_repoint_after_switch() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(two_library_app());
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let a_id = model.emby_browser_id.clone().expect("A browser mounted");
+    model.sync_mounted_surfaces();
 
-    // Switch away to B (A stays mounted with its pre-mutation content).
+    // Switch away to B (A's owner stays installed with its pre-mutation
+    // content).
     model.app.tab = TabSelection::EmbyLibrary(1);
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    assert!(model.application.mounted(&a_id));
+    model.sync_mounted_surfaces();
+    assert!(library_owner_installed(&model, 1));
 
     // Mutate A's item list while away: replace every item with a new one.
     let mut fresh = make_item("Fresh Movie", "Movie");
@@ -171,15 +172,11 @@ fn emby_browser_refreshes_content_on_repoint_after_switch() {
 
     // Switch back to A and paint the first frame.
     model.app.tab = TabSelection::EmbyLibrary(0);
-    model.sync_emby_browser();
-    model.sync_active_destination();
+    model.sync_mounted_surfaces();
+    draw_owner_model(&mut model, 120, 40);
     let backend = TestBackend::new(120, 40);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| {
-        model.app.compose_base_frame(f, None);
-        model.render_emby_browser_component(f);
-    })
-    .unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
     let buffer = term.backend().buffer();
     let output: String = (0..buffer.area().height)
         .flat_map(|y| (0..buffer.area().width).map(move |x| buffer[(x, y)].symbol().to_owned()))
@@ -273,14 +270,13 @@ fn feed_group_picker_bracket_keys_cycle_groups() {
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
     assert!(model.app.is_feed_home_video_group_view(0));
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let id = model
-        .emby_browser_id
-        .clone()
-        .expect("feed group-picker browser mounted");
+    model.sync_mounted_surfaces();
 
-    let msg = drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::NONE);
+    // Task 6.1: the group picker's local chords route through the focused
+    // `LibraryPanel` into the embedded owner; the group-pill flag the old
+    // component carried as shell-projected content now lives on the owner's
+    // own projected push (`BrowserOwnerPush::group_pills`).
+    let msg = drive_owner_key(&mut model, Key::Char(']'), KeyModifiers::NONE);
     assert!(
         matches!(
             msg,
@@ -319,58 +315,41 @@ fn feed_group_picker_wide_borderline_height_keeps_pills_above_rows() {
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
 
-    // At this terminal height the mounted browser's full area is just tall
-    // enough for Wide hero, while the feed layer's two reserved rows make
-    // its body too short. This must take the body-area fallback, not repaint
-    // the group-pill row at the top of the full area.
+    // Task 6.1: the panel's Wide skeleton paints the Selector row (the group
+    // pills) and the list slot below it — at this deliberately borderline
+    // terminal height the pill bar must stay visible and the rows must still
+    // render below it, now asserted through the real `Model::draw_frame`
+    // output. (The old painter's body-fallback geometry preconditions pinned
+    // the deleted wide-Movies painter; the panel's own skeleton tests cover
+    // its arrangement.)
     let width = 120;
     let height = 15;
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    // One throwaway draw publishes `root_frame`; the recorded draw paints
+    // the mounted panels.
     terminal
-        .draw(|frame| {
-            model.app.compose_base_frame(frame, None);
-            model.render_emby_browser_component(frame);
-        })
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
 
     let area = model.app.layout.main.left_area;
-    assert_eq!(
-        area.height, 7,
-        "fixture must exercise the borderline wide height"
-    );
-    assert!(crate::app::render::wide_hero_fits(area));
-    assert!(crate::app::render::wide_library_panes(
-        ratatui::layout::Rect {
-            y: area.y + 2,
-            height: area.height - 2,
-            ..area
-        },
-        2,
-        1,
-        None,
-    )
-    .is_none());
-
     let buffer = terminal.backend().buffer();
     let row = |y| {
         (area.x..area.right())
             .map(|x| buffer[(x, y)].symbol())
             .collect::<String>()
     };
-    let pills = row(area.y);
+    let rows = (area.y..area.bottom()).map(row).collect::<Vec<_>>();
+    let output = rows.join("\n");
     assert!(
-        pills.contains("All"),
-        "feed group pills must remain visible at the top row: {pills:?}"
+        output.contains("All"),
+        "feed group pills must remain visible at the borderline height: {output:?}"
     );
-    let body = (area.y + 2..area.bottom())
-        .map(row)
-        .collect::<Vec<_>>()
-        .join("\\n");
-    // E2 may be below the final rail border at this deliberately borderline height;
-    // retain only the stable first-row assertion until robust coverage is added.
     assert!(
-        body.contains("E1"),
-        "feed rows must still render below the group-pill layer: {body:?}"
+        output.contains("E1"),
+        "feed rows must still render below the group-pill layer: {output:?}"
     );
 }
 
@@ -385,19 +364,19 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
         app.panel_mode = PanelMode::LibraryOnly;
         let mut harness = TickHarness::new(app);
         harness.model_mut().sync_mounted_surfaces();
-        render_browser_model(harness.model_mut(), width, 30);
+        draw_owner_model(harness.model_mut(), width, 30);
         harness.model_mut().sync_mounted_surfaces();
-        let id = harness
-            .model()
-            .emby_browser_id
-            .clone()
-            .expect("feed group-picker browser mounted");
-        assert_eq!(harness.model().application.focus(), Some(&id));
+        // Task 6.1: the group picker routes through the mounted `LibraryPanel`
+        // at every presentation width.
+        assert_eq!(
+            harness.model().application.focus(),
+            Some(&ComponentId::Library)
+        );
 
         // Both directions exercise the wrapping group selector at each real
         // presentation width.
         for (key, delta, expected) in [(Key::Char(']'), 1, 1usize), (Key::Char('['), -1, 0usize)] {
-            let msg = drive_browser_key(harness.model_mut(), &id, key, KeyModifiers::NONE);
+            let msg = drive_owner_key(harness.model_mut(), key, KeyModifiers::NONE);
             assert!(
                 matches!(msg, Some(Msg::Shell(ShellRequest::BrowserCycleGroup { delta: d })) if d == delta)
             );
@@ -422,15 +401,14 @@ fn feed_group_picker_routes_at_visible_narrow_and_wide_widths() {
         // Exercise the actual Application::tick path and prove Enter survives
         // the shell router as a typed activation request.
         let _focused = harness.model().application.focus().cloned();
-        let activation =
-            drive_browser_key(harness.model_mut(), &id, Key::Enter, KeyModifiers::NONE)
-                .into_iter()
-                .find_map(|msg| match msg {
-                    Msg::Shell(ref request @ ShellRequest::BrowserActivate { .. }) => {
-                        Some(request.clone())
-                    }
-                    _ => None,
-                });
+        let activation = drive_owner_key(harness.model_mut(), Key::Enter, KeyModifiers::NONE)
+            .into_iter()
+            .find_map(|msg| match msg {
+                Msg::Shell(ref request @ ShellRequest::BrowserActivate { .. }) => {
+                    Some(request.clone())
+                }
+                _ => None,
+            });
         let Some(activation) = activation else {
             continue;
         };

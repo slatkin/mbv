@@ -109,9 +109,6 @@ pub(crate) struct LayoutMain {
     /// Bounding rect of the wide Music left pane (album browser).
     /// Populated only when the wide Music layout is active.
     pub wide_music_right_area: Rect,
-    /// Bounding rect of the wide Movies right rail (pills + list).
-    /// Populated only when the wide Movies Wide hero layout is active.
-    pub movies_wide_right_area: Rect,
     // TV-wide geometry (2.1i): `tv_wide_area`/`tv_wide_left_area`/
     // `tv_wide_right_area`/`tv_wide_list_area` are published at their
     // natural checkpoint before `render_list`, gated by the

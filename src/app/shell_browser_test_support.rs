@@ -1,7 +1,9 @@
 #![allow(dead_code, unused_imports)]
 
 use super::super::*;
-use crate::app::components::{BrowserComponent, Msg};
+use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::Msg;
 use crate::app::render::make_movie_app;
 use crate::app::tests::{make_app_stub, make_item, make_items};
 use crate::app::types_browse::BrowseResting;
@@ -13,36 +15,64 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
-/// Drive one key into the mounted `BrowserComponent` and return its `Msg`
-/// (test helper for the Model-boundary regression above).
-pub(super) fn drive_browser_key(
-    model: &mut Model,
-    id: &ComponentId,
-    key: Key,
-    modifiers: KeyModifiers,
-) -> Option<Msg> {
+/// The embedded Movies/HomeVideos/Generic owner inside the mounted
+/// `LibraryPanel` (task 6.1) — the shared-borrow read for pure state checks.
+pub(super) fn browser_owner(model: &Model) -> &BrowserOwner {
+    let (_, key, _) = model
+        .active_migrated_browser_owner()
+        .expect("the active library's owner has migrated");
     model
         .application
-        .get_component_mut(id)
-        .expect("browser mounted")
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type")
+        .owner(&key)
+        .and_then(|owner| owner.as_any().downcast_ref::<BrowserOwner>())
+        .expect("browser owner installed")
+}
+
+/// The embedded owner, mutably (drives its own local key interpretation).
+pub(super) fn browser_owner_mut(model: &mut Model) -> &mut BrowserOwner {
+    let (_, key, _) = model
+        .active_migrated_browser_owner()
+        .expect("the active library's owner has migrated");
+    model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        .and_then(|panel| panel.owner_mut(&key))
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserOwner>())
+        .expect("browser owner installed")
+}
+
+/// Drive one key through the focused `LibraryPanel` into the embedded
+/// owner — the panel is the library area's one event boundary, so the old
+/// `drive_browser_key(&BrowserComponent)` contract becomes a panel delivery.
+pub(super) fn drive_owner_key(model: &mut Model, key: Key, modifiers: KeyModifiers) -> Option<Msg> {
+    model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .expect("Library panel mounted")
         .on(&Event::Keyboard(KeyEvent {
             code: key,
             modifiers,
         }))
 }
 
-/// Paint the App base frame and then the mounted Emby browser into a
-/// `TestBackend` of the given size — the same two-step the live shell's
-/// draw closure performs, so the App layout and the component's own
-/// painted `LayoutMain` agree on the column stride.
-pub(super) fn render_browser_model(model: &mut Model, width: u16, height: u16) {
+/// Paint one full frame through `Model::draw_frame` (the live shell paint
+/// path) at the given size — the migrated owner's surface, the mounted
+/// `LibraryPanel`.
+pub(super) fn draw_owner_model(model: &mut Model, width: u16, height: u16) {
+    model.app.terminal_width = width;
+    model.app.terminal_height = height;
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| {
-        model.app.compose_base_frame(f, None);
-        model.render_emby_browser_component(f);
-    })
-    .unwrap();
+    // One throwaway draw publishes `root_frame` (tasks 2.1-2.2); the
+    // recorded draw then paints the mounted panels.
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
 }
 
 /// A generic (non-Movies) Emby library with `n` flat Movie items: below
@@ -78,30 +108,6 @@ pub(super) fn browser_app_with_flat_movies(n: usize) -> App {
     });
 
     app
-}
-
-pub(super) fn browser_component_painted_rows(model: &Model, id: &ComponentId) -> Vec<Vec<usize>> {
-    model
-        .application
-        .get_component(id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .unwrap()
-        .test_layout()
-        .left_item_rows
-        .clone()
-}
-
-pub(super) fn browser_component_cursor(model: &Model, id: &ComponentId) -> usize {
-    model
-        .application
-        .get_component(id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .unwrap()
-        .cursor()
 }
 
 fn mounted_music_model() -> Model {

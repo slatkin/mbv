@@ -137,10 +137,36 @@ impl LibraryPanel {
         self.list_pane_width = list_pane_width;
     }
 
+    /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears
+    /// the split gesture state before the next delivery — the same reset
+    /// `WideHeroBoundaryComponent::sync` applied while it owned the gesture —
+    /// so no stale width can be emitted after eligibility ends, and a drag
+    /// without a fresh press stays inert once eligibility returns.
+    pub(in crate::app) fn sync_mouse_eligibility(&mut self, eligible: bool) {
+        if !eligible {
+            self.split_gestures = MouseGestureState::new();
+        }
+    }
+
     /// The painted split's gap rect, for the width-resolution test path.
     #[cfg(test)]
     pub(in crate::app) fn test_split_gap(&self) -> Option<ratatui::layout::Rect> {
         self.split.as_ref().map(|split| split.gap)
+    }
+
+    /// The split geometry the last painted Wide frame retained: the gap, the
+    /// content-area origin, the content width and the current list-pane
+    /// width (the facts the old `WideHeroBoundaryComponent::sync` carried).
+    #[cfg(test)]
+    pub(in crate::app) fn test_split(&self) -> Option<(ratatui::layout::Rect, u16, u16, u16)> {
+        self.split.as_ref().map(|split| {
+            (
+                split.gap,
+                split.pane_origin_x,
+                split.content_width,
+                split.width,
+            )
+        })
     }
 
     /// The painted list slot's rect, for the breakpoint-transition test path.

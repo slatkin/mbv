@@ -19,7 +19,7 @@ use crate::app::ui_util::trunc_str;
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Wrap};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -254,12 +254,9 @@ pub(in crate::app::render) fn render_hero_title_row(
 }
 
 /// One line of the `Hero` component's overview/detail block. `Plain` uses
-/// the block's default text colour (focus-derived); `Prefixed` renders a
-/// bold-styled label span before the truncated value -- the movie hero's
-/// "Director: <name>" line is the only user today.
+/// the block's default text colour (focus-derived).
 pub(in crate::app::render) enum HeroLine {
     Plain(String),
-    Prefixed { label: &'static str, value: String },
 }
 
 pub(in crate::app::render) struct HeroImage {
@@ -425,23 +422,6 @@ pub(in crate::app::render) fn paint_hero_content(
         }
         let (tw, tw16) = text_dims(row);
         match line {
-            HeroLine::Prefixed { label, value } => {
-                f.render_widget(
-                    Paragraph::new(Line::from(vec![
-                        Span::styled(*label, Style::default().fg(palette::TEXT_DETAIL_META)),
-                        Span::styled(
-                            trunc_str(value, tw),
-                            Style::default().fg(palette::TEXT_PRIMARY),
-                        ),
-                    ])),
-                    Rect {
-                        x: inner_x,
-                        y: row,
-                        width: tw16,
-                        height: 1,
-                    },
-                );
-            }
             HeroLine::Plain(text) => {
                 if !text.is_empty() {
                     f.render_widget(
@@ -465,185 +445,6 @@ pub(in crate::app::render) fn paint_hero_content(
     HeroPaintResult {
         next_row: row,
         img_rect,
-    }
-}
-
-/// Renders Home's inline metadata shape -- wrapped yellow title,
-/// optional green subtitle row, one meta line, a blank separator, then the
-/// overview -- shared by the Keep Watching (Emby) hero and the generic
-/// Audiobookshelf/Feeds hero, which otherwise duplicated this block
-/// (including, at one point, an errant background box under the overview
-/// that `paint_hero_content`'s movie/series heroes never had). No background
-/// is painted here either: text sits directly on whatever the caller's shell
-/// already painted, same as `paint_hero_content`.
-///
-/// Doesn't reuse `paint_hero_content` itself: that component's title is a
-/// single truncated row and has no subtitle slot, while this shape wraps the
-/// title across multiple lines and always reserves a show-name row below it.
-///
-/// `overview_lines` pairs each pre-wrapped line with whether it has wrapped
-/// past a beside-the-text image and should render across `wide_area`'s full
-/// width instead of `area`'s; callers with no such image pass `wide_area ==
-/// area` (the `bool` is then irrelevant since both rects are identical).
-///
-/// `title_suffix` is drawn one space after the last title line, on the same
-/// row (Emby's watch-state glyph — the only user today; other heroes pass
-/// `None`).
-#[allow(clippy::too_many_arguments)]
-pub(in crate::app::render) fn render_home_hero_meta_block(
-    f: &mut Frame,
-    area: Rect,
-    wide_area: Rect,
-    title_lines: &[String],
-    subtitle: &str,
-    title_suffix: Option<Span<'static>>,
-    meta_rows: Vec<Vec<Span<'static>>>,
-    overview_lines: &[(String, bool)],
-    overview_pad: u16,
-    focused: bool,
-) {
-    if area.width == 0 || area.height == 0 {
-        return;
-    }
-    let mut row = area.y;
-    let max_y = area.y + area.height;
-
-    for (idx, line) in title_lines.iter().enumerate() {
-        if row >= max_y {
-            break;
-        }
-        let mut spans = vec![Span::styled(
-            line.clone(),
-            Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
-                .add_modifier(Modifier::BOLD),
-        )];
-        if idx + 1 == title_lines.len() {
-            if let Some(suffix) = &title_suffix {
-                spans.push(Span::raw(" "));
-                spans.push(suffix.clone());
-            }
-        }
-        f.render_widget(
-            Paragraph::new(Line::from(spans)),
-            Rect {
-                x: area.x,
-                y: row,
-                width: area.width,
-                height: 1,
-            },
-        );
-        row += 1;
-    }
-
-    if row < max_y && !subtitle.is_empty() {
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                trunc_str(subtitle, area.width as usize),
-                Style::default().fg(palette::TEXT_METADATA),
-            )),
-            Rect {
-                x: area.x,
-                y: row,
-                width: area.width,
-                height: 1,
-            },
-        );
-        row += 1;
-    }
-
-    // One reserved row per meta row. `meta_rows` is empty only for heroes
-    // with nothing to show; render each non-empty row.
-    for meta_spans in meta_rows.iter() {
-        if row >= max_y {
-            break;
-        }
-        if !meta_spans.is_empty() {
-            f.render_widget(
-                Paragraph::new(Line::from(meta_spans.clone())),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-        }
-        row += 1;
-    }
-
-    row += 1; // blank separator row
-
-    // Wide hero (the recessed-box path): the box's own top padding row
-    // doubles as the separator above, leaving the metadata flush against the
-    // box's top edge. Reserve one more row so the gap above the box is
-    // visible. The narrow inline path (overview_pad == 0) renders no
-    // box and keeps its single separator row.
-    if overview_pad > 0 && !overview_lines.is_empty() {
-        row += 1;
-    }
-
-    if !overview_lines.is_empty() && row < max_y {
-        let ov_color = if focused {
-            palette::TEXT_STRONG
-        } else {
-            palette::TEXT_MUTED
-        };
-        // Wide hero: paint recessed box behind overview.
-        let recessed = if overview_pad > 0 {
-            // Reserve the remaining rows; Paragraph performs the authoritative
-            // wrapping while painting into the final content rect.
-            let ov_height = (max_y - row).saturating_add(2); // top and bottom padding rows
-            let ov_area = Rect {
-                x: area.x,
-                y: row.saturating_sub(1), // start 1 row earlier for top padding
-                width: area.width,
-                height: ov_height,
-            };
-            Some(
-                crate::app::render::arrangements::wide_hero::wide_hero_hero_content_box(f, ov_area),
-            )
-        } else {
-            None
-        };
-        if let Some((_, content)) = recessed {
-            let overview = overview_lines
-                .iter()
-                .map(|(line, _)| line.as_str())
-                .collect::<Vec<_>>()
-                .join(" ");
-            let text_area = Rect {
-                y: row,
-                height: max_y.saturating_sub(row),
-                ..content
-            };
-            f.render_widget(
-                Paragraph::new(Span::styled(overview, Style::default().fg(ov_color)))
-                    .wrap(Wrap { trim: true }),
-                text_area,
-            );
-        } else {
-            for (line, wide) in overview_lines {
-                if row >= max_y {
-                    break;
-                }
-                let base = if *wide { wide_area } else { area };
-                let text_r = Rect {
-                    x: base.x + overview_pad,
-                    y: row,
-                    width: base.width.saturating_sub(overview_pad * 2),
-                    height: 1,
-                };
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        line.clone(),
-                        Style::default().fg(ov_color),
-                    ))),
-                    text_r,
-                );
-                row += 1;
-            }
-        }
     }
 }
 

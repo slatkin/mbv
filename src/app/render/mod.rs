@@ -29,10 +29,6 @@ pub(in crate::app) use components::chrome_tabs::{render_tab_bar, TabBarModel};
 pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
 pub(in crate::app) use components::context_menu::render_context_menu_content;
 pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;
-#[allow(unused_imports)]
-pub(in crate::app) use components::detail::{
-    compact_banner_layout, render_compact_detail_with_ctx, CompactBannerLayout, CompactDetailCtx,
-};
 pub(in crate::app) use components::feeds::{
     render_feeds_content, FeedsPresentation, FeedsRenderModel,
 };
@@ -102,9 +98,7 @@ pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
-pub(in crate::app) use components::list_narrow::{
-    paint_feed_group_pills_row, render_narrow_browse_with_ctx,
-};
+pub(in crate::app) use components::list_narrow::render_narrow_browse_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use screens::feeds_model::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
@@ -114,7 +108,6 @@ pub(in crate::app) use screens::feeds_model::{
 // so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
 // shared helpers it needs at crate::app visibility.
 pub(in crate::app) use arrangements::library::wide_library_panes;
-pub(in crate::app) use arrangements::padded_rect;
 pub(in crate::app) use arrangements::wide_hero::{
     paint_wide_hero_text, place_media_list_below, wide_hero_browser_border, wide_hero_browser_pane,
     wide_hero_fits, wide_hero_hero_content_box, wide_hero_hero_pane, LeftPaneFocus,
@@ -122,9 +115,6 @@ pub(in crate::app) use arrangements::wide_hero::{
 };
 pub(in crate::app) use components::hero::{
     selected_detail_shell, wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS,
-};
-pub(in crate::app) use components::home_hero::{
-    prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
 pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).

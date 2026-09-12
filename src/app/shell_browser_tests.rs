@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::Msg;
 use crate::app::render::make_large_movie_library_app;
 use crate::app::tests::{make_item, make_items};
@@ -16,10 +17,10 @@ mod position_tests;
 mod test_support;
 use test_support::*;
 
-/// The mounted Movies browser must receive the wide letter-pill projection from
-/// the shell. This checks the rendered output, rather than only the shared
-/// breakpoint predicate: the pre-projection implementation leaves the row
-/// empty even though `BrowserComponent::view` selects the wide layout.
+/// The migrated Movies owner's Selector row must receive the shell's
+/// letter-pill projection: this checks the rendered panel output rather
+/// than only the shared breakpoint predicate (task 6.1: the letter pills
+/// are the panel's Selector row over the embedded `BrowserContent` owner).
 #[test]
 fn shell_emby_browser_wide_movies_renders_letter_pills() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -28,16 +29,12 @@ fn shell_emby_browser_wide_movies_renders_letter_pills() {
     app.libs[0].nav_stack[0].total_count = 1000;
     app.panel_mode = PanelMode::LibraryOnly;
     let mut model = Model::new(app);
-    model.sync_emby_browser();
-    model.sync_active_destination();
+    model.sync_mounted_surfaces();
 
     let backend = TestBackend::new(200, 40);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| {
-            model.app.compose_base_frame(frame, None);
-            model.render_emby_browser_component(frame);
-        })
+        .draw(|f| model.draw_frame(f, false, false))
         .unwrap();
 
     let buffer = terminal.backend().buffer();
@@ -58,16 +55,11 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
     app.libs[0].nav_stack[0].total_count = 12;
     app.panel_mode = PanelMode::LibraryOnly;
     let mut model = Model::new(app);
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let id = model.emby_browser_id.clone().expect("browser mounted");
+    model.sync_mounted_surfaces();
     let backend = TestBackend::new(200, 30);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal
-        .draw(|frame| {
-            model.app.compose_base_frame(frame, None);
-            model.render_emby_browser_component(frame);
-        })
+        .draw(|f| model.draw_frame(f, false, false))
         .unwrap();
     let buffer = terminal.backend().buffer();
     let mut rendered = String::new();
@@ -79,7 +71,7 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
     assert!(rendered.contains("Item 0"));
     assert!(rendered.contains("Item 1"));
     assert!(matches!(
-        drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
+        drive_owner_key(&mut model, Key::Down, KeyModifiers::NONE),
         Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
     ));
 }
@@ -88,7 +80,7 @@ fn shell_emby_browser_wide_movies_paints_one_item_per_row() {
 fn shell_emby_browser_wide_movies_guards_hero_to_movie_items() {
     let _guard = crate::config::TestStateDirGuard::new();
 
-    let render_left_pane = |selected: usize, non_movie: bool| {
+    let render_hero_pane = |selected: usize, non_movie: bool| {
         let mut app = browser_app_with_folder_and_movie();
         if non_movie {
             app.libs[0].nav_stack[0].items[1].item_type = "BoxSet".into();
@@ -97,22 +89,28 @@ fn shell_emby_browser_wide_movies_guards_hero_to_movie_items() {
         app.libs[0].nav_stack[0].set_resting_cursor(selected);
         app.panel_mode = PanelMode::LibraryOnly;
         let mut model = Model::new(app);
-        model.sync_emby_browser();
-        model.sync_active_destination();
+        model.sync_mounted_surfaces();
 
         let backend = TestBackend::new(200, 30);
         let mut terminal = Terminal::new(backend).unwrap();
+        // One throwaway draw publishes `root_frame`; the recorded draw paints
+        // the mounted panels.
         terminal
-            .draw(|frame| {
-                model.app.compose_base_frame(frame, None);
-                model.render_emby_browser_component(frame);
-            })
+            .draw(|f| model.draw_frame(f, false, false))
+            .unwrap();
+        terminal
+            .draw(|f| model.draw_frame(f, false, false))
             .unwrap();
 
-        let area =
-            crate::app::render::wide_library_panes(model.app.layout.main.left_area, 2, 1, None)
-                .expect("wide browser panes")
-                .hero_area;
+        // The panel's own retained Wide skeleton geometry is the painted
+        // truth for the hero pane's rect.
+        let area = model
+            .application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.test_wide_geometry())
+            .expect("the panel painted a Wide skeleton")
+            .hero_area;
         let buffer = terminal.backend().buffer();
         let mut rendered = String::new();
         for y in 0..area.height {
@@ -123,22 +121,22 @@ fn shell_emby_browser_wide_movies_guards_hero_to_movie_items() {
         rendered
     };
 
-    let folder_pane = render_left_pane(0, false);
+    let folder_pane = render_hero_pane(0, false);
     assert!(
         !folder_pane.contains("Folder A"),
         "folder selection must not paint a wide hero card: {folder_pane}"
     );
 
-    let non_movie_pane = render_left_pane(1, true);
+    let non_movie_pane = render_hero_pane(1, true);
     assert!(
         !non_movie_pane.contains("Box Set"),
         "non-Movie selection must not paint a wide hero card: {non_movie_pane}"
     );
 
-    let movie_pane = render_left_pane(1, false);
+    let movie_pane = render_hero_pane(1, false);
     assert!(
         movie_pane.contains("Movie B"),
-        "Movie selection must paint the wide hero card: {movie_pane}"
+        "movie selection paints a wide hero card: {movie_pane}"
     );
 }
 
@@ -163,16 +161,14 @@ fn shell_emby_browser_wide_movies_guards_hero_to_movie_items() {
 fn shell_emby_browser_effects_honor_component_target() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut model = Model::new(browser_app_with_folder_and_movie());
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let id = model.emby_browser_id.clone().expect("browser mounted");
+    model.sync_mounted_surfaces();
 
     // Drive the component cursor onto the movie (index 1) while App's
     // nav cursor stays parked on the folder (index 0). The movement key
     // now returns the typed rows request (task 5.3d, Emby browser local
     // navigation) — the component cursor still advances in place.
     assert!(matches!(
-        drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE),
+        drive_owner_key(&mut model, Key::Down, KeyModifiers::NONE),
         Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
     ));
 
@@ -182,7 +178,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // NOT grow into the folder, and the emby-gated play flashes the
     // unavailable Service) instead of the legacy folder navigation.
     let Some(Msg::Shell(ShellRequest::BrowserActivate { item })) =
-        drive_browser_key(&mut model, &id, Key::Enter, KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Enter, KeyModifiers::NONE)
     else {
         panic!("browser Enter must emit BrowserActivate, got no typed request");
     };
@@ -209,7 +205,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // Enter (folder play would have diverted to `play_folder`).
     model.app.status.clear();
     let Some(Msg::Shell(ShellRequest::BrowserPlay { item })) =
-        drive_browser_key(&mut model, &id, Key::Char('p'), KeyModifiers::CONTROL)
+        drive_owner_key(&mut model, Key::Char('p'), KeyModifiers::CONTROL)
     else {
         panic!("browser Ctrl+P must emit BrowserPlay, got no typed request");
     };
@@ -223,7 +219,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // Ctrl+A: the supplied movie (not the parked folder) is enqueued.
     model.app.status.clear();
     let Some(Msg::Shell(ShellRequest::BrowserEnqueue { item })) =
-        drive_browser_key(&mut model, &id, Key::Char('a'), KeyModifiers::CONTROL)
+        drive_owner_key(&mut model, Key::Char('a'), KeyModifiers::CONTROL)
     else {
         panic!("browser Ctrl+A must emit BrowserEnqueue, got no typed request");
     };
@@ -242,7 +238,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // parked folder would skip silently via the folder guard.
     model.app.status.clear();
     let Some(Msg::Shell(ShellRequest::BrowserToggleWatched { item })) =
-        drive_browser_key(&mut model, &id, Key::Char('w'), KeyModifiers::CONTROL)
+        drive_owner_key(&mut model, Key::Char('w'), KeyModifiers::CONTROL)
     else {
         panic!("browser Ctrl+W must emit BrowserToggleWatched, got no typed request");
     };
@@ -262,7 +258,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // actions — decisive that the menu targets the component-selected
     // movie, not the parked `BrowseLevel` cursor.
     let Some(Msg::Shell(ShellRequest::BrowserContextMenu { item })) =
-        drive_browser_key(&mut model, &id, Key::Char('.'), KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Char('.'), KeyModifiers::NONE)
     else {
         panic!("browser '.' must emit BrowserContextMenu, got no typed request");
     };
@@ -300,7 +296,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // decisive that the component-local cursor selected the target.
     model.app.status.clear();
     let Some(Msg::Shell(ShellRequest::BrowserShuffle { item })) =
-        drive_browser_key(&mut model, &id, Key::Char('s'), KeyModifiers::CONTROL)
+        drive_owner_key(&mut model, Key::Char('s'), KeyModifiers::CONTROL)
     else {
         panic!("browser Ctrl+S must emit BrowserShuffle, got no typed request");
     };
@@ -314,7 +310,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // the library index from its own tab state and runs `App::refresh_lib`,
     // which lifts the current nav level's `loading` flag.
     let Some(Msg::Shell(ShellRequest::BrowserRefresh)) =
-        drive_browser_key(&mut model, &id, Key::Char('r'), KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Char('r'), KeyModifiers::NONE)
     else {
         panic!("browser bare r must emit BrowserRefresh, got no typed request");
     };
@@ -329,7 +325,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // bare `r` arm below it catches Alt+`r` — exactly the legacy
     // `handle_lib_key` ordering.
     let Some(Msg::Shell(ShellRequest::BrowserRefresh)) =
-        drive_browser_key(&mut model, &id, Key::Char('r'), KeyModifiers::ALT)
+        drive_owner_key(&mut model, Key::Char('r'), KeyModifiers::ALT)
     else {
         panic!("browser Alt+r must still emit BrowserRefresh, got no typed request");
     };
@@ -339,7 +335,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // raises the same confirm modal (title/message/hint and
     // `ConfirmAction::RescanLibrary(lib_idx)`) the legacy arm raised.
     let Some(Msg::Shell(ShellRequest::BrowserRescan)) =
-        drive_browser_key(&mut model, &id, Key::Char('r'), KeyModifiers::CONTROL)
+        drive_owner_key(&mut model, Key::Char('r'), KeyModifiers::CONTROL)
     else {
         panic!("browser Ctrl+r must emit BrowserRescan, got no typed request");
     };
@@ -379,7 +375,7 @@ fn shell_emby_browser_effects_honor_component_target() {
         music_grouping: None,
     });
     let Some(Msg::Shell(ShellRequest::BrowserBack)) =
-        drive_browser_key(&mut model, &id, Key::Esc, KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Esc, KeyModifiers::NONE)
     else {
         panic!("focused browser Esc must emit BrowserBack, got no typed request");
     };
@@ -398,7 +394,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // Backspace routes the same way (the legacy arm matched both keys
     // with no modifier guard).
     let Some(Msg::Shell(ShellRequest::BrowserBack)) =
-        drive_browser_key(&mut model, &id, Key::Backspace, KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Backspace, KeyModifiers::NONE)
     else {
         panic!("focused browser Backspace must emit BrowserBack, got no typed request");
     };
@@ -413,7 +409,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // missing `should_show_letter_pills` piece.
     model.app.libs[0].library_total = Some(1000);
     let Some(Msg::Shell(ShellRequest::BrowserCycleLetterPill { delta })) =
-        drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Char(']'), KeyModifiers::NONE)
     else {
         panic!("focused browser ] must emit BrowserCycleLetterPill, got no typed request");
     };
@@ -431,7 +427,7 @@ fn shell_emby_browser_effects_honor_component_target() {
     // `[` cycles back the other way (the default is bucket 0, so this
     // round-trips to it).
     let Some(Msg::Shell(ShellRequest::BrowserCycleLetterPill { delta })) =
-        drive_browser_key(&mut model, &id, Key::Char('['), KeyModifiers::NONE)
+        drive_owner_key(&mut model, Key::Char('['), KeyModifiers::NONE)
     else {
         panic!("focused browser [ must emit BrowserCycleLetterPill, got no typed request");
     };
@@ -450,11 +446,11 @@ fn shell_emby_browser_effects_honor_component_target() {
     // excluded CONTROL and ALT, so those combinations remain unclaimed by
     // the component and are left to the central router.
     assert_eq!(
-        drive_browser_key(&mut model, &id, Key::Char('['), KeyModifiers::CONTROL),
+        drive_owner_key(&mut model, Key::Char('['), KeyModifiers::CONTROL),
         None
     );
     assert_eq!(
-        drive_browser_key(&mut model, &id, Key::Char(']'), KeyModifiers::ALT),
+        drive_owner_key(&mut model, Key::Char(']'), KeyModifiers::ALT),
         None
     );
 }
