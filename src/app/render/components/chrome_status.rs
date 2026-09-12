@@ -13,7 +13,7 @@ use crate::app::{palette, App, PanelFocus, RemoteSlotState};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -563,6 +563,11 @@ pub(in crate::app) fn render_status_bar(
     // Keep the row itself darker so the pills read as segments sitting on top of it.
     let bar_style =
         Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
+    // `Clear` blanks every cell's symbol first (task 12.2): a bare
+    // `Block::style` only recolors a cell, it never overwrites a stale
+    // glyph left by whatever painted this placement before the status bar
+    // owned it.
+    f.render_widget(Clear, area);
     f.render_widget(Block::default().style(bar_style), area);
 
     let mute_status = model.mute.clone();

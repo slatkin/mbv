@@ -201,6 +201,23 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
+        // Fill the placement's own background first (task 12.2): the panel
+        // paints a narrower inset content rect (`library_panel_content_area`
+        // insets by `TAB_LEFT_PAD`/one column, matching the tab bar's own
+        // left indent), so the margin columns outside that inset must still
+        // show the column's own background rather than whatever was painted
+        // underneath before this panel owned the placement.
+        frame.render_widget(ratatui::widgets::Clear, area);
+        frame.render_widget(
+            ratatui::widgets::Block::default().style(
+                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
+                    crate::app::palette::Surface::LibraryColumn,
+                    false,
+                )
+                .fill),
+            ),
+            area,
+        );
         let area = self.library_panel_content_area().unwrap_or(area);
         self.application.view(&id, frame, area);
         // The projected hero image's pixel paint (task 5.10, design D9): the

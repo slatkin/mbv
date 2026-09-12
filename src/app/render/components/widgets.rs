@@ -4,7 +4,7 @@ use crate::app::{palette, App, TabSelection};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
@@ -236,6 +236,11 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
     }
 
     let bg = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
+    // `Clear` blanks every cell's symbol first (task 12.2): a bare
+    // `Block::style` only recolors a cell, it never overwrites a stale
+    // glyph left by whatever painted this placement before the queue panel
+    // owned it.
+    f.render_widget(Clear, area);
     f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
     area
@@ -294,10 +299,27 @@ pub(in crate::app) fn render_pill_bar(
         "render_pill_bar: labels and ids must be parallel"
     );
     let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
-    if area.width == 0 || area.height == 0 || bar.labels.is_empty() {
+    if area.width == 0 || area.height == 0 {
         return selector_tabs;
     }
     let area = Rect { height: 1, ..area };
+    // The row surface is part of the canonical shell, painted even with no
+    // pills to show (task 12.2): the row's place stays reserved (its own
+    // doc comment above), so it must still repaint its own background
+    // rather than leave whatever was underneath before this panel owned the
+    // placement. `Clear` blanks every cell's symbol first -- a bare
+    // `Block::style` only recolors a cell, it never overwrites a stale
+    // glyph.
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Block::default().style(
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+        ),
+        area,
+    );
+    if bar.labels.is_empty() {
+        return selector_tabs;
+    }
     let n = bar.labels.len();
     let bar_w = area.width as usize;
     let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
@@ -364,14 +386,6 @@ pub(in crate::app) fn render_pill_bar(
         let has_right = scroll_end < n;
         (scroll_start, scroll_end, has_left, has_right)
     };
-
-    // The row surface is part of the canonical shell.
-    f.render_widget(
-        Block::default().style(
-            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
-        ),
-        area,
-    );
 
     let mut spans: Vec<Span> = Vec::new();
     let mut x_cursor = area.x;

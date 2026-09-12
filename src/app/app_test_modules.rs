@@ -228,5 +228,9 @@ mod tests_tick_integration_mouse_sidebar;
 mod tests_tick_integration_queue_playback; // Queue playback panel ownership tick coverage (task 3.7)
 
 #[cfg(test)]
+#[path = "tests_tick_integration_root_frame_fill.rs"]
+mod tests_tick_integration_root_frame_fill; // RootFrame placement fill sentinel proof (task 12.2)
+
+#[cfg(test)]
 #[path = "tests_narrow_browse_migration.rs"]
 mod tests_narrow_browse_migration;

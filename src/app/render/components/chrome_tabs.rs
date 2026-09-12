@@ -73,7 +73,13 @@ pub(in crate::app) fn render_tab_bar(
     model: &TabBarModel<'_>,
     hits: &mut Vec<(Rect, usize)>,
 ) {
-    // Fill the tab bar area with the tab box's own background.
+    // Fill the tab bar area with the tab box's own background. `Clear`
+    // blanks every cell's symbol first (task 12.2): a bare `Block::style`
+    // only recolors a cell, it never overwrites a stale glyph left by a
+    // prior frame, so the placement's padding rows (never touched by the
+    // tab/title painting below) would otherwise keep showing whatever was
+    // painted underneath before this panel owned the placement.
+    f.render_widget(ratatui::widgets::Clear, area);
     f.render_widget(
         ratatui::widgets::Block::default().style(
             ratatui::style::Style::default().bg(palette::surface_colors(

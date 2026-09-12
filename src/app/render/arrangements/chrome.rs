@@ -77,6 +77,22 @@ pub(crate) enum PanelPlacement {
     QueueBoundary(Rect),
 }
 
+impl PanelPlacement {
+    /// The placed rect, regardless of which panel it belongs to (task 12.2's
+    /// sentinel test walks every placement generically).
+    pub(crate) fn rect(self) -> Rect {
+        match self {
+            Self::Tab(rect)
+            | Self::Library(rect)
+            | Self::LibraryPlayback(rect)
+            | Self::Queue(rect)
+            | Self::QueuePlayback(rect)
+            | Self::StatusBar(rect)
+            | Self::QueueBoundary(rect) => rect,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct RootFrame {
     /// Tab bar at the top of the library column (`TabPanel`, task 2.1).

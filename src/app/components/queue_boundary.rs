@@ -115,7 +115,16 @@ impl Default for QueueBoundaryComponent {
 
 impl Component for QueueBoundaryComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        if self.enabled && area.width > 0 && area.height > 0 {
+        // `enabled` gates drag eligibility (mouse handling), not painting
+        // (task 12.2): the boundary is mounted only while `RootFrame`
+        // places it (Both mode), so it must paint its column whenever it
+        // has a real area, independent of whether a drag can start.
+        if area.width > 0 && area.height > 0 {
+            // `Clear` blanks every cell's symbol first: a bare `Block::style`
+            // only recolors a cell, it never overwrites a stale glyph left
+            // by whatever painted this placement before the boundary owned
+            // it.
+            frame.render_widget(ratatui::widgets::Clear, area);
             frame.render_widget(
                 Block::default().style(
                     Style::default().bg(palette::surface_colors(

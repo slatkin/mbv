@@ -27,7 +27,9 @@ use crate::app::render::{
 };
 
 use super::content::{LibraryPanelContent, ListSlot, PanelHeroImagePaint, PanelListPaintPolicy};
-use super::slots::{paint_list_controls_row, paint_pill_row_gap, paint_selector_row};
+use super::slots::{
+    paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
+};
 use super::wide::SkeletonHits;
 
 /// Columns the inline hero's wrapping text keeps beside a right-aligned
@@ -330,7 +332,16 @@ pub(in crate::app) fn render_narrow_skeleton(
                 &mut hits.selector,
             );
         }
-        _ => paint_pill_row_gap(f, areas.spacer_area),
+        (None, false) => {
+            // No `SelectorRow`: still repaint the reserved pills row's own
+            // background (task 12.2) through the shared pill-row painter,
+            // the same one `paint_selector_row` calls for an empty pill
+            // list, so the row never keeps whatever was painted underneath
+            // it before this panel owned the placement.
+            paint_pill_bar_row(f, areas.pills_area, &[], None, &mut hits.selector);
+            paint_pill_row_gap(f, areas.spacer_area);
+        }
+        (_, true) => paint_pill_row_gap(f, areas.spacer_area),
     }
 
     // List controls row: reserved only when the destination supplies

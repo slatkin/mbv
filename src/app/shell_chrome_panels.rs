@@ -262,6 +262,25 @@ impl Model {
             if self.app.now_playing_status() == NowPlayingStatus::Idle {
                 (None, CardGeometry::default())
             } else {
+                // Fill the slot region's own background first (task 12.2):
+                // the visual slot only paints the image/placeholder it
+                // actually has (documented: images-off or not-yet-loaded
+                // paints nothing, `render_card_painting`'s own test), so any
+                // columns it leaves untouched -- e.g. the gap before a
+                // zero-width slot at the wide breakpoint -- must still show
+                // this panel's own background rather than whatever was
+                // painted underneath before this panel owned the placement.
+                frame.render_widget(ratatui::widgets::Clear, slot_region);
+                frame.render_widget(
+                    ratatui::widgets::Block::default().style(
+                        ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
+                            crate::app::palette::Surface::QueueOnlyPlaybackPanel,
+                            false,
+                        )
+                        .fill),
+                    ),
+                    slot_region,
+                );
                 let (slot_h, slot_w, _) =
                     self.app
                         .render_queue_playback_slot(frame, slot_region, wide);

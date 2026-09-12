@@ -117,7 +117,16 @@ pub(in crate::app) fn render_wide_skeleton(
                 &mut hits.selector,
             );
         }
-        _ => paint_pill_row_gap(f, pane.spacer_area),
+        (None, false) => {
+            // No `SelectorRow`: still repaint the reserved pills row's own
+            // background (task 12.2) through the shared pill-row painter,
+            // the same one `paint_selector_row` calls for an empty pill
+            // list, so the row never keeps whatever was painted underneath
+            // it before this panel owned the placement.
+            paint_pill_bar_row(f, pane.pills_area, &[], None, &mut hits.selector);
+            paint_pill_row_gap(f, pane.spacer_area);
+        }
+        (_, true) => paint_pill_row_gap(f, pane.spacer_area),
     }
 
     // List controls row: reserved only when the destination supplies
@@ -279,7 +288,10 @@ fn paint_workspace_box(
             height: 1,
             ..workspace_rect
         };
-        if !selector.pills.is_empty() && bar.height > 0 {
+        if bar.height > 0 {
+            // `render_pill_bar` fully repaints the row's background even
+            // with no pills (task 12.2): the row stays reserved, so it must
+            // still own its own paint.
             paint_pill_bar_row(f, bar, &selector.pills, selector.active, hits);
         }
         box_area = Rect {
