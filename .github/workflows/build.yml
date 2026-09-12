@@ -70,6 +70,12 @@ jobs:
           sed -i "s/^version = \".*\"/version = \"${PKGVER}\"/" Cargo.toml
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
 
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
       - name: Build and test
         # Bounded test threads: the suite runs many tests in one process and a
         # third of them stand up a real libmpv handle or a loopback HTTP/ctrl

@@ -147,9 +147,12 @@ coverage.
   (`cargo nextest run -p <pkg>`); a proof that needs a new script needs the
   user to ask for it explicitly, per request.
 * check: `cargo check -p <package>`
-* test: `cargo nextest run -p <package>` (prefer nextest)
-* lint: `cargo clippy --workspace --all-targets`
+* test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo test --release -- --test-threads=4` (fd-budget throttling, see `build.yml` comment)
+* lint: `cargo clippy --workspace --all-targets -- -D warnings`
 * format: `cargo fmt`
+* errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
+* async: sync-first; `tokio` is edge-only (`src/mpris.rs`, `zbus`) — do not spread it
+* sharing: prefer owned data + `Msg` identities over new `Arc`/`Rc`; shell owns domain state, components own local UI state
 * anything web related: `ketch` not curl
 * docs/concept discovery (ADRs, openspec, CONTEXT.md): `qmd query "..."` (collection `mbv`); `rg` only for exact strings
 
