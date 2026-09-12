@@ -346,7 +346,7 @@ conforms to Emby.
 
 *Unification:* removes every remaining way to paint outside a panel.
 
-- [ ] 12.1a Delete the remaining destination compatibility and superseded lifecycle: remove
+- [x] 12.1a Delete the remaining destination compatibility and superseded lifecycle: remove
   `ComponentId::{Browser, WideHeroBoundary}` and every mount, sync, focus, subscription, mouse and
   render-routing path for them; remove the transitional owner-migrated branch, obsolete `cfg(test)`
   browser/music render shims, tests tied only to them and routing fixtures coupled to those impossible
