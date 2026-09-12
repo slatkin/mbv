@@ -380,7 +380,7 @@ conforms to Emby.
   `panel_content_area`, `home_area`, `card` — whatever the slices have not already removed) with `FrameChromeGeometry`'s paint-to-input use, so
   `RootFrame` is the only root geometry. Verify: `rg LayoutMain src` and `rg LayoutPlayback src` return
   nothing; context-menu keyboard-anchor tests pass for a library row and a queue row.
-- [ ] 12.5 Delete the dead paths of design D13 (`GridMediaList`, `NarrowBrowseControl`, `GridPaintPolicy`,
+- [x] 12.5 Delete the dead paths of design D13 (`GridMediaList`, `NarrowBrowseControl`, `GridPaintPolicy`,
   `LeftPaneFocus`, `SelectedRowSurface` as a caller argument) and the tests that only exercised them.
   Verify: `cargo check -p mbv`; `rg GridMediaList|NarrowBrowseControl|GridPaintPolicy|LeftPaneFocus src`
   finds nothing.
