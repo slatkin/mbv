@@ -641,7 +641,7 @@ impl HomeComponent {
     fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
         let viewport_height = self.list_area.height.max(1) as usize;
-        self.carrier.ensure_presentation(target, viewport_height);
+        self.carrier.set_presentation(target, viewport_height);
     }
 }
 

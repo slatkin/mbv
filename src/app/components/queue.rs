@@ -247,7 +247,7 @@ impl QueueComponent {
     /// carrier's presentation seam.
     fn ensure_carrier(&mut self) {
         self.carrier
-            .ensure_presentation(Presentation::Wide, self.content_area.height.max(1) as usize);
+            .set_presentation(Presentation::Wide, self.content_area.height.max(1) as usize);
     }
 
     fn move_cursor(&mut self, delta: i64) -> Option<Msg> {

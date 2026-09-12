@@ -8,6 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::app::components::inline_search::InlineSearch;
+use crate::app::components::media_list::{Presentation, SelectedRowSurface};
 
 /// The artwork shape the header reserves a box for (spec: the Wide Hero
 /// header's three types). Chosen by the artwork policy (design D5, task
@@ -169,31 +170,68 @@ pub(in crate::app) struct LibraryPanelContent<'a> {
     pub hero: Option<HeroContent<'a>>,
 }
 
+/// The closed paint policy the panel sets on its lists (design D3/D6): the
+/// focus bit, the slot's fixed selected-row surface, and the
+/// presentation-specific inputs — the Wide throbber and the Inline detail
+/// height the panel computes from the hero content. Destinations pass none
+/// of these; the carrier maps the policy onto its active presentation.
+pub(in crate::app) enum PanelListPaintPolicy {
+    /// The Wide presentation's policy: focus, selected-row surface, and the
+    /// now-playing throbber glyph (library lists carry none today).
+    Wide {
+        focused: bool,
+        selected: SelectedRowSurface,
+        throbber: Option<char>,
+    },
+    /// The Inline presentation's policy: focus, selected-row surface, and
+    /// the selected-row replacement height the panel derived from the hero.
+    Inline {
+        focused: bool,
+        selected: SelectedRowSurface,
+        desired_detail_rows: usize,
+    },
+}
+
 /// Object-safe view over one canonical media-list presentation flow
-/// (design D3).
-///
-/// Provisional surface for this unit (tasks 5.1–5.3): the skeleton views the
-/// active presentation into the list slot rect it computed. Task 5.8
-/// formalizes the full D3 surface — `set_presentation(Wide | Inline, anchor)`,
-/// the paint policy, retained slot geometry — and implements the trait once
-/// for the shared media-list carrier.
+/// (design D3), implemented once by the shared media-list carrier for every
+/// `Target` (task 5.8). The panel drives the whole surface: it chooses the
+/// presentation from its own breakpoint (`set_presentation`), sets the paint
+/// policy, views the active presentation into the list slot's rect, and
+/// reads the retained geometry back (selected/detail rects, point claims).
+/// Resolving a point to a typed target stays with the owning carrier's typed
+/// surface — targets are erased here, so no per-destination `ListSlot` or
+/// `Workspace` arm can grow.
 pub(in crate::app) trait PanelList {
+    /// Move the shared owner into `presentation` when it diverges, preserving
+    /// the outgoing selection's viewport offset (design D3's
+    /// `set_presentation(Wide | Inline, anchor)`; the carrier derives the
+    /// anchor from its own retained selection).
+    fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize);
+
+    /// Configure the paint policy used by the next `view` (design D3/D6: the
+    /// panel sets focus and the slot's fixed selected-row surface).
+    fn set_paint_policy(&mut self, policy: PanelListPaintPolicy);
+
     /// View the active presentation into `rect`, retaining its paint
     /// geometry.
     fn view(&mut self, frame: &mut Frame, rect: Rect);
 
-    /// View the active presentation with the panel's paint policy: the
-    /// focus bit and the slot's fixed selected-row surface (design D3/D6).
-    /// Provisional surface for this unit (task 5.6): the Workspace passes
-    /// the Wide policy vocabulary until task 5.8 formalizes the full D3
-    /// trait; the default keeps `view`'s behaviour.
-    fn view_with_policy(
-        &mut self,
-        frame: &mut Frame,
-        rect: Rect,
-        policy: crate::app::components::media_list::WideMediaListPaintPolicy,
-    ) {
-        let _ = policy;
-        self.view(frame, rect);
+    /// The admitted Inline detail block's rect from the current view — the
+    /// Narrow inline hero paints into it; `None` on fallback or Wide.
+    fn detail_rect(&self) -> Option<Rect> {
+        None
+    }
+
+    /// The selected row's rect from the current view, when one is visible.
+    fn selected_row_rect(&self) -> Option<Rect> {
+        None
+    }
+
+    /// Whether the current view's retained geometry claims `point` (D6 frame
+    /// invalidation: a presentation that has not completed its view claims
+    /// nothing).
+    fn claims_point(&self, point: ratatui::layout::Position) -> bool {
+        let _ = point;
+        false
     }
 }

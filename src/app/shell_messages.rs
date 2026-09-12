@@ -497,7 +497,16 @@ impl Model {
                 // override. There is no end/persist arm -- nothing is
                 // persisted.
                 ShellRequest::ResizeListPaneLive(width) => {
-                    if let Some(content_area) = self.wide_hero_boundary_content_area() {
+                    // The Library panel's split gesture emits the same
+                    // request for migrated surfaces (task 5.9): its content
+                    // area is the library rect the old boundary read, so
+                    // both gesture owners clamp against the same width.
+                    let content_area = if self.active_library_owner_migrated() {
+                        self.library_panel_content_area()
+                    } else {
+                        self.wide_hero_boundary_content_area()
+                    };
+                    if let Some(content_area) = content_area {
                         self.app.list_pane_width =
                             crate::app::list_pane_width::normalize_list_pane_width(
                                 Some(width),

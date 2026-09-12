@@ -34,7 +34,7 @@ pub(in crate::app) fn wide_library_panes(
     })
 }
 
-pub(in crate::app::render) fn selected_detail_content_area(
+pub(in crate::app) fn selected_detail_content_area(
     hero_area: Rect,
     side_padding: u16,
     extra_rows: u16,

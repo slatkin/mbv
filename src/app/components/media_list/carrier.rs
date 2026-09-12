@@ -1,33 +1,43 @@
 //! Destination-side carrier for one logical media-row flow (design.md D1/D2).
 //!
 //! A destination composes one [`MediaListCarrier`] holding the persistent
-//! [`WideMediaList`], [`InlineMediaBrowser`], and [`GridMediaList`]
-//! presentations over a single [`MediaList`](super::MediaList) owner.
-//! [`Presentation`] is the centrally-defined closed set; the carrier owns which
-//! member currently holds the owner and moves the owner between them on a
-//! responsive change, preserving only the outgoing selected-row viewport
-//! offset. Destinations derive the active member from their own kind,
-//! breakpoint, and painted chrome and retain provider content, chrome, pane
-//! state, and typed intent translation.
+//! [`WideMediaList`] and [`InlineMediaBrowser`] presentations over a single
+//! [`MediaList`](super::MediaList) owner. [`Presentation`] is the
+//! centrally-defined closed set; the carrier owns which member currently
+//! holds the owner and moves the owner between them on a responsive change,
+//! preserving only the outgoing selected-row viewport offset. Destinations
+//! derive the active member from their own kind, breakpoint, and painted
+//! chrome and retain provider content, chrome, pane state, and typed intent
+//! translation.
+//!
+//! Task 5.8 (unify-screens-under-panel-components): `Presentation::Grid` is
+//! deleted (design D13 — the Grid presentation served only non-hero catalogs
+//! and no library in use lacks a hero), and `ensure_presentation` is renamed
+//! to `set_presentation`, the panel-equivalent API (design D3): the Library
+//! panel calls `set_presentation(Wide | Inline, ..)` from its own breakpoint
+//! choice through the object-safe [`super::PanelList`]-style surface, and
+//! un-migrated destinations call the same method from theirs.
 
 use ratatui::layout::{Position, Rect};
 
 use super::{
-    GridMediaList, InlineMediaBrowser, MediaListRow, RowLocalInput, RowLocalOutcome,
-    ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaListRow, RowLocalInput, RowLocalOutcome, ViewportAnchor, WideMediaList,
 };
 
 /// The centrally-defined closed set of media-list presentations (CONTEXT.md
 /// "Presentation (media-list)"). Every destination derives the active member
 /// from its kind, breakpoint, and painted chrome; it never invents a new one.
+/// The Grid presentation was deleted with the non-hero catalogs it served
+/// (design D13, task 5.8); the Library panel drives `set_presentation` for
+/// converted owners, and the two remaining members are all a media-row flow
+/// can hold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Presentation {
     Wide,
     Inline,
-    Grid,
 }
 
-/// One logical row flow's destination-side carrier: the three persistent
+/// One logical row flow's destination-side carrier: the persistent
 /// presentation adapters (exactly one of which holds the shared owner at a
 /// time) plus which one is active. A responsive change moves the same owner
 /// between the adapters — the owner is never copied and no row-local state is
@@ -36,7 +46,6 @@ pub struct MediaListCarrier<Target> {
     active: Presentation,
     wide: WideMediaList<Target>,
     inline: InlineMediaBrowser<Target>,
-    grid: GridMediaList<Target>,
 }
 
 impl<Target> MediaListCarrier<Target> {
@@ -46,11 +55,13 @@ impl<Target> MediaListCarrier<Target> {
             active,
             wide: WideMediaList::new(),
             inline: InlineMediaBrowser::new(),
-            grid: GridMediaList::new(),
         }
     }
 
-    /// The presentation currently holding the shared owner.
+    /// The presentation currently holding the shared owner. Un-migrated
+    /// destinations read this to hand their painters the active adapter;
+    /// once a destination converts to a Library panel content owner, the
+    /// panel drives `set_presentation` instead (design D3).
     pub fn active(&self) -> Presentation {
         self.active
     }
@@ -76,22 +87,11 @@ impl<Target> MediaListCarrier<Target> {
         &mut self.inline
     }
 
-    /// The Grid presentation adapter.
-    pub fn grid(&self) -> &GridMediaList<Target> {
-        &self.grid
-    }
-
-    /// Mutable Grid presentation adapter.
-    pub fn grid_mut(&mut self) -> &mut GridMediaList<Target> {
-        &mut self.grid
-    }
-
     /// The active owner's stable selected target.
     pub fn selected_target(&self) -> Option<&Target> {
         match self.active {
             Presentation::Wide => self.wide.selected_target(),
             Presentation::Inline => self.inline.selected_target(),
-            Presentation::Grid => self.grid.selected_target(),
         }
     }
 
@@ -100,7 +100,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.cursor(),
             Presentation::Inline => self.inline.cursor(),
-            Presentation::Grid => self.grid.cursor(),
         }
     }
 
@@ -109,7 +108,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.scroll(),
             Presentation::Inline => self.inline.scroll(),
-            Presentation::Grid => self.grid.scroll(),
         }
     }
 
@@ -118,7 +116,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.rows(),
             Presentation::Inline => self.inline.rows(),
-            Presentation::Grid => self.grid.rows(),
         }
     }
 
@@ -130,7 +127,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.current_content_rect(),
             Presentation::Inline => self.inline.current_content_rect(),
-            Presentation::Grid => self.grid.current_content_rect(),
         }
     }
 
@@ -140,7 +136,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.current_selected_row_rect(),
             Presentation::Inline => self.inline.current_selected_row_rect(),
-            Presentation::Grid => None,
         }
     }
 
@@ -150,7 +145,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.current_flow_len(),
             Presentation::Inline => self.inline.current_flow_len(),
-            Presentation::Grid => None,
         }
     }
 
@@ -159,7 +153,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.current_flow_target_at(row),
             Presentation::Inline => self.inline.current_flow_target_at(row),
-            Presentation::Grid => None,
         }
     }
 
@@ -168,7 +161,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.current_flow_offset(),
             Presentation::Inline => self.inline.current_flow_offset(),
-            Presentation::Grid => self.grid.current_flow_offset(),
         }
     }
 
@@ -177,7 +169,6 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.is_empty(),
             Presentation::Inline => self.inline.is_empty(),
-            Presentation::Grid => self.grid.is_empty(),
         }
     }
 }
@@ -187,8 +178,12 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     /// active one. A responsive change moves the same owner between the
     /// persistent adapters and preserves only the outgoing selected-row
     /// viewport offset (design.md D2); no cursor, scroll, or selection is
-    /// copied between presentations.
-    pub fn ensure_presentation(&mut self, presentation: Presentation, viewport_height: usize) {
+    /// copied between presentations. The `viewport_height` is the receiving
+    /// presentation's painted row height: the outgoing selection's offset is
+    /// measured against it so the selected row lands at the same screen row
+    /// (design D3's `set_presentation(Wide | Inline, anchor)`; the anchor is
+    /// derived here from the carrier's own retained selection).
+    pub fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize) {
         if self.active == presentation {
             return;
         }
@@ -203,12 +198,10 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         let core = match self.active {
             Presentation::Wide => std::mem::take(&mut self.wide).into_media_list(),
             Presentation::Inline => std::mem::take(&mut self.inline).into_media_list(),
-            Presentation::Grid => std::mem::take(&mut self.grid).into_media_list(),
         };
         match presentation {
             Presentation::Wide => self.wide = WideMediaList::from_media_list(core),
             Presentation::Inline => self.inline = InlineMediaBrowser::from_media_list(core),
-            Presentation::Grid => self.grid = GridMediaList::from_media_list(core),
         }
         self.active = presentation;
         if let Some(anchor) = handoff {
@@ -222,7 +215,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.set_content(rows),
             Presentation::Inline => self.inline.set_content(rows),
-            Presentation::Grid => self.grid.set_content(rows),
         }
     }
 
@@ -231,7 +223,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.select_target(target),
             Presentation::Inline => self.inline.select_target(target),
-            Presentation::Grid => self.grid.select_target(target),
         }
     }
 
@@ -241,7 +232,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.patch_row(target, row),
             Presentation::Inline => self.inline.patch_row(target, row),
-            Presentation::Grid => self.grid.patch_row(target, row),
         }
     }
 
@@ -250,7 +240,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.select_first(),
             Presentation::Inline => self.inline.select_first(),
-            Presentation::Grid => self.grid.select_first(),
         }
     }
 
@@ -259,7 +248,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.select_last(),
             Presentation::Inline => self.inline.select_last(),
-            Presentation::Grid => self.grid.select_last(),
         }
     }
 
@@ -270,7 +258,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.select_index(index),
             Presentation::Inline => self.inline.select_index(index),
-            Presentation::Grid => self.grid.select_index(index),
         }
     }
 
@@ -279,18 +266,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.move_selection(delta),
             Presentation::Inline => self.inline.move_selection(delta),
-            Presentation::Grid => self.grid.move_selection(delta),
-        }
-    }
-
-    /// Move by `item_rows` painted item rows: the Grid presentation preserves
-    /// the selected column and clamps into the target row's nearest cell
-    /// (the established two-column catalog traversal); one-column
-    /// presentations stride one selectable row per item row.
-    pub fn move_item_rows(&mut self, item_rows: i64) {
-        match self.active {
-            Presentation::Grid => self.grid.move_item_rows(item_rows),
-            Presentation::Wide | Presentation::Inline => self.move_selection(item_rows),
         }
     }
 
@@ -299,7 +274,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.set_scroll(offset),
             Presentation::Inline => self.inline.set_scroll(offset),
-            Presentation::Grid => self.grid.set_scroll(offset),
         }
     }
 
@@ -310,7 +284,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         let offset = match self.active {
             Presentation::Wide => self.wide.resolve_viewport(viewport_height).offset,
             Presentation::Inline => self.inline.resolve_viewport(viewport_height).offset,
-            Presentation::Grid => self.grid.resolve_viewport(viewport_height).offset,
         };
         self.set_scroll(offset);
     }
@@ -325,7 +298,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.delegate(input, target),
             Presentation::Inline => self.inline.delegate(input, target),
-            Presentation::Grid => self.grid.delegate(input, target),
         }
     }
 
@@ -338,7 +310,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.claims_current_point(point),
             Presentation::Inline => self.inline.claims_current_point(point),
-            Presentation::Grid => self.grid.claims_current_point(point),
         }
     }
 
@@ -349,7 +320,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     pub fn resolve_current_point(&self, point: Position) -> Option<&Target> {
         match self.active {
             Presentation::Wide => self.wide.resolve_current_point(point),
-            Presentation::Grid => self.grid.resolve_current_point(point),
             Presentation::Inline => self.inline.resolve_current_point(point),
         }
     }
@@ -362,7 +332,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         let selected_row_offset = match self.active {
             Presentation::Wide => self.wide.selected_row_offset(viewport_height)?,
             Presentation::Inline => self.inline.selected_row_offset(viewport_height)?,
-            Presentation::Grid => self.grid.selected_row_offset(viewport_height)?,
         };
         Some(ViewportAnchor {
             selected_target,
@@ -380,7 +349,6 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.apply_viewport_anchor(anchor, viewport_height),
             Presentation::Inline => self.inline.apply_viewport_anchor(anchor, viewport_height),
-            Presentation::Grid => self.grid.apply_viewport_anchor(anchor, viewport_height),
         }
     }
 }

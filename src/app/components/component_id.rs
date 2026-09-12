@@ -38,6 +38,12 @@ pub enum ComponentId {
     QueueBoundary,
     /// The Wide hero split's gap-columns gesture owner (add-mouse-wide-split-resize).
     WideHeroBoundary,
+    /// The Library panel (`LibraryPanel`, task 5.9, design D2): the
+    /// library area's one event boundary. Mounted whenever the library
+    /// column is visible; it paints the `RootFrame.library` placement only
+    /// while the active library's owner has migrated — otherwise the old
+    /// mounted destination stays the surface (the transitional branch).
+    Library,
     Home,
     Browser(BrowserKey),
     /// Wide TV workspace (`TvWorkspaceComponent`). Distinct from

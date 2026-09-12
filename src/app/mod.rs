@@ -118,6 +118,8 @@ mod shell_home;
 mod shell_home_content;
 mod shell_inline_search;
 mod shell_library;
+#[path = "shell_library_panel.rs"]
+mod shell_library_panel;
 mod shell_modal_actions;
 mod shell_music_workspace;
 mod shell_overlays;

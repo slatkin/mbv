@@ -6,9 +6,8 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use crate::app::components::{BrowserComponent, Msg, ShellRequest};
 use crate::app::components::browser_narrow::NarrowBrowseExtras;
 use crate::app::render::{
-    browser_grid_media_list_paints, browser_inline_media_browser_paints,
-    browser_legacy_plain_rows_paints, browser_wide_media_list_paints, make_movie_app,
-    reset_browser_media_list_paints,
+    browser_inline_media_browser_paints, browser_legacy_plain_rows_paints,
+    browser_wide_media_list_paints, make_movie_app, reset_browser_media_list_paints,
 };
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
@@ -120,20 +119,21 @@ fn browser_narrow_tick_click_uses_retained_geometry_and_the_inline_painter_once(
     assert_eq!(browser_legacy_plain_rows_paints(), 0);
 }
 
-/// Task 4.1: the generic non-hero two-column catalog paints through the Grid
-/// presentation over the shared owner — exactly one Grid painter runs, and no
-/// legacy plain-row painter, Wide, or Inline presentation paints beside it.
+/// Task 5.8: the generic catalog's narrow surface paints through the Inline
+/// presentation over the shared owner — exactly one Inline painter runs, and
+/// no legacy plain-row painter or Wide presentation paints beside it. (The
+/// test previously pinned the Grid presentation for this surface; Grid was
+/// deleted as unreachable by design D13 — no library in use lacks a hero.)
 #[test]
-fn browser_generic_two_column_tick_isolated_from_canonical_controls() {
+fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     let mut app = make_movie_app();
     app.libs[0].library.collection_type = "other".into();
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     reset_browser_media_list_paints();
     let _ = draw(&mut harness, 100, 30);
-    assert_eq!(browser_grid_media_list_paints(), 1);
+    assert_eq!(browser_inline_media_browser_paints(), 1);
     assert_eq!(browser_wide_media_list_paints(), 0);
-    assert_eq!(browser_inline_media_browser_paints(), 0);
     assert_eq!(browser_legacy_plain_rows_paints(), 0);
     assert_eq!(browser(&harness).cursor(), 0);
 
@@ -148,11 +148,11 @@ fn browser_generic_two_column_tick_isolated_from_canonical_controls() {
     }));
     assert_eq!(browser(&harness).cursor(), 1);
 
-    // The next frame repaints through the Grid presentation only, with the
+    // The next frame repaints through the Inline presentation only, with the
     // selection retained by the shared owner.
     reset_browser_media_list_paints();
     let _ = draw(&mut harness, 100, 30);
-    assert_eq!(browser_grid_media_list_paints(), 1);
+    assert_eq!(browser_inline_media_browser_paints(), 1);
     assert_eq!(browser_legacy_plain_rows_paints(), 0);
     assert_eq!(browser(&harness).cursor(), 1);
 }

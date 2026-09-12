@@ -13,7 +13,7 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Frame;
 
-use crate::app::components::media_list::{SelectedRowSurface, WideMediaListPaintPolicy};
+use crate::app::components::media_list::SelectedRowSurface;
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
@@ -161,7 +161,21 @@ pub(in crate::app) fn render_wide_skeleton(
             );
             search.set_scroll(new_scroll);
         }
-        ListSlot::Media(list) => list.view(f, list_area),
+        ListSlot::Media(list) => {
+            // The panel drives the presentation and the paint policy (design
+            // D3): the Wide breakpoint selects the Wide presentation, and the
+            // slot fixes focus and the list-backdrop selected row (design D6).
+            list.set_presentation(
+                crate::app::components::media_list::Presentation::Wide,
+                list_area.height.max(1) as usize,
+            );
+            list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
+                focused: browser_focused,
+                selected: SelectedRowSurface::ListBackdrop,
+                throbber: None,
+            });
+            list.view(f, list_area);
+        }
         ListSlot::Empty { loading, text } => {
             let msg = if *loading {
                 " Loading\u{2026}"
@@ -266,15 +280,14 @@ fn paint_workspace_box(
     let content = padded_rect(panel, PANE_PAD_X, PANE_PAD_Y);
     // The owning-surface selected row is fixed by the slot (design D6): the
     // panel sets the paint policy, destinations pass none.
-    workspace.list.view_with_policy(
-        f,
-        content,
-        WideMediaListPaintPolicy::new(
-            workspace.focused,
-            SelectedRowSurface::OwningLibraryPane,
-            None,
-        ),
-    );
+    workspace
+        .list
+        .set_paint_policy(super::content::PanelListPaintPolicy::Wide {
+            focused: workspace.focused,
+            selected: SelectedRowSurface::OwningLibraryPane,
+            throbber: None,
+        });
+    workspace.list.view(f, content);
     (panel, content)
 }
 #[cfg(test)]
@@ -312,6 +325,19 @@ mod wide_skeleton_tests {
     }
 
     impl PanelList for StubList {
+        fn set_presentation(
+            &mut self,
+            _presentation: crate::app::components::media_list::Presentation,
+            _viewport_height: usize,
+        ) {
+        }
+
+        fn set_paint_policy(
+            &mut self,
+            _policy: crate::app::components::library_panel::content::PanelListPaintPolicy,
+        ) {
+        }
+
         fn view(&mut self, f: &mut Frame, rect: Rect) {
             self.painted = Some(rect);
             for (index, row) in self.rows.iter().enumerate() {

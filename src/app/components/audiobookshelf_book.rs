@@ -116,7 +116,7 @@ impl AudiobookshelfBookComponent {
     fn ensure_carrier(&mut self) {
         let viewport_height = self.geometry.left_area.height.max(1) as usize;
         self.carrier
-            .ensure_presentation(self.active_presentation(), viewport_height);
+            .set_presentation(self.active_presentation(), viewport_height);
     }
 
     /// Test-only: drive framework focus the way `Component::attr` does.

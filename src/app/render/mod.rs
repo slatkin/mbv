@@ -66,12 +66,6 @@ pub(crate) fn home_inline_media_browser_paints() -> usize {
 #[cfg(test)]
 pub(crate) fn reset_browser_media_list_paints() {
     reset_home_media_list_paints();
-    components::media_list::GRID_MEDIA_LIST_PAINTS.with(|count| count.set(0));
-}
-
-#[cfg(test)]
-pub(crate) fn browser_grid_media_list_paints() -> usize {
-    components::media_list::GRID_MEDIA_LIST_PAINTS.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]
@@ -127,15 +121,17 @@ pub(in crate::app) use arrangements::wide_hero::{
     wide_hero_fits, wide_hero_hero_content_box, wide_hero_hero_pane, LeftPaneFocus,
     WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
-pub(in crate::app) use components::hero::wrap_overview_lines;
+pub(in crate::app) use components::hero::{
+    selected_detail_shell, wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS,
+};
 pub(in crate::app) use components::home_hero::{
     prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
 };
+pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
 pub(in crate::app) use components::audiobookshelf_podcast::podcast_show_rows;
 pub(in crate::app) use components::media_list::{
-    render_grid_media_list_component, render_inline_media_browser_component,
-    render_wide_media_list_component,
+    render_inline_media_browser_component, render_wide_media_list_component,
 };
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,

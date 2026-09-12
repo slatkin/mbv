@@ -314,7 +314,7 @@ impl FeedsComponent {
     fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
         let viewport_height = self.layout.left_area.height.max(1) as usize;
-        self.carrier.ensure_presentation(target, viewport_height);
+        self.carrier.set_presentation(target, viewport_height);
     }
 
     fn cycle_group(&mut self, delta: i64) {

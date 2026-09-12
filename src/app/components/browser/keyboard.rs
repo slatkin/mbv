@@ -93,16 +93,10 @@ impl BrowserComponent {
                     return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
                 }
                 // Column navigation applies only to a painted list with
-                // more than one column. A one-column list leaves
-                // Left/Right/h/l unbound locally.
-                Key::Left | Key::Char('h') if self.columns() > 1 => {
-                    let index = self.move_cursor_delta(-1);
-                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
-                }
-                Key::Right | Key::Char('l') if self.columns() > 1 => {
-                    let index = self.move_cursor_delta(1);
-                    return Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index }));
-                }
+                // more than one column: the Grid presentation's two-column
+                // traversal was deleted with Grid as unreachable (design
+                // D13), so every presentation over the shared owner is
+                // one-column and Left/Right/h/l stay unbound locally.
                 _ => {}
             }
         }

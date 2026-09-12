@@ -41,7 +41,7 @@ pub(in crate::app::render) const HERO_TITLE_ROWS: u16 = 1;
 /// colored-bg padding row just inside each border. The borders are part of
 /// the hero block's reserved rows (the list makes room), not painted over
 /// list content like `render_selected_block_borders` does.
-pub(in crate::app::render) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
+pub(in crate::app) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 
 /// Word-wraps text using a width that may change for each completed line.
 /// Inline heroes use this to narrow overview text beside a right-aligned
@@ -183,7 +183,7 @@ pub(in crate::app::render) fn inline_detail_flow(
 /// hero's own fixed window (`offset = 0`, fully visible, padding rows
 /// `[1, hero_rows - 2]`), so there is exactly one implementation of the ▁/▔
 /// shell rather than two near-identical ones.
-pub(in crate::app::render) fn selected_detail_shell(
+pub(in crate::app) fn selected_detail_shell(
     f: &mut Frame,
     hero_area: Rect,
     hero_rows: u16,

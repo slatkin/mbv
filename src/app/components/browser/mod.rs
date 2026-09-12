@@ -19,7 +19,6 @@ use tuirealm::state::State;
 
 use mbv_core::api::EmbyItem;
 
-use super::browser_narrow::NarrowBrowseControl;
 use super::browser_narrow::NarrowBrowseExtras;
 use super::component_id::BrowserKind;
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
@@ -257,15 +256,15 @@ impl BrowserComponent {
         self.carrier.set_content(rows);
     }
 
-    /// The presentation the component's kind, breakpoint, and painted chrome
-    /// select right now (design.md D2).
+    /// The presentation the component's kind and breakpoint select right now
+    /// (design.md D2). The Grid presentation was deleted as unreachable
+    /// (design D13): every narrow browse surface paints the Inline
+    /// presentation.
     fn active_presentation(&self) -> Presentation {
         if self.wide_movies {
             Presentation::Wide
-        } else if self.uses_inline_control() {
-            Presentation::Inline
         } else {
-            Presentation::Grid
+            Presentation::Inline
         }
     }
 
@@ -276,7 +275,7 @@ impl BrowserComponent {
     pub(in crate::app) fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
         let viewport_height = self.painted_viewport_height();
-        self.carrier.ensure_presentation(target, viewport_height);
+        self.carrier.set_presentation(target, viewport_height);
     }
     /// Handle a mouse event against the component's painted browse geometry.
     ///
@@ -522,16 +521,12 @@ impl Component for BrowserComponent {
             self.image_paint = None;
         } else {
             // Narrow generic/Movies/home-video: the component owns the full
-            // surface via the `browser_narrow` composer (task 3.3). The active
-            // canonical presentation (Inline or Grid) paints the rows; the
-            // composer returns only the poster image still needing paint (the
-            // shell executes it via `App::paint_home_image`, mirroring the
-            // wide path and `HomeComponent`).
-            let control = if self.uses_inline_control() {
-                NarrowBrowseControl::Inline(self.carrier.inline_mut())
-            } else {
-                NarrowBrowseControl::Grid(self.carrier.grid_mut())
-            };
+            // surface via the `browser_narrow` composer (task 3.3). The Inline
+            // presentation paints the rows (the Grid presentation was deleted
+            // as unreachable, design D13); the composer returns only the
+            // poster image still needing paint (the shell executes it via
+            // `App::paint_home_image`, mirroring the wide path and
+            // `HomeComponent`).
             let (_scroll, image_paint) = crate::app::render::render_narrow_browse_with_ctx(
                 frame,
                 area,
@@ -539,7 +534,7 @@ impl Component for BrowserComponent {
                 &self.narrow_extras,
                 self.focused,
                 &mut self.layout,
-                control,
+                self.carrier.inline_mut(),
             );
             self.image_paint = image_paint;
         }

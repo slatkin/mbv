@@ -45,6 +45,10 @@ impl Model {
         // after the destination has received its current pool/loading state.
         self.apply_pending_inline_search_transfer();
         self.sync_music_workspace();
+        // Task 5.9: the Library panel mounts with the library column and
+        // drives its owner map (retention + the active pointer) before the
+        // focus pass routes to the active surface.
+        self.sync_library_panel();
         // Retire destination components whose Service library left the
         // catalog before the focus pass routes to the active destination
         // (keep-destination-components-mounted tasks 1.3).
@@ -135,13 +139,22 @@ impl Model {
             self.push_tv_workspace_content();
         }
         self.render_library_playback_panel(f);
-        self.render_home_component(f);
-        self.render_feeds_component(f);
-        self.render_audiobookshelf_podcast_component(f);
-        self.render_audiobookshelf_book_component(f);
-        self.render_emby_browser_component(f);
-        self.render_tv_workspace_component(f);
-        self.render_music_workspace_component(f);
+        // Task 5.9 (design D16's transitional branch): the migrated active
+        // library paints through the Library panel; the old destination
+        // components stay the surface for every un-migrated library. Only
+        // the active tab's destination paints a surface, so gating the whole
+        // set on the active library's migration is exact.
+        if self.active_library_owner_migrated() {
+            self.render_library_panel(f);
+        } else {
+            self.render_home_component(f);
+            self.render_feeds_component(f);
+            self.render_audiobookshelf_podcast_component(f);
+            self.render_audiobookshelf_book_component(f);
+            self.render_emby_browser_component(f);
+            self.render_tv_workspace_component(f);
+            self.render_music_workspace_component(f);
+        }
         self.render_queue_component(f);
         self.render_queue_boundary(f);
         self.render_wide_hero_boundary(f);

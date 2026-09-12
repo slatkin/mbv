@@ -1,7 +1,5 @@
 use super::BrowserComponent;
-use crate::app::components::component_id::BrowserKind;
 use crate::app::components::media_list::RowLocalInput;
-use crate::app::library_column_width::library_column_count;
 
 impl BrowserComponent {
     pub(super) fn reanchor_content(&mut self) {
@@ -11,38 +9,20 @@ impl BrowserComponent {
         }
     }
 
-    /// Return the column count of the active presentation: one for the Wide
-    /// and Inline presentations, the arrangement's two-column policy for the
-    /// Grid presentation.
-    pub(super) fn columns(&self) -> usize {
-        if self.wide_movies || self.uses_inline_control() {
-            1
-        } else {
-            library_column_count(self.layout.left_area.width)
-        }
-    }
-
-    /// Painted item rows the pager moves per PageUp/PageDown. One-column
-    /// presentations stride one selectable row per painted row, while the
-    /// Grid keeps its existing header-exclusion and height-sensitive stride.
+    /// Painted item rows the pager moves per PageUp/PageDown: the one-column
+    /// presentations stride one selectable row per painted row. (The Grid
+    /// presentation's column-preserving stride was deleted with Grid as
+    /// unreachable, design D13.)
     pub(super) fn page_rows(&self) -> i64 {
         self.layout.left_area.height.saturating_sub(1).max(1) as i64
     }
 
-    pub(super) fn uses_inline_control(&self) -> bool {
-        !self.wide_movies
-            && (matches!(self.kind, BrowserKind::Movies | BrowserKind::HomeVideos)
-                || self.narrow_extras.inline_hero.is_some()
-                || self.narrow_extras.hero_placeholder)
-    }
-
-    /// Move the shared owner by `item_rows` painted item rows. One-column
-    /// presentations stride one selectable row per item row; the Grid
-    /// presentation preserves the selected column and clamps into the target
-    /// row's nearest cell (the established two-column catalog traversal).
+    /// Move the shared owner by `item_rows` painted item rows: every
+    /// presentation over the shared owner is one-column, so this strides one
+    /// selectable row per item row.
     pub(super) fn move_by_item_rows(&mut self, item_rows: i64) -> usize {
         self.ensure_carrier();
-        self.carrier.move_item_rows(item_rows);
+        self.carrier.move_selection(item_rows);
         self.carrier.sync_viewport(self.painted_viewport_height());
         self.cursor()
     }

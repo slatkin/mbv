@@ -19,7 +19,7 @@ use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// Standard inset for every selected detail block.
-pub(in crate::app::render) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
+pub(in crate::app) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
 
 /// Returns `palette::TEXT_EMPHASIS` when `focused`, `palette::TEXT_SECONDARY` otherwise.
 pub(in crate::app::render) fn focused_or_subtle(focused: bool) -> Color {

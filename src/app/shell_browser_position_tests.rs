@@ -52,18 +52,16 @@ fn shell_mounts_and_syncs_the_generic_emby_browser() {
 }
 
 /// Task 5.3d, Emby browser local navigation through the Model boundary:
-/// the focused `BrowserComponent` returns typed `BrowserMoveRows` /
-/// `BrowserMoveColumn` / `BrowserJumpCursor` requests in place of the
-/// raw legacy key, and the shell derives the active Emby library index
-/// from its own tab state and runs the same `App` cursor methods the
-/// legacy `handle_lib_key` movement arms call. The App cursor must move
-/// through that typed path (never a raw cursor-field write): a
-/// two-column painted list strides the App cursor by the column count
-/// per row (Down +2), Home/End jump to the first/last item, and
-/// Left/Right move within the row; a one-column list keeps Left/Right/
-/// h/l unbound (raw key consumed by the component without movement,
-/// App cursor unchanged) while the row keys keep their typed
-/// stride of one.
+/// the focused `BrowserComponent` returns typed `BrowserCursorIndex`
+/// requests in place of the raw legacy key, and the shell derives the
+/// active Emby library index from its own tab state and runs the same
+/// `App` cursor methods the legacy `handle_lib_key` movement arms call.
+/// The App cursor must move through that typed path (never a raw
+/// cursor-field write). Task 5.8 deleted the Grid presentation as
+/// unreachable (design D13), so every painted list is one-column: Down
+/// strides one item, Home/End jump to the first/last item, and Left/
+/// Right/h/l stay unbound locally (raw key consumed by the component
+/// without movement, App cursor unchanged).
 #[test]
 fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     let _guard = crate::config::TestStateDirGuard::new();
@@ -85,23 +83,23 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     model.sync_emby_browser();
     model.sync_active_destination();
 
-    // Down: the focused component returns `BrowserMoveRows { rows: 1 }`
-    // (one display row, in place of the raw key), and the shell runs
-    // `App::move_lib_cursor_rows` — its own painted two-column stride
-    // lands the App cursor on item 2, exactly like the legacy arm.
+    // Down: the focused component returns a typed `BrowserCursorIndex`
+    // (one selectable row, in place of the raw key), and the shell applies
+    // it — the one-column Inline presentation strides the App cursor one
+    // item, exactly like the legacy arm.
     let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE)
     else {
         panic!("focused browser Down must emit BrowserCursorIndex, got no typed request");
     };
-    assert_eq!(index, 2, "Down must resolve to item 2");
+    assert_eq!(index, 1, "Down must resolve to the next item");
     let navigation_before = model.app.last_nav_at;
     model.app.library_position_dirty = false;
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(
         model.app.libs[0].nav_stack[0].resting().cursor(),
-        2,
-        "two-column Down must apply the component-resolved index"
+        1,
+        "Down must apply the component-resolved index"
     );
     assert!(
         model.app.library_position_dirty,
@@ -112,7 +110,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
         "cursor application must mark library navigation"
     );
     assert_eq!(
-        model.app.library_position_state.libraries["lib-films"].levels[0].cursor_index, 2,
+        model.app.library_position_state.libraries["lib-films"].levels[0].cursor_index, 1,
         "the single cursor application must persist the resolved index"
     );
     let component_cursor = model
@@ -124,7 +122,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
         .unwrap()
         .cursor();
     assert_eq!(
-        component_cursor, 2,
+        component_cursor, 1,
         "component cursor remains locally resolved"
     );
 
@@ -147,29 +145,9 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
 
-    // Right/Left move the App cursor within the row via
-    // `App::move_lib_cursor` (the two-column list claims them).
-    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
-        drive_browser_key(&mut model, &id, Key::Right, KeyModifiers::NONE)
-    else {
-        panic!(
-            "focused two-column browser Right must emit BrowserCursorIndex, got no typed request"
-        );
-    };
-    assert_eq!(index, 1, "Right must resolve to item 1");
-    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
-    let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
-        drive_browser_key(&mut model, &id, Key::Char('h'), KeyModifiers::NONE)
-    else {
-        panic!("focused two-column browser h must emit BrowserCursorIndex, got no typed request");
-    };
-    assert_eq!(index, 0, "h must resolve to item 0");
-    model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
-    assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 0);
-
-    // One-column list: Left/Right/h/l stay unbound locally with no movement
-    // request, leaving the App cursor unchanged.
+    // Left/Right/h/l stay unbound locally with no movement request (task
+    // 5.8 deleted the Grid presentation's column navigation, design D13),
+    // leaving the component and App cursors unchanged.
     model.app.panel_mode = PanelMode::Both;
     render_browser_model(&mut model, 100, 40);
     model.sync_emby_browser();
@@ -178,7 +156,7 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
         assert_eq!(
             drive_browser_key(&mut model, &id, key, KeyModifiers::NONE),
             None,
-            "one-column focused {key:?} must stay unclaimed"
+            "focused {key:?} must stay unclaimed: the list is one-column"
         );
     }
     let comp_cursor = model
@@ -191,26 +169,25 @@ fn shell_emby_browser_movement_drives_app_cursor_via_typed_requests() {
         .cursor();
     assert_eq!(
         comp_cursor, 0,
-        "one-column Left/Right/h/l must not move the component cursor"
+        "unbound Left/Right/h/l must not move the component cursor"
     );
     assert_eq!(
         model.app.libs[0].nav_stack[0].resting().cursor(),
         0,
-        "one-column Left/Right/h/l must not move the App cursor"
+        "unbound Left/Right/h/l must not move the App cursor"
     );
+    // Down keeps its typed stride of one in the one-column list.
     let Some(Msg::Shell(ShellRequest::BrowserCursorIndex { index })) =
         drive_browser_key(&mut model, &id, Key::Down, KeyModifiers::NONE)
     else {
-        panic!(
-            "focused one-column browser Down must still emit BrowserCursorIndex, got no typed request"
-        );
+        panic!("focused browser Down must still emit BrowserCursorIndex, got no typed request");
     };
     assert_eq!(index, 1);
     model.handle_browser_request(ShellRequest::BrowserCursorIndex { index });
     assert_eq!(
         model.app.libs[0].nav_stack[0].resting().cursor(),
         1,
-        "one-column Down must stride the App cursor one item"
+        "Down must stride the App cursor one item"
     );
 }
 

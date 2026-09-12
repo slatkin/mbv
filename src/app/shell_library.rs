@@ -45,14 +45,30 @@ impl Model {
         if queue_owns_focus {
             return;
         }
+        // Task 5.9 (design D2): the migrated library routes focus to the
+        // Library panel; an un-migrated library keeps its old destination
+        // child (the transitional branch).
         let target = self
-            .library_child_id()
+            .active_surface_id()
             .filter(|child| self.application.mounted(child))
             .unwrap_or(ComponentId::UiRoot);
         if self.application.mounted(&target) {
             self.application
                 .active(&target)
                 .expect("activate Library child");
+        }
+    }
+
+    /// The component the active library's surface routes through this frame:
+    /// the Library panel while the active library's owner has migrated
+    /// (design D2), otherwise the old destination child (the transitional
+    /// branch). One derivation shared by the focus pass and the mouse
+    /// eligibility ladder so the two can never disagree.
+    pub(super) fn active_surface_id(&self) -> Option<ComponentId> {
+        if self.active_library_owner_migrated() {
+            Some(ComponentId::Library)
+        } else {
+            self.library_child_id()
         }
     }
 
@@ -159,7 +175,7 @@ impl Model {
         let mut ids = Vec::new();
         let panel_mode = self.app.effective_panel_mode();
         if let Some(child) = self
-            .library_child_id()
+            .active_surface_id()
             .filter(|child| self.library_panel_visible() && self.application.mounted(child))
         {
             ids.push(child);
@@ -340,6 +356,12 @@ impl Model {
     /// (`sync_wide_hero_boundary`) and painting
     /// (`render_wide_hero_boundary`), or `None` when no split is painted.
     fn wide_hero_boundary_geometry(&self) -> Option<WideHeroBoundaryGeometry> {
+        // The Library panel owns the split gesture for migrated surfaces
+        // (task 5.9, design D2): the old boundary stays inert beside it, so
+        // the one painted gap never has two gesture owners.
+        if self.active_library_owner_migrated() {
+            return None;
+        }
         let content_area = self.wide_hero_boundary_content_area()?;
         let panes =
             crate::app::render::wide_library_panes(content_area, 0, 0, self.app.list_pane_width)?;

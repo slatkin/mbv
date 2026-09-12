@@ -184,6 +184,10 @@ mod tests_tick_integration_mouse;
 mod tests_tick_integration_wide_split_resize;
 
 #[cfg(test)]
+#[path = "tests_tick_integration_library_panel.rs"]
+mod tests_tick_integration_library_panel; // Library panel ownership tick coverage (task 5.9)
+
+#[cfg(test)]
 #[path = "tests_tick_integration_music_mouse.rs"]
 mod tests_tick_integration_music_mouse;
 

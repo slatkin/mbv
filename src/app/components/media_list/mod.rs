@@ -10,7 +10,6 @@ use ratatui::layout::{Position, Rect};
 
 mod anchor;
 mod carrier;
-mod grid;
 mod grouping;
 mod inline;
 #[cfg(test)]
@@ -19,7 +18,6 @@ mod wide;
 
 pub use anchor::ViewportAnchor;
 pub use carrier::{MediaListCarrier, Presentation};
-pub use grid::{GridMediaList, GridPaintPolicy};
 pub use grouping::letter_grouped_rows;
 pub use inline::{InlineLayout, InlineMediaBrowser};
 pub use wide::WideMediaList;
@@ -424,13 +422,6 @@ impl<Target> MediaList<Target> {
     /// Store the offset a painter resolved, so the next frame resumes from it.
     fn set_scroll(&mut self, offset: usize) {
         self.scroll = offset.min(self.rows.len().saturating_sub(1));
-    }
-
-    /// Store an offset without the row-count clamp. The Grid presentation
-    /// defers the display-line clamp to the painted viewport while its column
-    /// policy is still unknown.
-    pub(crate) fn set_scroll_unclamped(&mut self, offset: usize) {
-        self.scroll = offset;
     }
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.

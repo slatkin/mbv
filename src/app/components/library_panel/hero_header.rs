@@ -205,6 +205,19 @@ mod hero_header_tests {
     /// A stub `PanelList` so a Workspace can be present for the shrink rule.
     struct NoopList;
     impl PanelList for NoopList {
+        fn set_presentation(
+            &mut self,
+            _presentation: crate::app::components::media_list::Presentation,
+            _viewport_height: usize,
+        ) {
+        }
+
+        fn set_paint_policy(
+            &mut self,
+            _policy: crate::app::components::library_panel::content::PanelListPaintPolicy,
+        ) {
+        }
+
         fn view(&mut self, _f: &mut Frame, _rect: Rect) {}
     }
 

@@ -599,7 +599,7 @@ impl Component for MusicWorkspaceComponent {
                 .height as usize
         };
         self.carrier
-            .ensure_presentation(target, incoming_height.max(1));
+            .set_presentation(target, incoming_height.max(1));
 
         // The active control owns the painted selection. Use its index for
         // render-derived detail content before cloning the shell snapshot.
