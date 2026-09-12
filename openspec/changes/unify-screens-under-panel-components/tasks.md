@@ -376,7 +376,7 @@ conforms to Emby.
   slices have not already removed), answering context-menu keyboard anchors from the owning component
   through the existing request path. Verify: column-aware cursor and mouse-hit tests pass; `rg` finds no
   removed field.
-- [ ] 12.4 Delete `LayoutPlayback` and the remaining chrome `LayoutMain` fields (`panel_area`,
+- [x] 12.4 Delete `LayoutPlayback` and the remaining chrome `LayoutMain` fields (`panel_area`,
   `panel_content_area`, `home_area`, `card` — whatever the slices have not already removed) with `FrameChromeGeometry`'s paint-to-input use, so
   `RootFrame` is the only root geometry. Verify: `rg LayoutMain src` and `rg LayoutPlayback src` return
   nothing; context-menu keyboard-anchor tests pass for a library row and a queue row.
