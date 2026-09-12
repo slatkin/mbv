@@ -261,7 +261,7 @@ proves the slot types early.
   landscape art, no longer the poster) and episodes open only through `SelectionModal`. Verify:
   `detail_series_tests.rs` and the Narrow TV characterization rewritten to panel output; a Wide↔Narrow
   resize keeps the selected series and its viewport.
-- [ ] 8.4 Register TV as `LibraryKey::Service(TvShows)`: delete the remaining mounted component, its
+- [x] 8.4 Register TV as `LibraryKey::Service(TvShows)`: delete the remaining mounted component, its
   `ComponentId` arm and its hit stores, moving season-pill/episode hit resolution to the panel, and
   re-point `tv_workspace_component_tests.rs` and the TV rows of `tests_library_characterization.rs` at
   the owner. Verify: tick integration tests for focus, mouse eligibility and both lists; an inactive TV
