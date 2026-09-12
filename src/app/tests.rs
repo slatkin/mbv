@@ -1,4 +1,3 @@
-
 use super::types_settings::SettingsDestination;
 use super::*;
 
@@ -234,8 +233,7 @@ pub(crate) fn make_app_stub() -> App {
         card_image_loading: std::collections::HashSet::new(),
         last_card_height: 0,
         last_card_width: 0,
-        queue_card_projection:
-            crate::app::render::components::card::QueueCardProjection::default(),
+        queue_card_projection: crate::app::render::components::card::QueueCardProjection::default(),
         card_image_tx,
         card_image_rx,
         resize_register_tx,
@@ -350,6 +348,7 @@ pub(crate) fn make_app_stub() -> App {
         feed_seek_pending_slot: None,
         feed_tab: super::types_feed_tab::FeedTabState::default(),
         feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::default(),
+        card_image_fetch_calls: 0,
     }
 }
 

@@ -704,12 +704,24 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
     let loading = harness.model().app.card_image_loading.clone();
     let active = harness.model().app.image_fetches_active;
     let pending = harness.model().app.pending_image_fetches.len();
+    let calls = harness.model().app.card_image_fetch_calls;
+    assert_eq!(calls, 1, "the new hero key issues exactly one fetch call");
 
     // Repaint tick: nothing changed, so the projection starts no new fetch.
+    // `card_image_fetch_calls` only increments past the dedup guard, so it
+    // catches a broken guard even though the fixture has no Emby client
+    // (`spawn_image_fetch` balances `image_fetches_active` back to its prior
+    // value synchronously in that case, making the other counters blind to a
+    // redundant call).
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(harness.model().app.card_image_loading, loading);
     assert_eq!(harness.model().app.image_fetches_active, active);
     assert_eq!(harness.model().app.pending_image_fetches.len(), pending);
+    assert_eq!(
+        harness.model().app.card_image_fetch_calls,
+        calls,
+        "a repaint with the same hero key must not call queue_card_image_fetch again"
+    );
 
     // A new hero item reserves exactly one new key.
     if let Some(panel) = harness

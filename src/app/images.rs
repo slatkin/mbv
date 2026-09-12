@@ -325,6 +325,18 @@ impl App {
         {
             return;
         }
+        // Test-only instrumentation: counts every reservation that proceeds
+        // past the dedup guard above, so a broken guard is visible even when
+        // the fixture has no Emby client (`spawn_image_fetch` balances
+        // `image_fetches_active` back to its prior value synchronously in
+        // that case, hiding a redundant reservation from the other counters).
+        // `project_hero_image` calls `fetch_card_image` unconditionally on
+        // every sync pass, so counting entry into this function (rather than
+        // past this guard) would also increment on every legitimate repaint.
+        #[cfg(test)]
+        {
+            self.card_image_fetch_calls += 1;
+        }
         // Reserve the key immediately so duplicate (and queued) requests dedupe.
         self.card_image_loading.insert(cache_key.clone());
         let req = ImageFetchReq {

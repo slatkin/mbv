@@ -384,6 +384,13 @@ pub struct App {
     pub(super) feed_seek_pending_slot: Option<mbv_core::playback_queue::QueueSlotId>,
     #[cfg(test)]
     pub(super) _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
+    /// Test-only instrumentation: counts every reservation `queue_card_image_fetch`
+    /// makes past its dedup guard, so a broken guard is visible even when the
+    /// fixture has no Emby client (`spawn_image_fetch` balances
+    /// `image_fetches_active` back to its prior value synchronously in that
+    /// case, hiding a redundant reservation from the other counters).
+    #[cfg(test)]
+    pub(super) card_image_fetch_calls: u32,
 }
 
 impl App {
