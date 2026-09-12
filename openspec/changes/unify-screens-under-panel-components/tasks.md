@@ -330,7 +330,7 @@ conforms to Emby.
   keeps painting its legacy painter this step. Verify: unit tests of `content()` (one pill bar, Square
   artwork, the workspace carrying both the filter Selector and the episode list);
   `tests_audiobookshelf_podcasts.rs` and the podcast component tests pass unchanged.
-- [ ] 11.2 Paint Podcasts through the panel: delete `render_audiobookshelf_podcast_content`,
+- [x] 11.2 Paint Podcasts through the panel: delete `render_audiobookshelf_podcast_content`,
   `render_narrow_podcast`, `paint_bucket_pills` and the private geometry struct — the episode table,
   the Narrow inline filter pills and the Narrow inline episodes go with them — painting the shared
   skeleton instead. Verify: `tests_audiobookshelf_podcasts.rs` and
