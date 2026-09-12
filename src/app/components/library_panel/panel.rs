@@ -135,6 +135,12 @@ impl LibraryPanel {
         self.split.as_ref().map(|split| split.gap)
     }
 
+    /// The painted list slot's rect, for the breakpoint-transition test path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_list_rect(&self) -> Option<ratatui::layout::Rect> {
+        self.list_rect()
+    }
+
     // ── Event interpretation ─────────────────────────────────────────────
 
     /// The list slot's row-flow rect from the last painted frame, when one
@@ -285,8 +291,9 @@ impl LibraryPanel {
     }
 
     /// Forget the last painted frame's geometry: the panel resolves only
-    /// geometry it painted, so an unpainted frame (no migrated owner, hidden
-    /// library column) arms nothing.
+    /// geometry it painted. `view` calls this before painting, so an unpainted
+    /// frame (no migrated owner) and a breakpoint transition both leave only
+    /// the current frame's geometry behind.
     fn reset_frame(&mut self) {
         self.hits = SkeletonHits::default();
         self.wide_geometry = None;
@@ -304,8 +311,12 @@ impl Default for LibraryPanel {
 
 impl Component for LibraryPanel {
     fn view(&mut self, frame: &mut Frame, area: ratatui::layout::Rect) {
+        // Each frame's retained geometry is exactly what that frame painted
+        // (ADR 0024): the reset also drops the other breakpoint's geometry, so
+        // a Wide→Narrow resize leaves neither the vanished split's gap armed
+        // nor the stale Wide list rect claiming clicks.
+        self.reset_frame();
         let Some(owner) = self.owners.active_mut() else {
-            self.reset_frame();
             return;
         };
         let mut content = owner.content();

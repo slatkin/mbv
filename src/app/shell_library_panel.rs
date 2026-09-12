@@ -111,21 +111,25 @@ impl Model {
         }
     }
 
-    /// Mount/unmount the `LibraryPanel` to the library column's visibility
-    /// (design D1's mount rule for the Library panel), drive its owner map —
-    /// the active pointer and the catalog-retention rule — and push the
-    /// session split width. The panel paints only a migrated owner; with
-    /// zero migrated owners the old destination stays the surface, so this
-    /// never makes the panel claim a surface it does not paint.
+    /// Mount the `LibraryPanel` with the library column (design D1's mount
+    /// rule for the Library panel), drive its owner map — the active pointer
+    /// and the catalog-retention rule — and push the session split width. The
+    /// panel paints only a migrated owner; with zero migrated owners the old
+    /// destination stays the surface, so this never makes the panel claim a
+    /// surface it does not paint.
+    ///
+    /// D1 mount-rule exception (design D2): D1 would unmount the panel when
+    /// the library column hides, but the owners live inside it, and an
+    /// unmount would destroy every owner's cursor/scroll/focus/drafts — the
+    /// retention D2 grants while the library is in the catalog. Once mounted
+    /// the panel therefore stays mounted across Panel modes (mounted ≠
+    /// painted): `render_library_panel` views it only with a real placement
+    /// and a migrated active owner, and the mouse eligibility ladder
+    /// subscribes it only while the library column is visible, so a hidden
+    /// panel never paints or claims input.
     pub(super) fn sync_library_panel(&mut self) {
         let id = ComponentId::Library;
-        if !self.library_panel_visible() {
-            if self.application.mounted(&id) {
-                let _ = self.application.umount(&id);
-            }
-            return;
-        }
-        if !self.application.mounted(&id) {
+        if self.library_panel_visible() && !self.application.mounted(&id) {
             self.application
                 .mount(id.clone(), Box::new(LibraryPanel::new()), vec![])
                 .expect("mount LibraryPanel");
@@ -133,18 +137,20 @@ impl Model {
         let active = self.active_library_key();
         let live = self.live_library_keys();
         let list_pane_width = self.app.list_pane_width;
-        if let Some(panel) = self
+        let Some(panel) = self
             .application
             .get_component_mut(&id)
             .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-        {
-            // Owner retention while the library is in the catalog (design
-            // D2): the rule `reconcile_destination_mounts` applies to the old
-            // destination components, moved inside for the panel's owners.
-            panel.retain_owners(&live);
-            panel.set_active(active);
-            panel.set_list_pane_width(list_pane_width);
-        }
+        else {
+            return;
+        };
+        // Owner retention while the library is in the catalog (design
+        // D2): the rule `reconcile_destination_mounts` applies to the old
+        // destination components, moved inside for the panel's owners. Driven
+        // in every Panel mode so a hidden library's owners keep their state.
+        panel.retain_owners(&live);
+        panel.set_active(active);
+        panel.set_list_pane_width(list_pane_width);
     }
 
     /// The library content rect the old destinations paint — the same

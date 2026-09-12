@@ -26,6 +26,7 @@ use crate::app::components::media_list::{
 };
 use crate::app::components::msg::{Msg, TerminalObserverEvent};
 use crate::app::components::{BrowserKind, ComponentId};
+use crate::app::{PanelFocus, PanelMode};
 use crate::app::tests_tick_harness::TickHarness;
 
 // ── Fixture content owner ───────────────────────────────────────────────
@@ -148,6 +149,16 @@ fn migrated_home() -> (TickHarness, Rc<RefCell<FixtureLog>>) {
 
 fn draw_frame(harness: &mut TickHarness) -> Terminal<TestBackend> {
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    terminal
+}
+
+/// Draw at the model's own terminal width — the breakpoint-transition draw.
+fn draw_frame_sized(harness: &mut TickHarness) -> Terminal<TestBackend> {
+    let width = harness.model().app.terminal_width;
+    let mut terminal = Terminal::new(TestBackend::new(width, 30)).unwrap();
     terminal
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
@@ -352,6 +363,168 @@ fn inactive_owner_keeps_cursor_scroll_across_a_tab_change() {
         log.borrow().selections.last(),
         Some(&Some("gamma".into())),
         "the wheel step continues from the selection made before the tab change"
+    );
+}
+
+/// The mounted Library panel, for the geometry-reading tests.
+fn panel_of(
+    harness: &TickHarness,
+) -> Option<&crate::app::components::library_panel::LibraryPanel> {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+}
+
+/// A Wide→Narrow resize drops the stale Wide geometry (ADR 0024): the old
+/// gutter no longer arms the split drag, and a click inside the freshly
+/// painted narrow list — outside the stale Wide list rect — still reaches the
+/// active owner instead of being silently dropped.
+#[test]
+fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
+    let (mut harness, log) = migrated_home();
+    drop(draw_frame(&mut harness));
+
+    // The Wide frame's painted gap and list rect, read from the panel.
+    let gap = panel_of(&harness)
+        .and_then(|panel| panel.test_split_gap())
+        .expect("the Wide frame paints a split gap");
+    let wide_list = panel_of(&harness)
+        .and_then(|panel| panel.test_list_rect())
+        .expect("the Wide frame paints a list slot");
+
+    // Resize to Narrow (below TWO_COLUMN_THRESHOLD, above the mini view) and
+    // draw: the vanished split claims nothing and the list rect is the
+    // narrow one.
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    drop(draw_frame_sized(&mut harness));
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_split_gap())
+            .is_none(),
+        "the Narrow frame must not retain the Wide split's gap"
+    );
+    let narrow_list = panel_of(&harness)
+        .and_then(|panel| panel.test_list_rect())
+        .expect("the Narrow frame paints a list slot");
+    assert!(
+        narrow_list.right() > wide_list.right(),
+        "the narrow list spans past the stale Wide list's right edge"
+    );
+
+    // A press at the old gutter position no longer arms the split drag, so
+    // the drag resolves no live width.
+    harness.inject(tuirealm::event::Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: gap.x,
+        row: gap.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    harness.inject(tuirealm::event::Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Drag(MouseButton::Left),
+        column: gap.x + 8,
+        row: gap.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        !outcome.raw_messages.iter().any(|msg| matches!(
+            msg,
+            Msg::Shell(crate::app::components::msg::ShellRequest::ResizeListPaneLive(_))
+        )),
+        "the vanished gutter must not arm the split drag"
+    );
+
+    // A click inside the newly painted narrow list but outside the stale
+    // Wide list rect (over the old hero pane) reaches the owner.
+    let click_x = narrow_list.right() - 1;
+    assert!(
+        click_x > wide_list.right(),
+        "test setup: the click must sit outside the stale Wide list rect"
+    );
+    harness.inject(tuirealm::event::Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: click_x,
+        row: narrow_list.y + 1,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(
+        log.borrow().events.iter().any(|event| matches!(
+            event,
+            LibrarySlotEvent::List(RowLocalInput::Click(_))
+        )),
+        "the narrow list click outside the stale Wide rect reaches the owner"
+    );
+}
+
+/// Owner state survives a Panel-mode round trip (design D2's retention rule):
+/// queue-only hides the library column but must not destroy the owners, so
+/// the selection made before the switch still drives the wheel step after it,
+/// and the panel still takes focus and resolves clicks.
+#[test]
+fn owner_state_survives_a_queue_only_round_trip() {
+    let (mut harness, log) = migrated_home();
+
+    // Select "beta" on the migrated Home tab.
+    let terminal = draw_frame(&mut harness);
+    let buf = terminal.backend().buffer();
+    let (x, y) = find_text(buf, "beta").expect("the second row paints");
+    harness.inject(tuirealm::event::Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(log.borrow().selections.last(), Some(&Some("beta".into())));
+
+    // Queue-only hides the library column; the panel stays mounted with its
+    // owners (mounted ≠ painted) instead of dropping them.
+    harness.model_mut().app.panel_mode = PanelMode::QueueOnly;
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        harness.model().library_panel_has_owner(&home_key()),
+        "the hidden library column must not destroy the owner map"
+    );
+
+    // Back to library-only: the selection survived and the panel routes
+    // clicks again.
+    harness.model_mut().app.panel_mode = PanelMode::LibraryOnly;
+    harness.model_mut().app.panel_focus = PanelFocus::Library;
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Library),
+        "the panel takes focus again after the round trip"
+    );
+    assert!(harness
+        .model()
+        .mouse_subscribed
+        .contains(&ComponentId::Library));
+
+    let terminal = draw_frame(&mut harness);
+    let buf = terminal.backend().buffer();
+    let (x, y) = find_text(buf, "beta").expect("the retained owner's rows repaint");
+    harness.inject(tuirealm::event::Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(
+        log.borrow().selections.last(),
+        Some(&Some("gamma".into())),
+        "the wheel step continues from the selection made before the mode switch"
     );
 }
 
