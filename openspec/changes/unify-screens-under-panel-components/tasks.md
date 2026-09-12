@@ -189,7 +189,7 @@ choose a focus kind, pick a surface or lay out a pane.
   projected image state. Verify: push tests assert one fetch per new key and none on repaint; a tick
   test resizes the terminal and asserts one re-encode request at the new box size with the placeholder
   shown for at most one frame.
-- [ ] 5.11 Convert Home into `HomeContent` (embedded owner): section pills → Selector row, rows → list
+- [x] 5.11 Convert Home into `HomeContent` (embedded owner): section pills → Selector row, rows → list
   slot, selected item → the shared `hero_content` producer for its content type (Emby, ABS or Feeds),
   Narrow inline hero from the same content; delete `render_home_content`, `HomeCarrier`,
   `keep_watching_hero_image_types` and the `"{id}:pwr_kw"` key, Home's `pill_regions`/spacer paint and
