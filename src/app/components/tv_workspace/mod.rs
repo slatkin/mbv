@@ -102,6 +102,28 @@ pub struct TvWorkspaceComponent {
     pill_regions: HitRegions<usize>,
 }
 
+/// Derives the Emby-specific semantic state for a Narrow series row (mirrors
+/// `browser::emby_semantic_state`/`browser_content::emby_semantic_state`; the
+/// provider-neutral `media_list` layer deliberately stays free of `EmbyItem`,
+/// so each projection site carries its own copy).
+fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
+    if item.playback_position_ticks > 0 && !item.played {
+        let progress = if item.runtime_ticks > 0 {
+            Some(
+                ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64).min(100)
+                    as u16,
+            )
+        } else {
+            None
+        };
+        MediaSemanticState::active(progress)
+    } else if item.played {
+        MediaSemanticState::Played
+    } else {
+        MediaSemanticState::Ordinary
+    }
+}
+
 /// Build the embedded episode `WideMediaList`'s rows from a season's
 /// episodes (task 4.2d): the same title/duration formatting the hand-painted
 /// table previously rendered, now the canonical control's row content.
@@ -212,6 +234,7 @@ impl TvWorkspaceComponent {
         };
         let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
         sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
+        let is_wide = self.is_wide;
         let rows = sorted_items.iter().enumerate().flat_map(|(index, item)| {
             let heading = grouped
                 .then(|| {
@@ -238,12 +261,18 @@ impl TvWorkspaceComponent {
                     trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
                     duration: None,
                     kind: MediaKind::Collection,
-                    // TV series rows are never dimmed on watched/played state
-                    // (legacy rail parity): the canonical row colour follows
-                    // panel focus only. One row-building function feeds both
-                    // presentations (design.md D12), so this now also holds
-                    // for the Narrow series list.
-                    semantic_state: MediaSemanticState::Ordinary,
+                    // Deliberate, known divergence (not a bug to unify away):
+                    // Wide's series rail never dimmed on watched/played state
+                    // pre-merge (legacy rail parity), so it stays
+                    // `Ordinary` here. Narrow was painted by
+                    // `BrowserComponent::project_rows` pre-merge, which did
+                    // dim watched/in-progress rows via `emby_semantic_state`
+                    // (legacy detail-list parity); this reproduces that.
+                    semantic_state: if is_wide {
+                        MediaSemanticState::Ordinary
+                    } else {
+                        emby_semantic_state(item)
+                    },
                 }))
         });
         let rows = rows.collect::<Vec<_>>();
@@ -564,6 +593,20 @@ impl TvWorkspaceComponent {
             let target = item.id.clone();
             self.carrier.select_target(&target);
         }
+    }
+
+    /// Test-only: the shared owner's current rows' semantic states, in
+    /// display order.
+    #[cfg(test)]
+    pub(crate) fn test_row_semantic_states(&self) -> Vec<MediaSemanticState> {
+        self.carrier
+            .rows()
+            .iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item { semantic_state, .. } => Some(semantic_state.clone()),
+                _ => None,
+            })
+            .collect()
     }
 }
 

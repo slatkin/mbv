@@ -1,4 +1,5 @@
 use super::inline_search::{InlineSearchHost, SearchPool};
+use super::media_list::MediaSemanticState;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::tv_workspace::TvWorkspaceComponent;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
@@ -9,6 +10,46 @@ use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
+
+#[test]
+fn narrow_tv_dims_watched_and_in_progress_rows_but_wide_never_does() {
+    let mut watched = make_item("Watched Series", "Series");
+    watched.id = "series-watched".into();
+    watched.played = true;
+
+    let mut in_progress = make_item("In Progress Series", "Series");
+    in_progress.id = "series-in-progress".into();
+    in_progress.runtime_ticks = 1000;
+    in_progress.playback_position_ticks = 500;
+
+    let content = TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![watched.clone(), in_progress.clone()], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        false,
+    );
+
+    let mut narrow = TvWorkspaceComponent::new();
+    narrow.set_is_wide(false);
+    narrow.set_content(content.clone());
+    let narrow_states = narrow.test_row_semantic_states();
+    assert!(narrow_states
+        .iter()
+        .any(|state| matches!(state, MediaSemanticState::Played)));
+    assert!(narrow_states
+        .iter()
+        .any(|state| matches!(state, MediaSemanticState::Active { .. })));
+
+    let mut wide = TvWorkspaceComponent::new();
+    wide.set_is_wide(true);
+    wide.set_content(content);
+    let wide_states = wide.test_row_semantic_states();
+    assert!(wide_states
+        .iter()
+        .all(|state| matches!(state, MediaSemanticState::Ordinary)));
+}
 
 #[test]
 fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {

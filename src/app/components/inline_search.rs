@@ -437,25 +437,6 @@ impl Default for InlineSearch {
 pub(in crate::app) trait InlineSearchHost {
     fn inline_search(&self) -> &InlineSearch;
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
-    fn inline_search_transfer(&self) -> Option<(String, String, usize)> {
-        let search = self.inline_search();
-        search
-            .selected_target()
-            .map(|(id, item_type)| (id, item_type, search.scroll()))
-    }
-    fn apply_inline_search_transfer(
-        &mut self,
-        query: String,
-        target: Option<(String, String)>,
-        row_offset: usize,
-    ) {
-        let search = self.inline_search_mut();
-        // A transfer is the sole exception to the normal open/close lifecycle:
-        // it moves an already-open session to the other TV owner.
-        search.active = true;
-        search.restore_query(query);
-        search.restore_target(target, row_offset);
-    }
     fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.inline_search().selected_item()
     }
