@@ -133,8 +133,7 @@ pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sideba
 // and/or `use super::*` in render/tests.rs.
 pub use components::indicators;
 use components::widgets::{
-    render_right_scrollbar, render_selected_block_background, MUSIC_ALBUM_IMAGE_TYPES,
-    RENDER_FILTER,
+    render_right_scrollbar, render_selected_block_background, RENDER_FILTER,
 };
 pub(in crate::app) use components::widgets::{
     render_selected_block_borders, SelectedBlockBorderStyle,

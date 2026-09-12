@@ -103,6 +103,10 @@ impl Model {
         key: &LibraryKey,
         kind: BrowserKind,
     ) {
+        // Group-level loading belongs to the shell projection seam, not the
+        // render path: ensure the owner receives complete content before it
+        // is painted.
+        self.app.ensure_feed_home_video_group_level(index);
         let feed_group_view = self.app.is_feed_home_video_group_view(index);
         let home_video = self.app.is_home_video_view(index) && !feed_group_view;
         let show_letter_pills = self.app.should_show_letter_pills(index);

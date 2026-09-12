@@ -538,6 +538,14 @@ pub enum ShellRequest {
     BrowserCycleGroup {
         delta: i64,
     },
+    /// A library list wheel movement resolved by the embedded owner. The
+    /// stable library key and owner-resolved cursor/scroll cross the panel
+    /// boundary; the shell persists the resting scroll without re-reading it.
+    LibraryScroll {
+        key: crate::app::components::component_id::BrowserKey,
+        index: usize,
+        scroll: usize,
+    },
     /// Every local browser cursor key (arrows/hjkl, Page keys, Home/End) on
     /// the focused generic/Movies/home-video `BrowserComponent` (task 5.3d,
     /// Emby browser local navigation): the component resolves the target item

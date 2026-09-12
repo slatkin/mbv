@@ -334,6 +334,34 @@ impl Model {
                 request @ ShellRequest::BrowserCursorIndex { .. } => {
                     self.handle_browser_request(request);
                 }
+                ShellRequest::LibraryScroll { key, index, scroll } => {
+                    let active_key = self
+                        .active_migrated_browser_owner()
+                        .map(|(_, active, _)| active);
+                    if active_key.as_ref()
+                        == Some(&crate::app::components::library_panel::LibraryKey::Service(
+                            key,
+                        ))
+                    {
+                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                            self.app.persist_library_scroll(lib_idx, scroll);
+                            // The owner already applied the movement; retain
+                            // the resolved cursor for App-side effects only.
+                            if index
+                                < self.app.libs[lib_idx]
+                                    .nav_stack
+                                    .last()
+                                    .map_or(0, |level| level.items.len())
+                            {
+                                self.app.libs[lib_idx]
+                                    .nav_stack
+                                    .last_mut()
+                                    .expect("validated nav stack")
+                                    .set_resting_cursor(index);
+                            }
+                        }
+                    }
+                }
                 ShellRequest::BrowserPillClick { target } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         self.app.handle_mouse_selector_click_emby(lib_idx, target);

@@ -3,10 +3,9 @@
 use super::tests_routing_matrix_support::*;
 use crate::app::action::Command;
 use crate::app::components::msg::ConfirmIntent;
-use crate::app::components::{BrowserKey, BrowserKind, ComponentId, ModalId, Msg, ShellRequest};
+use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crossterm::event::KeyCode;
-use mbv_core::config::ServiceKind;
 
 #[test]
 fn focused_blocking_overlay_keeps_its_own_unbound_chord() {

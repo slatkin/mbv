@@ -439,6 +439,10 @@ impl InlineSearchHost for BrowserContent {
 }
 
 impl LibraryContentOwner for BrowserContent {
+    fn scroll_position(&self) -> Option<(usize, usize)> {
+        Some((self.cursor(), self.scroll()))
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         let hero = self.hero_item().map(|item| {
             let data = hero_content_emby(item);

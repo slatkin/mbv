@@ -121,46 +121,6 @@ fn grouped_album_rows_with_targets(
 }
 
 impl App {
-    /// Pre-warm nearby album art for narrow grouped Music after navigation has
-    /// gone idle. `order` is the already-resolved display order, so this does
-    /// not repeat the grouping or sorting work used to build the render context.
-    ///
-    /// Shell-side effect, not painting: like `fetch_nearby_movie_posters`
-    /// (`list_narrow.rs`), this is an `App` image-fetch helper that lives in the
-    /// render module because the album cache-key/art-type constants are render-
-    /// scoped. Called only from `shell_music_workspace.rs` after the mounted
-    /// component has established its authoritative cursor — never from
-    /// `MusicWorkspaceComponent::view`, which must stay free of `App` effects.
-    pub(in crate::app) fn prewarm_grouped_music_album_images(
-        &mut self,
-        albums: &[EmbyItem],
-        cursor: usize,
-        order: &[usize],
-    ) {
-        const PREFETCH_AHEAD: usize = 3;
-        const PREFETCH_BEHIND: usize = 1;
-
-        let Some(cursor_pos) = order.iter().position(|&idx| idx == cursor) else {
-            return;
-        };
-        let start = cursor_pos.saturating_sub(PREFETCH_BEHIND);
-        let end = (cursor_pos + PREFETCH_AHEAD + 1).min(order.len());
-        for (offset, &idx) in order[start..end].iter().enumerate() {
-            if start + offset == cursor_pos {
-                continue;
-            }
-            let Some(album) = albums.get(idx) else {
-                continue;
-            };
-            self.fetch_list_card_image_when_idle(
-                crate::app::render::components::album_art::inline_album_art_cache_key(&album.id),
-                album.id.clone(),
-                album.series_id.clone(),
-                crate::app::render::MUSIC_ALBUM_IMAGE_TYPES,
-            );
-        }
-    }
-
     pub(in crate::app) fn wide_music_render_ctx(
         &self,
         lib_idx: usize,

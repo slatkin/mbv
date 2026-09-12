@@ -1,13 +1,10 @@
 //! Routing matrix: focus precedence and policy rows.
 
 use super::tests_routing_matrix_support::*;
-use crate::app::components::{
-    BrowserKey, BrowserKind, ComponentId, Msg, QueueRequest, ShellRequest,
-};
+use crate::app::components::{ComponentId, Msg, QueueRequest, ShellRequest};
 use crate::app::input_resolver::KeyChord;
 use crate::app::types_playback::QueueScope;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::config::ServiceKind;
 
 #[test]
 fn queue_focus_routes_queue_chord_to_queue_owner() {

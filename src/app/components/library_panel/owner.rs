@@ -91,6 +91,12 @@ pub(in crate::app) trait LibraryContentOwner {
     /// 5.10, design D9).
     fn set_hero_image(&mut self, _state: HeroImageState) {}
 
+    /// The owner-resolved cursor and resting scroll after local movement.
+    /// `None` is used by owners whose position is not persisted by App.
+    fn scroll_position(&self) -> Option<(usize, usize)> {
+        None
+    }
+
     /// Downcast support for the shell's per-destination pushes (the shell
     /// projects destination-specific content into a typed owner it knows
     /// by name, addressed through the panel's `LibraryKey` map).

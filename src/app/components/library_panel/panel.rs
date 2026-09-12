@@ -323,9 +323,26 @@ impl LibraryPanel {
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
-        self.owners
+        let is_wheel = matches!(event, LibrarySlotEvent::List(RowLocalInput::Wheel { .. }));
+        let result = self
+            .owners
             .active_mut()
-            .and_then(|owner| owner.on_slot_event(event))
+            .and_then(|owner| owner.on_slot_event(event));
+        if is_wheel {
+            if let (Some(LibraryKey::Service(key)), Some((index, scroll))) = (
+                self.owners.active_key().cloned(),
+                self.owners
+                    .active_mut()
+                    .and_then(|owner| owner.scroll_position()),
+            ) {
+                return Some(Msg::Shell(ShellRequest::LibraryScroll {
+                    key,
+                    index,
+                    scroll,
+                }));
+            }
+        }
+        result
     }
 
     /// The split drag's resolved message: a live-only `ResizeListPaneLive`

@@ -536,8 +536,6 @@ impl App {
                 // LibraryPanel owner; the legacy frame only reserves the area.
             }
             TabSelection::EmbyLibrary(lib_idx) => {
-                self.ensure_music_group_album_level(lib_idx);
-                self.ensure_feed_home_video_group_level(lib_idx);
                 if self.is_feed_home_video_group_view(lib_idx) {
                     // BrowserComponent owns feed group presentation at every
                     // width; publish only the full browser area.

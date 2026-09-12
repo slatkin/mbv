@@ -39,7 +39,6 @@ pub enum ComponentId {
     /// The Library panel (`LibraryPanel`, task 5.9, design D2): the
     /// library area's one event boundary.
     Library,
-    Browser(BrowserKey),
     Overlay(OverlayId),
     Modal(ModalId),
     Popup(PopupId),

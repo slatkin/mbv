@@ -67,6 +67,11 @@ impl Model {
         let Some(key) = self.music_owner_key() else {
             return;
         };
+        // Keep grouped album content loading in the shell projection seam;
+        // rendering must remain effect-free.
+        if let TabSelection::EmbyLibrary(index) = self.app.tab {
+            self.app.ensure_music_group_album_level(index);
+        }
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
