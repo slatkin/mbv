@@ -6,7 +6,7 @@ use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 use std::time::{Duration, Instant};
 
-pub(in crate::app) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
+pub(super) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
 
 pub(super) fn mem_key(cache_key: &str, suffix: &str) -> String {
     format!("{cache_key}@{suffix}")

@@ -76,6 +76,9 @@ pub struct LibraryPanel {
     /// projected protocol into the reserved box (the same defer-the-pixel-
     /// paint seam every destination component uses).
     image_paint: Option<PanelHeroImagePaint>,
+    /// A wheel also needs to persist the owner's resolved scroll. Queue that
+    /// secondary shell intent while returning the owner's cursor echo.
+    deferred_msg: Option<Msg>,
 }
 
 impl LibraryPanel {
@@ -92,7 +95,12 @@ impl LibraryPanel {
             split_gestures: MouseGestureState::new(),
             gestures: MouseGestureState::new(),
             image_paint: None,
+            deferred_msg: None,
         }
+    }
+
+    pub(in crate::app) fn take_deferred_msg(&mut self) -> Option<Msg> {
+        self.deferred_msg.take()
     }
 
     // ── Shell-directed owner map (design D2) ─────────────────────────────
@@ -335,7 +343,7 @@ impl LibraryPanel {
                     .active_mut()
                     .and_then(|owner| owner.scroll_position()),
             ) {
-                return Some(Msg::Shell(ShellRequest::LibraryScroll {
+                self.deferred_msg = Some(Msg::Shell(ShellRequest::LibraryScroll {
                     key,
                     index,
                     scroll,

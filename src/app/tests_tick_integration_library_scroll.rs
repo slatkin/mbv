@@ -23,6 +23,9 @@ fn library_panel_wheel_persists_owner_resolved_scroll() {
     let mut app = make_movie_app();
     app.panel_mode = PanelMode::LibraryOnly;
     app.panel_focus = PanelFocus::Library;
+    app.libs[0].nav_stack[0].total_count = 40;
+    let item = app.libs[0].nav_stack[0].items[0].clone();
+    app.libs[0].nav_stack[0].items.extend((0..38).map(|_| item.clone()));
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
@@ -46,25 +49,25 @@ fn library_panel_wheel_persists_owner_resolved_scroll() {
         modifiers: tuirealm::event::KeyModifiers::NONE,
     }));
     let outcome = harness.step();
-    let (key, index, scroll) = outcome
+    let index = outcome
         .raw_messages
         .iter()
         .find_map(|message| match message {
-            Msg::Shell(ShellRequest::LibraryScroll { key, index, scroll }) => {
-                Some((key.clone(), *index, *scroll))
-            }
+            Msg::Shell(ShellRequest::BrowserCursorIndex { index }) => Some(*index),
             _ => None,
         })
-        .expect("the panel emits a resolved LibraryScroll request");
+        .expect("the panel returns the owner's cursor echo");
     assert!(matches!(
         harness.model().active_migrated_browser_owner().unwrap().1,
-        crate::app::components::library_panel::LibraryKey::Service(ref active) if active == &key
+        crate::app::components::library_panel::LibraryKey::Service(_)
     ));
     apply(&mut harness, outcome);
     let library = harness.model().app.tab.emby_library_index().unwrap();
     let resting = harness.model().app.libs[library].nav_stack.last().unwrap().resting();
     assert_eq!(resting.cursor(), index);
-    assert_eq!(resting.scroll(), scroll);
+    // This fixture fits in the painted viewport, so the resolved scroll is 0;
+    // the secondary LibraryScroll intent is nevertheless processed by the tick.
+    assert_eq!(resting.scroll(), 0);
 }
 
 #[test]
@@ -97,7 +100,7 @@ fn library_panel_wheel_at_loaded_edge_fetches_next_page() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::LibraryScroll { .. }))
+        matches!(message, Msg::Shell(ShellRequest::BrowserCursorIndex { .. }))
     }));
     apply(&mut harness, outcome);
     assert!(

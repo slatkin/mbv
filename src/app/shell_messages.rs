@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::library_panel::LibraryPanel;
 use std::time::Instant;
 
 impl Model {
@@ -344,11 +345,6 @@ impl Model {
                         ))
                     {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                            let now = Instant::now();
-                            let idle = now.duration_since(self.app.last_nav_at)
-                                >= crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
-                            self.app.last_nav_at = now;
-                            self.app.mark_library_navigation(now);
                             self.app.persist_library_scroll(lib_idx, scroll);
                             // The owner already applied the movement; retain
                             // the resolved cursor for App-side effects only.
@@ -363,14 +359,6 @@ impl Model {
                                     .last_mut()
                                     .expect("validated nav stack")
                                     .set_resting_cursor(index);
-                                self.app.save_default_library_position(lib_idx);
-                            }
-                            // Keep wheel navigation on the same pagination path
-                            // as keyboard cursor movement. The list owner has
-                            // already resolved and applied the index; this only
-                            // retains the shell-side effects.
-                            if idle {
-                                self.app.maybe_fetch_next_page(lib_idx, index);
                             }
                         }
                     }
@@ -571,6 +559,16 @@ impl Model {
                 if self.handle_service_request(request) {
                     quit = true;
                 }
+            }
+        }
+        if let Some(deferred) = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(LibraryPanel::take_deferred_msg)
+        {
+            if self.handle_terminal_message(deferred, music_resize, tv_resize) {
+                quit = true;
             }
         }
         quit
