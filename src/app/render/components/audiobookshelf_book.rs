@@ -9,11 +9,11 @@ use crate::app::render::arrangements::wide_hero::{
     self, wide_hero_browser_border, wide_hero_browser_pane, PANE_PAD_X, PANE_PAD_Y,
 };
 use crate::app::render::components::audiobookshelf_books::BookHeroPlan;
-use crate::app::render::components::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
 use crate::app::render::components::hero::{
     paint_hero_content, selected_detail_shell, wrap_overview_lines, HeroContent, HeroImage,
     HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
 };
+use crate::app::render::components::hero::{INLINE_COVER_COLS, INLINE_COVER_ROWS};
 use crate::app::render::components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 use crate::app::render::{render_pill_bar, render_placeholder, PillBar};
 use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
@@ -506,8 +506,8 @@ fn book_hero_plan(
         };
     };
     let has_cover = images_enabled && book.cover_path.is_some();
-    let image_width = if has_cover { SERIES_IMAGE_COLS } else { 0 }.min(width);
-    let image_height = if has_cover { SERIES_IMAGE_ROWS } else { 0 };
+    let image_width = if has_cover { INLINE_COVER_COLS } else { 0 }.min(width);
+    let image_height = if has_cover { INLINE_COVER_ROWS } else { 0 };
     let author_rows = u16::from(
         book.author_display
             .as_deref()

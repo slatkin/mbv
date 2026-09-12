@@ -1,10 +1,8 @@
 //! TV content projection and paint-free breakpoint helpers (task 8.2,
 //! unify-screens-under-panel-components).
 //!
-//! Task 8.2 deleted the Wide TV painter (`render_wide_tv_with_ctx`): the
-//! mounted `TvWorkspaceComponent` paints Wide through the Library panel's
-//! shared `render_wide_skeleton`, and keeps the narrow
-//! `render_narrow_browse_with_ctx` composer until task 8.3. What remains
+//! Task 8.2 deleted the Wide TV painter (`render_wide_tv_with_ctx`), and task
+//! 8.3 moves Narrow through the same Library panel skeleton. What remains
 //! here is the shell-projected content context the component consumes and
 //! the paint-free breakpoint/area helpers the shell's mount/focus gates
 //! read.

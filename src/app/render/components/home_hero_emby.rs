@@ -1,5 +1,4 @@
 use super::home_hero::HomeImagePaint;
-use crate::app::images::series_image_cache_key;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -80,30 +79,6 @@ impl App {
         );
     }
 
-    /// Paints cached Series artwork using its portrait inline-detail budget.
-    fn paint_series_image(&mut self, f: &mut Frame, area: Rect, cache_key: &str) {
-        if let Some(image) = self.cached_image_protocol_mut(cache_key) {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-            let avail = Size {
-                width: area.width,
-                height: area.height,
-            };
-            if let Some(actual) =
-                image.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
-            {
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                    Rect {
-                        width: actual.width,
-                        height: actual.height,
-                        ..area
-                    },
-                    image,
-                );
-            }
-        }
-    }
-
     fn paint_audiobookshelf_cover(
         &mut self,
         f: &mut Frame,
@@ -127,38 +102,6 @@ impl App {
         image_paint: Option<HomeImagePaint>,
     ) {
         match image_paint {
-            Some(HomeImagePaint::Series {
-                area,
-                item,
-                show_placeholder,
-                image_types,
-            }) => {
-                let cache_key = series_image_cache_key(&item.id, image_types);
-                if self.images_enabled() {
-                    self.fetch_card_image(
-                        cache_key.clone(),
-                        item.id.clone(),
-                        String::new(),
-                        image_types,
-                    );
-                }
-                if show_placeholder {
-                    // Series artwork uses the portrait inline-detail budget,
-                    // not the generic 16:9 hero budget.
-                    f.render_widget(
-                        Block::default().style(
-                            Style::default().bg(palette::surface_colors(
-                                palette::Surface::ArtworkLoadingPlaceholder,
-                                false,
-                            )
-                            .fill),
-                        ),
-                        area,
-                    );
-                } else {
-                    self.paint_series_image(f, area, &cache_key);
-                }
-            }
             Some(HomeImagePaint::AudiobookshelfCover {
                 area,
                 library_item_id,

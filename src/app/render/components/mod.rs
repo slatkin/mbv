@@ -20,7 +20,9 @@ pub(super) mod confirm_modal;
 pub(super) mod context_menu;
 pub(super) mod daemon_lost_modal;
 pub(super) mod detail;
-pub(super) mod detail_series_view;
+#[cfg(test)]
+#[path = "detail_series_tests.rs"]
+mod detail_series_tests;
 pub(super) mod feeds_manage;
 pub(super) mod help;
 pub(super) mod hero;
@@ -63,14 +65,6 @@ mod home_video_tests;
 #[cfg(test)]
 #[path = "hero_tests.rs"]
 mod hero_tests;
-
-#[cfg(test)]
-#[path = "detail_series_tests.rs"]
-mod detail_series_tests;
-
-#[cfg(test)]
-#[path = "list_narrow_tests.rs"]
-mod list_narrow_tests;
 
 #[cfg(test)]
 #[path = "tv_wide_tests.rs"]

@@ -35,9 +35,9 @@ pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix
 pub(in crate::app) const SERIES_IMAGE_CACHE_KEY_INFIX: &str = ":ser:";
 
 /// Cache key for Series artwork under the `{id}:ser:{types}` scheme.
-/// Shared by the `paint_home_image` Series arm and the shell-side
-/// prefetch/loading lookups so the two can never format the key
-/// differently and silently miss each other's cache entries. Formats only;
+/// Shared by the panel's Emby artwork projection and shell-side
+/// prefetch/loading lookups so they cannot format the key differently and
+/// silently miss each other's cache entries. Formats only;
 /// chain ownership stays with the callers.
 pub(in crate::app) fn series_image_cache_key(item_id: &str, image_types: &[&str]) -> String {
     format!(

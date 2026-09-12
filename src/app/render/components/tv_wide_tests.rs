@@ -86,6 +86,22 @@ fn wide_tv_uses_shared_panel_skeleton_geometry_and_output() {
 }
 
 #[test]
+fn narrow_tv_uses_the_shared_panel_inline_skeleton() {
+    let app = tv_app();
+    let mut component = TvWorkspaceComponent::new();
+    component.set_is_wide(false);
+    component.set_focused(true);
+    component.set_content(app.wide_tv_render_ctx(0, None));
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let output = buffer_to_string(&terminal);
+    assert!(output.contains("The Series"));
+    assert!(!output.contains("Series:"));
+}
+
+#[test]
 fn wide_tv_season_pills_resolve_to_typed_hits() {
     let mut app = tv_app();
     let mut second = make_item("Season 2", "Season");

@@ -1,8 +1,5 @@
 use super::*;
-use crate::app::components::{
-    browser_narrow::NarrowInlineHero, Msg, ShellRequest, TerminalObserverEvent,
-    TvWorkspaceComponent,
-};
+use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent, TvWorkspaceComponent};
 use crate::app::render::make_movie_app;
 use crate::app::types_browse::BrowseResting;
 use ratatui::backend::TestBackend;

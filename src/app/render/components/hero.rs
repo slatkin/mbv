@@ -17,6 +17,11 @@
 use crate::app::palette;
 use crate::app::ui_util::trunc_str;
 use ratatui::layout::Rect;
+
+/// Shared legacy cover dimensions used by the still-unmigrated ABS and Music
+/// painters. TV uses the panel's aspect-driven inline hero instead.
+pub(in crate::app::render) const INLINE_COVER_COLS: u16 = 18;
+pub(in crate::app::render) const INLINE_COVER_ROWS: u16 = 12;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -215,10 +220,9 @@ pub(in crate::app) fn selected_detail_shell(
 
 /// Paints the selected item's name on the hero's top row (two-column lists
 /// only, when `show_title` is set at the call site): yellow, bold when
-/// focused. Shared by the movie hero (`detail.rs`'s `render_compact_detail`,
-/// via [`paint_hero_content`]) and the Series inline hero
-/// (`detail_series_view.rs`'s `render_series_inline_detail`), which
-/// otherwise duplicated this block with only the geometry differing.
+/// focused. Shared by the legacy movie hero (`detail.rs`'s
+/// `render_compact_detail`, via [`paint_hero_content`]) and the panel's
+/// inline hero.
 /// Returns `row + 1` if the title was painted, else `row` unchanged, so
 /// callers push subsequent content down by the result.
 pub(in crate::app::render) fn render_hero_title_row(

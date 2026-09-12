@@ -156,18 +156,18 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
-        // The Wide hero image projection (design D9/D16): the one EmbyItem
-        // producer's facts drive the shell fetch and the cover-fit encode at
-        // the box the panel skeleton will paint; painting reads the projected
-        // state only. Narrow keeps its own Primary-chain paint-time return.
-        let hero_image = match (is_wide, lib_area, selected_series.as_ref()) {
-            (true, Some(area), Some(item)) => {
+        // Both breakpoints project the same producer's artwork state before
+        // view. Wide uses the cover-fit header box; Narrow uses the decoded
+        // source aspect for the shared inline hero (D9/D7).
+        let hero_image = selected_series
+            .as_ref()
+            .map(|item| {
                 let data = hero_content_emby(item);
+                let area = lib_area.unwrap_or(self.app.layout.main.left_area);
                 self.app
                     .project_hero_image(&data.facts, true, area, self.app.list_pane_width)
-            }
-            _ => HeroImageState::None,
-        };
+            })
+            .unwrap_or(HeroImageState::None);
         let context = TvWideRenderCtx::new(
             list,
             selected_series,
@@ -223,46 +223,16 @@ impl Model {
                 comp.set_list_pane_width(self.app.list_pane_width);
             }
         }
-        if !is_wide {
-            let browse_cursor = self
-                .application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
-                .map_or(0, TvWorkspaceComponent::browse_cursor);
-            let extras = self
-                .app
-                .tab
-                .emby_library_index()
-                .map(|lib_idx| self.app.narrow_browse_extras(lib_idx, browse_cursor));
-            if let Some((comp, extras)) = self
-                .application
-                .get_component_mut(id)
-                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-                .zip(extras)
-            {
-                comp.set_narrow_extras(extras);
-            }
-        }
         self.application.view(id, frame, area);
-        if is_wide {
-            // The Wide hero image is the shared panel skeleton's retained
-            // paint (task 8.2): the projected protocol paints into its
-            // reserved box, never a paint-time fetch (design D9).
-            let image_paint = self
-                .application
-                .get_component_mut(id)
-                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-                .and_then(TvWorkspaceComponent::take_panel_image_paint);
-            if let Some(paint) = image_paint {
-                self.app.paint_panel_hero_image(frame, &paint);
-            }
-        } else {
-            let image_paint = self
-                .application
-                .get_component_mut(id)
-                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-                .and_then(TvWorkspaceComponent::take_image_paint);
-            self.app.paint_home_image(frame, image_paint);
+        // The shared skeleton retains the projected image paint for Wide and
+        // Narrow alike; the shell is the only pixel-paint authority.
+        let image_paint = self
+            .application
+            .get_component_mut(id)
+            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::take_panel_image_paint);
+        if let Some(paint) = image_paint {
+            self.app.paint_panel_hero_image(frame, &paint);
         }
     }
 }

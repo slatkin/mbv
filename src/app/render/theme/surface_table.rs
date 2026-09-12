@@ -259,7 +259,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: SURFACE_BACKDROP,
         },
         // Main paints the artwork-loading inset's fill (the `OVERLAY` value):
-        // `card.rs:111`, `album_art.rs:183`, `detail_series_view.rs:125`,
+        // `card.rs:111`, `album_art.rs:183`, the panel inline-hero painter,
         // `home_hero_emby.rs:121,272,286`. The row resolves through the
         // purpose-named `ARTWORK_LOADING_PLACEHOLDER` primitive (task 4.2),
         // never the border role's `OVERLAY`, so a border edit cannot move the

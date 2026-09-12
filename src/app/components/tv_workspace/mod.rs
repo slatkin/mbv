@@ -3,13 +3,10 @@
 //!
 //! One mounted component now owns TV at every breakpoint: the series list
 //! (Wide and Inline presentations over one shared `MediaListCarrier`), the
-//! episode list, the season cursor, and the Inline Search session. Wide
-//! paints the pane-based workspace (series rail + episode/season box);
-//! Narrow paints the flat series list through the same
-//! `render_narrow_browse_with_ctx` composer `BrowserComponent` used before
-//! the merge. The shell pushes `is_wide` alongside content each frame
-//! (`App::wide_tv_library_area`), so a breakpoint flip is an ordinary
-//! `set_presentation` on the shared owner, not a component hand-off.
+//! episode list, the season cursor, and the Inline Search session. Wide and
+//! Narrow both paint through the Library panel skeleton; a breakpoint flip is
+//! an ordinary `set_presentation` on the shared owner, not a component
+//! hand-off.
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -21,11 +18,11 @@ use tuirealm::state::State;
 
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
-use super::browser_narrow::NarrowBrowseExtras;
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
 use super::library_panel::{
-    hero_content_emby, render_wide_skeleton, HeroContent, LibraryPanelContent, ListSlot,
-    PanelHeroImagePaint, SelectorRow, SkeletonHits, WideSkeletonGeometry, Workspace,
+    hero_content_emby, render_narrow_skeleton, render_wide_skeleton, HeroContent,
+    LibraryPanelContent, ListSlot, PanelHeroImagePaint, SelectorRow, SkeletonHits,
+    WideSkeletonGeometry, Workspace,
 };
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
@@ -37,10 +34,7 @@ use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
-use crate::app::render::{
-    effective_sort_str, letter_bucket, render_narrow_browse_with_ctx, HomeImagePaint,
-    TvWideRenderCtx,
-};
+use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{list_duration_secs, natural_sort_key};
 #[cfg(test)]
 use tuirealm::event::Key;
@@ -81,7 +75,6 @@ pub struct TvWorkspaceComponent {
     /// mounted component's own hit resolution and viewport arithmetic read
     /// the rects the shared skeleton painted.
     wide_geometry: Option<WideSkeletonGeometry>,
-    image_paint: Option<HomeImagePaint>,
     /// The Wide hero image paint the shared skeleton retained (task 8.2): the
     /// shell paints the projected protocol into the reserved box after
     /// `view` returns (the same defer-the-pixel-paint seam the Library panel
@@ -107,10 +100,6 @@ pub struct TvWorkspaceComponent {
     /// component built and viewed without an explicit push (existing unit
     /// tests) keeps painting the Wide workspace.
     is_wide: bool,
-    /// Shell-resolved Narrow extras (letter-pill row, inline series hero),
-    /// pushed each frame by `render_tv_workspace_component` while Narrow
-    /// (mirrors `BrowserComponent::narrow_extras` before the merge).
-    narrow_extras: NarrowBrowseExtras,
     /// Narrow-only letter-pill hit regions — last-push-wins rectangles
     /// (design.md D6), repopulated in `view()` from the pill rects the
     /// Narrow composer just painted into `self.layout.selector_tabs`.
@@ -184,14 +173,12 @@ impl TvWorkspaceComponent {
             last_series_id: None,
             layout: Default::default(),
             wide_geometry: None,
-            image_paint: None,
             panel_image_paint: None,
             viewport_height: 1,
             mouse_gestures: MouseGestureState::new(),
             tv_chrome: HitRegions::new(),
             inline_search: InlineSearch::new(),
             is_wide: true,
-            narrow_extras: NarrowBrowseExtras::default(),
             pill_regions: HitRegions::new(),
         }
     }
@@ -202,13 +189,6 @@ impl TvWorkspaceComponent {
     /// `set_content` projection.
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
         self.context.list.list_pane_width = list_pane_width;
-    }
-
-    /// Records the shell-resolved Narrow extras for the next `view()`
-    /// (mirrors `BrowserComponent::set_narrow_extras`). Pushed each frame by
-    /// `render_tv_workspace_component` while Narrow.
-    pub(in crate::app) fn set_narrow_extras(&mut self, extras: NarrowBrowseExtras) {
-        self.narrow_extras = extras;
     }
 
     /// Records this frame's breakpoint (design.md D12): `true` selects the
@@ -517,10 +497,6 @@ impl TvWorkspaceComponent {
         self.carrier.scroll()
     }
 
-    pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
-        self.image_paint.take()
-    }
-
     /// Take the Wide hero image paint the shared skeleton retained (task
     /// 8.2): the shell paints the projected protocol into its reserved box
     /// right after `view` returns (design D9).
@@ -750,7 +726,6 @@ impl Component for TvWorkspaceComponent {
         self.ensure_carrier();
         self.layout = Default::default();
         self.wide_geometry = None;
-        self.image_paint = None;
         self.panel_image_paint = None;
         if self.is_wide {
             // The Library panel's shared Wide skeleton (task 8.2): the
@@ -781,24 +756,32 @@ impl Component for TvWorkspaceComponent {
                 }
                 return;
             }
+            // A Wide surface is owned exclusively by the Wide skeleton. If
+            // it declines (for example during a transient geometry change),
+            // clear its chrome and stop; never paint the Narrow skeleton over
+            // a Wide surface (8.2 P2).
+            self.tv_chrome.clear();
+            return;
         }
-        let (_scroll, image_paint) = render_narrow_browse_with_ctx(
-            frame,
-            area,
-            &self.context.list,
-            &self.narrow_extras,
-            self.context.focused,
-            &mut self.layout,
-            self.carrier.inline_mut(),
-        );
-        self.image_paint = image_paint;
 
-        // Adopt the letter-pill rects the Narrow composer just painted
-        // into the irregular-chrome registry (design.md D6).
+        // Narrow uses the same panel content producer and the panel's shared
+        // Inline skeleton as Wide. Episodes remain in the Workspace content
+        // and are therefore reachable only through SelectionModal.
+        let browser_focused = self.context.focused;
+        let mut content = self.panel_content();
+        let mut hits = SkeletonHits::default();
+        let geometry =
+            render_narrow_skeleton(frame, area, &mut content, browser_focused, &mut hits);
+        self.layout.left_area = geometry.list_area;
+        self.layout.inline_hero_area = geometry.inline_hero.unwrap_or_default();
+        self.layout.hero_area = geometry.inline_hero.unwrap_or_default();
+        self.layout.selected_item_rect = geometry.selected;
+        self.layout.selector_tabs = hits.selector.regions().to_vec();
         self.pill_regions.clear();
-        for (rect, target) in &self.layout.selector_tabs {
+        for (rect, target) in hits.selector.regions() {
             self.pill_regions.push(*rect, *target);
         }
+        self.tv_chrome.clear();
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {

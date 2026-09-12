@@ -12,15 +12,6 @@ use ratatui::layout::Rect;
 /// inline hero and Wide header now derive from the panel's generic
 /// `HeroContent`/artwork-policy image projection instead.
 pub(in crate::app) enum HomeImagePaint {
-    Series {
-        area: Rect,
-        item: Box<mbv_core::api::EmbyItem>,
-        show_placeholder: bool,
-        /// Ordered Emby image-type candidate chain to fetch, so wide TV's
-        /// landscape hero can request the `Thumb`-first chain while other
-        /// callers keep the narrow inline detail's `&["Primary"]`.
-        image_types: &'static [&'static str],
-    },
     AudiobookshelfCover {
         area: Rect,
         library_item_id: String,

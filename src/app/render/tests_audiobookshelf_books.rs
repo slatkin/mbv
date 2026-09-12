@@ -1,4 +1,5 @@
 use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
+use crate::app::render::components::hero::{INLINE_COVER_COLS, INLINE_COVER_ROWS};
 use crate::app::render::components::media_list::{
     INLINE_MEDIA_BROWSER_PAINTS, PLAIN_ROWS_PAINTS, WIDE_MEDIA_LIST_PAINTS,
 };
@@ -191,14 +192,8 @@ fn book_loading_cover_reserves_shared_series_image_slot() {
         panic!("book cover paint request expected");
     };
     assert!(show_placeholder);
-    assert_eq!(
-        area.width,
-        crate::app::render::components::detail_series_view::SERIES_IMAGE_COLS
-    );
-    assert_eq!(
-        area.height,
-        crate::app::render::components::detail_series_view::SERIES_IMAGE_ROWS
-    );
+    assert_eq!(area.width, INLINE_COVER_COLS);
+    assert_eq!(area.height, INLINE_COVER_ROWS);
 }
 
 #[test]

@@ -1,28 +1,9 @@
 //! Narrow TV series-list inputs for the canonical inline media-browser
 //! composition.
 //!
-//! `BrowserComponent` owns the narrow TV surface's paint. The shell resolves
-//! everything that needs `App`/image-cache authority into this plain
-//! [`NarrowBrowseExtras`] bundle (letter-pill row, inline series hero sizing)
-//! and pushes it to the component each frame; the component's `view` then
-//! hands it, plus the mirrored [`LibraryListRenderCtx`], to the pure
-//! composition helper [`crate::app::render::render_narrow_browse_with_ctx`]
-//! and forwards the returned [`HomeImagePaint`] to the shell (mirrors
-//! `HomeComponent`).
-
-/// The selected item's inline hero, already resolved by the shell. Only
-/// `Series` survives task 6.1 (Movies/HomeVideos/Generic moved to the
-/// embedded `BrowserContent` owner, which derives its Narrow inline hero
-/// generically from `HeroContent`, design D7); this component now mounts
-/// only for narrow TV.
-pub(in crate::app) enum NarrowInlineHero {
-    /// A selected Series on a `tvshows` library.
-    Series {
-        item: mbv_core::api::EmbyItem,
-        images_enabled: bool,
-        image_loading: bool,
-    },
-}
+//! `BrowserComponent` retains this transitional input bundle for the
+//! unregistered destinations. TV no longer uses it: its Narrow surface is
+//! painted by the Library panel skeleton from the same `HeroContent` as Wide.
 
 /// Shell-resolved extras the narrow composer needs beyond the mirrored
 /// [`LibraryListRenderCtx`]. Built by `App::narrow_browse_extras`.
@@ -39,5 +20,4 @@ pub(in crate::app) struct NarrowBrowseExtras {
     /// Narrow TV season grid (`is_viewing_season_grid`): force a single-column
     /// stride instead of the width-derived column count (legacy `list.rs`).
     pub(in crate::app) season_grid: bool,
-    pub(in crate::app) inline_hero: Option<NarrowInlineHero>,
 }

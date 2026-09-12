@@ -1,23 +1,18 @@
-//! Canonical narrow TV composition (series list). Generic/Movies/HomeVideos
-//! paint through the embedded `BrowserContent` owner instead (task 6.1, design
-//! D2). `BrowserComponent` owns inputs; this module paints and publishes
-//! replacement-flow geometry for its caller.
+//! Transitional narrow-browser composition retained for the still-unregistered
+//! browser component. TV uses the Library panel's shared Narrow skeleton;
+//! migrated BrowserContent owners paint through that panel as well.
 
 use super::detail::compact_banner_image_cache_key;
-use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
+use crate::app::components::browser_narrow::NarrowBrowseExtras;
 use crate::app::components::media_list::{
     InlineMediaBrowser, InlineMediaBrowserPaintPolicy, SelectedRowSurface,
 };
-use crate::app::images::series_image_cache_key;
 use crate::app::layout::LayoutMain;
-use crate::app::library_column_width::library_column_count;
-use crate::app::render::arrangements::{library, wide_hero};
+use crate::app::render::arrangements::wide_hero;
 use crate::app::render::components::hero::{
     selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
 };
-use crate::app::render::components::list_rows::{
-    LibraryListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
-};
+use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::HomeImagePaint;
 use crate::app::App;
 use ratatui::layout::Rect;
@@ -43,36 +38,14 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     let content_area = area;
 
     // Narrow TV season grids keep their own single-column stride
-    // (`is_viewing_season_grid`, legacy `list.rs`); every other narrow browse
-    // surface derives the column count from the list width.
-    let hero_presentation = extras.inline_hero.is_some() || extras.hero_placeholder;
-    let cols = if extras.season_grid || hero_presentation {
-        1
-    } else {
-        library_column_count(content_area.width)
-    };
+    // (`is_viewing_season_grid`, legacy `list.rs`); every other transitional
+    // narrow browse surface derives the column count from the list width.
+    let hero_presentation = extras.hero_placeholder;
 
-    let mut inline_hero_rows: u16 = match &extras.inline_hero {
-        Some(NarrowInlineHero::Series {
-            item,
-            images_enabled,
-            ..
-        }) => {
-            crate::app::render::screens::detail_series::series_inline_detail_rows(
-                *images_enabled,
-                item,
-                content_area.width,
-                cols > 1,
-            ) as u16
-                + HERO_BLOCK_EXTRA_ROWS
-        }
-        None => {
-            if extras.hero_placeholder {
-                HERO_PLACEHOLDER_ROWS
-            } else {
-                0
-            }
-        }
+    let mut inline_hero_rows: u16 = if extras.hero_placeholder {
+        HERO_PLACEHOLDER_ROWS
+    } else {
+        0
     };
     if !extras.use_shared_replacement_plan {
         inline_hero_rows =
@@ -147,35 +120,13 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     layout.selected_item_rect = browser.current_selected_row_rect();
     let final_offset = browser.current_flow_offset().unwrap_or(0);
 
-    let mut image_paint = None;
     if layout.hero_area.height > 0 {
         selected_detail_shell(f, layout.hero_area, inline_hero_rows, focused);
-        let content_rect = library::selected_detail_content_area(
-            layout.hero_area,
-            SELECTED_BLOCK_SIDE_PADDING,
-            HERO_BLOCK_EXTRA_ROWS,
-        );
-        image_paint = match &extras.inline_hero {
-            Some(NarrowInlineHero::Series {
-                item,
-                images_enabled,
-                image_loading,
-            }) => super::detail_series_view::render_series_inline_detail(
-                super::detail_series_view::SeriesInlineDetailCtx {
-                    item,
-                    images_enabled: *images_enabled,
-                    image_loading: *image_loading,
-                },
-                f,
-                content_rect,
-                focused,
-                true,
-            ),
-            None => None,
-        };
     }
 
-    (final_offset, image_paint)
+    // The transitional Browser path has no destination-owned hero painter;
+    // migrated destinations use the Library panel's shared skeleton.
+    (final_offset, None)
 }
 
 /// Letter-range pill row above the narrow TV series list; the selected index
@@ -247,64 +198,36 @@ impl App {
         }
     }
 
-    /// Shell-resolved extras for the narrow TV series-list composer
-    /// (`migrate-narrow-browse-to-components` task 3.3; Generic/Movies/
-    /// HomeVideos moved to the embedded `BrowserContent` owner, task 6.1):
-    /// the letter-pill row and the inline series hero — everything that needs
-    /// `App`/image-cache authority, resolved here and pushed to
-    /// `BrowserComponent` each frame.
+    /// Shell-resolved extras for the transitional narrow browser composer:
+    /// the letter-pill row and placeholder replacement policy.
     pub(in crate::app) fn narrow_browse_extras(
         &mut self,
         lib_idx: usize,
-        cursor: usize,
+        _cursor: usize,
     ) -> NarrowBrowseExtras {
         let coll = self.libs[lib_idx].library.collection_type.clone();
         let show_letter_pills = self.should_show_letter_pills(lib_idx);
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
         let season_grid = self.is_viewing_season_grid(lib_idx);
 
-        // This composer now paints only narrow TV (task 6.1 moved
-        // Generic/Movies/HomeVideos to the embedded `BrowserContent` owner,
-        // which derives its inline hero generically from `HeroContent`), so
-        // the only inline hero this function still resolves is a selected
-        // Series.
-        let selected_series = self.selected_series_item(lib_idx, cursor);
-
-        let inline_hero = if let Some(item) = selected_series {
-            let images_enabled = self.images_enabled();
-            // Narrow keeps its own `Primary`-chain entry (the chain
-            // `detail_series_view` paints); it must never read Wide's
-            // Thumb-first entry, whose bytes differ.
-            let image_cache_key = series_image_cache_key(&item.id, &["Primary"]);
-            let image_loading =
-                images_enabled && !self.card_image_states.contains_key(&image_cache_key);
-            Some(NarrowInlineHero::Series {
-                item,
-                images_enabled,
-                image_loading,
-            })
-        } else {
-            None
-        };
-
+        // TV now supplies its own shared panel content. This transitional
+        // helper only computes whether a hero-capable surface needs the
+        // selected-row replacement placeholder.
         // Every hero-capable browse destination, including folder/channel
         // selections without a resolved leaf hero, uses the inline
         // replacement flow. Non-hero catalogs keep their width-derived grid.
-        let hero_placeholder = inline_hero.is_none()
-            && !crate::app::render::arrangements::wide_hero::wide_hero_fits(
-                self.layout.main.left_area,
-            )
-            && matches!(
-                coll.as_str(),
-                "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
-            );
+        let hero_placeholder = !crate::app::render::arrangements::wide_hero::wide_hero_fits(
+            self.layout.main.left_area,
+        ) && matches!(
+            coll.as_str(),
+            "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
+        );
 
         NarrowBrowseExtras {
             show_letter_pills,
             use_shared_replacement_plan,
             hero_placeholder,
             season_grid,
-            inline_hero,
         }
     }
 }

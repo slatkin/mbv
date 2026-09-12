@@ -61,9 +61,9 @@ pub struct BrowserComponent {
     /// `application.view()` and paints it via `App::paint_home_image`
     /// (mirrors `HomeComponent`, task 5.3d.17a).
     image_paint: Option<HomeImagePaint>,
-    /// Shell-resolved narrow-browse extras (count label, letter pills, inline
-    /// movie/series hero) for the `browser_narrow` composer, pushed each frame
-    /// by `render_emby_browser_component` (task 3.3).
+    /// Shell-resolved narrow-browse extras (letter pills and replacement
+    /// policy) for the transitional `browser_narrow` composer, pushed each
+    /// frame by `render_emby_browser_component` (task 3.3).
     narrow_extras: NarrowBrowseExtras,
     /// Discrete navigation/restoration re-anchor (design.md D1): re-selects
     /// its target when new content makes it available again.

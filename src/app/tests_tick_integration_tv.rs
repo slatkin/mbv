@@ -153,18 +153,32 @@ fn tv_wide_narrow_wide_tick_navigation_keeps_the_selected_target() {
     harness.step();
     draw(&mut harness);
     assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
+    let wide_anchor = tv(&harness)
+        .viewport_anchor(tv(&harness).painted_viewport_height())
+        .expect("wide TV viewport anchor");
 
-    // Narrow: the same owner keeps the same selected target.
+    // Narrow: the same owner keeps the same selected target and viewport
+    // offset across the shared Wide/Inline presentation transition.
     harness.model_mut().app.terminal_width = 80;
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
     assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
+    let narrow_anchor = tv(&harness)
+        .viewport_anchor(tv(&harness).painted_viewport_height())
+        .expect("narrow TV viewport anchor");
+    assert_eq!(narrow_anchor.selected_target, wide_anchor.selected_target);
+    assert_eq!(narrow_anchor.selected_row_offset, wide_anchor.selected_row_offset);
 
-    // Wide again: still the same target.
+    // Wide again: still the same target and viewport offset.
     harness.model_mut().app.terminal_width = 160;
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
     assert_eq!(tv(&harness).selected_item_id(), Some("series-1".into()));
+    let final_anchor = tv(&harness)
+        .viewport_anchor(tv(&harness).painted_viewport_height())
+        .expect("final Wide TV viewport anchor");
+    assert_eq!(final_anchor.selected_target, narrow_anchor.selected_target);
+    assert_eq!(final_anchor.selected_row_offset, narrow_anchor.selected_row_offset);
 }
 
 #[test]

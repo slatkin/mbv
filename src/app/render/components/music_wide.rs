@@ -12,10 +12,10 @@ use crate::app::render::arrangements::music::{self as music_arrangement, WideMus
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::arrangements::wide_hero::{self, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y};
 use crate::app::render::components::album_detail::album_hero_detail_rows;
-use crate::app::render::components::detail_series_view::{SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS};
 use crate::app::render::components::hero::{
     paint_hero_content, selected_detail_shell, HeroContent, HeroImage, HERO_BLOCK_EXTRA_ROWS,
 };
+use crate::app::render::components::hero::{INLINE_COVER_COLS, INLINE_COVER_ROWS};
 use crate::app::render::components::list_rows::{
     LibraryListRenderCtx, SELECTED_BLOCK_SIDE_PADDING,
 };
@@ -437,8 +437,8 @@ pub(in crate::app) fn render_narrow_music_group_with_ctx(
                     format!("{artist} \u{2022} {year}")
                 };
                 let image = images_enabled.then_some(HeroImage {
-                    actual_w: SERIES_IMAGE_COLS,
-                    height: SERIES_IMAGE_ROWS,
+                    actual_w: INLINE_COVER_COLS,
+                    height: INLINE_COVER_ROWS,
                 });
                 let content = HeroContent {
                     title: Some(title.as_str()),

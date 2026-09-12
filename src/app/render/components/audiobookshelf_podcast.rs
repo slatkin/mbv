@@ -6,10 +6,10 @@ use crate::app::render::arrangements::padded_rect;
 use crate::app::render::arrangements::wide_hero::{
     self, wide_hero_browser_border, wide_hero_browser_pane, PANE_PAD_X, PANE_PAD_Y,
 };
-use crate::app::render::components::detail_series_view::{
-    SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
-    SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS,
-};
+use crate::app::render::components::hero::{INLINE_COVER_COLS, INLINE_COVER_ROWS};
+const SERIES_DETAIL_DIVIDER_ROWS: usize = 1;
+const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8;
+const SERIES_DETAIL_TRAILING_BLANK_ROWS: usize = 1;
 use crate::app::render::components::hero::{
     inline_hero_text_width, selected_detail_shell, wrap_overview_lines, HeroContent, HeroImage,
     HeroLine, HERO_BLOCK_EXTRA_ROWS, HERO_TITLE_ROWS,
@@ -50,7 +50,7 @@ pub(in crate::app::render) fn podcast_hero_content_rows(
     {
         rows += 1;
         let (image_width, image_height) = if images_enabled {
-            (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS)
+            (INLINE_COVER_COLS, INLINE_COVER_ROWS)
         } else {
             (0, 0)
         };
@@ -72,7 +72,7 @@ pub(in crate::app::render) fn podcast_hero_content_rows(
     }
     rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
     if images_enabled {
-        rows = rows.max(SERIES_IMAGE_ROWS + 1);
+        rows = rows.max(INLINE_COVER_ROWS + 1);
     }
     rows
 }
@@ -401,8 +401,8 @@ fn render_podcast_hero(
     // HeroImage is right-aligned by the painter; use the fixed cover width so
     // the full-width overview retains room for title and metadata.
     let image = images_enabled.then_some(HeroImage {
-        actual_w: SERIES_IMAGE_COLS,
-        height: SERIES_IMAGE_ROWS,
+        actual_w: INLINE_COVER_COLS,
+        height: INLINE_COVER_ROWS,
     });
     let result = crate::app::render::components::hero::paint_hero_content(
         frame,
@@ -482,13 +482,14 @@ fn render_podcast_hero(
 #[cfg(test)]
 mod tests {
     use super::{podcast_hero_content_rows, PodcastInteraction};
-    use crate::app::render::components::detail_series_view::{
+    use super::{
         SERIES_DETAIL_DIVIDER_ROWS, SERIES_DETAIL_EPISODE_ROWS_ESTIMATE,
-        SERIES_DETAIL_TRAILING_BLANK_ROWS, SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS,
+        SERIES_DETAIL_TRAILING_BLANK_ROWS,
     };
     use crate::app::render::components::hero::{
         inline_hero_text_width, wrap_overview_lines, HERO_TITLE_ROWS,
     };
+    use crate::app::render::components::hero::{INLINE_COVER_COLS, INLINE_COVER_ROWS};
     use crate::app::types_audiobookshelf_browse::{
         AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
     };
@@ -539,7 +540,7 @@ mod tests {
         {
             rows += 1;
             let (image_width, image_height) = if images_enabled {
-                (SERIES_IMAGE_COLS, SERIES_IMAGE_ROWS)
+                (INLINE_COVER_COLS, INLINE_COVER_ROWS)
             } else {
                 (0, 0)
             };
@@ -561,7 +562,7 @@ mod tests {
         }
         rows += SERIES_DETAIL_TRAILING_BLANK_ROWS as u16;
         if images_enabled {
-            rows = rows.max(SERIES_IMAGE_ROWS + 1);
+            rows = rows.max(INLINE_COVER_ROWS + 1);
         }
         rows
     }
@@ -650,10 +651,10 @@ mod tests {
             description: None,
             cover_path: None,
         });
-        // Images enabled lifts even a title-only budget to SERIES_IMAGE_ROWS+1.
+        // Images enabled lifts even a title-only budget to the cover height.
         assert_eq!(
             podcast_hero_content_rows(&state, interaction(false), 40, true),
-            SERIES_IMAGE_ROWS + 1
+            INLINE_COVER_ROWS + 1
         );
         assert_matches_legacy(&state, interaction(false), 40, true);
     }

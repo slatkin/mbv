@@ -1,89 +1,38 @@
-use super::detail_series_view::{
-    render_series_inline_detail, series_meta_line, SeriesInlineDetailCtx, SERIES_IMAGE_COLS,
-    SERIES_IMAGE_ROWS,
-};
-use crate::app::render::HomeImagePaint;
+use crate::app::components::TvWorkspaceComponent;
+use crate::app::render::components::list_rows::LibraryListRenderCtx;
+use crate::app::render::test_helpers::buffer_to_string;
+use crate::app::render::TvWideRenderCtx;
 use crate::app::tests::make_item;
-use ratatui::{backend::TestBackend, layout::Rect, Terminal};
+use ratatui::backend::TestBackend;
+use ratatui::Terminal;
+use tuirealm::component::Component;
 
+/// TV Normal/Narrow detail is the panel's shared inline hero, not a
+/// destination-specific Series painter. Keep this characterization at the
+/// panel boundary so a TV-specific inline painter cannot return.
 #[test]
-fn series_inline_detail_reserves_portrait_image_budget() {
-    let item = make_item("Series", "Series");
-    let rows = crate::app::render::screens::detail_series::series_inline_detail_rows(
-        true, &item, 40, true,
-    );
-    assert!(rows > SERIES_IMAGE_ROWS as usize);
-    assert!(series_meta_line(&item).is_empty());
-}
+fn narrow_series_detail_is_painted_by_the_shared_panel_skeleton() {
+    let mut series = make_item("The Series", "Series");
+    series.id = "series".into();
+    series.overview = "A shared panel overview.".into();
 
-#[test]
-fn loading_series_art_uses_placeholder_and_portrait_budget() {
-    let item = make_item("Series", "Series");
-    let area = Rect::new(0, 0, 40, 20);
-    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-    let mut paint = None;
+    let mut component = TvWorkspaceComponent::new();
+    component.set_is_wide(false);
+    component.set_focused(true);
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series),
+        None,
+        0,
+        None,
+        false,
+    ));
+
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
     terminal
-        .draw(|frame| {
-            paint = render_series_inline_detail(
-                SeriesInlineDetailCtx {
-                    item: &item,
-                    images_enabled: true,
-                    image_loading: true,
-                },
-                frame,
-                area,
-                false,
-                true,
-            );
-        })
+        .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-
-    match paint {
-        Some(HomeImagePaint::Series {
-            area,
-            show_placeholder,
-            ..
-        }) => {
-            assert!(show_placeholder);
-            assert_eq!(area.width, SERIES_IMAGE_COLS);
-            assert_eq!(area.height, SERIES_IMAGE_ROWS);
-        }
-        _ => panic!("expected loading Series paint request"),
-    }
-}
-
-#[test]
-fn cached_series_art_uses_series_painter_and_portrait_budget() {
-    let item = make_item("Series", "Series");
-    let area = Rect::new(0, 0, 40, 20);
-    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-    let mut paint = None;
-    terminal
-        .draw(|frame| {
-            paint = render_series_inline_detail(
-                SeriesInlineDetailCtx {
-                    item: &item,
-                    images_enabled: true,
-                    image_loading: false,
-                },
-                frame,
-                area,
-                false,
-                true,
-            );
-        })
-        .unwrap();
-
-    match paint {
-        Some(HomeImagePaint::Series {
-            area,
-            show_placeholder,
-            ..
-        }) => {
-            assert!(!show_placeholder);
-            assert_eq!(area.width, SERIES_IMAGE_COLS);
-            assert_eq!(area.height, SERIES_IMAGE_ROWS);
-        }
-        _ => panic!("expected cached Series paint request"),
-    }
+    let output = buffer_to_string(&terminal);
+    assert!(output.contains("The Series"));
+    assert!(output.contains("shared"));
 }

@@ -1,6 +1,5 @@
 use super::test_helpers::{
-    draw_mounted_frame, make_movie_app, mounted_model_at, mounted_tv_layout, mounted_tv_scroll,
-    set_tv_cursor_for_test,
+    draw_mounted_frame, make_movie_app, mounted_model_at, mounted_tv_scroll, set_tv_cursor_for_test,
 };
 use super::*;
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
@@ -168,58 +167,30 @@ fn tv_letter_grouped_app(scroll: usize) -> App {
     app
 }
 
-// TV's narrow browsing routes through the merged `TvWorkspaceComponent`
-// (task 8.1, design D12); this characterization is unchanged by task 6.1.
+// TV's Narrow surface is the same shared panel skeleton as Wide (task 8.3,
+// design D4/D7). Characterize its rendered content and owner viewport rather
+// than the deleted Series-specific detail geometry.
 #[test]
-fn tv_letter_grouped_replacement_characterization_covers_header_fit_and_marker_suppression() {
+fn tv_narrow_panel_characterization_keeps_content_and_viewport() {
     let mut model = mounted_model_at(tv_letter_grouped_app(12), 70, 20);
     set_tv_cursor_for_test(&mut model, 54);
     let output = draw_mounted_frame(&mut model, 70, 20);
-    let layout = mounted_tv_layout(&model);
 
     assert!(
         output.contains("Series"),
-        "selected series is missing:\n{output}"
+        "selected series is missing from shared panel output:\n{output}"
     );
     assert!(
-        layout.hero_area.height > 0,
-        "grouped complete replacement should fit"
+        !output.contains("Season") && !output.contains("Episode"),
+        "Narrow TV must open episodes only through SelectionModal"
     );
     let control_scroll = mounted_tv_scroll(&model);
-    assert!(
-        control_scroll > 0,
-        "mounted grouped control must retain scroll"
-    );
-    let hero_lines = output
-        .lines()
-        .skip(layout.hero_area.y as usize)
-        .take(layout.hero_area.height as usize)
-        .collect::<String>();
-    assert!(
-        !hero_lines.contains('▎'),
-        "ordinary marker leaked into the grouped hero"
-    );
     let _ = draw_mounted_frame(&mut model, 70, 20);
     assert_eq!(
         mounted_tv_scroll(&model),
         control_scroll,
-        "mounted grouped control scroll persists across redraws"
+        "shared panel redraw must preserve the TV viewport"
     );
-
-    let mut boundary_model = mounted_model_at(tv_letter_grouped_app(1), 70, 14);
-    set_tv_cursor_for_test(&mut boundary_model, 54);
-    let boundary_output = draw_mounted_frame(&mut boundary_model, 70, 14);
-    let boundary_layout = mounted_tv_layout(&boundary_model);
-    assert!(
-        boundary_output.contains("Series"),
-        "header fit boundary hides selected row: hero={:?}\n{boundary_output}",
-        boundary_layout.hero_area
-    );
-    assert_eq!(
-        boundary_layout.hero_area.height, 0,
-        "cannot-fit grouped detail restores ordinary rows"
-    );
-    assert!(boundary_layout.selected_item_rect.is_some());
 }
 
 /// migrate-home-feeds 4.6 regression: after the full wide-Movies arrangement

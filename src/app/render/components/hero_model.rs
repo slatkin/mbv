@@ -96,7 +96,7 @@ pub(in crate::app) const SERIES_LANDSCAPE_IMAGE_TYPES: &[&str] =
 pub(crate) fn emby_hero_meta_rows_plain(item: &EmbyItem) -> Vec<String> {
     let mut rows = Vec::new();
     if item.item_type == "Series" {
-        // Ported from `series_meta_line()` (`detail_series_view.rs`):
+        // Shared with the former Series metadata rule:
         // year range (`production_year`..`end_year`) and uppercased
         // genre, joined with two spaces, skipping empty parts.
         let year_range = match (item.production_year, item.end_year) {

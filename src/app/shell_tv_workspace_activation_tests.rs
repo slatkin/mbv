@@ -49,22 +49,15 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert_eq!(component_cursor, 0);
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
 
-    let component_extras = model.app.narrow_browse_extras(0, component_cursor);
-    match component_extras.inline_hero {
-        Some(NarrowInlineHero::Series { item, .. }) => {
-            assert_eq!(item.id, "movie-focused");
-        }
-        _ => panic!("component cursor must resolve the focused Series"),
-    }
-    let stale_extras = model
-        .app
-        .narrow_browse_extras(0, model.app.libs[0].nav_stack[0].resting().cursor());
-    match stale_extras.inline_hero {
-        Some(NarrowInlineHero::Series { item, .. }) => {
-            assert_eq!(item.id, "movie-second");
-        }
-        _ => panic!("stale App cursor must resolve the other Series"),
-    }
+    assert_eq!(
+        model
+            .application
+            .get_component(&model.tv_workspace_id.clone().expect("tv workspace mounted"))
+            .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
+            .and_then(TvWorkspaceComponent::selected_item_id),
+        Some("movie-focused".into()),
+        "the shared TV owner resolves its own selected Series"
+    );
 
     model.app.libs[0].nav_stack[0].set_resting_cursor(component_cursor);
 
