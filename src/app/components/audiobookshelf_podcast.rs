@@ -58,6 +58,7 @@ pub struct AudiobookshelfPodcastComponent {
     wide_geometry: Option<WideSkeletonGeometry>,
     narrow_geometry: Option<NarrowSkeletonGeometry>,
     selector_regions: Vec<(Rect, usize)>,
+    workspace_selector_regions: Vec<(Rect, usize)>,
     image_paint: Option<HomeImagePaint>,
     /// One shared canonical show owner, carried by exactly one of the Wide and
     /// Inline presentations (design.md D1/D2). It owns the show cursor, scroll,
@@ -94,6 +95,7 @@ impl AudiobookshelfPodcastComponent {
             wide_geometry: None,
             narrow_geometry: None,
             selector_regions: Vec::new(),
+            workspace_selector_regions: Vec::new(),
             image_paint: None,
             carrier: MediaListCarrier::new(Presentation::Inline),
             episode_list: MediaListCarrier::new(Presentation::Wide),
@@ -542,6 +544,15 @@ impl AudiobookshelfPodcastComponent {
                     PodcastEpisodeIntent::FocusOrPlay(self.episode_target()),
                 ),
             )),
+            // A show-focused Enter in Narrow opens the existing episode
+            // selection modal. Never reuse a stale episode target from a
+            // prior Wide focus session; Wide and episode-focused activation
+            // retain their existing action semantics.
+            Key::Enter if !self.wide && !self.episode_focused => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    None,
+                )),
+            )),
             Key::Enter => Some(Msg::Shell(
                 ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
                     self.episode_target(),
@@ -587,6 +598,19 @@ impl AudiobookshelfPodcastComponent {
                         .delegate(RowLocalInput::Click(at), Some(target));
                     self.sync_show_selection();
                     return self.show_move_request();
+                }
+                // The Wide Workspace filter selector is the only painted
+                // episode-filter chrome. Narrow does not paint it, so its
+                // retained geometry is empty and cannot claim a stale click.
+                if let Some((_, filter)) = self
+                    .workspace_selector_regions
+                    .iter()
+                    .find(|(rect, _)| rect.contains(at))
+                {
+                    if let Some(filter) = AudiobookshelfEpisodeFilter::ALL.get(*filter) {
+                        self.set_episode_filter(*filter);
+                        return Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed));
+                    }
                 }
                 // After a show-owner miss, a focused episode pane resolves
                 // the point against the episode owner's retained geometry and
@@ -678,6 +702,11 @@ impl AudiobookshelfPodcastComponent {
     pub(crate) fn episode_content_rect_for_test(&self) -> Option<Rect> {
         self.episode_list.current_content_rect()
     }
+
+    #[cfg(test)]
+    pub(crate) fn workspace_selector_painted_for_test(&self) -> bool {
+        !self.workspace_selector_regions.is_empty()
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -703,6 +732,7 @@ impl Component for AudiobookshelfPodcastComponent {
         self.wide_geometry = None;
         self.narrow_geometry = None;
         self.selector_regions.clear();
+        self.workspace_selector_regions.clear();
         self.image_paint = None;
         let hero = self.state.selected_show().map(|show| {
             let mut data = hero_content_abs_show(show);
@@ -810,6 +840,15 @@ impl Component for AudiobookshelfPodcastComponent {
         }
         self.selector_regions = hits
             .selector
+            .regions()
+            .iter()
+            .map(|(rect, id)| (*rect, *id))
+            .collect();
+        // The filter selector is painted only in the Wide Workspace. Retain
+        // exactly that paint-time geometry; Narrow deliberately has no
+        // inline filter pills and therefore no regions to resolve.
+        self.workspace_selector_regions = hits
+            .workspace_selector
             .regions()
             .iter()
             .map(|(rect, id)| (*rect, *id))

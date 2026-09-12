@@ -15,9 +15,62 @@ use mbv_core::audiobookshelf::{
 };
 use mbv_core::config::{AudiobookshelfSetup, ServiceKind};
 use ratatui::backend::TestBackend;
+use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+/// The migrated Podcast surface is painted by the shared panel skeleton at
+/// both breakpoints. A sentinel prefill proves the component does not rely on
+/// the deleted base-frame underpaint for either surface.
+#[test]
+fn podcast_panel_fills_wide_and_narrow_surface() {
+    for (width, height) in [(100, 24), (60, 24)] {
+        let mut component = AudiobookshelfPodcastComponent::new();
+        let state = audiobookshelf_app().audiobookshelf_browse[0].clone();
+        component.set_content(&state, false);
+        component.set_focused(true);
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        crate::app::render::reset_podcast_media_list_paints();
+        terminal
+            .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
+            .unwrap();
+        let paints = if width >= 80 {
+            crate::app::render::podcast_wide_media_list_paints()
+        } else {
+            crate::app::render::podcast_inline_media_browser_paints()
+        };
+        let expected = if width >= 80 { 2 } else { 1 };
+        assert_eq!(
+            paints, expected,
+            "shared panel list painter count at {width}x{height}"
+        );
+        assert_eq!(crate::app::render::browser_legacy_plain_rows_paints(), 0);
+        let output: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol())
+            .collect();
+        assert!(output.contains("Show A"), "output: {output:?}");
+    }
+}
+
+#[test]
+fn podcast_filter_selector_is_wide_only() {
+    for (width, expected) in [(100, true), (60, false)] {
+        let mut component = AudiobookshelfPodcastComponent::new();
+        let state = audiobookshelf_app().audiobookshelf_browse[0].clone();
+        component.set_content(&state, false);
+        component.set_focused(true);
+        let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        assert_eq!(component.workspace_selector_painted_for_test(), expected);
+    }
+}
 
 /// split-audiobookshelf-cursor-ownership D4 / task 1.3 → 5.1: when a content
 /// push drops the show the component had selected, the component resets its
