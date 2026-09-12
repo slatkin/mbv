@@ -502,7 +502,7 @@ pub(in crate::app) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
 }
 
 impl App {
-    pub(in crate::app) fn render_library(
+    pub(in crate::app) fn legacy_library_surface(
         &mut self,
         _f: &mut Frame,
         area: Rect,
@@ -557,5 +557,16 @@ impl App {
                 }
             }
         }
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn render_library(
+        &mut self,
+        frame: &mut Frame,
+        area: Rect,
+        layout: &mut LayoutMain,
+        cursor_scroll: Option<(usize, usize)>,
+    ) {
+        self.legacy_library_surface(frame, area, layout, cursor_scroll);
     }
 }

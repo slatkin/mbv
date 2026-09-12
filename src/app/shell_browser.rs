@@ -402,7 +402,12 @@ impl Model {
         self.push_emby_browser_content();
     }
 
+    #[cfg(test)]
     pub(crate) fn render_emby_browser_component(&mut self, frame: &mut ratatui::Frame) {
+        self.paint_emby_browser_panel(frame);
+    }
+
+    pub(crate) fn paint_emby_browser_panel(&mut self, frame: &mut ratatui::Frame) {
         let Some(id) = self.emby_browser_id.as_ref() else {
             return;
         };

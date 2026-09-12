@@ -199,7 +199,12 @@ impl Model {
         }
     }
 
+    #[cfg(test)]
     pub(super) fn render_queue_component(&mut self, frame: &mut ratatui::Frame) {
+        self.paint_queue_panel(frame);
+    }
+
+    pub(super) fn paint_queue_panel(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
             return;

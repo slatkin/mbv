@@ -13,7 +13,7 @@ use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
-pub(in crate::app) fn render_legacy_backdrops(
+pub(in crate::app) fn root_column_backgrounds(
     frame: &mut Frame,
     left_area: Rect,
     right_area: Rect,

@@ -401,7 +401,7 @@ impl Model {
     }
 
     /// Paint the Wide hero gap columns with the backdrop they already showed.
-    pub(super) fn render_wide_hero_boundary(&mut self, frame: &mut ratatui::Frame) {
+    pub(super) fn paint_wide_hero_boundary(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::WideHeroBoundary;
         if !self.application.mounted(&id) {
             return;

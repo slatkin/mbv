@@ -169,6 +169,10 @@ impl Model {
 
     #[cfg(test)]
     pub(crate) fn render_music_workspace_component(&mut self, frame: &mut ratatui::Frame) {
+        self.paint_music_workspace_panel(frame);
+    }
+
+    pub(crate) fn paint_music_workspace_panel(&mut self, frame: &mut ratatui::Frame) {
         self.render_library_panel(frame);
     }
 }

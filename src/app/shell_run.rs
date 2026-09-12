@@ -1,5 +1,4 @@
 use super::*;
-use crate::app::components::BrowserComponent;
 use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 use crate::app::PanelFocus;
 use std::sync::atomic::Ordering;
@@ -99,27 +98,9 @@ impl Model {
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter, task 5.3d).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
-        let cursor_scroll = self.app.tab.emby_library_index().and_then(|_| {
-            self.emby_browser_component_id()
-                .and_then(|id| self.application.get_component(&id))
-                .and_then(|c| c.as_any().downcast_ref::<BrowserComponent>())
-                .map(|c| (c.cursor(), c.scroll()))
-                .or_else(|| self.tv_tv_content_cursor_scroll())
-                .or_else(|| {
-                    self.music_owner()
-                        .map(|c| (c.album_cursor(), c.album_scroll()))
-                })
-        });
-        self.app.compose_base_frame(f, cursor_scroll);
-        // S1 (tasks 2.1-2.2): the tab bar and status row are painted by their
-        // mounted panels where `RootFrame` places them; the base frame no
-        // longer paints either (one painter per surface, design D10/D16).
+        self.app.compose_root_frame(f);
         self.render_tab_panel(f);
         self.render_status_bar_panel(f);
-        // Task 3.5: the queue column's playback surface (header row, visual
-        // slot, transport) paints from its `RootFrame.queue_playback`
-        // placement; the freshly painted slot size publishes for the queue
-        // panel's placement below and the next frame's chrome placements.
         self.render_queue_playback_panel(f);
         if music_resize {
             self.push_music_workspace_content();
@@ -128,19 +109,17 @@ impl Model {
             self.push_tv_workspace_content();
         }
         self.render_library_playback_panel(f);
-        // Task 5.9 (design D16's transitional branch): the migrated active
-        // library paints through the Library panel; the old destination
-        // components stay the surface for every un-migrated library. Only
-        // the active tab's destination paints a surface, so gating the whole
-        // set on the active library's migration is exact.
-        if self.active_library_owner_migrated() {
-            self.render_library_panel(f);
-        } else {
-            self.render_emby_browser_component(f);
+        self.render_library_panel(f);
+        if let Some(area) = self.app.layout.root_frame.queue {
+            if self
+                .application
+                .mounted(&crate::app::components::ComponentId::Queue)
+            {
+                self.application
+                    .view(&crate::app::components::ComponentId::Queue, f, area);
+            }
         }
-        self.render_queue_component(f);
         self.render_queue_boundary(f);
-        self.render_wide_hero_boundary(f);
         self.render_overlay_stack(f);
     }
 
