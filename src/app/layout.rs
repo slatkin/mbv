@@ -1,23 +1,20 @@
-//! Per-frame layout geometry published by root frame composition and consumed
-//! by mouse hit-testing in `input.rs`.
+//! Per-frame layout geometry published by root frame composition for render,
+//! sizing, and test consumers.
 //!
 //! `App` owns a single `AppLayout` value (`app.layout`) instead of ~35
-//! scattered `layout_*`/`*`/`queue_*` fields. Grouping by view
-//! mirrors the boundaries `render/` and `input.rs` already use, rather than
-//! inventing a new one.
+//! scattered `layout_*`/`*`/`queue_*` fields. Grouping by view mirrors the
+//! boundaries `render/` already uses, rather than inventing a new one.
 //!
-//! Render code does not write into `self.layout` in place. Each call to
-//! Root frame composition builds a fresh, local `AppLayout::default()` and threads it
-//! (or the relevant per-view sub-struct) through the render call graph as an
-//! explicit parameter; every render function that used to write
+//! Render code does not write into `self.layout` in place. Each call to root
+//! frame composition builds a fresh, local `AppLayout::default()` and threads
+//! it (or the relevant per-view sub-struct) through the render call graph as
+//! an explicit parameter; every render function that used to write
 //! `self.layout.<view>.<field> = ...` now writes `layout.<field> = ...` on
-//! that local value instead. Only once the full pass completes does
-//! swaps it into `self.layout` in a single atomic
-//! assignment. This means
-//! `self.layout` (read by `input.rs`) always reflects the last frame that
-//! rendered in full, or is left completely untouched by an early return
-//! (e.g. the zero-area guard) -- it can never hold a mix of fields from two
-//! different frames.
+//! that local value instead. Only once the full pass completes does it swap
+//! the value into `self.layout` in a single atomic assignment. This means
+//! `self.layout` always reflects the last frame rendered in full, or is left
+//! completely untouched by an early return (e.g. the zero-area guard) -- it
+//! can never hold a mix of fields from two different frames.
 
 use ratatui::layout::Rect;
 
@@ -92,11 +89,15 @@ pub(crate) struct FrameChromeGeometry {
 
 /// All per-frame layout geometry, grouped by the view that produces it.
 /// `App` stores exactly one of these (`app.layout`); render writes into it,
-/// input reads from it. See module docs for the rationale.
+/// and sizing, paint, and test consumers read from it. See module docs for the
+/// rationale.
 #[derive(Default)]
 pub(crate) struct AppLayout {
     /// Left panel (card + queue) column rect.
     pub left_area: Rect,
+    /// The queue card's own paint geometry, retained for paint and test code;
+    /// unlike the removed `FrameChromeGeometry` input-path mirror, it is not
+    /// chrome geometry used for click resolution.
     pub card: CardGeometry,
     /// The last fully rendered frame's root panel placements (`RootFrame`).
     /// Published with the rest of the chrome checkpoint in
