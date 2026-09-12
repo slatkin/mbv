@@ -141,7 +141,7 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
 
     let at = Position::new(0, 0);
     let message = owner.on_slot_event(LibrarySlotEvent::List(RowLocalInput::Click(at)));
-    assert!(matches!(message, None), "a plain click emits no Msg");
+    assert!(message.is_none(), "a plain click emits no Msg");
     assert_eq!(owner.inline_search().cursor(), 0);
 
     let message = owner.on_slot_event(LibrarySlotEvent::List(RowLocalInput::Wheel {
