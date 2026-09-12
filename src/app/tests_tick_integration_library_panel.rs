@@ -17,17 +17,19 @@ use ratatui::Terminal;
 use tuirealm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::library_panel::content::{
-    HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
+    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use crate::app::components::library_panel::{ArtworkShape, HeroArtwork, HeroFacts, LibraryKey};
+use crate::app::components::library_panel::{
+    hero_content_emby, ArtworkShape, HeroArtwork, HeroContentData, HeroFacts, LibraryKey,
+};
 use crate::app::components::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
 };
 use crate::app::components::msg::{Msg, TerminalObserverEvent};
 use crate::app::components::{BrowserKind, ComponentId};
-use crate::app::{PanelFocus, PanelMode};
 use crate::app::tests_tick_harness::TickHarness;
+use crate::app::{PanelFocus, PanelMode};
 
 // ── Fixture content owner ───────────────────────────────────────────────
 
@@ -45,11 +47,7 @@ struct FixtureOwner {
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
         let mut carrier = MediaListCarrier::new(Presentation::Wide);
-        carrier.set_content(vec![
-            row("alpha"),
-            row("beta"),
-            row("gamma"),
-        ]);
+        carrier.set_content(vec![row("alpha"), row("beta"), row("gamma")]);
         Self { carrier, log }
     }
 }
@@ -214,7 +212,10 @@ fn library_panel_focus_follows_the_active_library() {
     // Back to the migrated tab: the panel takes focus again.
     harness.model_mut().app.tab = crate::app::TabSelection::Home;
     harness.model_mut().sync_mounted_surfaces();
-    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Library));
+    assert_eq!(
+        harness.model().application.focus(),
+        Some(&ComponentId::Library)
+    );
 }
 
 /// Mouse eligibility follows the painted panel: the migrated surface is
@@ -265,10 +266,10 @@ fn library_panel_mouse_eligibility_and_pill_slot_events() {
         "the painted pill's slot event reached the active owner"
     );
     assert!(
-        outcome.raw_messages.iter().any(|msg| matches!(
-            msg,
-            Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
-        )),
+        outcome
+            .raw_messages
+            .iter()
+            .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))),
         "the owner's claim marker flows through the tick"
     );
 }
@@ -287,7 +288,11 @@ fn library_panel_split_drag_resolves_the_live_width() {
         .model()
         .application
         .get_component(&ComponentId::Library)
-        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
         .and_then(|panel| panel.test_split_gap())
         .expect("the migrated surface paints a Wide split");
     assert!(gap.width > 0 && gap.height > 0);
@@ -350,9 +355,7 @@ fn inactive_owner_keeps_cursor_scroll_across_a_tab_change() {
     // Switch to the un-migrated Emby library, then back: the owner stays.
     harness.model_mut().app.tab = crate::app::TabSelection::EmbyLibrary(0);
     harness.model_mut().sync_mounted_surfaces();
-    assert!(harness
-        .model()
-        .library_panel_has_owner(&home_key()));
+    assert!(harness.model().library_panel_has_owner(&home_key()));
     harness.model_mut().app.tab = crate::app::TabSelection::Home;
     harness.model_mut().sync_mounted_surfaces();
 
@@ -376,9 +379,7 @@ fn inactive_owner_keeps_cursor_scroll_across_a_tab_change() {
 }
 
 /// The mounted Library panel, for the geometry-reading tests.
-fn panel_of(
-    harness: &TickHarness,
-) -> Option<&crate::app::components::library_panel::LibraryPanel> {
+fn panel_of(harness: &TickHarness) -> Option<&crate::app::components::library_panel::LibraryPanel> {
     harness
         .model()
         .application
@@ -466,10 +467,10 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
     }));
     let _ = harness.step();
     assert!(
-        log.borrow().events.iter().any(|event| matches!(
-            event,
-            LibrarySlotEvent::List(RowLocalInput::Click(_))
-        )),
+        log.borrow()
+            .events
+            .iter()
+            .any(|event| matches!(event, LibrarySlotEvent::List(RowLocalInput::Click(_)))),
         "the narrow list click outside the stale Wide rect reaches the owner"
     );
 }
@@ -549,11 +550,12 @@ fn owner_retention_follows_the_catalog_through_the_sync_pass() {
         app.tab = crate::app::TabSelection::EmbyLibrary(0);
         let mut harness = TickHarness::new(app);
         harness.model_mut().sync_library_panel();
-        harness
-            .model_mut()
-            .push_library_owner(movies_key(), Box::new(FixtureOwner::new(Rc::new(
-                RefCell::new(FixtureLog::default()),
-            ))));
+        harness.model_mut().push_library_owner(
+            movies_key(),
+            Box::new(FixtureOwner::new(Rc::new(RefCell::new(
+                FixtureLog::default(),
+            )))),
+        );
         harness.model_mut().sync_mounted_surfaces();
         harness
     };
@@ -566,9 +568,256 @@ fn owner_retention_follows_the_catalog_through_the_sync_pass() {
     harness.model_mut().app.libs.remove(0);
     harness.model_mut().sync_mounted_surfaces();
     assert!(
-        !harness
-            .model()
-            .library_panel_has_owner(&movies_key()),
+        !harness.model().library_panel_has_owner(&movies_key()),
         "the retired library's owner is dropped by the retention rule"
     );
+}
+
+// ── Task 5.10: hero image projection (design D9) ────────────────────────
+//
+// The Home Hero header's fetch moved into `sync_library_hero_images`
+// (`App::project_hero_image`); painting only reads the projected
+// `HeroImageState`. These fixtures use a landscape-declared item so the
+// projection reaches the Wide cover-fit box path.
+
+/// A hero-bearing owner: the minimal owner the projection needs — one item's
+/// policy-produced `HeroContentData`, mutable so a test can swap it for a
+/// fresh item (a new cache key), and `set_hero_image` records every state the
+/// projection delivers so a test can prove the placeholder frame count.
+struct HeroFixtureOwner {
+    carrier: MediaListCarrier<String>,
+    hero: HeroContentData,
+    image_states: Vec<HeroImageState>,
+}
+
+impl HeroFixtureOwner {
+    fn new(hero: HeroContentData) -> Self {
+        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        carrier.set_content(vec![row("alpha")]);
+        Self {
+            carrier,
+            hero,
+            image_states: Vec::new(),
+        }
+    }
+}
+
+impl LibraryContentOwner for HeroFixtureOwner {
+    fn content(&mut self) -> LibraryPanelContent<'_> {
+        LibraryPanelContent {
+            selector: None,
+            controls: None,
+            list: ListSlot::Media(&mut self.carrier),
+            hero: Some(HeroContent {
+                facts: self.hero.facts.clone(),
+                overview: self.hero.overview.clone(),
+                workspace: None,
+            }),
+        }
+    }
+
+    fn on_slot_event(&mut self, _event: LibrarySlotEvent) -> Option<Msg> {
+        None
+    }
+
+    fn hero_data(&mut self) -> Option<HeroContentData> {
+        Some(self.hero.clone())
+    }
+
+    fn set_hero_image(&mut self, state: HeroImageState) {
+        self.image_states.push(state);
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+/// A movie item with a declared landscape (`Thumb`) image: the artwork
+/// policy's Landscape arm, whose cover-fit box tracks the hero pane's width
+/// directly (design D5), so a resize changes the box.
+fn landscape_hero_item(id: &str) -> mbv_core::api::EmbyItem {
+    let mut item = crate::app::tests::make_item("Hero", "Movie");
+    item.id = id.into();
+    item.image_tags.thumb = "tag".into();
+    item
+}
+
+/// A Home tab with a `HeroFixtureOwner` installed instead of the plain
+/// `FixtureOwner` (this file's other fixture has no declared artwork, so
+/// `hero_data` returns `None` and the projection never fetches).
+fn migrated_home_with_hero(item: mbv_core::api::EmbyItem, terminal_width: u16) -> TickHarness {
+    let mut app = crate::app::render::make_movie_app();
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.tab = crate::app::TabSelection::Home;
+    app.image_protocol_enabled = true;
+    app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+    app.terminal_width = terminal_width;
+    app.terminal_height = 40;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_library_panel();
+    harness.model_mut().push_library_owner(
+        home_key(),
+        Box::new(HeroFixtureOwner::new(hero_content_emby(&item))),
+    );
+    harness
+}
+
+fn owner_of(harness: &TickHarness) -> &HeroFixtureOwner {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.owner(&home_key()))
+        .and_then(|owner| owner.as_any().downcast_ref::<HeroFixtureOwner>())
+        .expect("the hero fixture owner is installed")
+}
+
+/// One fetch per new hero cache key, and none on a repaint tick with the
+/// same key (task 5.10's Verify clause, mirroring the queue visual slot's
+/// `queue_projection_fetches_now_playing_image_once_and_none_on_repaint`,
+/// task 3.4). The fixture has no Emby client, so `spawn_image_fetch`
+/// balances `image_fetches_active` synchronously; the reservation set pins
+/// the request count.
+#[test]
+fn hero_projection_fetches_image_once_and_none_on_repaint() {
+    let mut harness = migrated_home_with_hero(landscape_hero_item("hero-a"), 160);
+    // Establishes `root_frame.library` before the first projection reads it.
+    drop(draw_frame_sized(&mut harness));
+    harness.model_mut().sync_mounted_surfaces();
+
+    let key = "hero-a:Backdrop,Primary,Logo";
+    assert!(
+        harness.model().app.card_image_loading.contains(key),
+        "the new hero key must be reserved by the projection"
+    );
+    let loading = harness.model().app.card_image_loading.clone();
+    let active = harness.model().app.image_fetches_active;
+    let pending = harness.model().app.pending_image_fetches.len();
+
+    // Repaint tick: nothing changed, so the projection starts no new fetch.
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(harness.model().app.card_image_loading, loading);
+    assert_eq!(harness.model().app.image_fetches_active, active);
+    assert_eq!(harness.model().app.pending_image_fetches.len(), pending);
+
+    // A new hero item reserves exactly one new key.
+    if let Some(panel) = harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any_mut()
+                .downcast_mut::<crate::app::components::library_panel::LibraryPanel>()
+        })
+    {
+        if let Some(owner) = panel
+            .owner_mut(&home_key())
+            .and_then(|owner| owner.as_any_mut().downcast_mut::<HeroFixtureOwner>())
+        {
+            owner.hero = hero_content_emby(&landscape_hero_item("hero-b"));
+        }
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness
+        .model()
+        .app
+        .card_image_loading
+        .contains("hero-b:Backdrop,Primary,Logo"));
+}
+
+/// A real terminal resize invalidates every card image (`sync_terminal_resize`,
+/// pre-existing behaviour: font-pixel metrics can change on a real resize, so
+/// the whole cache clears and every key re-fetches). For the hero key this
+/// means exactly one fresh reservation at the resize's sync pass, resolved to
+/// the new box size once "fetched" (simulated the same way as the initial
+/// fetch) — one placeholder frame, then Ready at the new box.
+#[test]
+fn hero_projection_refetches_and_reencodes_on_resize_with_one_placeholder_frame() {
+    let mut harness = migrated_home_with_hero(landscape_hero_item("hero-a"), 160);
+    let key = "hero-a:Backdrop,Primary,Logo".to_string();
+
+    // Establish the Ready state at the initial width.
+    drop(draw_frame_sized(&mut harness));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().app.card_image_loading.contains(&key));
+    let img = image::DynamicImage::new_rgb8(64, 64);
+    let entry = harness.model().app.build_cached_image(&key, Some(img));
+    harness.model_mut().app.card_image_loading.remove(&key);
+    harness
+        .model_mut()
+        .app
+        .card_image_states
+        .insert(key.clone(), entry);
+    harness.model_mut().sync_mounted_surfaces();
+    let box1 = harness
+        .model()
+        .app
+        .card_image_states
+        .get(&key)
+        .and_then(|entry| entry.cover_box)
+        .expect("the Wide header's cover-fit box is keyed on the entry");
+    assert!(matches!(
+        owner_of(&harness).image_states.last(),
+        Some(HeroImageState::Ready { .. })
+    ));
+
+    // Resize: draw computes the fresh geometry, then the sync pass clears the
+    // stale cache and reserves exactly one fresh fetch for the same key.
+    harness.model_mut().app.terminal_width = 220;
+    drop(draw_frame_sized(&mut harness));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().app.card_image_states.is_empty());
+    assert_eq!(
+        harness.model().app.card_image_loading.len(),
+        1,
+        "the resize starts exactly one fresh fetch for the hero key"
+    );
+    assert!(harness.model().app.card_image_loading.contains(&key));
+    assert_eq!(harness.model().app.image_fetches_active, 0);
+    assert!(harness.model().app.pending_image_fetches.is_empty());
+    assert!(
+        matches!(
+            owner_of(&harness).image_states.last(),
+            Some(HeroImageState::Loading)
+        ),
+        "the resize's sync pass shows the placeholder for its one frame"
+    );
+
+    // "Fetch" resolves: the new box size's re-encode.
+    let img = image::DynamicImage::new_rgb8(64, 64);
+    let entry = harness.model().app.build_cached_image(&key, Some(img));
+    harness.model_mut().app.card_image_loading.remove(&key);
+    harness
+        .model_mut()
+        .app
+        .card_image_states
+        .insert(key.clone(), entry);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        matches!(
+            owner_of(&harness).image_states.last(),
+            Some(HeroImageState::Ready { .. })
+        ),
+        "the placeholder shows for at most the one frame the resize's sync pass painted"
+    );
+    let box2 = harness
+        .model()
+        .app
+        .card_image_states
+        .get(&key)
+        .and_then(|entry| entry.cover_box)
+        .expect("the resize re-encode keeps the box keyed on the entry");
+    assert_ne!(box1, box2, "the wider panel re-encodes at a new box size");
 }
