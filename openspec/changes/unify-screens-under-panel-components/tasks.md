@@ -324,7 +324,7 @@ Books conforms to Emby.
 *Unification:* removes the episode table and the Narrow inline filter pills and episodes — Podcasts
 conforms to Emby.
 
-- [ ] 11.1 `PodcastContent`: move `AudiobookshelfPodcastComponent`'s content state into a
+- [x] 11.1 `PodcastContent`: move `AudiobookshelfPodcastComponent`'s content state into a
   `LibraryContentOwner` (alphabetical buckets → Selector row, Square header, overview box, Workspace =
   filter pills + downloaded episodes), filled by the shell's existing Podcasts push; the component
   keeps painting its legacy painter this step. Verify: unit tests of `content()` (one pill bar, Square
