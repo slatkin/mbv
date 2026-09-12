@@ -183,7 +183,7 @@ choose a focus kind, pick a surface or lay out a pane.
   for focus following the active library, mouse eligibility, split drag
   (`tests_tick_integration_wide_split_resize.rs`), and an inactive owner keeping cursor/scroll across a
   tab change.
-- [ ] 5.10 Move image requests for Hero headers and inline heroes into the shell projection: for each
+- [x] 5.10 Move image requests for Hero headers and inline heroes into the shell projection: for each
   projected hero run `artwork_policy` + `hero_artwork_box` (with the Library panel's `RootFrame` area)
   and issue `fetch_card_image` there, generalizing TV's `push_tv_workspace_content`; painting reads
   projected image state. Verify: push tests assert one fetch per new key and none on repaint; a tick
