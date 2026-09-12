@@ -352,13 +352,23 @@ the library rect the root gives it — one painter per surface throughout; no su
 both. If a destination needs a slot or arm the content types lack, the slice stops and the type is
 changed for every destination (D0).
 
+*Slicing inside one destination (tasks 7–11):* each destination is three steps, one per session. First
+the owner and its content mapping, still painted by the destination's legacy painter, so no output
+moves and the panel's slot types are exercised by unit tests. Then the panel skeleton painted from the
+still-mounted component with its own retained hit store — this is the step that deletes the legacy
+painter, and it keeps mounting, focus and mouse untouched, which is what bounds the session. Then
+registration in the panel's owner map, which deletes the mounted component and moves hit resolution
+to the panel without moving a pixel. The middle step is valid only while the mounted component can
+supply its hero from image state the shell already pushes; if it cannot without a paint-time fetch,
+the last two steps land together instead — D9 wins over the split.
+
 **D17 — Base-frame element inventory: every element has one owner panel and one task.** This is the
 enumeration behind "zero visible UI elements that are not components" (G1).
 
 | Element today (painter, site) | Owner at completion | Task |
 |---|---|---|
-| Left column backdrop (`render_legacy_backdrops`, `chrome.rs:16`) | Queue panel + Queue playback panel fills | 3.1, 3.5, 12.1 |
-| Right column backdrop (`render_legacy_backdrops`, `chrome.rs:42`) | Tab / Library / Library playback / Status bar panel fills | 12.1 (after 2.x, 4.1, 5.x) |
+| Left column backdrop (`render_legacy_backdrops`, `chrome.rs:16`) | Queue panel + Queue playback panel fills | 3.1, 3.5, 12.1, 12.2 |
+| Right column backdrop (`render_legacy_backdrops`, `chrome.rs:42`) | Tab / Library / Library playback / Status bar panel fills | 12.1, 12.2 (after 2.x, 4.1, 5.x) |
 | Tab bar + overflow arrows (`render_tabs`, `chrome_tabs.rs:34`) | Tab panel | 2.1 |
 | Status row + volume/mute/remote pills (`render_status_bar`, `chrome_status.rs:377`) | Status bar panel | 2.2 |
 | Right-column transport strip (`PlaybackComponent` at `player_area`) | Library playback panel | 4.1 |
@@ -371,7 +381,7 @@ enumeration behind "zero visible UI elements that are not components" (G1).
 | Queue column boundary (`QueueBoundaryComponent`, `shell_queue.rs:169`) | Queue boundary (root-placed) | 1.4 |
 | Wide hero gap boundary (`WideHeroBoundaryComponent`, `shell_library.rs:363`) | Library panel | 5.9 |
 | Library area publishing (`render_library`, `widgets.rs:529`) | deleted (paints nothing) | 12.1 |
-| Home / Browser / TV / Music / Feeds / ABS Book / ABS Podcast bodies (component-wrapped free painters) | Library panel slots | 5.11, 6.1, 7.1, 8.2, 9.1, 10.1, 11.1 |
+| Home / Browser / TV / Music / Feeds / ABS Book / ABS Podcast bodies (component-wrapped free painters) | Library panel slots | 5.11, 6.1, 7.2, 8.2, 8.3, 9.2, 9.3, 10.2, 11.2 |
 | Overlays, modals, popups, sidebars (`render_overlay_stack`) | unchanged: already component views | — |
 
 ## Risks / Trade-offs

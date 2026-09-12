@@ -4,6 +4,12 @@ destination, never add a destination-only arm. Before any TUI edit, follow
 `.agents/skills/mbv-frontend/SKILL.md`. Tests are ordinary buffer and `Application::tick()` integration
 tests; no test, rule or script checks one destination against another.
 
+Every subtask is one implementer session: it ends with `cargo nextest run -p mbv` green, one painter per
+surface, and no half-applied surface flip. A destination slice is therefore split into its content step
+(the owner and its mapping, still painted by the legacy painter), its painting step (the panel skeleton
+replaces that painter) and its composition step (the mounted component collapses into the panel's owner
+map); the painting step lands with the deletion of the painter it replaces (D16).
+
 ## 0. Base
 
 - [x] 0.1 Confirm the base is `main` at or after `9e59a29a` (not the discarded
@@ -216,12 +222,24 @@ Grid catalog.
 *Unification:* removes the second pill bar and the Feeds-only hero box — the most divergent screen
 proves the slot types early.
 
-- [ ] 7.1 Convert `FeedsComponent` into `FeedsContent`: feed-group pills → Selector row, Watched filter
-  → List controls pills, entries → list slot, selected entry → shared feed-entry producer (Square for podcast feeds, Landscape placeholder otherwise) + overview box, Narrow
-  inline hero. Delete `render_feeds_content`, its `render_selector_content` closure, `paint_feed_hero`,
-  `LayoutMain.feeds_area`, and `ComponentId::Feeds`. Verify: `tests_feeds.rs` rewritten (one pill bar,
-  controls row, policy header); `feeds_component_tests.rs` and `tests_tick_integration_feeds.rs` pass;
-  the `w` key and a click on a Watched pill both change the filter.
+- [ ] 7.1 `FeedsContent`: move `FeedsComponent`'s content state into a plain `LibraryContentOwner`
+  (feed-group pills → the one `SelectorRow`; the Watched filter → `ListControls` pills; entries → the
+  list slot; selected entry → the shared feed-entry producer — Square for a podcast feed, Landscape
+  placeholder otherwise — plus its overview), filled by the shell's existing Feeds push. The component
+  still paints its legacy painter this step, so no output moves. Verify: unit tests of `content()` (one
+  pill bar; the controls row only with a filter; Square/Landscape per feed kind); `tests_feeds.rs`,
+  `feeds_component_tests.rs` and `tests_tick_integration_feeds.rs` pass unchanged.
+- [ ] 7.2 Paint Feeds through the panel: `FeedsComponent::view` becomes the shared Wide/Narrow skeleton
+  over `content()`, keeping only its own pill/row hit store, and `render_feeds_content`, its
+  `render_selector_content` closure and `paint_feed_hero` are deleted with `tests_feeds.rs` rewritten to
+  the new output (the hero image is the projected `HeroImageState`, never a paint-time fetch). Verify:
+  one pill bar, one controls row and the policy header in the buffer; `w` and a click on a Watched pill
+  both change the filter; `feeds_component_tests.rs` and `tests_tick_integration_feeds.rs` still pass.
+- [ ] 7.3 Register Feeds as `LibraryKey::Feeds`: delete `ComponentId::Feeds`, the mounted component, its
+  hit store and `LayoutMain.feeds_area`, with slot-event translation and hit resolution moving to the
+  panel, and re-point `feeds_component_tests.rs` at the owner type. Verify: tick integration tests for
+  focus, mouse eligibility and a pill/row click through the panel, and owner retention across a tab
+  change; `rg FeedsComponent src` finds nothing.
 
 ## 8. TV (S7)
 
@@ -230,78 +248,135 @@ proves the slot types early.
 - [ ] 8.1 Merge `TvWorkspaceComponent` and `BrowserComponent(TvShows)` into one `TvContent` owner:
   one series list owner (Wide + Inline presentations), episode list, season cursor, Inline Search
   session; delete `hand_off_tv_breakpoint`, the TV part of `apply_pending_inline_search_transfer`, and
-  `ComponentId::TvWorkspace`. Verify: `tv_workspace_component_tests.rs` and the TV re-anchor tests pass
+  the second mounted id (Narrow keeps painting `render_narrow_browse_with_ctx` from the merged
+  component this step). Verify: `tv_workspace_component_tests.rs` and the TV re-anchor tests pass
   (stable target across Wide↔Narrow); `tests_tick_integration_tv.rs` passes.
-- [ ] 8.2 Paint TV through the panel: letter pills → Selector row, hero from the shared `EmbyItem` producer, overview box,
-  Workspace = season pills (Workspace Selector row) + episodes; Narrow inline hero from the same hero
-  content (the policy's landscape art, no longer the poster); Narrow episodes only via the selection
-  modal. Delete `tv_wide.rs::render_wide_tv_with_ctx`,
-  `render_series_inline_detail`, `SERIES_IMAGE_COLS/ROWS`, `NarrowInlineHero`, and
-  `LayoutMain.tv_wide_*`. Verify: `tv_wide_tests.rs`/`detail_series_tests.rs` rewritten to panel output;
-  season-pill and episode clicks resolve via tick tests.
+- [ ] 8.2 TV Wide through the panel: the Wide view becomes the shared `render_wide_skeleton` (letter
+  pills → Selector row, hero from the shared `EmbyItem` producer, overview box, Workspace = season
+  pills + episodes), and `tv_wide.rs::render_wide_tv_with_ctx` with `LayoutMain.tv_wide_*` is deleted,
+  `tv_wide_tests.rs` rewritten to panel output. Narrow keeps `render_series_inline_detail` this step.
+  Verify: season-pill and episode clicks resolve through tick tests; the Narrow tests pass unchanged.
+- [ ] 8.3 TV Narrow through the panel: delete `render_series_inline_detail`, `SERIES_IMAGE_COLS/ROWS`,
+  `NarrowInlineHero` and their tests; the inline hero derives from the same `HeroContent` (the policy's
+  landscape art, no longer the poster) and episodes open only through `SelectionModal`. Verify:
+  `detail_series_tests.rs` and the Narrow TV characterization rewritten to panel output; a Wide↔Narrow
+  resize keeps the selected series and its viewport.
+- [ ] 8.4 Register TV as `LibraryKey::Service(TvShows)`: delete the remaining mounted component, its
+  `ComponentId` arm and its hit stores, moving season-pill/episode hit resolution to the panel, and
+  re-point `tv_workspace_component_tests.rs` and the TV rows of `tests_library_characterization.rs` at
+  the owner. Verify: tick integration tests for focus, mouse eligibility and both lists; an inactive TV
+  owner keeps cursor/scroll across a tab change.
 
 ## 9. Music (S8)
 
 *Unification:* removes Music's private header layout, its focused-box surface arm and dead search
 branches.
 
-- [ ] 9.1 Convert `MusicWorkspaceComponent` into `MusicContent`: group pills → Selector row, albums →
-  list slot, Square header, no overview box when the album has none, Workspace = tracks (accent-soft on
-  focus, now shared); Narrow inline hero with album art, tracks via the modal. Delete
-  `music_wide.rs::render_{wide,narrow}_music_group_with_ctx`, `render_wide_left_hero`,
-  `wide_music_left_layout`, `music_wide_browser.rs`, the `is_search_active` search-box/`render_plain_rows`
-  branches, and `LayoutMain.wide_music_*`. Verify: `tests_music_wide.rs`, `tests_music_narrow.rs`,
-  `tests_music_groups.rs`, `tests_album_focus.rs` rewritten where output changed;
-  `tests_tick_integration_music_mouse.rs` and the Music re-anchor characterization pass.
+- [ ] 9.1 `MusicContent`: move `MusicWorkspaceComponent`'s content state (group pills, albums, tracks,
+  cursor, inline search) into a `LibraryContentOwner` (group pills → Selector row, albums → list slot,
+  Square header, no overview box when the album has none, Workspace = tracks), filled by the shell's
+  existing Music push; the component keeps painting its legacy painters this step. Verify: unit tests of
+  `content()` (Square artwork for an album, overview omitted when absent, tracks as the workspace);
+  `tests_music_wide.rs`, `tests_music_narrow.rs`, `tests_music_groups.rs` and the Music component tests
+  pass unchanged.
+- [ ] 9.2 Music Wide through the panel: delete `music_wide.rs`'s wide path
+  (`render_wide_music_group_with_ctx`, `render_wide_left_hero`), `music_wide_browser.rs`,
+  `wide_music_left_layout` and `LayoutMain.wide_music_*`, painting `render_wide_skeleton` instead;
+  Narrow keeps its legacy painter this step. Verify: `tests_music_wide.rs`, `tests_music_groups.rs` and
+  `tests_music_wide_reanchor_characterization.rs` rewritten to panel output; the re-anchor
+  characterization still passes.
+- [ ] 9.3 Music Narrow through the panel: delete `render_narrow_music_group_with_ctx` and the
+  `is_search_active` search-box/`render_plain_rows` branches, rewrite `tests_music_narrow.rs` and
+  `tests_music_characterization.rs`, with the inline hero built from the same `HeroContent` and tracks
+  opening only through `SelectionModal`. Verify: `tests_tick_integration_music_mouse.rs` passes at both
+  breakpoints; album art is the projected image, never a paint-time fetch.
+- [ ] 9.4 Register Music as `LibraryKey::Service(Music)`: delete the mounted component, its `ComponentId`
+  arm and the per-component pushes in `shell_music_workspace*.rs`, moving hit resolution to the panel,
+  and re-point the Music component tests at the owner type. Verify: tick integration tests for focus,
+  mouse eligibility and album/track clicks; an inactive Music owner keeps cursor/scroll across a tab
+  change.
 
 ## 10. Audiobookshelf Books (S9)
 
 *Unification:* removes the second content box, the list-backdrop workspace row and inline chapters —
 Books conforms to Emby.
 
-- [ ] 10.1 Convert `AudiobookshelfBookComponent` into `BookContent`: surname buckets → Selector row,
-  Portrait header with progress in meta, overview box, Workspace = chapters (owning-surface row); Narrow
-  inline hero without chapters, Enter opens the selection modal. Delete
-  `render_audiobookshelf_book_content`, `render_narrow_book`, `render_book_rows`' inline path and the
-  private geometry struct. Verify: `tests_audiobookshelf_books.rs` and
-  `audiobookshelf_book_component_tests.rs` rewritten; `tests_tick_integration_book.rs` passes; Narrow
-  Enter opens the chapter modal.
+- [ ] 10.1 `BookContent`: move `AudiobookshelfBookComponent`'s content state into a
+  `LibraryContentOwner` (surname buckets → Selector row, Portrait header with progress in meta,
+  overview box, Workspace = chapters), filled by the shell's existing Books push; the component keeps
+  painting its legacy painter this step. Verify: unit tests of `content()` (one pill bar, Portrait
+  artwork, progress as a plain meta row, chapters as the workspace); `tests_audiobookshelf_books.rs`,
+  `audiobookshelf_book_component_tests.rs` and `tests_tick_integration_book.rs` pass unchanged.
+- [ ] 10.2 Paint Books through the panel: delete `render_audiobookshelf_book_content`,
+  `render_narrow_book`, `render_book_rows`' inline path and the private geometry struct, painting the
+  shared skeleton instead, with `tests_audiobookshelf_books.rs` rewritten to panel output (Narrow
+  inline hero without chapters, Enter opens the selection modal). Verify: buffer tests for the Wide
+  Workspace box and the Narrow hero; Narrow Enter opens the chapter modal;
+  `audiobookshelf_book_component_tests.rs` still passes.
+- [ ] 10.3 Register Books as `LibraryKey::Service(AudiobookshelfBook)`: delete the mounted component, its
+  `ComponentId` arm, its hit store and `LayoutMain.audiobookshelf_book_area`, moving slot-event
+  translation to the panel, and re-point the book component tests at the owner type. Verify: tick
+  integration tests for focus, mouse eligibility and chapter-row clicks; the book owner keeps
+  cursor/scroll across a tab change.
 
 ## 11. Audiobookshelf Podcasts (S10)
 
 *Unification:* removes the episode table and the Narrow inline filter pills and episodes — Podcasts
 conforms to Emby.
 
-- [ ] 11.1 Convert `AudiobookshelfPodcastComponent` into `PodcastContent`: alphabetical buckets →
-  Selector row, Square header, overview box, Workspace = filter pills (Workspace Selector row) +
-  downloaded episodes; Narrow inline hero without pills or episodes, Enter opens the modal. Delete
-  `render_audiobookshelf_podcast_content`, `render_narrow_podcast`, `paint_bucket_pills` and the private
-  geometry struct. Verify: `tests_audiobookshelf_podcasts.rs`, the podcast component/geometry tests
-  rewritten; `tests_tick_integration_podcast.rs` passes.
+- [ ] 11.1 `PodcastContent`: move `AudiobookshelfPodcastComponent`'s content state into a
+  `LibraryContentOwner` (alphabetical buckets → Selector row, Square header, overview box, Workspace =
+  filter pills + downloaded episodes), filled by the shell's existing Podcasts push; the component
+  keeps painting its legacy painter this step. Verify: unit tests of `content()` (one pill bar, Square
+  artwork, the workspace carrying both the filter Selector and the episode list);
+  `tests_audiobookshelf_podcasts.rs` and the podcast component tests pass unchanged.
+- [ ] 11.2 Paint Podcasts through the panel: delete `render_audiobookshelf_podcast_content`,
+  `render_narrow_podcast`, `paint_bucket_pills` and the private geometry struct — the episode table,
+  the Narrow inline filter pills and the Narrow inline episodes go with them — painting the shared
+  skeleton instead. Verify: `tests_audiobookshelf_podcasts.rs` and
+  `audiobookshelf_podcast_geometry_tests.rs` rewritten to panel output; Narrow Enter opens the episode
+  modal; the Wide filter pills are the Workspace Selector row.
+- [ ] 11.3 Register Podcasts as `LibraryKey::Service(AudiobookshelfPodcast)`: delete the mounted
+  component, its `ComponentId` arm, its hit store and `LayoutMain.audiobookshelf_podcast_area`, moving
+  slot-event translation to the panel, and re-point the podcast component tests at the owner type.
+  Verify: `tests_tick_integration_podcast.rs` passes through the panel; tick tests for focus and filter
+  pill/episode clicks; the podcast owner keeps cursor/scroll across a tab change.
 
 ## 12. Delete the base frame and legacy structures (S11)
 
 *Unification:* removes every remaining way to paint outside a panel.
 
-- [ ] 12.1 Delete `compose_base_frame`, `render_main`, `paint_legacy_chrome`,
-  `render_legacy_backdrops`, `render_library`, every shell `render_*_component` method, the transitional
-  old-component branch in `RootFrame`, and the remaining legacy `ComponentId` arms
-  (`Browser`, `WideHeroBoundary`). Verify: `cargo check -p mbv`; `rg` finds none of these symbols and
-  no `fetch_card_image`/`fetch_*` call reachable from any component `view` or Render Component (manual
-  check); one tick integration test per Panel mode (`both`, `queue-only`, `library-only`, mini
-  view) pre-fills the test buffer with a sentinel symbol, draws one frame, and asserts no sentinel cell
-  remains inside any mounted panel's `RootFrame` placement.
-- [ ] 12.2 Delete `LayoutMain`, `LayoutPlayback` and `FrameChromeGeometry`'s paint-to-input use; answer
-  context-menu keyboard anchors from the owning component through the existing request path. Verify:
-  `rg LayoutMain src` returns nothing; context-menu keyboard-anchor tests pass for a library row and a
-  queue row.
-- [ ] 12.3 Delete the dead paths of design D13 (`GridMediaList`, `NarrowBrowseControl`,
-  `GridPaintPolicy`, `LeftPaneFocus`, `SelectedRowSurface` as a caller argument) and the tests that only
-  exercised deleted structures, including `src/app/render/tests_conformance_matrix.rs`; make
+- [ ] 12.1 Delete the base frame composition: `compose_base_frame`, `render_main`,
+  `paint_legacy_chrome`, `render_legacy_backdrops`, `render_library`, every shell `render_*_component`
+  method, the transitional old-component branch in `RootFrame`, and the remaining legacy `ComponentId`
+  arms (`Browser`, `WideHeroBoundary`), so the draw path composes the `RootFrame` placements plus the
+  overlay stack only. Verify: `cargo check -p mbv`; `rg` finds none of these symbols; no
+  `fetch_card_image`/`fetch_*` call is reachable from any component `view` or Render Component (manual
+  check); one tick integration test per Panel mode asserts a non-empty frame.
+- [ ] 12.2 Pass the sentinel test: one tick integration test per Panel mode (`both`, `queue-only`,
+  `library-only`, mini view) pre-fills the test buffer with a sentinel symbol, draws one frame, and
+  asserts no sentinel cell remains inside any mounted panel's `RootFrame` placement — fixing the panels
+  that do not yet fill their own surface (what is left of the full-column backdrops). Verify: the four
+  tests pass and each fails when a panel's fill is removed.
+- [ ] 12.3 Delete the list/cursor half of the remaining `LayoutMain` (`left_item_rows`, `hero_area`,
+  `inline_hero_area`, `selector_tabs`, `breadcrumbs`, `selected_item_rect` — whatever the destination
+  slices have not already removed), answering context-menu keyboard anchors from the owning component
+  through the existing request path. Verify: column-aware cursor and mouse-hit tests pass; `rg` finds no
+  removed field.
+- [ ] 12.4 Delete `LayoutPlayback` and the remaining chrome `LayoutMain` fields (`panel_area`,
+  `panel_content_area`, `home_area`, `card` — whatever the slices have not already removed) with `FrameChromeGeometry`'s paint-to-input use, so
+  `RootFrame` is the only root geometry. Verify: `rg LayoutMain src` and `rg LayoutPlayback src` return
+  nothing; context-menu keyboard-anchor tests pass for a library row and a queue row.
+- [ ] 12.5 Delete the dead paths of design D13 (`GridMediaList`, `NarrowBrowseControl`, `GridPaintPolicy`,
+  `LeftPaneFocus`, `SelectedRowSurface` as a caller argument) and the tests that only exercised them.
+  Verify: `cargo check -p mbv`; `rg GridMediaList|NarrowBrowseControl|GridPaintPolicy|LeftPaneFocus src`
+  finds nothing.
+- [ ] 12.6 Delete the last dead branches (Music/TV list-level search painters, `HomeCarrier`, leftover
+  per-destination paint helpers) with `src/app/render/tests_conformance_matrix.rs`, then make
   `wide_hero_presentation`, `pill_bar_areas`, `wide_hero_browser_pane`, `wide_hero_hero_content_box` and
   `place_media_list_below` private to the Library panel's arrangement module (no caller outside it
-  remains).
-  Verify: `cargo clippy --workspace --all-targets` reports no dead code; `cargo nextest run -p mbv` green.
+  remains). Verify: `cargo clippy --workspace --all-targets` reports no dead code; `cargo nextest run -p
+  mbv` green.
 
 ## 13. Docs and glossary (S12)
 
