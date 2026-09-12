@@ -23,8 +23,9 @@ pub mod wide;
 
 #[allow(unused_imports)]
 pub(in crate::app) use content::{
-    ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroFacts, HeroHeader,
-    LibraryPanelContent, ListControls, ListSlot, PanelList, SelectorRow, Workspace,
+    ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroFacts, HeroHeader, HeroImageState,
+    LibraryPanelContent, ListControls, ListSlot, PanelHeroImagePaint, PanelList, SelectorRow,
+    Workspace,
 };
 #[allow(unused_imports)]
 pub(in crate::app) use hero::{

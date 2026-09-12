@@ -7,13 +7,17 @@
 //! and hands the active owner semantic slot events, which the owner
 //! translates into its existing typed `Msg`s.
 
+use std::any::Any;
 use std::collections::HashMap;
+
+use tuirealm::event::KeyEvent;
 
 use crate::app::components::component_id::BrowserKey;
 use crate::app::components::media_list::RowLocalInput;
 use crate::app::components::msg::Msg;
 
-use super::content::LibraryPanelContent;
+use super::content::{HeroImageState, LibraryPanelContent};
+use super::hero::HeroContentData;
 
 /// The identity of one library destination, keying the panel's owner map
 /// (design D2: `Home | Feeds | Service(BrowserKey)`). Stable across
@@ -56,6 +60,38 @@ pub(in crate::app) trait LibraryContentOwner {
     /// Translate one resolved slot event into the owner's existing typed
     /// `Msg`s (design D2). `None` when the owner claims nothing for it.
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg>;
+
+    /// The panel's minimal keyboard forwarding (task 5.11, design D3): the
+    /// focused panel hands one already-routed chord to the active owner,
+    /// which keeps its own local key interpretation exactly as a mounted
+    /// destination did. The router keeps precedence — the panel only
+    /// forwards when it holds framework focus, so no chord is resolved
+    /// outside `router.rs`/`key_policy.rs`.
+    fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let _ = key;
+        None
+    }
+
+    /// The current hero's content data for the shell's image projection
+    /// (task 5.10, design D9), or `None` when the owner shows no hero. The
+    /// projection runs the artwork box and the fetch; painting reads the
+    /// projected state only.
+    fn hero_data(&mut self) -> Option<HeroContentData> {
+        None
+    }
+
+    /// Receive the projection's image state for the current hero (task
+    /// 5.10, design D9).
+    fn set_hero_image(&mut self, _state: HeroImageState) {}
+
+    /// Downcast support for the shell's per-destination pushes (the shell
+    /// projects destination-specific content into a typed owner it knows
+    /// by name, addressed through the panel's `LibraryKey` map).
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /// The shared-borrow twin of [`LibraryContentOwner::as_any_mut`] for
+    /// the shell's pure reads (section identity, painted geometry).
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// The panel's owner map (design D2): every embedded content owner keyed by
@@ -99,6 +135,21 @@ impl LibraryOwners {
     /// The owner currently painted and event-bound, or `None`.
     pub fn active_mut(&mut self) -> Option<&mut Box<dyn LibraryContentOwner>> {
         self.owners.get_mut(self.active.as_ref()?)
+    }
+
+    /// The owner installed for `key`, whether active or not (the shell's
+    /// destination-specific pushes reach inactive owners too — an inactive
+    /// owner's content is refreshed while its library is in the catalog).
+    pub fn get_mut(&mut self, key: &LibraryKey) -> Option<&mut dyn LibraryContentOwner> {
+        match self.owners.get_mut(key) {
+            Some(owner) => Some(owner.as_mut()),
+            None => None,
+        }
+    }
+
+    /// The shared-borrow twin of [`LibraryOwners::get_mut`].
+    pub fn get(&self, key: &LibraryKey) -> Option<&dyn LibraryContentOwner> {
+        self.owners.get(key).map(|owner| &**owner)
     }
 
     /// The active owner's key, for the shell's transitional branch.

@@ -81,6 +81,7 @@ impl LibraryContentOwner for FixtureOwner {
                     artwork: HeroArtwork {
                         shape: ArtworkShape::Landscape,
                         source: None,
+                        image: crate::app::components::library_panel::content::HeroImageState::None,
                     },
                 },
                 overview: None,
@@ -114,6 +115,14 @@ impl LibraryContentOwner for FixtureOwner {
         log.events.push(event);
         log.selections.push(selection);
         Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    }
+
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

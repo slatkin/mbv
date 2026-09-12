@@ -125,7 +125,7 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
     let out = fold_tick_with_outcome(
         None,
         key(KeyCode::Down),
-        Some(ComponentId::Home),
+        Some(ComponentId::Library),
         RouterOutcome::FallThrough,
     );
     assert!(

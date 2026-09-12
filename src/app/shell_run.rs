@@ -49,6 +49,10 @@ impl Model {
         // drives its owner map (retention + the active pointer) before the
         // focus pass routes to the active surface.
         self.sync_library_panel();
+        // Task 5.10 (design D9): the active owner's hero image projection —
+        // the fetches and the cover-fit box re-encode — runs here, before the
+        // draw, so painting reads projected state only.
+        self.sync_library_hero_images();
         // Retire destination components whose Service library left the
         // catalog before the focus pass routes to the active destination
         // (keep-destination-components-mounted tasks 1.3).
@@ -147,7 +151,6 @@ impl Model {
         if self.active_library_owner_migrated() {
             self.render_library_panel(f);
         } else {
-            self.render_home_component(f);
             self.render_feeds_component(f);
             self.render_audiobookshelf_podcast_component(f);
             self.render_audiobookshelf_book_component(f);

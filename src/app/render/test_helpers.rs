@@ -367,14 +367,14 @@ pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Termina
     term
 }
 
-/// Render the Home destination exactly as the live shell does (task 5.3d,
-/// Home legacy underpaint removal): draw the legacy `App::render` base frame
-/// — which for Home now only reserves `home_area` — then paint the mounted
-/// `HomeComponent` through the real `Model::render_home_component` shell
-/// path (which sizes the component by `home_area` and paints the cover image
-/// it returned). Returns the model, so tests can read the component's own
-/// painted geometry and App state, together with the terminal. This is the
-/// Home characterization path once the legacy underpaint is gone.
+/// Render the Home destination exactly as the live shell does (task 5.11,
+/// Home as the first panel owner): run the real sync pass (which mounts the
+/// Library panel, points it at the Home owner, and projects the hero images),
+/// then draw the base frame — which for Home only reserves the library area —
+/// and paint the migrated `LibraryPanel` through the real
+/// `Model::render_library_panel` shell path. Returns the model, so tests can
+/// read the panel's own painted geometry and App state, together with the
+/// terminal.
 ///
 /// Home content is Model-owned (task 5.3d), so a test that needs seeded
 /// Continue Watching rows/pills uses `render_home_shell_with` and seeds
@@ -420,12 +420,12 @@ pub fn render_home_shell_with(
     let mut model = crate::app::shell::Model::new(app);
     seed(&mut model);
     model.push_home_content();
-    model.sync_active_destination();
+    model.sync_mounted_surfaces();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
         model.app.compose_base_frame(f, None);
-        model.render_home_component(f);
+        model.render_library_panel(f);
     })
     .unwrap();
     (model, term)
@@ -433,6 +433,29 @@ pub fn render_home_shell_with(
 
 pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
     render_view_to_terminal(app, width, height).1
+}
+
+/// The Home content owner inside the mounted `LibraryPanel` (task 5.11),
+/// for the panel-output test path: the characterization tests read the
+/// owner's own cursor/section/scroll — the same painted-truth contract the
+/// deleted mounted `HomeComponent` served.
+pub(in crate::app) fn home_owner(
+    model: &crate::app::shell::Model,
+) -> Option<&crate::app::components::home_content::HomeContent> {
+    use crate::app::components::library_panel::LibraryKey;
+    model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .and_then(|c| {
+            c.as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.owner(&LibraryKey::Home))
+        .and_then(|owner| {
+            owner
+                .as_any()
+                .downcast_ref::<crate::app::components::home_content::HomeContent>()
+        })
 }
 
 /// Assert, against a *painted* buffer, that a Wide hero list pane leaves

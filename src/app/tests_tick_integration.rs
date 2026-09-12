@@ -116,7 +116,7 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
     }));
     let outcome = harness.step();
 
-    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Home));
+    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Library));
     let seeks: Vec<f64> = outcome
         .raw_messages
         .iter()
@@ -211,7 +211,8 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     );
     assert_eq!(
         stub_harness.model().application.focus(),
-        Some(&ComponentId::Home)
+        Some(&ComponentId::Library),
+        "the Home owner is installed with the panel, so the normalized Home tab routes to the Library panel (task 5.11)"
     );
 }
 

@@ -28,6 +28,8 @@ use crate::app::components::UserEvent;
 use crate::app::list_pane_width::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
 
+use super::content::{HeroImageState, PanelHeroImagePaint};
+use super::hero::HeroContentData;
 use super::narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
 use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
 use super::wide::{render_wide_skeleton, SkeletonHits, WideSkeletonGeometry};
@@ -72,6 +74,11 @@ pub struct LibraryPanel {
     split_gestures: MouseGestureState,
     /// The library surface's own gesture recognizer for slot events.
     gestures: MouseGestureState,
+    /// The projected hero image paint the last view retained (task 5.10,
+    /// design D9): the shell takes it after `view` returns and paints the
+    /// projected protocol into the reserved box (the same defer-the-pixel-
+    /// paint seam every destination component uses).
+    image_paint: Option<PanelHeroImagePaint>,
 }
 
 impl LibraryPanel {
@@ -87,6 +94,7 @@ impl LibraryPanel {
             split: None,
             split_gestures: MouseGestureState::new(),
             gestures: MouseGestureState::new(),
+            image_paint: None,
         }
     }
 
@@ -141,12 +149,83 @@ impl LibraryPanel {
         self.list_rect()
     }
 
+    /// The Selector row's retained hit regions, for the pill-row test path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_selector_hits(
+        &self,
+    ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
+        &self.hits.selector
+    }
+
+    /// The last painted Wide skeleton geometry, for the panel-output test
+    /// path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_wide_geometry(&self) -> Option<WideSkeletonGeometry> {
+        self.wide_geometry.clone()
+    }
+
+    /// The last painted Narrow skeleton geometry, for the panel-output test
+    /// path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_narrow_geometry(&self) -> Option<NarrowSkeletonGeometry> {
+        self.narrow_geometry.clone()
+    }
+
+    // ── Shell-directed owner projection (task 5.10, design D9) ───────────
+
+    /// The active owner's current hero content data, for the shell's image
+    /// projection.
+    pub(in crate::app) fn active_hero_data(&mut self) -> Option<HeroContentData> {
+        self.owners.active_mut().and_then(|owner| owner.hero_data())
+    }
+
+    /// Deliver the projection's image state to the active owner.
+    pub(in crate::app) fn set_active_hero_image(&mut self, state: HeroImageState) {
+        if let Some(owner) = self.owners.active_mut() {
+            owner.set_hero_image(state);
+        }
+    }
+
+    /// Mutably borrow the owner installed for `key` (the shell's
+    /// destination-specific content pushes reach a typed owner through its
+    /// `as_any_mut`).
+    pub(in crate::app) fn owner_mut(
+        &mut self,
+        key: &LibraryKey,
+    ) -> Option<&mut dyn LibraryContentOwner> {
+        self.owners.get_mut(key)
+    }
+
+    /// The shared-borrow twin of [`LibraryPanel::owner_mut`], for the
+    /// shell's pure reads.
+    pub(in crate::app) fn owner(&self, key: &LibraryKey) -> Option<&dyn LibraryContentOwner> {
+        self.owners.get(key)
+    }
+
+    /// Take the hero image paint the last view retained (the shell paints it
+    /// right after `view` returns).
+    pub(in crate::app) fn take_image_paint(&mut self) -> Option<PanelHeroImagePaint> {
+        self.image_paint.take()
+    }
+
+    /// The painted panel's (list slot rect, selected row rect) for the
+    /// context-menu anchor path — the panel's own last-painted geometry, the
+    /// same painted-truth contract the old destination components'
+    /// `menu_placement_geometry` served.
+    pub(in crate::app) fn menu_geometry(
+        &self,
+    ) -> Option<(ratatui::layout::Rect, Option<ratatui::layout::Rect>)> {
+        let wide = self.wide_geometry.as_ref()?;
+        Some((wide.list_panel, wide.selected))
+    }
+
     // ── Event interpretation ─────────────────────────────────────────────
 
     /// The list slot's row-flow rect from the last painted frame, when one
     /// painted.
     fn list_rect(&self) -> Option<ratatui::layout::Rect> {
         self.wide_geometry
+            .as_ref()
             .map(|geometry| geometry.list_area)
             .or(self
                 .narrow_geometry
@@ -300,6 +379,7 @@ impl LibraryPanel {
         self.narrow_geometry = None;
         self.painted_area = None;
         self.split = None;
+        self.image_paint = None;
     }
 }
 
@@ -354,8 +434,19 @@ impl Component for LibraryPanel {
         } else {
             let geometry =
                 render_narrow_skeleton(frame, area, &mut content, self.focused, &mut hits);
-            self.narrow_geometry = Some(geometry);
+            self.narrow_geometry = Some(geometry.clone());
         }
+        // The projected hero image's reserved box (task 5.10, design D9): the
+        // shell paints the protocol into it right after view returns.
+        self.image_paint = self
+            .wide_geometry
+            .as_ref()
+            .and_then(|geometry| geometry.hero_image.clone())
+            .or_else(|| {
+                self.narrow_geometry
+                    .as_ref()
+                    .and_then(|geometry| geometry.inline_hero_image.clone())
+            });
         self.hits = hits;
         self.painted_area = Some(area);
     }
@@ -383,11 +474,14 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            // Keyboard interpretation for migrated owners lands with each
-            // destination's conversion (tasks 5.11+): the router keeps
-            // precedence, and the panel will translate resolved chords into
-            // slot events. Until then the old destination components stay
-            // the keyboard endpoints for their libraries.
+            // The panel's minimal keyboard forwarding (task 5.11, design D3):
+            // the focused panel hands the already-routed chord to the active
+            // owner, which keeps its local key interpretation exactly as a
+            // mounted destination did. The router keeps precedence — this is
+            // not a second resolution site, only delivery.
+            Event::Keyboard(key) if self.focused => {
+                self.owners.active_mut().and_then(|owner| owner.on_key(key))
+            }
             _ => None,
         }
     }
@@ -464,6 +558,8 @@ mod panel_tests {
                         artwork: crate::app::components::library_panel::HeroArtwork {
                             shape: crate::app::components::library_panel::ArtworkShape::Landscape,
                             source: None,
+                            image:
+                                crate::app::components::library_panel::content::HeroImageState::None,
                         },
                     },
                     overview: None,
@@ -501,6 +597,14 @@ mod panel_tests {
             Some(Msg::TerminalEvent(
                 crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
             ))
+        }
+
+        fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+            self
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
         }
     }
 

@@ -8,9 +8,9 @@
 //! which sets the component's rect, then read `ContextMenuComponent::menu_rect()`.
 use super::tests_podcast::add_emby_movie_library;
 use super::*;
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
-    ComponentId, ContextMenuComponent, HomeComponent, Msg, OverlayId, ShellRequest,
-    TerminalObserverEvent,
+    ComponentId, ContextMenuComponent, Msg, OverlayId, TerminalObserverEvent,
 };
 use crate::app::shell::Model;
 use crate::app::tests::*;
@@ -103,15 +103,15 @@ fn pointer_placement_stays_click_anchored_not_following_selection() {
     );
 }
 
-/// Task 5.3d, Home menu-placement geometry: when Home is the active
-/// destination with Library focus, the shell places the context menu from the
-/// mounted `HomeComponent`'s own painted geometry — never the legacy
-/// `AppLayout.left_area`/`selected_item_rect` copies. To prove the source, the
-/// legacy copies are poisoned far outside the panel and the menu must still
-/// land exactly where the component's paint implies, while a fallback to the
-/// poisoned rect would land elsewhere. Paint only the Home component (and the
-/// overlay), never the legacy `App::render` underpaint, so the poisoned legacy
-/// copies stay stale for the whole placement.
+/// Task 5.3d + 5.11, Home menu-placement geometry: when the Home owner is
+/// the migrated active destination with Library focus, the shell places the
+/// context menu from the mounted `LibraryPanel`'s own painted geometry —
+/// never the legacy `AppLayout.left_area`/`selected_item_rect` copies. To
+/// prove the source, the legacy copies are poisoned far outside the panel
+/// and the menu must still land exactly where the panel's paint implies,
+/// while a fallback to the poisoned rect would land elsewhere. Paint only
+/// the panel (and the overlay), never the legacy `App::render` underpaint,
+/// so the poisoned legacy copies stay stale for the whole placement.
 #[test]
 fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     use crate::app::types_context_menu::ContextMenu;
@@ -121,9 +121,13 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.tab = TabSelection::Home;
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
-    model.handle_home_request(ShellRequest::HomeContextMenu {
+    model.handle_home_request(crate::app::components::ShellRequest::HomeContextMenu {
         home_cw_selected: model.home_continue_watching_selected(),
-        target: crate::app::components::msg::HomeRowTarget { item_id: Some("id0".into()), source: None, from_continue_watching: true },
+        target: crate::app::components::msg::HomeRowTarget {
+            item_id: Some("id0".into()),
+            source: None,
+            from_continue_watching: true,
+        },
     });
     assert!(
         matches!(
@@ -135,22 +139,31 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
 
     model.sync_modal_requests();
     model.push_home_content();
-    model.app.layout.main.home_area = Rect::new(0, 0, 80, 24);
+    // The panel paints from `RootFrame.library` (task 5.9); publish it
+    // directly, wide enough for the Wide skeleton's split.
+    let library_area = Rect::new(0, 0, 100, 30);
+    model.app.layout.root_frame.library = Some(library_area);
+    // The mounted panel only paints its active owner's surface; the shell's
+    // sync pass points it at the Home owner (`sync_library_panel`), which
+    // this test drives directly rather than through `sync_mounted_surfaces`.
+    model.sync_library_panel();
 
-    let backend = TestBackend::new(80, 24);
+    let backend = TestBackend::new(100, 30);
     let mut term = Terminal::new(backend).unwrap();
-    // Paint only the Home component so its `view()` produces the authoritative
-    // placed geometry while the legacy `AppLayout` copies stay untouched.
-    term.draw(|f| model.render_home_component(f)).unwrap();
+    // Paint only the panel so its `view()` produces the authoritative placed
+    // geometry while the legacy `AppLayout` copies stay untouched.
+    term.draw(|f| model.render_library_panel(f)).unwrap();
 
-    // Capture the component-painted geometry the shell must anchor to, then
+    // Capture the panel-painted geometry the shell must anchor to, then
     // poison the corresponding legacy copies far outside the panel.
-    let home = model
+    let painted = model
         .application
-        .get_component(&ComponentId::Home)
-        .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
-        .expect("Home component mounted");
-    let (panel, selected) = home.menu_placement_geometry();
+        .get_component(&ComponentId::Library)
+        .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
+        .expect("Library panel mounted")
+        .menu_geometry()
+        .expect("panel painted geometry");
+    let (panel, selected) = painted;
     model.app.layout.main.left_area = Rect::new(0, 0, 200, 200);
     model.app.layout.main.selected_item_rect = Some(Rect::new(500, 500, 1, 1));
 

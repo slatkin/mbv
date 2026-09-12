@@ -17,7 +17,7 @@ use crate::app::render::components::hero_model::{
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use crate::app::ui_util::{clean_overview, fmt_duration_approx};
 
-use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroFacts};
+use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroFacts, HeroImageState};
 
 /// A producer's output (design D5): the facts plus the item's overview.
 /// Destinations attach a `Workspace` when assembling [`HeroContent`]; the
@@ -43,6 +43,7 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
         return HeroArtwork {
             shape: ArtworkShape::Square,
             source: music_source(item),
+            image: HeroImageState::None,
         };
     }
     let tags = &item.image_tags;
@@ -57,22 +58,26 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
         return HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: None,
+            image: HeroImageState::None,
         };
     }
     if landscape_declared {
         HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: Some(emby_source(item, landscape_image_chain(item))),
+            image: HeroImageState::None,
         }
     } else if poster_declared {
         HeroArtwork {
             shape: ArtworkShape::Portrait,
             source: Some(emby_source(item, &["Primary", "Backdrop", "Logo"])),
+            image: HeroImageState::None,
         }
     } else {
         HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: None,
+            image: HeroImageState::None,
         }
     }
 }
@@ -101,6 +106,7 @@ pub(in crate::app) fn abs_book_artwork_policy(book: &AudiobookshelfBookQueueItem
                 library_item_id: book.library_item_id.clone(),
                 book: true,
             }),
+        image: HeroImageState::None,
     }
 }
 
@@ -117,6 +123,7 @@ pub(in crate::app) fn abs_episode_artwork_policy(episode: &AudiobookshelfQueueIt
                 library_item_id: episode.library_item_id.clone(),
                 book: false,
             }),
+        image: HeroImageState::None,
     }
 }
 
@@ -135,6 +142,7 @@ pub(in crate::app) fn abs_show_artwork_policy(
                 library_item_id: show.library_item_id.clone(),
                 book: false,
             }),
+        image: HeroImageState::None,
     }
 }
 
@@ -151,6 +159,7 @@ pub(in crate::app) fn feed_artwork_policy(entry: &FeedEntry) -> HeroArtwork {
             ArtworkShape::Landscape
         },
         source: None,
+        image: HeroImageState::None,
     }
 }
 

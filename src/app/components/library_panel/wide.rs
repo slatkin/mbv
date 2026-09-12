@@ -23,7 +23,7 @@ use crate::app::render::{
     wide_hero_hero_pane, LeftPaneFocus, PANE_PAD_X, PANE_PAD_Y,
 };
 
-use super::content::{LibraryPanelContent, ListSlot};
+use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroImagePaint};
 use super::hero_header::paint_hero_pane_content;
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
@@ -48,7 +48,7 @@ pub(in crate::app) struct SkeletonHits {
 /// Everything the Wide skeleton placed this frame, in role-rect form. The
 /// panel component (task 5.9) retains these rects; tests assert containment
 /// against them, never absolute coordinates (design D15).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub(in crate::app) struct WideSkeletonGeometry {
     /// The Browser pane (list pane).
     pub browser: Rect,
@@ -67,6 +67,12 @@ pub(in crate::app) struct WideSkeletonGeometry {
     pub hero_area: Rect,
     /// The Workspace box's (panel, content) rects, when one painted.
     pub workspace: Option<(Rect, Rect)>,
+    /// The projected hero image's paint (task 5.10, design D9), when the
+    /// header reserved a ready image's box.
+    pub hero_image: Option<PanelHeroImagePaint>,
+    /// The selected row's rect from the list slot's view, when one painted
+    /// (the context-menu anchor's painted truth).
+    pub selected: Option<Rect>,
 }
 
 /// Paints the Wide Library panel skeleton into `area`. Returns the frame's
@@ -200,6 +206,13 @@ pub(in crate::app) fn render_wide_skeleton(
         });
     let hero_area = wide_hero_hero_pane(f, area, focus, override_width)?;
 
+    // The list slot's painted selection: the context-menu anchor's painted
+    // truth (the selected row's rect, or the admitted inline hero block).
+    let selected = match &mut content.list {
+        ListSlot::Media(list) => list.selected_row_rect(),
+        _ => None,
+    };
+
     let mut geometry = WideSkeletonGeometry {
         browser: browser_panel,
         hero: hero_panel,
@@ -209,13 +222,25 @@ pub(in crate::app) fn render_wide_skeleton(
         list_area,
         hero_area,
         workspace: None,
+        hero_image: None,
+        selected,
     };
 
     if let Some(hero) = content.hero.as_mut() {
         // The Hero header (task 5.5): policy arm, placeholder artwork box,
         // one title/meta painter, and the overview box when overview text
-        // exists. Returns the first unpainted row.
-        let next_row = paint_hero_pane_content(f, hero_area, &*hero);
+        // exists. Returns the first unpainted row and the projected image's
+        // reserved box (task 5.10: `Ready` reserves; the shell paints).
+        let (next_row, image_box) = paint_hero_pane_content(f, hero_area, &*hero);
+        if let (HeroImageState::Ready { cache_key, .. }, Some(box_rect)) =
+            (&hero.facts.artwork.image, image_box)
+        {
+            geometry.hero_image = Some(PanelHeroImagePaint {
+                area: box_rect,
+                cache_key: cache_key.clone(),
+                centered: true,
+            });
+        }
         if let Some(workspace) = hero.workspace.as_mut() {
             // One blank row below the painted content before the Workspace
             // box (task 5.6): `next_row` is the first *unpainted* row, and
@@ -363,6 +388,7 @@ mod wide_skeleton_tests {
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,
+                image: crate::app::components::library_panel::content::HeroImageState::None,
             },
         }
     }

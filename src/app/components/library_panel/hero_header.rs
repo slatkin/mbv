@@ -84,19 +84,25 @@ fn box_from_height(max_h: u16, num: u16, den: u16, area: Rect) -> (u16, u16) {
 /// Main content box below it (design D5). One title/meta painter for all
 /// three arms, truncation and wrapping owned here; meta row *n* is coloured
 /// `HERO_META_ROLES[n % 3]`. The artwork box renders the shared placeholder
-/// at full box size (the projected image paints the same rect once the
-/// projection lands, task 5.10). Returns the first unpainted row, the anchor
-/// the skeleton places the Workspace below.
+/// while the projected image is not ready (task 5.10: `Ready` reserves the
+/// box and the shell paints the projected protocol into it after view);
+/// the returned second element is the reserved box's rect when a projected
+/// image should paint there. Returns `(first unpainted row, reserved image
+/// box)`, the row the skeleton places the Workspace below.
 pub(in crate::app) fn paint_hero_pane_content(
     f: &mut Frame,
     area: Rect,
     content: &HeroContent<'_>,
-) -> u16 {
+) -> (u16, Option<Rect>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
     let artwork = hero_artwork_box(area, content);
-    if artwork.width > 0 && artwork.height > 0 {
-        // Placeholder at full box size while loading (spec: the artwork box
-        // keeps its size and shows the shared placeholder).
+    let image_ready = matches!(
+        content.facts.artwork.image,
+        super::content::HeroImageState::Ready { .. }
+    );
+    if artwork.width > 0 && artwork.height > 0 && !image_ready {
+        // Placeholder at full box size while loading or imageless (spec: the
+        // artwork box keeps its size and shows the shared placeholder).
         render_artwork_placeholder(f, artwork);
     }
 
@@ -120,6 +126,8 @@ pub(in crate::app) fn paint_hero_pane_content(
     if header.arm() != super::content::HeroHeaderArm::Landscape {
         next_row = next_row.max(artwork.bottom());
     }
+    let reserved_image =
+        (artwork.width > 0 && artwork.height > 0 && image_ready).then_some(artwork);
 
     // The overview Main content box only when overview text exists (design
     // D5); without it the Workspace moves up.
@@ -167,7 +175,7 @@ pub(in crate::app) fn paint_hero_pane_content(
             next_row = box_area.bottom();
         }
     }
-    next_row
+    (next_row, reserved_image)
 }
 
 /// The one title/meta painter for all three arms: the title in
@@ -230,6 +238,7 @@ mod hero_header_tests {
             artwork: HeroArtwork {
                 shape,
                 source: None,
+                image: crate::app::components::library_panel::content::HeroImageState::None,
             },
         }
     }
@@ -348,6 +357,7 @@ mod hero_header_tests {
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,
+                image: crate::app::components::library_panel::content::HeroImageState::None,
             },
         };
         let pane = HeroContent {

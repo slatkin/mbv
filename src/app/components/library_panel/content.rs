@@ -54,6 +54,32 @@ pub(in crate::app) enum ArtworkSource {
 pub(in crate::app) struct HeroArtwork {
     pub shape: ArtworkShape,
     pub source: Option<ArtworkSource>,
+    /// Projected image state (task 5.10, design D9): set only by the shell's
+    /// projection; the painters read it and never fetch. Producers build the
+    /// default (`None`) and the owner copies the projection's state in.
+    pub image: HeroImageState,
+}
+
+/// The projection's image state for one hero (task 5.10, design D9): the
+/// fetch/encode runs in the shell projection; painting reads this state only.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::app) enum HeroImageState {
+    /// No image will arrive (no artwork source, images disabled, or a fetch
+    /// that resolved empty): the shared placeholder is final.
+    None,
+    /// A fetch/encode for the artwork source is in flight: the painters
+    /// reserve the box with the shared placeholder.
+    Loading,
+    /// The image is cached under `cache_key` (cover-fit keyed by the Wide
+    /// header's projected box); the painters reserve the box and the shell
+    /// paints the protocol into it after view, showing the placeholder at
+    /// most one frame while an encode completes. `decoded` is the cached
+    /// source image's pixel size — the Narrow inline hero sizes its box from
+    /// this aspect when present (design D7's decoded-size arm).
+    Ready {
+        cache_key: String,
+        decoded: Option<(u32, u32)>,
+    },
 }
 
 /// Plain hero facts (design D3): one title, ordered plain-text meta rows
@@ -158,6 +184,9 @@ pub(in crate::app) struct HeroContent<'a> {
 /// content plus `&mut` views into the active owner's media-list flow and
 /// search session; no rect, surface, style, focus-kind, header-arm or
 /// variant field.
+/// content plus `&mut` views into the active owner's media-list flow and
+/// search session; no rect, surface, style, focus-kind, header-arm or
+/// variant field.
 pub(in crate::app) struct LibraryPanelContent<'a> {
     /// The Browser pane's primary browse selector, if the destination
     /// supplies one.
@@ -234,4 +263,21 @@ pub(in crate::app) trait PanelList {
         let _ = point;
         false
     }
+}
+
+/// The hero image paint the panel retained from one view (task 5.10, design
+/// D9): the projected protocol's cache key and the box rect it paints into.
+/// The shell paints it right after `view` returns — the same
+/// defer-the-pixel-paint seam every destination component already uses
+/// (`take_image_paint`); the painters themselves only read projected state
+/// and never fetch.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::app) struct PanelHeroImagePaint {
+    /// The artwork box the painter reserved for the projected image.
+    pub area: Rect,
+    /// The projected cache key (`HeroImageState::Ready`'s key).
+    pub cache_key: String,
+    /// `true` for the Wide header's artwork box (centred); the Narrow inline
+    /// hero's right-aligned box paints right-aligned.
+    pub centered: bool,
 }

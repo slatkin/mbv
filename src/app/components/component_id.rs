@@ -44,7 +44,6 @@ pub enum ComponentId {
     /// while the active library's owner has migrated — otherwise the old
     /// mounted destination stays the surface (the transitional branch).
     Library,
-    Home,
     Browser(BrowserKey),
     /// Wide TV workspace (`TvWorkspaceComponent`). Distinct from
     /// `Browser(BrowserKey { kind: TvShows })` -- which the narrow TV

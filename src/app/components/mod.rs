@@ -19,7 +19,7 @@ pub mod daemon_lost;
 pub mod feeds;
 pub mod feeds_manage;
 pub mod help;
-pub mod home;
+pub mod home_content;
 pub mod inline_search;
 pub mod library_panel;
 pub mod library_playback_panel;
@@ -57,7 +57,6 @@ pub use self::daemon_lost::DaemonLostComponent;
 pub use self::feeds::FeedsComponent;
 pub use self::feeds_manage::FeedsManageComponent;
 pub use self::help::HelpComponent;
-pub use self::home::HomeComponent;
 pub(in crate::app) use self::inline_search::{InlineSearchHost, SearchPool};
 pub(in crate::app) use self::library_playback_panel::{LibraryPlaybackPanel, PlaybackProjection};
 pub use self::library_routes::LibraryRoutesComponent;
@@ -109,9 +108,6 @@ mod feeds_component_tests;
 #[cfg(test)]
 #[path = "feeds_manage_component_tests.rs"]
 mod feeds_manage_component_tests;
-#[cfg(test)]
-#[path = "home_component_tests.rs"]
-mod home_component_tests;
 #[cfg(test)]
 #[path = "library_routes_component_tests.rs"]
 mod library_routes_component_tests;

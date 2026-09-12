@@ -74,7 +74,11 @@ impl Model {
 
     pub(super) fn library_child_id(&self) -> Option<ComponentId> {
         match self.app.tab {
-            TabSelection::Home => Some(ComponentId::Home),
+            // The Home owner is installed with the panel (Model::new), so
+            // the Home tab always routes through the Library panel (task
+            // 5.11); `None` is unreachable via the transitional branch's
+            // migrated check.
+            TabSelection::Home => None,
             TabSelection::Feeds => Some(ComponentId::Feeds),
             TabSelection::EmbyLibrary(index) => self.emby_library_child_id(index),
             TabSelection::AudiobookshelfLibrary(index) => self.abs_library_child_id(index),

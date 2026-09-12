@@ -5,7 +5,7 @@ use super::test_helpers::{
 use super::*;
 use crate::app::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use crate::app::components::{
-    AudiobookshelfPodcastComponent, BrowserComponent, ComponentId, FeedsComponent, HomeComponent,
+    AudiobookshelfPodcastComponent, BrowserComponent, ComponentId, FeedsComponent,
     MusicWorkspaceComponent,
 };
 use crate::app::layout::LayoutMain;
@@ -484,25 +484,27 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     }
 }
 
-/// Task 5.3d, Home legacy underpaint removal: the Home leg of the pill-bar
-/// conformance now reads the mounted `HomeComponent`'s own `pill_targets`
-/// (the single painter) instead of `LayoutMain.selector_tabs`, which the
-/// legacy frame no longer populates for Home. The assertions mirror
-/// `assert_one_pill_row_and_spacer` exactly for that surface: targets share
-/// one row, exactly one pill bar is painted, and the pill spacer stays
+/// Task 5.3d + 5.11, Home as the first panel owner: the Home leg of the
+/// pill-bar conformance reads the mounted `LibraryPanel`'s own retained
+/// `SkeletonHits.selector` (the single painter) — the same painted-truth
+/// contract the deleted `HomeComponent::pill_targets` served. The assertions
+/// mirror `assert_one_pill_row_and_spacer` exactly for that surface: targets
+/// share one row, exactly one pill bar is painted, and the pill spacer stays
 /// consistent below it.
 fn assert_home_one_pill_row_and_spacer(
     model: &crate::app::shell::Model,
     terminal: &Terminal<TestBackend>,
 ) {
-    let home = model
+    let targets = model
         .application
-        .get_component(&ComponentId::Home)
-        .expect("Home component mounted")
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<HomeComponent>()
-        .expect("Home component type");
-    let targets = home.test_pill_targets();
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("Library panel type")
+        .test_selector_hits()
+        .regions()
+        .to_vec();
     let first = targets
         .first()
         .unwrap_or_else(|| panic!("Home should publish pill targets"))
@@ -620,25 +622,26 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
         );
     }
 
-    // Home (task 5.3d, legacy underpaint removal) is painted by the mounted
-    // component, so its mini-view hero is asserted from the component's own
-    // geometry: the reserved home area is empty and the component paints no
-    // hero. The pill data is Model-owned `home_content.latest` (5.3d).
+    // Home (task 5.3d + 5.11) is painted by the mounted `LibraryPanel`, so
+    // its mini-view hero is asserted from the panel's own geometry: the tiny
+    // viewport admits no inline hero. The pill data is Model-owned
+    // `home_content.latest` (5.3d).
     let (model, _terminal) = render_home_shell_with(mixed_home_app(), 60, 8, |m| {
         m.home_section_pending =
             Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
         m.home_content.latest = mixed_home_latest();
     });
-    let home = model
+    let admitted = model
         .application
-        .get_component(&ComponentId::Home)
-        .expect("Home component mounted")
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<HomeComponent>()
-        .expect("Home component type");
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("Library panel type")
+        .test_narrow_geometry()
+        .and_then(|geo| geo.inline_hero);
     assert_eq!(
-        home.hero_area().map(|a| a.height).unwrap_or(0),
-        0,
+        admitted, None,
         "Home mini presentation should not admit a hero"
     );
 }

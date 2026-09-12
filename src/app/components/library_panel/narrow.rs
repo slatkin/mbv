@@ -26,7 +26,7 @@ use crate::app::render::{
     HERO_BLOCK_EXTRA_ROWS, SELECTED_BLOCK_SIDE_PADDING,
 };
 
-use super::content::{LibraryPanelContent, ListSlot, PanelListPaintPolicy};
+use super::content::{LibraryPanelContent, ListSlot, PanelHeroImagePaint, PanelListPaintPolicy};
 use super::slots::{paint_list_controls_row, paint_pill_row_gap, paint_selector_row};
 use super::wide::SkeletonHits;
 
@@ -45,7 +45,7 @@ const INLINE_HERO_TEXT_GAP_COLS: u16 = 1;
 /// Everything the Narrow skeleton placed this frame, in role-rect form. The
 /// panel component (task 5.9) retains these rects; tests assert containment
 /// against them, never absolute coordinates (design D15).
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub(in crate::app) struct NarrowSkeletonGeometry {
     /// The Selector row's pill-bar rect, reserved even when the destination
     /// supplies no `SelectorRow` (the Inline Search box takes it).
@@ -57,6 +57,12 @@ pub(in crate::app) struct NarrowSkeletonGeometry {
     /// The admitted inline hero's detail-block rect, when the flow admitted
     /// it (the fallback paints the ordinary selected row instead).
     pub inline_hero: Option<Rect>,
+    /// The projected hero image's paint (task 5.10, design D9), when the
+    /// inline hero reserved a ready image's box.
+    pub inline_hero_image: Option<PanelHeroImagePaint>,
+    /// The painted selection's rect: the admitted inline hero block, else
+    /// the selected row's rect (the context-menu anchor's painted truth).
+    pub selected: Option<Rect>,
 }
 
 /// The inline hero's paint plan (design D7): the image box's size derived
@@ -88,10 +94,12 @@ fn shape_ratio(shape: super::content::ArtworkShape) -> (u16, u16) {
 }
 
 /// The paint-free inline-hero layout for one list row's width (design D7):
-/// the artwork box is right-aligned, sized from its shape's aspect, capped
-/// so the wrapping text keeps [`INLINE_HERO_MIN_TEXT_COLS`] columns and the
-/// image never exceeds [`INLINE_HERO_MAX_IMAGE_ROWS`] rows; the detail block
-/// is the taller of the image and the wrapped text, plus the shared shell's
+/// the artwork box is right-aligned, sized from its aspect — the decoded
+/// source's aspect when the projection projected a ready image (task 5.10's
+/// decoded-size arm), the policy shape's aspect otherwise — capped so the
+/// wrapping text keeps [`INLINE_HERO_MIN_TEXT_COLS`] columns and the image
+/// never exceeds [`INLINE_HERO_MAX_IMAGE_ROWS`] rows; the detail block is
+/// the taller of the image and the wrapped text, plus the shared shell's
 /// extra rows. One layout site: the panel calls this for the Inline
 /// presentation's `desired_detail_rows` and the hero painter calls it again
 /// with the admitted block's width.
@@ -100,7 +108,19 @@ pub(in crate::app) fn inline_hero_plan(
     hero: &super::content::HeroContent<'_>,
 ) -> InlineHeroPlan {
     let content_width = block_width.saturating_sub(SELECTED_BLOCK_SIDE_PADDING.saturating_mul(2));
-    let (num, den) = shape_ratio(hero.facts.artwork.shape);
+    // Decoded-size arm (design D7): a ready image's own pixel aspect sets
+    // the box ratio (cells are ~2x taller than wide), the policy shape's
+    // aspect otherwise.
+    let (num, den) = match &hero.facts.artwork.image {
+        super::content::HeroImageState::Ready {
+            decoded: Some((w, h)),
+            ..
+        } if *w > 0 && *h > 0 => (
+            (*w * 2).min(u16::MAX as u32) as u16,
+            (*h).min(u16::MAX as u32) as u16,
+        ),
+        _ => shape_ratio(hero.facts.artwork.shape),
+    };
     let max_cols = content_width.saturating_sub(INLINE_HERO_MIN_TEXT_COLS);
     let image_cols = max_cols
         .min(
@@ -110,7 +130,7 @@ pub(in crate::app) fn inline_hero_plan(
                 / den,
         )
         .min(content_width);
-    let image_rows = (image_cols.saturating_mul(den) / num).min(INLINE_HERO_MAX_IMAGE_ROWS);
+    let image_rows = (image_cols.saturating_mul(den) / num.max(1)).min(INLINE_HERO_MAX_IMAGE_ROWS);
     let plan = InlineHeroPlan {
         detail_rows: 0,
         image_cols,
@@ -206,20 +226,22 @@ fn inline_hero_text_rows(
 }
 
 /// Paints one inline hero into the admitted detail block (design D7): the
-/// shared selected-block shell, the artwork box right-aligned (the shared
-/// placeholder at full box size until the image projection lands, task
-/// 5.10), and the title/meta/overview text wrapping around it in the three
-/// meta colours, reclaiming the full width below the image. No selector,
-/// controls or constituent rows render inside the block.
+/// shared selected-block shell, the artwork box right-aligned (sized from
+/// the projected image's decoded aspect when ready, the policy shape's
+/// aspect otherwise), and the title/meta/overview text wrapping around it in
+/// the three meta colours, reclaiming the full width below the image. No
+/// selector, controls or constituent rows render inside the block. Returns
+/// the image box's rect when a projected ready image should paint there
+/// (task 5.10: `Ready` reserves; the shell paints after view).
 pub(in crate::app) fn paint_inline_hero(
     f: &mut Frame,
     block: Rect,
     hero: &super::content::HeroContent<'_>,
     focused: bool,
-) {
+) -> Option<Rect> {
     let plan = inline_hero_plan(block.width, hero);
     if plan.detail_rows == 0 || block.height == 0 {
-        return;
+        return None;
     }
     // The shared selected-block shell: the same ▁/▔ framed shell every
     // inline selected-detail block paints (one implementation, no second
@@ -227,10 +249,8 @@ pub(in crate::app) fn paint_inline_hero(
     selected_detail_shell(f, block, plan.detail_rows as u16, focused);
     let content =
         selected_detail_content_area(block, SELECTED_BLOCK_SIDE_PADDING, HERO_BLOCK_EXTRA_ROWS);
-    // The image box: right-aligned, sized from its aspect (task 5.7 sizes
-    // from the policy shape; the decoded-size arm lands with the projection,
-    // task 5.10). Placeholder at full box size until then (spec: the box
-    // keeps its size and shows the shared placeholder).
+    // The image box: right-aligned, sized from its aspect — the projected
+    // image's decoded aspect when ready, the policy shape's otherwise.
     let image = Rect {
         x: content
             .right()
@@ -240,7 +260,13 @@ pub(in crate::app) fn paint_inline_hero(
         width: plan.image_cols.min(content.width),
         height: plan.image_rows.min(content.height),
     };
-    if image.width > 0 && image.height > 0 {
+    let image_ready = matches!(
+        hero.facts.artwork.image,
+        super::content::HeroImageState::Ready { .. }
+    );
+    if image.width > 0 && image.height > 0 && !image_ready {
+        // Placeholder at full box size while loading or imageless (spec: the
+        // box keeps its size and shows the shared placeholder).
         render_artwork_placeholder(f, image);
     }
 
@@ -270,6 +296,7 @@ pub(in crate::app) fn paint_inline_hero(
             },
         );
     }
+    (image.width > 0 && image.height > 0 && image_ready).then_some(image)
 }
 
 /// Paints the Narrow Library panel skeleton into `area`. Rows top-to-bottom:
@@ -337,6 +364,7 @@ pub(in crate::app) fn render_narrow_skeleton(
         .unwrap_or(0);
 
     let mut inline_hero = None;
+    let mut inline_hero_image = None;
     match &mut content.list {
         ListSlot::Search(search) => {
             let items = search.ordered_items();
@@ -372,7 +400,17 @@ pub(in crate::app) fn render_narrow_skeleton(
             list.view(f, list_area);
             if let Some(hero) = content.hero.as_ref() {
                 if let Some(block) = list.detail_rect() {
-                    paint_inline_hero(f, block, hero, browser_focused);
+                    if let Some(image_box) = paint_inline_hero(f, block, hero, browser_focused) {
+                        if let super::content::HeroImageState::Ready { cache_key, .. } =
+                            &hero.facts.artwork.image
+                        {
+                            inline_hero_image = Some(PanelHeroImagePaint {
+                                area: image_box,
+                                cache_key: cache_key.clone(),
+                                centered: false,
+                            });
+                        }
+                    }
                     inline_hero = Some(block);
                 }
             }
@@ -394,6 +432,11 @@ pub(in crate::app) fn render_narrow_skeleton(
         controls: controls_area,
         list_area,
         inline_hero,
+        inline_hero_image,
+        selected: inline_hero.or(match &mut content.list {
+            ListSlot::Media(list) => list.selected_row_rect(),
+            _ => None,
+        }),
     }
 }
 
@@ -433,6 +476,7 @@ mod narrow_skeleton_tests {
             artwork: crate::app::components::library_panel::HeroArtwork {
                 shape,
                 source: None,
+                image: crate::app::components::library_panel::content::HeroImageState::None,
             },
         }
     }

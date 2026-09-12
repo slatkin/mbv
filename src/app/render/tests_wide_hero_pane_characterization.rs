@@ -9,7 +9,7 @@
 
 use super::test_helpers::{buffer_to_string, make_audiobookshelf_book_app, make_music_group_app};
 use crate::app::components::{
-    AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, FeedsComponent, HomeComponent,
+    AudiobookshelfBookComponent, AudiobookshelfPodcastComponent, FeedsComponent,
     MusicWorkspaceComponent, TvWorkspaceComponent,
 };
 use crate::app::palette;
@@ -94,45 +94,6 @@ fn music_wide_left_pane_unconditional_fill_no_horizontal_pad() {
     assert_eq!(
         buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
         palette::resolve_surface_focus(false)
-    );
-}
-
-/// Home's non-Emby Latest selection fills the complete hero pane. The
-/// Audiobookshelf cover and metadata are top-anchored within that pane.
-#[test]
-fn home_wide_non_emby_latest_fills_the_full_hero_area() {
-    let source = crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into());
-    let latest = vec![(
-        "Books".into(),
-        source.clone(),
-        vec![QueueItem::AudiobookshelfBook(
-            mbv_core::playback_queue::AudiobookshelfBookQueueItem {
-                library_item_id: "book-1".into(),
-                title: "Home Book".into(),
-                author: Some("Author".into()),
-                duration_ticks: None,
-                position_ticks: 0,
-                played: false,
-                is_finished: false,
-                cover_path: None,
-            },
-        )],
-    )];
-    let mut component = HomeComponent::new();
-    component.set_content(Vec::new(), latest, false);
-    component.set_focused(true);
-    assert!(component.restore_section(&source), "Books pill must exist");
-    let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
-
-    let hero = component.hero_area().expect("wide non-Emby hero pane");
-    let buffer = terminal.backend().buffer();
-
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
-    assert_eq!(
-        buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING,
-        "the full reported hero area must be filled"
     );
 }
 

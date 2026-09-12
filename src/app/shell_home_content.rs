@@ -5,7 +5,10 @@
 //! `types_playback.rs`; this file keeps the shell-side state transitions out
 //! of the near-cap `shell.rs`/`shell_home.rs`.
 
-use super::components::{ComponentId, HomeComponent};
+use super::components::home_content::HomeContent as HomeOwner;
+use super::components::library_panel::LibraryKey;
+use super::components::library_panel::LibraryPanel;
+use super::components::ComponentId;
 use super::notify_actions::ToastSeverity;
 use super::shell::Model;
 use super::types_playback::HomeContent;
@@ -186,12 +189,21 @@ impl Model {
     /// component the fact defaults to `false` (Home is mounted for the whole
     /// session, so this is only a defensive fallback).
     pub(super) fn home_continue_watching_selected(&self) -> bool {
-        self.application
-            .get_component(&ComponentId::Home)
-            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
-            .map(HomeComponent::section)
+        self.home_owner_shared()
+            .map(|owner| owner.section())
             .map(|section| section == 0)
             .unwrap_or(false)
+    }
+
+    /// The Home owner for shared reads, through the panel's owner map
+    /// (design D2: addressed by `LibraryKey`, never by a destination
+    /// component). `None` before the first `push_home_content` installs it.
+    fn home_owner_shared(&self) -> Option<&HomeOwner> {
+        self.application
+            .get_component(&ComponentId::Library)
+            .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.owner(&LibraryKey::Home))
+            .and_then(|owner| owner.as_any().downcast_ref::<HomeOwner>())
     }
 
     /// Persist a selected section's semantic source (task 5.3d, numeric Home
@@ -203,9 +215,7 @@ impl Model {
     /// (the empty-string sentinel); a missing component is a defensive no-op.
     pub(super) fn select_home_section_from_component(&mut self, section: usize) {
         let Some(source) = self
-            .application
-            .get_component(&ComponentId::Home)
-            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
+            .home_owner_shared()
             .map(|home| home.source_for_section(section))
         else {
             return;

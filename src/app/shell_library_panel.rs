@@ -10,6 +10,7 @@
 
 use ratatui::layout::Rect;
 
+use super::components::library_panel::content::HeroImageState;
 use super::components::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::components::{BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
@@ -175,6 +176,68 @@ impl Model {
             return;
         };
         self.application.view(&id, frame, area);
+        // The projected hero image's pixel paint (task 5.10, design D9): the
+        // painters read projected state and reserve the box; the shell paints
+        // the cached protocol into it right after view returns — the same
+        // defer-the-pixel-paint seam every destination component uses.
+        let image_paint = self
+            .application
+            .get_component_mut(&id)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(LibraryPanel::take_image_paint);
+        if let Some(paint) = image_paint {
+            self.app.paint_panel_hero_image(frame, &paint);
+        }
+    }
+
+    /// The library heroes' image projection (task 5.10, design D9, TV's
+    /// `push_tv_workspace_content` shape generalized): for the active
+    /// migrated owner's current hero, run the artwork policy's source and the
+    /// paint-free `hero_artwork_box` with the Library panel's `RootFrame`
+    /// area, issue every `fetch_card_image` here, and project the image
+    /// state (loading/ready, decoded size, cover-fit box keyed by size)
+    /// into the owner. Painting reads the projected state only; the queue
+    /// visual slot's separate projection (task 3.4) is untouched.
+    /// Driven every sync pass so a cursor move, breakpoint change, or split
+    /// drag re-projects on the next pass.
+    pub(super) fn sync_library_hero_images(&mut self) {
+        if !self.library_panel_visible() || !self.active_library_owner_migrated() {
+            return;
+        }
+        let Some(area) = self.library_panel_content_area() else {
+            return;
+        };
+        let list_pane_width = self.app.list_pane_width;
+        let hero_data = {
+            let panel = self
+                .application
+                .get_component_mut(&ComponentId::Library)
+                .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>());
+            match panel.and_then(LibraryPanel::active_hero_data) {
+                Some(data) => data,
+                None => {
+                    // No hero this frame: the placeholder is final.
+                    if let Some(panel) = self
+                        .application
+                        .get_component_mut(&ComponentId::Library)
+                        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+                    {
+                        panel.set_active_hero_image(HeroImageState::None);
+                    }
+                    return;
+                }
+            }
+        };
+        let state = self
+            .app
+            .project_hero_image(&hero_data.facts.artwork, area, list_pane_width);
+        if let Some(panel) = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        {
+            panel.set_active_hero_image(state);
+        }
     }
 }
 

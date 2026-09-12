@@ -13,17 +13,6 @@ use ratatui::Frame;
 use crate::app::render::RENDER_FILTER;
 
 impl App {
-    /// Image types to request for the Keep Watching hero panel, mirroring
-    /// the per-type conventions used for the queue visual slot (`render_queue_playback_slot`).
-    pub(in crate::app::render) fn keep_watching_hero_image_types(
-        item: &mbv_core::api::EmbyItem,
-    ) -> &'static [&'static str] {
-        match item.item_type.as_str() {
-            "Movie" => &["Backdrop", "Primary", "Logo"],
-            _ => &["Primary", "Backdrop"],
-        }
-    }
-
     /// Builds the Keep Watching hero panel's metadata layout for `item`,
     /// delegating to the shared [`hero_text_layout`] (also used by the
     /// generic Audiobookshelf hero, so both inline items share one
@@ -240,15 +229,25 @@ impl App {
                 item,
                 centered,
             }) => {
-                let cache_key = format!("{}:pwr_kw", item.id);
+                // The artwork policy is the one chain/key source (design D5):
+                // no destination picks an arm, a chain or a key. The
+                // un-migrated Movies painter keeps the paint-time fetch until
+                // its conversion slice (task 6.1) deletes this arm.
+                let policy =
+                    crate::app::components::library_panel::hero::emby_artwork_policy(&item);
+                let (cache_key, image_types, series_id, item_id) = match policy.source {
+                    Some(crate::app::components::library_panel::ArtworkSource::Emby {
+                        item_id,
+                        series_id,
+                        image_types,
+                        cache_key,
+                    }) => (cache_key, image_types, series_id, item_id),
+                    // Nothing to fetch: the placeholder is final.
+                    _ => return,
+                };
                 if self.images_enabled() {
-                    let img_types = Self::keep_watching_hero_image_types(&item);
-                    self.fetch_card_image(
-                        cache_key.clone(),
-                        item.id.clone(),
-                        item.series_id.clone(),
-                        img_types,
-                    );
+                    let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
+                    self.fetch_card_image(cache_key.clone(), item_id, series_id, &types);
                 }
                 self.render_keep_watching_hero_image(f, area, &cache_key, centered);
             }

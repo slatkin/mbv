@@ -1,7 +1,8 @@
 use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
+use super::super::components::library_panel::LibraryPanel;
 use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
-    BrowserComponent, ComponentId, ContextMenuComponent, HomeComponent, LibraryRoutesComponent,
+    BrowserComponent, ComponentId, ContextMenuComponent, LibraryRoutesComponent,
     MultiselectComponent, OverlayId, PopupId, QueueComponent, SelectionModalComponent,
     ShellRequest,
 };
@@ -20,22 +21,24 @@ impl Model {
         ComponentId::Overlay(OverlayId::ContextMenu)
     }
 
-    /// The mounted `HomeComponent`'s painted panel rect (list area) and
-    /// selected-row rect, when Home is the active destination with the Library
-    /// panel focused. Returns `None` otherwise, so the caller falls back to the
-    /// legacy `AppLayout` geometry. The component gains this geometry from its
-    /// own `view()` paint (`render_home_content`), so the menu placement tracks
-    /// the component's real paint rather than any copied-back legacy geometry.
+    /// The Library panel's painted panel rect (list slot) and selected-row
+    /// rect, when the Home owner is the migrated active destination with the
+    /// Library panel focused (task 5.11). Returns `None` otherwise, so the
+    /// caller falls back to the legacy `AppLayout` geometry. The panel gains
+    /// this geometry from its own `view()` paint, so the menu placement
+    /// tracks the panel's real paint rather than any copied-back legacy
+    /// geometry.
     fn home_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
         if !matches!(self.app.tab, TabSelection::Home)
             || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
+            || !self.active_library_owner_migrated()
         {
             return None;
         }
         self.application
-            .get_component(&ComponentId::Home)
-            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
-            .map(HomeComponent::menu_placement_geometry)
+            .get_component(&ComponentId::Library)
+            .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(LibraryPanel::menu_geometry)
     }
 
     /// The active Emby Browser's painted panel and selected-row anchor. The

@@ -448,9 +448,26 @@ impl Model {
             .application
             .active(&ComponentId::UiRoot)
             .expect("activate UiRoot");
-        // Home is mounted for the whole session but never made active: its
-        // input stays on the shell path, only its render is component-owned
-        model.mount_home();
+        // The Library panel is mounted for the whole session (it holds every
+        // library's embedded content owners, design D2's retention rule) but
+        // never made active directly: `sync_active_destination` routes focus
+        // to it while a migrated library is active, and it paints only a
+        // migrated owner's surface (the transitional branch, task 5.9).
+        // Home's owner is installed with the panel: the Home tab is always
+        // migrated, so `active_surface_id` routes it to the panel from the
+        // first sync (task 5.11). The other destinations install owners in
+        // their conversion slices (tasks 6.1+).
+        {
+            let mut panel = super::components::library_panel::LibraryPanel::new();
+            panel.insert_owner(
+                super::components::library_panel::LibraryKey::Home,
+                Box::new(super::components::home_content::HomeContent::new()),
+            );
+            model
+                .application
+                .mount(ComponentId::Library, Box::new(panel), vec![])
+                .expect("mount LibraryPanel");
+        }
         model.mount_feeds();
         model
             .application
