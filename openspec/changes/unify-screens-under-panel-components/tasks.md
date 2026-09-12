@@ -222,7 +222,7 @@ Grid catalog.
 *Unification:* removes the second pill bar and the Feeds-only hero box — the most divergent screen
 proves the slot types early.
 
-- [ ] 7.1 `FeedsContent`: move `FeedsComponent`'s content state into a plain `LibraryContentOwner`
+- [x] 7.1 `FeedsContent`: move `FeedsComponent`'s content state into a plain `LibraryContentOwner`
   (feed-group pills → the one `SelectorRow`; the Watched filter → `ListControls` pills; entries → the
   list slot; selected entry → the shared feed-entry producer — Square for a podcast feed, Landscape
   placeholder otherwise — plus its overview), filled by the shell's existing Feeds push. The component
