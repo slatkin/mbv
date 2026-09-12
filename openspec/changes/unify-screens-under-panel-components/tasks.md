@@ -279,7 +279,7 @@ branches.
   `content()` (Square artwork for an album, overview omitted when absent, tracks as the workspace);
   `tests_music_wide.rs`, `tests_music_narrow.rs`, `tests_music_groups.rs` and the Music component tests
   pass unchanged.
-- [ ] 9.2 Music Wide through the panel: delete `music_wide.rs`'s wide path
+- [x] 9.2 Music Wide through the panel: delete `music_wide.rs`'s wide path
   (`render_wide_music_group_with_ctx`, `render_wide_left_hero`), `music_wide_browser.rs`,
   `wide_music_left_layout` and `LayoutMain.wide_music_*`, painting `render_wide_skeleton` instead;
   Narrow keeps its legacy painter this step. Verify: `tests_music_wide.rs`, `tests_music_groups.rs` and
