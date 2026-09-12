@@ -147,7 +147,7 @@ coverage.
   (`cargo nextest run -p <pkg>`); a proof that needs a new script needs the
   user to ask for it explicitly, per request.
 * check: `cargo check -p <package>`
-* test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo test --release -- --test-threads=4` (fd-budget throttling, see `build.yml` comment)
+* test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo test --release -- --test-threads=4` (fd-budget throttling, see `build.yml` comment); `cargo llvm-cov` should be used to help ensuring proper test covrerage.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
 * format: `cargo fmt`
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
