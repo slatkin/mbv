@@ -10,6 +10,7 @@
 
 use ratatui::layout::Rect;
 
+use super::components::book_content::BookContent;
 use super::components::library_panel::content::HeroImageState;
 use super::components::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::components::{BrowserKey, BrowserKind, ComponentId};
@@ -139,6 +140,23 @@ impl Model {
         // mounted so the first painted frame has a current owner and geometry.
         self.push_music_workspace_content();
         let active = self.active_library_key();
+        // Register the Books owner as part of panel/catalog reconciliation,
+        // not from the Books content projection. A newly active Books tab is
+        // then populated by this discrete registration hand-off.
+        let register_book = active.as_ref().is_some_and(|key| {
+            matches!(
+                key,
+                LibraryKey::Service(browser)
+                    if browser.service == ServiceKind::Audiobookshelf
+                        && browser.kind == BrowserKind::AudiobookshelfBook
+            ) && !self.library_panel_has_owner(key)
+        });
+        if register_book {
+            if let Some(key) = active.clone() {
+                self.push_library_owner(key, Box::new(BookContent::new()));
+                self.push_audiobookshelf_book_content();
+            }
+        }
         let live = self.live_library_keys();
         let list_pane_width = self.app.list_pane_width;
         // The split gesture's eligibility-loss reset is decided before the
