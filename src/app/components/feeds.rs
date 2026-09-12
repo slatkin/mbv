@@ -1,14 +1,20 @@
 //! Interactive Component for the Feeds destination.
 //!
-//! The shell supplies validated feed snapshots. This component owns the
-//! subscription/group selector and the watched filter (parent chrome); one
-//! shared canonical `MediaList` owner of the grouped-entry projection moves
-//! between the `WideMediaList` (Wide hero Wide) and `InlineMediaBrowser`
-//! (inline Narrow) presentations, owns the cursor and scroll, and receives
-//! every eligible row-local key and pointer gesture through the common
-//! delegation seam. `render_feeds_content` is the parent-owned pill strip +
-//! chrome + hero painter and mounts the active presentation into the list
-//! sub-rect below the pill strip.
+//! The shell supplies validated feed snapshots. This component keeps only the
+//! presentation/geometry state the legacy painter needs — which breakpoint
+//! was painted, the private pointer gesture recognizer, the session list-pane
+//! width override, and the painter's `LayoutMain` — while the shell-projected
+//! content, the feed-group/Watched filter selection, and the one shared
+//! canonical `MediaList` owner of the grouped-entry projection live in the
+//! embedded [`FeedsContent`] (task 7.1, design D2/D16 step 1). The shared
+//! owner moves between the `WideMediaList` (Wide hero Wide) and
+//! `InlineMediaBrowser` (inline Narrow) presentations and receives every
+//! eligible row-local key and pointer gesture through the common delegation
+//! seam; slot translation lives on the owner, so the component's mouse path
+//! only resolves geometry. `render_feeds_content` remains the parent-owned
+//! pill strip + chrome + hero painter and mounts the active presentation into
+//! the list sub-rect below the pill strip (task 7.2 converts it to the panel
+//! skeleton).
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -18,38 +24,29 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEvent
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome,
-};
+use super::feeds_content::{FeedsContent, FeedsOwnerPush};
+use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+#[cfg(test)]
+use super::media_list::MediaListRow;
+use super::media_list::{RowIntent, RowLocalInput, RowLocalOutcome};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
+use super::msg::{Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
-use crate::app::render::{
-    current_time_secs, feed_display_rows, feed_duration_text, render_feeds_content, wide_hero_fits,
-    FeedDisplayRow, FeedsPresentation, FeedsRenderModel,
-};
+use crate::app::render::{render_feeds_content, wide_hero_fits, FeedsRenderModel};
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::FeedSubscription;
 use mbv_core::playback_queue::FeedEntry;
 
 pub struct FeedsComponent {
-    subscriptions: Vec<FeedSubscription>,
-    entries: Vec<Vec<FeedEntry>>,
-    all_entries: Vec<FeedEntry>,
-    visible_entries: Vec<FeedEntry>,
-    /// The one shared canonical owner of the grouped-entry projection, carried
-    /// by exactly one of the persistent presentations (design.md D1). It owns
-    /// cursor, scroll, and selected target; selectors remain parent chrome.
-    carrier: MediaListCarrier<String>,
-    watched_filter: WatchedFilter,
-    selected_group: usize,
+    /// The embedded content owner (task 7.1): the shell-projected feed
+    /// snapshot, the shared entry-list owner, and the feed-group/Watched
+    /// filter selection.
+    content: FeedsContent,
     /// Which presentation the last `view()` painted (Wide hero Wide vs inline
     /// Narrow). A breakpoint change moves the same shared owner between the
     /// persistent presentations; it also selects which owner `cursor()` reads.
     wide: bool,
-    loading: bool,
     images_enabled: bool,
     focused: bool,
     /// Session-only Wide hero list-pane width override (per-draw shell push,
@@ -57,7 +54,6 @@ pub struct FeedsComponent {
     /// clamped.
     list_pane_width: Option<u16>,
     layout: LayoutMain,
-    last_subscription_urls: Vec<String>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
@@ -66,26 +62,19 @@ pub struct FeedsComponent {
 impl FeedsComponent {
     pub fn new() -> Self {
         Self {
-            subscriptions: Vec::new(),
-            entries: Vec::new(),
-            all_entries: Vec::new(),
-            visible_entries: Vec::new(),
-            carrier: MediaListCarrier::new(Presentation::Inline),
-            watched_filter: WatchedFilter::default(),
-            selected_group: 0,
+            content: FeedsContent::new(),
             wide: false,
-            loading: false,
             images_enabled: true,
             focused: false,
             list_pane_width: None,
             layout: LayoutMain::default(),
-            last_subscription_urls: Vec::new(),
             mouse_gestures: MouseGestureState::new(),
         }
     }
 
     /// Replace the shell-owned snapshot while preserving the component's
-    /// render and input state shape.
+    /// render and input state shape. The owner preserves its own selection
+    /// and resets it only on a subscription-set change.
     pub(in crate::app) fn set_images_enabled(&mut self, images_enabled: bool) {
         self.images_enabled = images_enabled;
     }
@@ -111,65 +100,45 @@ impl FeedsComponent {
         all_entries: &[FeedEntry],
         loading: bool,
     ) {
-        let subscription_urls: Vec<String> = subscriptions
-            .iter()
-            .map(|subscription| subscription.url.clone())
-            .collect();
-        let subscriptions_changed = self.last_subscription_urls != subscription_urls;
-        self.last_subscription_urls = subscription_urls;
-        self.subscriptions = subscriptions.to_vec();
-        self.entries = entries.to_vec();
-        self.all_entries = all_entries.to_vec();
-        self.selected_group = self
-            .selected_group
-            .min(self.group_count().saturating_sub(1));
-        self.loading = loading;
-        self.rebuild_visible_entries();
-        // An ordinary refresh keeps the active control authoritative (the
-        // selected target is preserved by `ListCore::set_content`); only a
-        // subscription-set change resets the selection.
-        if subscriptions_changed {
-            self.reset_selection();
-        }
+        self.content.set_content(FeedsOwnerPush {
+            subscriptions: subscriptions.to_vec(),
+            entries: entries.to_vec(),
+            all_entries: all_entries.to_vec(),
+            loading,
+        });
     }
 
     pub(in crate::app) fn cursor(&self) -> usize {
-        self.carrier.cursor()
+        self.content.cursor()
     }
 
     pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
-        self.watched_filter
+        self.content.watched_filter()
     }
 
     pub(in crate::app) fn selected_group(&self) -> usize {
-        self.selected_group
+        self.content.selected_group()
     }
 
     pub(in crate::app) fn scroll(&self) -> usize {
-        self.carrier.scroll()
+        self.content.scroll()
     }
 
     pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
-        self.visible_entries
-            .iter()
-            .map(|entry| entry.title.as_str())
-            .collect()
+        self.content.visible_titles()
     }
 
     /// Whether the active group/watched filter leaves any entry for the
     /// painter to project — exactly the predicate `render_feeds_content`'s
     /// wide branch early-returns on. The group selector and watched filter are
-    /// component-local, so the shell resolves the boundary's painted-split
+    /// owner-local, so the shell resolves the boundary's painted-split
     /// eligibility from this fact instead of mirroring that state.
     pub(in crate::app) fn has_visible_entries(&self) -> bool {
-        !self.visible_entries.is_empty()
+        self.content.has_visible_entries()
     }
 
     pub(in crate::app) fn subscription_names(&self) -> Vec<&str> {
-        self.subscriptions
-            .iter()
-            .map(|subscription| subscription.name.as_str())
-            .collect()
+        self.content.subscription_names()
     }
 
     pub(in crate::app) fn layout(&self) -> &LayoutMain {
@@ -178,151 +147,33 @@ impl FeedsComponent {
 
     #[cfg(test)]
     pub(in crate::app) fn canonical_rows(&self) -> &[MediaListRow<String>] {
-        self.carrier.rows()
+        self.content.canonical_rows()
     }
 
     #[cfg(test)]
     pub(in crate::app) fn canonical_selectable_len(&self) -> usize {
-        self.carrier
-            .rows()
-            .iter()
-            .filter(|row| row.selectable_target().is_some())
-            .count()
+        self.content.canonical_selectable_len()
     }
 
     #[cfg(test)]
     pub(in crate::app) fn canonical_selected_target(&self) -> Option<&String> {
-        self.carrier.selected_target()
+        self.content.canonical_selected_target()
     }
 
     pub(in crate::app) fn group_count(&self) -> usize {
-        1 + self.subscriptions.len()
-    }
-
-    fn rebuild_visible_entries(&mut self) {
-        let source = if self.selected_group == 0 {
-            &self.all_entries
-        } else {
-            self.entries
-                .get(self.selected_group - 1)
-                .map(Vec::as_slice)
-                .unwrap_or(&[])
-        };
-        self.visible_entries = source
-            .iter()
-            .filter(|entry| self.watched_filter.matches(entry.played))
-            .cloned()
-            .collect();
-
-        // Project grouped `FeedEntries` into the canonical row vocabulary:
-        // `FeedAgeGroup` labels become non-selectable `Heading` rows, group
-        // separators become `Spacer` rows, entries become selectable `Item`
-        // rows carrying the stable `entry.guid` target and the watched
-        // semantic state. Structural rows are filtered out of the control's
-        // selectable index, so cursor movement skips them and the control's
-        // `RowGeometry` owns the selectable-index vs display-index mapping.
-        let now = current_time_secs();
-        let rows: Vec<MediaListRow<String>> = feed_display_rows(&self.visible_entries, now)
-            .into_iter()
-            .map(|row| match row {
-                FeedDisplayRow::Spacer => MediaListRow::Spacer,
-                FeedDisplayRow::Heading(group) => MediaListRow::Heading {
-                    text: group.label().to_string(),
-                },
-                FeedDisplayRow::Entry(index) => {
-                    let entry = &self.visible_entries[index];
-                    MediaListRow::Item {
-                        target: entry.guid.clone(),
-                        primary: entry.title.clone(),
-                        trailing: None,
-                        duration: feed_duration_text(entry.duration_ticks),
-                        kind: MediaKind::Media,
-                        semantic_state: if entry.played {
-                            MediaSemanticState::Played
-                        } else if entry.position_ticks > 0 {
-                            let progress = entry
-                                .duration_ticks
-                                .filter(|duration| *duration > 0)
-                                .map(|duration| {
-                                    ((entry.position_ticks.max(0) as u64 * 100) / duration).min(100)
-                                        as u16
-                                });
-                            MediaSemanticState::active(progress)
-                        } else {
-                            MediaSemanticState::Ordinary
-                        },
-                    }
-                }
-            })
-            .collect();
-        self.carrier.set_content(rows);
-    }
-
-    /// Park the shared owner at the first entry after a discrete group/filter
-    /// change (design.md D5: re-project then explicitly select the required
-    /// stable target).
-    fn reset_selection(&mut self) {
-        self.delegate_row_local_input(RowLocalInput::First, None);
-    }
-
-    /// The one seam through which Feeds offers an already-normalized row-local
-    /// key or pointer gesture to the shared owner carrying its entry rows. The
-    /// owner applies the local state transition and returns the closed
-    /// provider-neutral outcome; Feeds translates external row intents into
-    /// its typed Msgs (design.md D3).
-    fn delegate_row_local_input(
-        &mut self,
-        input: RowLocalInput,
-        pointer_target: Option<String>,
-    ) -> RowLocalOutcome<String> {
-        self.ensure_carrier();
-        self.carrier.delegate(input, pointer_target)
-    }
-
-    /// The entry whose stable `guid` the shared owner selected. Effect
-    /// requests are built from this owner-resolved target, never by indexing
-    /// `visible_entries` with the cursor.
-    fn entry_for_target(&self, target: &str) -> Option<&FeedEntry> {
-        self.visible_entries
-            .iter()
-            .find(|entry| entry.guid == target)
-    }
-
-    /// Adopt `target` as the selected group and rebuild.
-    fn select_group(&mut self, target: usize) {
-        self.selected_group = target;
-        self.rebuild_visible_entries();
-        self.reset_selection();
+        self.content.group_count()
     }
 
     fn page_size(&self) -> i64 {
         self.layout.left_area.height.saturating_sub(1).max(1) as i64
     }
 
-    fn active_presentation(&self) -> Presentation {
-        if self.wide {
-            Presentation::Wide
-        } else {
-            Presentation::Inline
-        }
-    }
-
-    /// Move the shared owner into the active presentation when they diverge.
-    /// A breakpoint change reads the same owner and preserves only the
-    /// outgoing selected-row viewport offset (design.md D1); no cursor, scroll,
-    /// or selection is copied between presentations.
+    /// Keep the shared owner in the presentation the painted breakpoint
+    /// currently selects before any row-local input touches it (design.md
+    /// D1).
     fn ensure_carrier(&mut self) {
-        let target = self.active_presentation();
-        let viewport_height = self.layout.left_area.height.max(1) as usize;
-        self.carrier.set_presentation(target, viewport_height);
-    }
-
-    fn cycle_group(&mut self, delta: i64) {
-        let count = self.group_count();
-        self.selected_group =
-            (self.selected_group as i64 + delta).rem_euclid(count as i64) as usize;
-        self.rebuild_visible_entries();
-        self.reset_selection();
+        self.content
+            .ensure_presentation(self.wide, self.layout.left_area.height.max(1) as usize);
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -337,78 +188,91 @@ impl FeedsComponent {
         match key.code {
             Key::Char('r') => Some(Msg::Shell(ShellRequest::RefreshFeeds)),
             Key::Char('w') => {
-                self.watched_filter = self.watched_filter.cycle();
-                self.rebuild_visible_entries();
-                self.reset_selection();
+                self.content.cycle_watched_filter();
                 None
             }
             Key::Up | Key::Char('k') | Key::Left | Key::Char('h') => {
-                self.delegate_row_local_input(RowLocalInput::Move(-1), None);
+                self.content
+                    .delegate_row_local_input(RowLocalInput::Move(-1), None);
                 None
             }
             Key::Down | Key::Char('j') | Key::Right | Key::Char('l') => {
-                self.delegate_row_local_input(RowLocalInput::Move(1), None);
+                self.content
+                    .delegate_row_local_input(RowLocalInput::Move(1), None);
                 None
             }
             Key::PageUp => {
-                self.delegate_row_local_input(RowLocalInput::Move(-self.page_size()), None);
+                let page = self.page_size();
+                self.content
+                    .delegate_row_local_input(RowLocalInput::Move(-page), None);
                 None
             }
             Key::PageDown => {
-                self.delegate_row_local_input(RowLocalInput::Move(self.page_size()), None);
+                let page = self.page_size();
+                self.content
+                    .delegate_row_local_input(RowLocalInput::Move(page), None);
                 None
             }
             Key::Home => {
-                self.delegate_row_local_input(RowLocalInput::First, None);
+                self.content
+                    .delegate_row_local_input(RowLocalInput::First, None);
                 None
             }
             Key::End => {
-                self.delegate_row_local_input(RowLocalInput::Last, None);
+                self.content
+                    .delegate_row_local_input(RowLocalInput::Last, None);
                 None
             }
             Key::Char('[') => {
-                self.cycle_group(-1);
+                self.content.cycle_group(-1);
                 None
             }
             Key::Char(']') => {
-                self.cycle_group(1);
+                self.content.cycle_group(1);
                 None
             }
-            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
-                    ShellRequest::FeedsPlay(self.entry_for_target(&target).cloned()),
-                )),
-                _ => Some(Msg::Shell(ShellRequest::FeedsPlay(None))),
-            },
-            Key::Char('e') => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
-                    ShellRequest::FeedsEnqueue(self.entry_for_target(&target).cloned()),
-                )),
-                _ => Some(Msg::Shell(ShellRequest::FeedsEnqueue(None))),
-            },
+            Key::Enter => {
+                match self
+                    .content
+                    .delegate_row_local_input(RowLocalInput::Activate, None)
+                {
+                    RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
+                        ShellRequest::FeedsPlay(self.content.entry_for_target(&target).cloned()),
+                    )),
+                    _ => Some(Msg::Shell(ShellRequest::FeedsPlay(None))),
+                }
+            }
+            Key::Char('e') => {
+                match self
+                    .content
+                    .delegate_row_local_input(RowLocalInput::Activate, None)
+                {
+                    RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
+                        ShellRequest::FeedsEnqueue(self.content.entry_for_target(&target).cloned()),
+                    )),
+                    _ => Some(Msg::Shell(ShellRequest::FeedsEnqueue(None))),
+                }
+            }
             _ => None,
         }
     }
 
     /// Handle a TuiRealm mouse event via the private `MouseGestureState`
-    /// (ADR 0024, design.md D3). Row identity comes from the active canonical
-    /// control's `resolve_point` (design.md D6); the selector pills stay
-    /// parent chrome resolved from `selector_tabs`. The component emits a
-    /// semantic `Msg` — never raw coordinates. Feeds has no keyboard
-    /// context-menu action (task 4.6), so right-click is ignored.
+    /// (ADR 0024, design.md D3). This component resolves only its own painted
+    /// geometry — the selector/filter pill hit store and the active list's
+    /// point claim — and offers the normalized row-local input to the owner,
+    /// which owns the typed target resolution and message translation
+    /// (design.md D6). Feeds has no keyboard context-menu action (task 4.6),
+    /// so right-click is ignored.
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // Feeds does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Scroll { at, delta } => {
-                if !self.carrier.claims_current_point(at) {
-                    return None;
-                }
-                self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
-                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-            }
+            MouseGesture::Scroll { at, delta } => self
+                .content
+                .on_slot_event(LibrarySlotEvent::List(RowLocalInput::Wheel { at, delta })),
             MouseGesture::Click(at) => {
                 if let Some((_, target)) = self
                     .layout
@@ -416,31 +280,20 @@ impl FeedsComponent {
                     .iter()
                     .find(|(rect, _)| rect.contains(at))
                 {
-                    let filter_base = self.group_count();
-                    if *target < filter_base {
-                        self.select_group(*target);
-                    } else if let Some(filter) = WatchedFilter::from_position(*target - filter_base)
-                    {
-                        self.watched_filter = filter;
-                        self.rebuild_visible_entries();
-                        self.reset_selection();
-                    }
-                    return None;
+                    let filter_base = self.content.group_count();
+                    let event = if *target < filter_base {
+                        LibrarySlotEvent::SelectorPicked(*target)
+                    } else {
+                        LibrarySlotEvent::ControlPicked(*target - filter_base)
+                    };
+                    return self.content.on_slot_event(event);
                 }
-                let target = self.resolve_row_id(at)?;
-                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
-                Some(Msg::Shell(ShellRequest::FeedsRowClick))
+                self.content
+                    .on_slot_event(LibrarySlotEvent::List(RowLocalInput::Click(at)))
             }
-            MouseGesture::DoubleClick(at) => {
-                let target = self.resolve_row_id(at)?;
-                // Select the painted row through the same delegation seam the
-                // first click uses, then play the resolved entry (Home shape).
-                // A target with no visible entry returns no message, matching
-                // the pre-migration `position(...)?` guard.
-                self.delegate_row_local_input(RowLocalInput::Click(at), Some(target.clone()));
-                let entry = self.entry_for_target(&target)?.clone();
-                Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry))))
-            }
+            MouseGesture::DoubleClick(at) => self
+                .content
+                .on_slot_event(LibrarySlotEvent::List(RowLocalInput::DoubleClick(at))),
             _ => None,
         }
     }
@@ -448,7 +301,7 @@ impl FeedsComponent {
     /// The stable row id under `point`, resolved by the shared owner that
     /// painted the active list (design.md D6).
     pub(in crate::app) fn resolve_row_id(&self, at: Position) -> Option<String> {
-        self.carrier.resolve_current_point(at).cloned()
+        self.content.resolve_row_id(at)
     }
 
     /// Test seam: reset the private gesture recognizer so a synchronous test
@@ -474,18 +327,8 @@ impl Component for FeedsComponent {
         // presentations.
         let wide = wide_hero_fits(area);
         self.wide = wide;
-        self.ensure_carrier();
-
-        let selected_entry = self
-            .carrier
-            .selected_target()
-            .and_then(|target| self.entry_for_target(target))
-            .cloned();
-        let presentation = if self.carrier.active() == Presentation::Wide {
-            FeedsPresentation::Wide(self.carrier.wide_mut())
-        } else {
-            FeedsPresentation::Inline(self.carrier.inline_mut())
-        };
+        let viewport_height = self.layout.left_area.height.max(1) as usize;
+        let inputs = self.content.paint_inputs(wide, viewport_height);
         let mut layout = LayoutMain::default();
         render_feeds_content(
             frame,
@@ -493,15 +336,15 @@ impl Component for FeedsComponent {
             self.focused,
             &mut layout,
             FeedsRenderModel {
-                subscriptions: &self.subscriptions,
-                visible_entries: &self.visible_entries,
-                watched_filter: self.watched_filter,
-                selected_group: self.selected_group,
-                loading: self.loading,
-                selected_entry: selected_entry.as_ref(),
+                subscriptions: inputs.subscriptions,
+                visible_entries: inputs.visible_entries,
+                watched_filter: inputs.watched_filter,
+                selected_group: inputs.selected_group,
+                loading: inputs.loading,
+                selected_entry: inputs.selected_entry,
                 images_enabled: self.images_enabled,
             },
-            presentation,
+            inputs.presentation,
             self.list_pane_width,
         );
         self.layout = layout;
@@ -528,9 +371,6 @@ impl Component for FeedsComponent {
 
 impl AppComponent<Msg, UserEvent> for FeedsComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
-        // Keep the shared owner in the presentation the painted breakpoint
-        // currently selects before any row-local input touches it (design.md
-        // D1).
         match event {
             Event::Keyboard(key) => {
                 self.ensure_carrier();

@@ -18,6 +18,7 @@ pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
 pub mod feeds;
+pub mod feeds_content;
 pub mod feeds_manage;
 pub mod help;
 pub mod home_content;
