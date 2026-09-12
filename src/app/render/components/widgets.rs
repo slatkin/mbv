@@ -549,9 +549,7 @@ impl App {
                 // `from_media_type` maps every ABS media type to exactly one of
                 // Book | Podcast, so the non-book arm *is* the podcast surface;
                 // a kind guard here would be unreachable branch weight.
-                if is_book {
-                    layout.audiobookshelf_book_area = area;
-                } else {
+                if !is_book {
                     layout.audiobookshelf_podcast_area = area;
                 }
             }

@@ -56,7 +56,6 @@ pub struct Model {
     pub(super) emby_browser_id: Option<ComponentId>,
     pub(super) music_workspace_id: Option<ComponentId>,
     pub(super) abs_podcast_id: Option<ComponentId>,
-    pub(super) abs_book_id: Option<ComponentId>,
     /// Maintained registry of every mounted destination surface component
     /// (`Browser` workspaces and `InlineSearch`). TuiRealm's `Application`
     /// exposes no component enumeration, so stale-discovery for
@@ -394,7 +393,6 @@ impl Model {
             emby_browser_id: None,
             music_workspace_id: None,
             abs_podcast_id: None,
-            abs_book_id: None,
             mounted_destinations: std::collections::HashSet::new(),
             mouse_subscribed: std::collections::HashSet::new(),
             music_track_focus_request: None,

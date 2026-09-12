@@ -180,6 +180,10 @@ impl BookContent {
         self.chapter_focused
     }
 
+    pub(in crate::app) fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
     /// Enter the parent-owned chapter pane without moving the chapter owner's
     /// selection (design.md D5): focus is not selection.
     pub(in crate::app) fn enter_chapter_focus(&mut self) {

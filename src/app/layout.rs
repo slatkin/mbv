@@ -101,9 +101,6 @@ pub(crate) struct LayoutMain {
     /// Full area passed to the Audiobookshelf podcast component after the
     /// legacy frame computes the current library layout.
     pub audiobookshelf_podcast_area: Rect,
-    /// Full area passed to the Audiobookshelf book component after the legacy
-    /// frame computes the current library layout.
-    pub audiobookshelf_book_area: Rect,
 }
 
 /// Root/chrome frame geometry computed paint-free by

@@ -130,11 +130,15 @@ impl Model {
             AudiobookshelfBrowseKind::Podcast => BrowserKind::AudiobookshelfPodcast,
             AudiobookshelfBrowseKind::Book => BrowserKind::AudiobookshelfBook,
         };
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Audiobookshelf,
-            library_id: library.id.clone(),
-            kind,
-        }))
+        Some(if kind == BrowserKind::AudiobookshelfBook {
+            ComponentId::Library
+        } else {
+            ComponentId::Browser(BrowserKey {
+                service: ServiceKind::Audiobookshelf,
+                library_id: library.id.clone(),
+                kind,
+            })
+        })
     }
 
     /// ADR 0024 D2: the mouse-eligible component set for the current frame, a
@@ -300,16 +304,7 @@ impl Model {
 
     fn abs_wide_hero_content_area(&self, index: usize) -> Option<Rect> {
         match self.app.audiobookshelf_kind_at(index)? {
-            AudiobookshelfBrowseKind::Book => {
-                let area = self.app.layout.main.audiobookshelf_book_area;
-                // The empty/loading early return skips the wide branch.
-                let has_books = self
-                    .app
-                    .audiobookshelf_book_browse
-                    .get(index)
-                    .is_some_and(|state| !state.books.is_empty());
-                (has_books && crate::app::render::wide_hero_fits(area)).then_some(area)
-            }
+            AudiobookshelfBrowseKind::Book => None,
             // Podcast paints its hero pane whenever the breakpoint fits, even
             // with no shows (the empty placeholder is painted in the rail).
             AudiobookshelfBrowseKind::Podcast => {

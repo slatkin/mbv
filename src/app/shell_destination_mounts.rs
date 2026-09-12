@@ -81,7 +81,6 @@ impl Model {
             &mut self.emby_browser_id,
             &mut self.music_workspace_id,
             &mut self.abs_podcast_id,
-            &mut self.abs_book_id,
         ] {
             if pointer.as_ref() == Some(id) {
                 *pointer = None;

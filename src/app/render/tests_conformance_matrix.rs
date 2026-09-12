@@ -728,48 +728,6 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
     );
 }
 
-/// P1 regression for 5.3d.13 Unit A: the legacy base frame must populate
-/// `layout.main.audiobookshelf_book_area` for the Book tab, or the shell's
-/// `render_audiobookshelf_book_component` early-returns on the zero Rect and
-/// the live Book surface stays blank (the component overlay reads that rect).
-/// Exercises the real base-frame path (`App::render_library` ->
-/// `render_audiobookshelf_library`), not a direct component render.
-#[test]
-fn render_library_sets_book_area_before_component_overlay() {
-    let mut app = make_audiobookshelf_book_app();
-    let (_, layout) = render_library(&mut app, 60, 20);
-    assert_eq!(
-        layout.audiobookshelf_book_area,
-        Rect::new(0, 0, 60, 20),
-        "base frame must populate audiobookshelf_book_area before the component overlay paints"
-    );
-}
-
-/// `remove-migrated-surface-underpaint` 3.5 (D4): the mounted
-/// `AudiobookshelfBookComponent` owns the Book picture at every breakpoint.
-/// `render_audiobookshelf_library`
-/// (`src/app/render/components/widgets.rs:599`) sets
-/// `audiobookshelf_book_area` and returns without painting a book row, hero,
-/// or pill. Mirrors the Home precedent
-/// `legacy_base_frame_does_not_paint_home_content_before_the_component`.
-#[test]
-fn abs_book_legacy_base_frame_publishes_geometry_but_paints_no_books() {
-    for (width, height) in [(60, 20), (120, 40)] {
-        let mut app = make_audiobookshelf_book_app();
-        let (terminal, layout) = render_library(&mut app, width, height);
-        assert_eq!(
-            layout.audiobookshelf_book_area,
-            Rect::new(0, 0, width, height),
-            "book geometry hand-off must stay reserved at {width}x{height}"
-        );
-        let output = buffer_to_string(&terminal);
-        assert!(
-            !output.contains("Alpha Tales") && !output.contains("◢"),
-            "legacy base frame must not paint the Book surface at {width}x{height}: {output:?}"
-        );
-    }
-}
-
 /// `remove-migrated-surface-underpaint` 3.6 (D4): the mounted
 /// `AudiobookshelfPodcastComponent` owns the Podcast picture. The podcast
 /// case of `render_audiobookshelf_library`

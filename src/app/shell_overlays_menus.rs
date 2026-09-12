@@ -1,4 +1,3 @@
-use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
 use super::super::components::library_panel::LibraryPanel;
 use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
@@ -58,28 +57,17 @@ impl Model {
             .and_then(BrowserComponent::menu_placement_geometry)
     }
 
-    /// Like `home_menu_geometry`, but for the mounted `AudiobookshelfBookComponent`
-    /// (task 5.3d.13, render ownership). Returns the book surface's painted
-    /// selected-item rect so the context menu anchors to what the component
-    /// actually painted rather than the legacy `AppLayout` copy.
+    /// Context-menu geometry for a migrated Audiobookshelf Books owner.
     fn book_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
-        let id = self.abs_book_id.clone()?;
-        if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
+        if !matches!(self.app.tab, TabSelection::AudiobookshelfLibrary(_))
+            || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
+        {
             return None;
         }
         self.application
-            .get_component(&id)
-            .and_then(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<AudiobookshelfBookComponent>()
-            })
-            .map(|component| {
-                (
-                    self.app.layout.main.left_area,
-                    component.geometry().selected_item_rect,
-                )
-            })
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(LibraryPanel::menu_geometry)
     }
 
     /// Like `home_menu_geometry`, but for the mounted `QueueComponent` (task

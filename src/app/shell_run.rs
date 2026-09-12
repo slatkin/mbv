@@ -138,7 +138,6 @@ impl Model {
             self.render_library_panel(f);
         } else {
             self.render_audiobookshelf_podcast_component(f);
-            self.render_audiobookshelf_book_component(f);
             self.render_emby_browser_component(f);
         }
         self.render_queue_component(f);
