@@ -366,7 +366,7 @@ conforms to Emby.
   the deleted symbols; one tick integration test per Panel mode (`both`, `queue-only`, `library-only`,
   mini view) asserts a non-empty frame. These tests do not pre-fill or assert sentinel ownership; that
   proof belongs exclusively to 12.2.
-- [ ] 12.2 Pass the sentinel test: one tick integration test per Panel mode (`both`, `queue-only`,
+- [x] 12.2 Pass the sentinel test: one tick integration test per Panel mode (`both`, `queue-only`,
   `library-only`, mini view) pre-fills the test buffer with a sentinel symbol, draws one frame, and
   asserts no sentinel cell remains inside any mounted panel's `RootFrame` placement — fixing the panels
   that do not yet fill their own surface (what is left of the full-column backdrops). Verify: the four
