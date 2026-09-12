@@ -13,14 +13,13 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Frame;
 
-use crate::app::components::media_list::SelectedRowSurface;
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::{
     render_inline_search, render_placeholder, wide_hero_browser_border, wide_hero_browser_pane,
-    wide_hero_hero_pane, LeftPaneFocus, PANE_PAD_X, PANE_PAD_Y,
+    wide_hero_hero_pane, PANE_PAD_X, PANE_PAD_Y,
 };
 
 use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroImagePaint};
@@ -186,7 +185,6 @@ pub(in crate::app) fn render_wide_skeleton(
             );
             list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
                 focused: browser_focused,
-                selected: SelectedRowSurface::ListBackdrop,
                 throbber: None,
             });
             list.view(f, list_area);
@@ -206,14 +204,12 @@ pub(in crate::app) fn render_wide_skeleton(
     // Hero pane: the fill's focus is derived, not declared (design D6) —
     // focusable exactly when a Workspace is present, focused exactly when
     // that Workspace holds focus.
-    let focus = content
+    let focused = content
         .hero
         .as_ref()
         .and_then(|hero| hero.workspace.as_ref())
-        .map_or(LeftPaneFocus::ReadOnly, |workspace| {
-            LeftPaneFocus::Workspace(workspace.focused)
-        });
-    let hero_area = wide_hero_hero_pane(f, area, focus, override_width)?;
+        .is_some_and(|workspace| workspace.focused);
+    let hero_area = wide_hero_hero_pane(f, area, focused, override_width)?;
 
     // The list slot's painted selection: the context-menu anchor's painted
     // truth (the selected row's rect, or the admitted inline hero block).
@@ -321,7 +317,6 @@ fn paint_workspace_box(
         .list
         .set_paint_policy(super::content::PanelListPaintPolicy::Wide {
             focused: workspace.focused,
-            selected: SelectedRowSurface::OwningLibraryPane,
             throbber: None,
         });
     workspace.list.view(f, content);

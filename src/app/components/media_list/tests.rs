@@ -1,6 +1,6 @@
 use super::{
     InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
-    SelectedRowSurface, ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
+    ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -84,7 +84,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
 mod resolve_point {
     use super::super::{
         InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow,
-        MediaSemanticState, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+        MediaSemanticState, WideMediaList, WideMediaListPaintPolicy,
     };
     use ratatui::backend::TestBackend;
     use ratatui::layout::{Position, Rect};
@@ -119,11 +119,7 @@ mod resolve_point {
     /// frame's geometry (design.md D6).
     fn paint_wide(list: &mut WideMediaList<String>, area: Rect) {
         list.set_geometry(area, area);
-        list.set_paint_policy(WideMediaListPaintPolicy::new(
-            false,
-            SelectedRowSurface::ListBackdrop,
-            None,
-        ));
+        list.set_paint_policy(WideMediaListPaintPolicy::new(false, None));
         let mut terminal =
             Terminal::new(TestBackend::new(area.right().max(1), area.bottom().max(1))).unwrap();
         terminal.draw(|f| list.view(f, area)).unwrap();
@@ -193,11 +189,7 @@ mod resolve_point {
 
     fn paint_inline(browser: &mut InlineMediaBrowser<String>, area: Rect, detail_rows: usize) {
         browser.set_geometry(area, area);
-        browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
-            false,
-            SelectedRowSurface::ListBackdrop,
-            detail_rows,
-        ));
+        browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(false, detail_rows));
         let mut terminal =
             Terminal::new(TestBackend::new(area.right().max(1), area.bottom().max(1))).unwrap();
         terminal.draw(|f| browser.view(f, area)).unwrap();
@@ -457,11 +449,7 @@ fn wide_component_retains_only_completed_current_frame_facts() {
     let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
     terminal
         .draw(|frame| {
-            list.set_paint_policy(WideMediaListPaintPolicy::new(
-                true,
-                SelectedRowSurface::ListBackdrop,
-                None,
-            ));
+            list.set_paint_policy(WideMediaListPaintPolicy::new(true, None));
             Component::view(&mut list, frame, area);
         })
         .unwrap();
@@ -528,11 +516,7 @@ fn inline_component_retains_detail_and_resolves_from_the_current_view() {
 
     terminal
         .draw(|frame| {
-            browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
-                true,
-                SelectedRowSurface::ListBackdrop,
-                2,
-            ));
+            browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(true, 2));
             Component::view(&mut browser, frame, area);
         })
         .unwrap();
@@ -567,11 +551,7 @@ fn inline_delegate_keeps_the_completed_frame_for_pointer_continuity() {
     let mut terminal = Terminal::new(TestBackend::new(28, 6)).unwrap();
     terminal
         .draw(|frame| {
-            browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(
-                true,
-                SelectedRowSurface::ListBackdrop,
-                2,
-            ));
+            browser.set_paint_policy(InlineMediaBrowserPaintPolicy::new(true, 2));
             Component::view(&mut browser, frame, area);
         })
         .unwrap();

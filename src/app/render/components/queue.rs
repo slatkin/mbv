@@ -1,6 +1,4 @@
-use crate::app::components::media_list::{
-    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
-};
+use crate::app::components::media_list::{WideMediaList, WideMediaListPaintPolicy};
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
@@ -31,11 +29,7 @@ pub(in crate::app) fn render_queue_body(
 ) {
     match presentation {
         QueuePresentation::Wide(list) => {
-            list.set_paint_policy(WideMediaListPaintPolicy::new(
-                focused,
-                SelectedRowSurface::OwningQueueColumn,
-                throbber,
-            ));
+            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused, throbber));
             Component::view(list, frame, area);
         }
     }

@@ -17,7 +17,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-use crate::app::components::media_list::{Presentation, SelectedRowSurface};
+use crate::app::components::media_list::Presentation;
 use crate::app::palette;
 use crate::app::render::arrangements::library::selected_detail_content_area;
 use crate::app::render::arrangements::wide_hero::pill_bar_areas;
@@ -405,7 +405,6 @@ pub(in crate::app) fn render_narrow_skeleton(
             list.set_presentation(Presentation::Inline, list_area.height.max(1) as usize);
             list.set_paint_policy(PanelListPaintPolicy::Inline {
                 focused: browser_focused,
-                selected: SelectedRowSurface::ListBackdrop,
                 desired_detail_rows,
             });
             list.view(f, list_area);

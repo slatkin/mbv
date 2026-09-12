@@ -211,15 +211,27 @@ pub struct WideMediaListPaintPolicy {
 }
 
 impl WideMediaListPaintPolicy {
-    pub const fn new(
-        focused: bool,
-        selected_surface: SelectedRowSurface,
-        throbber: Option<char>,
-    ) -> Self {
+    pub const fn new(focused: bool, throbber: Option<char>) -> Self {
         Self {
             focused,
-            selected_surface,
+            selected_surface: SelectedRowSurface::ListBackdrop,
             throbber,
+        }
+    }
+
+    pub const fn for_queue(focused: bool, throbber: Option<char>) -> Self {
+        Self {
+            focused,
+            selected_surface: SelectedRowSurface::OwningQueueColumn,
+            throbber,
+        }
+    }
+
+    pub const fn for_library_workspace(focused: bool) -> Self {
+        Self {
+            focused,
+            selected_surface: SelectedRowSurface::OwningLibraryPane,
+            throbber: None,
         }
     }
 
@@ -245,14 +257,10 @@ pub struct InlineMediaBrowserPaintPolicy {
 }
 
 impl InlineMediaBrowserPaintPolicy {
-    pub const fn new(
-        focused: bool,
-        selected_surface: SelectedRowSurface,
-        desired_detail_rows: usize,
-    ) -> Self {
+    pub const fn new(focused: bool, desired_detail_rows: usize) -> Self {
         Self {
             focused,
-            selected_surface,
+            selected_surface: SelectedRowSurface::ListBackdrop,
             desired_detail_rows,
         }
     }

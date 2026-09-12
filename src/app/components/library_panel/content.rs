@@ -8,7 +8,7 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::app::components::inline_search::InlineSearch;
-use crate::app::components::media_list::{Presentation, SelectedRowSurface};
+use crate::app::components::media_list::Presentation;
 
 /// The artwork shape the header reserves a box for (spec: the Wide Hero
 /// header's three types). Chosen by the artwork policy (design D5, task
@@ -197,23 +197,20 @@ pub(in crate::app) struct LibraryPanelContent<'a> {
 }
 
 /// The closed paint policy the panel sets on its lists (design D3/D6): the
-/// focus bit, the slot's fixed selected-row surface, and the
-/// presentation-specific inputs — the Wide throbber and the Inline detail
-/// height the panel computes from the hero content. Destinations pass none
-/// of these; the carrier maps the policy onto its active presentation.
+/// focus bit and presentation-specific inputs — the Wide throbber and the
+/// Inline detail height the panel computes from the hero content. Selected-row
+/// surfaces are fixed by the owning presentation policy; destinations pass none.
 pub(in crate::app) enum PanelListPaintPolicy {
-    /// The Wide presentation's policy: focus, selected-row surface, and the
-    /// now-playing throbber glyph (library lists carry none today).
+    /// The Wide presentation's policy: focus and the now-playing throbber
+    /// glyph (library lists carry none today).
     Wide {
         focused: bool,
-        selected: SelectedRowSurface,
         throbber: Option<char>,
     },
-    /// The Inline presentation's policy: focus, selected-row surface, and
-    /// the selected-row replacement height the panel derived from the hero.
+    /// The Inline presentation's policy: focus and the selected-row
+    /// replacement height the panel derived from the hero.
     Inline {
         focused: bool,
-        selected: SelectedRowSurface,
         desired_detail_rows: usize,
     },
 }

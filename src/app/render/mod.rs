@@ -87,8 +87,8 @@ pub(in crate::app) use screens::feeds_model::{
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::wide_hero::{
     paint_wide_hero_text, place_media_list_below, wide_hero_browser_border, wide_hero_browser_pane,
-    wide_hero_fits, wide_hero_hero_content_box, wide_hero_hero_pane, LeftPaneFocus,
-    WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
+    wide_hero_fits, wide_hero_hero_content_box, wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X,
+    PANE_PAD_Y,
 };
 pub(in crate::app) use components::hero::{
     selected_detail_shell, wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS,

@@ -260,30 +260,10 @@ pub(in crate::app) fn wide_hero_browser_pane(
     }
 }
 
-/// The Wide hero left pane's focus resolution (design.md D-B). A closed
-/// enum rather than a `bool`: the defect class this primitive exists to
-/// prevent is exactly the read-only-versus-workspace confusion (e.g. passing
-/// a bare `focused` when the correct value is `focused &&
-/// interaction.episode_focused`). `ReadOnly` and `Workspace(..)`
-/// are two visibly different call shapes, so a reviewer can check the
-/// variant rather than the expression.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum LeftPaneFocus {
-    /// The pane is never focusable (Movies/home-videos/Emby-podcasts/
-    /// feed-group browser, Home, Feeds): always the HeroPane surface's
-    /// resting fill.
-    ReadOnly,
-    /// The pane belongs to a focusable workspace (TV, Music, ABS Books, ABS
-    /// Podcasts); `true` when that workspace currently holds focus.
-    Workspace(bool),
-}
-
-/// Paints the Wide hero right pane: fills the [`wide_hero_presentation`]
-/// right pane with the surface [`LeftPaneFocus`] resolves to, and returns the
-/// shared content inset (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill,
-/// extent, inset, and focus resolution (design.md D-A) -- callers must not
-/// resize, re-derive, or conditionally skip the fill, and must not apply a
-/// destination-specific inset.
+/// Paints the Wide hero right pane and returns the shared content inset
+/// (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill, extent, inset, and focus
+/// resolution -- callers must not resize, re-derive, or conditionally skip the
+/// fill, and must not apply a destination-specific inset.
 ///
 /// Takes `content_area` rather than a pane rect so a caller has nothing to
 /// hand in but the rect the arrangement already consumes -- it cannot supply
@@ -292,18 +272,12 @@ pub(in crate::app) enum LeftPaneFocus {
 pub(in crate::app) fn wide_hero_hero_pane(
     f: &mut Frame,
     content_area: Rect,
-    focus: LeftPaneFocus,
+    focused: bool,
     override_width: Option<u16>,
 ) -> Option<Rect> {
     let WideHeroPanes {
         hero: hero_panel, ..
     } = wide_hero_presentation(content_area, override_width)?;
-    // D3(d): `ReadOnly` and `Workspace(held)` describe the same HeroPane
-    // surface; the match collapses to the one bool the fill depends on.
-    let focused = match focus {
-        LeftPaneFocus::ReadOnly => false,
-        LeftPaneFocus::Workspace(held) => held,
-    };
     let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
@@ -337,8 +311,7 @@ mod wide_hero_hero_pane_tests {
         } = wide_hero_presentation(area, None).expect("wide fits");
         terminal
             .draw(|f| {
-                let returned =
-                    wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly, None).expect("wide fits");
+                let returned = wide_hero_hero_pane(f, area, false, None).expect("wide fits");
                 assert_eq!(returned, padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y));
             })
             .unwrap();
@@ -357,8 +330,7 @@ mod wide_hero_hero_pane_tests {
         let expected = padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y);
         terminal
             .draw(|f| {
-                let returned = wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(true), None)
-                    .expect("wide fits");
+                let returned = wide_hero_hero_pane(f, area, true, None).expect("wide fits");
                 assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
                 assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
                 assert_eq!(returned, expected);
@@ -370,8 +342,7 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
             .draw(|f| {
-                wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(false), None)
-                    .expect("wide fits");
+                wide_hero_hero_pane(f, area, false, None).expect("wide fits");
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
@@ -389,10 +360,7 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
             .draw(|f| {
-                assert_eq!(
-                    wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly, None),
-                    None
-                );
+                assert_eq!(wide_hero_hero_pane(f, area, false, None), None);
             })
             .unwrap();
         let buffer = terminal.backend().buffer();

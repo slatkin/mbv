@@ -47,11 +47,7 @@ impl<Target> WideMediaList<Target> {
     pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
             core,
-            policy: WideMediaListPaintPolicy::new(
-                false,
-                super::SelectedRowSurface::ListBackdrop,
-                None,
-            ),
+            policy: WideMediaListPaintPolicy::new(false, None),
             configured_geometry: None,
             paint: None,
         }

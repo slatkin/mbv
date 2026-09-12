@@ -25,23 +25,17 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
-            PanelListPaintPolicy::Wide {
-                focused,
-                selected,
-                throbber,
-            } => {
+            PanelListPaintPolicy::Wide { focused, throbber } => {
                 self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::new(focused, selected, throbber));
+                    .set_paint_policy(WideMediaListPaintPolicy::new(focused, throbber));
             }
             PanelListPaintPolicy::Inline {
                 focused,
-                selected,
                 desired_detail_rows,
             } => {
                 self.inline_mut()
                     .set_paint_policy(InlineMediaBrowserPaintPolicy::new(
                         focused,
-                        selected,
                         desired_detail_rows,
                     ));
             }
@@ -73,7 +67,7 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
 mod panel_list_tests {
     use super::*;
     use crate::app::components::media_list::{
-        MediaKind, MediaListRow, MediaSemanticState, Presentation, SelectedRowSurface,
+        MediaKind, MediaListRow, MediaSemanticState, Presentation,
     };
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -113,7 +107,6 @@ mod panel_list_tests {
                     &mut carrier,
                     PanelListPaintPolicy::Wide {
                         focused: true,
-                        selected: SelectedRowSurface::ListBackdrop,
                         throbber: None,
                     },
                 );
@@ -139,7 +132,6 @@ mod panel_list_tests {
                     &mut carrier,
                     PanelListPaintPolicy::Inline {
                         focused: true,
-                        selected: SelectedRowSurface::ListBackdrop,
                         desired_detail_rows: 0,
                     },
                 );

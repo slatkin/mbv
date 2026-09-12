@@ -60,11 +60,7 @@ impl<Target> InlineMediaBrowser<Target> {
     pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
             core,
-            policy: InlineMediaBrowserPaintPolicy::new(
-                false,
-                super::SelectedRowSurface::ListBackdrop,
-                0,
-            ),
+            policy: InlineMediaBrowserPaintPolicy::new(false, 0),
             configured_geometry: None,
             paint: None,
         }

@@ -4,9 +4,7 @@
 
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::NarrowBrowseExtras;
-use crate::app::components::media_list::{
-    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, SelectedRowSurface,
-};
+use crate::app::components::media_list::{InlineMediaBrowser, InlineMediaBrowserPaintPolicy};
 use crate::app::render::arrangements::wide_hero;
 use crate::app::render::components::hero::{
     selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
@@ -126,11 +124,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         f,
         list_area,
         browser,
-        InlineMediaBrowserPaintPolicy::new(
-            focused,
-            SelectedRowSurface::ListBackdrop,
-            desired_detail_rows,
-        ),
+        InlineMediaBrowserPaintPolicy::new(focused, desired_detail_rows),
     );
     let hero_area = if hero_presentation {
         browser.current_detail_rect().unwrap_or_default()
