@@ -13,11 +13,7 @@ fn playback_gating_space_first_press_falls_through() {
     let out = fold_tick(
         leaf,
         key(KeyCode::Char(' ')),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         active_snapshot(),
     );
     assert_eq!(
@@ -32,11 +28,7 @@ fn playback_gating_esc_first_press_falls_through() {
     let out = fold_tick(
         leaf,
         key(KeyCode::Esc),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         active_snapshot(),
     );
     assert_eq!(out.len(), 1);

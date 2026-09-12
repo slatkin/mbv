@@ -64,40 +64,13 @@ fn render_browse_component(
         {
             owner.set_cursor_for_test(seed_cursor);
         }
-    } else if let Some(id) = model.emby_browser_id.clone() {
-        if let Some(browser) = model
-            .application
-            .get_component_mut(&id)
-            .and_then(|component| component.as_any_mut().downcast_mut::<BrowserComponent>())
-        {
-            browser.set_cursor_for_test(seed_cursor);
-        }
     }
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
     let list_area = model.app.layout.main.left_area;
-    let layout = if model.active_library_owner_migrated() {
-        panel_browse_layout(&model)
-    } else {
-        let painted = if model.music_workspace_id.is_some() {
-            super::test_helpers::mounted_music_layout(&model)
-        } else {
-            super::test_helpers::mounted_browser_layout(&model).clone()
-        };
-        LayoutMain {
-            left_area: if painted.left_area.width > 0 {
-                painted.left_area
-            } else {
-                list_area
-            },
-            hero_area: painted.hero_area,
-            selected_item_rect: painted.selected_item_rect,
-            selector_tabs: painted.selector_tabs.clone(),
-            ..Default::default()
-        }
-    };
+    let layout = panel_browse_layout(&model);
     (terminal, layout)
 }
 

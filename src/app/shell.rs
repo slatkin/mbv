@@ -4,7 +4,7 @@ use super::action::{playback_command_for_key, Command};
 use super::components::msg::AlbumCursorKind;
 use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
-    UiRootComponent, UserEvent, WideHeroBoundaryComponent,
+    UiRootComponent, UserEvent,
 };
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
@@ -55,14 +55,6 @@ pub struct Model {
     pub(super) application: Application<ComponentId, Msg, UserEvent>,
     pub(super) emby_browser_id: Option<ComponentId>,
     pub(super) music_workspace_id: Option<ComponentId>,
-    /// Maintained registry of every mounted destination surface component
-    /// (`Browser` workspaces and `InlineSearch`). TuiRealm's `Application`
-    /// exposes no component enumeration, so stale-discovery for
-    /// reconciliation cannot read the view registry; this set mirrors every
-    /// destination `mount`/`umount` (tasks 1.2 correction) so
-    /// `reconcile_destination_mounts` can find a retired library's component
-    /// even when no `*_id` pointer still names it.
-    pub(super) mounted_destinations: std::collections::HashSet<ComponentId>,
     /// Components currently carrying the `mouse_sub()` subscription. Owned
     /// solely by `sync_mouse_subscriptions` (ADR 0024 D2): it is the mouse
     /// arbitration table. `tuirealm` 4.1's `Application::unsubscribe` removes
@@ -391,7 +383,6 @@ impl Model {
             application,
             emby_browser_id: None,
             music_workspace_id: None,
-            mounted_destinations: std::collections::HashSet::new(),
             mouse_subscribed: std::collections::HashSet::new(),
             music_track_focus_request: None,
             music_workspace_reanchor: false,
@@ -453,14 +444,6 @@ impl Model {
                 vec![],
             )
             .expect("mount QueueBoundary");
-        model
-            .application
-            .mount(
-                ComponentId::WideHeroBoundary,
-                Box::new(WideHeroBoundaryComponent::new()),
-                vec![],
-            )
-            .expect("mount WideHeroBoundary");
         model.update_settings_content();
         model
     }

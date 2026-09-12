@@ -112,7 +112,6 @@ mod shell_audiobookshelf_podcast;
 mod shell_browser;
 mod shell_browser_content;
 mod shell_chrome_panels;
-mod shell_destination_mounts;
 mod shell_feeds;
 mod shell_feeds_manage;
 mod shell_home;

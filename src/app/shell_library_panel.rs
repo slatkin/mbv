@@ -78,15 +78,6 @@ impl Model {
         keys
     }
 
-    /// The mounted panel's migrated-owner check for the active library: the
-    /// transitional branch's one condition.
-    pub(super) fn active_library_owner_migrated(&self) -> bool {
-        let Some(key) = self.active_library_key() else {
-            return false;
-        };
-        self.library_panel_has_owner(&key)
-    }
-
     /// Whether the panel hosts an owner for `key`.
     pub(super) fn library_panel_has_owner(&self, key: &LibraryKey) -> bool {
         self.application
@@ -137,8 +128,9 @@ impl Model {
                 .mount(id.clone(), Box::new(LibraryPanel::new()), vec![])
                 .expect("mount LibraryPanel");
         }
-        // Music is an embedded owner; install/project it after the panel is
-        // mounted so the first painted frame has a current owner and geometry.
+        // Embedded owners are installed/projected after the panel is mounted
+        // so the first painted frame has a current owner and geometry.
+        self.push_active_browser_owner_content();
         self.push_music_workspace_content();
         let active = self.active_library_key();
         // Register the Books owner as part of panel/catalog reconciliation,
@@ -173,7 +165,7 @@ impl Model {
         let live = self.live_library_keys();
         let list_pane_width = self.app.list_pane_width;
         // The split gesture's eligibility-loss reset is decided before the
-        // panel borrow (mirrors `WideHeroBoundaryComponent::sync`, which the
+        // panel borrow (the panel owns the split gesture state, so the
         // panel's split drag moved in from): an overlay mount mid-drag must
         // not leave a stale armed drag behind.
         let mouse_eligible = self.panel_mouse_eligible();
@@ -209,7 +201,7 @@ impl Model {
     /// the old destination components paint (the caller gates them).
     pub(super) fn render_library_panel(&mut self, frame: &mut ratatui::Frame) {
         let id = ComponentId::Library;
-        if !self.application.mounted(&id) || !self.active_library_owner_migrated() {
+        if !self.application.mounted(&id) {
             return;
         }
         let Some(area) = self.library_panel_content_area() else {
@@ -248,9 +240,6 @@ impl Model {
             return;
         };
         let list_pane_width = self.app.list_pane_width;
-        if !self.active_library_owner_migrated() {
-            return;
-        }
         let hero_data = {
             let panel = self
                 .application

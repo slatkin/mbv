@@ -63,7 +63,7 @@ pub struct BrowserComponent {
     image_paint: Option<HomeImagePaint>,
     /// Shell-resolved narrow-browse extras (letter pills and replacement
     /// policy) for the transitional `browser_narrow` composer, pushed each
-    /// frame by `render_emby_browser_component` (task 3.3).
+    /// frame by the shell's owner projection (task 3.3).
     narrow_extras: NarrowBrowseExtras,
     /// Discrete navigation/restoration re-anchor (design.md D1): re-selects
     /// its target when new content makes it available again.
@@ -133,13 +133,13 @@ impl BrowserComponent {
     }
 
     /// Records the shell-resolved narrow-browse extras for the next `view()`
-    /// (task 3.3). Pushed each frame by `render_emby_browser_component`.
+    /// (task 3.3). Pushed each frame by the shell's owner projection.
     pub(in crate::app) fn set_narrow_extras(&mut self, extras: NarrowBrowseExtras) {
         self.narrow_extras = extras;
     }
 
     /// Records the session-only Wide hero list-pane width override for the
-    /// next `view()`. Pushed each frame by `render_emby_browser_component`
+    /// next `view()`. Pushed each frame by the shell's owner projection
     /// beside the other per-draw layout facts; it is not content, so it never
     /// travels through `set_content`.
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
@@ -163,7 +163,7 @@ impl BrowserComponent {
         self.reanchor_content();
     }
     /// Explicit, identity-gated resting-position re-seed (task 3.7). The shell
-    /// calls this from `push_emby_browser_content` ONLY when the browse
+    /// calls this from the owner projection ONLY when the browse
     /// identity changed (drill-in, go-back parent restore, letter-filter
     /// reset, sort change, feed/home-video group switch). Within one identity
     /// no position crosses the boundary, so pagination, loading completion,

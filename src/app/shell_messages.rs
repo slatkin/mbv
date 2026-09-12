@@ -121,7 +121,7 @@ impl Model {
                     // Confirmations rewrite Home content/focus; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::DaemonLostIntent(intent) => {
                     if self.handle_daemon_lost_intent(intent) {
@@ -139,14 +139,14 @@ impl Model {
                     // Enter executes the action, which can refetch Home; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::ContextMenuSelect(idx) => {
                     self.handle_context_menu_select(idx);
                     // A selected action can refetch Home; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::ContextMenuDismiss => {
                     self.app.pending_overlay =
@@ -237,7 +237,7 @@ impl Model {
                     // Hiding libraries/pills refetches Home inside the commit; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 request @ ShellRequest::LibraryRoutesEnter
                 | request @ ShellRequest::LibraryRoutesEsc => {
@@ -322,7 +322,7 @@ impl Model {
                     );
                     self.handle_browser_request(request);
                     // Browser navigation/effects change library content; re-project (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                     if reproject_workspace {
                         self.push_music_workspace_content();
                         self.push_tv_workspace_content();
@@ -341,7 +341,7 @@ impl Model {
                     // A music-group pill switch replaces the album level;
                     // re-anchor the workspace cursor at this nav event.
                     self.music_workspace_reanchor = true;
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::BrowserRowClick { target } => {
                     if let (Some(lib_idx), Some(target)) =
@@ -349,7 +349,7 @@ impl Model {
                     {
                         self.app.handle_mouse_single_click_emby(lib_idx, target);
                     }
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::BrowserRowActivate { target } => {
                     if let (Some(lib_idx), Some(target)) =
@@ -357,7 +357,7 @@ impl Model {
                     {
                         self.app.handle_mouse_double_click_emby(lib_idx, target);
                     }
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::BrowserRowContextMenu { target, anchor } => {
                     if let (Some(lib_idx), Some(target)) =
@@ -366,7 +366,7 @@ impl Model {
                         self.app
                             .handle_mouse_right_click_emby(lib_idx, target, anchor.0, anchor.1);
                     }
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::HomeRowClick { .. } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
@@ -497,16 +497,7 @@ impl Model {
                 // override. There is no end/persist arm -- nothing is
                 // persisted.
                 ShellRequest::ResizeListPaneLive(width) => {
-                    // The Library panel's split gesture emits the same
-                    // request for migrated surfaces (task 5.9): its content
-                    // area is the library rect the old boundary read, so
-                    // both gesture owners clamp against the same width.
-                    let content_area = if self.active_library_owner_migrated() {
-                        self.library_panel_content_area()
-                    } else {
-                        self.wide_hero_boundary_content_area()
-                    };
-                    if let Some(content_area) = content_area {
+                    if let Some(content_area) = self.library_panel_content_area() {
                         self.app.list_pane_width =
                             crate::app::list_pane_width::normalize_list_pane_width(
                                 Some(width),
@@ -549,6 +540,6 @@ impl Model {
     /// browser content (5.3d.15/M2).
     fn queue_click_reproject(&mut self) {
         self.push_home_content();
-        self.push_emby_browser_content();
+        self.push_active_browser_owner_content();
     }
 }

@@ -30,8 +30,6 @@ impl Model {
         self.sync_tab_panel();
         self.sync_status_bar_panel();
         self.sync_queue_playback_panel();
-        self.sync_wide_hero_boundary();
-        self.sync_emby_browser();
         self.sync_music_workspace();
         // Task 8.4: the TV owner is installed/pushed before the panel's
         // owner-retention and active-pointer pass below.
@@ -47,7 +45,6 @@ impl Model {
         // Retire destination components whose Service library left the
         // catalog before the focus pass routes to the active destination
         // (keep-destination-components-mounted tasks 1.3).
-        self.reconcile_destination_mounts();
         self.sync_active_destination();
         // ADR 0024 D2: mouse eligibility is derived off the same
         // active-destination derivation, in the same pass, right after it.
@@ -295,7 +292,7 @@ impl Model {
                 // mirror deletion).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
                 // Player events can reconcile ABS podcast progress; re-project (5.3d.11 U6).
                 self.push_audiobookshelf_podcast_content();
                 // Player events can reconcile ABS book progress; re-project (5.3d).
@@ -386,7 +383,7 @@ impl Model {
                 self.push_home_content();
                 self.push_audiobookshelf_podcast_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
                 // ABS book async completions (BooksFetched / BookDetailFetched)
                 // and saved-position restore arrive via lib events; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
@@ -428,7 +425,7 @@ impl Model {
                 had_events = true;
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
             }
 
             had_events |= self.drain_feed_add_results();
@@ -462,7 +459,7 @@ impl Model {
                 // `UserDataChanged` refetches Home inside the handler; re-project (5.3d).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
                 self.push_music_workspace_content();
             }
 
@@ -647,7 +644,6 @@ impl Model {
             }
         }
 
-        self.persist_emby_browser_scroll_for_active_library();
         self.app.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
                                             // Printed only after the terminal is restored (task 7.2): anything

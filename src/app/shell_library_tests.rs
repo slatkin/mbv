@@ -98,7 +98,7 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
         }
         let mut model = Model::new(app);
         model.sync_tv_content();
-        model.sync_emby_browser();
+        model.sync_mounted_surfaces();
         model.sync_active_destination();
         let eligible: std::collections::HashSet<_> =
             model.mouse_eligible_ids().into_iter().collect();
@@ -269,7 +269,7 @@ fn narrow_and_wide_tv_library_both_route_to_the_library_panel() {
         }
         let mut model = Model::new(app);
         model.sync_tv_content();
-        model.sync_emby_browser();
+        model.sync_mounted_surfaces();
         model.sync_active_destination();
         model
     };
@@ -414,20 +414,16 @@ fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
 }
 
 #[test]
-fn shell_routes_focus_back_to_ui_root_without_a_mounted_child() {
+fn shell_routes_focus_to_the_library_panel_for_a_music_library() {
     let mut model = Model::new(make_movie_app());
-    // A narrow (non-wide) grouped-Music library has no surface component
-    // yet; the destination falls back to UiRoot (whose terminal
-    // translation owns the remaining legacy key dispatch for those
-    // surfaces). Podcast / feed-group libraries now route to the mounted
-    // BrowserComponent (migrate-narrow-browse task 2.2).
+    // Every library destination routes through the mounted Library panel.
     model.app.libs[0].library.collection_type = "music".into();
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
     model.sync_active_destination();
 
-    assert_eq!(model.application.focus(), Some(&ComponentId::UiRoot));
+    assert_eq!(model.application.focus(), Some(&ComponentId::Library));
 }
 
 #[test]

@@ -295,7 +295,7 @@ pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Ter
         model
             .app
             .render_library(f, Rect::new(0, 0, 60, 20), layout, None);
-        model.render_emby_browser_component(f);
+        model.render_library_panel(f);
         model.render_music_workspace_component(f);
     })
     .unwrap();
@@ -325,7 +325,7 @@ pub fn render_library_to_string_sized(
         model
             .app
             .render_library(f, Rect::new(0, 0, width, height), layout, None);
-        model.render_emby_browser_component(f);
+        model.render_library_panel(f);
         model.render_music_workspace_component(f);
     })
     .unwrap();

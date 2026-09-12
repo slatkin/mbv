@@ -4,8 +4,7 @@
 //! `LibraryKey::Service(BrowserKey)`, and the shell projects Model-owned
 //! browse snapshots into it at the same writer seams `shell_browser.rs`
 //! already calls for TV's still-mounted `BrowserComponent`
-//! (`mount_emby_browser`/`push_emby_browser_content`/
-//! `persist_emby_browser_scroll`) — this file only supplies the branch those
+//! (the former standalone browser lifecycle) — this file supplies the
 //! three functions take for the three migrated kinds, so every existing
 //! writer call site keeps working unchanged for both paths.
 //!
@@ -90,13 +89,13 @@ impl Model {
     }
 
     /// Event-scoped content projection for the migrated owner (mirrors
-    /// `push_emby_browser_content`'s body): mirrors the shell-owned browse
+    /// former standalone projection's body): mirrors the shell-owned browse
     /// snapshot — the feed/home-video group's selected items when active,
     /// the ordinary nav-stack level otherwise — into the owner, re-seeding
     /// position only on a real identity change, then prefetches nearby
     /// Movie posters at the owner's now-authoritative cursor (#287,
     /// `App::fetch_nearby_movie_posters`, moved here from
-    /// `render_emby_browser_component` since that draw-path call no longer
+    /// the old draw path since that call no longer
     /// runs for these three kinds).
     pub(super) fn push_browser_owner_content(
         &mut self,
@@ -180,14 +179,9 @@ impl Model {
         }
     }
 
-    /// The migrated owner's current scroll offset, for
-    /// `persist_emby_browser_scroll`'s branch.
-    pub(super) fn browser_owner_scroll(&mut self, key: &LibraryKey) -> Option<usize> {
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|panel| panel.owner_mut(key))
-            .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserContent>())
-            .map(|owner| owner.scroll())
+    pub(super) fn push_active_browser_owner_content(&mut self) {
+        if let Some((index, key, kind)) = self.active_migrated_browser_owner() {
+            self.push_browser_owner_content(index, &key, kind);
+        }
     }
 }

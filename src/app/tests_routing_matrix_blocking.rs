@@ -92,11 +92,7 @@ fn router_command_discards_focused_leaf_message() {
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('q')),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         RouterOutcome::Command(Command::Stop),
     );
     assert!(
@@ -110,11 +106,7 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Down),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         RouterOutcome::FallThrough,
     );
     assert_eq!(out.len(), 1, "exactly one leaf message must stand");

@@ -30,7 +30,6 @@ impl Model {
     fn home_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
         if !matches!(self.app.tab, TabSelection::Home)
             || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
-            || !self.active_library_owner_migrated()
         {
             return None;
         }

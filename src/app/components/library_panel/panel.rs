@@ -4,14 +4,11 @@
 //! while their library is in the catalog), the library area's framework
 //! focus, the mouse subscription's event interpretation, the skeleton's
 //! retained slot hit geometry, and the Wide split-boundary drag gesture
-//! (moved in from `WideHeroBoundaryComponent`). Slot events are typed
+//! (moved into this parent). Slot events are typed
 //! `Msg`s routed to the active owner, which translates them into its
 //! existing `Msg`s — no raw event or coordinate crosses to the shell for
 //! re-resolution.
 //!
-//! Transitional branch (task 5.9): the panel paints only when the active
-//! library's owner has migrated; with zero migrated owners the old mounted
-//! destination stays the surface and the panel claims nothing.
 
 use ratatui::layout::Position;
 use ratatui::Frame;
@@ -36,7 +33,7 @@ use super::wide::{render_wide_skeleton, SkeletonHits, WideSkeletonGeometry};
 
 /// The painted split's pointer→width resolution inputs, shared by the drag
 /// gesture's arming and resolution (the same facts the old
-/// `WideHeroBoundaryComponent::sync` carried, now derived from the panel's
+/// the former boundary carried, now derived from the panel's
 /// own painted skeleton geometry).
 #[derive(Clone, Copy, Debug)]
 struct SplitGeometry {
@@ -70,7 +67,7 @@ pub struct LibraryPanel {
     split: Option<SplitGeometry>,
     /// The split boundary's private gesture state: a left press inside the
     /// painted gap arms a drag; pane presses never arm it (the
-    /// `WideHeroBoundaryComponent` rule this gesture moved in from).
+    /// legacy split-boundary rule this gesture moved in from).
     split_gestures: MouseGestureState,
     /// The library surface's own gesture recognizer for slot events.
     gestures: MouseGestureState,
@@ -139,7 +136,7 @@ impl LibraryPanel {
 
     /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears
     /// the split gesture state before the next delivery — the same reset
-    /// `WideHeroBoundaryComponent::sync` applied while it owned the gesture —
+    /// the former boundary applied while it owned the gesture —
     /// so no stale width can be emitted after eligibility ends, and a drag
     /// without a fresh press stays inert once eligibility returns.
     pub(in crate::app) fn sync_mouse_eligibility(&mut self, eligible: bool) {
@@ -156,7 +153,7 @@ impl LibraryPanel {
 
     /// The split geometry the last painted Wide frame retained: the gap, the
     /// content-area origin, the content width and the current list-pane
-    /// width (the facts the old `WideHeroBoundaryComponent::sync` carried).
+    /// width (the facts the former shell-side gesture carried).
     #[cfg(test)]
     pub(in crate::app) fn test_split(&self) -> Option<(ratatui::layout::Rect, u16, u16, u16)> {
         self.split.as_ref().map(|split| {
@@ -837,7 +834,7 @@ mod panel_tests {
     }
 
     /// The Wide split-boundary drag moved in from
-    /// `WideHeroBoundaryComponent`: a press inside the painted gap arms only
+    /// former split boundary: a press inside the painted gap arms only
     /// the split gesture, and the drag resolves the live width from the
     /// panel's own painted geometry.
     #[test]

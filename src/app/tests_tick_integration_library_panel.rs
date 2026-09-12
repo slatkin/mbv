@@ -2,8 +2,8 @@
 //! one real `Application::tick()` flow through the shell sync pass (ADR 0024,
 //! design D15): framework focus follows the active library's migration state,
 //! mouse eligibility follows the painted panel, painted pill clicks route
-//! `SelectorPicked` to the active owner, the Wide split drag moved in from
-//! `WideHeroBoundaryComponent` resolves through the panel, an inactive owner
+//! `SelectorPicked` to the active owner, the Wide split drag is owned by
+//! the panel, an inactive owner
 //! keeps its cursor/scroll across a tab change, and a library leaving the
 //! catalog retires its owner. No destination converts here: the migrated
 //! path is exercised through a test-owned fixture content owner, the minimal
@@ -271,7 +271,7 @@ fn library_panel_mouse_eligibility_and_pill_slot_events() {
     );
 }
 
-/// The Wide split-boundary drag moved in from `WideHeroBoundaryComponent`:
+/// The Wide split-boundary drag is owned by the panel:
 /// through the real subscription, a press inside the panel's painted gap
 /// arms only the split gesture and the drag resolves the live width.
 #[test]

@@ -10,9 +10,7 @@
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
 //!
-//! TV's narrow browsing keeps its own separate mounted `BrowserComponent`
-//! instance (a different `ComponentId::Browser(BrowserKey)` mount, task
-//! 8.1's concern); nothing here is shared state with it.
+//! TV's browsing uses its own owner; nothing here is shared state with it.
 //!
 //! The selected item's hero comes from the shared `hero_content_emby`
 //! producer (design D5) and the Narrow inline hero is the panel's generic

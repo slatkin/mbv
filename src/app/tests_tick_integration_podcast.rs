@@ -139,6 +139,5 @@ fn podcast_owner_survives_tab_reselection() {
         podcast(&mut harness).episode_filter(),
         crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played
     );
-    assert_eq!(harness.model().application.mounted(&ComponentId::Browser(BrowserKey { service: ServiceKind::Audiobookshelf, library_id: "abs-podcasts".into(), kind: BrowserKind::AudiobookshelfPodcast })), false);
     let _ = TerminalObserverEvent::NoOp;
 }

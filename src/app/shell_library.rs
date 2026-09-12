@@ -1,24 +1,6 @@
-use super::components::{BrowserKey, BrowserKind, ComponentId};
+use super::components::{BrowserKind, ComponentId};
 use super::shell::Model;
-use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::{PanelFocus, PanelMode, TabSelection};
-use mbv_core::config::ServiceKind;
-use ratatui::layout::Rect;
-
-/// The gap columns and the pointer→width resolution inputs for the active
-/// Wide hero surface's two-pane split, when that surface is painting one this
-/// frame.
-struct WideHeroBoundaryGeometry {
-    /// The shared `WIDE_HERO_PANE_GAP` gutter between the panes.
-    gap: Rect,
-    /// Left edge of the surface's content area; the pointer column minus this
-    /// is the resolved list-pane width.
-    pane_origin_x: u16,
-    /// The content area's width, used to clamp the resolved width.
-    content_width: u16,
-    /// The list-pane width the current override (or default ratio) paints.
-    list_pane_width: u16,
-}
 
 impl Model {
     /// Route TuiRealm's native LIFO focus to the active destination's child
@@ -45,11 +27,7 @@ impl Model {
         if queue_owns_focus {
             return;
         }
-        // Task 5.9 (design D2): the migrated library routes focus to the
-        // Library panel; an un-migrated library keeps its old destination
-        // child (the transitional branch).
-        let target = self
-            .active_surface_id()
+        let target = Some(ComponentId::Library)
             .filter(|child| self.application.mounted(child))
             .unwrap_or(ComponentId::UiRoot);
         if self.application.mounted(&target) {
@@ -59,17 +37,9 @@ impl Model {
         }
     }
 
-    /// The component the active library's surface routes through this frame:
-    /// the Library panel while the active library's owner has migrated
-    /// (design D2), otherwise the old destination child (the transitional
-    /// branch). One derivation shared by the focus pass and the mouse
-    /// eligibility ladder so the two can never disagree.
+    /// The active library surface is always the mounted Library panel.
     pub(super) fn active_surface_id(&self) -> Option<ComponentId> {
-        if self.active_library_owner_migrated() {
-            Some(ComponentId::Library)
-        } else {
-            self.library_child_id()
-        }
+        Some(ComponentId::Library)
     }
 
     pub(super) fn library_child_id(&self) -> Option<ComponentId> {
@@ -101,7 +71,7 @@ impl Model {
             // `BrowserContent` owner inside the mounted `LibraryPanel` (task
             // 6.1, design D2): `emby_browser_component_id` never mounts the
             // standalone `BrowserComponent` for them, so their
-            // `ComponentId::Browser(_)` collapses into `ComponentId::Library`.
+            // All Emby library surfaces route through `ComponentId::Library`.
             // TV joined them in task 8.4 (`TvContent` under
             // `LibraryKey::Service(TvShows)`), deleting the TV-specific
             // component registration.
@@ -117,11 +87,7 @@ impl Model {
             }
             BrowserKind::AudiobookshelfPodcast | BrowserKind::AudiobookshelfBook => false,
         };
-        mounted_surface.then_some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: library.library.id.clone(),
-            kind,
-        }))
+        mounted_surface.then_some(ComponentId::Library)
     }
 
     fn abs_library_child_id(&self, index: usize) -> Option<ComponentId> {
@@ -200,11 +166,6 @@ impl Model {
                 ids.push(id);
             }
         }
-        if self.application.mounted(&ComponentId::WideHeroBoundary)
-            && self.wide_hero_boundary_mouse_eligible()
-        {
-            ids.push(ComponentId::WideHeroBoundary);
-        }
         ids
     }
 
@@ -261,155 +222,6 @@ impl Model {
                 );
             }
         }
-    }
-
-    /// The active Wide hero surface's content area when it is painting its
-    /// two-pane split this frame, else `None`.
-    ///
-    /// One central tab→area match (design.md Decision: "One component, one
-    /// tab→area match with painted-split eligibility"). Each arm reads the
-    /// rect `layout.rs` published for that surface and carries the surface's
-    /// own wide-paint gate: breakpoint fit alone is not enough, because
-    /// empty/loading/no-selection states return before painting the hero pane
-    /// and would otherwise expose a grab zone over an unsplit frame.
-    pub(super) fn wide_hero_boundary_content_area(&self) -> Option<Rect> {
-        if !self.library_panel_visible() {
-            return None;
-        }
-        match self.app.tab {
-            TabSelection::Home => {
-                let area = self.app.layout.main.home_area;
-                crate::app::render::wide_hero_fits(area).then_some(area)
-            }
-            // Feeds is registered in the panel (task 7.3), so the panel owns
-            // its Wide split: its painted geometry is the drag gate, and this
-            // shell-side boundary stays inert. The old gate also disarmed on
-            // an empty filtered list, which no longer matches the skeleton
-            // (it always paints the split) — the panel's own retained split
-            // replaces it with one painted truth.
-            TabSelection::Feeds => None,
-            TabSelection::AudiobookshelfLibrary(index) => self.abs_wide_hero_content_area(index),
-            TabSelection::EmbyLibrary(index) => self.emby_wide_hero_content_area(index),
-        }
-    }
-
-    fn abs_wide_hero_content_area(&self, index: usize) -> Option<Rect> {
-        match self.app.audiobookshelf_kind_at(index)? {
-            AudiobookshelfBrowseKind::Book => None,
-            // Podcasts are rendered by LibraryPanel, whose retained Wide
-            // skeleton owns the split even when the owner has no selected
-            // show; this legacy boundary remains inert.
-            AudiobookshelfBrowseKind::Podcast => None,
-        }
-    }
-
-    fn emby_wide_hero_content_area(&self, index: usize) -> Option<Rect> {
-        let library = self.app.libs.get(index)?;
-        let kind = BrowserKind::from_collection_type(&library.library.collection_type);
-        match kind {
-            // Wide TV (series list) paints the two-pane workspace; Narrow TV
-            // is the same merged owner's flat list and paints no split. The
-            // boundary's content area is the paint-free `wide_tv_library_area`
-            // (task 8.2 deleted the `tv_wide_area` layout field).
-            BrowserKind::TvShows => self.app.wide_tv_library_area(index),
-            BrowserKind::Music => (self.app.is_music_group_view(index)
-                && self.app.is_viewing_album_folders(index))
-            .then_some(self.app.layout.main.left_area)
-            .filter(|area| crate::app::render::wide_hero_fits(*area)),
-            BrowserKind::Movies | BrowserKind::HomeVideos => {
-                let area = self.app.layout.main.left_area;
-                crate::app::render::wide_hero_fits(area).then_some(area)
-            }
-            // Generic libraries never paint a wide split; only the
-            // feed-home-video group picker (rendered by `BrowserComponent`)
-            // does.
-            BrowserKind::Generic => self
-                .app
-                .is_feed_home_video_group_view(index)
-                .then_some(self.app.layout.main.left_area)
-                .filter(|area| crate::app::render::wide_hero_fits(*area)),
-            BrowserKind::AudiobookshelfPodcast | BrowserKind::AudiobookshelfBook => None,
-        }
-    }
-
-    /// The gap columns and resolution inputs shared by the boundary's arming
-    /// (`sync_wide_hero_boundary`) and painting
-    /// (`render_wide_hero_boundary`), or `None` when no split is painted.
-    fn wide_hero_boundary_geometry(&self) -> Option<WideHeroBoundaryGeometry> {
-        // The Library panel owns the split gesture for migrated surfaces
-        // (task 5.9, design D2): the old boundary stays inert beside it, so
-        // the one painted gap never has two gesture owners.
-        if self.active_library_owner_migrated() {
-            return None;
-        }
-        let content_area = self.wide_hero_boundary_content_area()?;
-        let panes =
-            crate::app::render::wide_library_panes(content_area, 0, 0, self.app.list_pane_width)?;
-        let gap = Rect {
-            x: panes.browser_panel.right(),
-            y: content_area.y,
-            width: panes
-                .hero_panel
-                .x
-                .saturating_sub(panes.browser_panel.right()),
-            height: content_area.height,
-        };
-        (gap.width > 0 && gap.height > 0).then_some(WideHeroBoundaryGeometry {
-            gap,
-            pane_origin_x: content_area.x,
-            content_width: content_area.width,
-            list_pane_width: panes.browser_panel.width,
-        })
-    }
-
-    /// The gap rect the active surface paints this frame, if any. Shared with
-    /// the width-resolution test path.
-    #[cfg(test)]
-    pub(super) fn wide_hero_boundary_gap_rect(&self) -> Option<Rect> {
-        self.wide_hero_boundary_geometry()
-            .map(|geometry| geometry.gap)
-    }
-
-    /// Whether the Wide hero boundary gap may receive mouse input. Shared by
-    /// `mouse_eligible_ids` (subscription) and `sync_wide_hero_boundary`
-    /// (arming) so the two can never disagree.
-    pub(super) fn wide_hero_boundary_mouse_eligible(&self) -> bool {
-        self.panel_mouse_eligible() && self.wide_hero_boundary_geometry().is_some()
-    }
-
-    pub(super) fn sync_wide_hero_boundary(&mut self) {
-        let id = ComponentId::WideHeroBoundary;
-        let geometry = self.wide_hero_boundary_geometry();
-        let enabled = self.panel_mouse_eligible() && geometry.is_some();
-        let (area, pane_origin_x, content_width, width) = match geometry {
-            Some(geometry) => (
-                geometry.gap,
-                geometry.pane_origin_x,
-                geometry.content_width,
-                geometry.list_pane_width,
-            ),
-            None => (Rect::default(), 0, 0, 0),
-        };
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(boundary) = comp
-                .as_any_mut()
-                .downcast_mut::<super::components::WideHeroBoundaryComponent>()
-            {
-                boundary.sync(area, pane_origin_x, content_width, width, enabled);
-            }
-        }
-    }
-
-    /// Paint the Wide hero gap columns with the backdrop they already showed.
-    pub(super) fn paint_wide_hero_boundary(&mut self, frame: &mut ratatui::Frame) {
-        let id = ComponentId::WideHeroBoundary;
-        if !self.application.mounted(&id) {
-            return;
-        }
-        let area = self
-            .wide_hero_boundary_geometry()
-            .map_or(Rect::default(), |geometry| geometry.gap);
-        self.application.view(&id, frame, area);
     }
 
     /// ADR 0024 D2: reconcile the `mouse_sub()` subscription table to

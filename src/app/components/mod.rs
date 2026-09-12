@@ -47,7 +47,6 @@ pub mod status_bar_panel;
 pub mod tab_panel;
 pub mod tv_content;
 pub mod user_event;
-pub mod wide_hero_boundary;
 
 pub use self::browser::BrowserComponent;
 pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
@@ -90,7 +89,6 @@ pub(in crate::app) use self::settings::{
 pub use self::status_bar_panel::StatusBarPanel;
 pub use self::tab_panel::TabPanel;
 pub use self::user_event::UserEvent;
-pub use self::wide_hero_boundary::WideHeroBoundaryComponent;
 
 #[cfg(test)]
 #[path = "browser_component_tests.rs"]
@@ -139,5 +137,3 @@ mod selection_modal_component_tests;
 #[cfg(test)]
 #[path = "tv_content_component_tests.rs"]
 mod tv_content_component_tests;
-#[cfg(test)]
-mod wide_hero_boundary_component_tests;
