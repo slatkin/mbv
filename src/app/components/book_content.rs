@@ -425,10 +425,26 @@ impl BookContent {
                 .collect(),
             active: Some(self.selected_bucket),
         });
+        let list = if self.state.books.is_empty() {
+            self.carrier.invalidate_paint();
+            let text = self.state.error.clone().unwrap_or_else(|| {
+                if self.state.loading_pages.is_empty() {
+                    "No audiobooks".into()
+                } else {
+                    "Loading audiobooks…".into()
+                }
+            });
+            ListSlot::Empty {
+                loading: !self.state.loading_pages.is_empty(),
+                text,
+            }
+        } else {
+            ListSlot::Media(&mut self.carrier)
+        };
         LibraryPanelContent {
             selector,
             controls: None,
-            list: ListSlot::Media(&mut self.carrier),
+            list,
             hero,
         }
     }

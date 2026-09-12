@@ -557,23 +557,46 @@ fn book_activation_branch_flips_on_resize_tick_before_repaint() {
     app.audiobookshelf_book_browse.push(state);
     app.tab = TabSelection::AudiobookshelfLibrary(0);
     app.panel_focus = PanelFocus::Library;
-    // The narrow branch only opens the chapter modal when an inline hero
-    // is admitted; poison it here so both breakpoints exercise the same
-    // hero geometry.
-    app.layout.main.hero_area = Rect::new(0, 0, 40, 6);
     app.terminal_width = 60;
     app.terminal_height = 20;
     let mut model = Model::new(app);
+    model.sync_audiobookshelf_book();
+    model.sync_active_destination();
+    model.app.layout.main.audiobookshelf_book_area = Rect::new(0, 0, 60, 20);
+    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+    terminal
+        .draw(|frame| model.render_audiobookshelf_book_component(frame))
+        .unwrap();
     assert!(!model.app.is_right_panel_wide());
 
-    // Narrow: activation opens the chapter selection modal.
-    model.app.activate_audiobookshelf_book_parent();
+    // Narrow Enter on the shared skeleton opens the chapter selection modal.
+    model
+        .abs_book_component_mut(0)
+        .expect("book component mounted")
+        .set_focused(true);
+    let id = model.abs_book_id.clone().expect("book component mounted");
+    let Some(Msg::Shell(
+        request @ ShellRequest::AudiobookshelfBookIntent(
+            crate::app::components::msg::AudiobookshelfBookIntent::Activate,
+        ),
+    )) = model
+        .application
+        .get_component_mut(&id)
+        .unwrap()
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::Enter,
+            modifiers: KeyModifiers::NONE,
+        }))
+    else {
+        panic!("narrow Enter must emit the book activation intent");
+    };
+    model.handle_audiobookshelf_book_request(request);
     assert!(
         matches!(
             model.app.pending_overlay,
             Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
         ),
-        "narrow-with-hero activation must open the book chapter selection modal"
+        "narrow Enter must open the book chapter selection modal"
     );
     model.app.pending_overlay = None;
 
