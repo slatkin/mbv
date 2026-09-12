@@ -589,6 +589,8 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
             // mounted destination did. The router keeps precedence — this is
             // not a second resolution site, only delivery.
             Event::Keyboard(key) if self.focused => {
+                // Focus is panel-owned; keep the embedded owner's derived
+                // focus bit aligned before translating its local chord.
                 self.owners.active_mut().and_then(|owner| owner.on_key(key))
             }
             _ => None,

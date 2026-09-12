@@ -132,6 +132,10 @@ impl Model {
     pub(super) fn test_music_owner(&self) -> &MusicContent {
         self.music_owner().expect("music owner")
     }
+    #[cfg(test)]
+    pub(super) fn test_music_owner_mut(&mut self) -> &mut MusicContent {
+        self.music_owner_mut().expect("music owner")
+    }
 
     #[cfg(test)]
     pub(crate) fn render_music_workspace_component(&mut self, frame: &mut ratatui::Frame) {
