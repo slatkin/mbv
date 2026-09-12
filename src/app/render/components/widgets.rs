@@ -260,30 +260,6 @@ fn selector_pill_style(selected: bool) -> Style {
         .bg(palette::surface_colors(chip, selected).fill)
 }
 
-/// Draws the shared " {count} items" header (SUBTLE) on the first row of
-/// `area` and returns `area` shrunk by that one row, so callers can render
-/// their list into the remaining space. Used by the home-video tab to keep
-/// the label styling and the one-row consumption identical to other tabs
-/// that once shared it (movies/tv show library lists no longer show this
-/// row; see `render_list`).
-pub(in crate::app) fn render_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
-    if area.width == 0 || area.height == 0 {
-        return area;
-    }
-    f.render_widget(
-        Paragraph::new(Span::styled(
-            format!(" {} items", count),
-            Style::default().fg(palette::TEXT_SECONDARY),
-        )),
-        Rect { height: 1, ..area },
-    );
-    Rect {
-        y: area.y + 1,
-        height: area.height.saturating_sub(1),
-        ..area
-    }
-}
-
 /// A horizontally-scrolling row of selector pills, shared by every
 /// pill selector (Home sections, feed groups, music groups, letter
 /// filters, and series seasons) so their appearance,

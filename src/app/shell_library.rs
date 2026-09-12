@@ -108,7 +108,14 @@ impl Model {
             }));
         }
         let mounted_surface = match kind {
-            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => true,
+            // Generic, Movies and HomeVideos moved to the embedded
+            // `BrowserContent` owner inside the mounted `LibraryPanel` (task
+            // 6.1, design D2): `emby_browser_component_id` never mounts the
+            // standalone `BrowserComponent` for them, so their
+            // `ComponentId::Browser(_)` collapses into `ComponentId::Library`.
+            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos => {
+                return Some(ComponentId::Library)
+            }
             // Narrow TV focuses the mounted BrowserComponent (D4), matching
             // `emby_browser_component_id`.
             BrowserKind::TvShows => true,

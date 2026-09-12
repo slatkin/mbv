@@ -455,19 +455,6 @@ impl Component for BrowserComponent {
             .clone()
             .with_cursor_scroll(self.cursor(), self.scroll());
         context.list_pane_width = self.list_pane_width;
-        if let Some(items) = self.narrow_extras.feed_items.as_ref() {
-            let feed = BrowserContent {
-                items: items.clone(),
-                total_count: items.len(),
-                group_pills: true,
-                loading: context.loading,
-                ..BrowserContent::default()
-            };
-            context = feed.with_cursor_scroll(
-                self.cursor().min(items.len().saturating_sub(1)),
-                self.scroll(),
-            );
-        }
         if self.inline_search.is_active() {
             // Normal/non-Hero catalogs pass their whole list area to the
             // shared search painter (design.md D3); the ordinary narrow
@@ -496,12 +483,14 @@ impl Component for BrowserComponent {
             self.inline_search.set_scroll(new_scroll);
             self.image_paint = None;
         } else {
-            // Narrow generic/Movies/home-video: the component owns the full
-            // surface via the `browser_narrow` composer (task 3.3). The Inline
-            // presentation paints the rows (the Grid presentation was deleted
-            // as unreachable, design D13); the composer returns only the
-            // poster image still needing paint (the shell executes it via
-            // `App::paint_home_image`, mirroring the wide path and
+            // Narrow TV series list: the component owns the full surface via
+            // the `browser_narrow` composer (task 3.3). Generic/Movies/
+            // HomeVideos paint through the embedded `BrowserContent` owner
+            // instead (task 6.1); this component mounts only for narrow TV.
+            // The Inline presentation paints the rows (the Grid presentation
+            // was deleted as unreachable, design D13); the composer returns
+            // only the poster image still needing paint (the shell executes it
+            // via `App::paint_home_image`, mirroring the wide path and
             // `HomeComponent`).
             let (_scroll, image_paint) = crate::app::render::render_narrow_browse_with_ctx(
                 frame,

@@ -1,6 +1,7 @@
-//! Canonical narrow browse composition for generic, Movies, and home-video
-//! destinations. `BrowserComponent` owns inputs; this module paints and
-//! publishes replacement-flow geometry for its callers.
+//! Canonical narrow TV composition (series list). Generic/Movies/HomeVideos
+//! paint through the embedded `BrowserContent` owner instead (task 6.1, design
+//! D2). `BrowserComponent` owns inputs; this module paints and publishes
+//! replacement-flow geometry for its caller.
 
 use super::detail::compact_banner_image_cache_key;
 use crate::app::components::browser_narrow::{NarrowBrowseExtras, NarrowInlineHero};
@@ -22,14 +23,14 @@ use crate::app::App;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-/// Full narrow generic/Movies/home-video browse composition
-/// (`migrate-narrow-browse-to-components` task 3.3): the count label, letter
-/// pill row, the browse row list with an inline movie/series hero reserved in
-/// flow, and the empty-state placeholder — the picture the legacy
-/// `render_list` narrow branch painted, now owned by `BrowserComponent` via
-/// `browser_narrow.rs`. Pure: `layout` is the component's own geometry and
-/// the poster image is returned as a `HomeImagePaint` for the shell to
-/// execute (no `App`, cache, or fetch).
+/// Full narrow TV series-list composition (`migrate-narrow-browse-to-components`
+/// task 3.3; Movies/HomeVideos/Generic moved to the embedded `BrowserContent`
+/// owner, task 6.1): the letter pill row, the browse row list with an inline
+/// series hero reserved in flow, and the empty-state placeholder — the picture
+/// the legacy `render_list` narrow branch painted, now owned by
+/// `BrowserComponent` via `browser_narrow.rs`. Pure: `layout` is the
+/// component's own geometry and the poster image is returned as a
+/// `HomeImagePaint` for the shell to execute (no `App`, cache, or fetch).
 pub(in crate::app) fn render_narrow_browse_with_ctx(
     f: &mut Frame,
     area: Rect,
@@ -39,18 +40,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     layout: &mut LayoutMain,
     control: &mut InlineMediaBrowser<String>,
 ) -> (usize, Option<HomeImagePaint>) {
-    let mut content_area = area;
-
-    // Feed/home-video group pickers share the browser composer, but their
-    // cursor and rows live in FeedHomeVideoState rather than BrowseLevel.
-    if extras.home_video && extras.feed_items.is_none() && content_area.height > 0 {
-        content_area = crate::app::render::render_count_label(f, content_area, ctx.total_count);
-        content_area = Rect {
-            y: content_area.y + 1,
-            height: content_area.height.saturating_sub(1),
-            ..content_area
-        };
-    }
+    let content_area = area;
 
     // Narrow TV season grids keep their own single-column stride
     // (`is_viewing_season_grid`, legacy `list.rs`); every other narrow browse
@@ -93,12 +83,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             };
     }
 
-    // Feed/home-video group pickers and letter pickers both use the shared
-    // pill-bar geometry; the picker just fills the row with feed-group pills
-    // instead of letters (`is_feed_home_video_group_view`). Everything below —
-    // rows, inline-hero replacement, hit maps — is the shared path.
-    let feed_group_pills = extras.feed_items.is_some();
-    let (pills_area, list_area) = if extras.show_letter_pills || feed_group_pills {
+    let (pills_area, list_area) = if extras.show_letter_pills {
         let areas = wide_hero::pill_bar_areas(content_area);
         (areas.pills_area, areas.content_area)
     } else {
@@ -119,8 +104,6 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
             ctx.letter_filter.as_ref().map(|flt| flt.index).unwrap_or(0),
             layout,
         );
-    } else if feed_group_pills {
-        paint_feed_group_pills_row(f, pills_area, extras, layout);
     }
 
     layout.left_area = list_area;
@@ -195,41 +178,8 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     (final_offset, image_paint)
 }
 
-/// Feed/home-video group-picker pill row: an "All" pill plus one per feed
-/// folder group, selected by `feed_group_cursor`. Mirrors
-/// `paint_letter_pills_row` so the picker reuses the shared narrow browse
-/// composer instead of a bespoke painter.
-pub(in crate::app) fn paint_feed_group_pills_row(
-    f: &mut Frame,
-    row_area: Rect,
-    extras: &NarrowBrowseExtras,
-    layout: &mut LayoutMain,
-) {
-    if row_area.width == 0 {
-        layout.selector_tabs = Vec::new();
-        return;
-    }
-    let labels: Vec<String> = std::iter::once("All".to_string())
-        .chain(
-            extras
-                .feed_groups
-                .iter()
-                .map(|s| crate::app::ui_util::trunc_str(s, 12)),
-        )
-        .collect();
-    let ids: Vec<usize> = (0..labels.len()).collect();
-    layout.selector_tabs = crate::app::render::render_pill_bar(
-        f,
-        row_area,
-        crate::app::render::PillBar {
-            labels: &labels,
-            ids: &ids,
-            selected_pos: extras.feed_group_cursor,
-            prefix: Some(" \u{2318} "),
-        },
-    );
-}
-
+/// Letter-range pill row above the narrow TV series list; the selected index
+/// comes from the list's `letter_filter`.
 fn paint_letter_pills_row(
     f: &mut Frame,
     row_area: Rect,
@@ -255,15 +205,25 @@ fn paint_letter_pills_row(
 }
 
 impl App {
-    /// Poster-prefetch window for the narrow generic/Movies/home-video and
-    /// podcast browsers (#287): pre-warm the Primary images of movies just
-    /// ahead of / behind the cursor. Called from `shell_browser.rs` after the
-    /// mounted browser has established its authoritative cursor.
+    /// Poster-prefetch window for the migrated Movies/HomeVideos/Generic
+    /// embedded owner (#287): pre-warm the Primary images of movies just
+    /// ahead of / behind the cursor. Called from
+    /// `shell_browser_content.rs::push_browser_owner_content` after the owner
+    /// has established its authoritative cursor. Prefetches only when the
+    /// selected row is a non-folder `Movie` leaf, matching the legacy
+    /// draw-path gate (the candidate-window filter below screens the window,
+    /// not the selection).
     pub(in crate::app) fn fetch_nearby_movie_posters(
         &mut self,
         items: &[mbv_core::api::EmbyItem],
         cursor: usize,
     ) {
+        if !items
+            .get(cursor)
+            .is_some_and(|item| item.item_type == "Movie" && !item.is_folder)
+        {
+            return;
+        }
         const PREFETCH_AHEAD: usize = 3;
         const PREFETCH_BEHIND: usize = 1;
         let start = cursor.saturating_sub(PREFETCH_BEHIND);
@@ -287,10 +247,11 @@ impl App {
         }
     }
 
-    /// Shell-resolved extras for the narrow generic/Movies/home-video browse
-    /// composer (`migrate-narrow-browse-to-components` task 3.3): the count
-    /// label, letter-pill row, and the inline movie/series hero — everything
-    /// that needs `App`/image-cache authority, resolved here and pushed to
+    /// Shell-resolved extras for the narrow TV series-list composer
+    /// (`migrate-narrow-browse-to-components` task 3.3; Generic/Movies/
+    /// HomeVideos moved to the embedded `BrowserContent` owner, task 6.1):
+    /// the letter-pill row and the inline series hero — everything that needs
+    /// `App`/image-cache authority, resolved here and pushed to
     /// `BrowserComponent` each frame.
     pub(in crate::app) fn narrow_browse_extras(
         &mut self,
@@ -298,21 +259,7 @@ impl App {
         cursor: usize,
     ) -> NarrowBrowseExtras {
         let coll = self.libs[lib_idx].library.collection_type.clone();
-        let feed_group_view = self.is_feed_home_video_group_view(lib_idx);
-        let home_video = self.is_home_video_view(lib_idx) && !feed_group_view;
         let show_letter_pills = self.should_show_letter_pills(lib_idx);
-        let (feed_items, feed_groups, feed_group_cursor) = if feed_group_view {
-            let items = self.feed_home_video_selected_items(lib_idx);
-            let groups = self.libs[lib_idx]
-                .feed_home_video
-                .as_ref()
-                .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
-                .unwrap_or_default();
-            let cursor = self.feed_home_video_selected_group_index(lib_idx);
-            (Some(items), groups, cursor)
-        } else {
-            (None, Vec::new(), 0)
-        };
         let use_shared_replacement_plan = matches!(coll.as_str(), "movies" | "tvshows");
         let season_grid = self.is_viewing_season_grid(lib_idx);
 
@@ -340,8 +287,6 @@ impl App {
             None
         };
 
-        let feed_selected_height = 0;
-
         // Every hero-capable browse destination, including folder/channel
         // selections without a resolved leaf hero, uses the inline
         // replacement flow. Non-hero catalogs keep their width-derived grid.
@@ -355,15 +300,10 @@ impl App {
             );
 
         NarrowBrowseExtras {
-            home_video,
             show_letter_pills,
             use_shared_replacement_plan,
             hero_placeholder,
             season_grid,
-            feed_items,
-            feed_groups,
-            feed_group_cursor,
-            feed_selected_height,
             inline_hero,
         }
     }
