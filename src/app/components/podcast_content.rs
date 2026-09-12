@@ -1,8 +1,8 @@
 //! Audiobookshelf Podcasts' embedded Library panel content owner (task 11.1).
 //!
-//! This owner is deliberately plain: the legacy podcast component still paints
-//! the surface in this slice, while the shell-projected snapshot is also ready
-//! for the Library panel migration.
+//! This owner is deliberately plain: the Library panel supplies the shared
+//! skeleton while this type projects podcast-specific content and translates
+//! slot events.
 
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
@@ -389,15 +389,17 @@ impl LibraryContentOwner for PodcastContent {
                 self.sync_show_selection();
                 self.show_move()
             }
-            Key::Left | Key::Char('h') if !episode => {
-                self.carrier.delegate(RowLocalInput::Move(-1), None);
-                self.sync_show_selection();
-                self.show_move()
+            Key::Left | Key::Char('h') if episode => {
+                self.episode_focused = false;
+                Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::Exit,
+                    ),
+                ))
             }
             Key::Right | Key::Char('l') if !episode => {
-                self.carrier.delegate(RowLocalInput::Move(1), None);
-                self.sync_show_selection();
-                self.show_move()
+                self.episode_focused = true;
+                None
             }
             Key::Up | Key::Char('k') if episode => {
                 self.episode_list.delegate(RowLocalInput::Move(-1), None);
@@ -501,6 +503,46 @@ mod tests {
         );
         state.select(0);
         state
+    }
+
+    #[test]
+    fn empty_content_leaves_hero_to_the_panel_skeleton() {
+        let mut owner = PodcastContent::new();
+        let empty = AudiobookshelfBrowseState::new(AudiobookshelfLibrary {
+            id: "lib".into(),
+            name: "Podcasts".into(),
+            media_type: "podcast".into(),
+        });
+        owner.set_content(&empty, false);
+        let content = owner.content();
+        assert!(content.hero.is_none());
+        assert!(matches!(
+            content.list,
+            ListSlot::Empty { loading: false, .. }
+        ));
+    }
+
+    #[test]
+    fn horizontal_keys_change_pane_focus_instead_of_moving_shows() {
+        let mut owner = PodcastContent::new();
+        owner.set_content(&state(), false);
+        owner.set_focused(true);
+
+        assert!(!owner.episode_focused());
+        assert!(owner
+            .on_key(&KeyEvent::new(Key::Char('l'), KeyModifiers::NONE))
+            .is_none());
+        assert!(owner.episode_focused());
+        assert!(matches!(
+            owner.on_key(&KeyEvent::new(Key::Char('h'), KeyModifiers::NONE)),
+            Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                    PodcastEpisodeTransition::Exit
+                )
+            ))
+        ));
+        assert!(!owner.episode_focused());
+        assert_eq!(owner.selected_id().as_deref(), Some("show"));
     }
 
     #[test]

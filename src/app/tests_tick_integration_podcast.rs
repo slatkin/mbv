@@ -18,6 +18,11 @@ fn podcast_owner_is_registered_and_focuses_library_panel() {
     let mut harness = TickHarness::new(audiobookshelf_app());
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().application.mounted(&ComponentId::Library));
+    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Library));
+    assert!(harness
+        .model()
+        .mouse_eligible_ids()
+        .contains(&ComponentId::Library));
     assert!(podcast(&mut harness).selected_id().is_some());
     harness.inject(Event::Keyboard(KeyEvent { code: Key::Down, modifiers: KeyModifiers::NONE }));
     let result = harness.step();
@@ -31,11 +36,18 @@ fn podcast_owner_survives_tab_reselection() {
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     let before = podcast(&mut harness).selected_id();
+    podcast(&mut harness).set_episode_filter(
+        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played,
+    );
     harness.model_mut().app.tab = crate::app::TabSelection::Home;
     harness.model_mut().sync_mounted_surfaces();
     harness.model_mut().app.tab = crate::app::TabSelection::AudiobookshelfLibrary(0);
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(podcast(&mut harness).selected_id(), before);
+    assert_eq!(
+        podcast(&mut harness).episode_filter(),
+        crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played
+    );
     assert_eq!(harness.model().application.mounted(&ComponentId::Browser(BrowserKey { service: ServiceKind::Audiobookshelf, library_id: "abs-podcasts".into(), kind: BrowserKind::AudiobookshelfPodcast })), false);
     let _ = TerminalObserverEvent::NoOp;
 }

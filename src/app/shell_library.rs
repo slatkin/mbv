@@ -125,20 +125,11 @@ impl Model {
     }
 
     fn abs_library_child_id(&self, index: usize) -> Option<ComponentId> {
-        let library = self.app.audiobookshelf_libraries.get(index)?;
-        let kind = match self.app.audiobookshelf_kind_at(index)? {
-            AudiobookshelfBrowseKind::Podcast => BrowserKind::AudiobookshelfPodcast,
-            AudiobookshelfBrowseKind::Book => BrowserKind::AudiobookshelfBook,
-        };
-        Some(if kind == BrowserKind::AudiobookshelfBook {
-            ComponentId::Library
-        } else {
-            ComponentId::Browser(BrowserKey {
-                service: ServiceKind::Audiobookshelf,
-                library_id: library.id.clone(),
-                kind,
-            })
-        })
+        self.app.audiobookshelf_libraries.get(index)?;
+        self.app.audiobookshelf_kind_at(index)?;
+        // Both Audiobookshelf destinations are embedded LibraryPanel owners;
+        // neither gets a standalone mounted destination component.
+        Some(ComponentId::Library)
     }
 
     /// ADR 0024 D2: the mouse-eligible component set for the current frame, a
@@ -305,8 +296,9 @@ impl Model {
     fn abs_wide_hero_content_area(&self, index: usize) -> Option<Rect> {
         match self.app.audiobookshelf_kind_at(index)? {
             AudiobookshelfBrowseKind::Book => None,
-            // Podcast paints its hero pane whenever the breakpoint fits, even
-            // with no shows (the empty placeholder is painted in the rail).
+            // Podcasts are rendered by LibraryPanel, whose retained Wide
+            // skeleton owns the split even when the owner has no selected
+            // show; this legacy boundary remains inert.
             AudiobookshelfBrowseKind::Podcast => None,
         }
     }
