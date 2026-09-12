@@ -10,6 +10,7 @@
 
 pub mod audiobookshelf_book;
 pub mod audiobookshelf_podcast;
+pub mod book_content;
 pub mod browser;
 pub mod browser_content;
 pub mod browser_narrow;
