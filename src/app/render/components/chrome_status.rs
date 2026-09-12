@@ -533,7 +533,7 @@ pub(in crate::app) struct StatusBarModel {
 
 /// The status row's pointer regions, retained by the mounted
 /// `StatusBarPanel` after painting (the deleted
-/// `LayoutPlayback.{ind_vol, ind_mu, ind_rc}` side channel, task 2.2).
+/// the deleted indicator side channel side channel, task 2.2).
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct StatusBarRegions {
     /// Volume pill: scroll-wheel adjusts the volume.

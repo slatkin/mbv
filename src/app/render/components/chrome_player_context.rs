@@ -1,5 +1,4 @@
-use super::chrome_player::PlaybackRenderContext;
-use crate::app::layout::LayoutPlayback;
+use super::chrome_player::{PlaybackRenderContext, PlaybackStripAreas};
 use crate::app::{palette, App, PanelFocus, PanelMode};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
@@ -13,7 +12,7 @@ impl App {
     pub(in crate::app) fn playback_panel_context<'a>(
         &'a mut self,
         area: Rect,
-        playback: &'a mut LayoutPlayback,
+        playback: &'a mut PlaybackStripAreas,
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, Color)>,

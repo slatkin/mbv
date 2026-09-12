@@ -168,7 +168,7 @@ fn playback_status_pill_follows_the_table() {
     }
     let row = Rect::new(0, 0, 60, 1);
     let mut term = Terminal::new(TestBackend::new(60, 1)).unwrap();
-    let mut layout = crate::app::layout::LayoutPlayback::default();
+    let mut layout = crate::app::render::PlaybackStripAreas::default();
     let mut marquee = String::new();
     let marquee_at = std::time::Instant::now();
     term.draw(|f| {

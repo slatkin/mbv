@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 
 /// Narrow grouped Music is painted by the mounted `MusicWorkspaceComponent`
 /// now (task 3.8): drive the real `Model::draw_frame` shell path and read the
-/// component's own published `LayoutMain` via `mounted_music_layout`.
+/// component's own published legacy chrome geometry via `mounted_music_layout`.
 fn narrow_music_frame(app: App, height: u16) -> (Model, String) {
     let mut model = mounted_model_at(app, 60, height);
     let output = draw_mounted_frame(&mut model, 60, height);
@@ -44,7 +44,7 @@ fn selectable_artist_headers_are_typed_row_targets() {
     );
     // Artist headers are display-only and must not appear as row targets.
     // Read the complete flow retained by the mounted InlineMediaBrowser;
-    // legacy LayoutMain row maps are no longer populated by this owner.
+    // legacy row maps are no longer populated by this owner.
     assert!(
         mounted_music_flow_targets(&model)
             .iter()
@@ -141,9 +141,9 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
         .set_resting_cursor(cursor);
     let (model, output) = narrow_music_frame(app, 30);
     let layout = mounted_music_layout(&model);
-    // The mounted component paints into `app.layout.main.left_area`; its own
+    // The mounted component paints into the app's left area; its own
     // `layout()` publishes hero/target geometry in the same screen space.
-    let list_area = model.app.layout.main.left_area;
+    let list_area = model.app.layout.left_area;
 
     // The shared inline hero's admitted block is bottom-anchored and fully
     // visible: its own height (the panel's inline-hero plan) is what the
@@ -213,7 +213,7 @@ fn narrow_grouped_music_persists_bottom_hero_scroll() {
     let stored_scroll = mounted_music_scroll(&model);
     assert!(stored_scroll > 0, "the admitted hero offset must persist");
     {
-        let list_area = model.app.layout.main.left_area;
+        let list_area = model.app.layout.left_area;
         let layout = mounted_music_layout(&model);
         assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
         assert!(layout.hero_area.bottom() <= list_area.bottom());

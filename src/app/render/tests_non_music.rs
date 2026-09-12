@@ -95,7 +95,7 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
         (make_movie_app(), "Focused Movie"),
         (make_home_video_app(), "Birthday Clip"),
     ] {
-        let mut layout = LayoutMain::default();
+        let mut layout = Rect::default();
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 40)).unwrap();
         term.draw(|f| {
             app.reserve_library_area(
@@ -108,9 +108,9 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
         .unwrap();
 
         assert!(
-            layout.left_area.width > 0 && layout.left_area.height > 0,
+            layout.width > 0 && layout.height > 0,
             "wide movies destination area hand-off must still be reserved: {:?}",
-            layout.left_area
+            layout
         );
         let output = buffer_to_string(&term);
         assert!(
@@ -136,10 +136,7 @@ fn wide_emby_podcast_does_not_publish_tv_geometry() {
 
     let layout = render_view(&mut app, 200, 40);
 
-    assert!(
-        layout.left_area.width > 0,
-        "podcast destination remains reserved"
-    );
+    assert!(layout.width > 0, "podcast destination remains reserved");
 }
 
 #[test]
@@ -148,7 +145,7 @@ fn podcast_uses_inline_when_wide_height_is_unavailable() {
     podcast.libs[0].library.collection_type = "podcasts".into();
     let podcast_layout = render_view(&mut podcast, 200, 8);
     assert!(
-        podcast_layout.left_area.width > 0,
+        podcast_layout.width > 0,
         "podcast destination remains reserved"
     );
 }

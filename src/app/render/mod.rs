@@ -13,7 +13,7 @@ pub(in crate::app) use components::audiobookshelf_book::book_rows;
 
 #[allow(unused_imports)]
 pub(in crate::app) use components::chrome_player::{
-    render_player_panel, render_title_row, PlaybackRenderContext,
+    render_player_panel, render_title_row, PlaybackRenderContext, PlaybackStripAreas,
 };
 pub(in crate::app) use components::chrome_status::{
     render_status_bar, StatusBarModel, StatusBarRegions,
@@ -83,6 +83,7 @@ pub(in crate::app) use screens::feeds_model::{
 // Wide hero layout itself (mirroring HomeComponent's image-deferral),
 // so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
 // shared helpers it needs at crate::app visibility.
+#[cfg(test)]
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::wide_hero::{
     paint_wide_hero_text, place_media_list_below, wide_hero_browser_border, wide_hero_browser_pane,
@@ -178,8 +179,6 @@ use super::{palette, App};
 // only production callers moved into root.rs/queue.rs under screens/, which
 // import them directly), but render/tests.rs and friends still reach them via
 // `use super::*`.
-#[cfg(test)]
-use crate::app::layout::LayoutMain;
 #[cfg(test)]
 use components::widgets::right_panel_content_area;
 #[cfg(test)]

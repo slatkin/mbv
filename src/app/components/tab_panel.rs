@@ -7,7 +7,7 @@
 //! keyboard tab-cycling path reads/writes the same scroll anchor), projected
 //! one-way by `Model::sync_tab_panel`. A click on a painted tab emits
 //! `Msg::Shell(ShellRequest::TabSelect)`; the shell owns the tab switch and
-//! its side effects. This replaces the deleted `LayoutMain.tabs_hitmap`
+//! its side effects. This replaces the deleted the deleted tabs hit map
 //! side channel and the shell's `MouseClick` tab-click path.
 
 use ratatui::layout::{Position, Rect};

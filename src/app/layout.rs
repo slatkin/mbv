@@ -23,31 +23,6 @@ use ratatui::layout::Rect;
 
 use crate::app::render::arrangements::chrome::RootFrame;
 
-/// Seekbar rect and the mouse hit targets for the one-row playback header's
-/// transport controls (play/pause glyph and next).
-/// The button/track/volume/subtitle/audio rects this used to hold were
-/// removed with the expanded playback view; see the "Tab bar restyle" commit
-/// that zeroed them out. The status-bar pill rects
-/// (`ind_vol`/`ind_mu`/`ind_rc`) moved to the mounted `StatusBarPanel`
-/// (task 2.2).
-#[derive(Default)]
-pub(crate) struct LayoutPlayback {
-    pub player_area: Rect,
-    /// Status-bar area used by the shell-mounted playback prompt component.
-    pub status_area: Rect,
-    pub seekbar_area: Rect,
-    /// Playback header play/pause glyph; always clickable when the row renders.
-    pub play_pause_area: Rect,
-    /// Playback header stop glyph; only wired to the action when
-    /// `App::transport_stop_available()` is true.
-    pub stop_area: Rect,
-    /// Playback header next glyph; only wired to the action when
-    /// `App::transport_prev_next_available().1` is true.
-    pub next_area: Rect,
-    /// Idle-feed headline; only populated when its current item has a link.
-    pub idle_feed_link_area: Rect,
-}
-
 /// Geometry produced by the queue card's authoritative render operation.
 ///
 /// The card renderer returns the existing `(height, width, loading)` tuple;
@@ -60,26 +35,8 @@ pub(crate) struct CardGeometry {
     pub width: u16,
 }
 
-/// Library panel, queue panel, and home-grid geometry.
-#[derive(Clone, Default)]
-pub(crate) struct LayoutMain {
-    /// Card geometry published immediately after the card's authoritative
-    /// cache/size/fetch render path.
-    pub card: CardGeometry,
-    /// Full expanded sidebar covered by an F1-F4 panel, when present.
-    pub panel_area: Rect,
-    /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
-    pub panel_content_area: Rect,
-    pub left_area: Rect,
-    /// The full area `App::render_home_list` was given (hero + pills + list,
-    /// not just the inner list). The shell reads this to re-paint the
-    /// mounted `HomeComponent`'s `view()` over the same area right after
-    /// Root frame composition returns (task 3.4).
-    pub home_area: Rect,
-}
-
 /// Test-only row/hero/pill geometry shape, mirroring the fields the deleted
-/// destination components (Home/TV/Music) used to publish onto `LayoutMain`
+/// destination components (Home/TV/Music) used to publish onto legacy chrome geometry
 /// (task 12.3). It exists solely so the shared characterization test helpers
 /// keep one common return shape; production code never constructs it — each
 /// owning component answers real requests (mouse-hit, context-menu anchor)
@@ -104,9 +61,9 @@ pub(crate) struct PaintedRowGeometry {
 #[derive(Default)]
 pub(crate) struct FrameChromeGeometry {
     /// Full expanded sidebar covered by an F1-F4 panel, when present
-    /// (`LayoutMain::panel_area`).
+    /// (the former panel area).
     pub panel_area: Rect,
-    /// Content bounds inside `panel_area` (`LayoutMain::panel_content_area`).
+    /// Content bounds inside `panel_area` (the former panel content area).
     pub panel_content_area: Rect,
     /// Left panel (card + queue) column rect.
     pub left_area: Rect,
@@ -138,8 +95,9 @@ pub(crate) struct FrameChromeGeometry {
 /// input reads from it. See module docs for the rationale.
 #[derive(Default)]
 pub(crate) struct AppLayout {
-    pub playback: LayoutPlayback,
-    pub main: LayoutMain,
+    /// Left panel (card + queue) column rect.
+    pub left_area: Rect,
+    pub card: CardGeometry,
     /// The last fully rendered frame's root panel placements (`RootFrame`).
     /// Published with the rest of the chrome checkpoint in
     /// root frame composition and read by the sync pass (the queue

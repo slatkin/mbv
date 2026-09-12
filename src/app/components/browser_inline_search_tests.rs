@@ -137,7 +137,7 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
     ]));
     // The panel would have set this from its own paint; seed it directly so
     // the owner's point resolution has real painted geometry to read.
-    owner.inline_search_mut().layout_mut().left_area = Rect::new(0, 0, 40, 10);
+    *owner.inline_search_mut().layout_mut() = Rect::new(0, 0, 40, 10);
 
     let at = Position::new(0, 0);
     let message = owner.on_slot_event(LibrarySlotEvent::List(RowLocalInput::Click(at)));

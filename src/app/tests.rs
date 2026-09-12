@@ -542,12 +542,12 @@ fn aggregate_zero_area_render_leaves_layout_untouched() {
     // returns None) must leave `self.layout` exactly as the last completed
     // frame left it — no fresh-draft install, no partial mutation.
     let mut app = make_app_stub();
-    app.layout.main.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
-    let before_left = app.layout.main.left_area;
+    app.layout.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
+    let before_left = app.layout.left_area;
     let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
     term.draw(|f| app.compose_root_frame(f)).unwrap();
     assert_eq!(
-        app.layout.main.left_area, before_left,
+        app.layout.left_area, before_left,
         "zero-area render must not touch left_area"
     );
 }
@@ -561,11 +561,10 @@ fn aggregate_surfaces_do_not_bleed_across_destinations() {
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
     term.draw(|f| app.compose_root_frame(f)).unwrap();
 
-    let _main = &app.layout.main;
     // Cross-surface bleed check: a nonzero queue area must not also be a
     // nonzero music wide area (they are mutually exclusive destinations). The
     // queue placement comes from the paint-free checkpoint (task 3.1 moved
-    // the component mirror out of `LayoutMain`).
+    // the component mirror out of legacy chrome geometry).
     let queue_placement = app.queue_panel_placement().panel_area;
     let queue_active = queue_placement.width > 0 && queue_placement.height > 0;
     let music_wide_active = app.is_right_panel_wide();

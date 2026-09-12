@@ -6,7 +6,7 @@
 //! audiobookshelf show grid. `ListRenderCtx`/`DisplayRow` are its row
 //! model; `render_right_scrollbar` (`widgets.rs`) is its `Scrollbar`.
 //! Screens still call these functions directly and record their own row hit
-//! targets on `LayoutMain` rather than getting one back from a single
+//! targets on their own geometry rather than getting one back from a single
 //! entry point -- unifying that return shape, and folding in grouped
 //! Music's structurally different row model, is design.md's phase
 //! 8 ("Unified mouse hit targets"), not this extraction phase.

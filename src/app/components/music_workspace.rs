@@ -28,7 +28,6 @@ use super::mouse::hit::HitRegions;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest, TerminalObserverEvent};
 use super::music_content::MusicContent;
 use super::user_event::UserEvent;
-use crate::app::layout::LayoutMain;
 use crate::app::render::{wide_hero_fits, MusicWideRenderCtx};
 
 pub struct MusicWorkspaceComponent {
@@ -39,9 +38,9 @@ pub struct MusicWorkspaceComponent {
     pub(super) content: MusicContent,
     pub(super) album_columns: usize,
     pub(super) page_rows: usize,
-    layout: LayoutMain,
+    layout: Rect,
     /// The selected item's hero geometry the last painted skeleton produced
-    /// (Wide places it beside `layout.left_area`; Narrow places it inside
+    /// (Wide places it beside `layout`; Narrow places it inside
     /// the list as the selected parent's replacement).
     hero_area: Rect,
     /// Screen rect of the selected row/cell the last painted skeleton
@@ -81,7 +80,7 @@ impl MusicWorkspaceComponent {
             content: MusicContent::new(),
             album_columns: 1,
             page_rows: 1,
-            layout: LayoutMain::default(),
+            layout: Rect::default(),
             hero_area: Rect::default(),
             selected_item_rect: None,
             inline_track_focus_enabled: false,
@@ -461,7 +460,7 @@ impl MusicWorkspaceComponent {
     /// Geometry painted during the last view pass. The shell mirrors the
     /// interaction targets into App layout for legacy readers that still
     /// consume frame geometry.
-    pub(in crate::app) fn layout(&self) -> &LayoutMain {
+    pub(in crate::app) fn layout(&self) -> &Rect {
         &self.layout
     }
 
@@ -521,7 +520,7 @@ impl InlineSearchHost for MusicWorkspaceComponent {
 
 impl Component for MusicWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        self.layout = LayoutMain::default();
+        self.layout = Rect::default();
         self.hero_area = Rect::default();
         self.selected_item_rect = None;
         self.wide_geometry = None;
@@ -572,7 +571,7 @@ impl Component for MusicWorkspaceComponent {
                 &mut hits,
             ) {
                 self.panel_image_paint = geometry.hero_image.clone();
-                self.layout.left_area = geometry.list_area;
+                self.layout = geometry.list_area;
                 self.hero_area = geometry.hero_area;
                 self.selected_item_rect = geometry.selected;
                 self.wide_geometry = Some(geometry);
@@ -597,7 +596,7 @@ impl Component for MusicWorkspaceComponent {
             let geometry =
                 render_narrow_skeleton(frame, area, &mut panel_content, focused, &mut hits);
             self.panel_image_paint = geometry.inline_hero_image.clone();
-            self.layout.left_area = geometry.list_area;
+            self.layout = geometry.list_area;
             self.hero_area = geometry.inline_hero.unwrap_or_default();
             self.selected_item_rect = geometry.selected;
             self.pill_regions.clear();

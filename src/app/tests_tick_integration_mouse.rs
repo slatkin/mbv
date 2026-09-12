@@ -29,7 +29,6 @@ use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 /// A harness with a mounted Search sidebar painted with two results.
 fn search_sidebar_with_painted_results() -> (TickHarness, Vec<(Rect, usize)>) {
     let mut app = make_app_stub();
-    app.layout.main.panel_area = Rect::new(0, 0, 30, 16);
     let mut harness = TickHarness::new(app);
     harness.model_mut().mount_sidebar(SidebarId::Search);
     {
@@ -423,7 +422,6 @@ fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
     app.panel_focus = PanelFocus::Queue;
     // The queue panel retains its own geometry from its paint (task 3.1); the
     // wheel eligibility below follows the painted surface, not a seeded
-    // `LayoutMain` rect.
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 

@@ -23,13 +23,20 @@ use crate::app::render::components::card::queue_card_reserved_rect;
 use crate::app::render::StatusBarModel;
 use crate::app::NowPlayingStatus;
 
+pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
+    let area = app
+        .compute_chrome_geometry(Rect::new(0, 0, app.terminal_width, app.terminal_height))
+        .panel_area;
+    (area.width > 0 && area.height > 0).then_some(area)
+}
+
 impl Model {
     /// Publish the queue card reservation before root placements are synced.
     /// The reservation is derived from the prior paint checkpoint, so draw
     /// remains read-only with respect to `AppLayout`.
     pub(super) fn sync_queue_card_geometry(&mut self) {
         if self.app.now_playing_status() == NowPlayingStatus::Idle {
-            self.app.layout.main.card = CardGeometry::default();
+            self.app.layout.card = CardGeometry::default();
             return;
         }
         let chrome = self.app.compute_chrome_geometry(Rect::new(
@@ -39,7 +46,7 @@ impl Model {
             self.app.terminal_height,
         ));
         if chrome.left_area.width == 0 {
-            self.app.layout.main.card = CardGeometry::default();
+            self.app.layout.card = CardGeometry::default();
             return;
         }
         let slot_region = Rect {
@@ -54,7 +61,7 @@ impl Model {
             slot_region,
             wide,
         );
-        self.app.layout.main.card = CardGeometry {
+        self.app.layout.card = CardGeometry {
             height: rect.height,
             width: rect.width,
         };

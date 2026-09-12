@@ -5,7 +5,7 @@ use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::{BrowserComponent, ComponentId, MusicWorkspaceComponent};
-use crate::app::layout::{LayoutMain, PaintedRowGeometry};
+use crate::app::layout::PaintedRowGeometry;
 use crate::app::tests::make_item;
 use crate::app::{PanelFocus, SeriesDetail, TabSelection};
 use mbv_core::config::{FeedKind, FeedSubscription};
@@ -20,9 +20,9 @@ fn render_reserved_library_area(
     app: &mut App,
     width: u16,
     height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
+) -> (Terminal<TestBackend>, Rect) {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let mut layout = LayoutMain::default();
+    let mut layout = Rect::default();
     terminal
         .draw(|frame| {
             app.reserve_library_area(frame, Rect::new(0, 0, width, height), &mut layout, None);
@@ -74,7 +74,7 @@ fn render_browse_component(
     terminal
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
-    let list_area = model.app.layout.main.left_area;
+    let list_area = model.app.layout.left_area;
     let layout = panel_browse_layout(&model);
     (terminal, layout)
 }

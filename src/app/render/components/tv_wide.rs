@@ -83,7 +83,7 @@ impl App {
                 panel_focus: self.effective_panel_focus(),
                 queue_column_width: self.queue_column_width,
                 terminal_width: self.terminal_width,
-                card_height: self.layout.main.card.height,
+                card_height: self.layout.card.height,
                 playback_active: self.effective_playback_state().active,
             },
         );
@@ -100,7 +100,7 @@ impl App {
 
     /// Whether the right panel is in the wide Wide hero breakpoint right
     /// now, derived paint-free from the current terminal size. Replaces the
-    /// four `LayoutMain::is_wide_*_active()` paint-inference predicates: the
+    /// four deleted `is_wide_*_active()` paint-inference predicates: the
     /// breakpoint (`wide_hero_presentation`) is the same for every
     /// Wide hero destination, so one predicate serves all of them.
     pub(in crate::app) fn is_right_panel_wide(&self) -> bool {

@@ -24,9 +24,9 @@ use tuirealm::state::State;
 
 use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
-use crate::app::layout::LayoutPlayback;
 use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
+use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
 
@@ -174,10 +174,7 @@ impl Component for LibraryPlaybackPanel {
         // arrangement the queue-column transport calls, D10), and
         // `render_player_panel` is its leaf painter.
         let player_h = area.height.min(PLAYER_BOX_HEIGHT);
-        let mut playback = LayoutPlayback {
-            player_area: area,
-            ..LayoutPlayback::default()
-        };
+        let mut playback = PlaybackStripAreas::default();
         render_player_panel(
             frame,
             PlaybackRenderContext {

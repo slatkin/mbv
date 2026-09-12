@@ -217,7 +217,7 @@ impl LibraryPanel {
     /// `PaintedRowGeometry` shape the characterization helpers read (task
     /// 8.4: the panel owns the rects the deleted destination component used
     /// to publish; task 12.3: this no longer round-trips through the
-    /// shell's `LayoutMain`).
+    /// shell's legacy chrome geometry).
     #[cfg(test)]
     pub(in crate::app) fn test_painted_layout(&self) -> crate::app::layout::PaintedRowGeometry {
         if let Some(wide) = self.wide_geometry.as_ref() {

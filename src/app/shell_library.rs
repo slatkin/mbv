@@ -214,7 +214,7 @@ impl Model {
             {
                 boundary.sync(
                     area,
-                    self.app.layout.main.left_area.x,
+                    self.app.layout.left_area.x,
                     self.app.terminal_width,
                     self.app.queue_column_width,
                     matches!(self.app.effective_panel_focus(), PanelFocus::Queue),

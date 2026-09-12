@@ -2,7 +2,6 @@ use super::test_helpers::{
     buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
 };
 use super::*;
-use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -18,7 +17,7 @@ fn render_narrow_music(app: App, width: u16, height: u16) -> String {
 
 fn render_music_legacy(app: &mut App, width: u16, height: u16, _focused: bool) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let mut layout = LayoutMain::default();
+    let mut layout = Rect::default();
     terminal
         .draw(|f| {
             app.reserve_library_area(f, Rect::new(0, 0, width, height), &mut layout, None);

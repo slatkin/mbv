@@ -1,5 +1,4 @@
 use super::chrome::play_icon;
-use crate::app::layout::LayoutPlayback;
 use crate::app::palette;
 use crate::app::render::arrangements::playback_transport::{
     transport_rows, transport_title_plan, TransportIndicators, TransportMeasure, TransportPlan,
@@ -12,9 +11,17 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+#[derive(Clone, Default)]
+pub(in crate::app) struct PlaybackStripAreas {
+    pub(in crate::app) seekbar_area: Rect,
+    pub(in crate::app) play_pause_area: Rect,
+    pub(in crate::app) stop_area: Rect,
+    pub(in crate::app) next_area: Rect,
+}
+
 pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) area: Rect,
-    pub(in crate::app) playback: &'a mut LayoutPlayback,
+    pub(in crate::app) playback: &'a mut PlaybackStripAreas,
     pub(in crate::app) player_h: u16,
     pub(in crate::app) show_controls: bool,
     pub(in crate::app) now_playing_title: Option<(String, Color)>,
@@ -39,8 +46,6 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
     if ctx.player_h == 0 {
         return;
     }
-    ctx.playback.idle_feed_link_area = Rect::default();
-
     // The shared width-driven transport arrangement (task 3.5, D10): which
     // rows render in this panel, and which indicators/buttons the title row
     // shows at its width. Both playback panels route through here, so the
@@ -87,10 +92,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
         if let Some((title, color)) = ctx.now_playing_title.clone() {
             render_title_row(frame, title_area, title.as_str(), color, &mut ctx);
         } else if !ctx.show_controls {
-            if let Some((title, has_link)) = ctx.idle_feed_title.clone() {
-                if has_link {
-                    ctx.playback.idle_feed_link_area = title_area;
-                }
+            if let Some((title, _has_link)) = ctx.idle_feed_title.clone() {
                 let spans = marquee_spans(
                     &mut ctx,
                     &[(title, palette::ACCENT)],
@@ -131,7 +133,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
 fn render_seekbar(
     frame: &mut Frame,
     area: Rect,
-    playback: &mut LayoutPlayback,
+    playback: &mut PlaybackStripAreas,
     (position, runtime, _paused): (i64, i64, bool),
     panel_bg: Color,
 ) {

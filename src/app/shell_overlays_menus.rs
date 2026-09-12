@@ -103,7 +103,7 @@ impl Model {
                             // still places the menu, just without a row
                             // anchor (matches the legacy `AppLayout` mirror's
                             // behaviour, which never populated this field).
-                            None => (layout.main.left_area, None),
+                            None => (layout.left_area, None),
                         },
                     },
                     PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),
@@ -129,7 +129,7 @@ impl Model {
                             .and_then(|lib_idx| self.app.wide_tv_library_area(lib_idx))
                             .unwrap_or_default()
                     }
-                    PanelFocus::Library => layout.main.left_area,
+                    PanelFocus::Library => layout.left_area,
                     PanelFocus::Queue => self
                         .queue_menu_geometry()
                         .map(|(panel, _)| panel)

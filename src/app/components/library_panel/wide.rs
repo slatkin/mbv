@@ -728,7 +728,7 @@ mod wide_skeleton_tests {
         // The results occupy the list box; the search session retained the
         // row-flow rect the skeleton gave it.
         assert!(text_in(&buf, geo.list_area, "Alpha"));
-        assert_eq!(search.layout().left_area, geo.list_area);
+        assert_eq!(*search.layout(), geo.list_area);
         // The rest of the panel is unchanged: hero pane resting with its facts.
         assert_eq!(
             buf[(geo.hero.x, geo.hero.y)].bg,

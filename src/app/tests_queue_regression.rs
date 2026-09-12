@@ -47,7 +47,7 @@ fn shell_frame_leaves_queue_geometry_retained_in_the_queue_component() {
 }
 
 /// The queue panel's framed content area, read from the mounted component
-/// (task 3.1: component-retained geometry, no `LayoutMain` mirror).
+/// (task 3.1: component-retained geometry, no legacy chrome geometry mirror).
 fn mounted_queue_selected_row(model: &Model) -> ratatui::layout::Rect {
     model
         .application
@@ -246,7 +246,7 @@ fn mini_view_panel_does_not_overlay_queue_on_mode_switch() {
 
 /// Row 5.2 / row 9.2 block correction: at the mini breakpoint the queue panel
 /// is the sole painted surface. The library destination's mounted browser
-/// used `LayoutMain::left_area` as its paint area, but that field is only
+/// used the app's left area as its paint area, but that field is only
 /// republished as the library content rect while the base frame renders the
 /// library; in queue-only mode it stayed the full queue column, so the Emby
 /// browser painted its rows and inline hero straight over the queue. Assert

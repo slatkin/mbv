@@ -34,7 +34,7 @@ impl App {
             panel_focus: self.effective_panel_focus(),
             queue_column_width: self.queue_column_width,
             terminal_width: self.terminal_width,
-            card_height: self.layout.main.card.height,
+            card_height: self.layout.card.height,
             playback_active: self.effective_playback_state().active,
         })
     }
@@ -66,13 +66,9 @@ impl App {
         let mut layout = AppLayout::default();
         // Preserve the sync-owned queue card checkpoint while publishing
         // this frame's root placements.
-        layout.main.card = self.layout.main.card.clone();
+        layout.card = self.layout.card.clone();
         if frame.area().height >= 4 {
-            layout.main.panel_area = chrome.panel_area;
-            layout.main.panel_content_area = chrome.panel_content_area;
-            layout.main.left_area = chrome.left_area;
-            layout.playback.player_area = chrome.player_area;
-            layout.playback.status_area = chrome.status_area;
+            layout.left_area = chrome.left_area;
             layout.root_frame = chrome.root;
         }
         self.layout = layout;

@@ -7,7 +7,6 @@ use crate::app::components::browser_narrow::NarrowBrowseExtras;
 use crate::app::components::media_list::{
     InlineMediaBrowser, InlineMediaBrowserPaintPolicy, SelectedRowSurface,
 };
-use crate::app::layout::LayoutMain;
 use crate::app::render::arrangements::wide_hero;
 use crate::app::render::components::hero::{
     selected_detail_shell, HERO_BLOCK_EXTRA_ROWS, HERO_PLACEHOLDER_ROWS,
@@ -21,7 +20,7 @@ use ratatui::Frame;
 /// Mouse-hit and context-menu-anchor geometry `render_narrow_browse_with_ctx`
 /// publishes for the caller to adopt onto its own retained fields — the
 /// composer's row/hero geometry never round-trips through the shell's
-/// `LayoutMain` (task 12.3).
+/// legacy layout mirror (task 12.3).
 #[derive(Default)]
 pub(in crate::app) struct NarrowBrowseGeometry {
     /// Selected-parent geometry for the inline replacement (mouse-hit).
@@ -47,7 +46,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
     ctx: &LibraryListRenderCtx,
     extras: &NarrowBrowseExtras,
     focused: bool,
-    layout: &mut LayoutMain,
+    layout: &mut Rect,
     control: &mut InlineMediaBrowser<String>,
 ) -> (usize, Option<HomeImagePaint>, NarrowBrowseGeometry) {
     let content_area = area;
@@ -95,7 +94,7 @@ pub(in crate::app) fn render_narrow_browse_with_ctx(
         Vec::new()
     };
 
-    layout.left_area = list_area;
+    *layout = list_area;
 
     if ctx.items.is_empty() {
         crate::app::render::render_placeholder(
@@ -243,12 +242,12 @@ impl App {
         // Every hero-capable browse destination, including folder/channel
         // selections without a resolved leaf hero, uses the inline
         // replacement flow. Non-hero catalogs keep their width-derived grid.
-        let hero_placeholder = !crate::app::render::arrangements::wide_hero::wide_hero_fits(
-            self.layout.main.left_area,
-        ) && matches!(
-            coll.as_str(),
-            "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
-        );
+        let hero_placeholder =
+            !crate::app::render::arrangements::wide_hero::wide_hero_fits(self.layout.left_area)
+                && matches!(
+                    coll.as_str(),
+                    "movies" | "homevideos" | "podcasts" | "tvshows" | "music"
+                );
 
         NarrowBrowseExtras {
             show_letter_pills,

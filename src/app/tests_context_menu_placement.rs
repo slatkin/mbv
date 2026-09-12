@@ -165,7 +165,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
         .menu_geometry()
         .expect("panel painted geometry");
     let (panel, selected) = painted;
-    model.app.layout.main.left_area = Rect::new(0, 0, 200, 200);
+    model.app.layout.left_area = Rect::new(0, 0, 200, 200);
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -264,7 +264,7 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         .menu_geometry()
         .expect("panel painted geometry");
     let (panel, selected) = painted;
-    model.app.layout.main.left_area = Rect::new(0, 0, 200, 200);
+    model.app.layout.left_area = Rect::new(0, 0, 200, 200);
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
 
@@ -371,7 +371,7 @@ fn pointer_anchor_selects_wide_tv_branch_on_resize_tick_before_repaint() {
     // Poison the narrow fallback; the Wide branch derives its panel from the
     // current terminal geometry rather than a previous-frame layout field.
     let narrow_panel = Rect::new(1, 1, 5, 5);
-    model.app.layout.main.left_area = narrow_panel;
+    model.app.layout.left_area = narrow_panel;
 
     let entries = {
         let id = ComponentId::Overlay(OverlayId::ContextMenu);

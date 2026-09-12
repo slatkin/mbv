@@ -14,7 +14,7 @@ impl BrowserComponent {
     /// presentation's column-preserving stride was deleted with Grid as
     /// unreachable, design D13.)
     pub(super) fn page_rows(&self) -> i64 {
-        self.layout.left_area.height.saturating_sub(1).max(1) as i64
+        self.layout.height.saturating_sub(1).max(1) as i64
     }
 
     /// Move the shared owner by `item_rows` painted item rows: every

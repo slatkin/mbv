@@ -266,7 +266,7 @@ fn music_workspace_wide_search_hides_grouped_rows_and_paints_flat_results() {
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
 
-    let list_area = component.inline_search().layout().left_area;
+    let list_area = *component.inline_search().layout();
     assert!(list_area.width > 0 && list_area.height > 0);
     assert!(
         list_area.x > 0,
@@ -345,7 +345,7 @@ fn music_workspace_search_right_click_on_result_opens_context_menu() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let list_area = component.inline_search().layout().left_area;
+    let list_area = *component.inline_search().layout();
 
     let message = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Right),

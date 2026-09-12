@@ -30,7 +30,6 @@ use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
-use crate::app::layout::LayoutMain;
 use crate::app::render::{effective_sort_str, HomeImagePaint};
 
 mod content;
@@ -47,7 +46,7 @@ pub struct BrowserComponent {
     /// Identity carried by the last shell content push; it gates re-anchoring.
     last_identity: Option<BrowserIdentity>,
     focused: bool,
-    layout: LayoutMain,
+    layout: Rect,
     /// Selected-parent geometry for the inline replacement, published by the
     /// narrow-browse composer; the parent-owned mouse-hit region for the
     /// hero click a wheel/scroll gesture over the Inline presentation claims.
@@ -125,7 +124,7 @@ impl BrowserComponent {
             context: BrowserContent::default(),
             last_identity: None,
             focused: false,
-            layout: LayoutMain::default(),
+            layout: Rect::default(),
             inline_hero_area: Rect::default(),
             selected_item_rect: None,
             use_nerd_fonts: false,
@@ -360,7 +359,7 @@ impl BrowserComponent {
     /// selection to the row under it (a blank/gap click leaves the selection
     /// unchanged, matching the legacy behaviour) and return `true`.
     fn claim_list_point(&mut self, at: Position) -> bool {
-        if !(self.layout.left_area.contains(at) || self.inline_hero_area.contains(at)) {
+        if !(self.layout.contains(at) || self.inline_hero_area.contains(at)) {
             return false;
         }
         let Some(target) = self.resolve_row_target(at) else {
@@ -383,7 +382,7 @@ impl BrowserComponent {
     }
 
     #[cfg(test)]
-    pub(crate) fn test_layout(&self) -> &LayoutMain {
+    pub(crate) fn test_layout(&self) -> &Rect {
         &self.layout
     }
 
@@ -464,7 +463,7 @@ impl Component for BrowserComponent {
         // the outgoing selected-row viewport offset — no owner-to-owner
         // anchor transfer, no cursor/scroll seeding from a shell mirror.
         self.ensure_carrier();
-        self.layout = LayoutMain::default();
+        self.layout = Rect::default();
         self.inline_hero_area = Rect::default();
         self.selected_item_rect = None;
         self.pill_regions.clear();

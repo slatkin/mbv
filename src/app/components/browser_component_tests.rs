@@ -642,7 +642,7 @@ fn browser_mouse_uses_the_painted_row_for_left_and_right_clicks() {
             .draw(|frame| browser.view(frame, frame.area()))
             .unwrap();
         let layout = browser.test_layout();
-        let area = layout.left_area;
+        let area = *layout;
         let position = (area.x, area.y + 1);
         (
             browser.on(&Event::Mouse(MouseEvent {

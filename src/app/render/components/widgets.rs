@@ -1,5 +1,4 @@
 use super::chrome::thin_vertical_thumb;
-use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, TabSelection};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
@@ -520,7 +519,7 @@ impl App {
         &mut self,
         _f: &mut Frame,
         area: Rect,
-        layout: &mut LayoutMain,
+        layout: &mut Rect,
         _cursor_scroll: Option<(usize, usize)>,
     ) {
         // If a music-group library's nav_stack was truncated to just the group
@@ -531,13 +530,11 @@ impl App {
         // was already normalized to a live index by `render_main`.
         match self.tab {
             TabSelection::Home => {
-                // Home content is painted by the mounted `HomeComponent`
-                // (the shell paints it right after this legacy base frame,
-                // reading `home_area` to size it). The legacy frame only
-                // reserves the full Home destination area here — it paints
-                // no Home rows, pills, hero, or image (task 5.3d, Home
-                // legacy underpaint removal).
-                layout.home_area = area;
+                // Home content is painted by the mounted `HomeComponent`.
+                // The legacy frame only reserves the full Home destination
+                // area here — it paints no Home rows, pills, hero, or image
+                // (task 5.3d, Home legacy underpaint removal); nothing reads
+                // the reservation back (task 12.4), so it is a no-op.
             }
             TabSelection::Feeds => {
                 // Feeds is painted by its embedded owner inside the mounted
@@ -553,7 +550,7 @@ impl App {
                 if self.is_feed_home_video_group_view(lib_idx) {
                     // BrowserComponent owns feed group presentation at every
                     // width; publish only the full browser area.
-                    layout.left_area = area;
+                    *layout = area;
                     return;
                 }
                 {
@@ -565,7 +562,7 @@ impl App {
                     //
                     // BrowserComponent owns the browse body at every width;
                     // reserve only the destination area here.
-                    layout.left_area = area;
+                    *layout = area;
                 }
             }
         }

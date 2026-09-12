@@ -10,7 +10,7 @@
 //! content (`chrome_status.rs`), projected one-way by
 //! `Model::sync_status_bar_panel`; the component owns the overflow
 //! drop-order, pill geometry and event resolution. This replaces the
-//! deleted `LayoutPlayback.{ind_vol, ind_mu, ind_rc}` side channel.
+//! deleted the deleted indicator side channel side channel.
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;

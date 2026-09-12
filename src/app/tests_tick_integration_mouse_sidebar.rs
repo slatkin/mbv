@@ -40,7 +40,6 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     app.playlists_cursor = 0;
     assert!(app.playlists_open.is_none());
     assert!(app.playlists_open_items.is_empty());
-    app.layout.main.panel_area = Rect::new(0, 0, 40, 20);
     let mut harness = TickHarness::new(app);
     harness.inject(key(Key::Function(4)));
     let outcome = harness.step();
@@ -104,7 +103,8 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
 #[test]
 fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
     let mut app = make_app_stub();
-    app.layout.main.panel_area = Rect::new(0, 0, 30, 16);
+    app.terminal_width = 40;
+    app.terminal_height = 16;
     let mut harness = TickHarness::new(app);
     harness.model_mut().mount_help();
     harness.model_mut().sync_mounted_surfaces();

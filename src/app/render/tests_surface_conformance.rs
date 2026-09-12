@@ -120,7 +120,7 @@ fn painted(term: &Terminal<TestBackend>) -> Painted {
 
 /// The mounted queue panel's retained selected-row rect (task 3.1): the
 /// component answers the context-menu keyboard anchor from its own geometry,
-/// not a `LayoutMain` mirror.
+/// not a legacy chrome geometry mirror.
 fn mounted_queue_selected_row(model: &crate::app::shell::Model) -> Rect {
     use crate::app::components::{ComponentId, QueueComponent};
     model
@@ -182,7 +182,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
         let painted = painted(&term);
         let area = Rect::new(0, 0, 200, 30);
         let chrome = model.app.compute_chrome_geometry(area);
-        let main = &model.app.layout.main;
+        let layout = &model.app.layout;
         // The sites' own bit: the queue column's focus, exactly what the shell
         // hands the root chrome and panel painters.
         let queue_bit = chrome.queue_focused;
@@ -250,7 +250,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
         // `PlaybackBottomRow`.
         let transport = Rect {
             x: chrome.left_content.x,
-            y: chrome.left_content.y + 1 + main.card.height,
+            y: chrome.left_content.y + 1 + layout.card.height,
             width: chrome.left_content.width,
             height: 4,
         };
@@ -319,7 +319,7 @@ fn wide_library_only_hero_and_rail_follow_the_table() {
     let painted = painted(&term);
     let area = Rect::new(0, 0, 120, 30);
     let chrome = model.app.compute_chrome_geometry(area);
-    let library_area = model.app.layout.main.left_area;
+    let library_area = model.app.layout.left_area;
     let panes = wide_library_panes(library_area, PANE_PAD_X, PANE_PAD_Y, None)
         .expect("wide LibraryOnly fits the two-pane split");
     let browser = panel_wide_geometry(&model);
@@ -381,19 +381,19 @@ fn queue_only_strip_and_queue_follow_the_table() {
     let painted = painted(&term);
     let area = Rect::new(0, 0, 120, 30);
     let chrome = model.app.compute_chrome_geometry(area);
-    let main = &model.app.layout.main;
+    let layout = &model.app.layout;
     // The transport band the shell's Queue playback panel paints beside the
     // card in wide Queue-only (task 3.5), reconstructed from published
     // geometry: beside the freshly painted slot, below the always-painted
     // header row.
     let panel = Rect {
-        x: chrome.left_content.x + main.card.width + 2,
+        x: chrome.left_content.x + layout.card.width + 2,
         y: chrome.left_content.y + 1,
         width: chrome
             .left_content
             .width
-            .saturating_sub(main.card.width + 2),
-        height: main.card.height.max(4),
+            .saturating_sub(layout.card.width + 2),
+        height: layout.card.height.max(4),
     };
     assert!(
         panel.width > 4 && panel.height >= 4,
@@ -472,8 +472,17 @@ fn mini_view_halves_follow_the_table() {
         palette::Surface::PlaybackPanel,
         false,
         Rect::new(
-            model.app.layout.playback.player_area.x + 1,
-            model.app.layout.playback.player_area.y,
+            model
+                .app
+                .compute_chrome_geometry(Rect::new(0, 0, 100, 20))
+                .player_area
+                .x
+                + 1,
+            model
+                .app
+                .compute_chrome_geometry(Rect::new(0, 0, 100, 20))
+                .player_area
+                .y,
             1,
             1,
         ),
@@ -499,10 +508,10 @@ fn mini_view_halves_follow_the_table() {
     let mut model = crate::app::shell::Model::new(app);
     let term = draw_mounted_terminal(&mut model, 60, 20);
     let queue_painted = painted(&term);
-    let main = &model.app.layout.main;
+    let layout = &model.app.layout;
     let panel = Rect {
         x: 2,
-        y: 2 + main.card.height,
+        y: 2 + layout.card.height,
         width: 56,
         height: 4,
     };

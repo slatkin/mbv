@@ -4,7 +4,6 @@
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use crate::app::layout::LayoutMain;
 use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, LibraryListRenderCtx};
 
 /// Paints one embedded Inline Search frame into the supplied pill and result
@@ -24,7 +23,7 @@ pub(in crate::app) fn render_inline_search(
     scroll: usize,
     focused: bool,
     columns: usize,
-    layout: &mut LayoutMain,
+    layout: &mut Rect,
 ) -> usize {
     crate::app::render::components::hero::render_search_box(f, pill_area, query, loading);
     let ctx = LibraryListRenderCtx::from_items(items, cursor, scroll)
@@ -41,7 +40,7 @@ mod tests {
     #[test]
     fn render_inline_search_uses_supplied_one_row_and_result_rects() {
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-        let mut layout = LayoutMain::default();
+        let mut layout = Rect::default();
         let pill_area = Rect {
             x: 3,
             y: 1,
@@ -78,6 +77,6 @@ mod tests {
             .collect();
         assert!(pill.contains("SEARCH:") && pill.contains("on█"));
         assert!(!pill.contains("┌") && !pill.contains("└"));
-        assert_eq!(layout.left_area, result_area);
+        assert_eq!(layout, result_area);
     }
 }

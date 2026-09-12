@@ -42,28 +42,6 @@ fn panel(model: &crate::app::shell::Model) -> &LibraryPanel {
 /// reserves `layout.home_area = area` with no width branch, so
 /// the geometry-only hand-off holds at every breakpoint; the wide case is
 /// exercised here too.
-#[test]
-#[ignore = "obsolete legacy-render characterization"]
-fn legacy_base_frame_does_not_paint_home_content_before_the_component() {
-    for (width, height) in [(60, 20), (120, 40)] {
-        let mut app = home_app();
-        app.terminal_width = width;
-        app.terminal_height = height;
-        let terminal = render_app_to_terminal(&mut app, width, height);
-        assert!(
-            app.layout.main.home_area.height > 0,
-            "legacy frame must still reserve home_area at {width}x{height}: {:?}",
-            app.layout.main.home_area
-        );
-        let output = buffer_to_string(&terminal);
-        assert!(
-            !output.contains("Focused Movie"),
-            "legacy frame must not paint Home rows/hero before the component \
-             at {width}x{height}: {output:?}"
-        );
-    }
-}
-
 /// Task 5.11, Home as the first panel owner: this characterization renders
 /// through the mounted `LibraryPanel` (via the shell-equivalent
 /// `render_home_shell_with` helper) instead of the deleted mounted
@@ -281,36 +259,4 @@ fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
         .bg;
     assert_eq!(backdrop_bg, Some(palette::SURFACE_BACKDROP));
     assert_ne!(hero_bg, backdrop_bg, "hero must read as a recessed card");
-}
-
-/// The Wide panel skeleton reserves the status row exactly like every other
-/// Wide library destination: the hero pane bottoms out one row above the
-/// status row, and the framed list panel leaves one blank row above it.
-#[test]
-#[ignore = "obsolete legacy-render characterization"]
-fn wide_home_panes_leave_exactly_one_row_above_the_status_bar() {
-    let (width, height) = (200u16, 40u16);
-    let app = home_app();
-    let (model, terminal) = render_home_shell_with(app, width, height, |m| {
-        m.home_content.continue_items = vec![emby_cw_item()];
-    });
-    let geometry = panel(&model)
-        .test_wide_geometry()
-        .expect("wide Home paints the Wide skeleton");
-    // The status row sits one row below the Home destination area, not one
-    // row below the terminal (chrome owns the rows under `home_area`).
-    let home_area = model.app.layout.main.home_area;
-    assert_eq!(
-        geometry.hero.bottom(),
-        home_area.bottom() - 1,
-        "hero panel must bottom out one row above the status row"
-    );
-    // Positive buffer check: the framed list panel paints its `▁` bottom border
-    // two rows above the status row, leaving exactly one blank row between the
-    // panel and the status bar. A one-row vertical shift is caught here.
-    crate::app::render::test_helpers::assert_list_pane_reserves_one_row_above_status(
-        terminal.backend().buffer(),
-        geometry.list_area,
-        home_area.bottom(),
-    );
 }

@@ -8,11 +8,10 @@
 //! control per destination to shell adapters; it does not choose a
 //! destination or hand out Service/runtime objects.
 //!
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::app::layout::LayoutMain;
 use crate::app::ui_util::move_cursor;
 
 #[derive(Clone)]
@@ -111,7 +110,7 @@ pub(in crate::app) struct InlineSearch {
     loading: bool,
     /// Last painted result geometry, published by the shared render
     /// component for column-aware cursor/mouse resolution.
-    layout: LayoutMain,
+    layout: Rect,
     /// Private per-host gesture recognition (ADR 0024, design.md D1).
     mouse_gestures: MouseGestureState,
     /// Origin of an unreleased left press, for recognizing a drag that begins
@@ -130,7 +129,7 @@ impl InlineSearch {
             cursor: 0,
             scroll: 0,
             loading: false,
-            layout: LayoutMain::default(),
+            layout: Rect::default(),
             mouse_gestures: MouseGestureState::new(),
             left_press: None,
         }
@@ -216,11 +215,11 @@ impl InlineSearch {
         self.order.len()
     }
 
-    pub(in crate::app) fn layout(&self) -> &LayoutMain {
+    pub(in crate::app) fn layout(&self) -> &Rect {
         &self.layout
     }
 
-    pub(in crate::app) fn layout_mut(&mut self) -> &mut LayoutMain {
+    pub(in crate::app) fn layout_mut(&mut self) -> &mut Rect {
         &mut self.layout
     }
 
@@ -295,7 +294,7 @@ impl InlineSearch {
     /// Page size for PageUp/PageDown, derived from the last painted result
     /// area (falls back to one row before the first paint).
     fn page_size(&self) -> i64 {
-        self.layout.left_area.height.max(1) as i64
+        self.layout.height.max(1) as i64
     }
 
     fn push_char(&mut self, c: char) {
@@ -359,10 +358,10 @@ impl InlineSearch {
     /// the last painted result area. Returns whether the point was a result
     /// row.
     fn select_row_at(&mut self, at: Position) -> bool {
-        if !self.layout.left_area.contains(at) {
+        if !self.layout.contains(at) {
             return false;
         }
-        let row = at.y.saturating_sub(self.layout.left_area.y) as usize;
+        let row = at.y.saturating_sub(self.layout.y) as usize;
         self.cursor = move_cursor(row, 0, self.order.len());
         true
     }
@@ -385,7 +384,7 @@ impl InlineSearch {
             MouseEventKind::Down(MouseButton::Left) => self.left_press = Some(point),
             MouseEventKind::Up(MouseButton::Left) => {
                 if let Some(origin) = self.left_press.take() {
-                    if origin != point && !self.layout.left_area.contains(origin) {
+                    if origin != point && !self.layout.contains(origin) {
                         self.select_row_at(point);
                     }
                 }
@@ -403,7 +402,7 @@ impl InlineSearch {
                 }
             }
             MouseGesture::Scroll { at, delta } => {
-                if self.layout.left_area.contains(at) {
+                if self.layout.contains(at) {
                     self.move_cursor(delta);
                     return Some(InlineSearchMouse::Consumed);
                 }

@@ -118,8 +118,8 @@ impl Model {
             rows,
             services,
             setup,
-            area: if self.app.layout.main.panel_area.width > 0 {
-                self.app.layout.main.panel_area
+            area: if let Some(panel_area) = super::shell_chrome_panels::sync_panel_area(&self.app) {
+                panel_area
             } else {
                 Rect {
                     x: 0,

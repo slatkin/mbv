@@ -38,7 +38,7 @@ impl BrowserComponent {
     }
 
     pub(in crate::app) fn painted_viewport_height(&self) -> usize {
-        self.layout.left_area.height as usize
+        self.layout.height as usize
     }
 
     /// Runtime terminal-capability flag (task 5.3d.17a): mirrors
@@ -61,7 +61,7 @@ impl BrowserComponent {
     }
 
     pub(in crate::app) fn menu_placement_geometry(&self) -> Option<(Rect, Option<Rect>)> {
-        (self.layout.left_area.width > 0 && self.layout.left_area.height > 0)
-            .then_some((self.layout.left_area, self.selected_item_rect))
+        (self.layout.width > 0 && self.layout.height > 0)
+            .then_some((self.layout, self.selected_item_rect))
     }
 }

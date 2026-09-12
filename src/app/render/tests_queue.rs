@@ -112,9 +112,9 @@ fn short_window_keeps_queue_in_left_column() {
         layout.content_area
     );
     assert!(
-        app.layout.main.left_area.x >= app.queue_column_width,
+        app.layout.left_area.x >= app.queue_column_width,
         "expected library area to remain in the right column, got {:?}",
-        app.layout.main.left_area
+        app.layout.left_area
     );
 }
 
@@ -141,10 +141,6 @@ fn queue_only_layout_spans_full_width() {
     assert_eq!(
         layout.content_area.width, 76,
         "queue must span the full width minus inner padding"
-    );
-    assert_eq!(
-        app.layout.main.panel_area.width, 80,
-        "left panel must span full width in QueueOnly"
     );
 }
 
@@ -203,15 +199,6 @@ fn mini_view_starts_at_queue_only_by_default() {
         layout.content_area.width,
         width.saturating_sub(4),
         "mini view must start queue-only: queue must span the terminal width"
-    );
-    assert_eq!(
-        app.layout.main.panel_area.width, width,
-        "mini queue-only panel must span the terminal width"
-    );
-    assert_eq!(
-        app.layout.main.panel_content_area.width,
-        width.saturating_sub(4),
-        "mini queue-only mouse content bounds must span the terminal width"
     );
     assert_eq!(
         app.effective_panel_mode(),
@@ -317,7 +304,7 @@ fn idle_both_hides_card_and_reclaims_queue_rows() {
     let mut idle = make_queue_app(5);
     let (idle_term, idle_layout) = render_queue_view_to_terminal(&mut idle, width, height);
 
-    assert_eq!(idle.layout.main.card.height, 0);
+    assert_eq!(idle.layout.card.height, 0);
     assert!(idle_layout.content_area.height > 0);
     let before_queue = buffer_to_string(&idle_term)
         .lines()
@@ -330,7 +317,7 @@ fn idle_both_hides_card_and_reclaims_queue_rows() {
     active.player.status.lock().unwrap().active = true;
     let (_, active_layout) = render_queue_view_to_terminal(&mut active, width, height);
 
-    assert!(active.layout.main.card.height > 0);
+    assert!(active.layout.card.height > 0);
     assert!(
         idle_layout.content_area.height > active_layout.content_area.height,
         "idle queue must reclaim the card rows in Both mode"
@@ -350,7 +337,7 @@ fn idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts() {
     // Idle queue-only hides the separator row along with the card/panel and
     // hands every reclaimed row to the queue; only the header row (and the
     // separator above the panel) stays reserved (task 3.2).
-    assert_eq!(app.layout.main.card.height, 0);
+    assert_eq!(app.layout.card.height, 0);
     let idle_screen = buffer_to_string(&idle_term);
     assert!(!idle_screen.contains("On Now:"));
 
@@ -361,10 +348,7 @@ fn idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts() {
 
     // Playback restores the card and the seekbar/panel rows, pushing the
     // queue down and shrinking it by the same rows.
-    assert!(
-        app.layout.main.card.height > 0,
-        "playback must restore the card"
-    );
+    assert!(app.layout.card.height > 0, "playback must restore the card");
     assert!(buffer_to_string(&active_term).contains('\u{2594}'));
     assert!(active_queue_area_y(&app) > idle_layout.content_area.y);
     assert!(idle_layout.content_area.height > active_layout.content_area.height);
@@ -389,7 +373,7 @@ fn connected_idle_queue_only_collapses_to_the_header_row() {
     let (term, _) = render_queue_view_to_terminal(&mut app, 80, 40);
     let screen = buffer_to_string(&term);
 
-    assert_eq!(app.layout.main.card.height, 0);
+    assert_eq!(app.layout.card.height, 0);
     assert!(screen.contains("IDLE"), "the header states the idle status");
     assert!(
         screen.contains("on remote-host"),
@@ -416,7 +400,7 @@ fn paused_queue_only_keeps_card_and_panel() {
     let (term, _) = render_queue_view_to_terminal(&mut app, 80, 40);
     let screen = buffer_to_string(&term);
 
-    assert!(app.layout.main.card.height > 0);
+    assert!(app.layout.card.height > 0);
     assert!(screen.contains('\u{2594}'), "the transport seekbar paints");
     assert!(screen.contains("PAUSED"), "the header states PAUSED");
 }
@@ -436,7 +420,7 @@ fn paused_both_keeps_card_and_queue_column_transport() {
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let screen = buffer_to_string(&term);
 
-    assert!(app.layout.main.card.height > 0);
+    assert!(app.layout.card.height > 0);
     assert!(screen.contains('\u{2594}'), "the transport seekbar paints");
     assert!(screen.contains("PAUSED"), "the header states PAUSED");
     // The queue column's width at 100 columns is below the side-by-side
@@ -545,7 +529,7 @@ fn wide_active_queue_starts_below_panel_rows() {
     let height = 40;
     let (_term, layout) = render_queue_view_to_terminal(&mut app, width, height);
     let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, height));
-    let panel_rows = app.layout.main.card.height.max(4);
+    let panel_rows = app.layout.card.height.max(4);
     assert!(
         layout.content_area.y > chrome.left_content.y + panel_rows,
         "queue must start below the painted wide panel rows (plus the header row and its separator)"

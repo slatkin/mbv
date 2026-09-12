@@ -201,7 +201,7 @@ impl QueueComponent {
 
     /// The framed list content area the panel retained from its last paint:
     /// the context-menu anchor's panel rect and the list body's own geometry
-    /// (task 3.1; the `LayoutMain.queue_area` mirror is gone).
+    /// (task 3.1; the the former queue-area mirror mirror is gone).
     pub(in crate::app) fn content_area(&self) -> Rect {
         self.content_area
     }
@@ -548,7 +548,7 @@ impl Component for QueueComponent {
         self.area = area;
         // Component-retained geometry (task 3.1): the title band, status pill
         // row and framed content area derive from the placement through the
-        // shared arrangement helper, replacing the `LayoutMain.queue_*`
+        // shared arrangement helper, replacing the legacy queue geometry
         // mirror.
         let (content_area, title_area, pill_row, _title_reserved) = queue_panel_subareas(area);
         self.content_area = content_area;

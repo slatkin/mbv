@@ -129,7 +129,7 @@ fn music_workspace_wheel_moves_one_painted_album_row_and_reuses_cursor_request()
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let area = component.layout().left_area;
+    let area = *component.layout();
     let message = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
         column: area.x,

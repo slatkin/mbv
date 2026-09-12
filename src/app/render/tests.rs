@@ -1,7 +1,7 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::layout::LayoutPlayback;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
+use crate::app::render::PlaybackStripAreas;
 use crate::app::tests::make_app_stub;
 use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
@@ -116,7 +116,7 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
 
     let backend = TestBackend::new(60, 1);
     let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
     term.draw(|f| {
         let mut context = app.playback_panel_context(
             Rect::new(0, 0, 60, 1),
@@ -159,7 +159,7 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
 
     let backend = TestBackend::new(60, 1);
     let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
     term.draw(|f| {
         let mut context = app.playback_panel_context(
             Rect::new(0, 0, 60, 1),
@@ -206,7 +206,9 @@ fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
 
     let terminal = render_app_to_terminal(&mut app, 100, 20);
 
-    let player_area = app.layout.playback.player_area;
+    let player_area = app
+        .compute_chrome_geometry(Rect::new(0, 0, 100, 20))
+        .player_area;
     assert_eq!(
         player_area.height, PLAYER_BOX_HEIGHT,
         "library-only reserves exactly the strip band for the component: {player_area:?}"
@@ -262,9 +264,9 @@ fn tab_bar_and_status_row_legacy_base_frame_publish_placements_but_paint_no_pane
 fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
     let mut app = make_app_stub();
     let long_title = "A Very Long Album Title That Cannot Possibly Fit In This Row";
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
 
-    let render = |app: &mut crate::app::App, layout: &mut LayoutPlayback| -> String {
+    let render = |app: &mut crate::app::App, layout: &mut PlaybackStripAreas| -> String {
         let backend = TestBackend::new(30, 1);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
@@ -328,7 +330,7 @@ fn idle_feed_title_marquees_instead_of_truncating() {
         items_rx,
     });
 
-    let render = |app: &mut crate::app::App, layout: &mut LayoutPlayback| -> String {
+    let render = |app: &mut crate::app::App, layout: &mut PlaybackStripAreas| -> String {
         let backend = TestBackend::new(30, 4);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
@@ -348,7 +350,7 @@ fn idle_feed_title_marquees_instead_of_truncating() {
         buffer_to_string(&term).lines().nth(1).unwrap().to_string()
     };
 
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
     let first = render(&mut app, &mut layout);
     assert!(
         !first.contains('\u{2026}'),

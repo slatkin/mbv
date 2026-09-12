@@ -10,7 +10,7 @@
 //! While idle the panel paints only the header row: its visual slot and
 //! transport reserve zero rows, and the shell publishes that collapse
 //! (task 3.6). Transport hit geometry is the panel's own retained
-//! state (task 3.7) — the `LayoutPlayback` side channel is not read here.
+//! state (task 3.7) — the legacy playback geometry side channel is not read here.
 
 use std::time::Instant;
 
@@ -27,8 +27,8 @@ use tuirealm::state::State;
 use super::library_playback_panel::PlaybackProjection;
 use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
-use crate::app::layout::LayoutPlayback;
 use crate::app::palette;
+use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_playback_header, render_player_panel, PlaybackRenderContext};
 use crate::app::NowPlayingStatus;
 
@@ -181,10 +181,7 @@ impl Component for QueuePlaybackPanel {
             transport_area,
         );
         let player_h = transport_area.height.min(4);
-        let mut playback = LayoutPlayback {
-            player_area: transport_area,
-            ..LayoutPlayback::default()
-        };
+        let mut playback = PlaybackStripAreas::default();
         render_player_panel(
             frame,
             PlaybackRenderContext {

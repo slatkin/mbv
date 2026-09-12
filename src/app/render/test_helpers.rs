@@ -8,7 +8,7 @@ use crate::app::components::{
     BrowserComponent, ComponentId, MusicWorkspaceComponent, QueueComponent,
 };
 use crate::app::components::{BrowserKey, BrowserKind};
-use crate::app::layout::{AppLayout, LayoutPlayback};
+use crate::app::layout::AppLayout;
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
@@ -174,7 +174,7 @@ pub fn render_pill_bar_hitboxes(
     tabs
 }
 
-pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Terminal<TestBackend> {
+pub fn render_library_to_terminal(app: &mut App, layout: &mut Rect) -> Terminal<TestBackend> {
     let backend = TestBackend::new(60, 20);
     let mut term = Terminal::new(backend).unwrap();
     let mut model = crate::app::shell::Model::new(std::mem::replace(app, make_app_stub()));
@@ -192,7 +192,7 @@ pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Ter
     term
 }
 
-pub fn render_library_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
+pub fn render_library_to_string(app: &mut App, layout: &mut Rect) -> String {
     let term = render_library_to_terminal(app, layout);
     buffer_to_string(&term)
 }
@@ -202,7 +202,7 @@ pub fn render_library_to_string(app: &mut App, layout: &mut LayoutMain) -> Strin
 /// whose hero panel reserves most of a short terminal).
 pub fn render_library_to_string_sized(
     app: &mut App,
-    layout: &mut LayoutMain,
+    layout: &mut Rect,
     width: u16,
     height: u16,
 ) -> String {
@@ -227,7 +227,7 @@ pub fn render_view_to_terminal(
     app: &mut App,
     width: u16,
     height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
+) -> (Terminal<TestBackend>, Rect) {
     // Mirror the real shell path (task 3.1): the sync pass + `draw_frame`,
     // which composes the base frame and paints the mounted components —
     // including the queue panel, which now paints its own surface. Only
@@ -239,14 +239,14 @@ pub fn render_view_to_terminal(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| model.draw_frame(f, false, false)).unwrap();
-    let layout = model.app.layout.main.clone();
+    let layout = model.app.layout.left_area;
     *app = model.app;
     (term, layout)
 }
 
 /// Queue panel geometry the mounted `QueuePanel` retained after a real shell
 /// draw (task 3.1): the framed list content area and the title band. The
-/// `LayoutMain.queue_*` mirror is gone — the panel owns its geometry.
+/// legacy queue geometry mirror is gone — the panel owns its geometry.
 #[derive(Clone, Copy, Debug)]
 pub struct QueuePanelView {
     pub content_area: Rect,
@@ -367,7 +367,7 @@ pub fn render_home_shell_with(
     (model, term)
 }
 
-pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
+pub fn render_view(app: &mut App, width: u16, height: u16) -> Rect {
     render_view_to_terminal(app, width, height).1
 }
 
