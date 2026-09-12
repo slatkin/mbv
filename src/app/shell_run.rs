@@ -110,14 +110,15 @@ impl Model {
         }
         self.render_library_playback_panel(f);
         self.render_library_panel(f);
-        if let Some(area) = self.app.layout.root_frame.queue {
-            if self
+        let queue_area = self.app.queue_panel_placement().panel_area;
+        if queue_area.width > 0
+            && queue_area.height > 0
+            && self
                 .application
                 .mounted(&crate::app::components::ComponentId::Queue)
-            {
-                self.application
-                    .view(&crate::app::components::ComponentId::Queue, f, area);
-            }
+        {
+            self.application
+                .view(&crate::app::components::ComponentId::Queue, f, queue_area);
         }
         self.render_queue_boundary(f);
         self.render_overlay_stack(f);

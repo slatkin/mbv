@@ -10,7 +10,7 @@ use crate::app::render::{
 };
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::{PanelFocus, TabSelection};
+use crate::app::{PanelFocus, PanelMode, TabSelection};
 
 fn home_harness(width: u16, height: u16, count: usize) -> TickHarness {
     let mut app = make_app_stub();
@@ -81,6 +81,43 @@ fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBack
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     terminal
+}
+
+fn assert_tick_frame_nonempty(mode: PanelMode, width: u16) {
+    let mut harness = home_harness(width, 24, 1);
+    harness.model_mut().app.panel_mode = mode;
+    harness.inject(key(Key::Char('x')));
+    harness.step();
+    let terminal = draw(&mut harness, width, 24);
+    assert!(
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.symbol() != " "),
+        "panel mode {mode:?} produced an empty frame"
+    );
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_both_mode() {
+    assert_tick_frame_nonempty(PanelMode::Both, 140);
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_queue_only_mode() {
+    assert_tick_frame_nonempty(PanelMode::QueueOnly, 140);
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_library_only_mode() {
+    assert_tick_frame_nonempty(PanelMode::LibraryOnly, 140);
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_mini_view() {
+    assert_tick_frame_nonempty(PanelMode::QueueOnly, 60);
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {
