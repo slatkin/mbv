@@ -356,7 +356,7 @@ conforms to Emby.
   `cargo nextest run -p mbv` green; `rg` finds no removed identity or shim; no
   `fetch_card_image`/`fetch_*` call is reachable from a component `view` or Render Component (manual
   check).
-- [ ] 12.1b Finish ordered root composition and delete the base frame: represent the ordered panel
+- [x] 12.1b Finish ordered root composition and delete the base frame: represent the ordered panel
   placements as data in `RootFrame`, compose them through one root loop, and preserve the explicit
   root-owned deferred protocol-image paint after its owning panel placement. Delete
   `compose_base_frame`, `render_main`, `paint_legacy_chrome`, `render_legacy_backdrops`,
