@@ -290,7 +290,7 @@ branches.
   `tests_music_characterization.rs`, with the inline hero built from the same `HeroContent` and tracks
   opening only through `SelectionModal`. Verify: `tests_tick_integration_music_mouse.rs` passes at both
   breakpoints; album art is the projected image, never a paint-time fetch.
-- [ ] 9.4 Register Music as `LibraryKey::Service(Music)`: delete the mounted component, its `ComponentId`
+- [x] 9.4 Register Music as `LibraryKey::Service(Music)`: delete the mounted component, its `ComponentId`
   arm and the per-component pushes in `shell_music_workspace*.rs`, moving hit resolution to the panel,
   and re-point the Music component tests at the owner type. Verify: tick integration tests for focus,
   mouse eligibility and album/track clicks; an inactive Music owner keeps cursor/scroll across a tab
