@@ -31,17 +31,14 @@ fn wide_area() -> Rect {
 /// through the mounted component's per-draw override seam.
 fn render_tv_wide(override_width: Option<u16>) -> String {
     let mut component = TvWorkspaceComponent::new();
-    component.set_content(
-        TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![make_item("Series One", "Series")], 0, 0),
-            None,
-            None,
-            0,
-            None,
-            true,
-        )
-        .with_image_state(false, false),
-    );
+    component.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![make_item("Series One", "Series")], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        true,
+    ));
     component.set_list_pane_width(override_width);
     let area = wide_area();
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();

@@ -379,11 +379,11 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
 /// Renders the wide TV workspace through the shell paint path and returns the
 /// painted buffer with the component-owned right series-rail rect.
 fn render_wide_tv(model: &mut Model) -> (ratatui::buffer::Buffer, Rect) {
-    let area = model.app.layout.main.tv_wide_area;
-    assert!(
-        area.width > 0 && area.height > 0,
-        "wide TV geometry must be primed by the sync pass: {area:?}"
-    );
+    let area = model
+        .app
+        .wide_tv_library_area(0)
+        .expect("wide TV area must be derived from the current frame");
+    assert!(area.width > 0 && area.height > 0);
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 40)).unwrap();
     terminal
         .draw(|f| model.render_tv_workspace_component(f))
@@ -396,8 +396,9 @@ fn render_wide_tv(model: &mut Model) -> (ratatui::buffer::Buffer, Rect) {
         .as_any()
         .downcast_ref::<TvWorkspaceComponent>()
         .unwrap()
-        .test_layout()
-        .tv_wide_list_area;
+        .test_wide_geometry()
+        .expect("Wide skeleton geometry")
+        .list_area;
     (terminal.backend().buffer().clone(), rail)
 }
 

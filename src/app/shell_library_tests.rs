@@ -398,7 +398,7 @@ fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
 
     // The breakpoint is now driven synchronously by terminal size (the
     // flash fix): `prime_wide_tv_geometry` in `sync_mounted_surfaces`
-    // recomputes `tv_wide_*` before the mount gates read it.
+    // derives the TV breakpoint before the mount gates read it.
     let widen = |model: &mut Model, wide: bool| {
         model.app.terminal_width = if wide { 160 } else { 80 };
     };

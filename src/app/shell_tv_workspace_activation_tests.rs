@@ -6,7 +6,6 @@ fn wide_tv_handoff_does_not_fetch_empty_series_id() {
     app.libs[0].library.collection_type = "tvshows".into();
     app.libs[0].nav_stack[0].items[0].item_type = "Series".into();
     app.libs[0].nav_stack[0].items[0].id.clear();
-    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
     let mut model = Model::new(app);
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
@@ -132,7 +131,6 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     }
     app.libs.push(tv_lib);
     app.tab = TabSelection::EmbyLibrary(1);
-    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
     app.terminal_width = 160;
     app.terminal_height = 40;
     let mut model = Model::new(app);
@@ -154,8 +152,7 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
 /// gates on `App::wide_tv_library_area`, a paint-free predicate driven solely
 /// by terminal size. Resizing narrow -> wide through the real
 /// `Msg::TerminalEvent(Resize)` path must flip the activation branch on that
-/// same tick, before any repaint refreshes `tv_wide_left_area`/
-/// `tv_wide_right_area`.
+/// same tick, before any repaint refreshes the TV component's geometry.
 #[test]
 fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
     let mut model = mounted_tv_model();

@@ -142,9 +142,7 @@ pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
-pub(in crate::app) use components::tv_wide::{
-    render_wide_tv_with_ctx, TvEpisodePresentation, TvSeriesPresentation, TvWideRenderCtx,
-};
+pub(in crate::app) use components::tv_wide::TvWideRenderCtx;
 pub(in crate::app) use components::widgets::{render_pill_bar, render_placeholder, PillBar};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the

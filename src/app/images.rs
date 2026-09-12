@@ -968,12 +968,14 @@ impl App {
     /// box, sized from the projected decoded aspect (design D7).
     pub(in crate::app) fn project_hero_image(
         &mut self,
-        artwork: &crate::app::components::library_panel::HeroArtwork,
+        facts: &crate::app::components::library_panel::HeroFacts,
+        workspace_present: bool,
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
     ) -> crate::app::components::library_panel::HeroImageState {
         use crate::app::components::library_panel::content::ArtworkSource;
         use crate::app::components::library_panel::content::HeroImageState as State;
+        let artwork = &facts.artwork;
         let Some(source) = &artwork.source else {
             return State::None;
         };
@@ -1032,23 +1034,11 @@ impl App {
                 PANE_PAD_Y,
                 list_pane_width,
             ) {
-                let content = crate::app::components::library_panel::content::HeroContent {
-                    facts: crate::app::components::library_panel::HeroFacts {
-                        title: String::new(),
-                        meta_rows: Vec::new(),
-                        artwork: crate::app::components::library_panel::HeroArtwork {
-                            shape: artwork.shape,
-                            source: None,
-                            image: State::None,
-                        },
-                    },
-                    overview: None,
-                    workspace: None,
-                };
                 let box_cells =
                     crate::app::components::library_panel::hero_header::hero_artwork_box(
                         panes.hero_area,
-                        &content,
+                        facts,
+                        workspace_present,
                     );
                 if !self.ensure_hero_cover_protocol(&cache_key, (box_cells.width, box_cells.height))
                 {

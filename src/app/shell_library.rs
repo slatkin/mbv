@@ -332,11 +332,10 @@ impl Model {
         let kind = BrowserKind::from_collection_type(&library.library.collection_type);
         match kind {
             // Wide TV (series list) paints the two-pane workspace; Narrow TV
-            // is the same merged owner's flat list and paints no split.
-            BrowserKind::TvShows => self
-                .app
-                .wide_tv_library_area(index)
-                .map(|_| self.app.layout.main.tv_wide_area),
+            // is the same merged owner's flat list and paints no split. The
+            // boundary's content area is the paint-free `wide_tv_library_area`
+            // (task 8.2 deleted the `tv_wide_area` layout field).
+            BrowserKind::TvShows => self.app.wide_tv_library_area(index),
             BrowserKind::Music => (self.app.is_music_group_view(index)
                 && self.app.is_viewing_album_folders(index))
             .then_some(self.app.layout.main.wide_music_area)

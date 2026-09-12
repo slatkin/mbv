@@ -74,9 +74,9 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let layout = component.test_layout();
-    let row = layout.tv_wide_list_area.y + 1;
-    let col = layout.tv_wide_list_area.x;
+    let list_area = component.test_wide_geometry().unwrap().list_area;
+    let row = list_area.y + 1;
+    let col = list_area.x;
 
     let left = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
@@ -127,8 +127,8 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
     let (col, row) = {
-        let layout = component.test_layout();
-        (layout.tv_wide_list_area.x, layout.tv_wide_list_area.y)
+        let list_area = component.test_wide_geometry().unwrap().list_area;
+        (list_area.x, list_area.y)
     };
 
     let click = component.on(&Event::Mouse(MouseEvent {
@@ -595,12 +595,14 @@ fn wide_tv_search_paints_in_browser_pane_not_hero_pane() {
         .unwrap();
 
     let list_area = component.inline_search().layout().left_area;
-    let left_pane = component.test_layout().tv_wide_left_area;
+    let geometry = component.test_wide_geometry().unwrap();
+    let browser_pane = geometry.browser;
+    let hero_pane = geometry.hero;
     assert!(list_area.width > 0 && list_area.height > 0);
     assert!(
-        list_area.x + list_area.width <= left_pane.x,
-        "search paints in the browser pane, before the episode/Hero pane: \
-         list_area={list_area:?} left_pane={left_pane:?}"
+        list_area.x >= browser_pane.x
+            && list_area.x + list_area.width <= browser_pane.x + browser_pane.width,
+        "search paints inside the browser pane: list_area={list_area:?} browser={browser_pane:?}"
     );
 
     let buffer = terminal.backend().buffer();
@@ -615,7 +617,7 @@ fn wide_tv_search_paints_in_browser_pane_not_hero_pane() {
         "ordinary selector must be replaced"
     );
     let mut found_in_rail = false;
-    let mut found_in_left_pane = false;
+    let mut found_in_hero_pane = false;
     for y in list_area.y..list_area.y + list_area.height {
         let rail_row: String = (list_area.x..list_area.x + list_area.width)
             .map(|x| buffer.cell((x, y)).unwrap().symbol())
@@ -623,11 +625,11 @@ fn wide_tv_search_paints_in_browser_pane_not_hero_pane() {
         if rail_row.contains("Search Result Alpha") {
             found_in_rail = true;
         }
-        let left_row: String = (left_pane.x..left_pane.x + left_pane.width)
+        let hero_row: String = (hero_pane.x..hero_pane.x + hero_pane.width)
             .map(|x| buffer.cell((x, y)).unwrap().symbol())
             .collect();
-        if left_row.contains("Search Result Alpha") {
-            found_in_left_pane = true;
+        if hero_row.contains("Search Result Alpha") {
+            found_in_hero_pane = true;
         }
     }
     assert!(
@@ -635,8 +637,8 @@ fn wide_tv_search_paints_in_browser_pane_not_hero_pane() {
         "search result row painted in the browser pane"
     );
     assert!(
-        !found_in_left_pane,
-        "search result must not paint in the episode/Hero pane"
+        !found_in_hero_pane,
+        "search result must not paint in the hero pane"
     );
 }
 

@@ -117,22 +117,12 @@ impl TvWorkspaceComponent {
                 Some(ShellRequest::TvMoveRows { rows: 1 })
             }
             Key::PageUp => {
-                let rows = -(self
-                    .layout
-                    .tv_wide_list_area
-                    .height
-                    .saturating_sub(1)
-                    .max(1) as i64);
+                let rows = -(self.painted_viewport_height().saturating_sub(1).max(1) as i64);
                 self.move_rows(rows);
                 Some(ShellRequest::TvMoveRows { rows })
             }
             Key::PageDown => {
-                let rows = self
-                    .layout
-                    .tv_wide_list_area
-                    .height
-                    .saturating_sub(1)
-                    .max(1) as i64;
+                let rows = self.painted_viewport_height().saturating_sub(1).max(1) as i64;
                 self.move_rows(rows);
                 Some(ShellRequest::TvMoveRows { rows })
             }

@@ -128,15 +128,14 @@ impl Model {
                             self.app.wide_tv_library_area(lib_idx).is_some()
                         }) =>
                     {
-                        let pos = match &anchor {
-                            ContextMenuAnchor::Pointer { x, y } => (*x, *y).into(),
-                            ContextMenuAnchor::SelectedItem(_) => unreachable!(),
-                        };
-                        if layout.main.tv_wide_left_area.contains(pos) {
-                            layout.main.tv_wide_left_area
-                        } else {
-                            layout.main.tv_wide_right_area
-                        }
+                        // Task 8.2 deleted the `tv_wide_*` pane rects; the
+                        // panel's paint-free library content area is the
+                        // placement region for the whole Wide TV workspace.
+                        self.app
+                            .tab
+                            .emby_library_index()
+                            .and_then(|lib_idx| self.app.wide_tv_library_area(lib_idx))
+                            .unwrap_or_default()
                     }
                     PanelFocus::Library => layout.main.left_area,
                     PanelFocus::Queue => self

@@ -575,17 +575,11 @@ impl App {
                         ctx.publish_geometry(area, layout);
                     }
                     // Wide TV's mounted `TvWorkspaceComponent` paints the
-                    // whole Wide hero workspace itself (task 5.3d.18d);
-                    // the legacy wide-TV branch is gone. We only publish the
-                    // hand-off `tv_wide_*` rects here before `render_list` so
-                    // input routing (`App::wide_tv_library_area`) and the
-                    // shell's render seam can locate them.
-                    if self.is_wide_tv_library(lib_idx)
-                        && crate::app::render::arrangements::wide_hero::wide_hero_fits(area)
-                    {
-                        let ctx = self.wide_tv_render_ctx(lib_idx, cursor_scroll);
-                        ctx.publish_geometry(area, layout);
-                    }
+                    // whole Wide hero workspace itself through the Library
+                    // panel's shared skeleton (task 8.2); the legacy base
+                    // frame reserves only the destination area here and
+                    // paints no workspace.
+                    //
                     // BrowserComponent owns the browse body at every width;
                     // reserve only the destination area here.
                     layout.left_area = area;

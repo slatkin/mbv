@@ -123,7 +123,6 @@ fn mounted_tv_model() -> Model {
     for item in &mut app.libs[0].nav_stack[0].items {
         item.item_type = "Series".into();
     }
-    app.layout.main.tv_wide_right_area = ratatui::layout::Rect::new(40, 0, 60, 20);
     // Wide breakpoint is now driven synchronously by terminal size
     // (`wide_tv_library_area`), not this previous-frame paint rect.
     app.terminal_width = 160;

@@ -71,3 +71,7 @@ mod detail_series_tests;
 #[cfg(test)]
 #[path = "list_narrow_tests.rs"]
 mod list_narrow_tests;
+
+#[cfg(test)]
+#[path = "tv_wide_tests.rs"]
+mod tv_wide_tests;

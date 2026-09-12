@@ -43,10 +43,14 @@ const HERO_MIN_TEXT_COLS: u16 = 16;
 /// One layout site: the header painter calls this and the shell projection
 /// (task 5.10) calls it with the Library panel's area, so the fetched image
 /// is always encoded for the box that paints it.
-pub(in crate::app) fn hero_artwork_box(area: Rect, content: &HeroContent<'_>) -> Rect {
-    let header = HeroHeader::from(content.facts.artwork.shape);
+pub(in crate::app) fn hero_artwork_box(
+    area: Rect,
+    facts: &HeroFacts,
+    workspace_present: bool,
+) -> Rect {
+    let header = HeroHeader::from(facts.artwork.shape);
     // The artwork shrinks before a Workspace viewport would drop (design D5).
-    let max_h = if content.workspace.is_some() {
+    let max_h = if workspace_present {
         area.height.saturating_sub(WORKSPACE_MIN_ROWS)
     } else {
         area.height
@@ -58,7 +62,7 @@ pub(in crate::app) fn hero_artwork_box(area: Rect, content: &HeroContent<'_>) ->
             // The artwork shrinks before the title/meta block below it is
             // starved out of the pane: the box keeps room for the wrapped
             // text rows plus the gap row between the two blocks.
-            let text_rows = wrapped_text_rows(area.width, &content.facts);
+            let text_rows = wrapped_text_rows(area.width, facts);
             let room_for_text = area
                 .height
                 .saturating_sub(text_rows)
@@ -118,7 +122,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     content: &HeroContent<'_>,
 ) -> (u16, Option<Rect>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
-    let artwork = hero_artwork_box(area, content);
+    let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
     let image_ready = matches!(
         content.facts.artwork.image,
         super::content::HeroImageState::Ready { .. }
@@ -306,7 +310,7 @@ mod hero_header_tests {
     #[test]
     fn landscape_header_paints_art_above_text() {
         let pane = content(ArtworkShape::Landscape);
-        let artwork = hero_artwork_box(AREA, &pane);
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
         let buf = draw_pane(AREA.width, AREA.height, &pane);
         // The artwork box spans the full content width at the top.
         assert_eq!(artwork.x, AREA.x);
@@ -338,7 +342,7 @@ mod hero_header_tests {
     #[test]
     fn square_header_paints_art_right_of_text() {
         let pane = content(ArtworkShape::Square);
-        let artwork = hero_artwork_box(AREA, &pane);
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
         let buf = draw_pane(AREA.width, AREA.height, &pane);
         // The artwork box is right-aligned; title and meta paint left of it.
         assert_eq!(artwork.right(), AREA.right());
@@ -360,7 +364,7 @@ mod hero_header_tests {
     #[test]
     fn portrait_header_paints_art_right_of_text() {
         let pane = content(ArtworkShape::Portrait);
-        let artwork = hero_artwork_box(AREA, &pane);
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
         let buf = draw_pane(AREA.width, AREA.height, &pane);
         assert_eq!(artwork.right(), AREA.right());
         let text_area = Rect {
@@ -388,7 +392,7 @@ mod hero_header_tests {
             overview: None,
             workspace: None,
         };
-        let artwork = hero_artwork_box(AREA, &pane);
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
         let buf = draw_pane(AREA.width, AREA.height, &pane);
         // Title first, then one row per meta row; row n uses role n % 3.
         for (index, expected) in palette::HERO_META_ROLES.iter().cycle().take(4).enumerate() {
@@ -405,7 +409,7 @@ mod hero_header_tests {
     fn overview_box_presents_only_with_overview_text() {
         let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
         let pane = content(ArtworkShape::Landscape);
-        let artwork = hero_artwork_box(AREA, &pane);
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
         let below = Rect {
             y: artwork.bottom() + 3,
             height: AREA.bottom().saturating_sub(artwork.bottom() + 3),
@@ -436,7 +440,7 @@ mod hero_header_tests {
     fn artwork_shrinks_before_a_workspace_viewport_drops() {
         let free = content(ArtworkShape::Landscape);
         let small = Rect::new(0, 0, 60, 14);
-        let without_workspace = hero_artwork_box(small, &free);
+        let without_workspace = hero_artwork_box(small, &free.facts, free.workspace.is_some());
         let mut workspace_list = NoopList;
         let constrained = HeroContent {
             facts: facts(ArtworkShape::Landscape),
@@ -447,7 +451,8 @@ mod hero_header_tests {
                 focused: false,
             }),
         };
-        let with_workspace = hero_artwork_box(small, &constrained);
+        let with_workspace =
+            hero_artwork_box(small, &constrained.facts, constrained.workspace.is_some());
         // The landscape box no longer fills the pane even without a
         // Workspace: it leaves room for the wrapped title/meta rows below
         // it, and a present Workspace caps it further so the Workspace
@@ -465,7 +470,7 @@ mod hero_header_tests {
         // fill the whole pane and leave the title/meta block no rows.
         let pane = content(ArtworkShape::Landscape);
         let small = Rect::new(0, 0, 113, 19);
-        let artwork = hero_artwork_box(small, &pane);
+        let artwork = hero_artwork_box(small, &pane.facts, pane.workspace.is_some());
         assert!(
             artwork.height < small.height,
             "artwork leaves room for the text block below it"

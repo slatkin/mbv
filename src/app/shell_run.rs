@@ -33,11 +33,6 @@ impl Model {
         self.sync_status_bar_panel();
         self.sync_queue_playback_panel();
         self.sync_wide_hero_boundary();
-        // Publish wide-TV geometry before other readers of `tv_wide_right_area`/
-        // `tv_wide_left_area` (e.g. context-menu anchors) see this frame's
-        // values, since those fields are otherwise a previous-frame paint
-        // signal.
-        self.prime_wide_tv_geometry();
         self.sync_emby_browser();
         self.sync_tv_workspace();
         self.sync_music_workspace();

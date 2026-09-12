@@ -139,8 +139,10 @@ fn wide_emby_podcast_does_not_publish_tv_geometry() {
 
     let layout = render_view(&mut app, 200, 40);
 
-    assert_eq!(layout.tv_wide_left_area, ratatui::layout::Rect::default());
-    assert_eq!(layout.tv_wide_right_area, ratatui::layout::Rect::default());
+    assert!(
+        layout.left_area.width > 0,
+        "podcast destination remains reserved"
+    );
 }
 
 #[test]
@@ -148,7 +150,10 @@ fn podcast_uses_inline_when_wide_height_is_unavailable() {
     let mut podcast = make_movie_app();
     podcast.libs[0].library.collection_type = "podcasts".into();
     let podcast_layout = render_view(&mut podcast, 200, 8);
-    assert_eq!(podcast_layout.tv_wide_left_area.width, 0);
+    assert!(
+        podcast_layout.left_area.width > 0,
+        "podcast destination remains reserved"
+    );
 }
 
 #[test]

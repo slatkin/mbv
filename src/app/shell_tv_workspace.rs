@@ -1,6 +1,5 @@
+use super::components::library_panel::{hero_content_emby, HeroImageState};
 use super::components::{BrowserKey, BrowserKind, ComponentId, ShellRequest, TvWorkspaceComponent};
-use super::images::series_image_cache_key;
-use super::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
 use super::TabSelection;
@@ -83,37 +82,6 @@ impl Model {
         }))
     }
 
-    /// Populate `tv_wide_*` layout geometry *before* the mount/focus gates in
-    /// `sync_mounted_surfaces` read it. Consumers gated on the paint-free
-    /// `App::wide_tv_library_area` no longer need this to avoid a
-    /// narrow→wide flash, but other readers of `tv_wide_right_area`/
-    /// `tv_wide_left_area` (e.g. context-menu anchors) still rely on this
-    /// priming this same frame. This recomputes exactly what
-    /// `render_library` publishes, but paint-free from the current terminal
-    /// size (mirrors Music's `render_music_workspace_component` priming its
-    /// own `publish_geometry`).
-    pub(super) fn prime_wide_tv_geometry(&mut self) {
-        use ratatui::layout::Rect;
-        match self
-            .app
-            .tab
-            .emby_library_index()
-            .and_then(|idx| self.app.wide_tv_library_area(idx).map(|area| (idx, area)))
-        {
-            Some((idx, lib_area)) => {
-                let ctx = self.app.wide_tv_render_ctx(idx, None);
-                ctx.publish_geometry(lib_area, &mut self.app.layout.main);
-            }
-            None => {
-                // Clear any stale wide rect so the mount gate does not stay
-                // wide after leaving the workspace or narrowing the terminal.
-                self.app.layout.main.tv_wide_area = Rect::default();
-                self.app.layout.main.tv_wide_left_area = Rect::default();
-                self.app.layout.main.tv_wide_right_area = Rect::default();
-            }
-        }
-    }
-
     /// Mount/retire the one merged TV owner (design.md D12): unlike before
     /// the merge, a Wide<->Narrow breakpoint flip never changes which
     /// component is mounted, so there is no hand-off to perform here.
@@ -151,7 +119,8 @@ impl Model {
         if library.library.collection_type != "tvshows" {
             return;
         }
-        let is_wide = self.app.wide_tv_library_area(index).is_some();
+        let lib_area = self.app.wide_tv_library_area(index);
+        let is_wide = lib_area.is_some();
         let list = self.app.library_list_render_ctx(
             index,
             self.app.libs[index]
@@ -187,34 +156,18 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
-        // The Wide hero's landscape-chain fetch runs from this push
-        // (design D9's TV precedent); Narrow's own Primary-chain fetch stays
-        // a paint-time `HomeImagePaint` return (unchanged by this merge --
-        // task 5.10 generalizes both to the shell projection later).
-        let mut image_loading = false;
-        if is_wide {
-            if let Some(item) = selected_series
-                .as_ref()
-                .filter(|_| self.app.images_enabled())
-            {
-                self.app.fetch_card_image(
-                    series_image_cache_key(&item.id, SERIES_LANDSCAPE_IMAGE_TYPES),
-                    item.id.clone(),
-                    String::new(),
-                    SERIES_LANDSCAPE_IMAGE_TYPES,
-                );
+        // The Wide hero image projection (design D9/D16): the one EmbyItem
+        // producer's facts drive the shell fetch and the cover-fit encode at
+        // the box the panel skeleton will paint; painting reads the projected
+        // state only. Narrow keeps its own Primary-chain paint-time return.
+        let hero_image = match (is_wide, lib_area, selected_series.as_ref()) {
+            (true, Some(area), Some(item)) => {
+                let data = hero_content_emby(item);
+                self.app
+                    .project_hero_image(&data.facts, true, area, self.app.list_pane_width)
             }
-            image_loading = selected_series.as_ref().is_some_and(|item| {
-                self.app.images_enabled()
-                    && !self
-                        .app
-                        .card_image_states
-                        .contains_key(&series_image_cache_key(
-                            &item.id,
-                            SERIES_LANDSCAPE_IMAGE_TYPES,
-                        ))
-            });
-        }
+            _ => HeroImageState::None,
+        };
         let context = TvWideRenderCtx::new(
             list,
             selected_series,
@@ -223,7 +176,7 @@ impl Model {
             None,
             self.app.should_show_letter_pills(index),
         )
-        .with_image_state(self.app.images_enabled(), image_loading);
+        .with_hero_image(hero_image);
         if let Some(comp) = self.application.get_component_mut(id) {
             if let Some(tv) = comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>() {
                 tv.set_is_wide(is_wide);
@@ -245,22 +198,32 @@ impl Model {
             .emby_library_index()
             .is_some_and(|idx| self.app.wide_tv_library_area(idx).is_some());
         let area = if is_wide {
-            self.app.layout.main.tv_wide_area
+            self.app
+                .tab
+                .emby_library_index()
+                .and_then(|idx| self.app.wide_tv_library_area(idx))
+                .unwrap_or_default()
         } else {
             self.app.layout.main.left_area
         };
         if area.width == 0 || area.height == 0 {
             return;
         }
-        if is_wide {
-            if let Some(comp) = self
-                .application
-                .get_component_mut(id)
-                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-            {
+        if let Some(comp) = self
+            .application
+            .get_component_mut(id)
+            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+        {
+            // The breakpoint is paint-free and derived from the same panel
+            // area as the shell route; keep the mounted owner's presentation
+            // in lockstep even when a test or resize draws before its next
+            // content push.
+            comp.set_is_wide(is_wide);
+            if is_wide {
                 comp.set_list_pane_width(self.app.list_pane_width);
             }
-        } else {
+        }
+        if !is_wide {
             let browse_cursor = self
                 .application
                 .get_component(id)
@@ -281,12 +244,26 @@ impl Model {
             }
         }
         self.application.view(id, frame, area);
-        let image_paint = self
-            .application
-            .get_component_mut(id)
-            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-            .and_then(TvWorkspaceComponent::take_image_paint);
-        self.app.paint_home_image(frame, image_paint);
+        if is_wide {
+            // The Wide hero image is the shared panel skeleton's retained
+            // paint (task 8.2): the projected protocol paints into its
+            // reserved box, never a paint-time fetch (design D9).
+            let image_paint = self
+                .application
+                .get_component_mut(id)
+                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+                .and_then(TvWorkspaceComponent::take_panel_image_paint);
+            if let Some(paint) = image_paint {
+                self.app.paint_panel_hero_image(frame, &paint);
+            }
+        } else {
+            let image_paint = self
+                .application
+                .get_component_mut(id)
+                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
+                .and_then(TvWorkspaceComponent::take_image_paint);
+            self.app.paint_home_image(frame, image_paint);
+        }
     }
 }
 

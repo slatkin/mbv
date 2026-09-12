@@ -23,9 +23,13 @@ use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
 use super::browser_narrow::NarrowBrowseExtras;
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
+use super::library_panel::{
+    hero_content_emby, render_wide_skeleton, HeroContent, LibraryPanelContent, ListSlot,
+    PanelHeroImagePaint, SelectorRow, SkeletonHits, WideSkeletonGeometry, Workspace,
+};
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
-    ViewportAnchor, WideMediaList,
+    ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::mouse::hit::HitRegions;
@@ -34,8 +38,8 @@ use super::user_event::UserEvent;
 #[cfg(test)]
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
-    effective_sort_str, letter_bucket, render_narrow_browse_with_ctx, render_wide_tv_with_ctx,
-    HomeImagePaint, TvEpisodePresentation, TvSeriesPresentation, TvWideRenderCtx,
+    effective_sort_str, letter_bucket, render_narrow_browse_with_ctx, HomeImagePaint,
+    TvWideRenderCtx,
 };
 use crate::app::ui_util::{list_duration_secs, natural_sort_key};
 #[cfg(test)]
@@ -65,13 +69,24 @@ pub struct TvWorkspaceComponent {
     /// (like `carrier` mirrors the series rail) so the box previews episodes
     /// even while the Series pane holds focus; `pane` controls whether its
     /// selected row paints as focused. Wide-only: Narrow has no Episodes
-    /// pane.
-    episodes: WideMediaList<String>,
+    /// pane. It is a carrier (task 8.2) so the Library panel's shared
+    /// `Workspace` slot can hand it over as a `PanelList`; it never changes
+    /// presentation.
+    episodes: MediaListCarrier<String>,
     pane: Pane,
     initialized: bool,
     last_series_id: Option<String>,
     layout: crate::app::layout::LayoutMain,
+    /// The Wide frame's retained panel-skeleton geometry (task 8.2): the
+    /// mounted component's own hit resolution and viewport arithmetic read
+    /// the rects the shared skeleton painted.
+    wide_geometry: Option<WideSkeletonGeometry>,
     image_paint: Option<HomeImagePaint>,
+    /// The Wide hero image paint the shared skeleton retained (task 8.2): the
+    /// shell paints the projected protocol into the reserved box after
+    /// `view` returns (the same defer-the-pixel-paint seam the Library panel
+    /// uses).
+    panel_image_paint: Option<PanelHeroImagePaint>,
     viewport_height: usize,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle. Not a shared clock.
@@ -81,7 +96,7 @@ pub struct TvWorkspaceComponent {
     /// just produced. Both panes now have an embedded canonical control, so
     /// row identity comes from each control's retained current-frame
     /// geometry; the blank Episodes-pane fallback is resolved directly
-    /// against `tv_wide_left_area` in `resolve_hit`.
+    /// against the retained Wide skeleton geometry in `resolve_hit`.
     tv_chrome: HitRegions<TvHit>,
     /// The embedded Inline Search control (design.md D1). See
     /// `BrowserComponent::inline_search` for the migration-phase notes.
@@ -163,12 +178,14 @@ impl TvWorkspaceComponent {
             context,
             carrier: MediaListCarrier::new(Presentation::Wide),
             season_cursor: 0,
-            episodes: WideMediaList::new(),
+            episodes: MediaListCarrier::new(Presentation::Wide),
             pane: Pane::Series,
             initialized: false,
             last_series_id: None,
             layout: Default::default(),
+            wide_geometry: None,
             image_paint: None,
+            panel_image_paint: None,
             viewport_height: 1,
             mouse_gestures: MouseGestureState::new(),
             tv_chrome: HitRegions::new(),
@@ -376,6 +393,75 @@ impl TvWorkspaceComponent {
         self.episodes.set_content(rows);
     }
 
+    /// This frame's typed Library panel content (design D3, task 8.2): the
+    /// letter pills are the one Selector row, the hero comes from the shared
+    /// `EmbyItem` producer with the shell-projected image state, and the
+    /// Workspace is the season pills plus the episode list. The Inline Search
+    /// session takes the list slot while active (the panel places its box in
+    /// the Selector row and its results in the list box).
+    fn panel_content(&mut self) -> LibraryPanelContent<'_> {
+        let searching = self.inline_search.is_active();
+        // Hero facts first: reading the projected snapshot and image state
+        // ends before the Workspace borrows the episode carrier mutably.
+        let hero_data = self.context.selected_series.as_ref().map(|series| {
+            let mut data = hero_content_emby(series);
+            data.facts.artwork.image = self.context.hero_image.clone();
+            data
+        });
+        // Season pills are the Workspace selector; without a resolvable
+        // season there is no selector row and the episode box takes the
+        // whole workspace.
+        let workspace_selector = self
+            .context
+            .series_detail
+            .as_ref()
+            .filter(|detail| !detail.seasons.is_empty())
+            .map(|detail| SelectorRow {
+                pills: detail
+                    .seasons
+                    .iter()
+                    .map(|season| season.display_name())
+                    .collect(),
+                active: Some(self.season_cursor.min(detail.seasons.len() - 1)),
+            });
+        let workspace_focused = self.context.focused && self.pane == Pane::Episodes;
+        let selector = if !searching && self.context.show_letter_pills {
+            Some(SelectorRow {
+                pills: crate::app::render::LetterFilter::labels(),
+                active: Some(
+                    self.context
+                        .list
+                        .letter_filter
+                        .as_ref()
+                        .map(|filter| filter.index)
+                        .unwrap_or(0),
+                ),
+            })
+        } else {
+            None
+        };
+        let hero = hero_data.map(|data| HeroContent {
+            facts: data.facts,
+            overview: data.overview,
+            workspace: Some(Workspace {
+                selector: workspace_selector,
+                list: &mut self.episodes,
+                focused: workspace_focused,
+            }),
+        });
+        let list = if searching {
+            ListSlot::Search(&mut self.inline_search)
+        } else {
+            ListSlot::Media(&mut self.carrier)
+        };
+        LibraryPanelContent {
+            selector,
+            controls: None,
+            list,
+            hero,
+        }
+    }
+
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier.cursor()
     }
@@ -408,7 +494,9 @@ impl TvWorkspaceComponent {
 
     pub(in crate::app) fn painted_viewport_height(&self) -> usize {
         let painted = if self.is_wide {
-            self.layout.tv_wide_list_area.height as usize
+            self.wide_geometry
+                .as_ref()
+                .map_or(0, |geometry| geometry.list_area.height) as usize
         } else {
             self.layout.left_area.height as usize
         };
@@ -431,6 +519,13 @@ impl TvWorkspaceComponent {
 
     pub(in crate::app) fn take_image_paint(&mut self) -> Option<HomeImagePaint> {
         self.image_paint.take()
+    }
+
+    /// Take the Wide hero image paint the shared skeleton retained (task
+    /// 8.2): the shell paints the projected protocol into its reserved box
+    /// right after `view` returns (design D9).
+    pub(in crate::app) fn take_panel_image_paint(&mut self) -> Option<PanelHeroImagePaint> {
+        self.panel_image_paint.take()
     }
 
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
@@ -573,7 +668,11 @@ impl TvWorkspaceComponent {
                 .cloned()
                 .map(TvHit::EpisodeRow);
         }
-        if self.layout.tv_wide_left_area.contains(position) {
+        if self
+            .wide_geometry
+            .as_ref()
+            .is_some_and(|geometry| geometry.hero.contains(position))
+        {
             return Some(TvHit::EpisodesPane);
         }
         None
@@ -582,6 +681,25 @@ impl TvWorkspaceComponent {
     #[cfg(test)]
     pub(crate) fn test_layout(&self) -> &LayoutMain {
         &self.layout
+    }
+
+    /// The last painted Wide skeleton geometry (task 8.2), for the
+    /// panel-output test path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_wide_geometry(&self) -> Option<&WideSkeletonGeometry> {
+        self.wide_geometry.as_ref()
+    }
+
+    /// The season-pill hit regions the shared Workspace slot painted (task
+    /// 8.2), for the season-click test path.
+    #[cfg(test)]
+    pub(crate) fn test_season_hits(&self) -> &HitRegions<TvHit> {
+        &self.tv_chrome
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_episode_claim_rect(&self) -> Option<Rect> {
+        self.episodes.wide().current_claim_rect()
     }
 
     /// Test-only cursor seed (mirrors `BrowserComponent::set_cursor_for_test`):
@@ -631,57 +749,55 @@ impl Component for TvWorkspaceComponent {
         self.viewport_height = area.height as usize;
         self.ensure_carrier();
         self.layout = Default::default();
+        self.wide_geometry = None;
         self.image_paint = None;
+        self.panel_image_paint = None;
         if self.is_wide {
-            // `episode_cursor` in the render context only signals the
-            // Episodes pane's focus/highlight state now (the embedded
-            // control tracks the real cursor); it is `Some` exactly while
-            // `pane == Pane::Episodes`.
-            let episode_focus_cursor =
-                (self.pane == Pane::Episodes).then(|| self.episodes.cursor());
-            let context = self.context.clone().with_local_state(
-                self.carrier.cursor(),
-                self.carrier.scroll(),
-                self.season_cursor,
-                episode_focus_cursor,
-            );
-            let (_, image_paint) = render_wide_tv_with_ctx(
+            // The Library panel's shared Wide skeleton (task 8.2): the
+            // component supplies typed content and keeps only its own painted
+            // hit stores; the hero image is the shell-projected
+            // `HeroImageState`, never a paint-time fetch (design D9).
+            let browser_focused = self.context.focused && self.pane == Pane::Series;
+            let list_pane_width = self.context.list.list_pane_width;
+            let mut content = self.panel_content();
+            let mut hits = SkeletonHits::default();
+            if let Some(geometry) = render_wide_skeleton(
                 frame,
                 area,
-                &context,
-                &mut self.layout,
-                TvSeriesPresentation::Wide(self.carrier.wide_mut()),
-                TvEpisodePresentation::Wide(&mut self.episodes),
-                &mut self.inline_search,
-            );
-            self.image_paint = image_paint;
-
-            // Adopt the season-pill chrome the wide-TV painter just produced
-            // into the irregular-chrome registry (design.md D6); both list
-            // rows and the blank Episodes-pane fallback resolve directly in
-            // `resolve_hit`.
-            self.tv_chrome.clear();
-            for (rect, index) in &self.layout.tv_wide_season_tabs {
-                self.tv_chrome.push(*rect, TvHit::SeasonTab(*index));
+                &mut content,
+                browser_focused,
+                list_pane_width,
+                &mut hits,
+            ) {
+                self.panel_image_paint = geometry.hero_image.clone();
+                self.wide_geometry = Some(geometry);
+                // Adopt the season-pill chrome the shared Workspace slot
+                // just produced into the irregular-chrome registry
+                // (design.md D6); both list rows and the blank Episodes-pane
+                // fallback resolve directly in `resolve_hit`.
+                self.tv_chrome.clear();
+                for (rect, index) in hits.workspace_selector.regions() {
+                    self.tv_chrome.push(*rect, TvHit::SeasonTab(*index));
+                }
+                return;
             }
-        } else {
-            let (_scroll, image_paint) = render_narrow_browse_with_ctx(
-                frame,
-                area,
-                &self.context.list,
-                &self.narrow_extras,
-                self.context.focused,
-                &mut self.layout,
-                self.carrier.inline_mut(),
-            );
-            self.image_paint = image_paint;
+        }
+        let (_scroll, image_paint) = render_narrow_browse_with_ctx(
+            frame,
+            area,
+            &self.context.list,
+            &self.narrow_extras,
+            self.context.focused,
+            &mut self.layout,
+            self.carrier.inline_mut(),
+        );
+        self.image_paint = image_paint;
 
-            // Adopt the letter-pill rects the Narrow composer just painted
-            // into the irregular-chrome registry (design.md D6).
-            self.pill_regions.clear();
-            for (rect, target) in &self.layout.selector_tabs {
-                self.pill_regions.push(*rect, *target);
-            }
+        // Adopt the letter-pill rects the Narrow composer just painted
+        // into the irregular-chrome registry (design.md D6).
+        self.pill_regions.clear();
+        for (rect, target) in &self.layout.selector_tabs {
+            self.pill_regions.push(*rect, *target);
         }
     }
 

@@ -346,7 +346,7 @@ fn context_menu_entries_render_below_the_reserved_top_row() {
 /// terminal size (not by the previous frame's `AppLayout` paint). This must
 /// select the wide-TV branch on the very tick a resize lands — before
 /// `Application::view`/any repaint of the TV workspace has a chance to
-/// refresh `layout.main.tv_wide_left_area`/`tv_wide_right_area`.
+/// refreshes the TV component's retained geometry.
 ///
 /// The resize is driven through the real `Msg::TerminalEvent(Resize)` path
 /// (`Model::handle_terminal_message`), and the branch is read back via
@@ -374,14 +374,10 @@ fn pointer_anchor_selects_wide_tv_branch_on_resize_tick_before_repaint() {
     let mut model = Model::new(app);
     model.sync_modal_requests();
 
-    // Poison the narrow-branch and wide-branch panel rects to distinct,
-    // stale values that this tick never repaints, so the rendered menu
-    // position reveals which branch `context_menu_rect` took.
+    // Poison the narrow fallback; the Wide branch derives its panel from the
+    // current terminal geometry rather than a previous-frame layout field.
     let narrow_panel = Rect::new(1, 1, 5, 5);
-    let wide_panel = Rect::new(50, 0, 10, 20);
     model.app.layout.main.left_area = narrow_panel;
-    model.app.layout.main.tv_wide_left_area = wide_panel;
-    model.app.layout.main.tv_wide_right_area = Rect::new(70, 0, 10, 20);
 
     let entries = {
         let id = ComponentId::Overlay(OverlayId::ContextMenu);
@@ -423,10 +419,12 @@ fn pointer_anchor_selects_wide_tv_branch_on_resize_tick_before_repaint() {
     );
     assert_eq!(model.app.terminal_width, 150);
 
-    // Read the branch back immediately, with no intervening repaint of the
-    // TV workspace: `tv_wide_left_area`/`tv_wide_right_area` still hold the
-    // poisoned values set above, yet the pointer anchor must already resolve
-    // to the wide-TV panel because the gate is paint-free.
+    // Read the branch back immediately, before repainting the TV workspace;
+    // the pointer anchor must already resolve to the derived Wide panel.
+    let wide_panel = model
+        .app
+        .wide_tv_library_area(0)
+        .expect("TV is wide after resize");
     let backend = TestBackend::new(150, 24);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();

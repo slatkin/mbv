@@ -106,24 +106,6 @@ pub(crate) struct LayoutMain {
     /// Bounding rect of the wide Music left pane (album browser).
     /// Populated only when the wide Music layout is active.
     pub wide_music_right_area: Rect,
-    // TV-wide geometry (2.1i): `tv_wide_area`/`tv_wide_left_area`/
-    // `tv_wide_right_area`/`tv_wide_list_area` are published at their
-    // natural checkpoint before `render_list`, gated by the
-    // `wide_hero_presentation` breakpoint, with loading preserved
-    // component-side. Shared widget geometry (`selector_tabs`, left row
-    // maps, hero/selected rects) was already published pre-paint by rows
-    // 2.1a–2.1f. Component-local `tv_wide_episode_rows`/
-    // `tv_wide_season_tabs` are paint-coupled by design (2.1b carve-out,
-    // component-internal only).
-    pub tv_wide_right_area: Rect,
-    pub tv_wide_list_area: Rect,
-    /// Paint area of the embedded episode `WideMediaList` (task 4.2d): the
-    /// canonical control resolves its own row hits against this rect, so no
-    /// per-row hit map is published here.
-    pub tv_wide_episode_list_area: Rect,
-    pub tv_wide_season_tabs: Vec<(Rect, usize)>,
-    pub tv_wide_left_area: Rect,
-    pub tv_wide_area: Rect,
     /// Bounding rect of the grouped-album browser itself, the sub-rect of
     /// `wide_music_right_area` below the pill row. The embedded canonical
     /// control owns row identity and hit geometry within this rect.

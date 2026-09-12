@@ -236,7 +236,7 @@ impl Model {
         };
         let state = self
             .app
-            .project_hero_image(&hero_data.facts.artwork, area, list_pane_width);
+            .project_hero_image(&hero_data.facts, false, area, list_pane_width);
         if let Some(panel) = self
             .application
             .get_component_mut(&ComponentId::Library)

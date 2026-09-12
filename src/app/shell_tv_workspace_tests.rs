@@ -22,8 +22,8 @@ fn mounted_tv_model() -> Model {
     app.libs[0].library.collection_type = "tvshows".into();
     for item in &mut app.libs[0].nav_stack[0].items {
         item.item_type = "Series".into();
+        item.image_tags.thumb = "tag".into();
     }
-    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
     // Wide breakpoint is now driven synchronously by terminal size
     // (`wide_tv_library_area`), not this previous-frame paint rect.
     app.terminal_width = 160;
@@ -49,13 +49,7 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
         .unwrap();
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(100, 30)).unwrap();
     terminal.draw(|f| component.view(f, f.area())).unwrap();
-    assert!(matches!(
-        component.take_image_paint(),
-        Some(crate::app::render::HomeImagePaint::Series {
-            show_placeholder: true,
-            ..
-        })
-    ));
+    assert!(component.take_panel_image_paint().is_none());
 
     model.app.card_image_states.insert(
         crate::app::images::series_image_cache_key(
@@ -73,13 +67,7 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
         .downcast_mut::<TvWorkspaceComponent>()
         .unwrap();
     terminal.draw(|f| component.view(f, f.area())).unwrap();
-    assert!(matches!(
-        component.take_image_paint(),
-        Some(crate::app::render::HomeImagePaint::Series {
-            show_placeholder: false,
-            ..
-        })
-    ));
+    assert!(component.take_panel_image_paint().is_none());
 }
 
 /// Task 2.1: the Wide push prefetches the identical canonical key the
@@ -120,38 +108,15 @@ fn push_tv_workspace_prefetch_warms_the_painted_series_key() {
             .downcast_mut::<TvWorkspaceComponent>()
             .unwrap();
         terminal.draw(|f| component.view(f, f.area())).unwrap();
-        component.take_image_paint()
+        component.take_panel_image_paint()
     };
-    let Some(crate::app::render::HomeImagePaint::Series { image_types, .. }) = &paint else {
-        panic!("expected a Series image request");
-    };
-    assert_eq!(
-        *image_types, SERIES_LANDSCAPE_IMAGE_TYPES,
-        "painter must declare the canonical chain"
-    );
-
-    terminal
-        .draw(|f| model.app.paint_home_image(f, paint))
-        .unwrap();
-
-    assert!(
-        model.app.card_image_loading.contains(&expected_key)
-            || model.app.card_image_states.contains_key(&expected_key),
-        "paint must keep the prefetched key reserved: {expected_key}"
-    );
+    assert!(paint.is_none(), "loading projection paints no pixels yet");
     assert_eq!(
         model.app.card_image_loading, loading,
-        "paint must leave the prefetch's reservation set untouched: {expected_key}"
+        "painting must leave the prefetch reservation untouched: {expected_key}"
     );
-    assert_eq!(
-        model.app.image_fetches_active, active,
-        "paint must start no additional fetch"
-    );
-    assert_eq!(
-        model.app.pending_image_fetches.len(),
-        pending,
-        "paint must queue no additional fetch"
-    );
+    assert_eq!(model.app.image_fetches_active, active);
+    assert_eq!(model.app.pending_image_fetches.len(), pending);
 }
 
 #[test]

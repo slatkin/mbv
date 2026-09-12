@@ -271,12 +271,6 @@ impl LibraryListRenderCtx {
         self
     }
 
-    pub(in crate::app) fn with_cursor_scroll(mut self, cursor: usize, scroll: usize) -> Self {
-        self.cursor = cursor;
-        self.scroll = scroll;
-        self
-    }
-
     pub(in crate::app) fn with_search(mut self, query: String, loading: bool) -> Self {
         self.search_query = Some(query);
         self.search_loading = loading;
