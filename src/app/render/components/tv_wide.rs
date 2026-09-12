@@ -111,7 +111,7 @@ impl App {
     /// The finalized library content rect when the wide Wide hero TV
     /// workspace owns `lib_idx`, computed paint-free from the current
     /// terminal size — `None` when the library is not a wide-TV series list
-    /// or the breakpoint is narrow. Mirrors the exact gate `render_library`
+    /// or the breakpoint is narrow. Mirrors the exact library-panel gate
     /// applies (`is_wide_tv_library` + `wide_hero_presentation` on the
     /// finalized area), so component mount/focus can be routed a frame
     /// earlier than the deleted previous-frame paint signal this predicate

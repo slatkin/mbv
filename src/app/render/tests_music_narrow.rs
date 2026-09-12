@@ -337,7 +337,7 @@ fn narrow_music_reused_model_paints_after_a_wide_to_narrow_resize() {
     // Unit-1 investigation: a single `Model` resized Wide -> Narrow was
     // reported painting the narrow grouped-Music buffer blank. The cause is
     // the test harness, not the painter -- `draw_mounted_frame` does not sync
-    // `app.terminal_width/height`, so `compose_base_frame` collapses
+    // `app.terminal_width/height`, so root frame composition collapses
     // `left_area` to 0x0 and the workspace `view` early-returns. With the
     // dimensions synced (as the real resize-event path does), the canonical
     // persistent `InlineMediaBrowser` recomputes its flow and paints the

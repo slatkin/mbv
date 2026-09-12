@@ -16,7 +16,11 @@ use ratatui::Terminal;
 use std::collections::HashMap;
 use tuirealm::component::Component;
 
-fn render_library(app: &mut App, width: u16, height: u16) -> (Terminal<TestBackend>, LayoutMain) {
+fn render_reserved_library_area(
+    app: &mut App,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, LayoutMain) {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     let mut layout = LayoutMain::default();
     terminal
@@ -589,7 +593,7 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
 fn feeds_legacy_base_frame_paints_no_entries() {
     for (width, height) in [(60, 20), (140, 30)] {
         let mut app = feed_app();
-        let (terminal, _layout) = render_library(&mut app, width, height);
+        let (terminal, _layout) = render_reserved_library_area(&mut app, width, height);
         let output = buffer_to_string(&terminal);
         assert!(
             !output.contains("Entry One") && !output.contains("Test Feed") && !output.contains("◢"),

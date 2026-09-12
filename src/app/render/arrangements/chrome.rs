@@ -107,10 +107,6 @@ pub(crate) struct RootFrame {
     /// The one-column queue boundary between the two panels (the mounted
     /// `QueueBoundaryComponent`), placed only in the two-panel layout.
     pub queue_boundary: Option<Rect>,
-    /// Placements in paint order. The root consumes this single ordered list;
-    /// the individual fields above remain convenient named accessors for
-    /// sync, hit testing, and tests.
-    pub ordered: [Option<PanelPlacement>; 7],
 }
 
 impl Default for RootFrame {
@@ -123,14 +119,25 @@ impl Default for RootFrame {
             queue_playback: None,
             status_bar: None,
             queue_boundary: None,
-            ordered: [None; 7],
         }
     }
 }
 
 impl RootFrame {
+    /// Returns placements in paint order. Named fields remain convenient
+    /// accessors for sync, hit testing, and tests.
     pub(crate) fn placements(self) -> [Option<PanelPlacement>; 7] {
-        self.ordered
+        [
+            self.tab.map(PanelPlacement::Tab),
+            self.library_playback.map(PanelPlacement::LibraryPlayback),
+            self.library.map(PanelPlacement::Library),
+            self.queue_playback.map(PanelPlacement::QueuePlayback),
+            self.queue.map(PanelPlacement::Queue),
+            // Status bar is last among content panels so it cannot be covered
+            // by the library surface above it.
+            self.status_bar.map(PanelPlacement::StatusBar),
+            self.queue_boundary.map(PanelPlacement::QueueBoundary),
+        ]
     }
 }
 
@@ -363,15 +370,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         input.panel_mode == PanelMode::Both && left_w > 0,
         queue_boundary_area,
     );
-    let ordered = [
-        tab.map(PanelPlacement::Tab),
-        library_playback.map(PanelPlacement::LibraryPlayback),
-        library.map(PanelPlacement::Library),
-        queue_playback.map(PanelPlacement::QueuePlayback),
-        queue.map(PanelPlacement::Queue),
-        status_bar.map(PanelPlacement::StatusBar),
-        queue_boundary.map(PanelPlacement::QueueBoundary),
-    ];
     let root = RootFrame {
         tab,
         library,
@@ -380,7 +378,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         queue_playback,
         status_bar,
         queue_boundary,
-        ordered,
     };
 
     FrameChromeGeometry {

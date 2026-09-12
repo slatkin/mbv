@@ -9,7 +9,7 @@ impl Model {
         // Tasks 1.1/1.2: the draw-time state mutations run here, before any
         // draw. The saved-tab resolution and the stale-destination fallback
         // settle the active tab so every projection below -- and the frame --
-        // sees the resolved tab (`render_main` no longer writes `self.tab`),
+        // sees the resolved tab (the sync pass no longer writes `self.tab`),
         // and the terminal-resize handling (card-image clear, queue-column
         // clamp + prefs save, and the mini-view focus hand-off on a real
         // Resize event) leaves the draw path, which now only reads geometry.
@@ -78,17 +78,13 @@ impl Model {
         }
     }
 
-    /// The sole base-frame orchestrator (D3): legacy base paint, resize
-    /// content pushes, then the mounted component views and overlay stack, in
-    /// that order. All three terminal draws route through it — the two startup
-    /// draws pass `false, false` since no resize locals exist yet, and the
-    /// steady-state draw passes the per-tick locals mutated by
-    /// `handle_terminal_message`.
+    /// The sole frame orchestrator (D3): root placement publication, mounted
+    /// component views, deferred protocol-image paint, and overlay stack.
     pub(in crate::app) fn draw_frame(
         &mut self,
         f: &mut ratatui::Frame,
-        music_resize: bool,
-        tv_resize: bool,
+        _music_resize: bool,
+        _tv_resize: bool,
     ) {
         // The legacy base frame reads the blocking-overlay state for its dim
         // backdrop and stay-alive indicator; that fact now lives in TuiRealm
@@ -96,12 +92,6 @@ impl Model {
         // App-level `blocking_overlay_active` adapter, task 5.3d).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
         self.app.compose_root_frame(f);
-        if music_resize {
-            self.push_music_workspace_content();
-        }
-        if tv_resize {
-            self.push_tv_workspace_content();
-        }
         // Root composition is data-driven: this is the sole panel paint loop.
         // The queue playback placement is deliberately handled by its panel
         // method because it also publishes the visual-slot geometry used by
@@ -121,8 +111,8 @@ impl Model {
                 crate::app::render::arrangements::chrome::PanelPlacement::Queue(area) => {
                     self.render_queue_panel_at(f, area)
                 }
-                crate::app::render::arrangements::chrome::PanelPlacement::QueuePlayback(_) => {
-                    self.render_queue_playback_panel(f)
+                crate::app::render::arrangements::chrome::PanelPlacement::QueuePlayback(area) => {
+                    self.render_queue_playback_panel(f, area)
                 }
                 crate::app::render::arrangements::chrome::PanelPlacement::StatusBar(area) => {
                     self.render_status_bar_panel_at(f, area)

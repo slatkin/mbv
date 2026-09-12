@@ -184,7 +184,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
         let chrome = model.app.compute_chrome_geometry(area);
         let main = &model.app.layout.main;
         // The sites' own bit: the queue column's focus, exactly what the shell
-        // hands `render_legacy_backdrops` and the panel painters.
+        // hands the root chrome and panel painters.
         let queue_bit = chrome.queue_focused;
         assert_eq!(
             queue_bit,
@@ -192,7 +192,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             "{label}: the frame's queue bit must follow the panel focus"
         );
 
-        // Column gutters: the shell's `render_legacy_backdrops` owns both; the
+        // Column gutters: the shell's root chrome owns both; the
         // queue column follows its bit, the library column is fixed.
         painted.expect(
             &format!("{label}/queue gutter"),
@@ -522,7 +522,7 @@ fn mini_view_halves_follow_the_table() {
 
 /// `unify-surface-colour-neutral` 4.1 pin (a): the wide music browser's
 /// container is occluded by the shell, not filled by the screen. The shell's
-/// `render_legacy_backdrops` paints the column with `LibraryColumn`; the pane
+/// Root chrome paints the column with `LibraryColumn`; the pane
 /// the screen owns paints the pill row (`PillRow`) and the rail body
 /// (`LibraryPanel`), and its one unclaimed row is the `PillRowGap` chrome
 /// band. A screen that fills the container again overpaints one of those rows

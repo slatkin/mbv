@@ -1,5 +1,5 @@
-//! Per-frame layout geometry produced by `App::compose_base_frame` and
-//! consumed by mouse hit-testing in `input.rs`.
+//! Per-frame layout geometry published by root frame composition and consumed
+//! by mouse hit-testing in `input.rs`.
 //!
 //! `App` owns a single `AppLayout` value (`app.layout`) instead of ~35
 //! scattered `layout_*`/`*`/`queue_*` fields. Grouping by view
@@ -7,12 +7,12 @@
 //! inventing a new one.
 //!
 //! Render code does not write into `self.layout` in place. Each call to
-//! `App::compose_base_frame` builds a fresh, local `AppLayout::default()` and threads it
+//! Root frame composition builds a fresh, local `AppLayout::default()` and threads it
 //! (or the relevant per-view sub-struct) through the render call graph as an
 //! explicit parameter; every render function that used to write
 //! `self.layout.<view>.<field> = ...` now writes `layout.<field> = ...` on
 //! that local value instead. Only once the full pass completes does
-//! `compose_base_frame` swap it into `self.layout` in a single atomic
+//! swaps it into `self.layout` in a single atomic
 //! assignment. This means
 //! `self.layout` (read by `input.rs`) always reflects the last frame that
 //! rendered in full, or is left completely untouched by an early return
@@ -80,7 +80,7 @@ pub(crate) struct LayoutMain {
     /// The full area `App::render_home_list` was given (hero + pills + list,
     /// not just the inner list). The shell reads this to re-paint the
     /// mounted `HomeComponent`'s `view()` over the same area right after
-    /// `App::compose_base_frame` returns (task 3.4).
+    /// Root frame composition returns (task 3.4).
     pub home_area: Rect,
     /// The selected item's hero geometry. Wide screens place it beside `left_area`;
     /// inline screens place the replacement inside the list and use it as the
@@ -101,7 +101,7 @@ pub(crate) struct LayoutMain {
 }
 
 /// Root/chrome frame geometry computed paint-free by
-/// `App::compute_frame_layout` and consumed by `App::render_main` and the
+/// `App::compute_frame_layout` and consumed by the shell draw path and the
 /// chrome painters. This is the partial typed subresult of the staged
 /// geometry/paint split (D2, task 2.1a): it owns the root/chrome fields only.
 /// The full `AppLayout` remains the aggregate shared by every surface family;
@@ -148,7 +148,7 @@ pub(crate) struct AppLayout {
     pub main: LayoutMain,
     /// The last fully rendered frame's root panel placements (`RootFrame`).
     /// Published with the rest of the chrome checkpoint in
-    /// `App::compose_base_frame` and read by the sync pass (the queue
+    /// root frame composition and read by the sync pass (the queue
     /// boundary's mount/rect source, task 1.4).
     pub root_frame: RootFrame,
 }

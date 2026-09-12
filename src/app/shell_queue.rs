@@ -204,9 +204,8 @@ impl Model {
             return;
         }
         // The queue panel paints its whole surface (frame, title, status,
-        // list) at its `RootFrame`-derived placement, computed after the base
-        // frame published this frame's card geometry (task 3.1).
-        let placement = self.app.queue_panel_placement().panel_area;
+        // list) at the placement computed by the root loop (task 3.1).
+        let placement = _placement;
         if placement.width == 0 || placement.height == 0 {
             return;
         }

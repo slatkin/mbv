@@ -390,7 +390,7 @@ pub fn render_queue_view_to_terminal(
 ) -> (Terminal<TestBackend>, QueuePanelView) {
     // Only terminal_width is touched before the Model is built (the
     // historical helper contract): the queue panel's paint pass reads the
-    // terminal sizes `compose_base_frame` normalized, so the placement
+    // terminal sizes normalized by root frame composition, so the placement
     // follows the drawn frame while the card's reservation geometry keeps
     // the stub's default height cap.
     app.terminal_width = width;

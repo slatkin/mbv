@@ -39,7 +39,7 @@ fn panel(model: &crate::app::shell::Model) -> &LibraryPanel {
 /// or hero there.
 ///
 /// `remove-migrated-surface-underpaint` 3.1 (D4): the Home dispatch arm
-/// (`render_library`) is `layout.home_area = area` with no width branch, so
+/// reserves `layout.home_area = area` with no width branch, so
 /// the geometry-only hand-off holds at every breakpoint; the wide case is
 /// exercised here too.
 #[test]

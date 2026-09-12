@@ -186,10 +186,7 @@ impl Model {
         panel.sync_mouse_eligibility(mouse_eligible);
     }
 
-    /// The library content rect the old destinations paint — the same
-    /// derivation `render_main` applies to `RootFrame.library` — so the
-    /// panel's transitional paint and the old path never disagree about the
-    /// surface's extent.
+    /// The library content rect painted by the mounted panel.
     pub(super) fn library_panel_content_area(&self) -> Option<Rect> {
         let area = self.app.layout.root_frame.library?;
         let collapsed = self.app.effective_panel_mode() != PanelMode::Both;
@@ -204,10 +201,7 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        let area = crate::app::render::components::widgets::right_panel_content_area(
-            area,
-            self.app.effective_panel_mode() != PanelMode::Both,
-        );
+        let area = self.library_panel_content_area().unwrap_or(area);
         self.application.view(&id, frame, area);
         // The projected hero image's pixel paint (task 5.10, design D9): the
         // painters read projected state and reserve the box; the shell paints

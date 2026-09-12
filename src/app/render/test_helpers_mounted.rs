@@ -14,7 +14,7 @@ use ratatui::Terminal;
 /// Build a `Model` at an explicit terminal size with the library pane focused.
 /// Characterization tests whose surface is now painted by a mounted component
 /// (`BrowserComponent` / `MusicWorkspaceComponent` / embedded `TvContent`)
-/// instead of the legacy `render_library` arm start here, then draw with
+/// instead of the legacy library dispatch start here, then draw with
 /// `draw_mounted_frame` and read geometry via `mounted_*_layout`.
 pub fn mounted_model_at(mut app: App, width: u16, height: u16) -> Model {
     app.terminal_width = width;
@@ -58,7 +58,7 @@ pub fn draw_mounted_terminal(model: &mut Model, width: u16, height: u16) -> Term
 }
 
 /// The mounted Emby `BrowserComponent`'s own painted geometry (task 3.8: the
-/// legacy `render_library` `EmbyLibrary` arm no longer publishes it).
+/// legacy Emby library dispatch no longer publishes it).
 pub fn mounted_browser_layout(model: &Model) -> &LayoutMain {
     let id = model
         .emby_browser_id

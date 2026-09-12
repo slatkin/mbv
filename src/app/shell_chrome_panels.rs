@@ -208,38 +208,20 @@ impl Model {
     /// adapter (the moved `render_card`, task 3.4) paints the slot below the
     /// header row. While idle the slot and transport collapse to zero rows
     /// (task 3.6) and only the header row paints.
-    pub(super) fn render_queue_playback_panel(&mut self, frame: &mut Frame) {
+    pub(super) fn render_queue_playback_panel(&mut self, frame: &mut Frame, placement: Rect) {
         let id = ComponentId::QueuePlaybackPanel;
         if !self.application.mounted(&id) {
             return;
         }
-        // The panel paints into its `RootFrame.queue_playback` placement;
-        // mounted exactly when a placement exists (the D1 mount rule), so
-        // the placement check is both the paint gate and the view rect.
-        let Some(placement) = self.app.layout.root_frame.queue_playback else {
-            return;
-        };
-        // The slot/transport geometry recomputes from the same paint-free
-        // checkpoint the placement was published from. The slot region starts
-        // on the row below the placement's header row and reaches the rest of
-        // the queue column: the slot's render caps itself (the same 12/24-row
-        // budget the queue card always had), and a freshly painted slot may
-        // exceed the placement for one frame — the one-frame card publish
-        // below reserves those rows from the next frame on.
-        let chrome = self.app.compute_chrome_geometry(ratatui::layout::Rect::new(
-            0,
-            0,
-            self.app.terminal_width,
-            self.app.terminal_height,
-        ));
-        let content = chrome.left_content;
+        // The root loop supplies the placement and is the paint gate.
+        // The slot region starts on the row below the placement's header row.
         let slot_region = Rect {
-            y: content.y + 1,
-            height: content.height.saturating_sub(1),
-            ..content
+            y: placement.y + 1,
+            height: placement.height.saturating_sub(1),
+            ..placement
         };
-        let wide = queue_playback_column_wide(chrome.left_area.width);
-        let (transport_area, card): (Option<Rect>, CardGeometry) =
+        let wide = queue_playback_column_wide(placement.width);
+        let (transport_area, _): (Option<Rect>, CardGeometry) =
             if self.app.now_playing_status() == NowPlayingStatus::Idle {
                 (None, CardGeometry::default())
             } else {
@@ -254,7 +236,6 @@ impl Model {
                     queue_playback_transport_area(slot_region, wide, card.width, card.height);
                 (Some(transport_area), card)
             };
-        self.app.layout.main.card = card;
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
                 panel.set_transport_area(transport_area);
