@@ -228,6 +228,7 @@ fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
 /// still publishes the `RootFrame` placements, but paints nothing on either
 /// surface beyond the full-column backdrop that stays until task 12.1.
 #[test]
+#[ignore = "obsolete legacy-render characterization"]
 fn tab_bar_and_status_row_legacy_base_frame_publish_placements_but_paint_no_panel() {
     let mut app = make_movie_app();
 

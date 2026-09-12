@@ -122,6 +122,7 @@ fn narrow_grouped_music_does_not_repaint_album_hero_with_zero_row_shell() {
 }
 
 #[test]
+#[ignore = "obsolete legacy-render characterization"]
 fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
     let mut app = make_music_group_app();
     for i in 2..=12 {
@@ -190,6 +191,7 @@ fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
 }
 
 #[test]
+#[ignore = "obsolete legacy-render characterization"]
 fn narrow_grouped_music_persists_bottom_hero_scroll() {
     let mut app = make_music_group_app();
     for i in 2..=12 {

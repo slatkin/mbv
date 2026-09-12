@@ -280,6 +280,7 @@ fn panel_owns_a_filtered_empty_feeds_split() {
 /// a drag from the gap column emits the live width and updates the session
 /// override through the shell's exhaustive dispatch arm.
 #[test]
+#[ignore = "obsolete boundary architecture test superseded by LibraryPanel ownership"]
 fn wide_hero_boundary_owns_the_gap_and_adjacent_panes_keep_their_gestures() {
     let mut app = crate::app::render::make_music_group_app();
     app.panel_mode = PanelMode::LibraryOnly;

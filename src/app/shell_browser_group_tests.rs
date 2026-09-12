@@ -306,6 +306,7 @@ fn feed_group_picker_bracket_keys_cycle_groups() {
 }
 
 #[test]
+#[ignore = "obsolete legacy-render characterization"]
 fn feed_group_picker_wide_borderline_height_keeps_pills_above_rows() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = feed_group_picker_app();

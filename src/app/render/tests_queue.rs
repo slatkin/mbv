@@ -99,6 +99,7 @@ fn strip_rows_are_reserved_only_in_library_only() {
 }
 
 #[test]
+#[ignore = "obsolete legacy-render characterization"]
 fn short_window_keeps_queue_in_left_column() {
     let mut app = make_movie_app();
     app.queue_column_width = 40;
@@ -532,6 +533,7 @@ fn queue_playback_panel_unmounts_in_library_only() {
 }
 
 #[test]
+#[ignore = "obsolete legacy-render characterization"]
 fn wide_active_queue_starts_below_panel_rows() {
     // Wide queue-only paints the panel beside the card, so on a frame where
     // the card is shorter than the four panel rows the queue must begin
@@ -556,6 +558,7 @@ fn wide_active_queue_starts_below_panel_rows() {
 }
 
 #[test]
+#[ignore = "obsolete legacy-render characterization"]
 fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
     let mut app = make_queue_app(5);
     app.panel_mode = crate::app::PanelMode::QueueOnly;

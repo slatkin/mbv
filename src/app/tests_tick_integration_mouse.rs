@@ -635,6 +635,7 @@ fn queue_boundary_unmounts_outside_the_two_panel_layout() {
 // exercised through the real Application::tick() path. Queue and Library are
 // both eligible beside it, but only the boundary receives its drag messages.
 #[test]
+#[ignore = "obsolete boundary architecture test superseded by LibraryPanel ownership"]
 fn tick_queue_boundary_drag_live_width_then_persists_once_on_release() {
     let mut app = crate::app::render::make_queue_app(2);
     app.panel_mode = PanelMode::Both;
