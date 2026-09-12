@@ -25,7 +25,6 @@ impl Model {
         self.sync_sidebar_overlays();
         self.sync_library_playback_panel();
         self.sync_feeds();
-        self.sync_audiobookshelf_podcast();
         self.sync_audiobookshelf_book();
         self.sync_queue();
         self.sync_queue_boundary();
@@ -137,7 +136,6 @@ impl Model {
         if self.active_library_owner_migrated() {
             self.render_library_panel(f);
         } else {
-            self.render_audiobookshelf_podcast_component(f);
             self.render_emby_browser_component(f);
         }
         self.render_queue_component(f);

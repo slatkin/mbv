@@ -620,9 +620,9 @@ mod selection_modal_tests {
     #[test]
     fn audiobookshelf_progress_refreshes_matching_podcast_modal() {
         let mut model = Model::new(super::super::tests_podcast::audiobookshelf_app());
-        // Mount/project the podcast component so the modal action reads/writes
-        // the episode filter through it (task 5.3d.11 U3).
-        model.sync_audiobookshelf_podcast();
+        // Mount/project the podcast owner so the modal action reads/writes
+        // the episode filter through it (task 11.3).
+        model.sync_mounted_surfaces();
         model.open_podcast_selection_modal();
         model.sync_modal_requests();
         let update = mbv_core::player::AudiobookshelfProgressUpdate {
@@ -674,10 +674,10 @@ mod selection_modal_tests {
         );
         browse.detail_loading = false;
 
-        // Mount/project the podcast browser and open/sync the modal so the
-        // real `SelectionModalFilterSelected` dispatch path runs against a
-        // mounted component (task 5.3d.11 U3).
-        model.sync_audiobookshelf_podcast();
+        // Mount/project the podcast owner and open/sync the modal so the
+        // real `SelectionModalFilterSelected` dispatch path runs through the
+        // Library panel (task 11.3).
+        model.sync_mounted_surfaces();
         model.open_podcast_selection_modal();
         model.sync_modal_requests();
 

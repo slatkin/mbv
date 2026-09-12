@@ -11,9 +11,7 @@ use super::test_helpers::{buffer_to_string, make_music_group_app};
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{
-    AudiobookshelfPodcastComponent, BrowserKey, BrowserKind, MusicWorkspaceComponent,
-};
+use crate::app::components::{BrowserKey, BrowserKind, MusicWorkspaceComponent};
 use crate::app::palette;
 use crate::app::render::arrangements::library::wide_library_panes;
 use crate::app::render::arrangements::wide_hero::{PANE_PAD_X, PANE_PAD_Y};
@@ -189,57 +187,6 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
         palette::SURFACE_RESTING
     );
     assert!(buffer_to_string(&terminal).contains("Press r to load feeds"));
-}
-
-/// ABS Podcasts (task 2.1): the wide right hero pane fills via
-/// `wide_hero_hero_pane`.
-/// D8's gain: this surface goes focus-green when the episode workspace holds
-/// focus (mirroring TV), not a bare `focused`.
-#[test]
-fn abs_podcasts_wide_left_pane_fills_via_shared_primitive() {
-    let app = crate::app::tests_podcast::audiobookshelf_app();
-    let mut component = AudiobookshelfPodcastComponent::new();
-    if let Some(state) = app.audiobookshelf_browse.first() {
-        component.set_content(state, app.images_enabled());
-        component.set_focused(true);
-    }
-    let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
-    let geometry = component.geometry();
-    let hero = geometry.hero_area;
-    assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
-    let buffer = terminal.backend().buffer();
-    // No episode is selected in this fixture: the show list holds focus, so
-    // the pane stays resting even though the surface is focused overall
-    // (D8/D3: never a bare `focused`).
-    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
-    assert_ne!(
-        buffer[(hero.x, hero.y)].bg,
-        palette::resolve_surface_focus(true)
-    );
-
-    component.enter_episode_focus();
-    let focused_terminal = direct_terminal(|f| component.view(f, area));
-    let focused_buffer = focused_terminal.backend().buffer();
-    assert_eq!(
-        focused_buffer[(hero.x, hero.y)].bg,
-        palette::SURFACE_FOCUSED
-    );
-}
-
-#[test]
-fn abs_podcast_wide_hero_keeps_text_with_images_on_or_off() {
-    let app = crate::app::tests_podcast::audiobookshelf_app();
-    for images_enabled in [true, false] {
-        let mut component = AudiobookshelfPodcastComponent::new();
-        component.set_content(
-            app.audiobookshelf_browse.first().expect("podcast state"),
-            images_enabled,
-        );
-        component.set_focused(true);
-        let terminal = direct_terminal(|f| component.view(f, wide_area()));
-        assert!(buffer_to_string(&terminal).contains("Show A"));
-    }
 }
 
 /// Sanity: the fixture width used throughout this module clears the shared

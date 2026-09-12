@@ -532,26 +532,8 @@ impl App {
                 // pill.
             }
             TabSelection::AudiobookshelfLibrary(_) => {
-                // The Book surface is painted by the embedded LibraryPanel
-                // owner and the Podcast surface by the mounted
-                // `AudiobookshelfPodcastComponent` (task
-                // 5.3d.10, Unit E); the legacy App renderers were removed. This
-                // arm only reserves the destination content area the shell
-                // reads to place those component overlays.
-                let is_book = self.tab.audiobookshelf_index().is_some_and(|index| {
-                    matches!(
-                        self.audiobookshelf_kind_at(index),
-                        Some(
-                            crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book
-                        )
-                    )
-                });
-                // `from_media_type` maps every ABS media type to exactly one of
-                // Book | Podcast, so the non-book arm *is* the podcast surface;
-                // a kind guard here would be unreachable branch weight.
-                if !is_book {
-                    layout.audiobookshelf_podcast_area = area;
-                }
+                // Audiobookshelf destinations are painted by the embedded
+                // LibraryPanel owner; the legacy frame only reserves the area.
             }
             TabSelection::EmbyLibrary(lib_idx) => {
                 self.ensure_music_group_album_level(lib_idx);

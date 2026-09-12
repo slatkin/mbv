@@ -13,6 +13,7 @@ use ratatui::layout::Rect;
 use super::components::book_content::BookContent;
 use super::components::library_panel::content::HeroImageState;
 use super::components::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
+use super::components::podcast_content::PodcastContent;
 use super::components::{BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::{PanelMode, TabSelection};
@@ -155,6 +156,18 @@ impl Model {
             if let Some(key) = active.clone() {
                 self.push_library_owner(key, Box::new(BookContent::new()));
                 self.push_audiobookshelf_book_content();
+            }
+        }
+        let register_podcast = active.as_ref().is_some_and(|key| {
+            matches!(key, LibraryKey::Service(browser)
+                if browser.service == ServiceKind::Audiobookshelf
+                    && browser.kind == BrowserKind::AudiobookshelfPodcast)
+                && !self.library_panel_has_owner(key)
+        });
+        if register_podcast {
+            if let Some(key) = active.clone() {
+                self.push_library_owner(key, Box::new(PodcastContent::new()));
+                self.push_audiobookshelf_podcast_content();
             }
         }
         let live = self.live_library_keys();

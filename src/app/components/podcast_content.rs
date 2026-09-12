@@ -10,14 +10,18 @@ use super::library_panel::content::{
 use super::library_panel::hero::hero_content_abs_show;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
+use super::media_list::RowLocalInput;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
 };
-use super::msg::Msg;
+use super::msg::{
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+};
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
 };
 use crate::app::ui_util::clean_overview;
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 pub(in crate::app) fn podcast_show_rows(
     shows: &[mbv_core::audiobookshelf::AudiobookshelfShow],
@@ -148,6 +152,88 @@ impl PodcastContent {
         self.focused = focused;
     }
 
+    pub(in crate::app) fn selected_id(&self) -> Option<String> {
+        self.carrier.selected_target().cloned()
+    }
+
+    pub(in crate::app) fn episode_focused(&self) -> bool {
+        self.episode_focused
+    }
+    pub(in crate::app) fn episode_filter(&self) -> AudiobookshelfEpisodeFilter {
+        self.episode_filter
+    }
+    pub(in crate::app) fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
+        self.episode_filter = filter;
+        self.project_episode_rows();
+        self.episode_list.select_first();
+    }
+    pub(in crate::app) fn enter_episode_focus(&mut self) {
+        self.episode_focused = true;
+    }
+
+    pub(in crate::app) fn episode_target(&self) -> Option<PodcastEpisodeTarget> {
+        if !self.episode_focused {
+            return None;
+        }
+        Some(PodcastEpisodeTarget::new(
+            self.state.selected_show()?.library_item_id.clone(),
+            self.episode_list.selected_target()?.clone(),
+        ))
+    }
+
+    fn sync_show_selection(&mut self) {
+        let Some(target) = self.carrier.selected_target().cloned() else {
+            return;
+        };
+        let Some(index) = self
+            .state
+            .shows
+            .iter()
+            .position(|s| s.library_item_id == target)
+        else {
+            return;
+        };
+        if self.state.select_changed_identity(index) {
+            self.episode_filter = AudiobookshelfEpisodeFilter::All;
+            self.episode_focused = false;
+            self.project_episode_rows();
+            self.episode_list.select_first();
+        }
+        self.state.select(index);
+    }
+
+    fn show_move(&mut self) -> Option<Msg> {
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            library_item_id: self.selected_id(),
+        }))
+    }
+
+    fn select_bucket(&mut self, position: usize) -> Option<Msg> {
+        let bucket =
+            crate::app::types_audiobookshelf_browse::build_show_title_buckets(&self.state.shows)
+                .get(position)?
+                .start;
+        let target = self.state.shows.get(bucket)?.library_item_id.clone();
+        self.carrier.select_target(&target);
+        self.sync_show_selection();
+        self.show_move()
+    }
+
+    fn cycle_filter(&mut self, delta: i64) {
+        let current = AudiobookshelfEpisodeFilter::ALL
+            .iter()
+            .position(|f| *f == self.episode_filter)
+            .unwrap_or(0);
+        let next = crate::app::ui_util::move_cursor(
+            current,
+            delta,
+            AudiobookshelfEpisodeFilter::ALL.len(),
+        );
+        self.episode_filter = AudiobookshelfEpisodeFilter::ALL[next];
+        self.project_episode_rows();
+        self.episode_list.select_first();
+    }
+
     pub(in crate::app) fn hero_data(&mut self) -> Option<HeroContentData> {
         let show = self.state.selected_show()?;
         let mut data = hero_content_abs_show(show);
@@ -243,8 +329,138 @@ impl LibraryContentOwner for PodcastContent {
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.content()
     }
-    fn on_slot_event(&mut self, _event: LibrarySlotEvent) -> Option<Msg> {
-        None
+    fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+        match event {
+            LibrarySlotEvent::SelectorPicked(index) => self.select_bucket(index),
+            LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
+                let filter = *AudiobookshelfEpisodeFilter::ALL.get(index)?;
+                self.episode_filter = filter;
+                self.project_episode_rows();
+                self.episode_list.select_first();
+                Some(Msg::TerminalEvent(
+                    crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+                ))
+            }
+            LibrarySlotEvent::List(input) => {
+                self.carrier.delegate(input, None);
+                self.sync_show_selection();
+                self.show_move()
+            }
+            LibrarySlotEvent::HeroPane(input) => {
+                let point = match input {
+                    RowLocalInput::Click(p)
+                    | RowLocalInput::DoubleClick(p)
+                    | RowLocalInput::ContextClick(p) => p,
+                    RowLocalInput::Wheel { at, .. } => at,
+                    _ => return None,
+                };
+                if let Some(target) = self.episode_list.resolve_current_point(point).cloned() {
+                    self.episode_list.delegate(input, Some(target));
+                    if matches!(input, RowLocalInput::DoubleClick(_)) {
+                        return Some(Msg::Shell(
+                            ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                                PodcastEpisodeIntent::OpenOrPlay(self.episode_target()),
+                            ),
+                        ));
+                    }
+                    return Some(Msg::TerminalEvent(
+                        crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+                    ));
+                }
+                None
+            }
+            LibrarySlotEvent::ControlPicked(_) => None,
+        }
+    }
+
+    fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if !self.focused {
+            return None;
+        }
+        let episode = self.episode_focused;
+        match key.code {
+            Key::Up | Key::Char('k') if !episode => {
+                self.carrier.delegate(RowLocalInput::Move(-1), None);
+                self.sync_show_selection();
+                self.show_move()
+            }
+            Key::Down | Key::Char('j') if !episode => {
+                self.carrier.delegate(RowLocalInput::Move(1), None);
+                self.sync_show_selection();
+                self.show_move()
+            }
+            Key::Left | Key::Char('h') if !episode => {
+                self.carrier.delegate(RowLocalInput::Move(-1), None);
+                self.sync_show_selection();
+                self.show_move()
+            }
+            Key::Right | Key::Char('l') if !episode => {
+                self.carrier.delegate(RowLocalInput::Move(1), None);
+                self.sync_show_selection();
+                self.show_move()
+            }
+            Key::Up | Key::Char('k') if episode => {
+                self.episode_list.delegate(RowLocalInput::Move(-1), None);
+                Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::PreviousEpisode,
+                    ),
+                ))
+            }
+            Key::Down | Key::Char('j') if episode => {
+                self.episode_list.delegate(RowLocalInput::Move(1), None);
+                Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::NextEpisode,
+                    ),
+                ))
+            }
+            Key::Char('[') if key.modifiers.is_empty() => {
+                self.cycle_filter(-1);
+                Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::PreviousFilter,
+                    ),
+                ))
+            }
+            Key::Char(']') if key.modifiers.is_empty() => {
+                self.cycle_filter(1);
+                Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::NextFilter,
+                    ),
+                ))
+            }
+            Key::Esc | Key::Backspace if episode => {
+                self.episode_focused = false;
+                Some(Msg::Shell(
+                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
+                        PodcastEpisodeTransition::Exit,
+                    ),
+                ))
+            }
+            Key::Enter if !episode => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    None,
+                )),
+            )),
+            Key::Char(' ') => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+                    PodcastEpisodeIntent::FocusOrPlay(self.episode_target()),
+                ),
+            )),
+            Key::Enter => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    self.episode_target(),
+                )),
+            )),
+            Key::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(
+                    self.episode_target(),
+                )),
+            )),
+            _ => None,
+        }
     }
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()

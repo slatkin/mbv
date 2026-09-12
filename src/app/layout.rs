@@ -98,9 +98,6 @@ pub(crate) struct LayoutMain {
     /// group-selector publishes these before paint.
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
-    /// Full area passed to the Audiobookshelf podcast component after the
-    /// legacy frame computes the current library layout.
-    pub audiobookshelf_podcast_area: Rect,
 }
 
 /// Root/chrome frame geometry computed paint-free by

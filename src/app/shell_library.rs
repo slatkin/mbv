@@ -307,10 +307,7 @@ impl Model {
             AudiobookshelfBrowseKind::Book => None,
             // Podcast paints its hero pane whenever the breakpoint fits, even
             // with no shows (the empty placeholder is painted in the rail).
-            AudiobookshelfBrowseKind::Podcast => {
-                let area = self.app.layout.main.audiobookshelf_podcast_area;
-                crate::app::render::wide_hero_fits(area).then_some(area)
-            }
+            AudiobookshelfBrowseKind::Podcast => None,
         }
     }
 

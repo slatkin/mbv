@@ -15,8 +15,8 @@ impl Model {
         // (split-browse-state-interaction-fields task 3.2); default to `All`
         // when the component is not the active mounted browser.
         let episode_filter = self
-            .abs_podcast_component_mut(index)
-            .map(|component| component.episode_filter())
+            .abs_podcast_owner()
+            .map(|owner| owner.episode_filter())
             .unwrap_or_default();
         let (title, library_item_id, list_state) = {
             let Some(state) = self.app.audiobookshelf_browse.get(index) else {
@@ -68,8 +68,8 @@ impl Model {
         }) else {
             return;
         };
-        if let Some(component) = self.abs_podcast_component_mut(index) {
-            component.set_episode_filter(filter);
+        if let Some(owner) = self.abs_podcast_owner_mut() {
+            owner.set_episode_filter(filter);
         }
         let modal_state = {
             let Some(state) = self.app.audiobookshelf_browse.get(index) else {

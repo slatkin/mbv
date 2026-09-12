@@ -68,20 +68,6 @@ pub(crate) fn browser_legacy_plain_rows_paints() -> usize {
     components::media_list::PLAIN_ROWS_PAINTS.with(std::cell::Cell::get)
 }
 
-#[cfg(test)]
-pub(crate) fn reset_podcast_media_list_paints() {
-    reset_home_media_list_paints();
-}
-
-#[cfg(test)]
-pub(crate) fn podcast_wide_media_list_paints() -> usize {
-    home_wide_media_list_paints()
-}
-
-#[cfg(test)]
-pub(crate) fn podcast_inline_media_browser_paints() -> usize {
-    home_inline_media_browser_paints()
-}
 pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{

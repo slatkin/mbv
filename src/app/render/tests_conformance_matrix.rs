@@ -4,9 +4,7 @@ use super::test_helpers::{
 use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
-use crate::app::components::{
-    AudiobookshelfPodcastComponent, BrowserComponent, ComponentId, MusicWorkspaceComponent,
-};
+use crate::app::components::{BrowserComponent, ComponentId, MusicWorkspaceComponent};
 use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
 use crate::app::{PanelFocus, SeriesDetail, TabSelection};
@@ -135,31 +133,6 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> LayoutMain {
     }
 }
 
-fn render_podcast_component(
-    app: &App,
-    width: u16,
-    height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
-    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let area = Rect::new(0, 0, width, height);
-    let mut component = AudiobookshelfPodcastComponent::new();
-    if let Some(state) = app.audiobookshelf_browse.first() {
-        component.set_content(state, app.images_enabled());
-        component.set_focused(true);
-    }
-    terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let geometry = component.geometry();
-    let layout = LayoutMain {
-        left_area: area,
-        hero_area: geometry.hero_area,
-        inline_hero_area: geometry.inline_hero_area,
-        selected_item_rect: geometry.selected_item_rect,
-        selector_tabs: geometry.selector_tabs.clone(),
-        ..Default::default()
-    };
-    (terminal, layout)
-}
-
 /// Render the wide grouped Music workspace through its mounted
 /// `MusicWorkspaceComponent` (the sole wide-music painter, #613) instead of
 /// the legacy `render_library`, surfacing the component's own painted pill
@@ -222,20 +195,6 @@ fn series_app() -> App {
             episodes,
         },
     );
-    app
-}
-
-fn podcast_app_with_bottom_selection() -> App {
-    let mut app = crate::app::tests_podcast::audiobookshelf_app();
-    let state = &mut app.audiobookshelf_browse[0];
-    let template = state.shows[0].clone();
-    state.shows.extend((0..4).map(|index| {
-        let mut show = template.clone();
-        show.library_item_id = format!("show-{index}");
-        show.title = format!("Show {index}");
-        show
-    }));
-    state.select(state.shows.len() - 1);
     app
 }
 
@@ -448,11 +407,6 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
         ("Movies", make_movie_app(), "Focused Movie"),
         ("TV", series_app(), "Movie"),
         ("Music", make_music_group_app(), "First Album"),
-        (
-            "Podcasts",
-            crate::app::tests_podcast::audiobookshelf_app(),
-            "Show A",
-        ),
     ];
 
     for (surface, app, title) in cases {
@@ -460,11 +414,7 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
         // Movies/TV/Music route through `Model::draw_frame`, which reserves
         // chrome, so give them a slightly taller terminal whose *content* area
         // is still far shorter than any hero needs.
-        let (terminal, layout) = if surface == "Podcasts" {
-            render_podcast_component(&app, 60, 4)
-        } else {
-            render_browse_component(app, 60, 12)
-        };
+        let (terminal, layout) = render_browse_component(app, 60, 12);
         let output = buffer_to_string(&terminal);
         assert_eq!(
             layout.hero_area,
@@ -483,17 +433,10 @@ fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
 fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     let mut music = make_music_group_app();
     music.libs[0].nav_stack[1].set_resting_cursor(0);
-    let cases = [
-        ("Music", music, "First Album"),
-        ("Podcasts", podcast_app_with_bottom_selection(), "Show 3"),
-    ];
+    let cases = [("Music", music, "First Album")];
 
     for (surface, app, title) in cases {
-        let (terminal, layout) = if surface == "Podcasts" {
-            render_podcast_component(&app, 70, 30)
-        } else {
-            render_browse_component(app, 70, 30)
-        };
+        let (terminal, layout) = render_browse_component(app, 70, 30);
         let output = buffer_to_string(&terminal);
         assert!(
             layout.hero_area.height > 0,
@@ -584,17 +527,10 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
         ("Movies", movie_with_pills(), 60),
         ("TV", series_app(), 60),
         ("Music", make_music_group_app(), 100),
-        (
-            "Podcasts",
-            crate::app::tests_podcast::audiobookshelf_app(),
-            60,
-        ),
     ];
 
     for (surface, app, width) in cases {
-        let (terminal, layout) = if surface == "Podcasts" {
-            render_podcast_component(&app, width, 30)
-        } else if surface == "Music" {
+        let (terminal, layout) = if surface == "Music" {
             render_music_component(&app, width, 30)
         } else {
             render_browse_component(app, width, 30)
@@ -634,7 +570,6 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
         ("Movies", make_movie_app()),
         ("TV", series_app()),
         ("Music", make_music_group_app()),
-        ("Podcasts", crate::app::tests_podcast::audiobookshelf_app()),
         ("Feeds", feed_app()),
     ];
     for (surface, mut app) in cases {
@@ -670,30 +605,6 @@ fn matrix_mini_presentations_do_not_admit_a_full_hero() {
         admitted, None,
         "Home mini presentation should not admit a hero"
     );
-}
-
-/// `remove-migrated-surface-underpaint` 3.6 (D4): the mounted
-/// `AudiobookshelfPodcastComponent` owns the Podcast picture. The podcast
-/// case of `render_audiobookshelf_library`
-/// (`src/app/render/components/widgets.rs:605`) only assigns
-/// `audiobookshelf_podcast_area`; nothing else runs in the function, so no
-/// show row, hero, or pill is painted.
-#[test]
-fn abs_podcast_legacy_base_frame_publishes_geometry_but_paints_no_shows() {
-    for (width, height) in [(60, 20), (120, 40)] {
-        let mut app = crate::app::tests_podcast::audiobookshelf_app();
-        let (terminal, layout) = render_library(&mut app, width, height);
-        assert_eq!(
-            layout.audiobookshelf_podcast_area,
-            Rect::new(0, 0, width, height),
-            "podcast geometry hand-off must stay reserved at {width}x{height}"
-        );
-        let output = buffer_to_string(&terminal);
-        assert!(
-            !output.contains("Show A") && !output.contains("◢"),
-            "legacy base frame must not paint the Podcast surface at {width}x{height}: {output:?}"
-        );
-    }
 }
 
 /// `remove-migrated-surface-underpaint` 3.7 (D4): the registered Feeds owner

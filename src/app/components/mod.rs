@@ -8,7 +8,6 @@
 
 #![allow(dead_code)]
 
-pub mod audiobookshelf_podcast;
 pub mod book_content;
 pub mod browser;
 pub mod browser_content;
@@ -50,7 +49,6 @@ pub mod tv_content;
 pub mod user_event;
 pub mod wide_hero_boundary;
 
-pub use self::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
 pub use self::browser::BrowserComponent;
 pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
@@ -94,11 +92,6 @@ pub use self::tab_panel::TabPanel;
 pub use self::user_event::UserEvent;
 pub use self::wide_hero_boundary::WideHeroBoundaryComponent;
 
-#[cfg(test)]
-#[path = "audiobookshelf_podcast_component_tests.rs"]
-mod audiobookshelf_podcast_component_tests;
-#[cfg(test)]
-mod audiobookshelf_podcast_test_support;
 #[cfg(test)]
 #[path = "browser_component_tests.rs"]
 mod browser_component_tests;

@@ -77,11 +77,7 @@ impl Model {
     /// `*_id` fields are pointers, not ownership; `None` suppresses the
     /// per-draw render gate).
     fn clear_destination_pointer(&mut self, id: &ComponentId) {
-        for pointer in [
-            &mut self.emby_browser_id,
-            &mut self.music_workspace_id,
-            &mut self.abs_podcast_id,
-        ] {
+        for pointer in [&mut self.emby_browser_id, &mut self.music_workspace_id] {
             if pointer.as_ref() == Some(id) {
                 *pointer = None;
             }
