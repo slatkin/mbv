@@ -260,26 +260,6 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
     );
 }
 
-/// migrate-home-feeds 5.1 (§5 geometry test): the shared Wide hero
-/// primitive owns the one-row status-bar reserve, so wide Music's framed list
-/// panel must paint its `▁` bottom border two rows above `wide_music_area`'s
-/// bottom, leaving exactly one blank row between the panel and the status bar.
-/// Asserted against the painted buffer — a re-derived layout rect cannot catch
-/// a one-row vertical shift.
-#[test]
-fn wide_music_list_panel_leaves_exactly_one_row_above_the_status_bar() {
-    let mut model = mounted_model_at(make_music_group_app(), 200, 40);
-    let terminal = draw_mounted_terminal(&mut model, 200, 40);
-    let layout = mounted_music_layout(&model);
-    let right = layout.wide_music_right_area;
-    assert!(right.height > 0, "wide music right pane must paint");
-    assert_list_pane_reserves_one_row_above_status(
-        terminal.backend().buffer(),
-        right,
-        layout.wide_music_area.bottom(),
-    );
-}
-
 /// migrate-home-feeds 5.1 (§5 geometry test): same one-blank-row reserve for
 /// the ABS Book tab. Book paints no framed list border at the pane bottom, so
 /// this checks the painted buffer directly: the last row before the status bar

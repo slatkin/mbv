@@ -6,10 +6,7 @@ use ratatui::Frame;
 
 const INLINE_ALBUM_ART_COLS: u16 = 30;
 pub(in crate::app::render) const INLINE_ALBUM_ART_ROWS: u16 = 15;
-const INLINE_ALBUM_ART_GAP: u16 = 2;
 const INLINE_ALBUM_ART_RIGHT_PAD: u16 = 2;
-pub(in crate::app::render) const INLINE_ALBUM_ART_RESERVED: u16 =
-    INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP + INLINE_ALBUM_ART_RIGHT_PAD;
 
 pub(in crate::app::render) fn inline_album_art_cache_key(album_id: &str) -> String {
     format!("{album_id}:P")

@@ -926,7 +926,7 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
         .application
         .get_component(&music_id)
         .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(|music| music.layout().wide_music_browser_area)
+        .map(|music| music.layout().left_area)
         .expect("Music component layout");
     assert!(wide_area.width > 0 && wide_area.height > 0);
     harness.inject(click(wide_area.x + 1, wide_area.y + 1));

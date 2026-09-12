@@ -1,6 +1,5 @@
 use super::test_helpers::{
     buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
-    render_library_to_string_sized,
 };
 use super::*;
 use crate::app::layout::LayoutMain;
@@ -88,60 +87,6 @@ fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint
         !output.contains("Show tracks") && !output.contains("Play | "),
         "the inline hero must no longer show the action-hint row:\n{output}"
     );
-}
-
-#[test]
-fn wide_grouped_music_publishes_same_frame_layout_geometry() {
-    let mut app = make_music_group_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 120, 30);
-
-    assert_eq!(layout.wide_music_area, Rect::new(0, 0, 120, 30));
-    assert!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0);
-    assert!(layout.left_area.width > 0);
-    assert!(layout.hero_area.width > 0);
-    assert!(layout.wide_music_right_area.width > 0);
-}
-
-/// D4 proof: at the wide breakpoint the legacy base frame publishes the
-/// `wide_music_*` hand-off geometry but paints no grouped-album rows — the
-/// mounted `MusicWorkspaceComponent` is the sole painter (#613). Mirrors
-/// `tests_non_music::wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
-#[test]
-fn wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
-    let mut app = make_music_group_app();
-    app.libs[0].nav_stack[1].set_resting_cursor(0);
-    let mut layout = LayoutMain::default();
-    let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
-    term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, 120, 40), &mut layout, None);
-    })
-    .unwrap();
-
-    assert!(
-        layout.wide_music_area.width > 0 && layout.wide_music_area.height > 0,
-        "wide music area hand-off must still be reserved: {:?}",
-        layout.wide_music_area
-    );
-    assert!(
-        layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0,
-        "wide music right area hand-off must still be reserved: {:?}",
-        layout.wide_music_right_area
-    );
-    let output = buffer_to_string(&term);
-    assert!(
-        !output.contains("First Album"),
-        "legacy base frame must not paint grouped-album rows at the wide breakpoint: {output:?}"
-    );
-}
-
-#[test]
-fn narrow_grouped_music_publishes_no_wide_track_targets() {
-    let mut app = make_music_group_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
-
-    assert!(!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0));
 }
 
 #[test]

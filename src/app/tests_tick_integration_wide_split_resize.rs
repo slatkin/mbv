@@ -328,7 +328,7 @@ fn wide_hero_boundary_owns_the_gap_and_adjacent_panes_keep_their_gestures() {
         .application
         .get_component(&music_id)
         .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(|music| music.layout().wide_music_browser_area)
+        .map(|music| music.layout().left_area)
         .expect("Music layout");
     assert!(
         browser_area.right() <= gap.x,

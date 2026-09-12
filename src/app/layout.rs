@@ -98,18 +98,6 @@ pub(crate) struct LayoutMain {
     /// group-selector publishes these before paint.
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
-    /// Bounding rect of the wide Music right pane's hero artwork area.
-    /// Clicks here should not activate track selection or playback.
-    pub wide_music_art_area: Rect,
-    /// Full area passed to the grouped Music component after legacy layout.
-    pub wide_music_area: Rect,
-    /// Bounding rect of the wide Music left pane (album browser).
-    /// Populated only when the wide Music layout is active.
-    pub wide_music_right_area: Rect,
-    /// Bounding rect of the grouped-album browser itself, the sub-rect of
-    /// `wide_music_right_area` below the pill row. The embedded canonical
-    /// control owns row identity and hit geometry within this rect.
-    pub wide_music_browser_area: Rect,
     /// Full area passed to the Audiobookshelf podcast component after the
     /// legacy frame computes the current library layout.
     pub audiobookshelf_podcast_area: Rect,

@@ -282,8 +282,7 @@ mod tests {
             ..LibraryTab::new(library)
         });
         let mut model = Model::new(app);
-        model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-        model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+        model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
 
         // Album-folder view: the Music workspace is the destination.
         model.sync_music_workspace();

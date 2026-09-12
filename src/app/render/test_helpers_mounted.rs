@@ -92,6 +92,24 @@ pub fn mounted_browser_scroll(model: &Model) -> usize {
 }
 
 /// The mounted `MusicWorkspaceComponent`'s own painted geometry.
+pub fn mounted_music_wide_geometry(
+    model: &Model,
+) -> &crate::app::components::library_panel::WideSkeletonGeometry {
+    let id = model
+        .music_workspace_id
+        .as_ref()
+        .expect("music workspace component mounted");
+    model
+        .application
+        .get_component(id)
+        .expect("music workspace mounted")
+        .as_any()
+        .downcast_ref::<MusicWorkspaceComponent>()
+        .expect("MusicWorkspaceComponent")
+        .test_wide_geometry()
+        .expect("wide Music skeleton painted")
+}
+
 pub fn mounted_music_layout(model: &Model) -> &LayoutMain {
     let id = model
         .music_workspace_id

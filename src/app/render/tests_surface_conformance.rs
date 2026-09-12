@@ -83,7 +83,7 @@
 
 use super::test_helpers::{
     draw_mounted_terminal, make_movie_app, make_music_group_app, make_queue_app, mounted_model_at,
-    mounted_music_layout,
+    mounted_music_wide_geometry,
 };
 use super::*;
 use crate::app::{PanelFocus, PanelMode};
@@ -541,18 +541,13 @@ fn wide_music_browser_container_is_occluded_by_the_shell() {
     let painted = painted(&term);
     let area = Rect::new(0, 0, 120, 30);
     let chrome = model.app.compute_chrome_geometry(area);
-    let music = mounted_music_layout(&model);
-    let browser_area = music.wide_music_right_area;
+    let music = mounted_music_wide_geometry(&model);
+    let browser_panel = music.browser;
     assert!(
-        browser_area.width > 4 && browser_area.height > 4,
-        "wide music must publish its browser pane, got {browser_area:?}"
+        browser_panel.width > 4 && browser_panel.height > 4,
+        "wide music must publish its browser pane, got {browser_panel:?}"
     );
-    let browser_panel = Rect {
-        y: browser_area.y.saturating_sub(PANE_PAD_Y),
-        height: browser_area.height + PANE_PAD_Y * 2,
-        ..browser_area
-    };
-    let pane = wide_hero_browser_pane(browser_panel, browser_area);
+    let pane = wide_hero_browser_pane(browser_panel, music.list_area);
 
     // The row below the pill bar is the chrome-band spacer the screen owns.
     painted.expect(

@@ -17,8 +17,7 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
     app.libs[0].nav_stack[1].items.push(second_album);
     let mut model = Model::new(app);
     assert_eq!(model.app.libs[0].nav_stack[1].resting().cursor(), 0);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
@@ -34,11 +33,7 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
             .as_any()
             .downcast_ref::<MusicWorkspaceComponent>()
             .unwrap();
-        (
-            music.layout().wide_music_browser_area,
-            music.album_target_rows(1)[0],
-            1,
-        )
+        (music.layout().left_area, music.album_target_rows(1)[0], 1)
     };
     let message = model
         .application
@@ -68,7 +63,7 @@ fn music_mouse_album_click_emits_and_shell_applies_cursor() {
 #[test]
 fn shell_music_shortcuts_use_component_selection() {
     let mut model = Model::new(make_music_group_app());
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model
@@ -111,10 +106,9 @@ fn shell_music_shortcuts_use_component_selection() {
 #[test]
 fn shell_mounts_and_syncs_music_workspace() {
     let mut model = Model::new(make_music_group_app());
-    // The mounted browser is in the post-hero right rail, whose width—not
-    // the pre-hero left area—determines horizontal navigation availability.
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 200, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(100, 0, 100, 30);
+    // Grouped Music uses one-dimensional album rows; the mounted workspace
+    // receives the library content area from the shell.
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 200, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model
@@ -150,8 +144,7 @@ fn shell_mounts_and_syncs_music_workspace() {
 #[test]
 fn push_music_workspace_fetches_selected_album_tracks() {
     let mut model = Model::new(make_music_group_app());
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
         server_url: "http://127.0.0.1:1".into(),
@@ -242,10 +235,11 @@ fn shell_executes_grouped_music_image_paint() {
     model.app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
         std::sync::Mutex::new(client),
     ));
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.app.layout.root_frame.library = Some(ratatui::layout::Rect::new(0, 0, 100, 30));
     model.sync_music_workspace();
     model.sync_active_destination();
+    model.sync_library_hero_images();
 
     let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
     terminal
@@ -280,11 +274,10 @@ fn shell_mounts_music_workspace_in_narrow_mode() {
     assert!(model.app.is_music_group_view(0));
     assert!(model.app.is_viewing_album_folders(0));
     assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
+        !(model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0)
     );
 
-    let wide_area = model.app.layout.main.wide_music_area;
+    let wide_area = model.app.layout.main.left_area;
     assert_eq!(wide_area.width, 0);
     assert_eq!(wide_area.height, 0);
     model.sync_music_workspace();
@@ -294,5 +287,5 @@ fn shell_mounts_music_workspace_in_narrow_mode() {
         .clone()
         .expect("narrow Music workspace mounted");
     assert!(model.application.mounted(&id));
-    assert_eq!(model.app.layout.main.wide_music_area, wide_area);
+    assert_eq!(model.app.layout.main.left_area, wide_area);
 }

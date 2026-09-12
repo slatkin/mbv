@@ -507,7 +507,7 @@ impl App {
         _f: &mut Frame,
         area: Rect,
         layout: &mut LayoutMain,
-        cursor_scroll: Option<(usize, usize)>,
+        _cursor_scroll: Option<(usize, usize)>,
     ) {
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
@@ -565,15 +565,6 @@ impl App {
                     return;
                 }
                 {
-                    // Music's mounted workspace needs the same-frame geometry
-                    // before its view replaces this legacy frame.
-                    if self.is_music_group_view(lib_idx)
-                        && self.is_viewing_album_folders(lib_idx)
-                        && crate::app::render::arrangements::wide_hero::wide_hero_fits(area)
-                    {
-                        let ctx = self.wide_music_render_ctx(lib_idx, cursor_scroll);
-                        ctx.publish_geometry(area, layout);
-                    }
                     // Wide TV's mounted `LibraryPanel` paints the whole Wide
                     // hero workspace through its embedded TV content owner
                     // panel's shared skeleton (task 8.2); the legacy base
@@ -586,23 +577,5 @@ impl App {
                 }
             }
         }
-    }
-
-    /// Resolves the display artist for an album item in the grouped music
-    /// views, synchronously (never schedules artist lookups). Priority
-    /// order:
-    /// 1. `item.artist` (Emby's Album-entity metadata) if non-empty.
-    /// 2. `album_artist_cache` entry if non-empty (fetched from the album's
-    ///    first few tracks — see `fetch_album_artist` in `images.rs`).
-    /// 3. `parse_album_folder_name` heuristic.
-    /// 4. Literal "Unknown Artist".
-    pub(in crate::app) fn resolve_group_album_artist(
-        &self,
-        item: &mbv_core::api::EmbyItem,
-    ) -> String {
-        crate::app::music_grouping::derive_album_artist(
-            item,
-            self.album_artist_cache.get(&item.id).map(String::as_str),
-        )
     }
 }

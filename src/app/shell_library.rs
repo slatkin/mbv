@@ -330,7 +330,7 @@ impl Model {
             BrowserKind::TvShows => self.app.wide_tv_library_area(index),
             BrowserKind::Music => (self.app.is_music_group_view(index)
                 && self.app.is_viewing_album_folders(index))
-            .then_some(self.app.layout.main.wide_music_area)
+            .then_some(self.app.layout.main.left_area)
             .filter(|area| crate::app::render::wide_hero_fits(*area)),
             BrowserKind::Movies | BrowserKind::HomeVideos => {
                 let area = self.app.layout.main.left_area;

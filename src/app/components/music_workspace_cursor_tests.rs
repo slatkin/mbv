@@ -129,7 +129,7 @@ fn music_workspace_wheel_moves_one_painted_album_row_and_reuses_cursor_request()
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    let area = component.layout().wide_music_browser_area;
+    let area = component.layout().left_area;
     let message = component.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
         column: area.x,
@@ -189,8 +189,7 @@ fn music_workspace_selection_follows_shared_hero_gate_boundaries() {
             .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
             .unwrap();
         assert_eq!(
-            component.layout().wide_music_right_area.width > 0
-                && component.layout().wide_music_right_area.height > 0,
+            component.layout().left_area.width > 0 && component.layout().left_area.height > 0,
             wide,
             "component layout branch at {width}x{height}"
         );

@@ -176,38 +176,18 @@ impl Model {
         if !self.library_panel_visible() {
             return;
         }
-        // Wide Music paints into `wide_music_area`; narrow Music has no wide
-        // area, so fall back to the narrow main content area (`left_area`) so
-        // the component's `view` is still reached.
-        let mut area = self.app.layout.main.wide_music_area;
-        let wide = wide_hero_fits(area);
-        if !wide {
-            area = self.app.layout.main.left_area;
-        }
+        // The legacy Music destination receives the same Library panel area
+        // at both breakpoints; its view selects the shared Wide skeleton or
+        // keeps the legacy Narrow painter.
+        let area = self.app.layout.main.left_area;
         if area.width == 0 || area.height == 0 {
             return;
         }
-        let mut search_active = false;
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
-            let cursor_scroll = self
-                .application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .map(|music| (music.album_cursor(), music.album_scroll()))
-                .or_else(|| {
-                    self.app.libs[lib_idx].nav_stack.last().map(|level| {
-                        let resting = level.resting();
-                        (resting.cursor(), resting.scroll())
-                    })
-                });
-            let context = self.app.wide_music_render_ctx(lib_idx, cursor_scroll);
-            search_active = self
-                .application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .is_some_and(|music| music.inline_search().is_active());
-            context.publish_geometry(area, &mut self.app.layout.main);
-        }
+        let search_active = self
+            .application
+            .get_component(id)
+            .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
+            .is_some_and(|music| music.inline_search().is_active());
         if let Some(comp) = self
             .application
             .get_component_mut(id)
@@ -221,17 +201,26 @@ impl Model {
             .get_component_mut(id)
             .and_then(|comp| comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>())
             .map(|music| {
+                let panel_image_paint = music.take_panel_image_paint();
                 let image_paint = music.take_image_paint();
                 let layout = music.layout();
                 let (album_cursor, album_order) = music.painted_album_cursor_and_order();
                 (
+                    panel_image_paint,
                     image_paint,
                     layout.selected_item_rect,
                     album_cursor,
                     album_order.to_vec(),
                 )
             });
-        if let Some((image_paint, selected_item_rect, album_cursor, album_order)) = projection {
+        if let Some((
+            panel_image_paint,
+            image_paint,
+            selected_item_rect,
+            album_cursor,
+            album_order,
+        )) = projection
+        {
             if self.app.images_enabled() && !search_active {
                 if let Some(lib_idx) = self.app.tab.emby_library_index() {
                     let context = self.app.wide_music_render_ctx(lib_idx, None);
@@ -242,7 +231,13 @@ impl Model {
                     );
                 }
             }
-            self.app.paint_music_image(frame, image_paint);
+            if wide_hero_fits(area) {
+                if let Some(paint) = panel_image_paint {
+                    self.app.paint_panel_hero_image(frame, &paint);
+                }
+            } else {
+                self.app.paint_music_image(frame, image_paint);
+            }
             self.app.layout.main.selected_item_rect = selected_item_rect;
         }
     }

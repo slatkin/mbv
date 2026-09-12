@@ -37,10 +37,7 @@ fn music_resize_push_uses_current_frame_geometry() {
             .downcast_mut::<MusicWorkspaceComponent>()
             .unwrap();
         wide.enter_track_focus();
-        assert!(
-            (model.app.layout.main.wide_music_right_area.width > 0
-                && model.app.layout.main.wide_music_right_area.height > 0)
-        );
+        assert!(wide.test_wide_geometry().is_some());
         assert!(wide.track_focused());
     }
     wide_terminal
@@ -54,7 +51,7 @@ fn music_resize_push_uses_current_frame_geometry() {
     assert!(
         track_selected.is_some(),
         "wide music render did not retain track geometry: area={:?}, id={id:?}",
-        model.app.layout.main.wide_music_area
+        model.app.layout.main.left_area
     );
 
     let mut narrow_terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
@@ -72,10 +69,6 @@ fn music_resize_push_uses_current_frame_geometry() {
         .as_any()
         .downcast_ref::<MusicWorkspaceComponent>()
         .unwrap();
-    assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
-    );
     assert!(!narrow.track_focused());
 }
 
@@ -83,8 +76,7 @@ fn music_resize_push_uses_current_frame_geometry() {
 fn narrow_music_workspace_requests_album_activation() {
     let mut model = Model::new(make_music_group_app());
     assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
+        !(model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0)
     );
     model.sync_music_workspace();
     model.sync_active_destination();
@@ -166,8 +158,7 @@ fn recursive_album_activation_enters_track_focus_only_in_wide() {
     model.sync_music_workspace();
     model.sync_active_destination();
     assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
+        !(model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0)
     );
     let id = model
         .music_workspace_id
@@ -215,8 +206,7 @@ fn wide_enter_request_defers_until_the_activated_album_tracks_arrive() {
     // hovered, so its tracks are not cached when the one-shot is consumed.
     // The request stays armed (bound to that album) until the tracks re-push.
     let mut model = Model::new(make_music_group_app());
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.app.terminal_width = 160;
     model.app.terminal_height = 40;
     model.sync_music_workspace();
@@ -282,8 +272,7 @@ fn position_restore_request_clears_track_focus_at_next_sync() {
         .app
         .album_tracks_cache
         .insert("album-1".into(), vec![track]);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model
@@ -391,8 +380,7 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
         ..LibraryTab::new(library)
     });
     let mut model = Model::new(app);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model
@@ -498,13 +486,9 @@ fn music_workspace_stays_mounted_and_preserves_album_cursor_across_drill() {
 }
 
 /// migrate-narrow-browse-to-components task 2.4 (D6, first half): at a
-/// narrow width (no `wide_music_area`), a grouped album-folder Emby Music
-/// library's `MusicWorkspaceComponent` is both *rendered* (its `view` is
-/// reached via the `left_area` fallback — proven by `render_music_workspace`
-/// `_component` publishing geometry into `wide_music_area`, which a
-/// early-return would leave zeroed) and *focusable* (the active-destination
-/// pass lands TuiRealm focus on its `ComponentId::Browser{..Music}`). It
-/// still paints nothing until task 3.6 gives it a narrow branch.
+/// At a narrow width, a grouped album-folder Emby Music library's
+/// `MusicWorkspaceComponent` is both rendered and focusable (the active-
+/// destination pass lands TuiRealm focus on its Music component id).
 #[test]
 fn narrow_grouped_music_workspace_is_rendered_and_focusable() {
     let mut model = Model::new(make_music_group_app());
@@ -512,8 +496,7 @@ fn narrow_grouped_music_workspace_is_rendered_and_focusable() {
     assert!(model.app.is_music_group_view(0));
     assert!(model.app.is_viewing_album_folders(0));
     assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
+        !(model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0)
     );
 
     model.sync_music_workspace();
@@ -531,25 +514,16 @@ fn narrow_grouped_music_workspace_is_rendered_and_focusable() {
         })
     ));
 
-    // Render at a narrow width: no `wide_music_area`, only a narrow
-    // `left_area`, so the component's `view` is reached only via the
-    // `left_area` fallback.
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
+    // Render at a narrow width through the component's retained content area.
+    model.app.layout.main.left_area = ratatui::layout::Rect::default();
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 50, 28);
     let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
     terminal
         .draw(|frame| model.render_music_workspace_component(frame))
         .unwrap();
     assert!(
-        model.app.layout.main.wide_music_area.width > 0
-            && model.app.layout.main.wide_music_area.height > 0,
-        "render_music_workspace_component must reach the component view via the \
-         left_area fallback and publish geometry, not early-return at narrow"
-    );
-    assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0),
-        "the narrow fallback must not mark the wide Music layout active"
+        model.app.layout.main.left_area.width > 0 && model.app.layout.main.left_area.height > 0,
+        "render_music_workspace_component must reach the component view at narrow"
     );
 
     // Focus: the active-destination pass lands on the mounted component.
@@ -583,8 +557,7 @@ fn music_workspace_first_mount_adopts_restored_album_cursor() {
     // third re-anchor site), rather than starting at 0.
     let mut model = Model::new(music_group_app_two_albums());
     model.app.libs[0].nav_stack[1].set_resting_cursor(1);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model
@@ -597,8 +570,7 @@ fn music_workspace_first_mount_adopts_restored_album_cursor() {
 #[test]
 fn music_workspace_reanchor_lands_regardless_of_prior_local_move() {
     let mut model = Model::new(music_group_app_two_albums());
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model
@@ -627,8 +599,7 @@ fn music_workspace_reanchor_lands_regardless_of_prior_local_move() {
 #[test]
 fn music_workspace_ordinary_push_does_not_touch_album_cursor() {
     let mut model = Model::new(music_group_app_two_albums());
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model
@@ -656,7 +627,7 @@ fn music_workspace_ordinary_push_does_not_touch_album_cursor() {
 /// gates on `App::is_right_panel_wide`, a paint-free predicate driven solely
 /// by terminal size. Resizing narrow -> wide through the real
 /// `Msg::TerminalEvent(Resize)` path must flip the activation branch on that
-/// same tick, before any repaint refreshes `wide_music_right_area`.
+/// same tick, before any repaint refreshes the rendered panel geometry.
 #[test]
 fn music_album_folder_activation_branch_flips_on_resize_tick_before_repaint() {
     let mut model = Model::new(make_music_group_app());

@@ -286,8 +286,10 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
         .clone()
         .expect("music workspace mounted");
     assert!(
-        model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0
+        super::test_helpers::mounted_music_wide_geometry(&model)
+            .hero
+            .width
+            > 0
     );
     assert_eq!(album_cursor(&model, &id), last);
     let wide_scroll = mounted_music_scroll(&model);
@@ -296,10 +298,6 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
 
     // Wide -> Narrow: the selected album and its screen-row offset carry over.
     let narrow = resize_draw(&mut model, 60, 30);
-    assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
-    );
     assert_eq!(
         album_cursor(&model, &id),
         last,
@@ -314,8 +312,10 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
     // all return to the wide arrangement.
     let _ = resize_draw(&mut model, 160, 40);
     assert!(
-        model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0
+        super::test_helpers::mounted_music_wide_geometry(&model)
+            .hero
+            .width
+            > 0
     );
     assert_eq!(album_cursor(&model, &id), last);
     assert_eq!(
@@ -343,15 +343,13 @@ fn narrow_music_reused_model_paints_after_a_wide_to_narrow_resize() {
     let mut model = mounted_model_at(multi_artist_app(), 160, 40);
     let _ = resize_draw(&mut model, 160, 40);
     assert!(
-        model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0
+        super::test_helpers::mounted_music_wide_geometry(&model)
+            .hero
+            .width
+            > 0
     );
 
     let narrow = resize_draw(&mut model, 60, 30);
-    assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
-    );
     assert!(
         narrow.contains("First Album") || narrow.contains("Alpha Album"),
         "narrow grouped Music must paint album rows after the resize:\n{narrow}"
@@ -359,8 +357,10 @@ fn narrow_music_reused_model_paints_after_a_wide_to_narrow_resize() {
 
     let wide = resize_draw(&mut model, 160, 40);
     assert!(
-        model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0
+        super::test_helpers::mounted_music_wide_geometry(&model)
+            .hero
+            .width
+            > 0
     );
     assert!(wide.contains("First Album") || wide.contains("Alpha Album"));
 }
@@ -432,5 +432,5 @@ fn wide_anchor_offset(model: &Model, id: &ComponentId) -> usize {
         .expect("music workspace");
     let layout = component.layout();
     let rect = layout.selected_item_rect.expect("wide selected-row rect");
-    (rect.y - layout.wide_music_browser_area.y) as usize
+    (rect.y - layout.left_area.y) as usize
 }

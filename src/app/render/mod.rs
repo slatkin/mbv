@@ -123,8 +123,7 @@ pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
 pub(in crate::app) use components::music_wide::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, MusicAlbumPresentation,
-    MusicTrackPresentation, MusicWideRenderCtx,
+    render_narrow_music_group_with_ctx, MusicAlbumPresentation, MusicWideRenderCtx,
 };
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,

@@ -12,7 +12,6 @@ use tuirealm::event::{
 fn narrow_short_wide_grouped_music_moves_one_album_per_down_and_page() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 6);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
     for index in 2..8 {
         let name = format!("Album {index}");
         let mut album = make_item(&name, "MusicAlbum");
@@ -56,7 +55,6 @@ fn narrow_short_wide_grouped_music_moves_one_album_per_down_and_page() {
 fn narrow_music_album_click_selects_and_requests_cursor_move() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 9);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
     for index in 0..4 {
         let mut album = make_item(&format!("Album {}", index + 2), "MusicAlbum");
         album.id = format!("album-{}", index + 2);
@@ -123,7 +121,6 @@ fn narrow_music_album_click_selects_and_requests_cursor_move() {
 fn narrow_music_album_double_click_requests_activation() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 9);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
     for index in 0..4 {
         let mut album = make_item(&format!("Album {}", index + 2), "MusicAlbum");
         album.id = format!("album-{}", index + 2);
@@ -173,7 +170,6 @@ fn narrow_music_album_double_click_requests_activation() {
 fn narrow_music_group_pill_click_requests_relative_group_switch() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 6);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
@@ -218,7 +214,6 @@ fn narrow_music_group_pill_click_requests_relative_group_switch() {
 fn narrow_music_album_right_click_carries_pointer_anchor() {
     let mut model = Model::new(make_music_group_app());
     model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 60, 9);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::default();
     for index in 0..4 {
         let mut album = make_item(&format!("Album {}", index + 2), "MusicAlbum");
         album.id = format!("album-{}", index + 2);
@@ -262,8 +257,7 @@ fn narrow_music_album_right_click_carries_pointer_anchor() {
 #[test]
 fn wide_music_album_rail_click_still_requests_cursor_move() {
     let mut model = Model::new(make_music_group_app());
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model.music_workspace_id.clone().unwrap();
@@ -279,7 +273,7 @@ fn wide_music_album_rail_click_still_requests_cursor_move() {
             .as_any()
             .downcast_ref::<MusicWorkspaceComponent>()
             .unwrap();
-        let area = c.layout().wide_music_browser_area;
+        let area = c.layout().left_area;
         // Row 0 is the artist heading; row 1 is the sole album row.
         (area.x + 1, area.y + 1)
     };
@@ -313,8 +307,7 @@ fn music_mouse_track_click_stays_component_local() {
         .app
         .album_tracks_cache
         .insert("album-1".into(), vec![track, second_track]);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
-    model.app.layout.main.wide_music_right_area = ratatui::layout::Rect::new(50, 0, 50, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
     let id = model

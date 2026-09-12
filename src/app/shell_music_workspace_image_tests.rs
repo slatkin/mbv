@@ -17,7 +17,7 @@ fn wide_grouped_music_prewarms_neighbour_album_images() {
         albums.push(album);
     }
     model.app.libs[0].nav_stack[1].set_resting_cursor(2);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
 
@@ -45,7 +45,7 @@ fn stale_grouped_music_order_prefetches_painted_neighbours() {
         albums.push(album);
     }
     model.app.libs[0].nav_stack[1].set_resting_cursor(2);
-    model.app.layout.main.wide_music_area = ratatui::layout::Rect::new(0, 0, 100, 30);
+    model.app.layout.main.left_area = ratatui::layout::Rect::new(0, 0, 100, 30);
     model.sync_music_workspace();
     model.sync_active_destination();
 

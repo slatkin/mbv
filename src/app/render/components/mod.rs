@@ -44,7 +44,6 @@ pub(super) mod modal_frame;
 pub(super) mod multiselect;
 pub(in crate::app) mod music;
 pub(super) mod music_wide;
-pub(super) mod music_wide_browser;
 pub(super) mod playlists;
 pub(in crate::app) mod queue;
 pub(in crate::app) mod queue_playback;

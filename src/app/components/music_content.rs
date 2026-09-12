@@ -150,7 +150,7 @@ impl MusicContent {
         self.hero_image = state;
     }
 
-    fn content(&mut self) -> LibraryPanelContent<'_> {
+    pub(in crate::app) fn panel_content(&mut self) -> LibraryPanelContent<'_> {
         // Copy the selected snapshot and focus bit before borrowing either
         // list mutably for the returned slots.
         let album = self.selected_item();
@@ -335,7 +335,7 @@ impl Default for MusicContent {
 
 impl LibraryContentOwner for MusicContent {
     fn content(&mut self) -> LibraryPanelContent<'_> {
-        self.content()
+        self.panel_content()
     }
 
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {

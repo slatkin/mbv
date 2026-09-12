@@ -18,6 +18,9 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::inline_search::{InlineSearch, InlineSearchHost, InlineSearchMouse};
+use super::library_panel::{
+    render_wide_skeleton, PanelHeroImagePaint, SkeletonHits, WideSkeletonGeometry,
+};
 use super::media_list::{Presentation, RowLocalInput, RowLocalOutcome};
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
@@ -26,8 +29,8 @@ use super::music_content::MusicContent;
 use super::user_event::UserEvent;
 use crate::app::layout::LayoutMain;
 use crate::app::render::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, wide_hero_fits,
-    MusicAlbumPresentation, MusicImagePaint, MusicTrackPresentation, MusicWideRenderCtx,
+    render_narrow_music_group_with_ctx, wide_hero_fits, MusicAlbumPresentation, MusicImagePaint,
+    MusicWideRenderCtx,
 };
 
 pub struct MusicWorkspaceComponent {
@@ -43,6 +46,10 @@ pub struct MusicWorkspaceComponent {
     inline_track_focus_enabled: bool,
     mouse_gestures: MouseGestureState,
     wide_browser_content_height: Option<usize>,
+    /// Retained role geometry from the shared Wide skeleton. The mounted
+    /// Music owner remains the event boundary until registration in task 9.4.
+    wide_geometry: Option<WideSkeletonGeometry>,
+    panel_image_paint: Option<PanelHeroImagePaint>,
     pill_regions: HitRegions<usize>,
     /// Session-only Wide hero list-pane width override (per-draw shell push,
     /// `None` = default ratio). Written onto the cloned render context in
@@ -75,6 +82,8 @@ impl MusicWorkspaceComponent {
             inline_track_focus_enabled: false,
             mouse_gestures: MouseGestureState::new(),
             wide_browser_content_height: None,
+            wide_geometry: None,
+            panel_image_paint: None,
             pill_regions: HitRegions::new(),
             list_pane_width: None,
         }
@@ -431,6 +440,23 @@ impl MusicWorkspaceComponent {
         self.image_paint.take()
     }
 
+    pub(in crate::app) fn take_panel_image_paint(&mut self) -> Option<PanelHeroImagePaint> {
+        self.panel_image_paint.take()
+    }
+
+    pub(in crate::app) fn hero_data(&mut self) -> Option<super::library_panel::HeroContentData> {
+        self.content.hero_data()
+    }
+
+    pub(in crate::app) fn set_hero_image(&mut self, state: super::library_panel::HeroImageState) {
+        self.content.set_hero_image(state);
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_wide_geometry(&self) -> Option<&WideSkeletonGeometry> {
+        self.wide_geometry.as_ref()
+    }
+
     /// Geometry painted during the last view pass. The shell mirrors the
     /// interaction targets into App layout for legacy readers that still
     /// consume frame geometry.
@@ -481,6 +507,8 @@ impl InlineSearchHost for MusicWorkspaceComponent {
 impl Component for MusicWorkspaceComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         self.layout = LayoutMain::default();
+        self.wide_geometry = None;
+        self.panel_image_paint = None;
         let wide = wide_hero_fits(area);
         let target = if wide {
             Presentation::Wide
@@ -517,6 +545,37 @@ impl Component for MusicWorkspaceComponent {
         let mut context = content.context.clone();
         context.track_focused = content.track_focused;
         context.list.list_pane_width = self.list_pane_width;
+        if wide {
+            // Wide Music uses the shared Library panel skeleton while the
+            // destination remains mounted as the event boundary until 9.4.
+            let browser_focused = content.context.focused && !content.track_focused;
+            let mut panel_content = content.panel_content();
+            let mut hits = SkeletonHits::default();
+            if let Some(geometry) = render_wide_skeleton(
+                frame,
+                area,
+                &mut panel_content,
+                browser_focused,
+                self.list_pane_width,
+                &mut hits,
+            ) {
+                self.panel_image_paint = geometry.hero_image.clone();
+                self.layout.left_area = geometry.list_area;
+                self.layout.hero_area = geometry.hero_area;
+                self.layout.selected_item_rect = geometry.selected;
+                self.wide_geometry = Some(geometry);
+                self.pill_regions.clear();
+                self.layout.selector_tabs.clear();
+                for (rect, target) in hits.selector.regions() {
+                    self.pill_regions.push(*rect, *target);
+                    self.layout.selector_tabs.push((*rect, *target));
+                }
+                if let Some(height) = self.wide_geometry.as_ref().map(|g| g.list_area.height) {
+                    self.wide_browser_content_height = Some(height as usize);
+                }
+                return;
+            }
+        }
         if !wide && content.inline_search.is_active() {
             // Normal Music passes its whole list area to the shared search
             // painter (design.md D3); the ordinary grouped composer does not
@@ -553,20 +612,6 @@ impl Component for MusicWorkspaceComponent {
                 MusicAlbumPresentation::Inline(content.carrier.inline_mut()),
             );
             self.image_paint = output.image_paint;
-        } else {
-            let output = render_wide_music_group_with_ctx(
-                frame,
-                area,
-                &context,
-                &mut self.layout,
-                MusicAlbumPresentation::Wide(content.carrier.wide_mut()),
-                MusicTrackPresentation::Wide(content.track_list.wide_mut()),
-                &mut content.inline_search,
-            );
-            self.image_paint = output.image_paint;
-            if let Some(height) = output.content_height {
-                self.wide_browser_content_height = Some(height);
-            }
         }
         self.pill_regions.clear();
         for (rect, target) in &self.layout.selector_tabs {
