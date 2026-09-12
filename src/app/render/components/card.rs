@@ -51,7 +51,7 @@ fn card_cache_key(item: &EmbyItem) -> String {
 /// image/visualizer size, or the full reserved slot (capped like the artwork
 /// height) before anything has rendered. Used by both the blank reservations
 /// and the visualizer so `v` never moves the queue list.
-fn card_reserved_rect(
+pub(in crate::app) fn queue_card_reserved_rect(
     last_card: (u16, u16),
     terminal_height: u16,
     area: Rect,
@@ -114,7 +114,7 @@ pub(in crate::app) fn render_card_painting(
     // The visualizer never reaches this painter (the `App` adapter paints it
     // from the shell's sample window); degenerate input reserves geometry.
     if projection.visualizer || !projection.images_enabled {
-        let rect = card_reserved_rect(last_card, terminal_height, area, left_align);
+        let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
         return (rect.height, rect.width, false);
     }
     // The bundled placeholder slot caps its height at 24 rows like the
@@ -168,7 +168,7 @@ pub(in crate::app) fn render_card_painting(
     // painted geometry holds the slot steady.
     let (last_height, last_width) = last_card;
     let reservation = if last_height == 0 && loading {
-        card_reserved_rect(last_card, terminal_height, area, left_align)
+        queue_card_reserved_rect(last_card, terminal_height, area, left_align)
     } else {
         Rect {
             x: area.x,
@@ -199,7 +199,7 @@ pub(in crate::app) fn render_card_painting(
     if placeholder_slot && reservation.height == 0 && last_width == 0 && !loading {
         // An empty queue with no previous artwork geometry still reserves its
         // fallback rectangle so toggling `v` never moves the queue list.
-        let rect = card_reserved_rect(last_card, terminal_height, area, left_align);
+        let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
         return (rect.height, rect.width, false);
     }
     (reservation.height, placeholder_w, loading)
@@ -212,7 +212,7 @@ impl App {
         area: Rect,
         left_align: bool,
     ) -> (u16, u16, bool) {
-        let rect = card_reserved_rect(
+        let rect = queue_card_reserved_rect(
             (self.last_card_height, self.last_card_width),
             self.terminal_height,
             area,
@@ -244,7 +244,7 @@ impl App {
             return self.render_card_visualizer(f, area, left_align);
         }
         if !projection.images_enabled {
-            let rect = card_reserved_rect(
+            let rect = queue_card_reserved_rect(
                 (self.last_card_height, self.last_card_width),
                 self.terminal_height,
                 area,

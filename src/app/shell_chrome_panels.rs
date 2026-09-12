@@ -19,10 +19,47 @@ use crate::app::layout::CardGeometry;
 use crate::app::render::arrangements::chrome::{
     queue_playback_column_wide, queue_playback_transport_area, RootFrame,
 };
+use crate::app::render::components::card::queue_card_reserved_rect;
 use crate::app::render::StatusBarModel;
 use crate::app::NowPlayingStatus;
 
 impl Model {
+    /// Publish the queue card reservation before root placements are synced.
+    /// The reservation is derived from the prior paint checkpoint, so draw
+    /// remains read-only with respect to `AppLayout`.
+    pub(super) fn sync_queue_card_geometry(&mut self) {
+        if self.app.now_playing_status() == NowPlayingStatus::Idle {
+            self.app.layout.main.card = CardGeometry::default();
+            return;
+        }
+        let chrome = self.app.compute_chrome_geometry(Rect::new(
+            0,
+            0,
+            self.app.terminal_width,
+            self.app.terminal_height,
+        ));
+        if chrome.left_area.width == 0 {
+            self.app.layout.main.card = CardGeometry::default();
+            return;
+        }
+        let slot_region = Rect {
+            y: chrome.left_content.y + 1,
+            height: chrome.left_content.height.saturating_sub(1),
+            ..chrome.left_content
+        };
+        let wide = queue_playback_column_wide(chrome.left_area.width);
+        let rect = queue_card_reserved_rect(
+            (self.app.last_card_height, self.app.last_card_width),
+            self.app.terminal_height,
+            slot_region,
+            wide,
+        );
+        self.app.layout.main.card = CardGeometry {
+            height: rect.height,
+            width: rect.width,
+        };
+    }
+
     /// Paint-free chrome geometry for the sync pass. `compute_chrome_geometry`
     /// is a pure read of `App` state (its S0 doc comment), so the panel mounts
     /// are decidable here — before any draw — from the same computation the

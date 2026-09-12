@@ -29,6 +29,7 @@ impl Model {
         self.sync_queue_boundary();
         self.sync_tab_panel();
         self.sync_status_bar_panel();
+        self.sync_queue_card_geometry();
         self.sync_queue_playback_panel();
         self.sync_music_workspace();
         // Task 8.4: the TV owner is installed/pushed before the panel's

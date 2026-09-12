@@ -64,6 +64,9 @@ impl App {
             return;
         };
         let mut layout = AppLayout::default();
+        // Preserve the sync-owned queue card checkpoint while publishing
+        // this frame's root placements.
+        layout.main.card = self.layout.main.card.clone();
         if frame.area().height >= 4 {
             layout.main.panel_area = chrome.panel_area;
             layout.main.panel_content_area = chrome.panel_content_area;
