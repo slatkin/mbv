@@ -593,6 +593,12 @@ impl Model {
                 }
             }
 
+            // Drain deferred component intents after this tick's primary
+            // messages, including ticks with no primary component message.
+            if self.drain_deferred_library_message(&mut music_resize, &mut tv_resize) {
+                break 'outer;
+            }
+
             // Keep in sync with tests_tick_harness.rs, the other caller of this shared pass.
             self.sync_mounted_surfaces();
 

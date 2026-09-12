@@ -572,17 +572,26 @@ impl Model {
                 }
             }
         }
-        if let Some(deferred) = self
+        if self.drain_deferred_library_message(music_resize, tv_resize) {
+            quit = true;
+        }
+        quit
+    }
+
+    pub(crate) fn drain_deferred_library_message(
+        &mut self,
+        music_resize: &mut bool,
+        tv_resize: &mut bool,
+    ) -> bool {
+        let Some(deferred) = self
             .application
             .get_component_mut(&ComponentId::Library)
             .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
             .and_then(LibraryPanel::take_deferred_msg)
-        {
-            if self.handle_terminal_message(deferred, music_resize, tv_resize) {
-                quit = true;
-            }
-        }
-        quit
+        else {
+            return false;
+        };
+        self.handle_terminal_message(deferred, music_resize, tv_resize)
     }
 
     /// Re-project after a Queue click: the click moves panel focus to the
