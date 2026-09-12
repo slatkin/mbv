@@ -251,7 +251,7 @@ proves the slot types early.
   the second mounted id (Narrow keeps painting `render_narrow_browse_with_ctx` from the merged
   component this step). Verify: `tv_workspace_component_tests.rs` and the TV re-anchor tests pass
   (stable target across Wide↔Narrow); `tests_tick_integration_tv.rs` passes.
-- [ ] 8.2 TV Wide through the panel: the Wide view becomes the shared `render_wide_skeleton` (letter
+- [x] 8.2 TV Wide through the panel: the Wide view becomes the shared `render_wide_skeleton` (letter
   pills → Selector row, hero from the shared `EmbyItem` producer, overview box, Workspace = season
   pills + episodes), and `tv_wide.rs::render_wide_tv_with_ctx` with `LayoutMain.tv_wide_*` is deleted,
   `tv_wide_tests.rs` rewritten to panel output. Narrow keeps `render_series_inline_detail` this step.
