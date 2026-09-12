@@ -245,7 +245,7 @@ proves the slot types early.
 
 *Unification:* removes the two-component TV split and TV's private header and poster painters (Narrow TV now shows the policy's landscape art).
 
-- [ ] 8.1 Merge `TvWorkspaceComponent` and `BrowserComponent(TvShows)` into one `TvContent` owner:
+- [x] 8.1 Merge `TvWorkspaceComponent` and `BrowserComponent(TvShows)` into one `TvContent` owner:
   one series list owner (Wide + Inline presentations), episode list, season cursor, Inline Search
   session; delete `hand_off_tv_breakpoint`, the TV part of `apply_pending_inline_search_transfer`, and
   the second mounted id (Narrow keeps painting `render_narrow_browse_with_ctx` from the merged
