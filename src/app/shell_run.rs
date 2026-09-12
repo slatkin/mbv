@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::components::{BrowserComponent, MusicWorkspaceComponent};
+use crate::app::components::BrowserComponent;
 use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
 use crate::app::PanelFocus;
 use std::sync::atomic::Ordering;
@@ -107,9 +107,7 @@ impl Model {
                 .map(|c| (c.cursor(), c.scroll()))
                 .or_else(|| self.tv_tv_content_cursor_scroll())
                 .or_else(|| {
-                    self.music_workspace_component_id()
-                        .and_then(|id| self.application.get_component(&id))
-                        .and_then(|c| c.as_any().downcast_ref::<MusicWorkspaceComponent>())
+                    self.music_owner()
                         .map(|c| (c.album_cursor(), c.album_scroll()))
                 })
         });
@@ -142,7 +140,6 @@ impl Model {
             self.render_audiobookshelf_podcast_component(f);
             self.render_audiobookshelf_book_component(f);
             self.render_emby_browser_component(f);
-            self.render_music_workspace_component(f);
         }
         self.render_queue_component(f);
         self.render_queue_boundary(f);

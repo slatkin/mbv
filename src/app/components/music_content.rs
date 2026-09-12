@@ -7,9 +7,9 @@
 //! painters until the later Music panel slices move painting and registration.
 
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
-use tuirealm::event::KeyEvent;
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-use super::inline_search::{InlineSearch, SearchPool};
+use super::inline_search::{InlineSearch, InlineSearchHost, SearchPool};
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
@@ -192,6 +192,44 @@ impl MusicContent {
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.context.focused = focused;
+    }
+
+    pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
+        let cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
+        if let Some(target) = self.context.album_targets.get(cursor).cloned() {
+            self.carrier.select_target(&target);
+            self.carrier.set_scroll(scroll);
+        }
+    }
+
+    pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
+        if !enabled {
+            self.track_focused = false;
+        }
+    }
+    pub(in crate::app) fn enter_track_focus(&mut self) {
+        if !self.track_list.rows().is_empty() {
+            self.track_focused = true;
+            self.track_list.select_first();
+        }
+    }
+    pub(in crate::app) fn clear_track_focus(&mut self) {
+        self.track_focused = false;
+    }
+    pub(in crate::app) fn album_cursor(&self) -> usize {
+        self.selected_album_index()
+    }
+    pub(in crate::app) fn album_scroll(&self) -> usize {
+        self.carrier.scroll()
+    }
+    pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
+        let target = self.track_list.selected_target()?;
+        self.context
+            .album_tracks
+            .as_deref()?
+            .iter()
+            .find(|track| track.id == *target)
+            .cloned()
     }
 
     fn resolved_hero_data(&self) -> Option<HeroContentData> {
@@ -407,6 +445,15 @@ impl Default for MusicContent {
     }
 }
 
+impl InlineSearchHost for MusicContent {
+    fn inline_search(&self) -> &InlineSearch {
+        &self.inline_search
+    }
+    fn inline_search_mut(&mut self) -> &mut InlineSearch {
+        &mut self.inline_search
+    }
+}
+
 impl LibraryContentOwner for MusicContent {
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
@@ -416,11 +463,65 @@ impl LibraryContentOwner for MusicContent {
         self.on_slot_event(event)
     }
 
-    fn on_key(&mut self, _key: &KeyEvent) -> Option<Msg> {
-        // Keyboard translation remains on MusicWorkspaceComponent until task
-        // 9.4 removes that mounted component. The session itself is retained
-        // here and is available to the panel once it becomes the boundary.
-        None
+    fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if self.inline_search.is_active() {
+            return match self.inline_search.handle_key(key) {
+                Some(super::inline_search::InlineSearchAction::Activate { id, item_type }) => {
+                    Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+                        id,
+                        item_type,
+                    }))
+                }
+                Some(super::inline_search::InlineSearchAction::Dismiss) => {
+                    self.inline_search.close();
+                    None
+                }
+                None => None,
+            };
+        }
+        if !self.context.focused {
+            return None;
+        }
+        match key.code {
+            Key::Enter if self.track_focused => {
+                let track = self.selected_track_item()?;
+                let album = self.selected_item()?;
+                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+                    album_id: album.id,
+                    track,
+                }))
+            }
+            Key::Enter if self.track_list.rows().is_empty() => self
+                .selected_item()
+                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
+            Key::Enter => {
+                self.enter_track_focus();
+                None
+            }
+            Key::Esc | Key::Backspace if self.track_focused => {
+                self.clear_track_focus();
+                None
+            }
+            Key::Up | Key::Char('k') if self.track_focused => {
+                self.track_list.delegate(RowLocalInput::Move(-1), None);
+                None
+            }
+            Key::Down | Key::Char('j') if self.track_focused => {
+                self.track_list.delegate(RowLocalInput::Move(1), None);
+                None
+            }
+            Key::Char('/') => {
+                self.inline_search.open();
+                Some(Msg::Shell(ShellRequest::OpenInlineSearch))
+            }
+            Key::Char('[') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: -1 }))
+            }
+            Key::Char(']') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
+                Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }))
+            }
+            _ => None,
+        }
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

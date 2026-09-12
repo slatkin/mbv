@@ -12,7 +12,7 @@ use ratatui::layout::Rect;
 
 use super::components::library_panel::content::HeroImageState;
 use super::components::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
-use super::components::{BrowserKey, BrowserKind, ComponentId, MusicWorkspaceComponent};
+use super::components::{BrowserKey, BrowserKind, ComponentId};
 use super::shell::Model;
 use super::{PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
@@ -135,6 +135,9 @@ impl Model {
                 .mount(id.clone(), Box::new(LibraryPanel::new()), vec![])
                 .expect("mount LibraryPanel");
         }
+        // Music is an embedded owner; install/project it after the panel is
+        // mounted so the first painted frame has a current owner and geometry.
+        self.push_music_workspace_content();
         let active = self.active_library_key();
         let live = self.live_library_keys();
         let list_pane_width = self.app.list_pane_width;
@@ -214,39 +217,7 @@ impl Model {
             return;
         };
         let list_pane_width = self.app.list_pane_width;
-        // Music is still mounted as its legacy destination boundary in this
-        // slice, but its view paints the shared skeleton at both breakpoints.
-        // Project its Square hero through the same shell-owned path as
-        // registered panel owners; painting reads the projected state only
-        // (design D9).
         if !self.active_library_owner_migrated() {
-            if let Some(id) = self.music_workspace_component_id() {
-                let hero_data = self
-                    .application
-                    .get_component_mut(&id)
-                    .and_then(|component| {
-                        component
-                            .as_any_mut()
-                            .downcast_mut::<MusicWorkspaceComponent>()
-                    })
-                    .and_then(MusicWorkspaceComponent::hero_data);
-                if let Some(data) = hero_data {
-                    let state =
-                        self.app
-                            .project_hero_image(&data.facts, true, area, list_pane_width);
-                    if let Some(music) =
-                        self.application
-                            .get_component_mut(&id)
-                            .and_then(|component| {
-                                component
-                                    .as_any_mut()
-                                    .downcast_mut::<MusicWorkspaceComponent>()
-                            })
-                    {
-                        music.set_hero_image(state);
-                    }
-                }
-            }
             return;
         }
         let hero_data = {
