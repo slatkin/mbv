@@ -162,19 +162,19 @@ choose a focus kind, pick a surface or lay out a pane.
 - [x] 5.6 Implement the Workspace: optional Selector row over one Main content box holding a
   `&mut dyn PanelList`, accent-soft surface while focused, owning-surface selected row. Verify: buffer
   tests for focused/unfocused box surface and selected-row surface; `WideHeroContentBoxSurface` deleted.
-- [ ] 5.7 Implement the Narrow skeleton and the inline hero derived from the same `HeroContent` (policy
+- [x] 5.7 Implement the Narrow skeleton and the inline hero derived from the same `HeroContent` (policy
   image right-aligned, sized from its aspect, wrap-around text in the three meta colours, full width
   below), with no selector, controls or constituent rows inside it; the panel computes the Inline
   `desired_detail_rows`. Verify: buffer tests with a portrait, a landscape and no image — all
   right-aligned wrap-around — and a test that Wide and Narrow render the same title, meta rows and image
   for one `HeroContent`.
-- [ ] 5.8 Add the object-safe `PanelList` trait (design D3) implemented once by the shared media-list
+- [x] 5.8 Add the object-safe `PanelList` trait (design D3) implemented once by the shared media-list
   carrier for every `Target`; the panel calls `set_presentation(Wide | Inline, anchor)` from its own
   breakpoint choice and sets the paint policy (focus, `SelectedRowSurface` by slot, throbber from
   `ListSlot` loading state); remove the destination-side `MediaListCarrier::active` selection and
   `Presentation::Grid`. Verify: the canonical-list re-anchor tests pass with the panel driving the
   transition; `cargo check -p mbv` shows no `ListSlot`/`Workspace` arm per destination.
-- [ ] 5.9 Mount `LibraryPanel` as `ComponentId::Library`: owner map keyed by `LibraryKey`, focus and
+- [x] 5.9 Mount `LibraryPanel` as `ComponentId::Library`: owner map keyed by `LibraryKey`, focus and
   mouse subscription for the library area, slot events (`SelectorPicked`, `ControlPicked`,
   `WorkspaceSelectorPicked`, list delegation) routed to the active owner, the Wide split-boundary drag
   moved in from `WideHeroBoundaryComponent`, owner retention while the library is in the catalog (moved
