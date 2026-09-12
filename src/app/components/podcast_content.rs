@@ -343,6 +343,7 @@ impl LibraryContentOwner for PodcastContent {
                 ))
             }
             LibrarySlotEvent::List(input) => {
+                self.episode_focused = false;
                 self.carrier.delegate(input, None);
                 self.sync_show_selection();
                 self.show_move()
@@ -356,7 +357,12 @@ impl LibraryContentOwner for PodcastContent {
                     _ => return None,
                 };
                 if let Some(target) = self.episode_list.resolve_current_point(point).cloned() {
-                    self.episode_focused = true;
+                    if matches!(
+                        input,
+                        RowLocalInput::Click(_) | RowLocalInput::DoubleClick(_)
+                    ) {
+                        self.episode_focused = true;
+                    }
                     self.episode_list.delegate(input, Some(target));
                     if matches!(input, RowLocalInput::DoubleClick(_)) {
                         return Some(Msg::Shell(
