@@ -285,7 +285,7 @@ branches.
   Narrow keeps its legacy painter this step. Verify: `tests_music_wide.rs`, `tests_music_groups.rs` and
   `tests_music_wide_reanchor_characterization.rs` rewritten to panel output; the re-anchor
   characterization still passes.
-- [ ] 9.3 Music Narrow through the panel: delete `render_narrow_music_group_with_ctx` and the
+- [x] 9.3 Music Narrow through the panel: delete `render_narrow_music_group_with_ctx` and the
   `is_search_active` search-box/`render_plain_rows` branches, rewrite `tests_music_narrow.rs` and
   `tests_music_characterization.rs`, with the inline hero built from the same `HeroContent` and tracks
   opening only through `SelectionModal`. Verify: `tests_tick_integration_music_mouse.rs` passes at both
