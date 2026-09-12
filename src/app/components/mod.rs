@@ -33,6 +33,7 @@ pub mod music_content;
 pub mod music_workspace;
 mod music_workspace_keys;
 pub mod playlists;
+pub mod podcast_content;
 pub mod queue;
 pub mod queue_boundary;
 pub mod queue_playback_panel;
