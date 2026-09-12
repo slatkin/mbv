@@ -88,13 +88,8 @@ fn press(model: &mut Model, code: Key) {
     model.sync_mounted_surfaces();
 }
 
-fn album_cursor(model: &Model, id: &ComponentId) -> usize {
-    model
-        .application
-        .get_component(id)
-        .and_then(|c| c.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(MusicWorkspaceComponent::album_cursor)
-        .expect("music workspace album cursor")
+fn album_cursor(model: &Model, _id: &ComponentId) -> usize {
+    model.test_music_owner().album_cursor()
 }
 
 #[test]
@@ -235,10 +230,7 @@ fn narrow_music_image_bearing_fixture_emits_the_selected_album_art() {
 fn narrow_music_ordinary_refresh_retains_the_selected_album_target() {
     let mut model = mounted_model_at(multi_artist_app(), NW, NH);
     let _ = draw_mounted_frame(&mut model, NW, NH);
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("music workspace mounted");
+    let id = ComponentId::Library;
 
     // Move the component's own cursor, then push an ordinary content refresh:
     // the selected album survives without a shell cursor mirror.
@@ -280,10 +272,7 @@ fn narrow_music_viewport_anchor_round_trips_across_wide_narrow_wide() {
 
     let mut model = mounted_model_at(app, 160, 40);
     let _ = resize_draw(&mut model, 160, 40);
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("music workspace mounted");
+    let id = ComponentId::Library;
     assert!(
         super::test_helpers::mounted_music_wide_geometry(&model)
             .hero

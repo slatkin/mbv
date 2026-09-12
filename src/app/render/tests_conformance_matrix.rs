@@ -88,7 +88,7 @@ fn render_browse_component(
         let painted = if model.music_workspace_id.is_some() {
             super::test_helpers::mounted_music_layout(&model)
         } else {
-            super::test_helpers::mounted_browser_layout(&model)
+            super::test_helpers::mounted_browser_layout(&model).clone()
         };
         LayoutMain {
             left_area: if painted.left_area.width > 0 {

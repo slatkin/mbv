@@ -903,11 +903,7 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
     app.panel_mode = PanelMode::LibraryOnly;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let music_id = harness
-        .model()
-        .music_workspace_id
-        .clone()
-        .expect("grouped Music child mounted");
+    let music_id = ComponentId::Library;
     let click = |column, row| {
         Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -925,9 +921,9 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
         .model()
         .application
         .get_component(&music_id)
-        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(|music| music.layout().left_area)
-        .expect("Music component layout");
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_list_rect())
+        .expect("Music panel list geometry");
     assert!(wide_area.width > 0 && wide_area.height > 0);
     harness.inject(click(wide_area.x + 1, wide_area.y + 1));
     let outcome = harness.step();

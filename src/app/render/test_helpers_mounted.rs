@@ -3,8 +3,9 @@
 use super::super::*;
 use super::buffer_to_string;
 use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::music_content::MusicContent;
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{BrowserComponent, ComponentId, MusicWorkspaceComponent};
+use crate::app::components::{BrowserComponent, ComponentId};
 use crate::app::shell::Model;
 use crate::app::{App, PanelFocus};
 use ratatui::backend::TestBackend;
@@ -94,83 +95,42 @@ pub fn mounted_browser_scroll(model: &Model) -> usize {
 /// The mounted `MusicWorkspaceComponent`'s own painted geometry.
 pub fn mounted_music_wide_geometry(
     model: &Model,
-) -> &crate::app::components::library_panel::WideSkeletonGeometry {
-    let id = model
-        .music_workspace_id
-        .as_ref()
-        .expect("music workspace component mounted");
+) -> crate::app::components::library_panel::WideSkeletonGeometry {
     model
         .application
-        .get_component(id)
-        .expect("music workspace mounted")
+        .get_component(&ComponentId::Library)
+        .expect("library panel mounted")
         .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("MusicWorkspaceComponent")
+        .downcast_ref::<LibraryPanel>()
+        .expect("LibraryPanel")
         .test_wide_geometry()
         .expect("wide Music skeleton painted")
 }
 
-pub fn mounted_music_layout(model: &Model) -> &LayoutMain {
-    let id = model
-        .music_workspace_id
-        .as_ref()
-        .expect("music workspace component mounted");
+pub fn mounted_music_layout(model: &Model) -> LayoutMain {
     model
         .application
-        .get_component(id)
-        .expect("music workspace mounted")
+        .get_component(&ComponentId::Library)
+        .expect("library panel mounted")
         .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("MusicWorkspaceComponent")
-        .layout()
+        .downcast_ref::<LibraryPanel>()
+        .expect("LibraryPanel")
+        .test_painted_layout()
 }
 
 /// The album-scroll offset the mounted `MusicWorkspaceComponent` settled on.
 pub fn mounted_music_scroll(model: &Model) -> usize {
-    let id = model
-        .music_workspace_id
-        .as_ref()
-        .expect("music workspace component mounted");
-    model
-        .application
-        .get_component(id)
-        .expect("music workspace mounted")
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("MusicWorkspaceComponent")
-        .album_scroll()
+    model.test_music_owner().album_scroll()
 }
 
 /// The mounted Music album control's complete current-frame flow targets.
 pub fn mounted_music_flow_targets(model: &Model) -> Vec<Option<String>> {
-    let id = model
-        .music_workspace_id
-        .as_ref()
-        .expect("music workspace component mounted");
-    model
-        .application
-        .get_component(id)
-        .expect("music workspace mounted")
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("MusicWorkspaceComponent")
-        .album_flow_targets()
+    model.test_music_owner().album_flow_targets()
 }
 
 /// Flow rows occupied by a source album index in the mounted Music control.
 pub fn mounted_music_album_target_rows(model: &Model, target: usize) -> Vec<usize> {
-    let id = model
-        .music_workspace_id
-        .as_ref()
-        .expect("music workspace component mounted");
-    model
-        .application
-        .get_component(id)
-        .expect("music workspace mounted")
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("MusicWorkspaceComponent")
-        .album_target_rows(target)
+    model.test_music_owner().album_target_rows(target)
 }
 
 /// The panel-hosted TV owner (task 8.4: reached through the mounted

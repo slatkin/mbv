@@ -202,22 +202,10 @@ fn library_panel_focus_follows_the_active_library() {
         "the migrated tab's focus is the Library panel"
     );
 
-    // An un-migrated Emby library keeps its old destination child focused.
+    // Music is migrated too: its Service owner remains behind the Library panel.
     harness.model_mut().app.tab = crate::app::TabSelection::EmbyLibrary(0);
     harness.model_mut().sync_mounted_surfaces();
-    let focus = harness.model().application.focus().cloned();
-    assert_ne!(focus, Some(ComponentId::Library));
-    assert!(
-        focus
-            .as_ref()
-            .is_some_and(|id| {
-                matches!(
-                    id,
-                    ComponentId::Browser(key) if key.kind == crate::app::components::BrowserKind::Music
-                )
-            }),
-        "an un-migrated library focuses its old destination child, got {focus:?}"
-    );
+    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Library));
 
     // Back to the migrated tab: the panel takes focus again.
     harness.model_mut().app.tab = crate::app::TabSelection::Home;
@@ -240,11 +228,10 @@ fn library_panel_mouse_eligibility_and_pill_slot_events() {
         .mouse_subscribed
         .contains(&ComponentId::Library));
 
-    // Un-migrated tab: the panel is unsubscribed and the old child is
-    // subscribed instead.
+    // Music is migrated: the panel remains the painted and subscribed boundary.
     harness.model_mut().app.tab = crate::app::TabSelection::EmbyLibrary(0);
     harness.model_mut().sync_mounted_surfaces();
-    assert!(!harness
+    assert!(harness
         .model()
         .mouse_subscribed
         .contains(&ComponentId::Library));

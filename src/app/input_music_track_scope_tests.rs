@@ -2,8 +2,8 @@
 
 use super::music_track_test_support::*;
 use super::*;
+use crate::app::components::library_panel::owner::LibraryContentOwner;
 use crate::app::components::msg::Msg;
-use crate::app::components::music_workspace::MusicWorkspaceComponent;
 use crate::app::components::{ComponentId, ShellRequest};
 use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
@@ -25,22 +25,12 @@ fn wide_track_focus_model(track_count: usize) -> (Model, ComponentId) {
     model.app.terminal_height = 40;
     model.sync_music_workspace();
     model.sync_active_destination();
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("wide Music workspace mounted");
+    let id = ComponentId::Library;
     (model, id)
 }
 
-fn enter_track_focus(model: &mut Model, id: &ComponentId) {
-    model
-        .application
-        .get_component_mut(id)
-        .unwrap()
-        .on(&Event::Keyboard(TuiKeyEvent {
-            code: Key::Enter,
-            modifiers: TuiKeyModifiers::NONE,
-        }));
+fn enter_track_focus(model: &mut Model, _id: &ComponentId) {
+    model.test_music_owner_mut().enter_track_focus();
 }
 
 // ── Task 4: scope-correct actions (#145), re-homed at the shell boundary ──
@@ -70,14 +60,10 @@ fn focused_music_track_in_track_mode_resolves_focused_track() {
 
     // The component is authoritative: it resolves the owner-selected album and
     // track and carries both in the typed activation request (D4).
-    let message = model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .on(&Event::Keyboard(TuiKeyEvent {
-            code: Key::Enter,
-            modifiers: TuiKeyModifiers::NONE,
-        }));
+    let message = model.test_music_owner_mut().on_key(&TuiKeyEvent {
+        code: Key::Enter,
+        modifiers: TuiKeyModifiers::NONE,
+    });
     let Some(Msg::Shell(ShellRequest::MusicTrackActivate { album_id, track })) = message else {
         panic!("expected a track activation, got {message:?}");
     };
@@ -96,13 +82,7 @@ fn focused_music_track_falls_back_safely_when_cache_missing() {
     // genuinely has no entry for the selected album.
     model.app.album_tracks_cache.remove("album-1");
     assert!(!model.app.album_tracks_cache.contains_key("album-1"));
-    let component = model
-        .application
-        .get_component(&id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("music workspace");
+    let component = model.test_music_owner();
     assert!(
         component.selected_track_item().is_none(),
         "cache-missing focused track must stay None, not panic"
@@ -119,14 +99,10 @@ fn enter_in_track_mode_with_missing_cache_does_not_panic() {
     model.app.album_tracks_cache.remove("album-1");
     let nav_len_before = model.app.libs[0].nav_stack.len();
 
-    let msg = model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .on(&Event::Keyboard(TuiKeyEvent {
-            code: Key::Enter,
-            modifiers: TuiKeyModifiers::NONE,
-        }));
+    let msg = model.test_music_owner_mut().on_key(&TuiKeyEvent {
+        code: Key::Enter,
+        modifiers: TuiKeyModifiers::NONE,
+    });
     assert!(matches!(
         msg,
         Some(Msg::Shell(ShellRequest::MusicTrackActivate { .. }))
@@ -179,12 +155,7 @@ fn context_menu_for_focused_track_offers_track_scoped_actions_not_folder_actions
     let (mut model, id) = wide_track_focus_model(3);
     enter_track_focus(&mut model, &id);
     let track = model
-        .application
-        .get_component(&id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("music workspace")
+        .test_music_owner()
         .selected_track_item()
         .expect("focused track should resolve");
 

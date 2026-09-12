@@ -160,10 +160,7 @@ fn dispatch_component_key(
 #[test]
 fn shell_music_ctrl_p_runs_library_play_effect() {
     let mut model = mounted_music_model();
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("Music workspace mounted");
+    let id = ComponentId::Library;
     let request = dispatch_component_key(&mut model, &id, Key::Char('p'), KeyModifiers::CONTROL);
 
     assert!(matches!(
@@ -176,10 +173,7 @@ fn shell_music_ctrl_p_runs_library_play_effect() {
 #[test]
 fn shell_music_ctrl_a_runs_library_enqueue_effect() {
     let mut model = mounted_music_model();
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("Music workspace mounted");
+    let id = ComponentId::Library;
     let request = dispatch_component_key(&mut model, &id, Key::Char('a'), KeyModifiers::CONTROL);
 
     assert!(matches!(
@@ -252,10 +246,7 @@ fn shell_tv_ctrl_s_runs_library_shuffle_effect() {
 #[test]
 fn shell_music_ctrl_r_runs_library_rescan_effect() {
     let mut model = mounted_music_model();
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("Music workspace mounted");
+    let id = ComponentId::Library;
     let request = dispatch_component_key(&mut model, &id, Key::Char('r'), KeyModifiers::CONTROL);
 
     assert_eq!(request, ShellRequest::EmbyLibraryRescan);

@@ -225,6 +225,23 @@ impl MusicContent {
     pub(in crate::app) fn track_focused(&self) -> bool {
         self.track_focused
     }
+    pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {
+        (0..self.carrier.current_flow_len().unwrap_or(0))
+            .map(|row| self.carrier.current_flow_target_at(row).flatten().cloned())
+            .collect()
+    }
+
+    pub(in crate::app) fn album_target_rows(&self, target: usize) -> Vec<usize> {
+        self.album_flow_targets()
+            .iter()
+            .enumerate()
+            .filter_map(|(row, value)| {
+                (value.as_deref() == self.context.album_targets.get(target).map(String::as_str))
+                    .then_some(row)
+            })
+            .collect()
+    }
+
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
         let target = self.track_list.selected_target()?;
         self.context
@@ -500,6 +517,25 @@ impl LibraryContentOwner for MusicContent {
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Music is focused.
+        if key.modifiers.contains(KeyModifiers::CONTROL) && !self.track_focused {
+            let item = self.selected_item();
+            return match key.code {
+                Key::Char('p') => {
+                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryPlay { item }))
+                }
+                Key::Char('a') => {
+                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }))
+                }
+                Key::Char('s') => {
+                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryShuffle { item }))
+                }
+                Key::Char('w') => {
+                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryToggleWatched { item }))
+                }
+                Key::Char('r') => Some(Msg::Shell(ShellRequest::EmbyLibraryRescan)),
+                _ => None,
+            };
+        }
         match key.code {
             Key::Enter if self.track_focused => {
                 let track = self.selected_track_item()?;

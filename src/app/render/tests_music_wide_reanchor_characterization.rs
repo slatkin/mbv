@@ -36,13 +36,8 @@ fn music_app_many_albums() -> App {
     app
 }
 
-fn album_cursor(model: &Model, id: &ComponentId) -> usize {
-    model
-        .application
-        .get_component(id)
-        .and_then(|c| c.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(MusicWorkspaceComponent::album_cursor)
-        .expect("music workspace album cursor")
+fn album_cursor(model: &Model, _id: &ComponentId) -> usize {
+    model.test_music_owner().album_cursor()
 }
 
 /// Shell-driven re-anchor: move the resting cursor/scroll and fire the
@@ -57,16 +52,7 @@ fn re_anchor_to(model: &mut Model, cursor: usize, scroll: usize) {
 }
 
 fn album_targets(model: &Model, want: usize) -> Vec<usize> {
-    let id = model
-        .music_workspace_id
-        .as_ref()
-        .expect("music workspace mounted");
-    model
-        .application
-        .get_component(id)
-        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(|music| music.album_target_rows(want))
-        .unwrap_or_default()
+    model.test_music_owner().album_target_rows(want)
 }
 
 #[test]
@@ -76,10 +62,7 @@ fn grouped_music_wide_reanchor_characterization() {
     // ---- Wide: shell re-anchor to a mid-list album --------------------------
     let mut model = mounted_model_at(music_app_many_albums(), 160, 40);
     let _ = draw_mounted_frame(&mut model, 160, 40);
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("grouped Music workspace mounted");
+    let id = ComponentId::Library;
     assert!(
         super::test_helpers::mounted_music_wide_geometry(&model)
             .hero
@@ -162,10 +145,7 @@ fn grouped_music_wide_reanchor_characterization() {
     let _ = draw_mounted_frame(&mut narrow_model, 60, 30);
     re_anchor_to(&mut narrow_model, 6, 0);
     let narrow = draw_mounted_frame(&mut narrow_model, 60, 30);
-    let n_id = narrow_model
-        .music_workspace_id
-        .clone()
-        .expect("narrow Music workspace mounted");
+    let n_id = ComponentId::Library;
     assert_eq!(album_cursor(&narrow_model, &n_id), 6);
     assert!(
         narrow.contains("Album 06"),

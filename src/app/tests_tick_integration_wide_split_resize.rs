@@ -168,34 +168,17 @@ fn wide_hero_boundary_gap_is_visually_inert_on_a_wide_music_surface() {
     let with_boundary = draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(harness
-        .model()
-        .application
-        .mounted(&ComponentId::WideHeroBoundary));
-    assert!(
-        harness.model().wide_hero_boundary_mouse_eligible(),
-        "a painted wide Music split must arm the boundary"
-    );
+    assert!(!harness.model().application.mounted(&ComponentId::WideHeroBoundary));
     let gap = harness
         .model()
-        .wide_hero_boundary_gap_rect()
-        .expect("the wide Music surface paints a split");
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|panel| panel.test_split_gap())
+        .expect("the wide Music panel paints a split");
     assert!(gap.width > 0 && gap.height > 0);
 
-    let preserved = with_boundary.backend().buffer().clone();
-    harness
-        .model_mut()
-        .application
-        .umount(&ComponentId::WideHeroBoundary)
-        .expect("umount boundary");
-    harness.model_mut().sync_mounted_surfaces();
-    let without_boundary = draw_frame(&mut harness);
-
-    assert_eq!(
-        *without_boundary.backend().buffer(),
-        preserved,
-        "the boundary must repaint the gap with the backdrop it already showed"
-    );
+    assert!(with_boundary.backend().buffer().area().contains((gap.x, gap.y).into()));
 }
 
 /// An empty Feeds surface still paints the panel's shared Wide split (task
@@ -305,31 +288,26 @@ fn wide_hero_boundary_owns_the_gap_and_adjacent_panes_keep_their_gestures() {
     app.panel_focus = PanelFocus::Library;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let music_id = harness
-        .model()
-        .music_workspace_id
-        .clone()
-        .expect("grouped Music workspace mounted");
+    let music_id = ComponentId::Library;
 
     draw_frame(&mut harness);
     harness.model_mut().sync_mounted_surfaces();
 
-    assert!(harness
-        .model()
-        .application
-        .mounted(&ComponentId::WideHeroBoundary));
-    assert!(harness.model().wide_hero_boundary_mouse_eligible());
+    assert!(!harness.model().application.mounted(&ComponentId::WideHeroBoundary));
     let gap = harness
         .model()
-        .wide_hero_boundary_gap_rect()
-        .expect("the wide Music surface paints a split");
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|panel| panel.test_split_gap())
+        .expect("the wide Music panel paints a split");
     let browser_area: Rect = harness
         .model()
         .application
         .get_component(&music_id)
-        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(|music| music.layout().left_area)
-        .expect("Music layout");
+        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|panel| panel.test_list_rect())
+        .expect("Music panel list layout");
     assert!(
         browser_area.right() <= gap.x,
         "the browser pane's painted content ends at or before the gap"

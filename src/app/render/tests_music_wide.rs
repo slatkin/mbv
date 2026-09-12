@@ -12,7 +12,7 @@ use super::components::media_list::{PLAIN_ROWS_PAINTS, WIDE_MEDIA_LIST_PAINTS};
 use super::test_helpers::{buffer_to_string, make_music_group_app};
 use super::*;
 use crate::app::components::inline_search::InlineSearchHost;
-use crate::app::components::MusicWorkspaceComponent;
+use crate::app::components::{ComponentId, MusicWorkspaceComponent};
 use crate::app::tests::make_item;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::PanelFocus;
@@ -139,22 +139,14 @@ fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_album_control() {
     );
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let id = harness
-        .model()
-        .music_workspace_id
-        .clone()
-        .expect("wide Music workspace mounted");
+    let id = ComponentId::Library;
     harness.model_mut().open_inline_search();
     {
-        let workspace = harness
+        harness
             .model_mut()
-            .application
-            .get_component_mut(&id)
-            .expect("Music workspace mounted")
-            .as_any_mut()
-            .downcast_mut::<MusicWorkspaceComponent>()
-            .expect("Music workspace type");
-        workspace.inline_search_mut().restore_query("al".into());
+            .test_music_owner_mut()
+            .inline_search_mut()
+            .restore_query("al".into());
     }
     // This is the same shell projection used after search open and async
     // completions; do not manufacture search state in the render context.
@@ -182,13 +174,7 @@ fn wide_music_search_mode_uses_the_plain_rows_painter_not_the_album_control() {
         0,
         "search does not view the album rail through WideMediaList"
     );
-    let geometry = harness
-        .model()
-        .application
-        .get_component(&id)
-        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .and_then(MusicWorkspaceComponent::test_wide_geometry)
-        .expect("search still paints the Wide panel");
+    let geometry = super::test_helpers::mounted_music_wide_geometry(harness.model());
     assert!(
         geometry.selected.is_none(),
         "search owns album-row geometry"
