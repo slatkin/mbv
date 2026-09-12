@@ -67,6 +67,7 @@ pub use self::msg::{
     SettingsIntent, ShellRequest, TerminalObserverEvent,
 };
 pub use self::multiselect::MultiselectComponent;
+pub(in crate::app) use self::music_content::MusicContent;
 pub use self::music_workspace::MusicWorkspaceComponent;
 pub use self::playlists::PlaylistsComponent;
 pub(in crate::app) use self::playlists::PlaylistsContent;

@@ -222,6 +222,25 @@ impl MusicContent {
     pub(in crate::app) fn album_scroll(&self) -> usize {
         self.carrier.scroll()
     }
+    pub(in crate::app) fn track_focused(&self) -> bool {
+        self.track_focused
+    }
+    pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
+        let target = self.track_list.selected_target()?;
+        self.context
+            .album_tracks
+            .as_deref()?
+            .iter()
+            .position(|track| track.id == *target)
+    }
+    #[cfg(test)]
+    pub(in crate::app) fn test_track_content_rect(&self) -> Option<ratatui::layout::Rect> {
+        self.track_list.current_content_rect()
+    }
+    #[cfg(test)]
+    pub(in crate::app) fn test_track_selected_row_rect(&self) -> Option<ratatui::layout::Rect> {
+        self.track_list.current_selected_row_rect()
+    }
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
         let target = self.track_list.selected_target()?;
         self.context
@@ -479,9 +498,8 @@ impl LibraryContentOwner for MusicContent {
                 None => None,
             };
         }
-        if !self.context.focused {
-            return None;
-        }
+        // The LibraryPanel is the framework focus boundary; reaching this
+        // method already proves Music is focused.
         match key.code {
             Key::Enter if self.track_focused => {
                 let track = self.selected_track_item()?;

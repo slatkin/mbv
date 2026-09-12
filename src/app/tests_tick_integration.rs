@@ -12,7 +12,7 @@ use tuirealm::event::{
 use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::{
-    ComponentId, ModalId, Msg, MusicWorkspaceComponent, OverlayId, QueueRequest, SearchPool,
+    ComponentId, ModalId, Msg, MusicContent, OverlayId, QueueRequest, SearchPool,
     SearchSidebarComponent, ShellRequest, TerminalObserverEvent,
     UserEvent,
 };
@@ -350,43 +350,21 @@ fn wide_music_harness() -> (TickHarness, ComponentId) {
         .insert("album-1".into(), vec![first, second]);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let id = harness
-        .model()
-        .music_workspace_id
-        .clone()
-        .expect("wide Music workspace mounted");
-    (harness, id)
+    (harness, ComponentId::Library)
 }
 
 /// The focused track-pane row, or `None` when the track pane is unfocused
 /// (design.md D5: focus is parent state, the owner holds the selection).
 fn music_track_focus_row(harness: &TickHarness, id: &ComponentId) -> Option<usize> {
-    let music = harness
-        .model()
-        .application
-        .get_component(id)
-        .expect("Music workspace mounted")
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("Music workspace type");
+    let music = harness.model().test_music_owner();
     music
         .track_focused()
         .then(|| music.track_selected_row())
         .flatten()
 }
 
-fn music_workspace<'a>(
-    harness: &'a TickHarness,
-    id: &ComponentId,
-) -> &'a MusicWorkspaceComponent {
-    harness
-        .model()
-        .application
-        .get_component(id)
-        .expect("Music workspace mounted")
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("Music workspace type")
+fn music_workspace<'a>(harness: &'a TickHarness, _id: &ComponentId) -> &'a MusicContent {
+    harness.model().test_music_owner()
 }
 
 fn music_album_cursor(harness: &TickHarness, id: &ComponentId) -> usize {
@@ -482,14 +460,7 @@ fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
     // Seed a known result row (the shell content push would otherwise supply
     // the library's own albums); the cursor rests on it.
     {
-        let workspace = harness
-            .model_mut()
-            .application
-            .get_component_mut(&id)
-            .expect("Music workspace mounted")
-            .as_any_mut()
-            .downcast_mut::<MusicWorkspaceComponent>()
-            .expect("Music workspace type");
+        let workspace = harness.model_mut().test_music_owner_mut();
         let mut result = crate::app::tests::make_item("Result Album", "MusicAlbum");
         result.id = "result-album".into();
         workspace
@@ -547,14 +518,7 @@ fn enter_on_inline_search_album_result_defers_to_async_activation() {
         }]),
     );
     {
-        let workspace = harness
-            .model_mut()
-            .application
-            .get_component_mut(&id)
-            .expect("Music workspace mounted")
-            .as_any_mut()
-            .downcast_mut::<MusicWorkspaceComponent>()
-            .expect("Music workspace type");
+        let workspace = harness.model_mut().test_music_owner_mut();
         workspace
             .inline_search_mut()
             .set_pool(SearchPool::Albums(vec![crate::app::AlbumSearchEntry {
