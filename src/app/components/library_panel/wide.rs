@@ -315,9 +315,8 @@ fn paint_workspace_box(
     // panel sets the paint policy, destinations pass none.
     workspace
         .list
-        .set_paint_policy(super::content::PanelListPaintPolicy::Wide {
+        .set_paint_policy(super::content::PanelListPaintPolicy::WideWorkspace {
             focused: workspace.focused,
-            throbber: None,
         });
     workspace.list.view(f, content);
     (panel, content)

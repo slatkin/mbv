@@ -29,6 +29,10 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
                 self.wide_mut()
                     .set_paint_policy(WideMediaListPaintPolicy::new(focused, throbber));
             }
+            PanelListPaintPolicy::WideWorkspace { focused } => {
+                self.wide_mut()
+                    .set_paint_policy(WideMediaListPaintPolicy::for_library_workspace(focused));
+            }
             PanelListPaintPolicy::Inline {
                 focused,
                 desired_detail_rows,
@@ -69,6 +73,7 @@ mod panel_list_tests {
     use crate::app::components::media_list::{
         MediaKind, MediaListRow, MediaSemanticState, Presentation,
     };
+    use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
@@ -82,6 +87,45 @@ mod panel_list_tests {
             kind: MediaKind::Media,
             semantic_state: MediaSemanticState::Ordinary,
         }
+    }
+
+    #[test]
+    fn selected_row_surface_distinguishes_browser_and_workspace_slots() {
+        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        carrier.set_content(vec![item("selected")]);
+        let area = Rect::new(0, 0, 20, 1);
+        let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+
+        terminal
+            .draw(|f| {
+                PanelList::set_paint_policy(
+                    &mut carrier,
+                    PanelListPaintPolicy::Wide {
+                        focused: true,
+                        throbber: None,
+                    },
+                );
+                PanelList::view(&mut carrier, f, area);
+            })
+            .unwrap();
+        assert_eq!(
+            terminal.backend().buffer()[(area.x, area.y)].bg,
+            palette::surface_colors(palette::Surface::SelectedRow, true).fill
+        );
+
+        terminal
+            .draw(|f| {
+                PanelList::set_paint_policy(
+                    &mut carrier,
+                    PanelListPaintPolicy::WideWorkspace { focused: true },
+                );
+                PanelList::view(&mut carrier, f, area);
+            })
+            .unwrap();
+        assert_eq!(
+            terminal.backend().buffer()[(area.x, area.y)].bg,
+            palette::surface_colors(palette::Surface::SelectedRowOnLibraryPane, true).fill
+        );
     }
 
     /// The canonical-list re-anchor contract, driven through the panel's

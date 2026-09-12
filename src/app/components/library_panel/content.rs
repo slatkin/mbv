@@ -201,12 +201,16 @@ pub(in crate::app) struct LibraryPanelContent<'a> {
 /// Inline detail height the panel computes from the hero content. Selected-row
 /// surfaces are fixed by the owning presentation policy; destinations pass none.
 pub(in crate::app) enum PanelListPaintPolicy {
-    /// The Wide presentation's policy: focus and the now-playing throbber
-    /// glyph (library lists carry none today).
+    /// The Wide browser presentation's policy: focus and the now-playing
+    /// throbber glyph (library lists carry none today). Selected rows use the
+    /// list backdrop surface.
     Wide {
         focused: bool,
         throbber: Option<char>,
     },
+    /// The Wide library Workspace presentation. Its selected row belongs to
+    /// the owning library pane surface rather than the list backdrop.
+    WideWorkspace { focused: bool },
     /// The Inline presentation's policy: focus and the selected-row
     /// replacement height the panel derived from the hero.
     Inline {
