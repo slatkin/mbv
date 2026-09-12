@@ -234,7 +234,16 @@ impl MusicContent {
                             if self.carrier.claims_current_point(at) {
                                 self.carrier
                                     .delegate(RowLocalInput::Wheel { at, delta }, None);
-                                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                                let target = self.carrier.selected_target()?;
+                                let index = self
+                                    .context
+                                    .album_targets
+                                    .iter()
+                                    .position(|candidate| candidate == target)?;
+                                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                                    target: index,
+                                    kind: AlbumCursorKind::Move,
+                                }))
                             } else {
                                 None
                             }
@@ -272,9 +281,26 @@ impl MusicContent {
                     self.track_list
                         .delegate(RowLocalInput::Click(at), Some(target));
                     (matches!(input, RowLocalInput::DoubleClick(_))).then(|| {
-                        self.selected_item().map(|album| {
-                            Msg::Shell(ShellRequest::MusicAlbumActivate { item: album })
-                        })
+                        let track_target = self.track_list.selected_target()?;
+                        let track = self
+                            .context
+                            .album_tracks
+                            .as_deref()
+                            .unwrap_or_default()
+                            .iter()
+                            .find(|track| &track.id == track_target)
+                            .cloned()?;
+                        let album_target = self.carrier.selected_target()?;
+                        let album_index = self
+                            .context
+                            .album_targets
+                            .iter()
+                            .position(|candidate| candidate == album_target)?;
+                        let album = self.context.list.items.get(album_index)?;
+                        Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+                            album_id: album.id.clone(),
+                            track,
+                        }))
                     })?
                 }
                 RowLocalInput::ContextClick(at) => self
@@ -345,6 +371,10 @@ mod tests {
     use super::*;
     use crate::app::render::LibraryListRenderCtx;
     use crate::app::tests::make_item;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::{Position, Rect};
+    use ratatui::Terminal;
+    use tuirealm::component::Component;
 
     fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
         let mut album = album;
@@ -396,5 +426,64 @@ mod tests {
             .is_some_and(|hero| hero.workspace.is_some());
         assert!(has_workspace);
         assert_eq!(owner.track_list.rows().len(), 1);
+    }
+
+    #[test]
+    fn hero_double_click_activates_the_selected_track() {
+        let album = make_item("Album", "MusicAlbum");
+        let track = make_item("Track", "Audio");
+        let mut owner = MusicContent::new();
+        let mut ctx = context(album.clone(), "overview");
+        ctx.album_tracks = Some(vec![track.clone()]);
+        owner.set_content(ctx);
+
+        let area = Rect::new(0, 0, 30, 1);
+        owner.track_list.wide_mut().set_geometry(area, area);
+        let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
+        terminal
+            .draw(|frame| owner.track_list.wide_mut().view(frame, area))
+            .unwrap();
+
+        let message = owner.on_slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::DoubleClick(
+            Position { x: 0, y: 0 },
+        )));
+        match message {
+            Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+                album_id,
+                track: activated,
+            })) => {
+                assert_eq!(album_id, album.id);
+                assert_eq!(activated.id, track.id);
+            }
+            other => panic!("expected track activation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
+        let mut owner = MusicContent::new();
+        owner.set_content(context(make_item("Album", "MusicAlbum"), "overview"));
+
+        let area = Rect::new(0, 0, 30, 1);
+        owner.carrier.inline_mut().set_geometry(area, area);
+        let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
+        terminal
+            .draw(|frame| owner.carrier.inline_mut().view(frame, area))
+            .unwrap();
+
+        let event = LibrarySlotEvent::List(RowLocalInput::Wheel {
+            at: Position { x: 0, y: 0 },
+            delta: 1,
+        });
+        assert!(matches!(
+            owner.on_slot_event(event),
+            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                target: 0,
+                kind: AlbumCursorKind::Move,
+            }))
+        ));
+
+        owner.context.album_targets.clear();
+        assert_eq!(owner.on_slot_event(event), None);
     }
 }
