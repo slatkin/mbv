@@ -5,6 +5,10 @@ url = "http://emby.local:8096"
 [mpv]
 use_mpv_config = false
 show_audio_window = false
+# Video buffering uses memory: increase these for high-bitrate streams, or
+# decrease them to reduce resident memory. Values are MiB.
+video_cache_forward_mb = 50
+video_cache_back_mb = 100
 audio_pipe_enabled = false
 audio_pipe_path = "/tmp/mbv-pipe"
 audio_pipe_samplerate = 44100

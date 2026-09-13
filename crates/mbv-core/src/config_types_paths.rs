@@ -17,6 +17,8 @@ pub struct Config {
     pub hidden_latest: Vec<String>,
     pub show_audio_window: bool,
     pub use_mpv_config: bool,
+    pub video_cache_forward_mb: u32,
+    pub video_cache_back_mb: u32,
     pub audio_pipe_enabled: bool,
     pub audio_pipe_path: String,
     pub audio_pipe_samplerate: u32, // fixed output rate forced on the pipe (Hz); mpv resamples everything to this
@@ -97,6 +99,9 @@ pub struct Config {
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
 
+pub const DEFAULT_VIDEO_CACHE_FORWARD_MB: u32 = 50;
+pub const DEFAULT_VIDEO_CACHE_BACK_MB: u32 = 100;
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -110,6 +115,8 @@ impl Default for Config {
             hidden_latest: vec![],
             show_audio_window: false,
             use_mpv_config: false,
+            video_cache_forward_mb: DEFAULT_VIDEO_CACHE_FORWARD_MB,
+            video_cache_back_mb: DEFAULT_VIDEO_CACHE_BACK_MB,
             audio_pipe_enabled: false,
             audio_pipe_path: "/tmp/mbv-pipe".to_string(),
             audio_pipe_samplerate: 192_000,

@@ -205,6 +205,14 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         toml::Value::Boolean(cfg.use_mpv_config),
     );
     mpv.insert(
+        "video_cache_forward_mb".to_string(),
+        toml::Value::Integer(cfg.video_cache_forward_mb as i64),
+    );
+    mpv.insert(
+        "video_cache_back_mb".to_string(),
+        toml::Value::Integer(cfg.video_cache_back_mb as i64),
+    );
+    mpv.insert(
         "no_scripts".to_string(),
         toml::Value::Boolean(cfg.no_scripts),
     );

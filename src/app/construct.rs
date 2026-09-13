@@ -271,6 +271,10 @@ impl App {
             player_tx,
             None,
         );
+        let raw_player = raw_player.with_video_cache(
+            app_config.video_cache_forward_mb,
+            app_config.video_cache_back_mb,
+        );
         let player = PlayerProxy::local(raw_player, app_config.always_play_next);
         let mut app = Self::build(AppInit {
             config: Arc::new(Mutex::new(app_config.clone())),

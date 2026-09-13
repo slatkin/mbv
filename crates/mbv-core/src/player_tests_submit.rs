@@ -296,6 +296,8 @@ fn init_mpv_projects_mutually_exclusive_output() {
     let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
         headless: true,
         use_mpv_config: false,
+        video_cache_forward_mb: 50,
+        video_cache_back_mb: 100,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: None,
@@ -321,6 +323,8 @@ fn init_mpv_projects_mutually_exclusive_output() {
     let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
         headless: true,
         use_mpv_config: false,
+        video_cache_forward_mb: 50,
+        video_cache_back_mb: 100,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: Some(pipe_path.clone()),
@@ -353,6 +357,8 @@ fn init_mpv_headless_disables_cover_art_display() {
     let (mpv, _) = init_mpv(&MpvRunConfig {
         headless: true,
         use_mpv_config: false,
+        video_cache_forward_mb: 7,
+        video_cache_back_mb: 13,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: None,
@@ -378,6 +384,50 @@ fn init_mpv_headless_disables_cover_art_display() {
 }
 
 #[test]
+fn init_mpv_with_config_preserves_mpv_hwdec_default_and_user_overrides() {
+    let env_lock = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
+    let env = MpvConfigTestEnv::new("init-mpv-full-config");
+    std::fs::create_dir_all(&env.user_mpv).unwrap();
+    std::fs::write(env.user_mpv.join("mpv.conf"), "volume=37\n").unwrap();
+
+    // Establish the value from a fresh mpv that never receives an mbv hwdec
+    // setting, rather than assuming what the installed mpv defaults to.
+    let default_mpv = Mpv::with_initializer(|init| {
+        init.set_option("config", "no")?;
+        init.set_option("vo", "null")?;
+        init.set_option("ao", "null")?;
+        Ok(())
+    })
+    .unwrap();
+    let mpv_hwdec_default = default_mpv.get_property::<String>("hwdec").unwrap();
+    drop(default_mpv);
+
+    let (mpv, _) = init_mpv(&MpvRunConfig {
+        headless: false,
+        use_mpv_config: true,
+        video_cache_forward_mb: 7,
+        video_cache_back_mb: 13,
+        no_scripts: true,
+        always_skip_intro: false,
+        audio_pipe_path: None,
+        audio_pipe_samplerate: 0,
+        audio_pipe_bitdepth: 0,
+        audio_device: None,
+    })
+    .unwrap();
+    assert_eq!(mpv.get_property::<f64>("volume").unwrap(), 37.0);
+    assert_eq!(
+        mpv.get_property::<String>("hwdec").unwrap(),
+        mpv_hwdec_default,
+        "full-config playback must preserve mpv's own hwdec default"
+    );
+    mpv.set_property("ao", "null").unwrap();
+    mpv.set_property("vo", "null").unwrap();
+    drop(mpv);
+    drop(env_lock);
+}
+
+#[test]
 fn init_mpv_non_headless_uses_video_sized_demuxer_cache() {
     // bound-daemon-playback-memory: a run with a video window keeps the
     // existing 50M/100M demuxer cache budget unchanged.
@@ -385,6 +435,8 @@ fn init_mpv_non_headless_uses_video_sized_demuxer_cache() {
     let (mpv, _) = init_mpv(&MpvRunConfig {
         headless: false,
         use_mpv_config: false,
+        video_cache_forward_mb: 7,
+        video_cache_back_mb: 13,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: None,
@@ -395,12 +447,13 @@ fn init_mpv_non_headless_uses_video_sized_demuxer_cache() {
     .unwrap();
     assert_eq!(
         mpv.get_property::<i64>("demuxer-max-bytes").unwrap(),
-        50 * 1024 * 1024
+        7 * 1024 * 1024
     );
     assert_eq!(
         mpv.get_property::<i64>("demuxer-max-back-bytes").unwrap(),
-        100 * 1024 * 1024
+        13 * 1024 * 1024
     );
+    assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "auto-safe");
     mpv.set_property("ao", "null").unwrap();
     mpv.set_property("vo", "null").unwrap();
     drop(mpv);

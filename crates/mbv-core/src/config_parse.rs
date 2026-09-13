@@ -65,6 +65,19 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let video_cache_forward_mb = misc
+        .and_then(|m| m.get("video_cache_forward_mb"))
+        .and_then(|v| v.as_integer())
+        .and_then(|v| u32::try_from(v).ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT_VIDEO_CACHE_FORWARD_MB);
+    let video_cache_back_mb = misc
+        .and_then(|m| m.get("video_cache_back_mb"))
+        .and_then(|v| v.as_integer())
+        .and_then(|v| u32::try_from(v).ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(DEFAULT_VIDEO_CACHE_BACK_MB);
+
     let audio_pipe_enabled = misc
         .and_then(|m| m.get("audio_pipe_enabled"))
         .and_then(|v| v.as_bool())
@@ -321,6 +334,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         hidden_latest,
         show_audio_window,
         use_mpv_config,
+        video_cache_forward_mb,
+        video_cache_back_mb,
         audio_pipe_enabled,
         audio_pipe_path,
         audio_pipe_samplerate,

@@ -33,6 +33,8 @@ impl ProgressGuard {
 struct MpvRunConfig {
     headless: bool,
     use_mpv_config: bool,
+    video_cache_forward_mb: u32,
+    video_cache_back_mb: u32,
     no_scripts: bool,
     always_skip_intro: bool,
     audio_pipe_path: Option<String>,
@@ -269,11 +271,30 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
         let _ = mpv.set_property("audio-display", "no");
         // Audio-sized demuxer cache: a headless host has no video window to
         // justify the video-sized budget below.
-        let _ = mpv.set_property("demuxer-max-bytes", "10M");
-        let _ = mpv.set_property("demuxer-max-back-bytes", "10M");
+        if let Err(e) = mpv.set_property("demuxer-max-bytes", "10M") {
+            log::warn!(target: "player", "failed to set headless forward cache: {e}");
+        }
+        if let Err(e) = mpv.set_property("demuxer-max-back-bytes", "10M") {
+            log::warn!(target: "player", "failed to set headless back cache: {e}");
+        }
     } else {
-        let _ = mpv.set_property("demuxer-max-bytes", "50M");
-        let _ = mpv.set_property("demuxer-max-back-bytes", "100M");
+        if let Err(e) = mpv.set_property(
+            "demuxer-max-bytes",
+            format!("{}M", config.video_cache_forward_mb),
+        ) {
+            log::warn!(target: "player", "failed to set video forward cache: {e}");
+        }
+        if let Err(e) = mpv.set_property(
+            "demuxer-max-back-bytes",
+            format!("{}M", config.video_cache_back_mb),
+        ) {
+            log::warn!(target: "player", "failed to set video back cache: {e}");
+        }
+        if !config.use_mpv_config {
+            if let Err(e) = mpv.set_property("hwdec", "auto-safe") {
+                log::warn!(target: "player", "failed to set hwdec policy: {e}");
+            }
+        }
     }
     let mut startup_pause_armed = false;
     if let Some(path) = &config.audio_pipe_path {
