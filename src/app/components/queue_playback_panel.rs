@@ -46,10 +46,10 @@ pub struct QueuePlaybackPanel {
     host: String,
     /// The transport's projected facts (the shared transport projection).
     transport: PlaybackProjection,
-    /// The transport rect the shell hands this panel each frame — it is
-    /// computed from the visual slot's freshly painted size (task 3.5),
-    /// which the panel does not own. `None` while idle (task 3.6) or on a
-    /// degenerate rect.
+    /// The transport rect the shell computes in the sync pass from the
+    /// prior-paint card checkpoint (task 3.5). Draw is read-only with respect
+    /// to panel layout state. `None` while idle (task 3.6) or on a degenerate
+    /// rect.
     transport_area: Option<Rect>,
     /// The panel's own retained transport hit geometry (task 3.7): cleared
     /// whenever the transport does not paint, so a collapsed panel resolves
@@ -106,11 +106,10 @@ impl QueuePlaybackPanel {
         self.transport = transport;
     }
 
-    /// Hand the panel this frame's transport rect (paint-time projection,
-    /// like the queue panel's placement): computed by the shell from the
-    /// visual slot's freshly painted size. `None` collapses the transport
-    /// and clears the retained hit geometry (task 3.6: idle paints only the
-    /// header row and resolves nothing).
+    /// Project the transport rect computed by the shell in the sync pass from
+    /// the prior-paint card checkpoint. `None` collapses the transport and
+    /// clears the retained hit geometry (task 3.6: idle paints only the header
+    /// row and resolves nothing).
     pub(in crate::app) fn set_transport_area(&mut self, area: Option<Rect>) {
         let painted = area.filter(|r| r.width > 0 && r.height > 0);
         if painted.is_none() {
@@ -126,6 +125,12 @@ impl QueuePlaybackPanel {
     #[cfg(test)]
     pub(in crate::app) fn transport_hits(&self) -> (Rect, Rect) {
         (self.play_pause_area, self.seekbar_area)
+    }
+
+    /// Test-only: the sync-projected transport area.
+    #[cfg(test)]
+    pub(in crate::app) fn transport_area_for_test(&self) -> Option<Rect> {
+        self.transport_area
     }
 
     fn mouse(&self, event: &MouseEvent) -> Option<Msg> {

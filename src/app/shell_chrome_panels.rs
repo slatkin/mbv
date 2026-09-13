@@ -237,23 +237,38 @@ impl Model {
         transport.panel_focused = false;
         let status = self.app.now_playing_status();
         let host = self.app.playback_host_label();
+        let transport_area = if status != NowPlayingStatus::Idle {
+            placement.map(|placement| {
+                let inset = queue_panel_inset(placement);
+                let slot_region = Rect {
+                    y: placement.y + QUEUE_PLAYBACK_HEADER_ROWS,
+                    height: placement.height.saturating_sub(QUEUE_PLAYBACK_HEADER_ROWS),
+                    ..inset
+                };
+                let wide = queue_playback_column_wide(placement.width);
+                let card = &self.app.layout.card;
+                queue_playback_transport_area(slot_region, wide, card.width, card.height)
+            })
+        } else {
+            None
+        };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
                 panel.set_header(status, host);
                 panel.set_transport(transport);
+                panel.set_transport_area(transport_area);
             }
         }
     }
 
     /// Paint the mounted `QueuePlaybackPanel` into the `RootFrame.queue_playback`
-    /// placement (task 3.5, D1's view rule). The panel paints the header row —
-    /// the placement's first row — and the transport rect the shell computes
-    /// from the visual slot's freshly painted size (side by side at 100+
-    /// columns with the 2-cell gap, stacked below it otherwise, through the
-    /// shared `queue_playback_transport_area` arrangement); the App-side slot
-    /// adapter (the moved `render_card`, task 3.4) paints the slot below the
-    /// header row. While idle the slot and transport collapse to zero rows
-    /// (task 3.6) and only the header row paints.
+    /// placement (task 3.5, D1's view rule). The sync pass computes and
+    /// publishes the transport rect from the prior-paint card checkpoint, so
+    /// draw is read-only with respect to panel layout state. The panel paints
+    /// the header row and transport; the App-side slot adapter (the moved
+    /// `render_card`, task 3.4) paints the visual slot below the header row.
+    /// While idle the slot and transport collapse to zero rows (task 3.6) and
+    /// only the header row paints.
     pub(super) fn render_queue_playback_panel(&mut self, frame: &mut Frame, placement: Rect) {
         let id = ComponentId::QueuePlaybackPanel;
         if !self.application.mounted(&id) {
@@ -278,46 +293,30 @@ impl Model {
             ..inset
         };
         let wide = queue_playback_column_wide(placement.width);
-        let (transport_area, _): (Option<Rect>, CardGeometry) =
-            if self.app.now_playing_status() == NowPlayingStatus::Idle {
-                (None, CardGeometry::default())
-            } else {
-                // Fill the slot region's own background first (task 12.2):
-                // the visual slot only paints the image/placeholder it
-                // actually has (documented: images-off or not-yet-loaded
-                // paints nothing, `render_card_painting`'s own test), so any
-                // columns it leaves untouched -- e.g. the gap before a
-                // zero-width slot at the wide breakpoint -- must still show
-                // this panel's own background rather than whatever was
-                // painted underneath before this panel owned the placement.
-                // The outer `fill_surface` call above already cleared all of
-                // `placement`, including this subrect, so only the
-                // background needs (re)painting here.
-                frame.render_widget(
-                    ratatui::widgets::Block::default().style(
-                        ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
-                            crate::app::palette::Surface::QueueOnlyPlaybackPanel,
-                            false,
-                        )
-                        .fill),
-                    ),
-                    slot_region,
-                );
-                let (slot_h, slot_w, _) =
-                    self.app
-                        .render_queue_playback_slot(frame, slot_region, wide);
-                let card = CardGeometry {
-                    height: slot_h,
-                    width: slot_w,
-                };
-                let transport_area =
-                    queue_playback_transport_area(slot_region, wide, card.width, card.height);
-                (Some(transport_area), card)
-            };
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
-                panel.set_transport_area(transport_area);
-            }
+        if self.app.now_playing_status() != NowPlayingStatus::Idle {
+            // Fill the slot region's own background first (task 12.2):
+            // the visual slot only paints the image/placeholder it
+            // actually has (documented: images-off or not-yet-loaded
+            // paints nothing, `render_card_painting`'s own test), so any
+            // columns it leaves untouched -- e.g. the gap before a
+            // zero-width slot at the wide breakpoint -- must still show
+            // this panel's own background rather than whatever was
+            // painted underneath before this panel owned the placement.
+            // The outer `fill_surface` call above already cleared all of
+            // `placement`, including this subrect, so only the
+            // background needs (re)painting here.
+            frame.render_widget(
+                ratatui::widgets::Block::default().style(
+                    ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
+                        crate::app::palette::Surface::QueueOnlyPlaybackPanel,
+                        false,
+                    )
+                    .fill),
+                ),
+                slot_region,
+            );
+            self.app
+                .render_queue_playback_slot(frame, slot_region, wide);
         }
         self.application.view(&id, frame, placement);
     }

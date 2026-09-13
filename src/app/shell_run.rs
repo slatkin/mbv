@@ -95,8 +95,8 @@ impl Model {
         self.app.compose_root_frame(f);
         // Root composition is data-driven: this is the sole panel paint loop.
         // The queue playback placement is deliberately handled by its panel
-        // method because it also publishes the visual-slot geometry used by
-        // the next frame's queue placement.
+        // method; its transport geometry was projected during sync from the
+        // prior-paint card checkpoint, so this draw path remains read-only.
         for placement in self.app.layout.root_frame.placements() {
             let Some(placement) = placement else { continue };
             match placement {

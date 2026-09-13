@@ -151,6 +151,25 @@ mod strip_hits {
 }
 
 #[test]
+fn sync_projects_queue_transport_area_before_draw() {
+    let mut app = active_app(PanelMode::Both);
+    app.terminal_width = 100;
+    app.terminal_height = 40;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::QueuePlaybackPanel)
+        .and_then(|component| component.as_any().downcast_ref::<QueuePlaybackPanel>())
+        .expect("Queue playback panel mounted in a queue-visible layout");
+    let area = panel
+        .transport_area_for_test()
+        .expect("sync projects transport geometry before draw");
+    assert!(area.width > 0 && area.height > 0, "transport area is non-degenerate");
+}
+
+#[test]
 fn tick_clicks_play_pause_and_the_seekbar_in_both() {
     let (mut harness, play_pause, seekbar) =
         drawn_harness(active_app(PanelMode::Both), 100, 40);
