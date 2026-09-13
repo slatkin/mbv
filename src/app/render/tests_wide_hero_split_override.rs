@@ -93,8 +93,8 @@ fn an_override_moves_the_painted_panes() {
         "the hero pane takes the remainder"
     );
     assert_eq!(
-        moved.hero_panel.x,
-        moved.browser_panel.right() + WIDE_HERO_PANE_GAP,
+        moved.browser_panel.x,
+        moved.hero_panel.right() + WIDE_HERO_PANE_GAP,
         "the existing gap follows the moved boundary"
     );
 }

@@ -45,8 +45,8 @@ pub(in crate::app) const PANE_PAD_Y: u16 = 1;
 /// screen a second row.
 ///
 /// Geometry is returned by semantic role: `hero` is the larger (~60%)
-/// hero/workspace pane on the right, `browser` is the ~40% list pane on the
-/// left.
+/// hero/workspace pane on the left, `browser` is the ~40% list pane on the
+/// right.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct WideHeroPanes {
     pub browser: Rect,
@@ -131,9 +131,9 @@ mod tests {
 }
 
 /// Returns `(browser_pane, hero_pane)` for the Wide hero arrangement's
-/// horizontal split: a `WIDE_HERO_PANE_GAP`-column gutter between a
-/// ~40%-width browser (list) pane on the left and the larger hero pane
-/// taking the remainder on the right, each floored at
+/// horizontal split: a `WIDE_HERO_PANE_GAP`-column gutter between the larger
+/// hero pane on the left and a ~40%-width browser (list) pane taking the
+/// remainder on the right, each floored at
 /// `WIDE_HERO_MIN_PANE_WIDTH`. A `Some` override replaces the ratio default
 /// after being clamped to the valid range for this `content_area`; callers
 /// reach it only through [`wide_hero_presentation`]/[`wide_library_panes`].
@@ -158,13 +158,13 @@ pub(in crate::app::render) fn wide_hero_split(
         .saturating_sub(WIDE_HERO_PANE_GAP);
     (
         Rect {
-            x: content_area.x,
+            x: content_area.x + hero_w + WIDE_HERO_PANE_GAP,
             y: content_area.y,
             width: browser_w,
             height: content_area.height,
         },
         Rect {
-            x: content_area.x + browser_w + WIDE_HERO_PANE_GAP,
+            x: content_area.x,
             y: content_area.y,
             width: hero_w,
             height: content_area.height,
@@ -193,14 +193,14 @@ mod split_override_tests {
         // The list pane becomes exactly the override; the hero pane takes the
         // remainder and the shared gutter stays between them.
         assert_eq!(browser.width, 70);
-        assert_eq!(hero.x, browser.right() + WIDE_HERO_PANE_GAP);
+        assert_eq!(browser.x, hero.right() + WIDE_HERO_PANE_GAP);
         assert_eq!(browser.width + WIDE_HERO_PANE_GAP + hero.width, area.width);
         assert!(browser.width > default_browser.width);
         assert!(hero.width < default_hero.width);
     }
 }
 
-/// The Wide hero arrangement's left (list) pane geometry: a one-row pill
+/// The Wide hero arrangement's right (list) pane geometry: a one-row pill
 /// bar flush with the pane's top, then the list panel below it (decision
 /// 6's "pill row at top of list pane"). `right_panel` is the pane's full
 /// rect (its `y`/`height` anchor the pill row and the panel's bottom);
@@ -260,14 +260,14 @@ pub(in crate::app) fn wide_hero_browser_pane(
     }
 }
 
-/// Paints the Wide hero right pane and returns the shared content inset
+/// Paints the Wide hero left pane and returns the shared content inset
 /// (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill, extent, inset, and focus
 /// resolution -- callers must not resize, re-derive, or conditionally skip the
 /// fill, and must not apply a destination-specific inset.
 ///
 /// Takes `content_area` rather than a pane rect so a caller has nothing to
 /// hand in but the rect the arrangement already consumes -- it cannot supply
-/// a mutated right pane rect. `wide_hero_presentation` is pure and cheap, so
+/// a mutated hero pane rect. `wide_hero_presentation` is pure and cheap, so
 /// recomputing it here costs nothing.
 pub(in crate::app) fn wide_hero_hero_pane(
     f: &mut Frame,
@@ -402,7 +402,7 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
 }
 
 /// Paints the Wide hero arrangement's main content box: the `MainContentBox`
-/// surface's resting fill inset within the Wide hero left pane, present on every
+/// surface's resting fill inset within the Wide hero list pane, present on every
 /// Wide hero surface with a kind-dependent payload (the episode listing on TV,
 /// the track listing on Music, item description and metadata elsewhere) and one
 /// shared padding value (design.md D9, matching the pane inset from D6).

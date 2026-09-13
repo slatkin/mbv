@@ -42,17 +42,17 @@ impl Component for LibraryPanel {
                 &mut hits,
             ) {
                 // The split gesture owns the gap columns it painted: the
-                // gutter between the browser and hero panes, resolved
+                // gutter between the hero and browser panes, resolved
                 // against the panel's own content area.
                 let gap = ratatui::layout::Rect {
-                    x: geometry.browser.right(),
+                    x: geometry.hero.right(),
                     y: area.y,
-                    width: geometry.hero.x.saturating_sub(geometry.browser.right()),
+                    width: geometry.browser.x.saturating_sub(geometry.hero.right()),
                     height: area.height,
                 };
                 self.split = (gap.width > 0 && gap.height > 0).then_some(SplitGeometry {
                     gap,
-                    pane_origin_x: area.x,
+                    pane_origin_x: area.right(),
                     content_width: area.width,
                     width: geometry.browser.width,
                 });

@@ -1,7 +1,7 @@
-//! The Wide Library panel skeleton (task 5.2, design D4): the Browser pane
-//! (Selector row, List controls row, list box) | gap | Hero pane (resting
-//! surface; focused only when a Workspace is present and focused, design
-//! D6). One skeleton for every Wide library destination: destinations supply
+//! The Wide Library panel skeleton (task 5.2, design D4): the Hero pane
+//! (resting surface; focused only when a Workspace is present and focused,
+//! design D6) | gap | Browser pane (Selector row, List controls row, list
+//! box). One skeleton for every Wide library destination: destinations supply
 //! typed [`LibraryPanelContent`] and paint nothing themselves.
 //!
 //! The list box's presentation is the current carrier's (Wide/Inline via the

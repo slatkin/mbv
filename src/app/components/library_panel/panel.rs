@@ -33,8 +33,8 @@ use super::wide::{render_wide_skeleton, SkeletonHits, WideSkeletonGeometry};
 struct SplitGeometry {
     /// The shared `WIDE_HERO_PANE_GAP` gutter between the panes.
     gap: ratatui::layout::Rect,
-    /// Left edge of the panel's content area; the pointer column minus this
-    /// is the resolved list-pane width.
+    /// Right edge of the panel's content area; this minus the pointer
+    /// column is the resolved list-pane width.
     pane_origin_x: u16,
     /// The content area's width, used to clamp the resolved width.
     content_width: u16,
@@ -365,7 +365,7 @@ impl LibraryPanel {
             // the gap once the pointer leaves it.
             MouseGesture::Drag { to, .. } => {
                 let width = normalize_list_pane_width(
-                    Some(to.x.saturating_sub(split.pane_origin_x)),
+                    Some(split.pane_origin_x.saturating_sub(to.x)),
                     split.content_width,
                 )
                 .unwrap_or(split.width);

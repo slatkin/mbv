@@ -48,10 +48,10 @@ fn drag_once(harness: &mut TickHarness) {
     harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
     let outcome = harness.step();
     apply(harness, outcome);
-    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 6, gap.y));
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x - 6, gap.y));
     let outcome = harness.step();
     let expected = crate::app::list_pane_width::normalize_list_pane_width(
-        Some(gap.x + 6 - origin), content_width,
+        Some(origin - (gap.x - 6)), content_width,
     )
     .expect("drag resolves a valid width");
     assert!(outcome.raw_messages.iter().any(|message| matches!(
@@ -128,12 +128,12 @@ fn split_drag_is_live_only_and_tracks_press_drag_release() {
     let before = std::fs::read(crate::config::prefs_path()).ok();
     harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
     assert!(!harness.step().raw_messages.iter().any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
-    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x + 5, gap.y));
-    let expected = crate::app::list_pane_width::normalize_list_pane_width(Some(gap.x + 5 - origin), content_width).unwrap();
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x - 5, gap.y));
+    let expected = crate::app::list_pane_width::normalize_list_pane_width(Some(origin - (gap.x - 5)), content_width).unwrap();
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(w)) if *w == expected)));
     apply(&mut harness, outcome);
-    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x + 5, gap.y));
+    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x - 5, gap.y));
     assert!(!harness.step().raw_messages.iter().any(|m| matches!(m, Msg::Shell(ShellRequest::ResizeListPaneLive(_)))));
     assert_eq!(harness.model().app.list_pane_width, Some(expected));
     assert_eq!(std::fs::read(crate::config::prefs_path()).ok(), before);

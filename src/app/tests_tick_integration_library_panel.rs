@@ -423,10 +423,6 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
     let narrow_list = panel_of(&harness)
         .and_then(|panel| panel.test_list_rect())
         .expect("the Narrow frame paints a list slot");
-    assert!(
-        narrow_list.right() > wide_list.right(),
-        "the narrow list spans past the stale Wide list's right edge"
-    );
 
     // A press at the old gutter position no longer arms the split drag, so
     // the drag resolves no live width.
@@ -452,11 +448,14 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
         "the vanished gutter must not arm the split drag"
     );
 
-    // A click inside the newly painted narrow list but outside the stale
-    // Wide list rect (over the old hero pane) reaches the owner.
-    let click_x = narrow_list.right() - 1;
+    // A click inside the newly painted narrow list, not the stale Wide list
+    // rect, reaches the owner.
+    let click_x = narrow_list.x + 1;
     assert!(
-        click_x > wide_list.right(),
+        !wide_list.contains(ratatui::layout::Position {
+            x: click_x,
+            y: narrow_list.y + 1,
+        }),
         "test setup: the click must sit outside the stale Wide list rect"
     );
     harness.inject(tuirealm::event::Event::Mouse(MouseEvent {
