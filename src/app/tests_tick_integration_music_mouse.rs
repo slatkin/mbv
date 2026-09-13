@@ -110,6 +110,79 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
         .all(|message| !matches!(message, Msg::Shell(ShellRequest::MusicAlbumCursor { .. }))));
 }
 
+/// Modifier clicks on the Wide Music track list are delivered through the
+/// LibraryPanel surface gesture and retain the shared owner's selection.
+#[test]
+fn music_wide_track_modifier_clicks_toggle_range_and_plain_clear() {
+    let mut app = make_music_group_app();
+    let tracks = (0..3)
+        .map(|index| {
+            let mut track = make_item(&format!("Track {}", index + 1), "Audio");
+            track.id = format!("track-{}", index + 1);
+            track.index_number = index + 1;
+            track
+        })
+        .collect::<Vec<_>>();
+    app.album_tracks_cache.insert("album-1".into(), tracks);
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+
+    let (x, y) = {
+        let music = harness.model().test_music_owner();
+        let content = music
+            .track_list
+            .current_content_rect()
+            .expect("track table retained its content rect");
+        (content.x, content.y)
+    };
+    let mouse = |column, row, modifiers| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column,
+            row,
+            modifiers,
+        })
+    };
+
+    harness.inject(mouse(x, y + 1, tuirealm::event::KeyModifiers::CONTROL));
+    harness.step();
+    assert_eq!(
+        harness.model().test_music_owner().track_list.multi_selection(),
+        &["track-1".to_string(), "track-2".to_string()]
+    );
+
+    harness.inject(mouse(x, y + 2, tuirealm::event::KeyModifiers::SHIFT));
+    harness.step();
+    assert_eq!(
+        harness.model().test_music_owner().track_list.multi_selection(),
+        &[
+            "track-1".to_string(),
+            "track-2".to_string(),
+            "track-3".to_string()
+        ]
+    );
+
+    harness.inject(mouse(
+        x,
+        y,
+        tuirealm::event::KeyModifiers::NONE,
+    ));
+    harness.step();
+    assert!(harness
+        .model()
+        .test_music_owner()
+        .track_list
+        .multi_selection()
+        .is_empty());
+}
+
 /// The Wide album rail resolves its own retained row. Group pills remain
 /// Music-owned parent chrome, while the track table retains its independent
 /// child behavior (covered above).

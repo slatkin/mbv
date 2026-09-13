@@ -237,6 +237,86 @@ mod resolve_point {
 }
 
 #[test]
+fn delegate_first_toggle_includes_prior_cursor_target() {
+    use super::{RowLocalInput, RowLocalOutcome};
+
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=5)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
+            Some("4".to_string()),
+        ),
+        RowLocalOutcome::Consumed
+    );
+    assert_eq!(list.multi_selection(), &["1".to_string(), "4".to_string()]);
+}
+
+#[test]
+fn delegate_modifier_clicks_manage_multi_selection_and_plain_click_clears() {
+    use super::{RowLocalInput, RowLocalOutcome};
+
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=5)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    list.select_target(&"2".to_string());
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
+            Some("4".to_string()),
+        ),
+        RowLocalOutcome::Consumed
+    );
+    assert_eq!(list.multi_selection(), &["2".to_string(), "4".to_string()]);
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
+            Some("4".to_string()),
+        ),
+        RowLocalOutcome::Consumed
+    );
+    assert_eq!(list.multi_selection(), &["2".to_string()]);
+
+    list.delegate(
+        RowLocalInput::RangeClick(Position { x: 0, y: 0 }),
+        Some("5".to_string()),
+    );
+    assert_eq!(
+        list.multi_selection(),
+        &[
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+            "5".to_string()
+        ]
+    );
+    list.delegate(
+        RowLocalInput::RangeClick(Position { x: 0, y: 0 }),
+        Some("3".to_string()),
+    );
+    assert_eq!(list.multi_selection(), &["2".to_string(), "3".to_string()]);
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::Click(Position { x: 0, y: 0 }),
+            Some("5".to_string()),
+        ),
+        RowLocalOutcome::SelectedTargetChanged("5".to_string())
+    );
+    assert!(list.multi_selection().is_empty());
+    assert_eq!(list.selected_target(), Some(&"5".to_string()));
+}
+
+#[test]
 fn row_local_delegation_covers_movement_selection_and_external_intents() {
     use super::{RowIntent, RowLocalInput, RowLocalOutcome};
     let mut list = super::MediaList::new();
