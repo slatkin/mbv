@@ -190,9 +190,12 @@ fn inline_hero_lines(
         .map(str::trim)
         .filter(|text| !text.is_empty())
     {
+        // Overview is body content: soft white on every surface, never
+        // dimmed by focus (the Narrow hero has no focused/unfocused text
+        // split at all).
         segments.push((
             overview.to_string(),
-            Style::default().fg(palette::TEXT_MUTED),
+            Style::default().fg(palette::TEXT_EMPHASIS),
         ));
     }
 

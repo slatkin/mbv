@@ -165,6 +165,21 @@ fn portrait_hero_paints_right_aligned_wrap_around_text() {
             || line_text(&buf, row, block).contains("years")),
         "the overview wraps to full width below the image"
     );
+    // Soft white at all times: the overview is body content, never muted.
+    let overview_row = (image.bottom()..block.bottom())
+        .find(|&row| {
+            let text = line_text(&buf, row, block);
+            text.contains("desert") || text.contains("years")
+        })
+        .expect("an overview row below the image");
+    let first = (block.left()..block.right())
+        .find(|&x| !buf[(x, overview_row)].symbol().trim().is_empty())
+        .expect("the overview row paints text");
+    assert_eq!(
+        buf[(first, overview_row)].style().fg,
+        Some(palette::TEXT_EMPHASIS),
+        "narrow overview text is soft white"
+    );
 
     // No selector, controls or constituent rows inside the hero block.
     for row in block.y..block.bottom() {

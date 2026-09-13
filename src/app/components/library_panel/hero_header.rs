@@ -236,18 +236,14 @@ pub(in crate::app) fn paint_hero_pane_content(
                 width: panel.width.saturating_sub(PANE_PAD_X * 2),
                 height: panel.height.saturating_sub(PANE_PAD_Y * 2),
             };
-            // Plain text, never destination-styled; the hero pane's own focus
-            // (derived from the Workspace, design D6) picks the row colour.
-            let fg = if focused {
-                palette::TEXT_STRONG
-            } else {
-                palette::TEXT_MUTED
-            };
+            // Plain text, never destination-styled, and always soft white:
+            // the overview is body content, so the hero pane's focus (derived
+            // from the Workspace, design D6) does not dim it.
             let lines: Vec<WrappedHeroLine<'_>> = lines
                 .iter()
                 .map(|line| WrappedHeroLine {
                     text: line,
-                    style: ratatui::style::Style::default().fg(fg),
+                    style: ratatui::style::Style::default().fg(palette::TEXT_EMPHASIS),
                 })
                 .collect();
             paint_wide_hero_text(f, box_content, &lines);
@@ -353,6 +349,26 @@ mod hero_header_tests {
             }
         }
         false
+    }
+
+    /// The fg of the first cell painting `needle`'s first character.
+    fn text_fg(
+        buf: &ratatui::buffer::Buffer,
+        area: Rect,
+        needle: &str,
+    ) -> Option<ratatui::style::Color> {
+        for y in area.top()..area.bottom() {
+            let mut line = String::new();
+            let mut cells = Vec::new();
+            for x in area.left()..area.right() {
+                line.push_str(buf[(x, y)].symbol());
+                cells.push(buf[(x, y)].style().fg);
+            }
+            if let Some(offset) = line.find(needle) {
+                return cells.get(offset).copied().flatten();
+            }
+        }
+        None
     }
 
     fn placeholder_fill() -> ratatui::style::Color {
@@ -520,6 +536,29 @@ mod hero_header_tests {
             "overview box painted below the header"
         );
         assert!(text_in(&buf, below, "A very long overview."));
+        // Soft white at all times: the overview is body content, so the
+        // hero pane's focus (from the Workspace) never dims it.
+        assert_eq!(
+            text_fg(&buf, below, "A very long overview."),
+            Some(palette::TEXT_EMPHASIS),
+            "unfocused overview text"
+        );
+        let mut workspace_list = NoopList;
+        let focused = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("A very long overview.".into()),
+            workspace: Some(Workspace {
+                selector: None,
+                list: &mut workspace_list,
+                focused: true,
+            }),
+        };
+        let buf = draw_pane(AREA.width, AREA.height, &focused);
+        assert_eq!(
+            text_fg(&buf, below, "A very long overview."),
+            Some(palette::TEXT_EMPHASIS),
+            "focused overview text"
+        );
     }
 
     #[test]
