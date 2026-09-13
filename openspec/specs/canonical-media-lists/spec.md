@@ -86,9 +86,9 @@ It SHALL support Wide hero rails, provider workspace rows, and Queue fixed rows,
 - **AND** a parent treats the presentation as having no list target until the current view finishes.
 ### Requirement: InlineMediaBrowser owns selected-row replacement
 
-`InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, semantic painting delegation, and internal current-frame row and replacement geometry. Cursor, scroll, selected target, and other row-local state SHALL remain in the same logical owner used by the corresponding Wide or Grid presentation.
+`InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, semantic painting delegation, and internal current-frame row and replacement geometry. Cursor, scroll, selected target, and other row-local state SHALL remain in the same logical owner used by the corresponding Wide presentation.
 
-The parent SHALL retain destination framing and establish current claim and row-flow rectangles through its arrangement. The presentation's `Component::view` SHALL paint the established row flow once and SHALL be its only ordinary-row painting entry point for a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment and desired detail admission; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
+The owning panel (the Library panel or the Queue panel) SHALL retain framing and establish current claim and row-flow rectangles through its arrangement, and SHALL select which presentation of the shared owner is active from its own breakpoint. The presentation's `Component::view` SHALL paint the established row flow once and SHALL be its only ordinary-row painting entry point for a frame. Before that call, the owning panel MAY supply only a closed semantic policy for focused/selected treatment and desired detail admission; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
 
 The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, admitted detail rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve ordinary and replacement targets from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no detail rectangle.
 
@@ -102,11 +102,11 @@ It SHALL remain distinct from Inline Search and SHALL NOT become a second mounte
 
 #### Scenario: Grouped Music consumes one admitted detail result
 
-- **WHEN** Grouped Music paints its Inline album list with a selected album
+- **WHEN** the Narrow library panel paints Grouped Music's Inline album list with a selected album
 - **THEN** its Inline presentation admits or falls back from detail within one view over the shared owner
-- **AND** Grouped Music reads only the current retained admitted-detail rectangle before painting its provider-owned detail
-- **AND** Grouped Music does not rerun list layout, reconstruct selectable-row geometry, or transfer interaction state from another presentation
-- **AND** existing framing and spacing are unchanged.
+- **AND** the Library panel reads only the current retained admitted-detail rectangle before painting the one inline hero form into it
+- **AND** neither the panel nor Grouped Music reruns list layout, reconstructs selectable-row geometry, or transfers interaction state from another presentation
+- **AND** Grouped Music paints no detail of its own.
 
 #### Scenario: Inline and Wide read one owner
 
@@ -121,17 +121,17 @@ It SHALL remain distinct from Inline Search and SHALL NOT become a second mounte
 - **AND** a parent treats the presentation as having no list target or detail region until the current view finishes.
 ### Requirement: Responsive handoff preserves an explicit anchor
 
-A Wide, Inline, or Grid presentation change for one logical list SHALL reuse its shared canonical owner. The outgoing presentation SHALL record the selected ordinary row's viewport offset, and the receiving presentation SHALL preserve that offset when possible and clamp it to its viewport otherwise. It SHALL NOT copy cursor, selected target, scroll, or other row-local state between presentation-specific controls. Ordinary refresh SHALL preserve the stable target and locally clamp. Only a discrete navigation or restoration boundary MAY explicitly re-anchor the shared owner from a shell-owned stable target and row offset.
+A Wide or Inline presentation change for one logical list SHALL reuse its shared canonical owner. The outgoing presentation SHALL record the selected ordinary row's viewport offset, and the receiving presentation SHALL preserve that offset when possible and clamp it to its viewport otherwise. It SHALL NOT copy cursor, selected target, scroll, or other row-local state between presentation-specific controls. Ordinary refresh SHALL preserve the stable target and locally clamp. Only a discrete navigation or restoration boundary MAY explicitly re-anchor the shared owner from a shell-owned stable target and row offset.
 
 #### Scenario: TV re-anchors across breakpoints
 
-- **WHEN** TV changes Wide to Normal and later returns to Wide
+- **WHEN** TV changes Wide to Narrow and later returns to Wide
 - **THEN** the same logical series owner preserves the selected stable target and row-local state
 - **AND** the presentation handoff preserves or clamps only its viewport offset
 - **AND** no shell cursor/scroll mirror is adopted.
 ### Requirement: Named destinations compose without changing provider authority
 
-The slice SHALL compose the shared canonical media-list owner with applicable Wide and Inline presentations for hero-bearing generic Emby catalogs, Movies, the Emby homevideos feed view, and TV Series browsing. Non-hero two-column Emby catalogs SHALL keep their existing two-column arrangement policy while composing the Grid presentation over the same shared owner. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell; media-row interaction state and behavior SHALL remain in the shared owner.
+The slice SHALL compose the shared canonical media-list owner with applicable Wide and Inline presentations for generic Emby catalogs, Movies, the Emby homevideos feed view, and TV Series browsing. Every generic Emby catalog is hero-bearing; there is no non-hero two-column catalog presentation. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell; media-row interaction state and behavior SHALL remain in the shared owner.
 
 #### Scenario: One painter is active
 
@@ -141,9 +141,9 @@ The slice SHALL compose the shared canonical media-list owner with applicable Wi
 
 #### Scenario: Two-column policy remains presentation-only
 
-- **WHEN** a generic Emby destination uses its non-hero two-column policy
-- **THEN** Grid controls placement and current-frame geometry
-- **AND** the same shared owner supplies its stable target and row-local behavior.
+- **WHEN** a generic Emby catalog renders at any width
+- **THEN** it renders through the Wide or Narrow library panel with a Wide or Inline presentation
+- **AND** no two-column grid presentation renders.
 ### Requirement: Migration is accepted as one verified slice
 The implementation, representative stateful and rendered tests, automated gates, review, and acceptance SHALL form one uninterrupted slice. There SHALL be no pre-test visual-approval checkpoint. Affected surfaces SHALL provide metadata/state/image-bearing rendered evidence, stateful target-and-anchor evidence, source-level one-painter evidence, manual/live Wide/Narrow evidence before acceptance. The 800-line file-size gate SHALL be enforced as a pre-push check only and SHALL NOT gate acceptance of individual changes. A visual defect found during review or acceptance SHALL be treated as a bug, fixed, and followed by rerunning the affected tests and gates.
 
@@ -228,22 +228,22 @@ When grouped Music or an Audiobookshelf Podcast or Book destination meets the sh
 - **AND** it does not introduce a destination-specific arrangement or breakpoint.
 ### Requirement: One shared owner supports list-local extension
 
-Every in-scope logical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its Wide, Inline, and Grid presentations SHALL operate on that same owner rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
+Every in-scope logical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its Wide and Inline presentations SHALL operate on that same owner rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
 
-The in-scope flows SHALL be Queue slots; Home rows; generic Emby catalog rows including non-hero two-column catalogs; Movies and the Emby homevideos feed view; Grouped Music albums and tracks; TV series and episodes; Feeds entries; Audiobookshelf Podcast shows and filtered episodes; and Audiobookshelf Book titles and chapter/audio-part rows.
+The in-scope flows SHALL be Queue slots; Home rows; generic Emby catalog rows; Movies and the Emby homevideos feed view; Grouped Music albums and tracks; TV series and episodes; Feeds entries; Audiobookshelf Podcast shows and filtered episodes; and Audiobookshelf Book titles and chapter/audio-part rows.
 
-Parent destinations SHALL retain Service content, stable-target-to-domain lookup, active pane and component focus, section/group/filter/bucket/season/scope chrome, detail workspaces, loading, images, effects, persistence, and provider-specific typed intent translation. They SHALL NOT retain a second row cursor, row scroll, row-local membership or range state, row hit map, or authoritative selected-row identity.
+Parent destinations SHALL retain Service content, stable-target-to-domain lookup, active pane and component focus, section/group/filter/bucket/season/scope chrome, Workspaces, loading, images, effects, persistence, and provider-specific typed intent translation. They SHALL NOT retain a second row cursor, row scroll, row-local membership or range state, row hit map, or authoritative selected-row identity.
 
 #### Scenario: A list-local behavior has one implementation site
 
 - **WHEN** a developer adds a purely list-local state transition and visual decoration
 - **THEN** the production change is confined to the shared canonical media-list state/behavior owner and shared row painter
 - **AND** no destination production file changes
-- **AND** Wide, Inline, Grid, and provider-workspace media rows receive the behavior through their existing composition.
+- **AND** Wide, Inline, and provider-workspace media rows receive the behavior through their existing composition.
 
 #### Scenario: Responsive presentation does not synchronize local state
 
-- **WHEN** one logical list changes between Wide, Inline, or Grid presentation
+- **WHEN** one logical list changes between Wide and Inline presentation
 - **THEN** the new presentation reads the same shared owner
 - **AND** no cursor, scroll, membership, range, or other row-local state is copied between presentation-specific controls.
 
@@ -270,16 +270,6 @@ The mounted destination SHALL remain the sole TuiRealm event boundary and SHALL 
 - **WHEN** shared row handling resolves activation or context intent for a stable target
 - **THEN** the parent translates that provider-neutral result into its existing typed destination intent
 - **AND** Service, Player, persistence, and effect authority do not enter the shared list.
-### Requirement: Grid presentation shares canonical ownership
-
-The preserved non-hero two-column Emby catalog SHALL use a Grid presentation over the same shared media-list owner and delegation contract as Wide and Inline presentations. Grid SHALL own two-column row placement, viewport clamping, scrollbar facts, and retained current-frame cell geometry without changing the established two-column arrangement policy.
-
-#### Scenario: Generic catalog remains two columns
-
-- **WHEN** a non-hero Emby catalog is rendered at a width that selects its established two-column presentation
-- **THEN** it remains a two-column catalog
-- **AND** its cursor, scroll, stable target, row-local behavior, and point resolution come from the shared owner and Grid presentation
-- **AND** no parent cursor, scroll, selectable map, or cell hit map runs beside it.
 ### Requirement: Stable targets cross every canonical boundary
 
 Every selectable media row SHALL use a stable opaque target whose identity survives reorder and ordinary refresh. A destination request caused by a row SHALL carry the component-resolved stable target rather than a cursor, display-row index, or provider-relative index for shell re-resolution. Targets that are only unique within a parent SHALL include that parent identity.

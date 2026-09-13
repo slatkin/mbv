@@ -10,6 +10,26 @@ use ratatui::style::Style;
 use ratatui::widgets::Block;
 use ratatui::Frame;
 
+/// The queue visual slot's image projection (task 3.4, design D9): the queue
+/// projection issues every fetch for the now-playing item and projects the
+/// slot the painter consumes; painting reads it only — no fetch, no source
+/// resolution. The shell's image-cache authority resolves the slot's
+/// protocol handle for the painter (the same seam `paint_home_image` uses);
+/// the painter itself takes plain data only.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(in crate::app) struct QueueCardProjection {
+    /// The artwork slot's cache key; `None` paints the bundled placeholder
+    /// (empty queue, a source without artwork, or a resolved-empty fetch).
+    pub(in crate::app) cache_key: Option<String>,
+    /// Terminal images are off: the slot reserves its last painted geometry
+    /// and paints nothing.
+    pub(in crate::app) images_enabled: bool,
+    /// The visualizer is selected: painting stays App-coupled (it reads the
+    /// shell's sample window and panel focus) until the visual slot moves
+    /// into the Queue playback panel (task 3.5).
+    pub(in crate::app) visualizer: bool,
+}
+
 fn card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {
         "MusicAlbum" => super::widgets::MUSIC_ALBUM_IMAGE_TYPES,
@@ -27,227 +47,177 @@ fn card_cache_key(item: &EmbyItem) -> String {
     }
 }
 
-impl App {
-    fn render_card_image(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        cache_key: &str,
-        max_h: u16,
-        left_align: bool,
-    ) -> (u16, u16, bool) {
-        // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
-        // list keeps adequate space; taller terminals cap at 24 rows.
-        let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 24 });
-        let image_loading = self.card_image_loading.contains(cache_key);
-        let actual_size = if let Some(state) = self.cached_image_protocol_mut(cache_key) {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-            let avail = ratatui::layout::Size {
-                width: area.width,
-                height: max_h,
-            };
-            // `size_for` returns `None` while the resize+encode is still
-            // in-flight on the worker thread (ThreadProtocol has taken its
-            // inner protocol to send it off). Fall through to the
-            // loading/placeholder path below for that frame; the next
-            // frame after the response arrives will have a size again.
-            if let Some(actual) =
-                state.size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
-            {
-                let img_x = if left_align {
-                    area.x
-                } else {
-                    area.x + (area.width.saturating_sub(actual.width)) / 2
-                };
-                let img_rect = Rect {
-                    x: img_x,
-                    y: area.y,
-                    width: actual.width,
-                    height: actual.height,
-                };
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
-                    img_rect,
-                    state,
-                );
-                Some((actual.height, actual.width))
-            } else {
-                None
-            }
+/// The rectangle the queue card reserves for artwork: the last rendered
+/// image/visualizer size, or the full reserved slot (capped like the artwork
+/// height) before anything has rendered. Used by both the blank reservations
+/// and the visualizer so `v` never moves the queue list.
+pub(in crate::app) fn queue_card_reserved_rect(
+    last_card: (u16, u16),
+    terminal_height: u16,
+    area: Rect,
+    left_align: bool,
+) -> Rect {
+    let (last_height, last_width) = last_card;
+    let max_h = area.height.min(if terminal_height <= 30 { 12 } else { 24 });
+    let height = if last_height == 0 {
+        // Keep the queue title separator and one queue row visible when
+        // the card area is shorter than its normal image cap.
+        if max_h == area.height {
+            max_h.saturating_sub(2)
         } else {
-            None
-        };
-        if let Some((height, width)) = actual_size {
-            self.last_card_height = height;
-            self.last_card_width = width;
-            return (height, width, false);
+            max_h
         }
-        // No image loaded yet — if a fetch is in-flight and we have never
-        // rendered a card before, reserve the full height cap so the queue
-        // panel doesn't expand then collapse when the first image arrives.
-        let reservation = if self.last_card_height == 0 && image_loading {
-            self.card_reserved_rect(area, left_align)
+    } else {
+        last_height
+    };
+    let width = if last_width == 0 {
+        if left_align {
+            height.saturating_mul(2).min(area.width)
         } else {
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: self.last_card_height,
-            }
-        };
-        let placeholder_w = if self.last_card_width == 0 && image_loading {
-            reservation.width
-        } else {
-            self.last_card_width
-        };
-        // The reserved area above was otherwise left visually blank while
-        // loading -- paint a dim block over it instead, matching the
-        // compact movie banner's own poster placeholder. Image aspect
-        // ratios vary too widely here (backdrop, poster, album art,
-        // thumbnail) to estimate a tighter width the way the banner does
-        // for posters specifically, so this fills the full reserved area.
-        if image_loading && reservation.height > 0 {
-            f.render_widget(
-                Block::default().style(
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::ArtworkLoadingPlaceholder,
-                        false,
-                    )
-                    .fill),
-                ),
-                reservation,
-            );
+            area.width
         }
-        (reservation.height, placeholder_w, image_loading)
+    } else {
+        last_width
+    };
+    let x = if left_align {
+        area.x
+    } else {
+        area.x + (area.width.saturating_sub(width)) / 2
+    };
+    Rect {
+        x,
+        y: area.y,
+        width: width.min(area.width),
+        height: height.min(area.height),
     }
+}
 
-    /// Renders artwork for the active/selected queue item when it isn't an
-    /// `EmbyItem` (Audiobookshelf episode or book). Feed entries carry no
-    /// artwork (`QueueItem::artwork_url` is always `None` for them) and fall
-    /// straight through to the placeholder, same as an empty queue.
-    fn render_non_emby_card(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        left_align: bool,
-        raw_item: Option<QueueItem>,
-    ) -> (u16, u16, bool) {
-        let cover_id = match raw_item {
-            Some(QueueItem::Audiobookshelf(ep)) => Some((ep.library_item_id, false)),
-            Some(QueueItem::AudiobookshelfBook(book)) => Some((book.library_item_id, true)),
-            _ => None,
-        };
-        let Some((item_id, is_book)) = cover_id else {
-            return self.render_card_placeholder(f, area, left_align);
-        };
-        let Some(server_url) = self
-            .config
-            .lock()
-            .unwrap()
-            .audiobookshelf_setup
-            .as_ref()
-            .map(|setup| setup.server_url.clone())
-        else {
-            return self.render_card_placeholder(f, area, left_align);
-        };
+type CardImageProtocol = ratatui_image::thread::ThreadProtocol;
 
-        if is_book {
-            self.fetch_audiobookshelf_book_cover(server_url.clone(), item_id.clone());
-        } else {
-            self.fetch_audiobookshelf_cover(server_url.clone(), item_id.clone());
-        }
-        let suffix = self.current_protocol_suffix();
-        let cache_key = if is_book {
-            audiobookshelf_book_cover_cache_key(&server_url, &item_id, suffix)
-        } else {
-            audiobookshelf_cover_cache_key(&server_url, &item_id, suffix)
-        };
-
-        let use_placeholder = self
-            .card_image_states
-            .get(&cache_key)
-            .is_some_and(|e| e.img.is_none());
-        if use_placeholder {
-            return self.render_card_placeholder(f, area, left_align);
-        }
-        self.render_card_image(f, area, &cache_key, area.height, left_align)
+/// The queue visual slot's painter (task 3.4, design D9): a free function
+/// over projected state with no `App` access. `image` is the shell-resolved
+/// protocol handle for the slot's key (`None` while not ready); `loading`
+/// reserves the loading rectangle for an in-flight fetch. Returns
+/// `(rows_used, cols_used, image_loading)`.
+pub(in crate::app) fn render_card_painting(
+    f: &mut Frame,
+    area: Rect,
+    left_align: bool,
+    projection: &QueueCardProjection,
+    // `true` while a fetch for the slot's key is in flight: the painter
+    // reserves the loading rectangle instead of leaving the slot blank.
+    loading: bool,
+    image: Option<&mut CardImageProtocol>,
+    last_card: (u16, u16),
+    terminal_height: u16,
+) -> (u16, u16, bool) {
+    // The visualizer never reaches this painter (the `App` adapter paints it
+    // from the shell's sample window); degenerate input reserves geometry.
+    if projection.visualizer || !projection.images_enabled {
+        let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
+        return (rect.height, rect.width, false);
     }
-
-    fn render_card_placeholder(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        left_align: bool,
-    ) -> (u16, u16, bool) {
-        self.ensure_placeholder_card_image();
-        let rendered = self.render_card_image(
-            f,
-            area,
-            QUEUE_CARD_PLACEHOLDER_KEY,
-            area.height.min(24),
-            left_align,
-        );
-        if rendered == (0, 0, false) {
-            let rect = self.card_reserved_rect(area, left_align);
-            (rect.height, rect.width, false)
-        } else {
-            rendered
-        }
+    // The bundled placeholder slot caps its height at 24 rows like the
+    // compact banner's poster placeholder.
+    let placeholder_slot = projection.cache_key.is_none();
+    let cap = if terminal_height <= 30 { 12 } else { 24 };
+    let max_h = if placeholder_slot {
+        area.height.min(24)
+    } else {
+        area.height
     }
-
-    /// The rectangle the queue card reserves for artwork: the last rendered
-    /// image/visualizer size, or the full reserved slot (capped like the
-    /// artwork height) before anything has rendered. Used by both the blank
-    /// reservations and the visualizer so `v` never moves the queue list.
-    fn card_reserved_rect(&self, area: Rect, left_align: bool) -> Rect {
-        let max_h = area
-            .height
-            .min(if self.terminal_height <= 30 { 12 } else { 24 });
-        let height = if self.last_card_height == 0 {
-            // Keep the queue title separator and one queue row visible when
-            // the card area is shorter than its normal image cap.
-            if max_h == area.height {
-                max_h.saturating_sub(2)
-            } else {
-                max_h
-            }
-        } else {
-            self.last_card_height
+    .min(cap);
+    let mut image = image;
+    let actual_size = image.as_deref_mut().and_then(|state| {
+        let avail = ratatui::layout::Size {
+            width: area.width,
+            height: max_h,
         };
-        let width = if self.last_card_width == 0 {
-            if left_align {
-                height.saturating_mul(2).min(area.width)
-            } else {
-                area.width
-            }
-        } else {
-            self.last_card_width
-        };
-        let x = if left_align {
+        // `size_for` returns `None` while the resize+encode is still
+        // in-flight on the worker thread (ThreadProtocol has taken its
+        // inner protocol to send it off). Fall through to the
+        // loading/placeholder path below for that frame; the next
+        // frame after the response arrives will have a size again.
+        state
+            .size_for(ratatui_image::Resize::Scale(Some(RENDER_FILTER)), avail)
+            .map(|actual| (actual.height, actual.width, actual))
+    });
+    if let Some((height, width, _actual)) = actual_size {
+        let img_x = if left_align {
             area.x
         } else {
             area.x + (area.width.saturating_sub(width)) / 2
         };
-        Rect {
-            x,
+        let img_rect = Rect {
+            x: img_x,
             y: area.y,
-            width: width.min(area.width),
-            height: height.min(area.height),
-        }
+            width,
+            height,
+        };
+        f.render_stateful_widget(
+            ratatui_image::StatefulImage::default()
+                .resize(ratatui_image::Resize::Scale(Some(RENDER_FILTER))),
+            img_rect,
+            image.expect("image handle present"),
+        );
+        return (height, width, false);
     }
+    // No image loaded yet. If a fetch is in-flight and we have never rendered
+    // a card before, reserve the full height cap so the queue panel doesn't
+    // expand then collapse when the first image arrives; otherwise the last
+    // painted geometry holds the slot steady.
+    let (last_height, last_width) = last_card;
+    let reservation = if last_height == 0 && loading {
+        queue_card_reserved_rect(last_card, terminal_height, area, left_align)
+    } else {
+        Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: last_height,
+        }
+    };
+    let placeholder_w = if last_width == 0 && loading {
+        reservation.width
+    } else {
+        last_width
+    };
+    // The reserved area above was otherwise left visually blank while
+    // loading -- paint a dim block over it instead, matching the
+    // compact movie banner's own poster placeholder. Image aspect
+    // ratios vary too widely here (backdrop, poster, album art,
+    // thumbnail) to estimate a tighter width the way the banner does
+    // for posters specifically, so this fills the full reserved area.
+    if loading && reservation.height > 0 {
+        f.render_widget(
+            Block::default().style(Style::default().bg(
+                palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false).fill,
+            )),
+            reservation,
+        );
+    }
+    if placeholder_slot && reservation.height == 0 && last_width == 0 && !loading {
+        // An empty queue with no previous artwork geometry still reserves its
+        // fallback rectangle so toggling `v` never moves the queue list.
+        let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
+        return (rect.height, rect.width, false);
+    }
+    (reservation.height, placeholder_w, loading)
+}
 
-    /// Renders the selected visualizer into the queue card's reserved artwork
-    /// rectangle and returns the geometry the artwork/placeholder path would
-    /// return, so toggling `v` never moves the queue list. Capture eligibility
-    /// is a separate concern (`sync_visualizer`); here an empty sample window
-    /// just paints the cleared vectorscope background.
+impl App {
     fn render_card_visualizer(
         &mut self,
         f: &mut Frame,
         area: Rect,
         left_align: bool,
     ) -> (u16, u16, bool) {
-        let rect = self.card_reserved_rect(area, left_align);
+        let rect = queue_card_reserved_rect(
+            (self.last_card_height, self.last_card_width),
+            self.terminal_height,
+            area,
+            left_align,
+        );
         let bg = palette::surface_colors(
             palette::Surface::QueueCardVisualizer,
             matches!(self.effective_panel_focus(), PanelFocus::Queue),
@@ -257,22 +227,85 @@ impl App {
         (rect.height, rect.width, false)
     }
 
-    /// Renders the card image and returns `(rows_used, cols_used, image_loading)`.
-    /// `rows_used`/`cols_used` are 0 if the queue is empty or the image is not
-    /// yet ready. `image_loading` is true when a fetch is in-flight (caller
-    /// should defer rendering the rest of the view until the image arrives).
-    pub(in crate::app) fn render_card(
+    /// Renders the Queue playback panel's visual slot into `area` and
+    /// returns `(rows_used, cols_used, image_loading)` (task 3.5, D10: the
+    /// slot moved from the base frame's `render_card` into the panel's
+    /// paint path; the shell helper resolves the projected slot plus the
+    /// shell-resolved image protocol handle — no fetch, no source
+    /// resolution. The projection owns every fetch (task 3.4, D9)).
+    pub(in crate::app) fn render_queue_playback_slot(
         &mut self,
         f: &mut Frame,
         area: Rect,
         left_align: bool,
     ) -> (u16, u16, bool) {
-        if self.visualizer_enabled {
+        let mut projection = self.queue_card_projection.clone();
+        if projection.visualizer {
             return self.render_card_visualizer(f, area, left_align);
         }
-        if !self.images_enabled() {
-            let rect = self.card_reserved_rect(area, left_align);
+        if !projection.images_enabled {
+            let rect = queue_card_reserved_rect(
+                (self.last_card_height, self.last_card_width),
+                self.terminal_height,
+                area,
+                left_align,
+            );
             return (rect.height, rect.width, false);
+        }
+        // The slot's key: the projected artwork key, or the bundled
+        // placeholder when the fetch resolved empty or the slot is the
+        // placeholder itself. Resolved from the image cache's authority —
+        // a read, never a fetch.
+        let artwork_key = projection.cache_key.clone().filter(|key| {
+            !self
+                .card_image_states
+                .get(key)
+                .is_some_and(|entry| entry.img.is_none())
+        });
+        let placeholder_slot = artwork_key.is_none();
+        if placeholder_slot {
+            self.ensure_placeholder_card_image();
+            // The painter derives `placeholder_slot` from
+            // `projection.cache_key`; hand it the resolved-empty fact (a
+            // `Some` key whose fetch resolved empty means the placeholder)
+            // so the painter's fallback reservation matches the adapter's
+            // derivation (review of tasks 3.1-3.4).
+            projection.cache_key = None;
+        }
+        let key = artwork_key.as_deref().unwrap_or(QUEUE_CARD_PLACEHOLDER_KEY);
+        let loading = !placeholder_slot && self.card_image_loading.contains(key);
+        let last_card = (self.last_card_height, self.last_card_width);
+        let terminal_height = self.terminal_height;
+        let image = self.cached_image_protocol_mut(key);
+        let (height, width, loading) = render_card_painting(
+            f,
+            area,
+            left_align,
+            &projection,
+            loading,
+            image,
+            last_card,
+            terminal_height,
+        );
+        self.last_card_height = height;
+        self.last_card_width = width;
+        (height, width, loading)
+    }
+
+    /// The queue visual slot's image projection (task 3.4, design D9): the
+    /// queue projection — not the painter — issues every fetch for the
+    /// now-playing item and projects the slot to paint. Active-first, then
+    /// the viewed queue's selection, exactly as the painter-side source
+    /// resolution used to derive it.
+    pub(in crate::app) fn refresh_queue_card_image(&mut self) {
+        let mut projection = QueueCardProjection {
+            cache_key: None,
+            images_enabled: self.images_enabled(),
+            visualizer: self.visualizer_enabled,
+        };
+        if projection.visualizer || !projection.images_enabled {
+            self.queue_card_projection = projection;
+            return;
         }
         let playback = self.effective_playback_state();
         let active_source = if playback.active {
@@ -303,17 +336,53 @@ impl App {
                 let queue = self.displayed_queue();
                 queue.item_at(queue.queue_cursor).cloned()
             });
-            return self.render_non_emby_card(f, area, left_align, raw_item);
+            let cover_id = match raw_item {
+                Some(QueueItem::Audiobookshelf(ep)) => Some((ep.library_item_id, false)),
+                Some(QueueItem::AudiobookshelfBook(book)) => Some((book.library_item_id, true)),
+                _ => None,
+            };
+            let Some((item_id, is_book)) = cover_id else {
+                self.queue_card_projection = projection;
+                return;
+            };
+            let Some(server_url) = self
+                .config
+                .lock()
+                .unwrap()
+                .audiobookshelf_setup
+                .as_ref()
+                .map(|setup| setup.server_url.clone())
+            else {
+                self.queue_card_projection = projection;
+                return;
+            };
+            if is_book {
+                self.fetch_audiobookshelf_book_cover(server_url.clone(), item_id.clone());
+            } else {
+                self.fetch_audiobookshelf_cover(server_url.clone(), item_id.clone());
+            }
+            let cache_key = if is_book {
+                audiobookshelf_book_cover_cache_key(
+                    &server_url,
+                    &item_id,
+                    self.current_protocol_suffix(),
+                )
+            } else {
+                audiobookshelf_cover_cache_key(
+                    &server_url,
+                    &item_id,
+                    self.current_protocol_suffix(),
+                )
+            };
+            projection.cache_key = Some(cache_key);
+            self.queue_card_projection = projection;
+            return;
         };
 
         let img_types = card_image_types(&item.item_type);
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
         let cache_key = card_cache_key(&item);
         self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
-        let use_placeholder = self
-            .card_image_states
-            .get(&cache_key)
-            .is_some_and(|e| e.img.is_none());
 
         // Prefetch images for nearby items so they are ready before the cursor reaches them.
         // Collect data first (releasing the borrow on queue) then call fetch (&mut self).
@@ -341,10 +410,8 @@ impl App {
             let ptypes = card_image_types(&ptype);
             self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
         }
-        if use_placeholder {
-            return self.render_card_placeholder(f, area, left_align);
-        }
-        self.render_card_image(f, area, &cache_key, area.height, left_align)
+        projection.cache_key = Some(cache_key);
+        self.queue_card_projection = projection;
     }
 }
 
@@ -401,11 +468,14 @@ mod tests {
     }
 
     fn render_card(app: &mut App) -> (u16, u16, bool) {
+        // The projection owns every fetch (task 3.4); drive it the way the
+        // queue projection does, then render from the projected state.
+        app.refresh_queue_card_image();
         let backend = TestBackend::new(30, 20);
         let mut term = Terminal::new(backend).unwrap();
         let mut result = (0u16, 0u16, false);
         term.draw(|f| {
-            result = app.render_card(f, Rect::new(0, 0, 30, 20), false);
+            result = app.render_queue_playback_slot(f, Rect::new(0, 0, 30, 20), false);
         })
         .unwrap();
         result
@@ -651,11 +721,12 @@ mod tests {
         app.image_protocol_enabled = true;
         app.visualizer_enabled = true;
 
+        app.refresh_queue_card_image();
         let backend = TestBackend::new(30, 20);
         let mut term = Terminal::new(backend).unwrap();
         let mut geometry = (0, 0, false);
         term.draw(|f| {
-            geometry = app.render_card(f, Rect::new(0, 0, 30, 20), false);
+            geometry = app.render_queue_playback_slot(f, Rect::new(0, 0, 30, 20), false);
         })
         .unwrap();
         let (h, w, loading) = geometry;
@@ -698,6 +769,34 @@ mod tests {
                 .contains_key(QUEUE_CARD_PLACEHOLDER_KEY),
             "visualizer selection must not fall back to the bundled placeholder"
         );
+    }
+
+    /// A now-playing item whose fetch resolves empty must reserve the card
+    /// rect (the bundled placeholder) even with no prior card geometry, not
+    /// collapse to (0, 0) and hand its rows back to the queue panel (review
+    /// of tasks 3.1-3.4).
+    #[test]
+    fn now_playing_resolved_empty_art_reserves_the_placeholder_slot() {
+        let mut app = make_queue_app(3, 0);
+        app.image_protocol_enabled = true;
+        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.halfblock_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        set_playback(&mut app, 1, false);
+        // The now-playing item's fetch resolved empty; nothing has been
+        // painted yet, so there is no prior card geometry.
+        app.card_image_states
+            .insert("id1:P".into(), CachedImage::empty());
+
+        let (h, w, loading) = render_card(&mut app);
+
+        assert!(
+            h > 0 && w > 0,
+            "a resolved-empty now-playing fetch must reserve the card rect, got ({h},{w})"
+        );
+        assert!(!loading);
+        assert!(app
+            .card_image_states
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
     }
 
     #[test]
@@ -749,5 +848,100 @@ mod tests {
             "images-off must not fetch artwork"
         );
         assert!(app.card_image_states.is_empty());
+    }
+}
+
+/// Task 3.4 (design D9): the visual slot's painter is a free function over
+/// projected state — this buffer test constructs the projection and the
+/// geometry facts by hand and never touches `App`.
+#[cfg(test)]
+mod painter_tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    #[test]
+    fn card_painting_paints_from_projected_state_without_app_access() {
+        let mut term = Terminal::new(TestBackend::new(20, 10)).unwrap();
+        let area = Rect::new(0, 0, 20, 10);
+
+        // A projected artwork slot with a fetch in flight and no protocol
+        // state yet: the painter reserves the loading rectangle and paints
+        // the dim loading block.
+        let projection = QueueCardProjection {
+            cache_key: Some("now-playing:P".into()),
+            images_enabled: true,
+            visualizer: false,
+        };
+        let mut result = (0u16, 0u16, false);
+        term.draw(|f| {
+            result = render_card_painting(f, area, false, &projection, true, None, (0, 0), 40);
+        })
+        .unwrap();
+        let (height, width, loading) = result;
+        assert!(loading, "an in-flight fetch reports image_loading");
+        assert!(
+            height > 0 && width > 0,
+            "the loading reservation reserves rows"
+        );
+        let buf = term.backend().buffer();
+        let loading_fill =
+            crate::app::palette::surface_colors(palette::Surface::ArtworkLoadingPlaceholder, false)
+                .fill;
+        assert_eq!(
+            buf[(0, 0)].style().bg,
+            Some(loading_fill),
+            "the projected loading slot paints the dim reservation block"
+        );
+
+        // Terminal images off: the slot reserves its last geometry and paints
+        // nothing — no fetch, no placeholder state.
+        let off = QueueCardProjection {
+            cache_key: Some("now-playing:P".into()),
+            images_enabled: false,
+            visualizer: false,
+        };
+        let mut term = Terminal::new(TestBackend::new(20, 10)).unwrap();
+        let mut result = (0u16, 0u16, false);
+        term.draw(|f| {
+            result = render_card_painting(f, area, false, &off, false, None, (4, 6), 40);
+        })
+        .unwrap();
+        let (height, width, loading) = result;
+        assert!(!loading);
+        assert_eq!(
+            (height, width),
+            (4, 6),
+            "the images-off slot reports the last painted geometry"
+        );
+        assert_eq!(
+            term.backend().buffer()[(0, 0)].style().bg,
+            Some(ratatui::style::Color::Reset),
+            "images-off paints nothing (untouched cell)"
+        );
+
+        // The placeholder slot with no cached state: the fallback rectangle
+        // (the bundled placeholder's reservation) with no loading block.
+        let placeholder = QueueCardProjection {
+            cache_key: None,
+            images_enabled: true,
+            visualizer: false,
+        };
+        let mut result = (0u16, 0u16, false);
+        term.draw(|f| {
+            result = render_card_painting(f, area, false, &placeholder, false, None, (0, 0), 40);
+        })
+        .unwrap();
+        let (height, width, loading) = result;
+        assert!(!loading);
+        assert!(
+            height > 0 && width > 0,
+            "the empty-queue placeholder still reserves its fallback rectangle, got ({height},{width})"
+        );
+        assert_eq!(
+            term.backend().buffer()[(0, 0)].style().bg,
+            Some(ratatui::style::Color::Reset),
+            "a not-loading placeholder paints no dim block"
+        );
     }
 }

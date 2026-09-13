@@ -1,261 +1,234 @@
-use super::components::{
-    BrowserKey, BrowserKind, ComponentId, InlineSearchHost, MusicWorkspaceComponent,
-};
-use super::render::{wide_hero_fits, MusicWideRenderCtx};
+//! Shell projection for the grouped Music library owner.
+//! Music is retained by the LibraryPanel under `LibraryKey::Service(Music)`;
+//! it is not a mounted destination component.
+
+use super::components::library_panel::LibraryKey;
+use super::components::music_content::MusicContent;
+use super::components::{BrowserKey, BrowserKind, InlineSearchHost};
 use super::shell::{Model, MusicTrackFocusRequest};
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
 impl Model {
-    pub(super) fn music_workspace_component_id(&self) -> Option<ComponentId> {
+    fn music_owner_key(&self) -> Option<LibraryKey> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        if library.library.collection_type != "music"
-            || !self.app.is_music_group_view(index)
-            || !self.app.is_viewing_album_folders(index)
-        {
-            return None;
-        }
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: library.library.id.clone(),
-            kind: BrowserKind::Music,
-        }))
+        (library.library.collection_type == "music"
+            && self.app.is_music_group_view(index)
+            && self.app.is_viewing_album_folders(index))
+        .then(|| {
+            LibraryKey::Service(BrowserKey {
+                service: ServiceKind::Emby,
+                library_id: library.library.id.clone(),
+                kind: BrowserKind::Music,
+            })
+        })
     }
 
-    pub(super) fn sync_music_workspace(&mut self) {
-        let next_id = self.music_workspace_component_id();
-        if self.music_workspace_id != next_id {
-            match next_id {
-                Some(id) => {
-                    if !self.application.mounted(&id) {
-                        self.application
-                            .mount(id.clone(), Box::new(MusicWorkspaceComponent::new()), vec![])
-                            .expect("mount Music workspace");
-                        self.register_destination(&id);
-                        // First projection into a freshly mounted workspace:
-                        // adopt the shell's resting cursor once, explicitly
-                        // (a saved position restored before mount lands here).
-                        // A re-point at an already-mounted component keeps its
-                        // divergent local cursor.
-                        self.music_workspace_reanchor = true;
-                    }
-                    self.music_workspace_id = Some(id);
-                    self.push_music_workspace_content();
-                }
-                None => {
-                    self.music_workspace_id = None;
-                }
-            }
-        }
-
-        if self.music_workspace_id.is_none() {
-            // No Music workspace is mounted right now: a pending focus
-            // request (recursive album activation / position restore that
-            // landed on a non-mountable state) cannot be delivered, and must
-            // not fire later on an unrelated album.
-            self.music_track_focus_request = None;
-            self.music_workspace_reanchor = false;
-        }
+    pub fn music_owner(&self) -> Option<&MusicContent> {
+        let key = self.music_owner_key()?;
+        self.library_owner(&key)
     }
 
-    /// Event-scoped projection replacing the per-frame content mirror:
-    /// mirrors the active Music browse snapshot and panel geometry into the
-    /// mounted component, preserving its local cursor and track-focus state.
+    pub fn music_owner_mut(&mut self) -> Option<&mut MusicContent> {
+        let key = self.music_owner_key()?;
+        self.library_owner_mut(&key)
+    }
+
+    fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
+        let key = self.music_owner_key()?;
+        self.update_library_owner(key, || Box::new(MusicContent::new()), f)
+    }
+
     pub(super) fn push_music_workspace_content(&mut self) {
-        let Some(id) = self.music_workspace_id.as_ref() else {
+        // Music projects only in the album-folder grouped view (the same
+        // gate `music_owner_key` applies): outside it there is no owner to
+        // push into, and the body below must not run its side effects
+        // (`wide_music_render_ctx`, `fetch_album_tracks`) for an unrelated
+        // Emby library/item.
+        let Some(key) = self.music_owner_key() else {
             return;
         };
+        // Keep grouped album content loading in the shell projection seam;
+        // rendering must remain effect-free.
+        if let TabSelection::EmbyLibrary(index) = self.app.tab {
+            self.app.ensure_music_group_album_level(index);
+        }
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        let Some(library) = self.app.libs.get(index) else {
-            return;
-        };
-        if library.library.collection_type != "music"
-            || !self.app.is_music_group_view(index)
-            || !self.app.is_viewing_album_folders(index)
-        {
-            return;
+        // A freshly created owner (first push for this `LibraryKey`) has no
+        // prior selection to preserve: adopt the shell's resting cursor once,
+        // explicitly, exactly as the old mount-time trigger did. A re-point
+        // at an already-installed owner keeps its divergent local cursor.
+        if !self.library_panel_has_owner(&key) {
+            self.music_workspace_reanchor = true;
         }
-        // The persistent album controls own live selection and scroll. The
-        // shell only chooses the content snapshot's selected item: the
-        // resting position on an explicit re-anchor, otherwise the control's
-        // stable selected target when it is still present in the new catalog.
-        let resting = self.app.libs[index].nav_stack.last().map(|level| {
-            let resting = level.resting();
-            (resting.cursor(), resting.scroll())
-        });
+        let resting = self.app.libs[index]
+            .nav_stack
+            .last()
+            .map(|l| (l.resting().cursor(), l.resting().scroll()));
         let selected_target = (!self.music_workspace_reanchor)
             .then(|| {
-                self.application
-                    .get_component(id)
-                    .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                    .and_then(MusicWorkspaceComponent::selected_item)
-                    .map(|item| item.id)
+                self.music_owner()
+                    .and_then(MusicContent::selected_item)
+                    .map(|i| i.id)
             })
             .flatten();
-        let selected_cursor = self.app.libs[index]
+        let cursor = self.app.libs[index]
             .nav_stack
             .last()
             .and_then(|level| {
                 selected_target
                     .as_deref()
-                    .and_then(|target| level.items.iter().position(|item| item.id == target))
+                    .and_then(|t| level.items.iter().position(|i| i.id == t))
             })
-            .or_else(|| resting.map(|(cursor, _)| cursor));
-        let cursor_scroll = selected_cursor.map(|cursor| (cursor, 0));
-        let list = self
+            .or_else(|| resting.map(|r| r.0));
+        let mut context = self
             .app
-            .library_list_render_ctx(index, selected_cursor.unwrap_or(0), 0);
-        let selected_album = list.selected_item().cloned();
-        if let Some(album) = selected_album.as_ref() {
+            .wide_music_render_ctx(index, cursor.map(|c| (c, 0)));
+        if let Some(owner) = self.music_owner() {
+            if owner.inline_search().is_active() {
+                context.list = context.list.with_search(
+                    owner.inline_search().query().to_string(),
+                    owner.inline_search().loading(),
+                );
+            }
+        }
+        if let Some(album) = context.selected_album.as_ref() {
             if !self.app.album_tracks_cache.contains_key(&album.id)
                 && !self.app.album_tracks_loading.contains(&album.id)
             {
                 self.app.fetch_album_tracks(album.id.clone());
             }
         }
-        let context: MusicWideRenderCtx = self.app.wide_music_render_ctx(index, cursor_scroll);
-        let wide = self.app.is_right_panel_wide();
-        // Grouped Music paints one full-width album row at a time in both
-        // presentations, so navigation uses the same one-dimensional geometry.
-        let columns = 1;
-        // Consume the one-shot re-anchor trigger: a genuine navigation event
-        // (mount, group switch, recursive activation, saved-position restore)
-        // adopts the shell's resting cursor/scroll below, unconditionally.
         let reanchor = std::mem::take(&mut self.music_workspace_reanchor)
             .then(|| resting.unwrap_or((context.list.cursor(), 0)));
-        if let Some(comp) = self.application.get_component_mut(id) {
-            if let Some(music) = comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>() {
-                music.set_content(context);
-                if let Some((cursor, scroll)) = reanchor {
-                    music.re_anchor(cursor, scroll);
+        let wide = self.app.is_right_panel_wide();
+        let request = self.music_track_focus_request.take();
+        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        // Activation can outrun the album's track fetch (its tracks are not
+        // yet cached when the one-shot Enter request is consumed): the
+        // closure only reaches the owner, so it reports back whether the
+        // request needs to stay armed (bound to this album) for the tracks
+        // re-push to retry, rather than re-arming `self` from inside.
+        let rearm = self
+            .update_music_owner(|owner| {
+                owner.set_content(context);
+                if let Some((c, s)) = reanchor {
+                    owner.re_anchor(c, s);
                 }
-                music.set_album_columns(columns);
-                music.set_page_rows(self.app.layout.main.left_area.height as usize);
-                music.set_inline_track_focus_enabled(wide);
-                // Consume the one-shot track-focus request after the content
-                // push, so it cannot be clobbered by `set_content`'s album
-                // identity reset on the same tick.
-                match self.music_track_focus_request.take() {
-                    Some(MusicTrackFocusRequest::Clear) => music.clear_track_focus(),
-                    Some(MusicTrackFocusRequest::Enter { album_id }) => {
-                        let on_target = music
-                            .selected_item()
-                            .is_some_and(|album| album.id == album_id);
-                        if on_target {
-                            music.enter_track_focus();
-                            // Activation can outrun the album's track fetch;
-                            // keep the request (still bound to this album) so
-                            // the tracks re-push honors it. Narrow never enters,
-                            // so never retries.
-                            if wide && !music.track_focused() {
-                                self.music_track_focus_request =
-                                    Some(MusicTrackFocusRequest::Enter { album_id });
-                            }
-                        }
+                owner.set_focused(focused);
+                owner.set_inline_track_focus_enabled(wide);
+                match request {
+                    Some(MusicTrackFocusRequest::Clear) => {
+                        owner.clear_track_focus();
+                        None
                     }
-                    None => {}
+                    Some(MusicTrackFocusRequest::Enter { album_id })
+                        if wide && owner.selected_item().is_some_and(|a| a.id == album_id) =>
+                    {
+                        owner.enter_track_focus();
+                        (wide && !owner.track_focused())
+                            .then_some(MusicTrackFocusRequest::Enter { album_id })
+                    }
+                    _ => None,
                 }
-            }
+            })
+            .flatten();
+        if let Some(rearm) = rearm {
+            self.music_track_focus_request = Some(rearm);
         }
     }
 
-    pub(crate) fn render_music_workspace_component(&mut self, frame: &mut ratatui::Frame) {
-        let Some(id) = self.music_workspace_id.as_ref() else {
-            return;
-        };
-        // The queue-only mode hides the library panel; narrow Music falls back
-        // to `left_area`, which is only republished as the library content
-        // rect when the base frame renders the library. Without this guard the
-        // workspace would paint its albums over the queue-owned frame.
-        if !self.library_panel_visible() {
-            return;
-        }
-        // Wide Music paints into `wide_music_area`; narrow Music has no wide
-        // area, so fall back to the narrow main content area (`left_area`) so
-        // the component's `view` is still reached.
-        let mut area = self.app.layout.main.wide_music_area;
-        let wide = wide_hero_fits(area);
-        if !wide {
-            area = self.app.layout.main.left_area;
-        }
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-        let mut search_active = false;
-        if let Some(lib_idx) = self.app.tab.emby_library_index() {
-            let cursor_scroll = self
-                .application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .map(|music| (music.album_cursor(), music.album_scroll()))
-                .or_else(|| {
-                    self.app.libs[lib_idx].nav_stack.last().map(|level| {
-                        let resting = level.resting();
-                        (resting.cursor(), resting.scroll())
-                    })
-                });
-            let context = self.app.wide_music_render_ctx(lib_idx, cursor_scroll);
-            search_active = self
-                .application
-                .get_component(id)
-                .and_then(|comp| comp.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                .is_some_and(|music| music.inline_search().is_active());
-            context.publish_geometry(area, &mut self.app.layout.main);
-        }
-        if let Some(comp) = self
-            .application
-            .get_component_mut(id)
-            .and_then(|comp| comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>())
-        {
-            comp.set_list_pane_width(self.app.list_pane_width);
-        }
-        self.application.view(id, frame, area);
-        let projection = self
-            .application
-            .get_component_mut(id)
-            .and_then(|comp| comp.as_any_mut().downcast_mut::<MusicWorkspaceComponent>())
-            .map(|music| {
-                let image_paint = music.take_image_paint();
-                let layout = music.layout();
-                let (album_cursor, album_order) = music.painted_album_cursor_and_order();
-                (
-                    image_paint,
-                    layout.selected_item_rect,
-                    album_cursor,
-                    album_order.to_vec(),
-                )
-            });
-        if let Some((image_paint, selected_item_rect, album_cursor, album_order)) = projection {
-            if self.app.images_enabled() && !search_active {
-                if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                    let context = self.app.wide_music_render_ctx(lib_idx, None);
-                    self.app.prewarm_grouped_music_album_images(
-                        &context.list.items,
-                        album_cursor,
-                        &album_order,
-                    );
-                }
-            }
-            self.app.paint_music_image(frame, image_paint);
-            self.app.layout.main.selected_item_rect = selected_item_rect;
-        }
+    pub(super) fn sync_music_workspace(&mut self) {
+        self.push_music_workspace_content();
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_music_owner(&self) -> &MusicContent {
+        self.music_owner().expect("music owner")
+    }
+    #[cfg(test)]
+    pub(super) fn test_music_owner_mut(&mut self) -> &mut MusicContent {
+        self.music_owner_mut().expect("music owner")
     }
 }
 
 #[cfg(test)]
-#[path = "shell_music_workspace_cursor_tests.rs"]
-mod cursor_tests;
+mod tests {
+    use crate::app::render::{make_movie_app, make_music_group_app};
+    use crate::app::shell::Model;
+    use mbv_core::api::{EmbyClient, EmbyCredentialExchange};
+    use mbv_core::service_runtime::EmbyRuntime;
+    use std::sync::{Arc, Mutex};
+
+    /// A configured-but-unroutable `EmbyClient` (design mirrors the retired
+    /// `push_music_workspace_fetches_selected_album_tracks` test): the
+    /// `album_tracks_loading` insert `fetch_album_tracks` performs happens
+    /// synchronously before the network attempt, so it is observable
+    /// immediately after the sync call without waiting on (or requiring)
+    /// the doomed connection to resolve.
+    fn ready_emby_runtime() -> EmbyRuntime {
+        let mut client = EmbyClient::new(crate::config::Config::default());
+        client.apply_credential_exchange(&EmbyCredentialExchange {
+            server_url: "http://127.0.0.1:1".into(),
+            user_id: "user-id".into(),
+            token: "token".into(),
+        });
+        EmbyRuntime::ready(Arc::new(Mutex::new(client)))
+    }
+
+    /// Regression: `push_music_workspace_content` must not run its
+    /// Music-only side effects (`wide_music_render_ctx`, `fetch_album_tracks`)
+    /// for a selection on a non-Music Emby library. Before the fix the guard
+    /// only checked `tab.emby_library_index()`, so every tick spawned a real
+    /// track fetch for whatever item was selected on ANY Emby library tab.
+    #[test]
+    fn push_music_workspace_content_is_a_no_op_outside_music_album_folder_view() {
+        let mut app = make_movie_app();
+        app.emby_runtime = ready_emby_runtime();
+        let mut model = Model::new(app);
+
+        model.sync_mounted_surfaces();
+
+        assert!(
+            model.music_owner().is_none(),
+            "a non-Music library must never install a Music owner"
+        );
+        assert!(
+            !model.app.album_tracks_loading.contains("movie-focused"),
+            "the selected movie's tracks must never be fetched"
+        );
+        assert!(
+            !model.app.album_tracks_cache.contains_key("movie-focused"),
+            "the selected movie's tracks must never be cached as an album"
+        );
+    }
+
+    /// Positive control for the guard above: a genuine Music album-folder
+    /// selection still fetches the selected album's tracks.
+    #[test]
+    fn push_music_workspace_content_fetches_the_selected_albums_tracks() {
+        let mut app = make_music_group_app();
+        app.emby_runtime = ready_emby_runtime();
+        let mut model = Model::new(app);
+
+        model.sync_mounted_surfaces();
+
+        assert!(
+            model.music_owner().is_some(),
+            "the Music album-folder view must install its owner"
+        );
+        assert!(
+            model.app.album_tracks_loading.contains("album-1"),
+            "the selected album's tracks must be fetched"
+        );
+    }
+}
+
 #[cfg(test)]
-#[path = "shell_music_workspace_image_tests.rs"]
-mod image_tests;
-#[cfg(test)]
-#[path = "shell_music_workspace_mouse_tests.rs"]
-mod mouse_tests;
-#[cfg(test)]
-#[path = "shell_music_workspace_tests.rs"]
-mod tests;
+#[path = "shell_music_workspace_owner_tests.rs"]
+mod owner_tests;

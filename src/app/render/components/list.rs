@@ -1,4 +1,3 @@
-use crate::app::layout::LayoutMain;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use ratatui::layout::Rect;
 use ratatui::Frame;
@@ -9,9 +8,9 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
     ctx: &LibraryListRenderCtx,
     focused: bool,
     columns: usize,
-    layout: &mut LayoutMain,
+    layout: &mut Rect,
 ) -> usize {
-    layout.left_area = list_area;
+    *layout = list_area;
     if ctx.items.is_empty() {
         crate::app::render::render_placeholder(
             f,
@@ -31,10 +30,9 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
                 row_ctx,
                 ctx.letter_filter.clone(),
                 ctx.true_total(),
-                layout,
             )
         } else {
-            super::media_list::render_plain_rows(f, row_ctx, layout)
+            super::media_list::render_plain_rows(f, row_ctx)
         }
     }
 }

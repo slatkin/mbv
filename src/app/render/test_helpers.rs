@@ -1,8 +1,12 @@
 #![allow(dead_code, unused_imports)]
 
 use super::*;
-use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
-use crate::app::layout::{AppLayout, LayoutPlayback};
+use crate::app::components::library_panel::LibraryKey;
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::tv_content::TvContent;
+use crate::app::components::{BrowserKey, BrowserKind};
+use crate::app::components::{ComponentId, QueueComponent};
+use crate::app::layout::AppLayout;
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};
@@ -15,6 +19,7 @@ use crate::config::Config;
 use mbv_core::api::EmbyClient;
 use mbv_core::api::EmbyItem;
 use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
+use mbv_core::config::ServiceKind;
 use ratatui::backend::TestBackend;
 use ratatui::style::Color;
 use ratatui::Terminal;
@@ -26,16 +31,40 @@ pub use mounted::*;
 mod fixtures;
 pub use fixtures::*;
 
-pub fn set_browser_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
+/// The active TV library's owner key, derived exactly as production does
+/// (task 8.4: one `Service` key for a `tvshows` library; the owner lives
+/// inside the mounted `LibraryPanel`).
+fn tv_owner_key(model: &crate::app::shell::Model) -> LibraryKey {
+    let index = model
+        .app
+        .tab
+        .emby_library_index()
+        .expect("Emby library tab");
+    LibraryKey::Service(BrowserKey {
+        service: ServiceKind::Emby,
+        library_id: model.app.libs[index].library.id.clone(),
+        kind: BrowserKind::TvShows,
+    })
+}
+
+/// Seed the TV owner's authoritative selection directly (mirrors
+/// `set_browser_cursor_for_test`; task 8.4: the owner is addressed through
+/// the mounted panel's `LibraryKey`, not a `ComponentId`).
+pub fn set_tv_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
     model.sync_mounted_surfaces();
-    let id = model.emby_browser_id.clone().expect("browser mounted");
+    let key = tv_owner_key(model);
     model
         .application
-        .get_component_mut(&id)
-        .expect("browser component")
+        .get_component_mut(&ComponentId::Library)
+        .expect("library panel mounted")
         .as_any_mut()
-        .downcast_mut::<BrowserComponent>()
-        .expect("browser component type")
+        .downcast_mut::<LibraryPanel>()
+        .expect("LibraryPanel")
+        .owner_mut(&key)
+        .expect("tv owner installed")
+        .as_any_mut()
+        .downcast_mut::<TvContent>()
+        .expect("TvContent")
         .set_cursor_for_test(cursor);
 }
 
@@ -130,119 +159,7 @@ pub fn render_pill_bar_hitboxes(
     tabs
 }
 
-pub fn assert_surface_pills(
-    terminal: &Terminal<TestBackend>,
-    layout: &LayoutMain,
-    panel: Rect,
-    expected_pill_rows: usize,
-    spacer_bg: Color,
-    expected_ids: &[usize],
-    expected_labels: &[&str],
-    selected_id: usize,
-) {
-    assert_eq!(
-        layout
-            .selector_tabs
-            .iter()
-            .map(|(_, id)| *id)
-            .collect::<Vec<_>>(),
-        expected_ids,
-        "surface pill targets"
-    );
-    let first = layout
-        .selector_tabs
-        .first()
-        .expect("surface should publish pill targets")
-        .0;
-    assert!(
-        layout
-            .selector_tabs
-            .iter()
-            .all(|(rect, _)| rect.y == first.y && rect.height == 1),
-        "pill hitboxes must occupy one shared row: {:?}",
-        layout.selector_tabs
-    );
-    let buffer = terminal.backend().buffer();
-    let painted_rows = (panel.y..panel.bottom())
-        .filter(|y| (panel.x..panel.right()).any(|x| matches!(buffer[(x, *y)].symbol(), "◢" | "◤")))
-        .collect::<Vec<_>>();
-    assert_eq!(
-        painted_rows.len(),
-        expected_pill_rows,
-        "painted pill rows in designated panel: panel={panel:?} targets={:?}",
-        layout.selector_tabs
-    );
-    assert!(
-        painted_rows.contains(&first.y),
-        "target row is not a painted pill row: targets={:?} rows={painted_rows:?}",
-        layout.selector_tabs
-    );
-    let row_text = (0..buffer.area().width)
-        .map(|x| buffer[(x, first.y)].symbol())
-        .collect::<String>();
-    for label in expected_labels {
-        assert!(
-            row_text.contains(label),
-            "pill row missing {label:?}: {row_text:?}"
-        );
-    }
-    assert_eq!(
-        buffer[(first.x, first.y)].style().bg,
-        Some(palette::PILL_ROW_BG),
-        "pill row background"
-    );
-    for pill_y in &painted_rows {
-        assert!(
-            *pill_y + 1 < panel.bottom(),
-            "reserved spacer must fit in panel"
-        );
-        for x in panel.x..panel.right() {
-            assert_eq!(
-                buffer[(x, *pill_y + 1)].style().bg,
-                Some(spacer_bg),
-                "reserved spacer background at x={x}, y={}",
-                *pill_y + 1
-            );
-        }
-    }
-    let painted_spans = (first.x..panel.right())
-        .filter(|x| buffer[(*x, first.y)].symbol() == "◢")
-        .filter_map(|start| {
-            (start + 1..panel.right())
-                .find(|x| buffer[(*x, first.y)].symbol() == "◤")
-                .map(|end| Rect::new(start, first.y, end - start + 1, 1))
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(
-        painted_spans,
-        layout
-            .selector_tabs
-            .iter()
-            .map(|(rect, _)| *rect)
-            .collect::<Vec<_>>(),
-        "pill hitboxes must match painted horizontal spans"
-    );
-    for rect in layout.selector_tabs.iter().map(|(rect, _)| *rect) {
-        assert!(
-            panel.contains((rect.x, rect.y).into())
-                && panel.contains((rect.right() - 1, rect.bottom() - 1).into()),
-            "pill target outside designated panel: {rect:?} panel={panel:?}"
-        );
-    }
-    let selected = layout
-        .selector_tabs
-        .iter()
-        .find(|(_, id)| *id == selected_id)
-        .expect("selected pill id should have a hitbox")
-        .0;
-    assert_eq!(
-        buffer[(selected.x + 1, selected.y)].style().bg,
-        Some(palette::PILL_SELECTED_BG),
-        "selected pill appearance"
-    );
-}
-
-pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Terminal<TestBackend> {
+pub fn render_library_to_terminal(app: &mut App, layout: &mut Rect) -> Terminal<TestBackend> {
     let backend = TestBackend::new(60, 20);
     let mut term = Terminal::new(backend).unwrap();
     let mut model = crate::app::shell::Model::new(std::mem::replace(app, make_app_stub()));
@@ -250,16 +167,17 @@ pub fn render_library_to_terminal(app: &mut App, layout: &mut LayoutMain) -> Ter
     term.draw(|f| {
         model
             .app
-            .render_library(f, Rect::new(0, 0, 60, 20), layout, None);
-        model.render_emby_browser_component(f);
-        model.render_music_workspace_component(f);
+            .reserve_library_area(f, Rect::new(0, 0, 60, 20), layout, None);
+        if let Some(area) = model.app.layout.root_frame.library {
+            model.render_library_panel_at(f, area);
+        }
     })
     .unwrap();
     *app = model.app;
     term
 }
 
-pub fn render_library_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
+pub fn render_library_to_string(app: &mut App, layout: &mut Rect) -> String {
     let term = render_library_to_terminal(app, layout);
     buffer_to_string(&term)
 }
@@ -269,7 +187,7 @@ pub fn render_library_to_string(app: &mut App, layout: &mut LayoutMain) -> Strin
 /// whose hero panel reserves most of a short terminal).
 pub fn render_library_to_string_sized(
     app: &mut App,
-    layout: &mut LayoutMain,
+    layout: &mut Rect,
     width: u16,
     height: u16,
 ) -> String {
@@ -280,9 +198,10 @@ pub fn render_library_to_string_sized(
     term.draw(|f| {
         model
             .app
-            .render_library(f, Rect::new(0, 0, width, height), layout, None);
-        model.render_emby_browser_component(f);
-        model.render_music_workspace_component(f);
+            .reserve_library_area(f, Rect::new(0, 0, width, height), layout, None);
+        if let Some(area) = model.app.layout.root_frame.library {
+            model.render_library_panel_at(f, area);
+        }
     })
     .unwrap();
     *app = model.app;
@@ -293,57 +212,86 @@ pub fn render_view_to_terminal(
     app: &mut App,
     width: u16,
     height: u16,
-) -> (Terminal<TestBackend>, LayoutMain) {
-    // Mirror App::render(), which syncs terminal_width from the drawn Rect
-    // before render_main runs -- without this, effective_panel_mode()/
-    // effective_panel_focus() see whatever width the app was constructed
-    // with instead of the width this call is actually rendering at. Only
-    // terminal_width is touched here (the historical helper contract): the
-    // terminal-normalization side effects of `compute_frame_layout` (image
-    // cache clears, mini-view focus, queue-column clamping, terminal_height)
-    // would change card reservation geometry for tests that render a view
-    // at a different height than the stub default.
+) -> (Terminal<TestBackend>, Rect) {
+    // Mirror the real shell path (task 3.1): the sync pass + `draw_frame`,
+    // which composes the base frame and paints the mounted components —
+    // including the queue panel, which now paints its own surface. Only
+    // terminal_width is touched before the Model is built (the historical
+    // helper contract); the shell path itself normalizes terminal size.
     app.terminal_width = width;
+    let mut model = Model::new(std::mem::replace(app, make_app_stub()));
+    model.sync_mounted_surfaces();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutMain::default();
-    term.draw(|f| {
-        // Root/chrome geometry comes from the same authoritative paint-free
-        // computation the live seam uses (task 2.1a).
-        let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, height));
-        layout.panel_area = chrome.panel_area;
-        layout.panel_content_area = chrome.panel_content_area;
-        app.render_main(
-            f,
-            Rect::new(0, 0, width, height),
-            &chrome,
-            &mut layout,
-            &mut LayoutPlayback::default(),
-            0,
-            false,
-            &None,
-            None,
-        );
-    })
-    .unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    let layout = model.app.layout.left_area;
+    *app = model.app;
     (term, layout)
+}
+
+/// Queue panel geometry the mounted `QueuePanel` retained after a real shell
+/// draw (task 3.1): the framed list content area and the title band. The
+/// legacy queue geometry mirror is gone — the panel owns its geometry.
+#[derive(Clone, Copy, Debug)]
+pub struct QueuePanelView {
+    pub content_area: Rect,
+    pub title_area: Option<Rect>,
+}
+
+/// Read the queue panel's component-retained geometry from a model.
+pub fn queue_panel_view(model: &Model) -> QueuePanelView {
+    let queue = model
+        .application
+        .get_component(&crate::app::components::ComponentId::Queue)
+        .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+        .expect("QueueComponent mounted");
+    QueuePanelView {
+        content_area: queue.content_area(),
+        title_area: queue.test_title_area(),
+    }
+}
+
+/// Render one frame through the real shell path (sync pass + `draw_frame`,
+/// which composes the base frame and paints the mounted `QueuePanel`) and
+/// return the terminal plus the panel's component-retained geometry. `app` is
+/// restored afterwards, so tests can keep reading published `AppLayout`
+/// fields.
+pub fn render_queue_view_to_terminal(
+    app: &mut App,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, QueuePanelView) {
+    // Only terminal_width is touched before the Model is built (the
+    // historical helper contract): the queue panel's paint pass reads the
+    // terminal sizes normalized by root frame composition, so the placement
+    // follows the drawn frame while the card's reservation geometry keeps
+    // the stub's default height cap.
+    app.terminal_width = width;
+    let mut model = Model::new(std::mem::replace(app, make_app_stub()));
+    model.sync_mounted_surfaces();
+    let backend = TestBackend::new(width, height);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| model.draw_frame(f, false, false)).unwrap();
+    let view = queue_panel_view(&model);
+    *app = model.app;
+    (term, view)
 }
 
 pub fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
-    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
+    term.draw(|f| app.compose_root_frame(f)).unwrap();
     term
 }
 
-/// Render the Home destination exactly as the live shell does (task 5.3d,
-/// Home legacy underpaint removal): draw the legacy `App::render` base frame
-/// — which for Home now only reserves `home_area` — then paint the mounted
-/// `HomeComponent` through the real `Model::render_home_component` shell
-/// path (which sizes the component by `home_area` and paints the cover image
-/// it returned). Returns the model, so tests can read the component's own
-/// painted geometry and App state, together with the terminal. This is the
-/// Home characterization path once the legacy underpaint is gone.
+/// Render the Home destination exactly as the live shell does (task 5.11,
+/// Home as the first panel owner): run the real sync pass (which mounts the
+/// Library panel, points it at the Home owner, and projects the hero images),
+/// then draw the base frame — which for Home only reserves the library area —
+/// and paint the migrated `LibraryPanel` through the real
+/// `Model::render_library_panel` shell path. Returns the model, so tests can
+/// read the panel's own painted geometry and App state, together with the
+/// terminal.
 ///
 /// Home content is Model-owned (task 5.3d), so a test that needs seeded
 /// Continue Watching rows/pills uses `render_home_shell_with` and seeds
@@ -360,8 +308,10 @@ pub fn render_queue_shell(
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_base_frame(f, None);
-        model.render_queue_component(f);
+        model.app.compose_root_frame(f);
+        if let Some(area) = model.app.layout.root_frame.queue {
+            model.render_queue_panel_at(f, area);
+        }
     })
     .unwrap();
     (model, term)
@@ -389,19 +339,44 @@ pub fn render_home_shell_with(
     let mut model = crate::app::shell::Model::new(app);
     seed(&mut model);
     model.push_home_content();
-    model.sync_active_destination();
+    model.sync_mounted_surfaces();
     let backend = TestBackend::new(width, height);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        model.app.compose_base_frame(f, None);
-        model.render_home_component(f);
+        model.app.compose_root_frame(f);
+        if let Some(area) = model.app.layout.root_frame.library {
+            model.render_library_panel_at(f, area);
+        }
     })
     .unwrap();
     (model, term)
 }
 
-pub fn render_view(app: &mut App, width: u16, height: u16) -> LayoutMain {
+pub fn render_view(app: &mut App, width: u16, height: u16) -> Rect {
     render_view_to_terminal(app, width, height).1
+}
+
+/// The Home content owner inside the mounted `LibraryPanel` (task 5.11),
+/// for the panel-output test path: the characterization tests read the
+/// owner's own cursor/section/scroll — the same painted-truth contract the
+/// deleted mounted `HomeComponent` served.
+pub(in crate::app) fn home_owner(
+    model: &crate::app::shell::Model,
+) -> Option<&crate::app::components::home_content::HomeContent> {
+    use crate::app::components::library_panel::LibraryKey;
+    model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .and_then(|c| {
+            c.as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .and_then(|panel| panel.owner(&LibraryKey::Home))
+        .and_then(|owner| {
+            owner
+                .as_any()
+                .downcast_ref::<crate::app::components::home_content::HomeContent>()
+        })
 }
 
 /// Assert, against a *painted* buffer, that a Wide hero list pane leaves

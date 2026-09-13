@@ -237,15 +237,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // Main paints this row whenever the panel is four rows high
-        // (`render/components/chrome_player.rs:122,158`), in every mode; only
-        // its "On Now" title is Mini-only (`:125`).
-        Surface::PlaybackBottomRow => Row {
-            level: Level::Recess,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_BACKDROP,
-        },
         Surface::PlaybackStatusPill => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
@@ -259,7 +250,7 @@ pub(super) const fn row(surface: Surface) -> Row {
             resting: SURFACE_BACKDROP,
         },
         // Main paints the artwork-loading inset's fill (the `OVERLAY` value):
-        // `card.rs:111`, `album_art.rs:183`, `detail_series_view.rs:125`,
+        // `card.rs:111`, `album_art.rs:183`, the panel inline-hero painter,
         // `home_hero_emby.rs:121,272,286`. The row resolves through the
         // purpose-named `ARTWORK_LOADING_PLACEHOLDER` primitive (task 4.2),
         // never the border role's `OVERLAY`, so a border edit cannot move the
@@ -422,7 +413,7 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     ),
     (
         Surface::QueuePanel,
-        "the queue panel's resting half has always painted the app backdrop",
+        "the queue panel's recessed resting box paints the app backdrop",
     ),
     (
         Surface::MainContentBox,

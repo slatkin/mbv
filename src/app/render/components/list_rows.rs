@@ -6,7 +6,7 @@
 //! audiobookshelf show grid. `ListRenderCtx`/`DisplayRow` are its row
 //! model; `render_right_scrollbar` (`widgets.rs`) is its `Scrollbar`.
 //! Screens still call these functions directly and record their own row hit
-//! targets on `LayoutMain` rather than getting one back from a single
+//! targets on their own geometry rather than getting one back from a single
 //! entry point -- unifying that return shape, and folding in grouped
 //! Music's structurally different row model, is design.md's phase
 //! 8 ("Unified mouse hit targets"), not this extraction phase.
@@ -19,7 +19,7 @@ use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// Standard inset for every selected detail block.
-pub(in crate::app::render) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
+pub(in crate::app) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
 
 /// Returns `palette::TEXT_EMPHASIS` when `focused`, `palette::TEXT_SECONDARY` otherwise.
 pub(in crate::app::render) fn focused_or_subtle(focused: bool) -> Color {
@@ -49,7 +49,6 @@ pub(in crate::app::render) struct InlineReplacementPlan<'a> {
     detail_rows: u16,
     total_display_rows: usize,
     offset: usize,
-    detail_screen_row: Option<usize>,
 }
 
 impl<'a> InlineReplacementPlan<'a> {
@@ -72,7 +71,7 @@ impl<'a> InlineReplacementPlan<'a> {
                 stored_offset,
             )
         });
-        let (detail_rows, offset, detail_screen_row) = match admitted.flatten() {
+        let (detail_rows, offset) = match admitted.flatten() {
             Some(flow) => {
                 let mut offset = flow.offset;
                 if matches!(
@@ -87,11 +86,7 @@ impl<'a> InlineReplacementPlan<'a> {
                         offset = header_offset;
                     }
                 }
-                (
-                    desired_detail_rows,
-                    offset,
-                    Some(selected_row.saturating_sub(offset)),
-                )
+                (desired_detail_rows, offset)
             }
             None => {
                 if selected_row >= display_rows.len() {
@@ -104,13 +99,12 @@ impl<'a> InlineReplacementPlan<'a> {
                         detail_rows: 0,
                         total_display_rows: display_rows.len(),
                         offset,
-                        detail_screen_row: None,
                     };
                 }
                 let visible_rows = visible_rows as usize;
                 let lower_bound = selected_row.saturating_sub(visible_rows.saturating_sub(1));
                 let offset = stored_offset.clamp(lower_bound, selected_row);
-                (0, offset, None)
+                (0, offset)
             }
         };
         let total_display_rows =
@@ -122,7 +116,6 @@ impl<'a> InlineReplacementPlan<'a> {
             detail_rows,
             total_display_rows,
             offset,
-            detail_screen_row,
         }
     }
 
@@ -136,14 +129,6 @@ impl<'a> InlineReplacementPlan<'a> {
 
     pub(in crate::app::render) fn total_display_rows(&self) -> usize {
         self.total_display_rows
-    }
-
-    pub(in crate::app::render) fn hero_area(&self, content_area: Rect) -> Option<Rect> {
-        self.detail_screen_row.map(|screen_row| Rect {
-            y: content_area.y + screen_row as u16,
-            height: self.detail_rows,
-            ..content_area
-        })
     }
 
     pub(in crate::app::render) fn display_row(
@@ -222,11 +207,6 @@ pub(in crate::app) struct LibraryListRenderCtx {
     pub(in crate::app) loading: bool,
     pub(in crate::app) search_query: Option<String>,
     pub(in crate::app) search_loading: bool,
-    /// The projected surface shows a feed/home-video group-pill row
-    /// (`is_feed_home_video_group_view`; migrate-narrow-browse task 2.2). The
-    /// focused `BrowserComponent`'s `[`/`]` chord then means group cycling
-    /// (`BrowserCycleGroup`) rather than letter-pill cycling.
-    pub(in crate::app) group_pills: bool,
     /// Session-only Wide hero list-pane width override (`None` = default
     /// ratio). Carried here so the wide TV/Music render contexts that embed
     /// this struct forward it into the shared split; normalized against the
@@ -251,30 +231,8 @@ impl LibraryListRenderCtx {
             loading: false,
             search_query: None,
             search_loading: false,
-            group_pills: false,
             list_pane_width: None,
         }
-    }
-
-    /// Marks this projection as a feed/home-video group picker (task 2.2).
-    pub(in crate::app) fn with_group_pills(mut self, group_pills: bool) -> Self {
-        self.group_pills = group_pills;
-        self
-    }
-
-    pub(in crate::app) fn set_cursor(&mut self, cursor: usize) {
-        self.cursor = cursor;
-    }
-
-    pub(in crate::app) fn with_loading(mut self, loading: bool) -> Self {
-        self.loading = loading;
-        self
-    }
-
-    pub(in crate::app) fn with_cursor_scroll(mut self, cursor: usize, scroll: usize) -> Self {
-        self.cursor = cursor;
-        self.scroll = scroll;
-        self
     }
 
     pub(in crate::app) fn with_search(mut self, query: String, loading: bool) -> Self {
@@ -393,38 +351,6 @@ pub(in crate::app::render) fn item_cell_spans(
         spans.push(pad_span);
     }
     spans
-}
-
-/// The screen rect of the selected cell in a column-aware list, derived from
-/// the same `item_rows`/`row_offset` inputs `draw_column_selection_bleed`
-/// consumes plus the cell-width/column-gap geometry the renderer already
-/// computed. Returns `None` when the cursor isn't on screen (e.g. it sits in
-/// a filtered-out bucket).
-pub(in crate::app::render) fn selected_cell_rect(
-    content_area: Rect,
-    cursor: usize,
-    item_rows: &[Vec<usize>],
-    row_offset: usize,
-    cols: usize,
-    cell_width: u16,
-    column_gap: u16,
-) -> Option<Rect> {
-    let cursor_row = item_rows.iter().position(|row| row.contains(&cursor))?;
-    let row_idx = cursor_row.checked_sub(row_offset)?;
-    let col_in_row = item_rows[cursor_row]
-        .iter()
-        .position(|&idx| idx == cursor)
-        .unwrap_or(0);
-    let col = col_in_row.min(cols.saturating_sub(1));
-    let cell_x = content_area
-        .x
-        .saturating_add(col as u16 * cell_width.saturating_add(column_gap));
-    Some(Rect {
-        x: cell_x,
-        y: content_area.y + row_idx as u16,
-        width: cell_width,
-        height: 1,
-    })
 }
 
 /// Draws the library list's selected-row background extension after the

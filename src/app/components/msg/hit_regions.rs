@@ -24,4 +24,8 @@ pub enum TvHit {
     /// to the navigation item, sets App's resting library cursor, and persists
     /// the resolved value; the component never accesses App.
     SeriesRow(String),
+    /// Narrow-only letter-range pill; index resolved by the component (task
+    /// 8.1, unify-screens-under-panel-components: the merged `TvContent`
+    /// owner's Narrow presentation paints its own pill row).
+    LetterPill(usize),
 }

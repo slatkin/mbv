@@ -20,6 +20,11 @@ use mbv_core::api::EmbyItem;
 use mbv_core::player::PlayerCommand;
 use std::sync::Arc;
 
+/// The volume step the `-`/`+` keys dispatch and the `StatusBarPanel`
+/// volume pill's wheel mapping mirrors (single definition, review of
+/// tasks 2.1-2.2).
+pub(crate) const VOLUME_STEP: i64 = 5;
+
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Command {
     OpenIdleFeedLink,
@@ -100,12 +105,17 @@ pub(super) enum Command {
 /// Resolve the idle-feed link shortcut separately from transport bindings so
 /// `o` remains available to the view when no link is displayed. A daemon-backed
 /// player is still an idle feed view when no Emby session is connected, so the
-/// playback backend and connected-session gates stay separate here.
+/// playback backend and connected-session gates stay separate here. The
+/// `playback_panel_present_idle` input is the Queue playback panel's presence
+/// with nothing playing (task 3.8): the panel is mounted in every
+/// queue-visible layout, so the gate follows it instead of the panel mode and
+/// the link is gated off in idle `both` and `queue-only`, on in idle
+/// `library-only` where the strip displays the feed.
 pub(super) fn idle_feed_command_for_key(
     chord: KeyChord,
     player_active: bool,
     has_connected_session: bool,
-    queue_only_idle: bool,
+    playback_panel_present_idle: bool,
     link_available: bool,
 ) -> Option<Command> {
     match chord.code {
@@ -113,7 +123,7 @@ pub(super) fn idle_feed_command_for_key(
             if chord.mods.is_empty()
                 && !player_active
                 && !has_connected_session
-                && !queue_only_idle
+                && !playback_panel_present_idle
                 && link_available =>
         {
             Some(Command::OpenIdleFeedLink)
@@ -151,8 +161,8 @@ pub(super) fn playback_command_for_key(
         KeyCode::Char('P') if gated => Some(Command::PreviousTrack),
         KeyCode::Char('z') if !ctrl => Some(Command::CycleOrToggleSubtitle),
         KeyCode::Char('m') => Some(Command::ToggleMute),
-        KeyCode::Char('-') => Some(Command::AdjustVolume(-5)),
-        KeyCode::Char('+') | KeyCode::Char('=') => Some(Command::AdjustVolume(5)),
+        KeyCode::Char('-') => Some(Command::AdjustVolume(-VOLUME_STEP)),
+        KeyCode::Char('+') | KeyCode::Char('=') => Some(Command::AdjustVolume(VOLUME_STEP)),
         KeyCode::Char('a') if gated && !ctrl => Some(Command::ToggleMuteOrCycleAudio),
         _ => None,
     }

@@ -1,10 +1,11 @@
 use super::chrome::thin_vertical_thumb;
-use crate::app::layout::LayoutMain;
-use crate::app::{palette, App, TabSelection};
+#[cfg(test)]
+use crate::app::TabSelection;
+use crate::app::{palette, App};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
@@ -32,7 +33,18 @@ pub(in crate::app) const COLUMN_GAP: u16 = 0;
 /// indentation relative to this padded edge.
 pub(in crate::app) const TAB_LEFT_PAD: u16 = 2;
 
+/// Rows of top padding between the right panel's content and whatever sits
+/// above it (tab bar, or the top of the terminal in mini view): previously
+/// supplied incidentally by the wide playback strip's reserved band, which
+/// now mounts only in LibraryOnly and no longer covers Both.
+pub(in crate::app) const RIGHT_PANEL_TOP_PAD: u16 = 1;
+
 pub(in crate::app) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
+    let area = Rect {
+        y: area.y + RIGHT_PANEL_TOP_PAD,
+        height: area.height.saturating_sub(RIGHT_PANEL_TOP_PAD),
+        ..area
+    };
     if left_collapsed {
         Rect {
             x: area.x + 1,
@@ -230,13 +242,42 @@ pub(in crate::app) fn render_selected_block_borders(
     }
 }
 
+/// The QueuePanel's recessed content box inside its QueueColumn placement:
+/// two columns of horizontal padding, one row of vertical padding.
+pub(in crate::app) fn queue_panel_inset(area: Rect) -> Rect {
+    Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    }
+}
+
+/// Fill `area` with `surface`'s resolved background, clearing it first.
+pub(in crate::app) fn fill_surface(
+    f: &mut Frame,
+    area: Rect,
+    surface: palette::Surface,
+    focused: bool,
+) {
+    let bg = palette::surface_colors(surface, focused).fill;
+    f.render_widget(Clear, area);
+    f.render_widget(Block::default().style(Style::default().bg(bg)), area);
+}
+
 pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rect {
     if area.width == 0 || area.height == 0 {
         return Rect::default();
     }
 
-    let bg = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
-    f.render_widget(Block::default().style(Style::default().bg(bg)), area);
+    // The Queue panel owns a recessed box inside the Queue column surface.
+    // Paint the complete parent placement first, then the semantic content
+    // box inset by the standard two-column horizontal padding. The outer
+    // fill already clears the inset rect, so only paint its background.
+    fill_surface(f, area, palette::Surface::QueueColumn, focused);
+    let inset = queue_panel_inset(area);
+    let inner = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
+    f.render_widget(Block::default().style(Style::default().bg(inner)), inset);
 
     area
 }
@@ -258,30 +299,6 @@ fn selector_pill_style(selected: bool) -> Style {
             palette::PILL_FG
         })
         .bg(palette::surface_colors(chip, selected).fill)
-}
-
-/// Draws the shared " {count} items" header (SUBTLE) on the first row of
-/// `area` and returns `area` shrunk by that one row, so callers can render
-/// their list into the remaining space. Used by the home-video tab to keep
-/// the label styling and the one-row consumption identical to other tabs
-/// that once shared it (movies/tv show library lists no longer show this
-/// row; see `render_list`).
-pub(in crate::app) fn render_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
-    if area.width == 0 || area.height == 0 {
-        return area;
-    }
-    f.render_widget(
-        Paragraph::new(Span::styled(
-            format!(" {} items", count),
-            Style::default().fg(palette::TEXT_SECONDARY),
-        )),
-        Rect { height: 1, ..area },
-    );
-    Rect {
-        y: area.y + 1,
-        height: area.height.saturating_sub(1),
-        ..area
-    }
 }
 
 /// A horizontally-scrolling row of selector pills, shared by every
@@ -318,10 +335,27 @@ pub(in crate::app) fn render_pill_bar(
         "render_pill_bar: labels and ids must be parallel"
     );
     let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
-    if area.width == 0 || area.height == 0 || bar.labels.is_empty() {
+    if area.width == 0 || area.height == 0 {
         return selector_tabs;
     }
     let area = Rect { height: 1, ..area };
+    // The row surface is part of the canonical shell, painted even with no
+    // pills to show (task 12.2): the row's place stays reserved (its own
+    // doc comment above), so it must still repaint its own background
+    // rather than leave whatever was underneath before this panel owned the
+    // placement. `Clear` blanks every cell's symbol first -- a bare
+    // `Block::style` only recolors a cell, it never overwrites a stale
+    // glyph.
+    f.render_widget(ratatui::widgets::Clear, area);
+    f.render_widget(
+        Block::default().style(
+            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
+        ),
+        area,
+    );
+    if bar.labels.is_empty() {
+        return selector_tabs;
+    }
     let n = bar.labels.len();
     let bar_w = area.width as usize;
     let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
@@ -388,14 +422,6 @@ pub(in crate::app) fn render_pill_bar(
         let has_right = scroll_end < n;
         (scroll_start, scroll_end, has_left, has_right)
     };
-
-    // The row surface is part of the canonical shell.
-    f.render_widget(
-        Block::default().style(
-            Style::default().bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
-        ),
-        area,
-    );
 
     let mut spans: Vec<Span> = Vec::new();
     let mut x_cursor = area.x;
@@ -526,12 +552,13 @@ pub(in crate::app) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
 }
 
 impl App {
-    pub(in crate::app) fn render_library(
+    #[cfg(test)]
+    pub(in crate::app) fn reserve_library_area(
         &mut self,
         _f: &mut Frame,
         area: Rect,
-        layout: &mut LayoutMain,
-        cursor_scroll: Option<(usize, usize)>,
+        layout: &mut Rect,
+        _cursor_scroll: Option<(usize, usize)>,
     ) {
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
@@ -541,95 +568,41 @@ impl App {
         // was already normalized to a live index by `render_main`.
         match self.tab {
             TabSelection::Home => {
-                // Home content is painted by the mounted `HomeComponent`
-                // (the shell paints it right after this legacy base frame,
-                // reading `home_area` to size it). The legacy frame only
-                // reserves the full Home destination area here — it paints
-                // no Home rows, pills, hero, or image (task 5.3d, Home
-                // legacy underpaint removal).
-                layout.home_area = area;
+                // Home content is painted by the mounted `HomeComponent`.
+                // The legacy frame only reserves the full Home destination
+                // area here — it paints no Home rows, pills, hero, or image
+                // (task 5.3d, Home legacy underpaint removal); nothing reads
+                // the reservation back (task 12.4), so it is a no-op.
             }
             TabSelection::Feeds => {
-                layout.feeds_area = area;
+                // Feeds is painted by its embedded owner inside the mounted
+                // `LibraryPanel` (task 7.3); the legacy base frame reserves
+                // nothing and paints no feed entry, selector pill or filter
+                // pill.
             }
             TabSelection::AudiobookshelfLibrary(_) => {
-                // The Book surface is painted by the mounted
-                // `AudiobookshelfBookComponent` (task 5.3d.13) and the Podcast
-                // surface by the mounted `AudiobookshelfPodcastComponent` (task
-                // 5.3d.10, Unit E); the legacy App renderers were removed. This
-                // arm only reserves the destination content area the shell
-                // reads to place those component overlays.
-                let is_book = self.tab.audiobookshelf_index().is_some_and(|index| {
-                    matches!(
-                        self.audiobookshelf_kind_at(index),
-                        Some(
-                            crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseKind::Book
-                        )
-                    )
-                });
-                // `from_media_type` maps every ABS media type to exactly one of
-                // Book | Podcast, so the non-book arm *is* the podcast surface;
-                // a kind guard here would be unreachable branch weight.
-                if is_book {
-                    layout.audiobookshelf_book_area = area;
-                } else {
-                    layout.audiobookshelf_podcast_area = area;
-                }
+                // Audiobookshelf destinations are painted by the embedded
+                // LibraryPanel owner; the legacy frame only reserves the area.
             }
             TabSelection::EmbyLibrary(lib_idx) => {
-                self.ensure_music_group_album_level(lib_idx);
-                self.ensure_feed_home_video_group_level(lib_idx);
                 if self.is_feed_home_video_group_view(lib_idx) {
                     // BrowserComponent owns feed group presentation at every
                     // width; publish only the full browser area.
-                    layout.left_area = area;
+                    *layout = area;
                     return;
                 }
                 {
-                    // Music's mounted workspace needs the same-frame geometry
-                    // before its view replaces this legacy frame.
-                    if self.is_music_group_view(lib_idx)
-                        && self.is_viewing_album_folders(lib_idx)
-                        && crate::app::render::arrangements::wide_hero::wide_hero_fits(area)
-                    {
-                        let ctx = self.wide_music_render_ctx(lib_idx, cursor_scroll);
-                        ctx.publish_geometry(area, layout);
-                    }
-                    // Wide TV's mounted `TvWorkspaceComponent` paints the
-                    // whole Wide hero workspace itself (task 5.3d.18d);
-                    // the legacy wide-TV branch is gone. We only publish the
-                    // hand-off `tv_wide_*` rects here before `render_list` so
-                    // input routing (`App::wide_tv_library_area`) and the
-                    // shell's render seam can locate them.
-                    if self.is_wide_tv_library(lib_idx)
-                        && crate::app::render::arrangements::wide_hero::wide_hero_fits(area)
-                    {
-                        let ctx = self.wide_tv_render_ctx(lib_idx, cursor_scroll);
-                        ctx.publish_geometry(area, layout);
-                    }
+                    // Wide TV's mounted `LibraryPanel` paints the whole Wide
+                    // hero workspace through its embedded TV content owner
+                    // panel's shared skeleton (task 8.2); the legacy base
+                    // frame reserves only the destination area here and
+                    // paints no workspace.
+                    //
                     // BrowserComponent owns the browse body at every width;
                     // reserve only the destination area here.
-                    layout.left_area = area;
+                    *layout = area;
                 }
             }
         }
-    }
-
-    /// Resolves the display artist for an album item in the grouped music
-    /// views, synchronously (never schedules artist lookups). Priority
-    /// order:
-    /// 1. `item.artist` (Emby's Album-entity metadata) if non-empty.
-    /// 2. `album_artist_cache` entry if non-empty (fetched from the album's
-    ///    first few tracks — see `fetch_album_artist` in `images.rs`).
-    /// 3. `parse_album_folder_name` heuristic.
-    /// 4. Literal "Unknown Artist".
-    pub(in crate::app) fn resolve_group_album_artist(
-        &self,
-        item: &mbv_core::api::EmbyItem,
-    ) -> String {
-        crate::app::music_grouping::derive_album_artist(
-            item,
-            self.album_artist_cache.get(&item.id).map(String::as_str),
-        )
     }
 }

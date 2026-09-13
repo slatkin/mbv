@@ -1,10 +1,8 @@
 use super::super::{effective_sort_str, letter_bucket, LetterFilter};
 use super::hero::InlineDisplayRow;
 use super::list_rows::{
-    focused_or_subtle, item_cell_spans, selected_cell_rect, DisplayRow, InlineReplacementPlan,
-    ListRenderCtx,
+    focused_or_subtle, item_cell_spans, DisplayRow, InlineReplacementPlan, ListRenderCtx,
 };
-use crate::app::layout::LayoutMain;
 use crate::app::library_column_width::{library_cell_width, LIBRARY_COLUMN_GAP};
 use crate::app::palette;
 use crate::app::ui_util::*;
@@ -22,7 +20,6 @@ pub(in crate::app) fn render_letter_grouped_rows(
     ctx: ListRenderCtx,
     active_letter_filter: Option<LetterFilter>,
     ungrouped_total: usize,
-    layout: &mut LayoutMain,
 ) -> usize {
     let ListRenderCtx {
         content_area,
@@ -106,10 +103,10 @@ pub(in crate::app) fn render_letter_grouped_rows(
     let total_display = plan.total_display_rows();
     let final_offset = offset;
 
-    // Publish the full row structure (parallel to the display rows,
-    // empty entries for headers) so column-aware cursor movement and
-    // mouse hit-testing can resolve cells between frames.
-    layout.left_item_rows = plan.item_rows();
+    // The full row structure (parallel to the display rows, empty entries
+    // for headers), local to this paint call: column-aware cursor movement
+    // and mouse hit-testing within it resolve cells from this below.
+    let item_rows = plan.item_rows();
 
     let show_scrollbar = focused && total_display > visible;
 
@@ -199,21 +196,6 @@ pub(in crate::app) fn render_letter_grouped_rows(
 
     let mut state = ListState::default();
     state.select(Some(display_cursor.saturating_sub(offset)));
-    layout.selected_item_rect = selected_cell_rect(
-        content_area,
-        cursor,
-        &layout.left_item_rows,
-        offset,
-        cols,
-        cell_w as u16,
-        LIBRARY_COLUMN_GAP,
-    );
-
-    if let Some(hero_area) = plan.hero_area(content_area) {
-        layout.hero_area = hero_area;
-        layout.inline_hero_area = layout.hero_area;
-        layout.selected_item_rect = Some(layout.hero_area);
-    }
     f.render_stateful_widget(
         List::new(list_items).highlight_style(Style::default()),
         content_area,
@@ -232,13 +214,7 @@ pub(in crate::app) fn render_letter_grouped_rows(
     }
 
     if plan.should_extend_selection_background() {
-        super::list_rows::draw_column_selection_bleed(
-            f,
-            content_area,
-            cursor,
-            &layout.left_item_rows,
-            offset,
-        );
+        super::list_rows::draw_column_selection_bleed(f, content_area, cursor, &item_rows, offset);
     }
 
     final_offset

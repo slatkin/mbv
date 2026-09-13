@@ -1,0 +1,183 @@
+//! Shell wiring for the Movies/HomeVideos/Generic embedded content owner
+//! (`BrowserContent`, task 6.1, design D2). Mirrors `shell_home_content.rs`'s
+//! shape: the owner lives inside the mounted `LibraryPanel`, addressed by
+//! `LibraryKey::Service(BrowserKey)`, and the shell projects Model-owned
+//! browse snapshots into it at the same writer seams `shell_browser.rs`
+//! already calls for TV's still-mounted `BrowserComponent`
+//! (the former standalone browser lifecycle) — this file supplies the
+//! three functions take for the three migrated kinds, so every existing
+//! writer call site keeps working unchanged for both paths.
+//!
+//! Typed effects need no new dispatch: this owner emits the same
+//! `ShellRequest::Browser*`/`EmbyLibrary*` messages the mounted
+//! `BrowserComponent` did, and `shell_browser.rs::handle_browser_request` /
+//! `shell_messages.rs`'s dispatch are keyed only by the active tab, not by
+//! which component or owner sent the message.
+
+use super::components::browser_content::BrowserIdentity;
+use super::components::browser_content::{BrowserContent, BrowserOwnerPush};
+use super::components::library_panel::LibraryKey;
+use super::components::{BrowserKey, BrowserKind};
+use super::shell::Model;
+use super::TabSelection;
+use mbv_core::config::ServiceKind;
+
+impl Model {
+    /// The active tab's migrated-owner identity, when the active Emby
+    /// library's kind is one of the three this owner serves (design D2's
+    /// `LibraryKey::Service`). `None` for every other tab, including a TV or
+    /// Music library (still served by their own mounted components) or a
+    /// non-`EmbyLibrary` tab.
+    pub(super) fn active_migrated_browser_owner(&self) -> Option<(usize, LibraryKey, BrowserKind)> {
+        let TabSelection::EmbyLibrary(index) = self.app.tab else {
+            return None;
+        };
+        let library = self.app.libs.get(index)?;
+        let kind = BrowserKind::from_collection_type(&library.library.collection_type);
+        if !matches!(
+            kind,
+            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos
+        ) {
+            return None;
+        }
+        let key = LibraryKey::Service(BrowserKey {
+            service: ServiceKind::Emby,
+            library_id: library.library.id.clone(),
+            kind,
+        });
+        Some((index, key, kind))
+    }
+
+    /// Mutably borrow the owner installed for `key` inside the mounted
+    /// `LibraryPanel`, creating it with `kind` on first reach (mirrors
+    /// `update_home_owner`).
+    fn update_browser_owner<R>(
+        &mut self,
+        key: &LibraryKey,
+        kind: BrowserKind,
+        f: impl FnOnce(&mut BrowserContent) -> R,
+    ) -> Option<R> {
+        self.update_library_owner(key.clone(), || Box::new(BrowserContent::new(kind)), f)
+    }
+
+    /// The browse identity of library `index`'s current level (mirrors
+    /// `shell_browser.rs::browse_identity`, reused verbatim as the shared
+    /// `BrowserIdentity` shape).
+    fn browser_owner_identity(&self, index: usize) -> BrowserIdentity {
+        let lib = &self.app.libs[index];
+        let level = lib.nav_stack.last();
+        BrowserIdentity {
+            depth: lib.nav_stack.len(),
+            parent_id: level.map(|l| l.parent_id.clone()).unwrap_or_default(),
+            letter_filter: level.and_then(|l| l.letter_filter.as_ref().map(|f| f.index)),
+            sort_by: level.map(|l| l.sort_by.clone()).unwrap_or_default(),
+            sort_order: level.map(|l| l.sort_order.clone()).unwrap_or_default(),
+            unplayed_only: level.is_some_and(|l| l.unplayed_only),
+            feed_group: lib
+                .feed_home_video
+                .as_ref()
+                .map(|s| s.selected_group_index()),
+        }
+    }
+
+    /// Event-scoped content projection for the migrated owner (mirrors
+    /// former standalone projection's body): mirrors the shell-owned browse
+    /// snapshot — the feed/home-video group's selected items when active,
+    /// the ordinary nav-stack level otherwise — into the owner, re-seeding
+    /// position only on a real identity change, then prefetches nearby
+    /// Movie posters at the owner's now-authoritative cursor (#287,
+    /// `App::fetch_nearby_movie_posters`, moved here from
+    /// the old draw path since that call no longer
+    /// runs for these three kinds).
+    pub(super) fn push_browser_owner_content(
+        &mut self,
+        index: usize,
+        key: &LibraryKey,
+        kind: BrowserKind,
+    ) {
+        // Group-level loading belongs to the shell projection seam, not the
+        // render path: ensure the owner receives complete content before it
+        // is painted.
+        self.app.ensure_feed_home_video_group_level(index);
+        let feed_group_view = self.app.is_feed_home_video_group_view(index);
+        let home_video = self.app.is_home_video_view(index) && !feed_group_view;
+        let show_letter_pills = self.app.should_show_letter_pills(index);
+        let (items, total_count, library_total, letter_filter, loading, cursor, scroll) =
+            if feed_group_view {
+                let items = self.app.feed_home_video_selected_items(index);
+                let (cursor, scroll) = self.app.libs[index]
+                    .feed_home_video
+                    .as_ref()
+                    .map(|state| (state.video_cursor, state.video_scroll))
+                    .unwrap_or((0, 0));
+                let loading = self.app.libs[index]
+                    .feed_home_video
+                    .as_ref()
+                    .map(|state| state.loading)
+                    .or_else(|| {
+                        self.app.libs[index]
+                            .nav_stack
+                            .first()
+                            .map(|root| root.loading)
+                    })
+                    .unwrap_or(false);
+                let total_count = items.len();
+                (items, total_count, None, None, loading, cursor, scroll)
+            } else {
+                let cursor = self.app.libs[index]
+                    .nav_stack
+                    .last()
+                    .map_or(0, |l| l.resting().cursor());
+                let scroll = self.app.libs[index]
+                    .nav_stack
+                    .last()
+                    .map_or(0, |l| l.resting().scroll());
+                let ctx = self.app.library_list_render_ctx(index, cursor, scroll);
+                (
+                    ctx.items,
+                    ctx.total_count,
+                    ctx.library_total,
+                    ctx.letter_filter,
+                    ctx.loading,
+                    cursor,
+                    scroll,
+                )
+            };
+        let feed_groups: Vec<String> = self.app.libs[index]
+            .feed_home_video
+            .as_ref()
+            .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
+            .unwrap_or_default();
+        let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
+        let poster_window = items.clone();
+        let push = BrowserOwnerPush {
+            items,
+            total_count,
+            library_total,
+            letter_filter,
+            loading,
+            group_pills: feed_group_view,
+            home_video,
+            show_letter_pills,
+            feed_groups,
+            feed_group_cursor,
+        };
+        let identity = self.browser_owner_identity(index);
+        let landed_cursor = self.update_browser_owner(key, kind, |owner| {
+            owner.set_content(push);
+            if owner.note_browse_identity(identity) {
+                owner.apply_position(cursor, scroll);
+            }
+            owner.cursor()
+        });
+        if let Some(cursor) = landed_cursor {
+            self.app.fetch_nearby_movie_posters(&poster_window, cursor);
+        }
+    }
+
+    pub(super) fn push_active_browser_owner_content(&mut self) {
+        if let Some((index, key, kind)) = self.active_migrated_browser_owner() {
+            self.push_browser_owner_content(index, &key, kind);
+        }
+    }
+}

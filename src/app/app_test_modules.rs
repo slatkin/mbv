@@ -180,8 +180,16 @@ mod tests_tick_integration;
 mod tests_tick_integration_mouse;
 
 #[cfg(test)]
-#[path = "tests_tick_integration_wide_split_resize.rs"]
-mod tests_tick_integration_wide_split_resize;
+#[path = "tests_tick_integration_library_panel.rs"]
+mod tests_tick_integration_library_panel; // Library panel ownership tick coverage (task 5.9)
+
+#[cfg(test)]
+#[path = "tests_tick_integration_wide_split.rs"]
+mod tests_tick_integration_wide_split;
+
+#[cfg(test)]
+#[path = "tests_tick_integration_library_scroll.rs"]
+mod tests_tick_integration_library_scroll;
 
 #[cfg(test)]
 #[path = "tests_tick_integration_music_mouse.rs"]
@@ -214,6 +222,14 @@ mod tests_tick_integration_book; // Book ownership tick coverage
 #[cfg(test)]
 #[path = "tests_tick_integration_mouse_sidebar.rs"]
 mod tests_tick_integration_mouse_sidebar;
+
+#[cfg(test)]
+#[path = "tests_tick_integration_queue_playback.rs"]
+mod tests_tick_integration_queue_playback; // Queue playback panel ownership tick coverage (task 3.7)
+
+#[cfg(test)]
+#[path = "tests_tick_integration_root_frame_fill.rs"]
+mod tests_tick_integration_root_frame_fill; // RootFrame placement fill sentinel proof (task 12.2)
 
 #[cfg(test)]
 #[path = "tests_narrow_browse_migration.rs"]

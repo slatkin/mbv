@@ -4,8 +4,7 @@ mod wide_row;
 
 pub(in crate::app) use plain_rows::render_plain_rows;
 pub(in crate::app) use wide::{
-    render_grid_media_list_component, render_inline_media_browser_component,
-    render_wide_media_list_component,
+    render_inline_media_browser_component, render_wide_media_list_component,
 };
 
 // §3.2 one-painter instrumentation: per-frame execution counters for the two
@@ -18,8 +17,6 @@ thread_local! {
     pub(in crate::app) static PLAIN_ROWS_PAINTS: std::cell::Cell<usize> =
         const { std::cell::Cell::new(0) };
     pub(in crate::app) static INLINE_MEDIA_BROWSER_PAINTS: std::cell::Cell<usize> =
-        const { std::cell::Cell::new(0) };
-    pub(in crate::app) static GRID_MEDIA_LIST_PAINTS: std::cell::Cell<usize> =
         const { std::cell::Cell::new(0) };
 }
 

@@ -35,14 +35,6 @@ A selected Feeds Service row MUST paint its title exactly once, with its selecte
 - **THEN** the first heading remains readable and the final visible FeedEntry/marker retains its semantic background and marker
 - **AND** the semantic border/background cells do not overwrite either content row
 
-### Requirement: Narrow behavior is preserved
-The change MUST preserve existing Narrow Feeds Service output and geometry. Any Narrow change requires a failing regression test demonstrating necessity.
-
-#### Scenario: narrow regression
-- **GIVEN** the existing Narrow Feeds fixture
-- **WHEN** it is rendered before and after the Wide correction
-- **THEN** its established output and row geometry remain unchanged
-
 ### Requirement: Verification is non-vacuous
 Automated coverage MUST exercise selected, played, and active states with metadata-bearing FeedEntry fixtures at width 82 and a larger Wide width, and MUST assert rendered geometry/output for the three defects.
 

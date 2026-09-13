@@ -44,7 +44,10 @@ fn drawn_component() -> (
 ) {
     let slots = queue_three();
     let mut component = component_with_slots(slots.clone());
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    // The panel derives its title/status overhead from the placement it is
+    // handed (task 3.1); 14 rows leave eight framed body rows, enough for the
+    // three dragged rows to resolve.
+    let mut terminal = Terminal::new(TestBackend::new(40, 14)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();

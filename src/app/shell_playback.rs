@@ -1,15 +1,13 @@
-use super::components::{PlaybackComponent, PlaybackProjection, PlaybackRequest};
+use super::components::{PlaybackProjection, PlaybackRequest};
 use super::shell::Model;
-use super::{palette, PanelFocus, PanelMode};
+use super::{palette, PanelFocus};
 
 impl Model {
-    pub(super) fn sync_playback(&mut self) {
-        let id = super::components::ComponentId::Playback;
-        if !self.application.mounted(&id) {
-            self.application
-                .mount(id.clone(), Box::new(PlaybackComponent::new()), vec![])
-                .expect("mount Playback");
-        }
+    /// The shared transport projection both playback panels consume (task
+    /// 3.5, D10): one builder so the queue-column panel and the right-column
+    /// strip cannot drift in the facts they show. The caller sets its own
+    /// panel surface identity on top.
+    pub(in crate::app) fn transport_projection(&mut self) -> PlaybackProjection {
         let state = self.app.effective_playback_state();
         let title = if state.active {
             self.app
@@ -40,15 +38,14 @@ impl Model {
         let show_controls = state.active
             || self.app.connected_session_id.is_some()
             || self.app.cast_attachment.is_some();
-        let focused = matches!(self.app.effective_panel_focus(), PanelFocus::Queue);
-        let projection = PlaybackProjection {
+        PlaybackProjection {
             state,
             show_controls,
-            // The panel's own identity plus the site's focus bit, verbatim;
-            // the painter resolves the fill through the surface table.
+            // The panel's own identity plus the site's focus bit; the painter
+            // resolves the fill through the surface table. Each sync sets the
+            // site's surface on top of this default.
             panel: palette::Surface::PlaybackPanel,
-            panel_focused: focused,
-            narrow_player: self.app.effective_panel_mode() == PanelMode::QueueOnly,
+            panel_focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
             now_playing_title: now_playing_title.clone(),
             title_parts: now_playing_title
                 .as_ref()
@@ -67,23 +64,6 @@ impl Model {
             use_nerd_fonts: self.app.use_nerd_fonts,
             stop_available: self.app.connected_session_id.is_some() || state.active,
             next_available: self.app.transport_prev_next_available().1,
-        };
-        if let Some(comp) = self.application.get_component_mut(&id) {
-            if let Some(playback) = comp.as_any_mut().downcast_mut::<PlaybackComponent>() {
-                playback.set_projection(projection);
-            }
-        }
-    }
-
-    pub(super) fn render_playback_component(&mut self, frame: &mut ratatui::Frame) {
-        let id = super::components::ComponentId::Playback;
-        if self.application.mounted(&id) {
-            // `compose_base_frame` has already published this frame's chrome in
-            // this same pass, so the panel rect is current. In every mode where
-            // the base frame paints the panel itself (queue-only mini view) it
-            // is empty, and the component paints nothing.
-            let area = self.app.layout.playback.player_area;
-            self.application.view(&id, frame, area);
         }
     }
 

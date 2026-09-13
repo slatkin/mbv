@@ -118,7 +118,7 @@ impl App {
         // The library list is rendered into the right panel; use the panel
         // height directly (rows are single-line; subtract 1 for the
         // count/search header line).
-        (self.layout.main.left_area.height as usize)
+        (self.layout.left_area.height as usize)
             .saturating_sub(1)
             .max(1)
     }

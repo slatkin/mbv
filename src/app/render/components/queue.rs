@@ -1,6 +1,4 @@
-use crate::app::components::media_list::{
-    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
-};
+use crate::app::components::media_list::{WideMediaList, WideMediaListPaintPolicy};
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
@@ -31,11 +29,7 @@ pub(in crate::app) fn render_queue_body(
 ) {
     match presentation {
         QueuePresentation::Wide(list) => {
-            list.set_paint_policy(WideMediaListPaintPolicy::new(
-                focused,
-                SelectedRowSurface::OwningQueueColumn,
-                throbber,
-            ));
+            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused, throbber));
             Component::view(list, frame, area);
         }
     }
@@ -99,7 +93,7 @@ impl App {
             icon.style = icon.style.fg(palette::TEXT_METADATA);
         }
         Self::uppercase_status_label(&mut local_spans);
-        let (remote_icon, remote_label) =
+        let (remote_icon, _remote_label) =
             self.remote_icon_and_label(remote_state, &daemon_endpoint);
         let tracking = if matches!(remote_state, RemoteSlotState::AttachedSession) {
             self.remote_tracker
@@ -143,7 +137,10 @@ impl App {
                 .map(|span| span.content.to_string())
                 .unwrap_or_default(),
             remote_icon: remote_icon.to_string(),
-            remote_label: format!("{}{}", remote_label.trim_start(), tracking),
+            // The host label comes from the one shared playback-target
+            // resolution (task 3.3); the queue title extends it with its own
+            // tracking suffix.
+            remote_label: format!("{}{}", self.playback_host_label(), tracking),
             local_selected: self.viewed_queue_scope() == QueueScope::Local,
             show_split,
             is_mbv_session,

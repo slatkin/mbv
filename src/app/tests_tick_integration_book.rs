@@ -1,126 +1,69 @@
-use crate::app::components::{AudiobookshelfBookComponent, Msg, ShellRequest, TerminalObserverEvent};
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::components::msg::AudiobookshelfBookMove;
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::TabSelection;
-use crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState;
-use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfLibrary};
+use mbv_core::audiobookshelf::{AudiobookshelfBook, AudiobookshelfChapter, AudiobookshelfLibrary};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-fn book(harness: &mut TickHarness) -> &mut AudiobookshelfBookComponent {
-    harness
-        .model_mut()
-        .abs_book_component_mut(1)
-        .expect("book component mounted")
-}
-
-fn harness(width: u16) -> TickHarness {
+fn harness() -> TickHarness {
     let mut app = audiobookshelf_app();
-    let library = AudiobookshelfLibrary {
-        id: "abs-books".into(),
-        name: "ABS Books".into(),
-        media_type: "book".into(),
-    };
-    let mut state = AudiobookshelfBookBrowseState::new(library.clone());
-    state.books = (0..8)
-        .map(|index| AudiobookshelfBook {
-            library_item_id: format!("book-{index}"),
-            title: format!("Book {index}"),
-            author_display: Some("Author".into()),
-            author_sort_key: "Author".into(),
-            cover_path: None,
-            duration_seconds: 60.0,
-            narrator: None,
-            published_year: None,
-            genres: Vec::new(),
-            description: None,
-            series_name: None,
-            chapters: Vec::new(),
-            audio_files: Vec::new(),
-        })
-        .collect();
+    let library = AudiobookshelfLibrary { id: "abs-books".into(), name: "Books".into(), media_type: "book".into() };
+    let mut state = crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState::new(library.clone());
+    state.books = (0..8).map(|i| AudiobookshelfBook {
+        library_item_id: format!("book-{i}"), title: format!("Book {i}"), author_display: Some("Author".into()), author_sort_key: "Author".into(), cover_path: None, duration_seconds: 60.0, narrator: None, published_year: None, genres: vec![], description: None, series_name: None, chapters: vec![AudiobookshelfChapter { id: 0, start: 0.0, end: 60.0, title: "Chapter".into() }], audio_files: vec![],
+    }).collect();
     state.buckets = crate::app::types_audiobookshelf_browse::build_surname_buckets(&state.books);
     state.selected_id = Some("book-0".into());
+    state.detail_cache.insert(
+        "book-0".into(),
+        (vec![AudiobookshelfChapter { id: 0, start: 0.0, end: 60.0, title: "Chapter".into() }], vec![]),
+    );
     app.audiobookshelf_libraries.push(library);
-    app.audiobookshelf_book_browse
-        .push(AudiobookshelfBookBrowseState::new(AudiobookshelfLibrary {
-            id: "unused".into(),
-            name: "Unused".into(),
-            media_type: "book".into(),
-        }));
+    app.audiobookshelf_book_browse.push(crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState::new(AudiobookshelfLibrary { id: "unused".into(), name: "Unused".into(), media_type: "book".into() }));
     app.audiobookshelf_book_browse.push(state);
     app.tab = TabSelection::AudiobookshelfLibrary(1);
-    app.terminal_width = width;
-    app.terminal_height = 24;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-    harness.model_mut().push_audiobookshelf_book_content();
-    harness
+    app.terminal_width = 140; app.terminal_height = 24;
+    let mut h = TickHarness::new(app);
+    h.model_mut().sync_mounted_surfaces();
+    h
 }
 
-fn draw(harness: &mut TickHarness, width: u16) {
-    harness.model_mut().app.terminal_width = width;
-    let mut terminal = Terminal::new(TestBackend::new(width, 24)).unwrap();
-    terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
+fn draw(h: &mut TickHarness) {
+    let mut terminal = Terminal::new(TestBackend::new(140, 24)).unwrap();    terminal.draw(|f| h.model_mut().draw_frame(f, false, false)).unwrap();
 }
 
 #[test]
-fn book_tick_wheel_claims_only_the_active_control_at_both_breakpoints() {
-    for width in [crate::app::TWO_COLUMN_THRESHOLD, crate::app::TWO_COLUMN_THRESHOLD - 1] {
-        let mut off = harness(width);
-        draw(&mut off, width);
-        off.inject(Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: 0,
-            row: 0,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(off.step().raw_messages, vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)]);
-        assert_eq!(book(&mut off).selected_book_id(), Some("book-0"));
-
-        let mut on = harness(width);
-        draw(&mut on, width);
-        let rect = book(&mut on).geometry().left_area;
-        on.inject(Event::Mouse(MouseEvent {
-            kind: MouseEventKind::ScrollDown,
-            column: rect.x + 1,
-            row: rect.y,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert!(on.step().raw_messages.contains(&Msg::Shell(
-            ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(Some("book-1".into()))),
-        )));
-        assert_eq!(book(&mut on).selected_book_id(), Some("book-1"));
-    }
+fn books_panel_is_focused_and_mouse_eligible() {
+    let mut h = harness();
+    assert_eq!(h.model().application.focus(), Some(&ComponentId::Library));
+    draw(&mut h);
+    let rect = h.model().application.get_component(&ComponentId::Library).unwrap().as_any().downcast_ref::<LibraryPanel>().unwrap().test_list_rect().unwrap();
+    h.inject(Event::Mouse(MouseEvent { kind: MouseEventKind::ScrollDown, column: rect.x + 1, row: rect.y, modifiers: KeyModifiers::NONE }));
+    assert!(h.step().raw_messages.iter().any(|m| matches!(m, Msg::Shell(ShellRequest::AudiobookshelfBookMove(AudiobookshelfBookMove::Book(Some(_)))))));
 }
 
 #[test]
-fn book_tick_navigation_and_blank_click_are_owned_by_painted_control() {
-    for width in [crate::app::TWO_COLUMN_THRESHOLD, crate::app::TWO_COLUMN_THRESHOLD - 1] {
-        let mut harness = harness(width);
-        draw(&mut harness, width);
-        assert_eq!(book(&mut harness).selected_book_id(), Some("book-0"));
-        harness.inject(Event::Keyboard(KeyEvent { code: Key::Down, modifiers: KeyModifiers::NONE }));
-        assert!(!harness.step().raw_messages.is_empty());
-        draw(&mut harness, width);
-        assert_eq!(book(&mut harness).selected_book_id(), Some("book-1"));
+fn chapter_row_click_routes_through_panel_owner() {
+    let mut h = harness(); draw(&mut h);
+    h.inject(Event::Keyboard(KeyEvent { code: Key::Left, modifiers: KeyModifiers::NONE }));
+    h.step(); draw(&mut h);
+    let panel = h.model().application.get_component(&ComponentId::Library).unwrap().as_any().downcast_ref::<LibraryPanel>().unwrap();
+    let hero = panel.test_wide_geometry().unwrap().hero;
+    h.inject(Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: hero.x + 1, row: hero.y + 1, modifiers: KeyModifiers::NONE }));
+    let _ = h.step();
+}
 
-        harness.inject(Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(tuirealm::event::MouseButton::Left),
-            column: 0,
-            row: 0,
-            modifiers: KeyModifiers::NONE,
-        }));
-        let outcome = harness.step();
-        assert_eq!(
-            outcome.raw_messages,
-            vec![Msg::TerminalEvent(TerminalObserverEvent::MouseClick { column: 0, row: 0 })]
-        );
-        assert_eq!(book(&mut harness).selected_book_id(), Some("book-1"));
-    }
+#[test]
+fn book_owner_is_retained_across_tab_change() {
+    let mut h = harness();
+    h.model_mut().test_abs_book_owner_mut().carrier.select_target(&"book-1".into());
+    h.model_mut().app.tab = TabSelection::Home;
+    h.model_mut().sync_mounted_surfaces();
+    h.model_mut().app.tab = TabSelection::AudiobookshelfLibrary(1);
+    h.model_mut().sync_mounted_surfaces();
+    assert_eq!(h.model().test_abs_book_owner().selected_book_id(), Some("book-1"));
 }

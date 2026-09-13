@@ -9,7 +9,7 @@ use mbv_core::remote_reconciliation::RemoteIntent;
 use std::time::{Duration, Instant};
 
 impl App {
-    /// Seek to a 0.0..=1.0 `fraction` of the runtime. `PlaybackComponent`
+    /// Seek to a 0.0..=1.0 `fraction` of the runtime. `LibraryPlaybackPanel`
     /// resolves the click column against its own painted `seekbar_area`, so the
     /// shell never reads that component-owned geometry.
     pub(super) fn seek_to_fraction(&mut self, fraction: f64) {
@@ -215,6 +215,13 @@ impl App {
                 }
             }
             TvHit::EpisodesPane => {}
+            // Narrow-only letter-pill click (task 8.1): jump directly to the
+            // clicked pill, mirroring `handle_mouse_selector_click_emby`'s
+            // letter-pill arm.
+            TvHit::LetterPill(index) => {
+                self.set_panel_focus(super::PanelFocus::Library);
+                self.select_letter_pill(lib_idx, index);
+            }
         }
     }
 

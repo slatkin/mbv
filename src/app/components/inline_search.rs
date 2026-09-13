@@ -8,11 +8,10 @@
 //! control per destination to shell adapters; it does not choose a
 //! destination or hand out Service/runtime objects.
 //!
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::app::layout::LayoutMain;
 use crate::app::ui_util::move_cursor;
 
 #[derive(Clone)]
@@ -111,7 +110,7 @@ pub(in crate::app) struct InlineSearch {
     loading: bool,
     /// Last painted result geometry, published by the shared render
     /// component for column-aware cursor/mouse resolution.
-    layout: LayoutMain,
+    layout: Rect,
     /// Private per-host gesture recognition (ADR 0024, design.md D1).
     mouse_gestures: MouseGestureState,
     /// Origin of an unreleased left press, for recognizing a drag that begins
@@ -130,7 +129,7 @@ impl InlineSearch {
             cursor: 0,
             scroll: 0,
             loading: false,
-            layout: LayoutMain::default(),
+            layout: Rect::default(),
             mouse_gestures: MouseGestureState::new(),
             left_press: None,
         }
@@ -216,11 +215,11 @@ impl InlineSearch {
         self.order.len()
     }
 
-    pub(in crate::app) fn layout(&self) -> &LayoutMain {
+    pub(in crate::app) fn layout(&self) -> &Rect {
         &self.layout
     }
 
-    pub(in crate::app) fn layout_mut(&mut self) -> &mut LayoutMain {
+    pub(in crate::app) fn layout_mut(&mut self) -> &mut Rect {
         &mut self.layout
     }
 
@@ -274,10 +273,28 @@ impl InlineSearch {
         self.cursor = move_cursor(self.cursor, delta, self.order.len());
     }
 
+    /// Move the result cursor by `delta` rows (a Library-panel-slot wheel
+    /// gesture's normalized delta; the panel's own `MouseGestureState` has
+    /// already collapsed the raw event, so this is the position-free
+    /// counterpart of the `MouseGesture::Scroll` arm in
+    /// [`InlineSearch::handle_mouse`]).
+    pub(in crate::app) fn move_cursor_by(&mut self, delta: i64) {
+        self.move_cursor(delta);
+    }
+
+    /// Move the result cursor to the row painted at `at`, if `at` is inside
+    /// the last painted result area (the Library-panel-slot counterpart of
+    /// [`InlineSearch::select_row_at`], exposed for an embedded owner that
+    /// only receives the panel's already-normalized `RowLocalInput::Click`
+    /// position, not the raw `MouseEvent` `handle_mouse` resolves against).
+    pub(in crate::app) fn select_row_at_point(&mut self, at: Position) -> bool {
+        self.select_row_at(at)
+    }
+
     /// Page size for PageUp/PageDown, derived from the last painted result
     /// area (falls back to one row before the first paint).
     fn page_size(&self) -> i64 {
-        self.layout.left_area.height.max(1) as i64
+        self.layout.height.max(1) as i64
     }
 
     fn push_char(&mut self, c: char) {
@@ -341,10 +358,10 @@ impl InlineSearch {
     /// the last painted result area. Returns whether the point was a result
     /// row.
     fn select_row_at(&mut self, at: Position) -> bool {
-        if !self.layout.left_area.contains(at) {
+        if !self.layout.contains(at) {
             return false;
         }
-        let row = at.y.saturating_sub(self.layout.left_area.y) as usize;
+        let row = at.y.saturating_sub(self.layout.y) as usize;
         self.cursor = move_cursor(row, 0, self.order.len());
         true
     }
@@ -367,7 +384,7 @@ impl InlineSearch {
             MouseEventKind::Down(MouseButton::Left) => self.left_press = Some(point),
             MouseEventKind::Up(MouseButton::Left) => {
                 if let Some(origin) = self.left_press.take() {
-                    if origin != point && !self.layout.left_area.contains(origin) {
+                    if origin != point && !self.layout.contains(origin) {
                         self.select_row_at(point);
                     }
                 }
@@ -385,7 +402,7 @@ impl InlineSearch {
                 }
             }
             MouseGesture::Scroll { at, delta } => {
-                if self.layout.left_area.contains(at) {
+                if self.layout.contains(at) {
                     self.move_cursor(delta);
                     return Some(InlineSearchMouse::Consumed);
                 }
@@ -419,25 +436,6 @@ impl Default for InlineSearch {
 pub(in crate::app) trait InlineSearchHost {
     fn inline_search(&self) -> &InlineSearch;
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
-    fn inline_search_transfer(&self) -> Option<(String, String, usize)> {
-        let search = self.inline_search();
-        search
-            .selected_target()
-            .map(|(id, item_type)| (id, item_type, search.scroll()))
-    }
-    fn apply_inline_search_transfer(
-        &mut self,
-        query: String,
-        target: Option<(String, String)>,
-        row_offset: usize,
-    ) {
-        let search = self.inline_search_mut();
-        // A transfer is the sole exception to the normal open/close lifecycle:
-        // it moves an already-open session to the other TV owner.
-        search.active = true;
-        search.restore_query(query);
-        search.restore_target(target, row_offset);
-    }
     fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.inline_search().selected_item()
     }

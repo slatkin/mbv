@@ -255,20 +255,22 @@ selection is active, the right pane SHALL receive focus.
 
 ### Requirement: Hero overview and media-list boxes have distinct ownership
 
-Every Wide hero destination SHALL paint a recessed overview main-content box through the
-shared primitive, even when its description is empty. The overview box carries only the Hero
-text description and has one primitive-owned internal padding value.
+When the shown item has overview text, every Wide hero destination SHALL render it in one recessed
+overview main-content box below the Hero header, through the shared Library panel, at one
+panel-owned internal padding value. When the item has no overview text, no overview box SHALL render.
+The overview box carries only the Hero text description.
 
-A destination with structured episode, track, or chapter content SHALL additionally paint a
-separate recessed media-list box. The shared arrangement owns both box and viewport rects; the
-destination component owns its embedded `WideMediaList<Target>`, including rows, target identity,
-cursor, scroll, selection, intent translation, and hit geometry. A Hero SHALL NOT carry a
-structured listing or mutable list state. The destination SHALL NOT define its own box geometry
-or surface.
+A destination with structured episode, track, or chapter content SHALL additionally render one
+separate recessed media-list box (the Workspace box). The Library panel owns both box and viewport
+rects and the Workspace box's surface, which is accent-soft while its list holds focus and the
+backdrop surface otherwise; the destination component owns its embedded `WideMediaList<Target>`,
+including rows, target identity, cursor, scroll, selection, intent translation, and hit geometry. A
+Hero SHALL NOT carry a structured listing or mutable list state. The destination SHALL NOT define its
+own box geometry or surface.
 
 #### Scenario: TV presents overview before episodes
 
-- **WHEN** a selected Series renders at Wide geometry
+- **WHEN** a selected Series with overview text renders at Wide geometry
 - **THEN** title and ordered metadata render first
 - **AND** one blank row separates the metadata from the overview main-content box
 - **AND** a separate media-list box follows the overview box
@@ -283,53 +285,33 @@ or surface.
 #### Scenario: The overview is empty
 
 - **WHEN** a selected item supplies no description text
-- **THEN** the overview main-content box is still painted
-- **AND** its absence is never used to signal an empty payload
+- **THEN** no overview main-content box is painted
+- **AND** the media-list box, if any, follows the Hero header directly
 
 #### Scenario: Two overview payloads are compared
 
 - **WHEN** two description payloads render in the overview main-content box at the same pane width
 - **THEN** both begin at the same offset from the box's edges
 
-### Requirement: Per-screen presentation differences are declared in one place
+#### Scenario: The media list takes focus
 
-Where a screen differs from the shared presentation, those differences SHALL be declared together in
-a single place associated with that screen, rather than expressed at the points where the screen
-renders. A screen that declares no differences SHALL receive the shared defaults. Declarations MAY
-cover the source of the hero image, the hero image's shape, which metadata lines are shown and in
-what order, the colour variant, and which elements are present. Declarations SHALL NOT cover
-geometry, the breakpoint, or focus behaviour.
-
-#### Scenario: A screen shows different metadata
-
-- **WHEN** a screen's library provides metadata that differs from the default set
-- **THEN** that difference is declared in the screen's single declaration
-- **AND** the screen's rendering path contains no other expression of it
-
-#### Scenario: A screen declares nothing
-
-- **WHEN** a screen declares no differences
-- **THEN** it renders with the shared defaults for its assigned arrangement
-
-#### Scenario: A shared default changes
-
-- **WHEN** a shared default changes
-- **THEN** every screen that has not declared a difference for it renders the change
+- **WHEN** a Workspace list holds focus on any destination
+- **THEN** its media-list box renders the accent-soft surface
 
 ### Requirement: The right panel has exactly two hero presentations
 
 The right panel SHALL provide exactly two responsive hero presentations for every hero-bearing browse surface. At or above the shared breakpoint, when the existing minimum-height guard is satisfied, the surface SHALL use Wide hero: the selected hero or detail workspace occupies the right pane and a single-column browser occupies the left rail. Otherwise the surface SHALL use selected-row replacement: the selected item's ordinary row is replaced by its variable-height detail block in the single-column scrolling browser.
 
-A separate detail block SHALL NOT be an arrangement or fallback. A surface SHALL NOT reserve a hero in a separate full-width area above its browser. Non-hero screens retain their existing presentation.
+A separate detail block SHALL NOT be an arrangement or fallback. A surface SHALL NOT reserve a hero in a separate full-width area above its browser. Every library is hero-bearing.
 
-The inline hero SHALL render one content shape across all surfaces: title, optional metadata line, optional overview text, and an optional image. The image model SHALL be selected by image aspect ratio — right-aligned wrap-around (Model A) for tall images such as posters and book covers, right-half meta-column (Model B) for wide 16:9 thumbnails, and Model A's degenerate no-image form for surfaces without artwork. No surface SHALL render structured lists (seasons, episodes, tracks, chapters) inside the inline hero; those SHALL be accessed via the inline-hero selection modal.
+The inline hero SHALL render one content shape across all surfaces: title, optional metadata line, optional overview text, and an optional image. The image chosen by the shared artwork policy (`library-panel`) SHALL render right-aligned, sized from its aspect, with the text wrapping around it and continuing at full width below it; a surface without an image renders the same form without the image. No surface SHALL render structured lists (seasons, episodes, tracks, chapters), selector pills, or list controls inside the inline hero; structured lists SHALL be accessed via the inline-hero selection modal.
 
 #### Scenario: A browse surface enters the narrow presentation
 
 - **WHEN** a hero-bearing browse surface's available width falls below the shared breakpoint
 - **THEN** it renders one browser column
 - **AND** the selected item's ordinary row is replaced by inline detail at the same flow position
-- **AND** the inline hero shows title, metadata, overview, and image using the model selected by the image's aspect ratio
+- **AND** the inline hero shows title, metadata, overview, and a right-aligned image with wrap-around text
 - **AND** no separate hero area is reserved above the browser
 - **AND** no structured lists render inside the inline hero
 
@@ -357,6 +339,11 @@ The inline hero SHALL render one content shape across all surfaces: title, optio
 - **THEN** it renders one list column with selected detail inline at the active row
 - **AND** the inline hero shows one content shape (title, metadata, overview, image) with no structured lists
 
+#### Scenario: A 16:9 image in the narrow presentation
+
+- **WHEN** the selected item's image is a 16:9 thumbnail in the narrow presentation
+- **THEN** it renders right-aligned with wrap-around text, the same form as a poster or cover
+
 #### Scenario: A formerly separate-detail surface crosses the breakpoint
 
 - **WHEN** a formerly separate-detail surface crosses below the shared breakpoint
@@ -377,26 +364,12 @@ The inline hero SHALL render one content shape across all surfaces: title, optio
 - **WHEN** a Wide hero surface no longer meets either wide geometry condition
 - **THEN** it renders selected-row replacement
 
-### Requirement: Feeds Wide arrangement is canonical
-The Feeds Service/tab Wide panel SHALL use the canonical one-column `WideMediaList` and preserve the accepted `restore-feeds-service-wide-list` (umbrella task 1.3a) rail framing, surface treatment, and selected-row alignment.
-
-#### Scenario: Wide and Narrow use approved variants
-- **WHEN** the panel crosses the Wide breakpoint
-- **THEN** only the named Wide variant changes placement; Narrow uses `InlineMediaBrowser` as applicable, without changing FeedEntry identity or watched/group state.
-
 ### Requirement: Shared Wide hero arrangement owns the status-row reserve
 The shared Wide hero arrangement primitive SHALL reserve the one status-bar row when it computes the hero and list panes, so every Wide hero destination inherits the reserve from one place. Screens and components SHALL NOT re-derive the reserve (no per-tab `saturating_sub(1)`, `bottom_pad`, or equivalent) on top of the panes the shared primitive returns.
 
 #### Scenario: Panels leave one blank row above the status bar
 - **WHEN** any Wide hero destination (Home, Feeds, and the non-migrated media tabs that share the primitive) renders in the Wide layout
 - **THEN** exactly one blank row separates the bottom of the content panels from the status bar, and that reserve is applied by the shared arrangement primitive rather than the screen.
-
-### Requirement: Other two-column policy is unchanged
-This slice SHALL NOT alter non-hero two-column arrangements outside Home and Feeds.
-
-#### Scenario: Unrelated library layout remains stable
-- **WHEN** a non-hero library is rendered outside the migrated Home or Feeds destinations
-- **THEN** its existing two-column policy and geometry remain unchanged.
 
 ### Requirement: Music and Audiobookshelf adopt the TV and Movies Wide precedent
 

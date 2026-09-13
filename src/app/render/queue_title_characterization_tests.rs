@@ -27,18 +27,18 @@ fn direct_app() -> App {
     app
 }
 
-fn title_area(app: &App) -> Rect {
-    let area = app.layout.main.queue_area;
-    Rect {
-        x: area.x + 2,
-        y: area.y.saturating_sub(2),
-        width: area.width.saturating_sub(4),
-        height: 1,
-    }
+fn title_area(model: &crate::app::shell::Model) -> Rect {
+    // The title band is the panel's own retained geometry (task 3.1).
+    model
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+        .and_then(QueueComponent::test_title_area)
+        .expect("queue panel retains a title band")
 }
 
-fn row_symbols(app: &App, term: &Terminal<TestBackend>) -> Vec<String> {
-    let area = title_area(app);
+fn row_symbols(model: &crate::app::shell::Model, term: &Terminal<TestBackend>) -> Vec<String> {
+    let area = title_area(model);
     let buffer = term.backend().buffer();
     (area.x..area.right())
         .map(|x| buffer[(x, area.y)].symbol().to_string())
@@ -60,7 +60,7 @@ fn assert_style(cell: &ratatui::buffer::Cell, fg: Color, bg: Color, bold: bool) 
 }
 
 fn assert_title(
-    app: &App,
+    model: &crate::app::shell::Model,
     term: &Terminal<TestBackend>,
     nerd_fonts: bool,
     split: bool,
@@ -69,7 +69,7 @@ fn assert_title(
     scopes: (Rect, Rect),
     local_selected: bool,
 ) {
-    let area = title_area(app);
+    let area = title_area(model);
     assert!(
         area.width > 20,
         "characterization needs a complete title row"
@@ -96,7 +96,7 @@ fn assert_title(
             &format!(" {remote_icon} "),
         );
     }
-    assert_eq!(row_symbols(app, term), expected, "queue title text");
+    assert_eq!(row_symbols(model, term), expected, "queue title text");
 
     let buffer = term.backend().buffer();
     let base = palette::SURFACE_CHROME;
@@ -213,7 +213,7 @@ fn assert_state(
         .map(QueueComponent::test_scope_pill_areas)
         .expect("QueueComponent should be mounted");
     assert_title(
-        &model.app,
+        &model,
         &term,
         nerd_fonts,
         split,

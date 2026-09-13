@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::components::BrowserComponent;
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::OverlayId;
 use crate::app::render::make_movie_app;
 use crate::app::tests::make_item;
@@ -15,18 +15,27 @@ fn eligibility_model() -> Model {
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
-    model.sync_emby_browser();
-    model.sync_active_destination();
+    // Task 6.1: the full sync pass mounts the migrated owner into the panel,
+    // points the panel at it (`sync_library_panel`), and routes focus
+    // (`sync_active_destination`); the two-call pair would leave the panel's
+    // active-owner pointer unset.
+    model.sync_mounted_surfaces();
     model
 }
 
 #[test]
 fn mouse_eligibility_rung3_is_painted_destination_plus_playback() {
     let model = eligibility_model();
-    let child = model.emby_browser_id.clone().expect("browser mounted");
+    // Task 6.1: the migrated Movies surface is the mounted `LibraryPanel`
+    // (its embedded owner is never a component), so the painted destination
+    // child is the panel.
+    let child = ComponentId::Library;
     let eligible: std::collections::HashSet<_> = model.mouse_eligible_ids().into_iter().collect();
     assert!(eligible.contains(&child));
-    assert!(eligible.contains(&ComponentId::Playback));
+    // The strip mounts only where `RootFrame` places it (task 4.1): in the
+    // two-panel layout its `library_playback` placement is absent and the
+    // `LibraryPlaybackPanel` is unmounted, so it is not mouse-eligible.
+    assert!(!eligible.contains(&ComponentId::LibraryPlaybackPanel));
     assert!(
         !eligible
             .iter()
@@ -66,7 +75,7 @@ fn mouse_eligibility_rung2_topmost_panel_overlay_is_exclusive() {
 
 /// Task 2.9(a): the eligible set follows what is painted across a
 /// wide/narrow breakpoint change and an overlay mount/unmount — it is
-/// derived off `library_child_id()`, never a second "did I paint" ledger.
+/// derived off `active_surface_id()`, never a second "did I paint" ledger.
 #[test]
 fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
     let tv_child = |wide: bool| {
@@ -88,24 +97,26 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
             app.terminal_height = 24;
         }
         let mut model = Model::new(app);
-        model.sync_tv_workspace();
-        model.sync_emby_browser();
+        model.sync_tv_content();
+        model.sync_mounted_surfaces();
         model.sync_active_destination();
         let eligible: std::collections::HashSet<_> =
             model.mouse_eligible_ids().into_iter().collect();
         (model, eligible)
     };
 
-    let (wide, wide_eligible) = tv_child(true);
-    assert!(wide_eligible.contains(&wide.tv_workspace_id.clone().unwrap()));
-    assert!(wide.emby_browser_id.is_none());
+    // Task 8.4 (design D2): the TV surface is the mounted `LibraryPanel`
+    // under `ComponentId::Library` at every breakpoint; no `Browser` id is
+    // ever mounted for TV.
+    let (_wide, wide_eligible) = tv_child(true);
+    assert!(wide_eligible.contains(&ComponentId::Library));
 
-    let (narrow, narrow_eligible) = tv_child(false);
-    assert!(narrow_eligible.contains(&narrow.emby_browser_id.clone().unwrap()));
-    assert!(narrow.tv_workspace_id.is_none());
+    let (_narrow, narrow_eligible) = tv_child(false);
+    assert!(narrow_eligible.contains(&ComponentId::Library));
 
     let mut model = eligibility_model();
-    let child = model.emby_browser_id.clone().expect("browser mounted");
+    // Task 6.1: the migrated Movies surface is the mounted `LibraryPanel`.
+    let child = ComponentId::Library;
     assert!(model.mouse_eligible_ids().contains(&child));
     model.mount_help();
     assert_eq!(
@@ -185,9 +196,14 @@ fn sync_mouse_subscriptions_tracks_and_wipes_the_eligible_set() {
     use crate::app::components::{ConfirmComponent, ModalId};
     let mut model = eligibility_model();
     model.sync_mouse_subscriptions();
-    let child = model.emby_browser_id.clone().expect("browser mounted");
+    // Task 6.1: the migrated Movies surface is the mounted `LibraryPanel`.
+    let child = ComponentId::Library;
     assert!(model.mouse_subscribed.contains(&child));
-    assert!(model.mouse_subscribed.contains(&ComponentId::Playback));
+    // The strip is not mounted in the two-panel layout (no
+    // `library_playback` placement), so it draws no subscription.
+    assert!(!model
+        .mouse_subscribed
+        .contains(&ComponentId::LibraryPlaybackPanel));
 
     model
         .application
@@ -210,31 +226,27 @@ fn shell_routes_focus_to_the_active_destination_child() {
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
-    model.sync_emby_browser();
-    model.sync_active_destination();
+    model.sync_mounted_surfaces();
 
-    let child = model
-        .emby_browser_id
-        .clone()
-        .expect("generic browser mounted");
+    // Task 6.1: the migrated Movies surface routes through the mounted
+    // `LibraryPanel`; the embedded owner is never a component.
+    let child = ComponentId::Library;
     assert_eq!(model.application.focus(), Some(&child));
     assert!(model
         .application
         .get_component(&child)
         .unwrap()
         .as_any()
-        .downcast_ref::<BrowserComponent>()
+        .downcast_ref::<LibraryPanel>()
         .is_some());
 }
 
-/// migrate-narrow-browse-to-components task 2.2 (D4): a narrow Emby TV
-/// library routes to the mounted `BrowserComponent` (flat series list);
-/// a wide one still routes to `TvWorkspaceComponent`. The two are never
-/// both `Some` for the same library at any width.
+/// unify-screens-under-panel-components task 8.4 (design D2): the TV owner is
+/// registered under `LibraryKey::Service(TvShows)` inside the mounted
+/// `LibraryPanel` at every breakpoint; no standalone `Browser` or TV-specific
+/// component id is ever mounted for a `tvshows` library.
 #[test]
-fn narrow_tv_library_routes_to_browser_component_wide_to_tv_workspace() {
-    use crate::app::components::TvWorkspaceComponent;
-
+fn narrow_and_wide_tv_library_both_route_to_the_library_panel() {
     let build = |wide: bool| {
         let mut app = make_movie_app();
         app.libs[0].library.collection_type = "tvshows".into();
@@ -254,48 +266,28 @@ fn narrow_tv_library_routes_to_browser_component_wide_to_tv_workspace() {
             app.terminal_height = 24;
         }
         let mut model = Model::new(app);
-        model.sync_tv_workspace();
-        model.sync_emby_browser();
+        model.sync_tv_content();
+        model.sync_mounted_surfaces();
         model.sync_active_destination();
         model
     };
 
-    // Narrow: BrowserComponent owns the surface and focus.
-    let narrow = build(false);
-    assert_eq!(narrow.tv_workspace_id, None);
-    let browser_id = narrow.emby_browser_id.clone().expect("narrow TV browser");
-    assert!(matches!(browser_id, ComponentId::Browser(_)));
-    assert_eq!(narrow.application.focus(), Some(&browser_id));
-    assert!(narrow
-        .application
-        .get_component(&browser_id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .is_some());
-
-    // Wide: TvWorkspaceComponent owns the surface and focus.
-    let wide = build(true);
-    assert_eq!(wide.emby_browser_id, None);
-    let tv_id = wide.tv_workspace_id.clone().expect("wide TV workspace");
-    assert_eq!(wide.application.focus(), Some(&tv_id));
-    assert!(wide
-        .application
-        .get_component(&tv_id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .is_some());
+    for wide in [false, true] {
+        let model = build(wide);
+        assert_eq!(model.application.focus(), Some(&ComponentId::Library));
+        assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
+    }
 }
 
-/// migrate-narrow-browse-to-components task 2.2: every
-/// `is_feed_home_video_group_view` Emby library — podcast channels and
-/// configured home-video feed-view libraries alike — is owned by the
-/// mounted `BrowserComponent` at every width. Both resolve
-/// `Some(ComponentId::Browser(..))` and take TuiRealm focus, narrow and
-/// wide.
+/// migrate-narrow-browse-to-components task 2.2, converted by task 6.1
+/// (design D2): every `is_feed_home_video_group_view` Emby library —
+/// podcast channels and configured home-video feed-view libraries alike —
+/// is a migrated kind whose surface routes through the mounted
+/// `LibraryPanel` at every width. Both take TuiRealm focus on
+/// `ComponentId::Library`, narrow and wide, with the embedded
+/// `BrowserContent` owner installed.
 #[test]
-fn feed_group_picker_libraries_route_to_browser_component_at_every_width() {
+fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
     let build = |podcast: bool, wide: bool| {
         let mut app = make_movie_app();
         let lib = &mut app.libs[0];
@@ -344,43 +336,39 @@ fn feed_group_picker_libraries_route_to_browser_component_at_every_width() {
         app.terminal_height = 40;
         let mut model = Model::new(app);
         assert!(model.app.is_feed_home_video_group_view(0));
-        model.sync_emby_browser();
-        model.sync_active_destination();
+        model.sync_mounted_surfaces();
         model
     };
 
     for podcast in [false, true] {
         for wide in [false, true] {
             let model = build(podcast, wide);
-            let id = model
-                .emby_browser_id
-                .clone()
-                .unwrap_or_else(|| panic!("podcast={podcast} wide={wide}: browser id"));
-            assert!(matches!(id, ComponentId::Browser(_)));
-            assert_eq!(model.application.focus(), Some(&id));
+            assert!(
+                model.active_migrated_browser_owner().is_some(),
+                "podcast={podcast} wide={wide}: the feed-group library is a migrated kind"
+            );
+            assert_eq!(
+                model.application.focus(),
+                Some(&ComponentId::Library),
+                "podcast={podcast} wide={wide}: focus lands on the mounted Library panel"
+            );
             assert!(model
                 .application
-                .get_component(&id)
+                .get_component(&ComponentId::Library)
                 .unwrap()
                 .as_any()
-                .downcast_ref::<BrowserComponent>()
+                .downcast_ref::<LibraryPanel>()
                 .is_some());
         }
     }
 }
 
-/// migrate-narrow-browse-to-components task 2.2 (reviewer block): drive a
-/// TV library through wide -> narrow -> wide via `sync_mounted_surfaces()`
-/// in production order (not the individual `sync_*` out of order). Because
-/// wide TV now mounts under `ComponentId::TvWorkspace` and narrow TV under
-/// `ComponentId::Browser`, both components can stay mounted across the
-/// flips and the active-destination pointer alone gates render/focus. At
-/// each step the mounted component *type* under the resolved id and the
-/// focus target must match the width.
+/// unify-screens-under-panel-components task 8.4 (design D2): drive a TV
+/// library through wide -> narrow -> wide via `sync_mounted_surfaces()` in
+/// production order. The panel-hosted owner stays installed and focused
+/// across every flip -- no second id is ever mounted.
 #[test]
 fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
-    use crate::app::components::TvWorkspaceComponent;
-
     let mut app = make_movie_app();
     app.libs[0].library.collection_type = "tvshows".into();
     for item in &mut app.libs[0].nav_stack[0].items {
@@ -395,76 +383,43 @@ fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
 
     // The breakpoint is now driven synchronously by terminal size (the
     // flash fix): `prime_wide_tv_geometry` in `sync_mounted_surfaces`
-    // recomputes `tv_wide_*` before the mount gates read it.
+    // derives the TV breakpoint before the mount gates read it.
     let widen = |model: &mut Model, wide: bool| {
         model.app.terminal_width = if wide { 160 } else { 80 };
     };
 
-    // Wide: TvWorkspaceComponent owns the surface and focus.
+    let assert_tv_focused = |model: &Model| {
+        assert_eq!(model.application.focus(), Some(&ComponentId::Library));
+        assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
+    };
+
+    // Wide.
     widen(&mut model, true);
     model.sync_mounted_surfaces();
-    let tv_id = model.tv_workspace_id.clone().expect("wide TV workspace id");
-    assert!(matches!(tv_id, ComponentId::TvWorkspace(_)));
-    assert_eq!(model.emby_browser_id, None);
-    assert_eq!(model.application.focus(), Some(&tv_id));
-    assert!(model
-        .application
-        .get_component(&tv_id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .is_some());
+    assert_tv_focused(&model);
 
-    // Narrow: BrowserComponent owns the surface and focus; the TV
-    // workspace stays mounted (keep-mounted) but is no longer the pointer.
+    // Narrow: the same owner stays installed and focused.
     widen(&mut model, false);
     model.sync_mounted_surfaces();
-    let browser_id = model.emby_browser_id.clone().expect("narrow TV browser id");
-    assert!(matches!(browser_id, ComponentId::Browser(_)));
-    assert_eq!(model.tv_workspace_id, None);
-    assert!(
-        model.application.mounted(&tv_id),
-        "the wide TV workspace stays mounted across the narrow flip"
-    );
-    assert_eq!(model.application.focus(), Some(&browser_id));
-    assert!(model
-        .application
-        .get_component(&browser_id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .is_some());
+    assert_tv_focused(&model);
 
-    // Wide again: the same TvWorkspaceComponent is re-pointed and focused.
+    // Wide again: still the same owner.
     widen(&mut model, true);
     model.sync_mounted_surfaces();
-    assert_eq!(model.tv_workspace_id.as_ref(), Some(&tv_id));
-    assert_eq!(model.emby_browser_id, None);
-    assert_eq!(model.application.focus(), Some(&tv_id));
-    assert!(model
-        .application
-        .get_component(&tv_id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<TvWorkspaceComponent>()
-        .is_some());
+    assert_tv_focused(&model);
 }
 
 #[test]
-fn shell_routes_focus_back_to_ui_root_without_a_mounted_child() {
+fn shell_routes_focus_to_the_library_panel_for_a_music_library() {
     let mut model = Model::new(make_movie_app());
-    // A narrow (non-wide) grouped-Music library has no surface component
-    // yet; the destination falls back to UiRoot (whose terminal
-    // translation owns the remaining legacy key dispatch for those
-    // surfaces). Podcast / feed-group libraries now route to the mounted
-    // BrowserComponent (migrate-narrow-browse task 2.2).
+    // Every library destination routes through the mounted Library panel.
     model.app.libs[0].library.collection_type = "music".into();
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
     model.sync_active_destination();
 
-    assert_eq!(model.application.focus(), Some(&ComponentId::UiRoot));
+    assert_eq!(model.application.focus(), Some(&ComponentId::Library));
 }
 
 #[test]
@@ -542,12 +497,9 @@ fn shell_blocking_overlay_owns_focus_and_dismiss_returns_to_destination() {
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
     // First: the destination child owns focus (the single focus pass).
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let child = model
-        .emby_browser_id
-        .clone()
-        .expect("generic browser mounted");
+    // Task 6.1: the migrated Movies surface is the mounted `LibraryPanel`.
+    model.sync_mounted_surfaces();
+    let child = ComponentId::Library;
     assert_eq!(model.application.focus(), Some(&child));
 
     // The production modal-open path mounts AND activates the blocking
@@ -601,15 +553,12 @@ fn shell_first_tick_focus_lands_on_the_active_destination_child() {
     // has been activated yet (no prior active() in sync_*).
     assert_eq!(model.application.focus(), Some(&ComponentId::UiRoot));
 
-    // Mirror the first tick: mount the destination, then the single focus
-    // pass routes to the child.
-    model.sync_emby_browser();
-    model.sync_active_destination();
+    // Mirror the first tick: the full sync pass mounts the destination
+    // owner, then the single focus pass routes to the child. Task 6.1: the
+    // migrated Movies surface is the mounted `LibraryPanel`.
+    model.sync_mounted_surfaces();
 
-    let child = model
-        .emby_browser_id
-        .clone()
-        .expect("generic browser mounted");
+    let child = ComponentId::Library;
     assert_eq!(
         model.application.focus(),
         Some(&child),
@@ -627,12 +576,9 @@ fn shell_overlay_dismiss_returns_focus_to_the_active_destination_child() {
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
-    model.sync_emby_browser();
-    model.sync_active_destination();
-    let child = model
-        .emby_browser_id
-        .clone()
-        .expect("generic browser mounted");
+    // Task 6.1: the migrated Movies surface is the mounted `LibraryPanel`.
+    model.sync_mounted_surfaces();
+    let child = ComponentId::Library;
     assert_eq!(model.application.focus(), Some(&child));
 
     // Mount Help (overlay owns focus); the destination pass short-circuits.
@@ -660,40 +606,29 @@ fn shell_overlay_dismiss_returns_focus_to_the_active_destination_child() {
     );
 }
 
-/// keep-destination-components-mounted task 4.3 (D4): a mounted-but-
-/// inactive destination component paints nothing. `render_emby_browser_`
-/// `component` early-returns when the `*_id` pointer is `None` (narrow /
-/// drilled away / inactive), so the mounted instance never paints over
-/// the legacy frame. Deterministic proof by frame diff over COMPLETE
-/// cell state: with the pointer `Some`, the component adds its content
-/// (symbols, styles, modifiers) to the frame; with the pointer `None`
-/// (component still mounted), the frame is identical to the App-only
-/// frame (zero cells contributed).
+/// keep-destination-components-mounted task 4.2 (D4), converted by task 6.1
+/// (design D2): a catalog-retained but inactive owner paints nothing. The
+/// panel's `view` paints only `owners.active_mut()`, and the shell's
+/// transitional gate is per-active-tab, so with another tab active the
+/// Movies owner stays installed (its cursor/scroll survive — the retention
+/// rule) yet contributes no cell to the frame; re-activating the library
+/// repaints it. Deterministic proof by buffer content, the panel-output
+/// form of the old component's frame diff.
 #[test]
-fn mounted_but_inactive_destination_paints_nothing() {
-    fn frame_cells(model: &mut Model, render_component: bool) -> String {
-        let backend = ratatui::backend::TestBackend::new(120, 40);
+fn mounted_but_inactive_library_owner_paints_nothing() {
+    fn draw_text(model: &mut Model, width: u16, height: u16) -> String {
+        model.app.terminal_width = width;
+        model.app.terminal_height = height;
+        let backend = ratatui::backend::TestBackend::new(width, height);
         let mut term = ratatui::Terminal::new(backend).unwrap();
-        term.draw(|f| {
-            model.app.compose_base_frame(f, None);
-            if render_component {
-                model.render_emby_browser_component(f);
-            }
-        })
-        .unwrap();
+        term.draw(|f| model.draw_frame(f, false, false)).unwrap();
         let buffer = term.backend().buffer();
         let mut out = String::new();
         for y in 0..buffer.area().height {
             for x in 0..buffer.area().width {
-                let cell = &buffer[(x, y)];
-                // Complete cell state: symbol + style (which carries the
-                // full style including any add/remove modifiers), so a
-                // render that changed only styling/attributes is caught.
-                out.push_str(cell.symbol());
-                out.push('|');
-                out.push_str(&format!("{:?}", cell.style()));
-                out.push(';');
+                out.push_str(buffer[(x, y)].symbol());
             }
+            out.push('\n');
         }
         out
     }
@@ -702,34 +637,40 @@ fn mounted_but_inactive_destination_paints_nothing() {
     model.app.tab = TabSelection::EmbyLibrary(0);
     model.app.panel_focus = PanelFocus::Library;
     model.app.panel_mode = PanelMode::Both;
-    model.sync_emby_browser();
-    let id = model.emby_browser_id.clone().expect("browser mounted");
-    assert!(model.application.mounted(&id));
+    model.sync_mounted_surfaces();
+    let key = model
+        .active_migrated_browser_owner()
+        .map(|(_, key, _)| key)
+        .expect("the Movies owner has migrated");
 
-    // Baseline: the App-only frame (the component is not rendered).
-    let app_only = frame_cells(&mut model, false);
-    // Active: the component paints its content over the frame. This must
-    // differ from app-only — otherwise the test could not discriminate a
-    // broken gate.
-    let active = frame_cells(&mut model, true);
-    assert_ne!(
-        active, app_only,
-        "the active browser must add content to the frame (gate sanity)"
-    );
-
-    // Inactive: clear the pointer (narrow/drill transition). The
-    // component stays mounted (keep-mounted) but the render gate must
-    // suppress it, so the frame is identical to App-only across the full
-    // cell state.
-    model.emby_browser_id = None;
-    let inactive = frame_cells(&mut model, true);
-    assert_eq!(
-        inactive, app_only,
-        "a mounted-but-inactive destination must paint nothing over the frame"
-    );
-    assert_eq!(model.emby_browser_id, None);
+    // Active: the panel paints the owner's rows (gate sanity).
+    let active = draw_text(&mut model, 120, 40);
     assert!(
-        model.application.mounted(&id),
-        "the component stays mounted but inactive"
+        active.contains("Focused Movie") && active.contains("Second Movie"),
+        "the active owner must add its rows to the frame:\n{active}"
+    );
+
+    // Switch to another migrated tab: the Movies owner is retained but
+    // inactive, and the panel paints only the active owner — no Movies cell
+    // reaches the frame.
+    model.app.tab = TabSelection::Home;
+    model.sync_mounted_surfaces();
+    let inactive = draw_text(&mut model, 120, 40);
+    assert!(
+        !inactive.contains("Focused Movie") && !inactive.contains("Second Movie"),
+        "a mounted-but-inactive owner must paint nothing:\n{inactive}"
+    );
+    assert!(
+        model.library_panel_has_owner(&key),
+        "the owner stays installed while its library is in the catalog"
+    );
+
+    // Re-activating the library repaints the retained owner.
+    model.app.tab = TabSelection::EmbyLibrary(0);
+    model.sync_mounted_surfaces();
+    let reactivated = draw_text(&mut model, 120, 40);
+    assert!(
+        reactivated.contains("Focused Movie") && reactivated.contains("Second Movie"),
+        "re-activating the library repaints its retained owner:\n{reactivated}"
     );
 }

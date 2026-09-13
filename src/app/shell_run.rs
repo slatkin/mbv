@@ -1,99 +1,128 @@
 use super::*;
-use crate::app::components::{BrowserComponent, MusicWorkspaceComponent, TvWorkspaceComponent};
 use crate::app::images::SERIES_IMAGE_CACHE_KEY_INFIX;
+use crate::app::PanelFocus;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
 impl Model {
     pub(crate) fn sync_mounted_surfaces(&mut self) {
+        // Tasks 1.1/1.2: the draw-time state mutations run here, before any
+        // draw. The saved-tab resolution and the stale-destination fallback
+        // settle the active tab so every projection below -- and the frame --
+        // sees the resolved tab (the sync pass no longer writes `self.tab`),
+        // and the terminal-resize handling (card-image clear, queue-column
+        // clamp + prefs save, and the mini-view focus hand-off on a real
+        // Resize event) leaves the draw path, which now only reads geometry.
+        self.sync_terminal_resize();
+        self.app.resolve_library_tab_pending();
+        self.app.normalize_stale_browse_destination();
         // Apply App-owned effect handoffs to their mounted components.
         // `sync_home` was deleted (task 5.3d, sync_home mirror deletion):
         // Home content/focus is projected event-driven by
         // `push_home_content` at the seams above.
         self.sync_modal_requests();
         self.sync_sidebar_overlays();
-        self.sync_playback();
+        self.sync_library_playback_panel();
         self.sync_feeds();
-        self.sync_audiobookshelf_podcast();
         self.sync_audiobookshelf_book();
         self.sync_queue();
         self.sync_queue_boundary();
-        self.sync_wide_hero_boundary();
-        // Publish wide-TV geometry before other readers of `tv_wide_right_area`/
-        // `tv_wide_left_area` (e.g. context-menu anchors) see this frame's
-        // values, since those fields are otherwise a previous-frame paint
-        // signal.
-        self.prime_wide_tv_geometry();
-        self.hand_off_tv_breakpoint();
-        self.sync_emby_browser();
-        self.sync_tv_workspace();
-        // TV's narrow owner is already mounted, so consume its transfer only
-        // after the destination has received its current pool/loading state.
-        self.apply_pending_inline_search_transfer();
+        self.sync_tab_panel();
+        self.sync_status_bar_panel();
+        self.sync_queue_card_geometry();
+        self.sync_queue_playback_panel();
         self.sync_music_workspace();
+        // Task 8.4: the TV owner is installed/pushed before the panel's
+        // owner-retention and active-pointer pass below.
+        self.sync_tv_content();
+        // Task 5.9: the Library panel mounts with the library column and
+        // drives its owner map (retention + the active pointer) before the
+        // focus pass routes to the active surface.
+        self.sync_library_panel();
+        // Task 5.10 (design D9): the active owner's hero image projection —
+        // the fetches and the cover-fit box re-encode — runs here, before the
+        // draw, so painting reads projected state only.
+        self.sync_library_hero_images();
         // Retire destination components whose Service library left the
         // catalog before the focus pass routes to the active destination
         // (keep-destination-components-mounted tasks 1.3).
-        self.reconcile_destination_mounts();
         self.sync_active_destination();
         // ADR 0024 D2: mouse eligibility is derived off the same
         // active-destination derivation, in the same pass, right after it.
         self.sync_mouse_subscriptions();
     }
 
-    /// The sole base-frame orchestrator (D3): legacy base paint, resize
-    /// content pushes, then the mounted component views and overlay stack, in
-    /// that order. All three terminal draws route through it — the two startup
-    /// draws pass `false, false` since no resize locals exist yet, and the
-    /// steady-state draw passes the per-tick locals mutated by
-    /// `handle_terminal_message`.
+    /// Terminal-resize side effects, applied in the sync pass before any draw
+    /// (task 1.2). A size drift against the size this pass last handled runs
+    /// the former draw-time mutations: the card-image state clear and the
+    /// queue-column clamp + prefs save (this also picks up the startup draw's
+    /// size normalization and any direct-frame normalization). The mini-view
+    /// focus hand-off runs only when the Resize observer armed it -- the real
+    /// terminal-resize event, whose pre-resize width the marker still holds.
+    pub(super) fn sync_terminal_resize(&mut self) {
+        let size = (self.app.terminal_width, self.app.terminal_height);
+        let resize_event = std::mem::take(&mut self.pending_terminal_resize);
+        if self.handled_terminal_size == size && !resize_event {
+            return;
+        }
+        let was_wide = self.handled_terminal_size.0 >= crate::app::MINI_VIEW_THRESHOLD;
+        self.handled_terminal_size = size;
+        self.app.card_image_states.clear();
+        self.app.card_image_loading.clear();
+        // Crossing into mini view on a real resize hands focus to the queue;
+        // the stored wide focus is untouched.
+        if resize_event && was_wide && size.0 < crate::app::MINI_VIEW_THRESHOLD {
+            self.app.mini_view_focus = PanelFocus::Queue;
+        }
+        if self.app.clamp_queue_column_width() {
+            self.app.save_prefs();
+        }
+    }
+
+    /// The sole frame orchestrator (D3): root placement publication, mounted
+    /// component views, deferred protocol-image paint, and overlay stack.
     pub(in crate::app) fn draw_frame(
         &mut self,
         f: &mut ratatui::Frame,
-        music_resize: bool,
-        tv_resize: bool,
+        _music_resize: bool,
+        _tv_resize: bool,
     ) {
         // The legacy base frame reads the blocking-overlay state for its dim
         // backdrop and stay-alive indicator; that fact now lives in TuiRealm
         // mount state, so the shell computes it once per frame (the deleted
         // App-level `blocking_overlay_active` adapter, task 5.3d).
         self.app.dim_backdrop_active = self.blocking_overlay_active();
-        let cursor_scroll = self.app.tab.emby_library_index().and_then(|_| {
-            self.emby_browser_component_id()
-                .and_then(|id| self.application.get_component(&id))
-                .and_then(|c| c.as_any().downcast_ref::<BrowserComponent>())
-                .map(|c| (c.cursor(), c.scroll()))
-                .or_else(|| {
-                    self.tv_workspace_component_id()
-                        .and_then(|id| self.application.get_component(&id))
-                        .and_then(|c| c.as_any().downcast_ref::<TvWorkspaceComponent>())
-                        .map(|c| (c.cursor(), c.scroll()))
-                })
-                .or_else(|| {
-                    self.music_workspace_component_id()
-                        .and_then(|id| self.application.get_component(&id))
-                        .and_then(|c| c.as_any().downcast_ref::<MusicWorkspaceComponent>())
-                        .map(|c| (c.album_cursor(), c.album_scroll()))
-                })
-        });
-        self.app.compose_base_frame(f, cursor_scroll);
-        if music_resize {
-            self.push_music_workspace_content();
+        self.app.compose_root_frame(f);
+        // Root composition is data-driven: this is the sole panel paint loop.
+        // The queue playback placement is deliberately handled by its panel
+        // method; its transport geometry was projected during sync from the
+        // prior-paint card checkpoint, so this draw path remains read-only.
+        for placement in self.app.layout.root_frame.placements() {
+            let Some(placement) = placement else { continue };
+            match placement {
+                crate::app::render::arrangements::chrome::PanelPlacement::Tab(area) => {
+                    self.render_tab_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::Library(area) => {
+                    self.render_library_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::LibraryPlayback(area) => {
+                    self.render_library_playback_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::Queue(area) => {
+                    self.render_queue_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::QueuePlayback(area) => {
+                    self.render_queue_playback_panel(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::StatusBar(area) => {
+                    self.render_status_bar_panel_at(f, area)
+                }
+                crate::app::render::arrangements::chrome::PanelPlacement::QueueBoundary(area) => {
+                    self.render_queue_boundary_at(f, area)
+                }
+            }
         }
-        if tv_resize {
-            self.push_tv_workspace_content();
-        }
-        self.render_playback_component(f);
-        self.render_home_component(f);
-        self.render_feeds_component(f);
-        self.render_audiobookshelf_podcast_component(f);
-        self.render_audiobookshelf_book_component(f);
-        self.render_emby_browser_component(f);
-        self.render_tv_workspace_component(f);
-        self.render_music_workspace_component(f);
-        self.render_queue_component(f);
-        self.render_queue_boundary(f);
-        self.render_wide_hero_boundary(f);
         self.render_overlay_stack(f);
     }
 
@@ -268,7 +297,7 @@ impl Model {
                 // mirror deletion).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
                 // Player events can reconcile ABS podcast progress; re-project (5.3d.11 U6).
                 self.push_audiobookshelf_podcast_content();
                 // Player events can reconcile ABS book progress; re-project (5.3d).
@@ -359,7 +388,7 @@ impl Model {
                 self.push_home_content();
                 self.push_audiobookshelf_podcast_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
                 // ABS book async completions (BooksFetched / BookDetailFetched)
                 // and saved-position restore arrive via lib events; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
@@ -401,7 +430,7 @@ impl Model {
                 had_events = true;
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
             }
 
             had_events |= self.drain_feed_add_results();
@@ -435,7 +464,7 @@ impl Model {
                 // `UserDataChanged` refetches Home inside the handler; re-project (5.3d).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_emby_browser_content();
+                self.push_active_browser_owner_content();
                 self.push_music_workspace_content();
             }
 
@@ -569,6 +598,12 @@ impl Model {
                 }
             }
 
+            // Drain deferred component intents after this tick's primary
+            // messages, including ticks with no primary component message.
+            if self.drain_deferred_library_message(&mut music_resize, &mut tv_resize) {
+                break 'outer;
+            }
+
             // Keep in sync with tests_tick_harness.rs, the other caller of this shared pass.
             self.sync_mounted_surfaces();
 
@@ -620,7 +655,6 @@ impl Model {
             }
         }
 
-        self.persist_emby_browser_scroll_for_active_library();
         self.app.teardown(quit_timeout);
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
                                             // Printed only after the terminal is restored (task 7.2): anything

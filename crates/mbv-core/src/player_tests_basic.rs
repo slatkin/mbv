@@ -194,6 +194,7 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
         audio_info: String::new(),
         genre: String::new(),
         playlist_item_id: String::new(),
+        image_tags: Default::default(),
     }
 }
 

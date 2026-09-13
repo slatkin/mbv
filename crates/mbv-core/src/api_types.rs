@@ -253,6 +253,38 @@ pub struct EmbyItem {
     pub audio_info: String,
     pub genre: String,
     pub playlist_item_id: String,
+    /// Declared image availability (task 5.3): the Emby default-DTO image
+    /// tags the hero artwork policy reads to choose an artwork shape before
+    /// any image is fetched. `Default` so older payloads deserialize
+    /// unchanged.
+    #[serde(default)]
+    pub image_tags: EmbyImageTags,
+}
+
+/// Declared image availability for one item (task 5.3, design D5): the
+/// provider metadata the artwork policy reads to decide availability before
+/// any image is fetched, so the chosen shape never changes when the image
+/// arrives. These are Emby's default item-DTO members (not `Fields`-gated
+/// properties), so parsing them needs no extra `Fields` request.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EmbyImageTags {
+    /// `ImageTags.Thumb`: a 16:9 landscape thumbnail is declared available.
+    #[serde(default)]
+    pub thumb: String,
+    /// `ImageTags.Primary`: a primary (poster/square) image is declared
+    /// available.
+    #[serde(default)]
+    pub primary: String,
+    /// `BackdropImageTags`: landscape backdrop tags.
+    #[serde(default)]
+    pub backdrops: Vec<String>,
+    /// On episodes: the series' thumb tag (`ParentThumbImageTag`, falling
+    /// back to `SeriesThumbImageTag`).
+    #[serde(default)]
+    pub series_thumb: String,
+    /// On episodes: the series' backdrop tags (`ParentBackdropImageTags`).
+    #[serde(default)]
+    pub series_backdrops: Vec<String>,
 }
 
 impl EmbyItem {
@@ -335,6 +367,7 @@ impl EmbyItem {
             audio_info: String::new(),
             genre: String::new(),
             playlist_item_id: String::new(),
+            image_tags: EmbyImageTags::default(),
         }
     }
 
@@ -611,7 +644,10 @@ fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
     }
 }
 
-fn parse_item(raw: &Value) -> EmbyItem {
+/// The single raw-JSON-to-`EmbyItem` constructor. `pub` so the app crate's
+/// tests parse recorded item JSON (task 5.3's fixtures) the way the live
+/// parse path does (task 5.4's artwork-policy tests).
+pub fn parse_item(raw: &Value) -> EmbyItem {
     let ud = raw.get("UserData").unwrap_or(&Value::Null);
     let item_type = raw["Type"].as_str().unwrap_or("").to_string();
     let is_folder = raw["IsFolder"].as_bool().unwrap_or(false)
@@ -697,10 +733,39 @@ fn parse_item(raw: &Value) -> EmbyItem {
             .map(|s| parse_video_info(s))
             .unwrap_or_default(),
         playlist_item_id: raw["PlaylistItemId"].as_str().unwrap_or("").to_string(),
+        image_tags: parse_image_tags(raw),
         audio_info: raw["MediaStreams"]
             .as_array()
             .map(|s| parse_audio_info(s))
             .unwrap_or_default(),
+    }
+}
+
+/// Reads one item's declared image availability (task 5.3): `ImageTags`
+/// (`Thumb`, `Primary`), `BackdropImageTags`, and — for episodes — the
+/// series' thumb/backdrop tags. Every missing member defaults to empty.
+fn parse_image_tags(raw: &Value) -> EmbyImageTags {
+    let tags = |value: &Value| -> Vec<String> {
+        value
+            .as_array()
+            .map(|tags| {
+                tags.iter()
+                    .filter_map(|tag| tag.as_str())
+                    .map(str::to_string)
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    EmbyImageTags {
+        thumb: raw["ImageTags"]["Thumb"].as_str().unwrap_or("").to_string(),
+        primary: raw["ImageTags"]["Primary"].as_str().unwrap_or("").to_string(),
+        backdrops: tags(&raw["BackdropImageTags"]),
+        series_thumb: raw["ParentThumbImageTag"]
+            .as_str()
+            .or_else(|| raw["SeriesThumbImageTag"].as_str())
+            .unwrap_or("")
+            .to_string(),
+        series_backdrops: tags(&raw["ParentBackdropImageTags"]),
     }
 }
 

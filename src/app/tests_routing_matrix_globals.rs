@@ -168,7 +168,7 @@ fn library_tab_jump_does_not_fire_in_search_sidebar() {
 }
 #[test]
 fn library_tab_jump_with_modifiers_is_swallowed() {
-    let focused = ComponentId::Browser(browser_key());
+    let focused = ComponentId::Library;
     assert_eq!(
         resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Char('1'), KeyModifiers::ALT),
@@ -211,7 +211,7 @@ fn open_sessions_command_toggles_without_respawning_loads() {
 }
 #[test]
 fn clear_queue_c_is_global_but_yields_to_text_entry() {
-    let focused = ComponentId::Browser(browser_key());
+    let focused = ComponentId::Library;
     assert_eq!(
         resolve_router_outcome_with_focused(
             key(KeyCode::Char('c')),

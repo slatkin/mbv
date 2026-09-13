@@ -50,6 +50,7 @@ fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
         audio_info: String::new(),
         genre: String::new(),
         playlist_item_id: String::new(),
+        image_tags: Default::default(),
     }
 }
 

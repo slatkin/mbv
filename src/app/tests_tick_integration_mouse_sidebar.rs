@@ -1,14 +1,14 @@
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
 
 use crate::app::action::Command;
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
-    BrowserComponent, ComponentId, HelpComponent, Msg, OverlayId, PlaylistsComponent, QueueComponent,
-    ShellRequest, TerminalObserverEvent, UserEvent,
+    ComponentId, HelpComponent, Msg, OverlayId, PlaylistsComponent, QueueComponent, ShellRequest,
+    TerminalObserverEvent, UserEvent,
 };
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
@@ -39,7 +39,6 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
     app.playlists_cursor = 0;
     assert!(app.playlists_open.is_none());
     assert!(app.playlists_open_items.is_empty());
-    app.layout.main.panel_area = Rect::new(0, 0, 40, 20);
     let mut harness = TickHarness::new(app);
     harness.inject(key(Key::Function(4)));
     let outcome = harness.step();
@@ -103,7 +102,8 @@ fn playlists_sidebar_claims_immediate_wheel_and_keeps_normal_keys() {
 #[test]
 fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
     let mut app = make_app_stub();
-    app.layout.main.panel_area = Rect::new(0, 0, 30, 16);
+    app.terminal_width = 40;
+    app.terminal_height = 16;
     let mut harness = TickHarness::new(app);
     harness.model_mut().mount_help();
     harness.model_mut().sync_mounted_surfaces();
@@ -154,24 +154,33 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         .unwrap();
 
     let queue_id = ComponentId::Queue;
-    let library_id = harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("Queue-only keeps the Library destination mounted");
+    // Task 6.1: the library surface is the mounted `LibraryPanel` (the
+    // Movies owner is embedded inside it), so the unpainted-library rule
+    // applies to the panel.
+    let library_id = ComponentId::Library;
     assert!(
         !harness.model().mouse_subscribed.contains(&library_id),
         "an unpainted Library destination must not be mouse-eligible"
     );
-    let library_cursor_before = harness
-        .model_mut()
-        .application
-        .get_component_mut(&library_id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<BrowserComponent>()
-        .unwrap()
-        .cursor();
+    let library_cursor_before = {
+        let (_, key, _) = harness
+            .model()
+            .active_migrated_browser_owner()
+            .expect("the Movies owner has migrated");
+        let panel = harness
+            .model_mut()
+            .application
+            .get_component_mut(&library_id)
+            .unwrap();
+        panel
+            .as_any_mut()
+            .downcast_mut::<LibraryPanel>()
+            .unwrap()
+            .owner(&key)
+            .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::browser_content::BrowserContent>())
+            .map(|owner| owner.cursor())
+            .expect("browser owner installed")
+    };
     let first_row = harness
         .model_mut()
         .application
@@ -206,15 +215,25 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         .iter()
         .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::QueueIntent(_)))));
     assert_eq!(
-        harness
-            .model_mut()
-            .application
-            .get_component_mut(&library_id)
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut::<BrowserComponent>()
-            .unwrap()
-            .cursor(),
+        {
+            let (_, key, _) = harness
+                .model()
+                .active_migrated_browser_owner()
+                .expect("the Movies owner has migrated");
+            let panel = harness
+                .model_mut()
+                .application
+                .get_component_mut(&library_id)
+                .unwrap();
+            panel
+                .as_any_mut()
+                .downcast_mut::<LibraryPanel>()
+                .unwrap()
+                .owner(&key)
+                .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::browser_content::BrowserContent>())
+                .map(|owner| owner.cursor())
+                .expect("browser owner installed")
+        },
         library_cursor_before,
         "the hidden Library must not mutate from Queue-only wheel"
     );

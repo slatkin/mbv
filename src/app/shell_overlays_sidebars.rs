@@ -81,8 +81,7 @@ impl Model {
         self.update_playlists_content();
         self.update_sessions_content();
 
-        let panel_area =
-            (self.app.layout.main.panel_area.width > 0).then_some(self.app.layout.main.panel_area);
+        let panel_area = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
         let help_id = ComponentId::Overlay(OverlayId::Help);
         if let Some(comp) = self.application.get_component_mut(&help_id) {
             if let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>() {
@@ -104,8 +103,7 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        let panel_area =
-            (self.app.layout.main.panel_area.width > 0).then_some(self.app.layout.main.panel_area);
+        let panel_area = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
         let connected_session_id = self.app.connected_session_id.as_deref();
         let tracking = self.app.remote_tracker.is_some();
         let cast_attachment_id = self

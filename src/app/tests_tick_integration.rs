@@ -12,7 +12,7 @@ use tuirealm::event::{
 use crate::app::components::msg::{ConfirmIntent, PlaybackRequest, ServiceRequest};
 use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::{
-    ComponentId, ModalId, Msg, MusicWorkspaceComponent, OverlayId, QueueRequest, SearchPool,
+    ComponentId, ModalId, Msg, MusicContent, OverlayId, QueueRequest, SearchPool,
     SearchSidebarComponent, ShellRequest, TerminalObserverEvent,
     UserEvent,
 };
@@ -29,6 +29,38 @@ fn key(code: Key) -> Event<UserEvent> {
         code,
         modifiers: KeyModifiers::NONE,
     })
+}
+
+/// Task 1.1: the saved-tab restore runs in the sync pass, before any draw.
+/// After one tick() + sync pass and without drawing, the pending tab is
+/// resolved; `render_main` no longer writes `self.tab`.
+#[test]
+fn sync_pass_resolves_a_pending_library_tab_without_a_draw() {
+    let mut app = crate::app::render::make_movie_app();
+    app.library_tab_pending = 1;
+    let mut harness = TickHarness::new(app);
+
+    // One production tick (no events reach the app) + the sync pass; no draw
+    // in between.
+    harness.inject(Event::User(UserEvent::Clock(Instant::now())));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        harness.model().app.library_tab_pending, 0,
+        "the pending tab is consumed"
+    );
+    assert_eq!(
+        harness.model().app.tab,
+        TabSelection::EmbyLibrary(0),
+        "the pending position resolves onto the loaded library"
+    );
 }
 
 fn queue_focused_harness() -> TickHarness {
@@ -56,22 +88,28 @@ fn arm_search_query(harness: &mut TickHarness, query: &str) {
 }
 
 /// Phase 1 delivery proof (task 2.7): with Queue focused, a click on the
-/// seek-bar row still reaches the unfocused `PlaybackComponent` through its
+/// seek-bar row still reaches the unfocused `LibraryPlaybackPanel` through its
 /// `mouse_sub()` subscription, and the component resolves the column against
 /// its own painted `seekbar_area` into a 0.0..=1.0 fraction. No other eligible
-/// surface claims the event (D2 exclusivity).
+/// surface claims the event (D2 exclusivity). The strip renders only where
+/// `RootFrame` places it (task 3.5), so this frame is library-only.
 #[test]
 fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
     let mut app = make_app_stub();
-    app.panel_focus = PanelFocus::Queue;
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
     app.connected_session_id = Some("session-1".into());
-    app.layout.playback.player_area = Rect::new(10, 5, 40, 4);
+    app.layout.root_frame.library_playback = Some(Rect::new(10, 5, 40, 4));
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
     let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
     terminal
-        .draw(|frame| harness.model_mut().render_playback_component(frame))
+        .draw(|frame| {
+            harness
+                .model_mut()
+                .render_library_playback_panel_at(frame, Rect::new(10, 5, 40, 4))
+        })
         .unwrap();
 
     harness.inject(Event::Mouse(MouseEvent {
@@ -82,7 +120,7 @@ fn tick_delivers_seekbar_click_to_unfocused_playback_as_a_fraction() {
     }));
     let outcome = harness.step();
 
-    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Queue));
+    assert_eq!(outcome.pre_fold_focus, Some(ComponentId::Library));
     let seeks: Vec<f64> = outcome
         .raw_messages
         .iter()
@@ -154,21 +192,33 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     library_app.panel_mode = PanelMode::Both;
     let mut library_harness = TickHarness::new(library_app);
     library_harness.model_mut().sync_mounted_surfaces();
-    let child = library_harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("movie browser child mounted");
-    assert_eq!(library_harness.model().application.focus(), Some(&child));
+    // Task 6.1: Movies moved into the mounted `LibraryPanel` as the
+    // `BrowserContent` owner, so its library tab routes to the panel (the
+    // old-destination-child focus for un-migrated libraries is covered by
+    // `tests_tick_integration_library_panel::library_panel_focus_follows_the_active_library`).
+    assert_eq!(
+        library_harness.model().application.focus(),
+        Some(&ComponentId::Library)
+    );
 
     let mut stub_app = make_app_stub();
+    // Task 1.1: the sync pass normalizes a stale Service-library destination
+    // before the focus pass routes, so this stub's index-0 tab (no libraries
+    // loaded) resolves to Home in the pass, and focus follows the mounted
+    // Home destination instead of falling through to UiRoot.
     stub_app.tab = TabSelection::EmbyLibrary(0);
     stub_app.panel_focus = PanelFocus::Library;
     let mut stub_harness = TickHarness::new(stub_app);
     stub_harness.model_mut().sync_mounted_surfaces();
     assert_eq!(
+        stub_harness.model().app.tab,
+        TabSelection::Home,
+        "the sync pass normalizes the stale destination before routing"
+    );
+    assert_eq!(
         stub_harness.model().application.focus(),
-        Some(&ComponentId::UiRoot)
+        Some(&ComponentId::Library),
+        "the Home owner is installed with the panel, so the normalized Home tab routes to the Library panel (task 5.11)"
     );
 }
 
@@ -304,43 +354,21 @@ fn wide_music_harness() -> (TickHarness, ComponentId) {
         .insert("album-1".into(), vec![first, second]);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let id = harness
-        .model()
-        .music_workspace_id
-        .clone()
-        .expect("wide Music workspace mounted");
-    (harness, id)
+    (harness, ComponentId::Library)
 }
 
 /// The focused track-pane row, or `None` when the track pane is unfocused
 /// (design.md D5: focus is parent state, the owner holds the selection).
-fn music_track_focus_row(harness: &TickHarness, id: &ComponentId) -> Option<usize> {
-    let music = harness
-        .model()
-        .application
-        .get_component(id)
-        .expect("Music workspace mounted")
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("Music workspace type");
+fn music_track_focus_row(harness: &TickHarness, _id: &ComponentId) -> Option<usize> {
+    let music = harness.model().test_music_owner();
     music
         .track_focused()
         .then(|| music.track_selected_row())
         .flatten()
 }
 
-fn music_workspace<'a>(
-    harness: &'a TickHarness,
-    id: &ComponentId,
-) -> &'a MusicWorkspaceComponent {
-    harness
-        .model()
-        .application
-        .get_component(id)
-        .expect("Music workspace mounted")
-        .as_any()
-        .downcast_ref::<MusicWorkspaceComponent>()
-        .expect("Music workspace type")
+fn music_workspace<'a>(harness: &'a TickHarness, _id: &ComponentId) -> &'a MusicContent {
+    harness.model().test_music_owner()
 }
 
 fn music_album_cursor(harness: &TickHarness, id: &ComponentId) -> usize {
@@ -426,7 +454,7 @@ fn music_library_queue_library_round_trip_keeps_focus_and_pane_state() {
 /// rather than the ordinary album cursor.
 #[test]
 fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
-    let (mut harness, id) = wide_music_harness();
+    let (mut harness, _id) = wide_music_harness();
 
     // Open Inline Search from the focused Music workspace.
     harness.inject(key(Key::Char('/')));
@@ -436,14 +464,7 @@ fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
     // Seed a known result row (the shell content push would otherwise supply
     // the library's own albums); the cursor rests on it.
     {
-        let workspace = harness
-            .model_mut()
-            .application
-            .get_component_mut(&id)
-            .expect("Music workspace mounted")
-            .as_any_mut()
-            .downcast_mut::<MusicWorkspaceComponent>()
-            .expect("Music workspace type");
+        let workspace = harness.model_mut().test_music_owner_mut();
         let mut result = crate::app::tests::make_item("Result Album", "MusicAlbum");
         result.id = "result-album".into();
         workspace
@@ -501,14 +522,7 @@ fn enter_on_inline_search_album_result_defers_to_async_activation() {
         }]),
     );
     {
-        let workspace = harness
-            .model_mut()
-            .application
-            .get_component_mut(&id)
-            .expect("Music workspace mounted")
-            .as_any_mut()
-            .downcast_mut::<MusicWorkspaceComponent>()
-            .expect("Music workspace type");
+        let workspace = harness.model_mut().test_music_owner_mut();
         workspace
             .inline_search_mut()
             .set_pool(SearchPool::Albums(vec![crate::app::AlbumSearchEntry {

@@ -589,42 +589,7 @@ impl App {
         let state = self
             .audiobookshelf_book_browse
             .get(audiobookshelf_library_index)?;
-        let book = state.selected_id.as_ref()?;
-        let book = state
-            .books
-            .iter()
-            .find(|candidate| candidate.library_item_id == *book)?;
-        if book.library_item_id.trim().is_empty() {
-            return None;
-        }
-        let detail = state.detail_cache.get(&book.library_item_id);
-        let duration_seconds = detail
-            .map(|(_, audio_files)| audio_files.iter().map(|file| file.duration).sum())
-            .filter(|duration| *duration > 0.0)
-            .or_else(|| {
-                detail.and_then(|(chapters, _)| {
-                    chapters
-                        .iter()
-                        .map(|chapter| chapter.end)
-                        .max_by(f64::total_cmp)
-                })
-            });
-        let progress = state.progress.get(&book.library_item_id);
-        let position_ticks = progress
-            .map(|progress| seconds_to_ticks(progress.current_time_seconds))
-            .unwrap_or(0);
-        let is_finished = progress.is_some_and(|progress| progress.is_finished);
-
-        Some(QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
-            library_item_id: book.library_item_id.clone(),
-            title: book.title.clone(),
-            author: book.author_display.clone(),
-            duration_ticks: duration_seconds.and_then(seconds_to_ticks_u64),
-            position_ticks,
-            played: is_finished,
-            is_finished,
-            cover_path: book.cover_path.clone(),
-        }))
+        audiobookshelf_book_queue_item(state)
     }
 
     pub(super) fn play_selected_audiobookshelf_book(&mut self, index: usize) {
@@ -703,6 +668,52 @@ pub(super) fn seconds_to_ticks(seconds: f64) -> i64 {
         .unwrap_or(0)
 }
 
+/// Resolve the Books tab's selected book as a `QueueItem::AudiobookshelfBook`
+/// without mutating the queue or opening a playback lifecycle (factored out
+/// of `App::selected_audiobookshelf_book_queue_item` for task 5.4: the Books
+/// tab's selection path and Home's queue-item path feed the one hero
+/// producer through this single conversion).
+pub(in crate::app) fn audiobookshelf_book_queue_item(
+    state: &super::types_audiobookshelf_browse::AudiobookshelfBookBrowseState,
+) -> Option<QueueItem> {
+    let book = state.selected_id.as_ref()?;
+    let book = state
+        .books
+        .iter()
+        .find(|candidate| candidate.library_item_id == *book)?;
+    if book.library_item_id.trim().is_empty() {
+        return None;
+    }
+    let detail = state.detail_cache.get(&book.library_item_id);
+    let duration_seconds = detail
+        .map(|(_, audio_files)| audio_files.iter().map(|file| file.duration).sum())
+        .filter(|duration| *duration > 0.0)
+        .or_else(|| {
+            detail.and_then(|(chapters, _)| {
+                chapters
+                    .iter()
+                    .map(|chapter| chapter.end)
+                    .max_by(f64::total_cmp)
+            })
+        });
+    let progress = state.progress.get(&book.library_item_id);
+    let position_ticks = progress
+        .map(|progress| seconds_to_ticks(progress.current_time_seconds))
+        .unwrap_or(0);
+    let is_finished = progress.is_some_and(|progress| progress.is_finished);
+
+    Some(QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
+        library_item_id: book.library_item_id.clone(),
+        title: book.title.clone(),
+        author: book.author_display.clone(),
+        duration_ticks: duration_seconds.and_then(seconds_to_ticks_u64),
+        position_ticks,
+        played: is_finished,
+        is_finished,
+        cover_path: book.cover_path.clone(),
+    }))
+}
+
 fn seconds_to_ticks_u64(seconds: f64) -> Option<u64> {
     (seconds.is_finite() && seconds >= 0.0)
         .then(|| (seconds * TICKS_PER_SECOND as f64).round() as u64)
@@ -715,7 +726,3 @@ mod book_seek_tests;
 #[cfg(test)]
 #[path = "split_browse_state_book_tests.rs"]
 mod split_browse_state_book_tests;
-
-#[cfg(test)]
-#[path = "split_browse_state_podcast_tests.rs"]
-mod split_browse_state_podcast_tests;

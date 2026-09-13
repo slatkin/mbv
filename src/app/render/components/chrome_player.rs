@@ -1,6 +1,8 @@
 use super::chrome::play_icon;
-use crate::app::layout::LayoutPlayback;
 use crate::app::palette;
+use crate::app::render::arrangements::playback_transport::{
+    transport_rows, transport_title_plan, TransportIndicators, TransportMeasure, TransportPlan,
+};
 use crate::app::ui_util::*;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -9,9 +11,17 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+#[derive(Clone, Default)]
+pub(in crate::app) struct PlaybackStripAreas {
+    pub(in crate::app) seekbar_area: Rect,
+    pub(in crate::app) play_pause_area: Rect,
+    pub(in crate::app) stop_area: Rect,
+    pub(in crate::app) next_area: Rect,
+}
+
 pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) area: Rect,
-    pub(in crate::app) playback: &'a mut LayoutPlayback,
+    pub(in crate::app) playback: &'a mut PlaybackStripAreas,
     pub(in crate::app) player_h: u16,
     pub(in crate::app) show_controls: bool,
     pub(in crate::app) now_playing_title: Option<(String, Color)>,
@@ -20,7 +30,6 @@ pub(in crate::app) struct PlaybackRenderContext<'a> {
     /// (`surface_colors`) instead of carrying a bare colour.
     pub(in crate::app) panel: palette::Surface,
     pub(in crate::app) panel_focused: bool,
-    pub(in crate::app) narrow_player: bool,
     pub(in crate::app) progress: (i64, i64, bool),
     pub(in crate::app) use_nerd_fonts: bool,
     pub(in crate::app) stop_available: bool,
@@ -37,38 +46,38 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
     if ctx.player_h == 0 {
         return;
     }
-    ctx.playback.idle_feed_link_area = Rect::default();
-
-    let seek_area = Rect {
-        height: 1,
-        ..ctx.area
-    };
+    // The shared width-driven transport arrangement (task 3.5, D10): which
+    // rows render in this panel, and which indicators/buttons the title row
+    // shows at its width. Both playback panels route through here, so the
+    // queue column and the right-column strip cannot drift at one width.
+    let rows = transport_rows(ctx.area, ctx.player_h);
     // The ctx-driven sites resolve the panel surface the context carries: the
-    // normal-mode panel's own fill (`PlaybackPanel`, the queue column's bit)
-    // or the Queue-only strip's fixed chrome band (`QueueOnlyPlaybackPanel`),
-    // whose recess rects share the value through this context.
+    // queue column's transport band (`QueueOnlyPlaybackPanel`) or the
+    // right-column strip's own fill (`PlaybackPanel`), whose recess rects
+    // share the value through this context.
     let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
-    if ctx.show_controls {
-        render_seekbar(frame, seek_area, ctx.playback, ctx.progress, panel_bg);
-    } else {
-        ctx.playback.seekbar_area = Rect::default();
-        let bar = "\u{2594}".repeat(seek_area.width as usize);
-        frame.render_widget(
-            Paragraph::new(Span::styled(
-                bar,
-                Style::default().fg(palette::PROGRESS_TRACK),
-            ))
-            .style(Style::default().bg(panel_bg)),
-            seek_area,
-        );
+    match rows.seekbar {
+        Some(seek_area) if ctx.show_controls => {
+            render_seekbar(frame, seek_area, ctx.playback, ctx.progress, panel_bg);
+        }
+        Some(seek_area) => {
+            ctx.playback.seekbar_area = Rect::default();
+            let bar = "\u{2594}".repeat(seek_area.width as usize);
+            frame.render_widget(
+                Paragraph::new(Span::styled(
+                    bar,
+                    Style::default().fg(palette::PROGRESS_TRACK),
+                ))
+                .style(Style::default().bg(panel_bg)),
+                seek_area,
+            );
+        }
+        None => {
+            ctx.playback.seekbar_area = Rect::default();
+        }
     }
 
-    if ctx.player_h >= 2 {
-        let title_row_area = Rect {
-            y: ctx.area.y + 1,
-            height: 1,
-            ..ctx.area
-        };
+    if let Some(title_row_area) = rows.title {
         frame.render_widget(
             Paragraph::new(Span::raw(" ".repeat(title_row_area.width as usize)))
                 .style(Style::default().bg(panel_bg)),
@@ -81,17 +90,9 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             height: 1,
         };
         if let Some((title, color)) = ctx.now_playing_title.clone() {
-            let row_title = if ctx.narrow_player {
-                ""
-            } else {
-                title.as_str()
-            };
-            render_title_row(frame, title_area, row_title, color, &mut ctx);
+            render_title_row(frame, title_area, title.as_str(), color, &mut ctx);
         } else if !ctx.show_controls {
-            if let Some((title, has_link)) = ctx.idle_feed_title.clone() {
-                if has_link {
-                    ctx.playback.idle_feed_link_area = title_area;
-                }
+            if let Some((title, _has_link)) = ctx.idle_feed_title.clone() {
                 let spans = marquee_spans(
                     &mut ctx,
                     &[(title, palette::ACCENT)],
@@ -107,87 +108,19 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
         }
     }
 
-    if ctx.player_h >= 3 {
-        let blank_area = Rect {
-            y: ctx.area.y + 2,
-            height: 1,
-            ..ctx.area
-        };
+    if let Some(blank_area) = rows.indicator_row {
         frame.render_widget(
             Paragraph::new(Span::raw(" ".repeat(blank_area.width as usize)))
                 .style(Style::default().bg(panel_bg)),
             blank_area,
         );
     }
-
-    if ctx.player_h >= 4 {
-        let bottom_area = Rect {
-            y: ctx.area.y + 3,
-            height: 1,
-            ..ctx.area
-        };
-        frame.render_widget(
-            Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize))).style(
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::PlaybackBottomRow,
-                    false,
-                )
-                .fill),
-            ),
-            bottom_area,
-        );
-        if ctx.narrow_player && ctx.show_controls {
-            if let Some((title, color)) = ctx.now_playing_title.clone() {
-                let prefix = "On Now: ";
-                let inset_area = Rect {
-                    x: bottom_area.x + 1,
-                    width: bottom_area.width.saturating_sub(2),
-                    ..bottom_area
-                };
-                let avail = inset_area.width as usize;
-                let title_avail = avail.saturating_sub(prefix.width());
-                let style = Style::default().fg(color);
-                let label = format!("{prefix}{title}");
-                let (line, alignment) = if label.width() <= avail || title_avail == 0 {
-                    (
-                        Line::from(Span::styled(trunc_str(&label, avail), style)),
-                        Alignment::Center,
-                    )
-                } else {
-                    let scrolled = marquee_spans(&mut ctx, &[(title, color)], title_avail)
-                        .into_iter()
-                        .next()
-                        .map(|span| span.content.to_string())
-                        .unwrap_or_default();
-                    (
-                        Line::from(vec![
-                            Span::styled(prefix, style),
-                            Span::styled(scrolled, style),
-                        ]),
-                        Alignment::Left,
-                    )
-                };
-                frame.render_widget(
-                    Paragraph::new(line)
-                        .style(
-                            Style::default().bg(palette::surface_colors(
-                                palette::Surface::PlaybackBottomRow,
-                                false,
-                            )
-                            .fill),
-                        )
-                        .alignment(alignment),
-                    inset_area,
-                );
-            }
-        }
-    }
 }
 
 fn render_seekbar(
     frame: &mut Frame,
     area: Rect,
-    playback: &mut LayoutPlayback,
+    playback: &mut PlaybackStripAreas,
     (position, runtime, _paused): (i64, i64, bool),
     panel_bg: Color,
 ) {
@@ -356,20 +289,23 @@ pub(in crate::app) fn render_title_row(
     let next_w = next_glyph.width() as u16;
     let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
     let available = area.width as usize;
-    let mut show_buttons = true;
-    let (right, right_w) = if ctx.narrow_player {
-        (right_elapsed, right_elapsed_w)
-    } else if available.saturating_sub(glyph_w as usize + right_full_w as usize + buttons_w)
-        < title.width()
-    {
-        show_buttons = false;
-        if available.saturating_sub(glyph_w as usize + right_full_w as usize) < title.width() {
-            (right_elapsed, right_elapsed_w)
-        } else {
-            (right_full, right_full_w)
-        }
-    } else {
-        (right_full, right_full_w)
+    // The width-driven decision (task 3.5): which indicator set shows and
+    // whether the transport buttons fit, from the shared transport
+    // arrangement.
+    let plan: TransportPlan = transport_title_plan(
+        area.width,
+        title.width() as u16,
+        TransportMeasure {
+            glyph_w,
+            buttons_w: buttons_w as u16,
+            full_w: right_full_w,
+            elapsed_w: right_elapsed_w,
+        },
+    );
+    let show_buttons = plan.transport_buttons;
+    let (right, right_w) = match plan.indicators {
+        TransportIndicators::Full => (right_full, right_full_w),
+        TransportIndicators::ElapsedOnly => (right_elapsed, right_elapsed_w),
     };
 
     let mut left = vec![Span::styled(
@@ -408,7 +344,7 @@ pub(in crate::app) fn render_title_row(
         ctx.playback.next_area = Rect::default();
     }
     let fixed_w = glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
-    let title_parts = if ctx.narrow_player || ctx.title_parts.is_empty() {
+    let title_parts = if ctx.title_parts.is_empty() {
         vec![(title.to_string(), title_color)]
     } else {
         ctx.title_parts.clone()

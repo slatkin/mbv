@@ -1,9 +1,7 @@
 use super::test_helpers::{
     buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
-    render_library_to_string_sized,
 };
 use super::*;
-use crate::app::layout::LayoutMain;
 use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -19,10 +17,10 @@ fn render_narrow_music(app: App, width: u16, height: u16) -> String {
 
 fn render_music_legacy(app: &mut App, width: u16, height: u16, _focused: bool) -> String {
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let mut layout = LayoutMain::default();
+    let mut layout = Rect::default();
     terminal
         .draw(|f| {
-            app.render_library(f, Rect::new(0, 0, width, height), &mut layout, None);
+            app.reserve_library_area(f, Rect::new(0, 0, width, height), &mut layout, None);
         })
         .unwrap();
     buffer_to_string(&terminal)
@@ -90,58 +88,43 @@ fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint
     );
 }
 
+/// Task 9.3: the Narrow inline hero and the Wide header derive from one
+/// `HeroContent` (design D3/D7), so one resolved artist/year/title paints at
+/// both breakpoints and neither falls back to the raw folder name.
 #[test]
-fn wide_grouped_music_publishes_same_frame_layout_geometry() {
-    let mut app = make_music_group_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 120, 30);
+fn narrow_and_wide_music_paint_the_same_resolved_album_hero() {
+    let narrow = render_narrow_music(folder_hero_app(), 60, 30);
+    let mut wide_model = mounted_model_at(folder_hero_app(), 160, 40);
+    let wide = draw_mounted_frame(&mut wide_model, 160, 40);
 
-    assert_eq!(layout.wide_music_area, Rect::new(0, 0, 120, 30));
-    assert!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0);
-    assert!(layout.left_area.width > 0);
-    assert!(layout.hero_area.width > 0);
-    assert!(layout.wide_music_right_area.width > 0);
+    for expected in ["Folder Artist", "2024", "First Album"] {
+        assert!(
+            narrow.contains(expected),
+            "narrow hero missing {expected}:\n{narrow}"
+        );
+        assert!(
+            wide.contains(expected),
+            "wide hero missing {expected}:\n{wide}"
+        );
+    }
+    for output in [&narrow, &wide] {
+        assert!(
+            !output.contains("Folder Artist (2024) First Album"),
+            "the raw folder name must not paint as the hero title:\n{output}"
+        );
+    }
 }
 
-/// D4 proof: at the wide breakpoint the legacy base frame publishes the
-/// `wide_music_*` hand-off geometry but paints no grouped-album rows — the
-/// mounted `MusicWorkspaceComponent` is the sole painter (#613). Mirrors
-/// `tests_non_music::wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
-#[test]
-fn wide_music_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
+fn folder_hero_app() -> App {
     let mut app = make_music_group_app();
     app.libs[0].nav_stack[1].set_resting_cursor(0);
-    let mut layout = LayoutMain::default();
-    let mut term = Terminal::new(TestBackend::new(120, 40)).unwrap();
-    term.draw(|f| {
-        app.render_library(f, Rect::new(0, 0, 120, 40), &mut layout, None);
-    })
-    .unwrap();
-
-    assert!(
-        layout.wide_music_area.width > 0 && layout.wide_music_area.height > 0,
-        "wide music area hand-off must still be reserved: {:?}",
-        layout.wide_music_area
-    );
-    assert!(
-        layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0,
-        "wide music right area hand-off must still be reserved: {:?}",
-        layout.wide_music_right_area
-    );
-    let output = buffer_to_string(&term);
-    assert!(
-        !output.contains("First Album"),
-        "legacy base frame must not paint grouped-album rows at the wide breakpoint: {output:?}"
-    );
-}
-
-#[test]
-fn narrow_grouped_music_publishes_no_wide_track_targets() {
-    let mut app = make_music_group_app();
-    let mut layout = LayoutMain::default();
-    let _ = render_library_to_string_sized(&mut app, &mut layout, 60, 30);
-
-    assert!(!(layout.wide_music_right_area.width > 0 && layout.wide_music_right_area.height > 0));
+    let album = &mut app.libs[0].nav_stack.last_mut().unwrap().items[0];
+    album.artist.clear();
+    album.name = "Folder Artist (2024) First Album".into();
+    album.production_year = 0;
+    app.album_artist_cache
+        .insert(album.id.clone(), "Folder Artist".into());
+    app
 }
 
 #[test]
@@ -153,9 +136,20 @@ fn narrow_grouped_music_shows_group_pill_bar() {
     let app = make_music_group_app();
     let mut model = mounted_model_at(app, 60, 30);
     let output = draw_mounted_frame(&mut model, 60, 30);
-    let layout = super::test_helpers::mounted_music_layout(&model);
+    let selector_tabs = model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .expect("Library panel mounted")
+        .test_selector_hits()
+        .regions()
+        .to_vec();
     assert!(
-        !layout.selector_tabs.is_empty(),
+        !selector_tabs.is_empty(),
         "narrow grouped Music must publish group selector pills:\n{output}"
     );
     assert!(

@@ -3,7 +3,7 @@
 //! controls, group selectors, overlay rows.
 //!
 //! This is not a new shape — it formalises the hand-rolled `Vec<(Rect, T)>`
-//! that components like `feeds.rs` (`layout.selector_tabs`) already keep. The
+//! the still-mounted destinations keep for their pill rows. The
 //! two canonical media-list controls do **not** use this; their uniform row
 //! flow resolves arithmetically through `resolve_point` (design.md D6).
 //!
@@ -51,9 +51,10 @@ impl<Tag> HitRegions<Tag> {
             .map(|(_, tag)| tag)
     }
 
-    /// Test seam: the recorded rect/tag pairs, so component tests can derive
-    /// click coordinates from the same geometry the component resolves.
-    #[cfg(test)]
+    /// The recorded rect/tag pairs in paint order. The panel's slot events
+    /// resolve through [`HitRegions::resolve`]; the one production reader is
+    /// the mounted `LibraryPanel` (task 8.4), which adopts the shared
+    /// Workspace selector's painted pills into its own hit store.
     pub(crate) fn regions(&self) -> &[(Rect, Tag)] {
         &self.regions
     }

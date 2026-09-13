@@ -1,7 +1,6 @@
 #![allow(unused_imports)]
 
 use super::indicators;
-use crate::app::layout::LayoutPlayback;
 use crate::app::ui_util::*;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -12,46 +11,6 @@ use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
 use ratatui::Frame;
 use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
-
-pub(in crate::app) fn render_legacy_backdrops(
-    frame: &mut Frame,
-    left_area: Rect,
-    right_area: Rect,
-    queue_focused: bool,
-    left_visible: bool,
-    right_visible: bool,
-) {
-    if left_visible {
-        // One column is left unpainted for the Queue boundary component;
-        // `saturating_sub` makes this a no-op for a zero-width column.
-        let backdrop = Rect {
-            width: left_area.width.saturating_sub(1),
-            ..left_area
-        };
-        frame.render_widget(
-            Block::default().style(
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::QueueColumn,
-                    queue_focused,
-                )
-                .fill),
-            ),
-            backdrop,
-        );
-    }
-    if right_visible {
-        frame.render_widget(
-            Block::default().style(
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::LibraryColumn,
-                    false,
-                )
-                .fill),
-            ),
-            right_area,
-        );
-    }
-}
 
 pub(in crate::app) fn thin_vertical_thumb(mut glyphs: GlyphSet) -> GlyphSet {
     glyphs.thumb_vertical_lower = ['▕'; 8];

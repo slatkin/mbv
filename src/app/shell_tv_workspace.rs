@@ -1,8 +1,24 @@
-use super::components::{
-    BrowserComponent, BrowserKey, BrowserKind, ComponentId, ShellRequest, TvWorkspaceComponent,
-};
-use super::images::series_image_cache_key;
-use super::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
+//! Shell wiring for the TV embedded content owner (`TvContent`, tasks
+//! 8.1–8.4, design D2/D12). Mirrors `shell_browser_content.rs`: the owner
+//! lives inside the mounted `LibraryPanel`, addressed by
+//! `LibraryKey::Service(BrowserKey{TvShows})`, and the shell projects
+//! Model-owned browse snapshots into it. Task 8.4 deleted the last mounted TV
+//! component, so there is no TV-specific `ComponentId`, no mount/unmount pass
+//! and no shell render step — the panel paints the owner and resolves its
+//! pointer geometry.
+//!
+//! Typed effects need no new dispatch: the owner emits the same
+//! `ShellRequest::Tv*`/`EmbyLibrary*` messages the mounted component did, and
+//! the shell's dispatch is keyed by the active tab, not by which owner sent
+//! it.
+
+use super::components::library_panel::LibraryKey;
+#[cfg(test)]
+use super::components::library_panel::LibraryPanel;
+use super::components::tv_content::TvContent;
+#[cfg(test)]
+use super::components::ComponentId;
+use super::components::{BrowserKey, BrowserKind, ShellRequest};
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
 use super::TabSelection;
@@ -14,14 +30,14 @@ impl Model {
             return;
         };
         match request {
-            // The component resolved the episode from its own season detail and
+            // The owner resolved the episode from its own season detail and
             // carried the stable item (design.md D4); the shell plays it
-            // directly without reading any component cursor.
+            // directly without reading any owner cursor.
             ShellRequest::TvEpisodeActivate { episode } => {
                 self.app.play_item(episode);
             }
             // Activation, back, and letter-pill effects resolve the
-            // component's selection directly (item-targeted) or from the App
+            // owner's selection directly (item-targeted) or from the App
             // nav stack; no cursor mirror remains.
             ShellRequest::TvMoveRows { .. }
             | ShellRequest::TvMoveColumn { .. }
@@ -46,14 +62,9 @@ impl Model {
             }
             ShellRequest::TvEpisodeMove { .. } => {}
             ShellRequest::TvSeasonMove { .. } => {
-                // The component moves its season cursor first; use that
+                // The owner moves its season cursor first; use that
                 // authoritative selection to lazily fetch uncached episodes.
-                let selected_season = self
-                    .tv_workspace_id
-                    .as_ref()
-                    .and_then(|id| self.application.get_component(id))
-                    .and_then(|component| component.as_any().downcast_ref::<TvWorkspaceComponent>())
-                    .and_then(TvWorkspaceComponent::selected_season);
+                let selected_season = self.tv_owner().and_then(|owner| owner.selected_season());
                 if let Some((series_id, season_id)) = selected_season {
                     self.app.fetch_series_season_episodes(series_id, season_id);
                     self.push_tv_workspace_content();
@@ -67,197 +78,145 @@ impl Model {
         }
     }
 
-    pub(super) fn tv_workspace_component_id(&self) -> Option<ComponentId> {
+    /// The active TV library's owner key (design D2's
+    /// `LibraryKey::Service(BrowserKey)`), or `None` for every other tab.
+    fn tv_owner_key(&self) -> Option<LibraryKey> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        if library.library.collection_type != "tvshows"
-            || !self.app.wide_tv_library_area(index).is_some()
-        {
+        if library.library.collection_type != "tvshows" {
             return None;
         }
-        Some(ComponentId::TvWorkspace(BrowserKey {
+        Some(LibraryKey::Service(BrowserKey {
             service: ServiceKind::Emby,
             library_id: library.library.id.clone(),
             kind: BrowserKind::TvShows,
         }))
     }
 
-    /// Populate `tv_wide_*` layout geometry *before* the mount/focus gates in
-    /// `sync_mounted_surfaces` read it. Consumers gated on the paint-free
-    /// `App::wide_tv_library_area` no longer need this to avoid a
-    /// narrow→wide flash, but other readers of `tv_wide_right_area`/
-    /// `tv_wide_left_area` (e.g. context-menu anchors) still rely on this
-    /// priming this same frame. This recomputes exactly what
-    /// `render_library` publishes, but paint-free from the current terminal
-    /// size (mirrors Music's `render_music_workspace_component` priming its
-    /// own `publish_geometry`).
-    pub(super) fn prime_wide_tv_geometry(&mut self) {
-        use ratatui::layout::Rect;
-        match self
-            .app
-            .tab
-            .emby_library_index()
-            .and_then(|idx| self.app.wide_tv_library_area(idx).map(|area| (idx, area)))
+    /// The TV owner installed for the active library, whether or not its tab
+    /// is active (the shell's typed reads reach a retained owner through
+    /// `as_any`, exactly as the former mounted-owner downcast did).
+    fn tv_owner(&self) -> Option<&TvContent> {
+        let key = self.tv_owner_key()?;
+        self.library_owner(&key)
+    }
+
+    /// Mutate the TV owner inside the mounted `LibraryPanel` (design D2: the
+    /// shell pushes content addressed by `LibraryKey`), creating it on first
+    /// push.
+    fn update_tv_owner<R>(&mut self, f: impl FnOnce(&mut TvContent) -> R) -> Option<R> {
+        let key = self.tv_owner_key()?;
+        self.update_library_owner(key, || Box::new(TvContent::new()), f)
+    }
+
+    /// Test-only: the active TV owner's key, for shell tests' owner-map
+    /// membership checks (mirrors [`Model::test_tv_owner`]).
+    #[cfg(test)]
+    pub(super) fn test_tv_owner_key(&self) -> LibraryKey {
+        self.tv_owner_key().expect("TV library active")
+    }
+
+    /// Test-only: the owner key for library `index` whether or not it is the
+    /// active tab (the Movies-tab assertions check the absence of a TV owner
+    /// for a non-TV library).
+    #[cfg(test)]
+    pub(super) fn test_tv_owner_key_at(&self, index: usize) -> LibraryKey {
+        LibraryKey::Service(BrowserKey {
+            service: ServiceKind::Emby,
+            library_id: self.app.libs[index].library.id.clone(),
+            kind: BrowserKind::TvShows,
+        })
+    }
+
+    /// Test-only: the mounted panel's last painted role rects, for the
+    /// characterization tests that used to read the deleted component's
+    /// geometry (task 8.4).
+    #[cfg(test)]
+    pub(in crate::app) fn test_painted_library_layout(
+        &self,
+    ) -> crate::app::layout::PaintedRowGeometry {
+        self.application
+            .get_component(&ComponentId::Library)
+            .expect("library panel mounted")
+            .as_any()
+            .downcast_ref::<LibraryPanel>()
+            .expect("LibraryPanel")
+            .test_painted_layout()
+    }
+
+    /// Test-only: the panel-hosted TV owner (task 8.4 deleted
+    /// TV-specific component id, so tests address the owner through the panel's
+    /// `LibraryKey` map exactly as production does).
+    #[cfg(test)]
+    pub(super) fn test_tv_owner(&self) -> &TvContent {
+        let key = self.tv_owner_key().expect("TV library active");
+        self.library_owner(&key).expect("tv owner installed")
+    }
+
+    /// Test-only: mutable twin of [`Model::test_tv_owner`].
+    #[cfg(test)]
+    pub(super) fn test_tv_owner_mut(&mut self) -> &mut TvContent {
+        let key = self.tv_owner_key().expect("TV library active");
+        self.library_owner_mut(&key).expect("tv owner installed")
+    }
+
+    /// Test-only: paint the mounted `LibraryPanel` into `area` and take the
+    /// hero image paint it retained (task 8.4: the panel, not the owner, is
+    /// the paint path — the shell's own draw does the same through
+    /// `render_library_panel` + `take_image_paint`).
+    #[cfg(test)]
+    pub(super) fn test_paint_library_panel(
+        &mut self,
+        area: ratatui::layout::Rect,
+    ) -> Option<crate::app::components::library_panel::PanelHeroImagePaint> {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(area.width, area.height))
+                .expect("test terminal");
         {
-            Some((idx, lib_area)) => {
-                let ctx = self.app.wide_tv_render_ctx(idx, None);
-                ctx.publish_geometry(lib_area, &mut self.app.layout.main);
-            }
-            None => {
-                // Clear any stale wide rect so the mount gate does not stay
-                // wide after leaving the workspace or narrowing the terminal.
-                self.app.layout.main.tv_wide_area = Rect::default();
-                self.app.layout.main.tv_wide_left_area = Rect::default();
-                self.app.layout.main.tv_wide_right_area = Rect::default();
-            }
+            let panel = self
+                .application
+                .get_component_mut(&ComponentId::Library)
+                .expect("library panel mounted")
+                .as_any_mut()
+                .downcast_mut::<LibraryPanel>()
+                .expect("LibraryPanel");
+            terminal
+                .draw(|frame| tuirealm::component::Component::view(panel, frame, area))
+                .expect("paint library panel");
         }
+        self.application
+            .get_component_mut(&ComponentId::Library)
+            .expect("library panel mounted")
+            .as_any_mut()
+            .downcast_mut::<LibraryPanel>()
+            .expect("LibraryPanel")
+            .take_image_paint()
     }
 
-    pub(super) fn sync_tv_workspace(&mut self) {
-        let next_id = self.tv_workspace_component_id();
-        if self.tv_workspace_id != next_id {
-            match next_id {
-                Some(id) => {
-                    if !self.application.mounted(&id) {
-                        self.application
-                            .mount(id.clone(), Box::new(TvWorkspaceComponent::new()), vec![])
-                            .expect("mount TV workspace");
-                        self.register_destination(&id);
-                    }
-                    self.tv_workspace_id = Some(id.clone());
-                    self.push_tv_workspace_content();
-                    // On a narrow→wide flip the receiving workspace is
-                    // mounted during this sync, so the one-shot transfer
-                    // could not be applied by hand_off_tv_breakpoint.
-                    if let Some(transfer) = self.inline_search_transfer.take() {
-                        self.push_inline_search_content();
-                        self.apply_inline_search_transfer(&id, transfer);
-                        // Re-publish after restoring the query: restore_query
-                        // recomputes against the receiving host's pool, so the
-                        // pool must be present before the one-shot target
-                        // restoration and remains authoritative afterwards.
-                        self.push_inline_search_content();
-                    }
-                }
-                None => {
-                    self.tv_workspace_id = None;
-                }
-            }
-        }
-        if self.tv_workspace_id.is_none() {
-            if let Some(anchor) = self.tv_viewport_anchor.take() {
-                if let Some(browser_id) = self.emby_browser_id.clone() {
-                    if let Some(component) = self
-                        .application
-                        .get_component_mut(&browser_id)
-                        .and_then(|comp| comp.as_any_mut().downcast_mut::<BrowserComponent>())
-                    {
-                        component.apply_viewport_anchor(anchor);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Breakpoint hand-off (migrate-narrow-browse task 2.3 / D5): when the
-    /// wide TV breakpoint flips while a TV library is active, the
-    /// active-destination pointer moves between `TvWorkspaceComponent` and
-    /// the narrow `BrowserComponent`, each owning its own selection cursor.
-    /// Carry the outgoing component's live cursor into the resting
-    /// `BrowseLevel` (the `persist_emby_browser_scroll` write-back shape) and
-    /// arm the incoming component's one-shot re-anchor (the
-    /// `music_workspace_reanchor` shape) so the selected series survives the
-    /// flip. Runs once per tick before `sync_emby_browser` / `sync_tv_workspace`
-    /// repoint the pointers.
-    pub(super) fn hand_off_tv_breakpoint(&mut self) {
-        let TabSelection::EmbyLibrary(lib_idx) = self.app.tab else {
-            return;
-        };
-        let Some(library) = self.app.libs.get(lib_idx) else {
-            return;
-        };
-        if library.library.collection_type != "tvshows" {
-            return;
-        }
-        let wide = self.app.wide_tv_library_area(lib_idx).is_some();
-        // The pointers describe the presentation used by the previous sync.
-        // Only capture/apply state when that owner actually changes; both TV
-        // destinations remain mounted between transitions.
-        let switching =
-            (wide && self.tv_workspace_id.is_none()) || (!wide && self.tv_workspace_id.is_some());
-        if !switching {
-            return;
-        }
-        // Capture the outgoing host before the destination sync repoints it;
-        // this is a discrete owner handoff, never a per-frame mirror.
-        let outgoing = if wide {
-            self.emby_browser_id.clone()
-        } else {
-            self.tv_workspace_id.clone()
-        };
-        self.inline_search_transfer = outgoing
-            .as_ref()
-            .and_then(|id| self.capture_inline_search_transfer(id));
-        if let Some(id) = outgoing.as_ref() {
-            self.close_inline_search_host(id);
-        }
-        match (
-            wide,
-            self.tv_workspace_id.clone(),
-            self.emby_browser_id.clone(),
-        ) {
-            // wide -> narrow: persist the wide workspace's live cursor/scroll
-            // to the resting level so the narrow browser's `set_content`
-            // adopts it on the same tick.
-            (false, Some(id), _) => {
-                let Some(anchor) = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
-                    .and_then(|tv| tv.viewport_anchor(tv.painted_viewport_height()))
-                else {
-                    return;
-                };
-                // Deliver after destination sync so Browser adopts the target
-                // without mirroring component-local cursor state.
-                self.tv_viewport_anchor = Some(anchor);
-            }
-            // narrow -> wide: capture the Browser's painted anchor and deliver
-            // it to the kept-mounted wide workspace on its next paint.
-            (true, _, Some(id)) => {
-                let Some(anchor) = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|comp| comp.as_any().downcast_ref::<BrowserComponent>())
-                    .and_then(|browser| browser.viewport_anchor(browser.painted_viewport_height()))
-                else {
-                    return;
-                };
-                self.tv_viewport_anchor = Some(anchor);
-            }
-            _ => {
-                self.inline_search_transfer = None;
-            }
-        }
+    /// Project this frame's TV snapshot into the owner (task 8.4; the
+    /// retired `sync_tv_workspace` body). The owner is retained across
+    /// pushes, so its cursor/scroll/season survive a refresh and a hidden
+    /// tab leaves the retained owner untouched. Runs in the sync pass so the
+    /// owner exists before the panel's focus/mouse pass reads the migrated
+    /// owner map.
+    pub(super) fn sync_tv_content(&mut self) {
+        self.push_tv_workspace_content();
     }
 
     pub(super) fn push_tv_workspace_content(&mut self) {
-        let Some(id) = self.tv_workspace_id.as_ref() else {
-            return;
-        };
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
         let Some(library) = self.app.libs.get(index) else {
             return;
         };
-        if library.library.collection_type != "tvshows"
-            || !self.app.wide_tv_library_area(index).is_some()
-        {
+        if library.library.collection_type != "tvshows" {
             return;
         }
+        let lib_area = self.app.wide_tv_library_area(index);
+        let is_wide = lib_area.is_some();
         let list = self.app.library_list_render_ctx(
             index,
             self.app.libs[index]
@@ -269,25 +228,14 @@ impl Model {
                 .last()
                 .map_or(0, |l| l.resting().scroll()),
         );
-        if let Some(anchor) = self.tv_viewport_anchor.take() {
-            if let Some(component) = self
-                .application
-                .get_component_mut(id)
-                .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-            {
-                component.apply_viewport_anchor(anchor);
-            }
-        }
-        // The TV component owns the selection cursor. Derive the pushed Series
-        // snapshot from the component's authoritative selection (its own cursor
-        // over its cached list), not the App browse cursor (which the removed
-        // mirror used to keep in sync). Only on first mount, when the component
-        // has no prior content, fall back to the App-derived item.
+        // The TV owner owns the selection cursor. Derive the pushed Series
+        // snapshot from the owner's authoritative selection (its own cursor
+        // over its cached list), not the App browse cursor. Only on first
+        // mount, when the owner has no prior content, fall back to the
+        // App-derived item.
         let selected_series = self
-            .application
-            .get_component(id)
-            .and_then(|comp| comp.as_any().downcast_ref::<TvWorkspaceComponent>())
-            .and_then(TvWorkspaceComponent::selected_item)
+            .tv_owner()
+            .and_then(TvContent::selected_item)
             .filter(|item| item.item_type == "Series")
             .or_else(|| {
                 list.selected_item()
@@ -302,27 +250,11 @@ impl Model {
         let series_detail = selected_series
             .as_ref()
             .and_then(|item| self.app.series_detail_cache.get(&item.id).cloned());
-        if let Some(item) = selected_series
-            .as_ref()
-            .filter(|_| self.app.images_enabled())
-        {
-            self.app.fetch_card_image(
-                series_image_cache_key(&item.id, SERIES_LANDSCAPE_IMAGE_TYPES),
-                item.id.clone(),
-                String::new(),
-                SERIES_LANDSCAPE_IMAGE_TYPES,
-            );
-        }
-        let image_loading = selected_series.as_ref().is_some_and(|item| {
-            self.app.images_enabled()
-                && !self
-                    .app
-                    .card_image_states
-                    .contains_key(&series_image_cache_key(
-                        &item.id,
-                        SERIES_LANDSCAPE_IMAGE_TYPES,
-                    ))
-        });
+        // The hero image is NOT projected here: task 5.10's central projection
+        // (`sync_library_hero_images`, design D9) is the one projector for
+        // every migrated owner, and TV is one since task 8.4. Pushing a second
+        // projection here would race the sync-pass one (double fetch, and the
+        // sync-pass `Loading` state overwriting the push's `Ready`).
         let context = TvWideRenderCtx::new(
             list,
             selected_series,
@@ -330,37 +262,18 @@ impl Model {
             0,
             None,
             self.app.should_show_letter_pills(index),
-        )
-        .with_image_state(self.app.images_enabled(), image_loading);
-        if let Some(comp) = self.application.get_component_mut(id) {
-            if let Some(tv) = comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>() {
-                tv.set_content(context);
-            }
-        }
-    }
-
-    pub(super) fn render_tv_workspace_component(&mut self, frame: &mut ratatui::Frame) {
-        let Some(id) = self.tv_workspace_id.as_ref() else {
-            return;
-        };
-        let area = self.app.layout.main.tv_wide_area;
-        if area.width == 0 || area.height == 0 {
-            return;
-        }
-        if let Some(comp) = self
-            .application
-            .get_component_mut(id)
-            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-        {
-            comp.set_list_pane_width(self.app.list_pane_width);
-        }
-        self.application.view(id, frame, area);
-        let image_paint = self
-            .application
-            .get_component_mut(id)
-            .and_then(|comp| comp.as_any_mut().downcast_mut::<TvWorkspaceComponent>())
-            .and_then(TvWorkspaceComponent::take_image_paint);
-        self.app.paint_home_image(frame, image_paint);
+        );
+        let list_pane_width = self.app.list_pane_width;
+        // Panel focus is the library area's focus bit; the owner paints its
+        // focused pane and claims local chords from it (task 8.4).
+        let library_focused =
+            matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        self.update_tv_owner(|owner| {
+            owner.set_is_wide(is_wide);
+            owner.set_list_pane_width(list_pane_width);
+            owner.set_content(context);
+            owner.set_focused(library_focused);
+        });
     }
 }
 

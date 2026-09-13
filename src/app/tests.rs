@@ -1,4 +1,3 @@
-
 use super::types_settings::SettingsDestination;
 use super::*;
 
@@ -39,6 +38,7 @@ pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
         audio_info: String::new(),
         genre: String::new(),
         playlist_item_id: String::new(),
+        image_tags: Default::default(),
     }
 }
 
@@ -233,6 +233,7 @@ pub(crate) fn make_app_stub() -> App {
         card_image_loading: std::collections::HashSet::new(),
         last_card_height: 0,
         last_card_width: 0,
+        queue_card_projection: crate::app::render::components::card::QueueCardProjection::default(),
         card_image_tx,
         card_image_rx,
         resize_register_tx,
@@ -347,6 +348,7 @@ pub(crate) fn make_app_stub() -> App {
         feed_seek_pending_slot: None,
         feed_tab: super::types_feed_tab::FeedTabState::default(),
         feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::default(),
+        card_image_fetch_calls: 0,
     }
 }
 
@@ -540,19 +542,13 @@ fn aggregate_zero_area_render_leaves_layout_untouched() {
     // returns None) must leave `self.layout` exactly as the last completed
     // frame left it — no fresh-draft install, no partial mutation.
     let mut app = make_app_stub();
-    app.layout.main.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
-    app.layout.main.hero_area = ratatui::layout::Rect::new(1, 2, 30, 12);
-    let before_left = app.layout.main.left_area;
-    let before_hero = app.layout.main.hero_area;
+    app.layout.left_area = ratatui::layout::Rect::new(1, 2, 30, 12);
+    let before_left = app.layout.left_area;
     let mut term = Terminal::new(TestBackend::new(0, 0)).unwrap();
-    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
+    term.draw(|f| app.compose_root_frame(f)).unwrap();
     assert_eq!(
-        app.layout.main.left_area, before_left,
+        app.layout.left_area, before_left,
         "zero-area render must not touch left_area"
-    );
-    assert_eq!(
-        app.layout.main.hero_area, before_hero,
-        "zero-area render must not touch hero_area"
     );
 }
 
@@ -563,12 +559,14 @@ fn aggregate_surfaces_do_not_bleed_across_destinations() {
     // cross-surface bleed from one destination into another.
     let mut app = make_app_stub();
     let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
-    term.draw(|f| app.compose_base_frame(f, None)).unwrap();
+    term.draw(|f| app.compose_root_frame(f)).unwrap();
 
-    let main = &app.layout.main;
     // Cross-surface bleed check: a nonzero queue area must not also be a
-    // nonzero music wide area (they are mutually exclusive destinations).
-    let queue_active = main.queue_area.width > 0 && main.queue_area.height > 0;
+    // nonzero music wide area (they are mutually exclusive destinations). The
+    // queue placement comes from the paint-free checkpoint (task 3.1 moved
+    // the component mirror out of legacy chrome geometry).
+    let queue_placement = app.queue_panel_placement().panel_area;
+    let queue_active = queue_placement.width > 0 && queue_placement.height > 0;
     let music_wide_active = app.is_right_panel_wide();
     // A stub may render a degenerate frame; the invariant is that neither
     // surface's geometry is written by the other's producer.

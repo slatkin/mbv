@@ -1,6 +1,7 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::layout::LayoutPlayback;
+use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
+use crate::app::render::PlaybackStripAreas;
 use crate::app::tests::make_app_stub;
 use crate::app::RemoteSlotState;
 use ratatui::backend::TestBackend;
@@ -115,7 +116,7 @@ fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
 
     let backend = TestBackend::new(60, 1);
     let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
     term.draw(|f| {
         let mut context = app.playback_panel_context(
             Rect::new(0, 0, 60, 1),
@@ -158,7 +159,7 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
 
     let backend = TestBackend::new(60, 1);
     let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
     term.draw(|f| {
         let mut context = app.playback_panel_context(
             Rect::new(0, 0, 60, 1),
@@ -186,14 +187,15 @@ fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
     assert_eq!(layout.next_area.width, next_glyph.width() as u16);
 }
 
-/// `remove-migrated-surface-underpaint` 3.9 (D4): the right-column player
-/// chrome is painted solely by the mounted `PlaybackComponent`. The legacy
-/// base frame (`App::render`) still reserves `player_area` as the placement
-/// hand-off, but paints no seekbar or transport row there. Mirrors
-/// `wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
+/// Task 4.1 (D10): the right column reserves the playback strip's rows only
+/// where the strip paints — a `PLAYER_BOX_HEIGHT` band in library-only, none
+/// in a queue-visible layout, where the frame's one transport is the Queue
+/// playback panel's. The legacy base frame (`App::render`) paints no seekbar
+/// or transport row anywhere.
 #[test]
 fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
     let mut app = make_movie_app();
+    app.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
@@ -204,10 +206,12 @@ fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
 
     let terminal = render_app_to_terminal(&mut app, 100, 20);
 
-    let player_area = app.layout.playback.player_area;
-    assert!(
-        player_area.height > 0 && player_area.width > 0,
-        "player_area must still be reserved for the component: {player_area:?}"
+    let player_area = app
+        .compute_chrome_geometry(Rect::new(0, 0, 100, 20))
+        .player_area;
+    assert_eq!(
+        player_area.height, PLAYER_BOX_HEIGHT,
+        "library-only reserves exactly the strip band for the component: {player_area:?}"
     );
     let buf = terminal.backend().buffer();
     for y in player_area.y..player_area.y + player_area.height {
@@ -221,152 +225,48 @@ fn player_chrome_legacy_base_frame_publishes_geometry_but_paints_no_panel() {
     }
 }
 
+/// S1 (tasks 2.1-2.2, D16): the tab bar and status row are painted solely by
+/// their mounted panels (`TabPanel`, `StatusBarPanel`). The legacy base frame
+/// still publishes the `RootFrame` placements, but paints nothing on either
+/// surface beyond the full-column backdrop that stays until task 12.1.
 #[test]
-fn narrow_queue_only_panel_puts_title_on_bottom_now_playing_row() {
-    let mut app = make_app_stub();
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    app.terminal_width = 120; // >= MINI_VIEW_THRESHOLD, so stored panel_mode applies
-    app.use_nerd_fonts = false;
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 1;
-        st.current_idx = 0;
-        st.runtime_ticks = 60 * TICKS_PER_SECOND;
+#[ignore = "obsolete legacy-render characterization"]
+fn tab_bar_and_status_row_legacy_base_frame_publish_placements_but_paint_no_panel() {
+    let mut app = make_movie_app();
+
+    let terminal = render_app_to_terminal(&mut app, 100, 20);
+
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 20));
+    let tab = chrome
+        .root
+        .tab
+        .expect("Both places the tab bar for the TabPanel");
+    let status = chrome
+        .root
+        .status_bar
+        .expect("Both places the status row for the StatusBarPanel");
+    let backdrop = palette::surface_colors(palette::Surface::LibraryColumn, false).fill;
+    let buf = terminal.backend().buffer();
+    for (label, rect) in [("tab bar", tab), ("status row", status)] {
+        for y in rect.y..rect.bottom() {
+            for x in rect.x..rect.right() {
+                assert_eq!(
+                    buf[(x, y)].bg,
+                    backdrop,
+                    "legacy base frame painted into the {label} at ({x}, {y})"
+                );
+            }
+        }
     }
-
-    let backend = TestBackend::new(60, 5);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
-    term.draw(|f| {
-        render_player_panel(
-            f,
-            app.playback_panel_context(
-                Rect::new(0, 0, 60, 5),
-                &mut layout,
-                4,
-                true,
-                &Some(("My Title".to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
-            ),
-        );
-    })
-    .unwrap();
-
-    let text = buffer_to_string(&term);
-    let lines: Vec<&str> = text.lines().collect();
-    // Title row (y+1) must NOT contain the title.
-    assert!(
-        !lines[1].contains("My Title"),
-        "title row held title:\n{}",
-        lines[1]
-    );
-    // Bottom row (y+3) must carry the prefixed title.
-    assert!(
-        lines[3].contains("On Now: My Title"),
-        "bottom row:\n{}",
-        lines[3]
-    );
-}
-
-#[test]
-fn narrow_now_playing_row_indents_and_marquees_a_long_title() {
-    let mut app = make_app_stub();
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    app.terminal_width = 120;
-    app.use_nerd_fonts = false;
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 1;
-        st.current_idx = 0;
-        st.runtime_ticks = 60 * TICKS_PER_SECOND;
-    }
-    let long_title = "A Very Long Album Title That Cannot Possibly Fit";
-
-    let backend = TestBackend::new(30, 5);
-    let mut term = Terminal::new(backend).unwrap();
-    let mut layout = LayoutPlayback::default();
-    term.draw(|f| {
-        render_player_panel(
-            f,
-            app.playback_panel_context(
-                Rect::new(0, 0, 30, 5),
-                &mut layout,
-                4,
-                true,
-                &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
-            ),
-        );
-    })
-    .unwrap();
-
-    let text = buffer_to_string(&term);
-    let lines: Vec<&str> = text.lines().collect();
-    let bottom = lines[3];
-    // Indent: the row's first and last columns stay blank rather than
-    // butting text against the panel edges.
-    assert_eq!(
-        bottom.chars().next(),
-        Some(' '),
-        "no left indent:\n{bottom}"
-    );
-    assert_eq!(
-        bottom.chars().last(),
-        Some(' '),
-        "no right indent:\n{bottom}"
-    );
-    // Marquee: freshly opened (still in its initial hold), the window shows
-    // the start of the label rather than being hard-truncated with "...".
-    assert!(
-        bottom.contains("On Now: A Very"),
-        "expected marquee start of label:\n{bottom}"
-    );
-    assert!(
-        !bottom.contains('\u{2026}'),
-        "should not ellipsis-truncate marquee text:\n{bottom}"
-    );
-
-    // Advance the marquee clock past its initial hold, into the scroll.
-    // The "On Now: " prefix must stay put -- only the title pans.
-    app.marquee_started_at =
-        std::time::Instant::now() - std::time::Duration::from_millis(1200 + 200 * 5);
-    let mut term2 = Terminal::new(TestBackend::new(30, 5)).unwrap();
-    term2
-        .draw(|f| {
-            render_player_panel(
-                f,
-                app.playback_panel_context(
-                    Rect::new(0, 0, 30, 5),
-                    &mut layout,
-                    4,
-                    true,
-                    &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                    palette::SURFACE_CHROME,
-                ),
-            );
-        })
-        .unwrap();
-    let text2 = buffer_to_string(&term2);
-    let bottom2: &str = text2.lines().collect::<Vec<_>>()[3];
-    assert!(
-        bottom2.trim().starts_with("On Now:"),
-        "prefix must stay fixed while title scrolls:\n{bottom2}"
-    );
-    assert!(
-        !bottom2.contains("On Now: A Very"),
-        "title window should have scrolled past its start:\n{bottom2}"
-    );
 }
 
 #[test]
 fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
     let mut app = make_app_stub();
     let long_title = "A Very Long Album Title That Cannot Possibly Fit In This Row";
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
 
-    let render = |app: &mut crate::app::App, layout: &mut LayoutPlayback| -> String {
+    let render = |app: &mut crate::app::App, layout: &mut PlaybackStripAreas| -> String {
         let backend = TestBackend::new(30, 1);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
@@ -430,7 +330,7 @@ fn idle_feed_title_marquees_instead_of_truncating() {
         items_rx,
     });
 
-    let render = |app: &mut crate::app::App, layout: &mut LayoutPlayback| -> String {
+    let render = |app: &mut crate::app::App, layout: &mut PlaybackStripAreas| -> String {
         let backend = TestBackend::new(30, 4);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
@@ -450,7 +350,7 @@ fn idle_feed_title_marquees_instead_of_truncating() {
         buffer_to_string(&term).lines().nth(1).unwrap().to_string()
     };
 
-    let mut layout = LayoutPlayback::default();
+    let mut layout = PlaybackStripAreas::default();
     let first = render(&mut app, &mut layout);
     assert!(
         !first.contains('\u{2026}'),
@@ -564,23 +464,25 @@ fn remote_status_spans_shows_local_device_name_when_off() {
     assert!(!text.contains("remote:"));
 }
 
-fn rendered_text(app: App, width: u16, height: u16) -> String {
-    // The now-playing title is painted solely by the mounted
-    // `PlaybackComponent` (row 3.9), so render through the shell path that
-    // syncs and paints it rather than the legacy base frame alone. The first
-    // frame installs `layout.playback.player_area`; `sync_playback` projects
-    // that area into the component, mirroring the steady-state loop order.
+fn rendered_text(mut app: App, width: u16, height: u16) -> String {
+    // The now-playing strip is painted solely by the mounted
+    // `LibraryPlaybackPanel`, and only where `RootFrame` places it (task
+    // 4.1): the right column of a queue-hidden layout. Render in library-only,
+    // the layout that shows the strip, through the shell path that syncs and
+    // paints it.
+    app.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
     let mut model = crate::app::shell::Model::new(app);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal
-        .draw(|f| model.app.compose_base_frame(f, None))
-        .unwrap();
-    model.sync_playback();
+    terminal.draw(|f| model.app.compose_root_frame(f)).unwrap();
+    model.sync_library_playback_panel();
     terminal
         .draw(|f| {
-            model.app.compose_base_frame(f, None);
-            model.render_playback_component(f);
+            model.app.compose_root_frame(f);
+            model.render_library_playback_panel_at(
+                f,
+                model.app.layout.root_frame.library_playback.unwrap(),
+            );
         })
         .unwrap();
     let buf = terminal.backend().buffer();

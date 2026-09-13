@@ -42,9 +42,18 @@ mbv SHALL list books from the selected Audiobookshelf book library using bounded
 
 ### Requirement: Book libraries use the Wide hero arrangement
 
-An Audiobookshelf book library SHALL use Wide hero when it meets the shared wide geometry conditions, matching grouped Music: a persistent book hero and chapters pane beside a persistent single-column book browser with surname-bucket pills. Otherwise the selected book's hero and chapter detail SHALL replace the active book row in the single-column browser. Both the selected book and browser SHALL remain available in either presentation. The book tab SHALL obtain responsive placement from the shared arrangement and SHALL NOT evaluate the breakpoint, minimum-height guard, or a separate fallback itself.
+An Audiobookshelf book library SHALL render through the Library panel like every Emby library: at Wide
+geometry, a Portrait Hero header, the overview box, and a chapters Workspace in the Hero pane beside a
+single-column book browser with surname-bucket pills in the Selector row; otherwise the selected book's
+inline hero (title, metadata, overview and cover, with no chapter rows) SHALL replace the active book
+row in the single-column browser, and its chapters SHALL open through the selection modal. Both the
+selected book and browser SHALL remain available in either presentation. The book tab SHALL obtain
+responsive placement from the shared Library panel and SHALL NOT evaluate the breakpoint,
+minimum-height guard, or a separate fallback itself.
 
-The book tab SHALL supply book-native content and interaction state without defining placement geometry: Audiobookshelf cover, metadata and progress, chapter rows, surname-bucket pills, and existing pane-focus behavior.
+The book tab SHALL supply book-native content and interaction state without defining placement
+geometry: Audiobookshelf cover, metadata and progress, chapter rows, surname-bucket pills, and existing
+pane-focus behavior.
 
 #### Scenario: Terminal geometry crosses the wide boundary
 - **WHEN** the book tab starts or stops meeting the shared wide geometry conditions
@@ -52,12 +61,13 @@ The book tab SHALL supply book-native content and interaction state without defi
 
 #### Scenario: Narrow selected book
 - **WHEN** a book is selected in the inline presentation
-- **THEN** that book's hero and chapter detail replace its active row in list flow
+- **THEN** that book's inline hero replaces its active row in list flow without chapter rows
 - **AND** other book rows remain part of the same single-column browser
+- **AND** Enter opens the selection modal listing the book's chapters
 
 #### Scenario: Hero follows the browser cursor
 - **WHEN** the book browser cursor moves to another book
-- **THEN** the hero and chapter detail update to that book without an Enter or open action
+- **THEN** the hero and chapter Workspace update to that book without an Enter or open action
 - **AND** the book browser remains visible
 
 #### Scenario: A surname pill filters the browser
@@ -70,16 +80,16 @@ The book tab SHALL supply book-native content and interaction state without defi
 - **AND** neither pane is hidden or replaced
 
 #### Scenario: Shared Wide hero presentation changes
-- **WHEN** the Wide hero presentation changes
-- **THEN** the wide book tab renders the change identically to grouped Music without an individual placement edit
+- **WHEN** the Wide library panel's presentation changes
+- **THEN** the wide book tab renders the change identically to the Emby destinations without an individual placement edit
 
 #### Scenario: Terminal width crosses the two-column threshold
 - **WHEN** the book tab crosses the shared width threshold
-- **THEN** it recomputes Wide hero versus inline placement using the shared minimum-height guard
+- **THEN** it recomputes Wide versus Narrow library panel using the shared minimum-height guard
 
 #### Scenario: Arrow focus leaves both panes visible
 - **WHEN** the user changes pane focus in wide Audiobookshelf book browsing
-- **THEN** the chapter workspace and book browser both remain visible
+- **THEN** the chapter Workspace and book browser both remain visible
 
 #### Scenario: The Wide hero arrangement changes
 - **WHEN** shared Wide hero geometry or styling changes

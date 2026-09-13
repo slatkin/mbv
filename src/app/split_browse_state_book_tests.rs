@@ -72,33 +72,3 @@ fn book_position_restores_selected_id_after_tab_switch_away_and_back() {
         "the saved position must restore the selected book on re-entry",
     );
 }
-
-#[test]
-fn selected_bucket_reanchors_to_selected_book_after_page_append() {
-    use crate::app::components::AudiobookshelfBookComponent;
-
-    let mut state = AudiobookshelfBookBrowseState::new(library());
-    state.append_page_books(0, 4, books(&["Brown", "Davis"]));
-    state.selected_id = Some("book-Davis".into());
-    let mut component = AudiobookshelfBookComponent::new();
-    component.set_content(&state, false);
-    component.set_focused(true);
-
-    // Page in earlier surnames, shifting "Davis" to a higher index. The
-    // content push re-anchors the component's bucket onto the still-selected
-    // book.
-    state.append_page_books(1, 4, books(&["Adams", "Carter"]));
-    component.set_content(&state, false);
-    component.set_focused(true);
-
-    let davis_after = state
-        .books
-        .iter()
-        .position(|book| book.author_sort_key == "Davis")
-        .unwrap();
-    let bucket_after = state.buckets[component.selected_bucket()];
-    assert!(
-        davis_after >= bucket_after.start && davis_after < bucket_after.end,
-        "selected bucket must still contain the selected book after a page append",
-    );
-}

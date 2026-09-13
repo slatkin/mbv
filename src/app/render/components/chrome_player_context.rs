@@ -1,24 +1,27 @@
-use super::chrome_player::PlaybackRenderContext;
-use crate::app::layout::LayoutPlayback;
+use super::chrome_player::{PlaybackRenderContext, PlaybackStripAreas};
 use crate::app::{palette, App, PanelFocus, PanelMode};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
 
 impl App {
+    /// Production playback panels build their own painter context from the
+    /// shell's transport projection (task 3.5); this App-side builder stays
+    /// as the characterization seam the frozen render tests call.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn playback_panel_context<'a>(
         &'a mut self,
         area: Rect,
-        playback: &'a mut LayoutPlayback,
+        playback: &'a mut PlaybackStripAreas,
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, Color)>,
         // The resolved colour this parameter used to carry is threaded as the
         // panel's surface identity below. The parameter keeps its position
         // and type because the characterization callers in
-        // `src/app/render/tests.rs` (which this change must not edit) pass it
-        // positionally; production callers name the surface through the mode
-        // match, so the colour is no longer read.
+        // `src/app/render/tests.rs` pass it positionally; production callers
+        // name the surface through the mode match, so the colour is no
+        // longer read.
         _panel_bg: Color,
     ) -> PlaybackRenderContext<'a> {
         // The site's own focus input: the queue column's bit, the same
@@ -38,7 +41,6 @@ impl App {
             now_playing_title: now_playing_title.clone(),
             panel,
             panel_focused,
-            narrow_player: self.effective_panel_mode() == PanelMode::QueueOnly,
             progress: self.playback_progress(),
             use_nerd_fonts: self.use_nerd_fonts,
             stop_available: self.connected_session_id.is_some()
@@ -84,6 +86,7 @@ impl App {
             .unwrap_or_else(|| vec![(title.to_string(), title_color)])
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn playback_progress(&self) -> (i64, i64, bool) {
         if let Some(ref remote) = self.connected_session_state {
             let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();

@@ -3,15 +3,13 @@ use std::time::{Duration, Instant};
 use super::action::{playback_command_for_key, Command};
 use super::components::msg::AlbumCursorKind;
 use super::components::{
-    media_list::ViewportAnchor, ComponentId, Msg, OverlayId, PlaybackComponent,
-    QueueBoundaryComponent, ShellRequest, TerminalObserverEvent, UiRootComponent, UserEvent,
-    WideHeroBoundaryComponent,
+    ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
+    UiRootComponent, UserEvent,
 };
 use super::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use super::service_startup;
 use super::types_feeds_manage::FeedsManagePopup;
 use super::types_playback::{HomeContent, HomeLatestSource};
-use super::types_settings::PanelMode;
 use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
@@ -39,15 +37,6 @@ const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
 /// `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
 const TERMINAL_LISTENER_MAX_POLL: usize = 60;
 
-/// One-shot transfer used only when TV changes its active destination at a breakpoint.
-#[derive(Clone, Debug)]
-pub(super) struct InlineSearchTransfer {
-    pub query: String,
-    pub selected_id: Option<String>,
-    pub selected_type: Option<String>,
-    pub row_offset: usize,
-}
-
 /// One-shot inline-track-focus transition the shell hands the Music workspace
 /// at the next content push. `Enter` is bound to the album it was raised for,
 /// so a re-anchor that outruns that album's track fetch can retry on the
@@ -64,19 +53,6 @@ pub(super) enum MusicTrackFocusRequest {
 pub struct Model {
     pub app: App,
     pub(super) application: Application<ComponentId, Msg, UserEvent>,
-    pub(super) emby_browser_id: Option<ComponentId>,
-    pub(super) tv_workspace_id: Option<ComponentId>,
-    pub(super) music_workspace_id: Option<ComponentId>,
-    pub(super) abs_podcast_id: Option<ComponentId>,
-    pub(super) abs_book_id: Option<ComponentId>,
-    /// Maintained registry of every mounted destination surface component
-    /// (`Browser` workspaces and `InlineSearch`). TuiRealm's `Application`
-    /// exposes no component enumeration, so stale-discovery for
-    /// reconciliation cannot read the view registry; this set mirrors every
-    /// destination `mount`/`umount` (tasks 1.2 correction) so
-    /// `reconcile_destination_mounts` can find a retired library's component
-    /// even when no `*_id` pointer still names it.
-    pub(super) mounted_destinations: std::collections::HashSet<ComponentId>,
     /// Components currently carrying the `mouse_sub()` subscription. Owned
     /// solely by `sync_mouse_subscriptions` (ADR 0024 D2): it is the mouse
     /// arbitration table. `tuirealm` 4.1's `Application::unsubscribe` removes
@@ -100,16 +76,6 @@ pub struct Model {
     /// content push never adopts the shell cursor; this is the explicit
     /// re-anchor that replaced the deleted echo-suppression test.
     pub(super) music_workspace_reanchor: bool,
-    /// One-shot shell→component re-anchor trigger for the mounted wide TV
-    /// workspace's series cursor/scroll, consumed at the next
-    /// `push_tv_workspace_content`. Set by the breakpoint hand-off
-    /// (`hand_off_tv_breakpoint`, migrate-narrow-browse task 2.3 / D5) when
-    /// the active-destination pointer flips from the narrow `BrowserComponent`
-    /// to `TvWorkspaceComponent`, so the kept-mounted workspace adopts the
-    /// resting position the narrow browser left behind instead of its stale
-    /// local cursor.
-    pub(super) tv_viewport_anchor: Option<ViewportAnchor<String>>,
-    pub(super) inline_search_transfer: Option<InlineSearchTransfer>,
     /// Shell-owned mirror of the feeds-management popup's interaction state
     /// plus its background add-feed channel (task 5.3c). The
     /// `FeedsManageComponent` mirrors `stage`/`cursor`/`feeds`/`pending_add`
@@ -123,6 +89,16 @@ pub struct Model {
     pub(super) home_section_pref_semantic: Option<HomeLatestSource>,
     pub(super) home_section_pending: Option<HomeLatestSource>,
     pub(super) home_context_item: Option<mbv_core::api::EmbyItem>,
+    /// The last terminal size the sync pass applied resize side effects for
+    /// (task 1.2). Initialized from the App's size so fixtures that pre-set a
+    /// size never spuriously resize; the draw path's size normalization is
+    /// picked up at the next sync pass.
+    pub(super) handled_terminal_size: (u16, u16),
+    /// Armed by the Resize observer (the real terminal-resize event) and
+    /// consumed by the next sync pass, which then also applies the mini-view
+    /// focus hand-off (task 1.2). Size normalization without a resize event
+    /// (a direct frame, a fixture) never arms it.
+    pub(super) pending_terminal_resize: bool,
     /// Fingerprint of the inputs `sync_queue` last projected into the mounted
     /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
     /// row vec (slot clone + per-row `format!`) on a tick where nothing the
@@ -281,7 +257,13 @@ impl Model {
                 || self.app.player.is_remote()
                 || self.app.is_cast_attached(),
             connected_session_id_present: self.app.connected_session_id.is_some(),
-            queue_only_idle: self.app.effective_panel_mode() == PanelMode::QueueOnly
+            // Task 3.8: the idle-feed open-link gate follows the Queue
+            // playback panel's presence, not the panel mode. The panel is
+            // mounted in every queue-visible layout (idle included), so the
+            // link is gated off whenever the queue column is visible and
+            // nothing is playing; in library-only the Library playback
+            // panel's strip displays the idle feed and the link opens.
+            queue_only_idle: self.application.mounted(&ComponentId::QueuePlaybackPanel)
                 && !self.app.effective_playback_state().active,
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
@@ -393,25 +375,20 @@ impl Model {
         let home_section = App::load_prefs()["home_section"]
             .as_str()
             .and_then(HomeLatestSource::from_pref_key);
+        let initial_terminal_size = (app.terminal_width, app.terminal_height);
         let mut model = Self {
             app,
             application,
-            emby_browser_id: None,
-            tv_workspace_id: None,
-            music_workspace_id: None,
-            abs_podcast_id: None,
-            abs_book_id: None,
-            mounted_destinations: std::collections::HashSet::new(),
             mouse_subscribed: std::collections::HashSet::new(),
             music_track_focus_request: None,
             music_workspace_reanchor: false,
-            tv_viewport_anchor: None,
-            inline_search_transfer: None,
             feeds_manage: None,
             home_content: HomeContent::new(),
             home_section_pref_semantic: home_section.clone(),
             home_section_pending: home_section,
             home_context_item: None,
+            handled_terminal_size: initial_terminal_size,
+            pending_terminal_resize: false,
             last_queue_projection: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
@@ -431,10 +408,30 @@ impl Model {
             .application
             .active(&ComponentId::UiRoot)
             .expect("activate UiRoot");
-        // Home is mounted for the whole session but never made active: its
-        // input stays on the shell path, only its render is component-owned
-        model.mount_home();
-        model.mount_feeds();
+        // The Library panel is mounted for the whole session (it holds every
+        // library's embedded content owners, design D2's retention rule) but
+        // never made active directly: `sync_active_destination` routes focus
+        // to it while a migrated library is active, and it paints only a
+        // migrated owner's surface (the transitional branch, task 5.9).
+        // Home's and Feeds' owners are installed with the panel: both tabs
+        // are always migrated, so `active_surface_id` routes them to the
+        // panel from the first sync (tasks 5.11, 7.3). The other destinations
+        // install owners in their conversion slices (tasks 8+).
+        {
+            let mut panel = super::components::library_panel::LibraryPanel::new();
+            panel.insert_owner(
+                super::components::library_panel::LibraryKey::Home,
+                Box::new(super::components::home_content::HomeContent::new()),
+            );
+            panel.insert_owner(
+                super::components::library_panel::LibraryKey::Feeds,
+                Box::new(super::components::feeds_content::FeedsContent::new()),
+            );
+            model
+                .application
+                .mount(ComponentId::Library, Box::new(panel), vec![])
+                .expect("mount LibraryPanel");
+        }
         model
             .application
             .mount(
@@ -443,26 +440,6 @@ impl Model {
                 vec![],
             )
             .expect("mount QueueBoundary");
-        model
-            .application
-            .mount(
-                ComponentId::WideHeroBoundary,
-                Box::new(WideHeroBoundaryComponent::new()),
-                vec![],
-            )
-            .expect("mount WideHeroBoundary");
-        // Playback is also the stable attribute carrier for precedence gates.
-        model
-            .application
-            .mount(
-                ComponentId::Playback,
-                Box::new(PlaybackComponent::new()),
-                // `vec![]`: no non-mouse subscription (ADR 0024, see
-                // `fold_mouse_messages`); mouse eligibility comes from
-                // `sync_mouse_subscriptions`.
-                vec![],
-            )
-            .expect("mount Playback");
         model.update_settings_content();
         model
     }
@@ -476,6 +453,10 @@ fn apply_terminal_observer(
 ) {
     match event {
         TerminalObserverEvent::Resize { width, height } => {
+            // The pre-resize width is only known here (task 1.2): the sync
+            // pass consumes the armed flag and compares it against the size
+            // it last handled.
+            model.pending_terminal_resize = true;
             model.app.terminal_width = width;
             model.app.terminal_height = height;
             model.app.force_clear = true;
@@ -487,18 +468,12 @@ fn apply_terminal_observer(
         }
         TerminalObserverEvent::FocusGained => model.app.note_focus_gained(),
         TerminalObserverEvent::FocusLost => model.app.note_focus_lost(),
-        // Task 6.5: the tab bar is shell-painted chrome with no mounted
-        // component of its own, so it has no `mouse_sub()` claim to resolve
-        // through. A click outside `layout.tabs_area` (and therefore outside
-        // every published hit target) is a no-op here and falls through to
-        // whatever mounted component's own claim the same tick produced.
-        TerminalObserverEvent::MouseClick { column, row } => {
-            let point = ratatui::layout::Position { x: column, y: row };
-            if let Some(tab_pos) = model.app.layout.main.tab_at(point) {
-                model.dismiss_active_inline_search();
-                model.app.set_library_tab(tab_pos);
-            }
-        }
+        // Task 6.5's `MouseClick` observer signal resolved shell-painted tab
+        // chrome; the tab bar is a mounted `TabPanel` now (task 2.1) and the
+        // click reaches it through its `mouse_sub()` subscription, so a
+        // click here is only the observer's redraw echo (no shell geometry
+        // is read).
+        TerminalObserverEvent::MouseClick { .. } => {}
         TerminalObserverEvent::Key(_)
         | TerminalObserverEvent::NoOp
         | TerminalObserverEvent::MouseClaimed => {}

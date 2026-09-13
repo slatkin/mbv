@@ -158,16 +158,9 @@ pub fn fmt_playback_pct(pos_ticks: i64, runtime_ticks: i64) -> String {
     }
 }
 
-pub fn trunc_overview(s: &str) -> String {
-    let stripped = regex_strip_urls(s);
-    trunc_str(stripped.trim(), 600)
-}
-
 /// URL-stripped, trimmed overview text with no length cap. Used by the view's
 /// compact movie-detail banner, which grows to fit its full content
-/// instead of truncating (#204, #263) -- unlike `trunc_overview`, still used
-/// by the legacy library table row and the home-video list, which
-/// render through a fixed-height surface.
+/// instead of truncating (#204, #263).
 pub fn clean_overview(s: &str) -> String {
     regex_strip_urls(s).trim().to_string()
 }

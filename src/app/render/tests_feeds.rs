@@ -1,7 +1,14 @@
+//! Feeds panel-output tests (tasks 7.2/7.3). Feeds paints through the shared
+//! Wide/Narrow Library panel skeleton over `FeedsContent::content()`, so these
+//! assertions target the mounted `LibraryPanel`'s own output — one Selector
+//! pill bar, one List controls row, and the policy hero header — instead of
+//! the deleted `render_feeds_content` chrome or the deleted mounted Feeds
+//! destination component.
+
 use super::test_helpers::*;
-use super::*;
-use crate::app::components::FeedsComponent;
-use crate::app::render::arrangements::wide_hero;
+use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
+use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
+use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
@@ -9,7 +16,10 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
+use tuirealm::props::{AttrValue, Attribute};
 
 fn feed_entry(guid: &str, title: &str, played: bool) -> FeedEntry {
     FeedEntry {
@@ -27,7 +37,7 @@ fn feed_entry(guid: &str, title: &str, played: bool) -> FeedEntry {
     }
 }
 
-fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
+fn feed_owner_with_entries(entries: Vec<FeedEntry>) -> FeedsContent {
     let subscriptions = vec![FeedSubscription {
         name: "Test Feed".into(),
         url: "https://example.test/feed".into(),
@@ -35,328 +45,177 @@ fn feed_component_with_entries(entries: Vec<FeedEntry>) -> FeedsComponent {
     }];
     let entries = vec![entries];
     let all_entries = entries[0].clone();
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false);
-    component.set_focused(true);
-    component
+    let mut owner = FeedsContent::new();
+    owner.set_content(FeedsOwnerPush {
+        subscriptions,
+        entries,
+        all_entries,
+        loading: false,
+    });
+    owner
 }
 
-fn feed_component() -> FeedsComponent {
-    feed_component_with_entries(vec![
+fn feed_owner() -> FeedsContent {
+    feed_owner_with_entries(vec![
         feed_entry("entry-1", "Entry One", false),
         feed_entry("entry-2", "Played Entry Two", true),
     ])
 }
 
-#[test]
-fn feeds_subscription_pills_use_reference_width_and_char_safe_truncation() {
-    let mut component = feed_component();
-    let subscriptions = [FeedSubscription {
-        name: "ABCDEFGHIJKLMNOPQRST".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
-    let entries = [feed_entry("entry-1", "Entry One", false)];
-    component.set_content(&subscriptions, &[entries.to_vec()], &entries, false);
-    let terminal = terminal_for(&mut component, 120, 30);
-    let output = buffer_to_string(&terminal);
-    assert!(
-        output.contains("ABCDEFGHIJKLMNOPQ…"),
-        "missing truncated pill: {output:?}"
-    );
+fn panel_with(owner: FeedsContent, focused: bool) -> LibraryPanel {
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(LibraryKey::Feeds, Box::new(owner));
+    panel.set_active(Some(LibraryKey::Feeds));
+    Component::attr(&mut panel, Attribute::Focus, AttrValue::Flag(focused));
+    panel
 }
 
-#[test]
-fn feeds_images_off_collapses_artwork_and_uses_full_text_width() {
-    let mut component = feed_component();
-    component.set_images_enabled(false);
-    let terminal = terminal_for(&mut component, 120, 30);
-    let layout = component.layout();
-    assert!(buffer_to_string(&terminal).contains("Entry One"));
-    assert!(
-        layout.left_area.width > 0,
-        "images-off text area must be usable"
-    );
-    // The artwork placeholder intentionally shares the library backdrop color,
-    // so a buffer-color scan cannot distinguish painted artwork from its parent
-    // surface. Text visibility and usable geometry cover this contract instead.
-}
-
-fn terminal_for(component: &mut FeedsComponent, width: u16, height: u16) -> Terminal<TestBackend> {
-    let backend = TestBackend::new(width, height);
-    let mut terminal = Terminal::new(backend).unwrap();
+fn terminal_for(panel: &mut LibraryPanel, width: u16, height: u16) -> Terminal<TestBackend> {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
     terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, width, height)))
+        .draw(|frame| Component::view(panel, frame, Rect::new(0, 0, width, height)))
         .unwrap();
     terminal
 }
 
-/// migrate-home-feeds 4.6 regression: after the full arrangement paint the
-/// focused selected row's background must be the surface *containing* the
-/// list panel (`SURFACE_BACKDROP`), not the panel's own focus-green fill, and
-/// the rail-framing helper must not overpaint that bar. Unfocused, the row
-/// must be indistinguishable from the panel body (no bar).
-#[test]
-fn wide_feeds_selected_row_punches_through_to_the_library_backdrop() {
-    fn selected_and_body_bg(focused: bool) -> (ratatui::style::Color, ratatui::style::Color) {
-        let subscriptions = vec![FeedSubscription {
-            name: "Test Feed".into(),
-            url: "https://example.test/feed".into(),
-            kind: FeedKind::Audio,
-        }];
-        let entries = vec![vec![
-            feed_entry("entry-1", "Entry One", false),
-            feed_entry("entry-2", "Played Entry Two", true),
-        ]];
-        let all_entries = entries[0].clone();
-        let mut component = FeedsComponent::new();
-        component.set_content(&subscriptions, &entries, &all_entries, false);
-        component.set_focused(focused);
-        let terminal = terminal_for(&mut component, 120, 30);
-        let layout = component.layout();
-        let buffer = terminal.backend().buffer();
-        let selected_row = layout
-            .selected_item_rect
-            .expect("selected row retained by active list")
-            .y;
-        (
-            buffer[(layout.left_area.x, selected_row)].bg,
-            buffer[(layout.left_area.x, selected_row + 1)].bg,
-        )
-    }
-
-    let (selected, body) = selected_and_body_bg(true);
-    assert_eq!(selected, crate::app::palette::SURFACE_BACKDROP);
-    assert_eq!(body, crate::app::palette::resolve_surface_focus(true));
-    assert_ne!(selected, body);
-
-    let (selected, body) = selected_and_body_bg(false);
-    assert_eq!(selected, body, "unfocused rail shows no selection bar");
-}
-
-/// migrate-home-feeds 4.6 regression: the Wide right hero pane mirrors the
-/// sibling media tabs -- a plain `SURFACE_RESTING` fill with no `▔`/`▁`
-/// HeroShell border and no focus tint from the list panel. Focusing the list
-/// must not turn the hero pane green.
-#[test]
-fn wide_feeds_left_hero_pane_is_a_plain_resting_surface() {
-    let mut component = feed_component();
-    let terminal = terminal_for(&mut component, 120, 30);
-    let layout = component.layout();
-    let hero = layout.hero_area;
-    assert!(hero.width > 0 && hero.height > 0);
-    let buffer = terminal.backend().buffer();
-
-    for y in hero.y..hero.bottom() {
-        for x in hero.x..hero.right() {
-            let cell = &buffer[(x, y)];
-            assert_ne!(cell.bg, crate::app::palette::resolve_surface_focus(true));
-            assert!(
-                cell.symbol() != "▔" && cell.symbol() != "▁",
-                "hero pane must not carry a shell border at ({x},{y})"
-            );
-        }
-    }
-    assert_eq!(
-        buffer[(hero.x, hero.bottom() - 1)].bg,
-        crate::app::palette::SURFACE_RESTING
-    );
-}
-
-#[test]
-fn wide_feeds_reserve_borders_at_the_scrolled_bottom_boundary() {
-    let entries = (0..8)
-        .map(|index| {
-            let title = if index == 7 {
-                "Last Played Entry".to_string()
-            } else {
-                format!("Entry {index}")
-            };
-            feed_entry(&format!("entry-{index}"), &title, index == 7)
-        })
-        .collect();
-    let mut component = feed_component_with_entries(entries);
-    for _ in 0..7 {
-        component.on(&Event::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
-    }
-    let terminal = terminal_for(&mut component, 82, 12);
-    let layout = component.layout();
-    // The canonical control scrolled the viewport to keep the selection on
-    // screen; the resolved offset is observable (never fed back).
-    assert!(component.scroll() > 0);
-
-    let panel = Rect::new(
-        layout.left_area.x.saturating_sub(wide_hero::PANE_PAD_X),
-        layout.left_area.y.saturating_sub(wide_hero::PANE_PAD_Y),
-        layout.left_area.width + 2 * wide_hero::PANE_PAD_X,
-        layout.left_area.height + 2 * wide_hero::PANE_PAD_Y,
-    );
-    let buffer = terminal.backend().buffer();
-    // The scrolled-to selection paints on the last row of the inset list
-    // sub-rect, and the framed rail still reserves its top and bottom border
-    // rows outside that sub-rect.
-    let last_row = layout.left_area.bottom() - 1;
-    let row = (layout.left_area.x..layout.left_area.right())
-        .map(|x| buffer[(x, last_row)].symbol())
-        .collect::<String>();
-    assert!(row.contains("Last Played Entry"), "row={row:?}");
-    assert_eq!(buffer[(panel.x, panel.y)].symbol(), "▔");
-    assert_eq!(buffer[(panel.x, panel.bottom() - 1)].symbol(), "▁");
-}
-
-/// migrate-home-feeds 5.1: the shared Wide hero primitive owns the status-row
-/// reserve, so the Wide Feeds list panel and left hero panel must bottom out
-/// exactly one row above `area.bottom()` — the same one-row gap every sibling
-/// tab gets from the shared primitive (no per-tab reserve on top of it).
-#[test]
-fn wide_feeds_reserve_a_bottom_row_above_the_status_bar() {
-    let height: u16 = 30;
-    let mut component = feed_component();
-    let terminal = terminal_for(&mut component, 120, height);
-    let layout = component.layout();
-
-    let list_panel_bottom = layout.left_area.bottom() + wide_hero::PANE_PAD_Y;
-    assert_eq!(
-        list_panel_bottom,
-        height - 1,
-        "framed list panel must bottom out one row above {height}"
-    );
-    assert_eq!(
-        layout.hero_area.bottom(),
-        height - 1,
-        "hero panel must bottom out one row above {height}"
-    );
-
-    // Positive buffer check: the framed list panel paints its `▁` bottom
-    // border on `height - 2` and the reserve row `height - 1` is blank. A
-    // one-row vertical shift moves the border or paints the reserve row.
-    assert_list_pane_reserves_one_row_above_status(
-        terminal.backend().buffer(),
-        layout.left_area,
-        height,
-    );
-}
-
-#[test]
-fn narrow_feeds_insert_selected_entry_detail_into_the_list_flow() {
-    let mut component = feed_component();
-    terminal_for(&mut component, 60, 20);
-    let layout = component.layout();
-
-    assert!(layout.hero_area.height > 0);
-    assert!(
-        layout.hero_area.y >= layout.left_area.y,
-        "hero={:?} list={:?}",
-        layout.hero_area,
-        layout.left_area
-    );
-}
-
-#[test]
-fn narrow_feeds_suppress_detail_when_the_viewport_is_too_short() {
-    let mut component = feed_component();
-    terminal_for(&mut component, 60, 4);
-    assert_eq!(component.layout().hero_area.height, 0);
-}
-
-#[test]
-fn feeds_buffer_characterization_covers_default_focused_narrow_and_selected_states() {
-    for (width, height, focused) in [
-        (140, 30, false),
-        (140, 30, true),
-        (60, 20, true),
-        (40, 20, false),
-    ] {
-        let mut component = feed_component();
-        let terminal = terminal_for(&mut component, width, height);
-        let output = buffer_to_string(&terminal);
-        assert!(
-            output.contains("Test Feed"),
-            "missing feed selector: {output:?}"
-        );
-        assert!(
-            output.contains("Entry One"),
-            "missing selected entry: {output:?}"
-        );
-        let _ = focused;
-    }
-}
-
-#[test]
-fn feeds_pill_row_and_targets_are_characterized_end_to_end() {
-    let assert_geometry = |terminal: &Terminal<TestBackend>, layout: &LayoutMain| {
-        let panel = Rect::new(0, 0, 60, 20);
-        let areas = wide_hero::pill_bar_areas(panel);
-        assert_eq!(
-            layout
-                .selector_tabs
-                .iter()
-                .map(|(_, id)| *id)
-                .collect::<Vec<_>>(),
-            vec![0, 1, 2, 3, 4],
-            "subscription and watched-filter hitboxes"
-        );
-        assert!(layout
-            .selector_tabs
-            .iter()
-            .all(|(rect, _)| rect.height == 1));
-        let buffer = terminal.backend().buffer();
-        let painted_rows: std::collections::BTreeSet<u16> = (panel.y..panel.bottom())
-            .filter(|y| {
-                (panel.x..panel.right()).any(|x| matches!(buffer[(x, *y)].symbol(), "◢" | "◤"))
-            })
+/// Whether `needle` appears in any single buffer row inside `area`.
+fn area_contains(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> bool {
+    (area.top()..area.bottom()).any(|y| {
+        let line: String = (area.left()..area.right())
+            .map(|x| buf[(x, y)].symbol())
             .collect();
-        assert_eq!(painted_rows.len(), 2);
-        for (rect, _) in &layout.selector_tabs {
-            assert!(painted_rows.contains(&rect.y));
-            assert!(panel.contains((rect.x, rect.y).into()));
-            assert!(panel.contains((rect.right() - 1, rect.bottom() - 1).into()));
-        }
-        assert_eq!(layout.selector_tabs[0].0.y, areas.pills_area.y);
-        assert_eq!(layout.left_area.y, areas.spacer_area.bottom() + 2);
-        let buffer = terminal.backend().buffer();
-        let filter_row = (0..buffer.area().width)
-            .map(|x| buffer[(x, areas.spacer_area.bottom())].symbol())
-            .collect::<String>();
-        assert!(
-            filter_row.contains("All"),
-            "missing watched All filter: {filter_row:?}"
-        );
-        assert!(
-            filter_row.contains("Played") && filter_row.contains("Unplayed"),
-            "missing watched filters: {filter_row:?}"
-        );
-    };
+        line.contains(needle)
+    })
+}
 
-    let mut no_hero_component = feed_component();
-    let no_hero_subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
-    no_hero_component.set_content(&no_hero_subscriptions, &[Vec::new()], &[], false);
-    no_hero_component.set_focused(true);
-    let no_hero_terminal = terminal_for(&mut no_hero_component, 60, 20);
-    assert_geometry(&no_hero_terminal, no_hero_component.layout());
+/// The panel paints the Selector row (feed groups), the List controls row
+/// (Watched filter) and the policy hero header — one pill bar per row, no
+/// destination chrome.
+#[test]
+fn feeds_paints_one_pill_bar_one_controls_row_and_the_policy_header() {
+    let mut panel = panel_with(feed_owner(), true);
+    let terminal = terminal_for(&mut panel, 120, 30);
+    let wide = panel
+        .test_wide_geometry()
+        .expect("the panel painted a Wide skeleton");
+    let output = buffer_to_string(&terminal);
 
-    let mut post_hero_component = feed_component();
-    let post_hero_terminal = terminal_for(&mut post_hero_component, 60, 20);
-    assert_geometry(&post_hero_terminal, post_hero_component.layout());
-    assert!(post_hero_component.layout().hero_area.height > 0);
-
-    let mut no_subscriptions_component = FeedsComponent::new();
-    let no_subscriptions_terminal = terminal_for(&mut no_subscriptions_component, 60, 20);
-    let layout = no_subscriptions_component.layout();
-    assert!(layout.selector_tabs.is_empty());
-    assert_eq!(layout.left_area.y, 3);
-    let empty_row = (0..60)
-        .map(|x| no_subscriptions_terminal.backend().buffer()[(x, 3)].symbol())
-        .collect::<String>();
+    let group_hits = panel.test_selector_hits().regions();
     assert!(
-        empty_row.contains("No feed subscriptions configured"),
-        "empty/help content moved: {empty_row:?}"
+        !group_hits.is_empty(),
+        "the feed-group Selector pills must paint"
+    );
+    assert!(
+        group_hits.iter().all(|(rect, _)| rect.height == 1),
+        "the Selector row is one pill bar"
+    );
+    let controls = wide.controls.expect("the List controls row must paint");
+    assert_eq!(controls.height, 1);
+    assert!(
+        group_hits.iter().all(|(rect, _)| rect.y < controls.y),
+        "the Selector row sits above the controls row"
+    );
+
+    // The policy hero header paints the selected entry's title in the hero
+    // pane (the artwork policy arm itself is covered by `feeds_content`).
+    assert!(
+        area_contains(terminal.backend().buffer(), wide.hero_area, "Entry One"),
+        "the policy hero header must paint the selected entry title"
+    );
+    assert!(output.contains("Test Feed"), "missing feed-group pill");
+    assert!(
+        output.contains("Played") && output.contains("Unplayed"),
+        "missing Watched filter pills: {output:?}"
+    );
+}
+
+/// Clicking the painted Watched pill changes the filter through the panel's
+/// slot-event resolution.
+#[test]
+fn watched_pill_click_changes_the_filter() {
+    let mut panel = panel_with(feed_owner(), true);
+    let terminal = terminal_for(&mut panel, 120, 30);
+    let controls = panel
+        .test_wide_geometry()
+        .expect("Wide skeleton")
+        .controls
+        .expect("controls row");
+    let buf = terminal.backend().buffer();
+    let watched_x = (controls.left()..controls.right())
+        .find(|&x| buf[(x, controls.y)].symbol() == "P")
+        .expect("the Watched pill is painted");
+    let filter = |panel: &LibraryPanel| {
+        panel
+            .owner(&LibraryKey::Feeds)
+            .and_then(|owner| owner.as_any().downcast_ref::<FeedsContent>())
+            .map(FeedsContent::watched_filter)
+    };
+    assert_eq!(filter(&panel), Some(WatchedFilter::All));
+
+    let msg = panel.on(&Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: watched_x + 1,
+        row: controls.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(msg, None);
+    assert_eq!(filter(&panel), Some(WatchedFilter::Watched));
+}
+
+/// The `w` chord still changes the filter through the panel's keyboard
+/// forwarding.
+#[test]
+fn w_key_changes_the_filter() {
+    let mut panel = panel_with(feed_owner(), true);
+    let msg = panel.on(&Event::Keyboard(KeyEvent {
+        code: Key::Char('w'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(msg, None);
+    let owner = panel
+        .owner_mut(&LibraryKey::Feeds)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<FeedsContent>())
+        .expect("Feeds owner installed");
+    assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
+}
+
+/// Narrow derives the inline hero from the same `HeroContent`; the admitted
+/// block is the Narrow geometry's `inline_hero`.
+#[test]
+fn narrow_feeds_render_the_inline_hero_from_the_same_content() {
+    let mut panel = panel_with(feed_owner(), true);
+    let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
+    let terminal = terminal_for(&mut panel, width, 20);
+    let narrow = panel
+        .test_narrow_geometry()
+        .expect("the panel painted a Narrow skeleton");
+    let inline_hero = narrow.inline_hero.expect("admitted inline hero");
+    assert!(!inline_hero.is_empty());
+    let output = buffer_to_string(&terminal);
+    assert!(output.contains("Test Feed"));
+    assert!(output.contains("Entry One"));
+}
+
+/// Without subscriptions the panel paints neither the Selector bar nor the
+/// List controls row, only the empty-slot placeholder.
+#[test]
+fn feeds_without_subscriptions_paints_no_pill_bar() {
+    let mut panel = panel_with(FeedsContent::new(), false);
+    let terminal = terminal_for(&mut panel, 120, 30);
+    let wide = panel
+        .test_wide_geometry()
+        .expect("the panel painted a Wide skeleton");
+    assert!(
+        panel.test_selector_hits().regions().is_empty(),
+        "no Selector bar without subscriptions"
+    );
+    assert!(
+        wide.controls.is_none(),
+        "no controls row without subscriptions"
+    );
+    let output = buffer_to_string(&terminal);
+    assert!(
+        output.contains("No feed subscriptions configured"),
+        "{output:?}"
     );
 }

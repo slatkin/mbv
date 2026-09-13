@@ -1,20 +1,35 @@
-#![allow(unused_imports)]
+//! Status-bar span builders and painter (task 2.2).
+//!
+//! The mounted `StatusBarPanel` Interactive Component
+//! (`src/app/components/status_bar_panel.rs`) owns the status row's pill hit
+//! regions, overflow drop-order and click/scroll resolution. The `impl App`
+//! methods here are content production only: they read app state and build
+//! the pill/right-segment spans the shell projects into the component. The
+//! free [`render_status_bar`] is the component's painter.
 
 use super::chrome::{daemon_endpoint_label, service_state_color};
 use super::indicators;
-use crate::app::layout::LayoutPlayback;
-use crate::app::ui_util::*;
-use crate::app::{palette, App, PanelFocus, RemoteSlotState, TABBAR_LEFT_RESERVE};
-use mbv_core::api::TICKS_PER_SECOND;
+use crate::app::{palette, App, PanelFocus, RemoteSlotState};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
-use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
 impl App {
+    /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
+    /// Returns None if the local player is not active.
+    /// Callers wrap these in [ ... ] with whatever surrounding style they need.
+    pub(in crate::app) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
+        let data = self.playback_indicator_target().indicator_data(self)?;
+        Some(indicators::indicator_spans(
+            self.indicator_style,
+            &data,
+            self.use_nerd_fonts,
+        ))
+    }
+
     pub(in crate::app) fn remote_status_spans(
         &self,
         remote_state: RemoteSlotState,
@@ -130,6 +145,20 @@ impl App {
             None => format!("{gap}{}", mbv_core::api::device_name()),
         };
         (icon, label)
+    }
+
+    /// The playback target's host label, resolved the way the queue title
+    /// row already resolves it (design D10; folded change D2/D3): the
+    /// connected session's device name (falling back to its host), the
+    /// direct-remote route/label, or this machine's device name when playback
+    /// is local. No tracking suffix, no uppercasing — callers style and
+    /// extend it themselves (the queue title appends its own tracking
+    /// suffix; the header row shows it verbatim).
+    pub(in crate::app) fn playback_host_label(&self) -> String {
+        let remote_state = self.remote_slot_state();
+        let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
+        let (_, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
+        label.trim_start().to_string()
     }
 
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
@@ -312,6 +341,140 @@ impl App {
         ]
     }
 
+    /// The status row's right segment: queue-source scope label, username,
+    /// and the service-state glyphs (Emby, Audiobookshelf, stay-alive,
+    /// shared-data) — always visible, coloured by state. Built shell-side
+    /// (task 2.2); the mounted `StatusBarPanel` positions and paints it.
+    pub(in crate::app) fn status_bar_right_spans(&self) -> Vec<Span<'static>> {
+        let username = {
+            let config = self.config.lock().unwrap();
+            config.username.clone()
+        };
+        let alive_color = if self.dim_backdrop_active {
+            palette::TEXT_FOCUS_ACCENT
+        } else if self.is_local_daemon() {
+            palette::STATUS_ERROR
+        } else {
+            palette::TEXT_MUTED
+        };
+        let shared_color = if self.shared_client.as_ref().is_some_and(|client| {
+            matches!(
+                client.state(),
+                mbv_core::shared_client::SharedClientState::Shared
+            )
+        }) {
+            palette::TEXT_METADATA
+        } else {
+            palette::TEXT_MUTED
+        };
+        let mut right_spans: Vec<Span> = Vec::new();
+        let source_label: Option<(String, Color)> = match &self.queue_source {
+            crate::config::QueueSource::Playlist { .. } => None,
+            crate::config::QueueSource::Album
+                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
+            {
+                Some(("ALBUM".to_string(), palette::TEXT_MUTED))
+            }
+            crate::config::QueueSource::Series
+                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
+            {
+                Some(("SERIES".to_string(), palette::TEXT_MUTED))
+            }
+            crate::config::QueueSource::Shuffle
+                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
+            {
+                Some(("SHUFFLE".to_string(), palette::TEXT_MUTED))
+            }
+            crate::config::QueueSource::Remote
+                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
+            {
+                Some(("REMOTE Q".to_string(), palette::TEXT_MUTED))
+            }
+            crate::config::QueueSource::Collection { collection_type }
+                if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
+            {
+                Some((collection_type.to_uppercase(), palette::TEXT_MUTED))
+            }
+            crate::config::QueueSource::Unknown => None,
+            _ => None,
+        };
+        let append_right = |right_spans: &mut Vec<Span<'static>>, span: Span<'static>| {
+            if !right_spans.is_empty() {
+                right_spans.push(Span::raw(" "));
+            }
+            right_spans.push(span);
+        };
+        if let Some((label, color)) = source_label {
+            append_right(
+                &mut right_spans,
+                Span::styled(
+                    format!(" {label} "),
+                    Style::default().fg(color).bg(palette::surface_colors(
+                        palette::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
+            );
+        }
+        if !username.is_empty() {
+            if !right_spans.is_empty() {
+                right_spans.push(Span::raw(" "));
+            }
+            right_spans.push(Span::styled(
+                " 🯅",
+                Style::default()
+                    .fg(palette::TEXT_METADATA)
+                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+            ));
+            right_spans.push(Span::styled(
+                format!(" {username} "),
+                Style::default()
+                    .fg(palette::PLAYBACK_META_FG)
+                    .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+            ));
+        }
+        // Service-state glyphs — Emby, Audiobookshelf, stay-alive, shared-data —
+        // always visible, coloured by state (brand colour when active,
+        // grey when inactive; stay-alive daemon lost = yellow). One
+        // leading space per glyph, no trailing space.
+        right_spans.extend([
+            Span::raw(" "),
+            Span::styled(
+                "\u{F06B4}",
+                Style::default().fg(service_state_color(
+                    self.emby_runtime.state,
+                    palette::ACCENT,
+                )),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                "\u{EDE2}",
+                Style::default().fg(service_state_color(
+                    self.audiobookshelf_runtime.state,
+                    palette::ACCENT_AUDIOBOOKSHELF,
+                )),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                if self.use_nerd_fonts {
+                    "\u{f004}"
+                } else {
+                    "\u{2665}"
+                },
+                Style::default().fg(alive_color),
+            ),
+            Span::raw(" "),
+            Span::styled("\u{F1C0}", Style::default().fg(shared_color)),
+            // Right edge of the segment: the shared-data glyph gets its own
+            // trailing margin like a pill.
+            Span::raw(" "),
+        ]);
+        // Remote queue scope is omitted here: the active queue is already
+        // apparent from the queue UI.
+        right_spans
+    }
+
     pub(in crate::app) fn status_width(spans: &[Span]) -> u16 {
         spans.iter().map(|s| s.content.width() as u16).sum()
     }
@@ -347,294 +510,231 @@ impl App {
         };
         label.content = label.content.to_uppercase().into();
     }
+}
 
-    pub(in crate::app) fn render_remote_status_hitbox(
-        &self,
-        layout: &mut LayoutPlayback,
-        area: Rect,
-        remote_x: Option<u16>,
-        remote_w: u16,
-    ) {
-        if area.width == 0 {
-            layout.ind_rc = Rect::default();
-        } else if let Some(x) = remote_x {
-            layout.ind_rc = Rect {
-                x,
+/// Plain-data paint model for one status row (task 2.2). The shell projects
+/// the pill/right-segment spans; the mounted `StatusBarPanel` owns the
+/// overflow drop-order, the pill hit regions and pointer resolution.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(in crate::app) struct StatusBarModel {
+    /// Whether the remote/session pill participates (the base frame has
+    /// always passed `false` here — the queue column's title pills show the
+    /// same info; the parameter is retained verbatim).
+    pub show_session_pill: bool,
+    /// Remote/session pill spans (empty unless `show_session_pill`).
+    pub remote: Vec<Span<'static>>,
+    /// Mute pill spans (absent when not muted).
+    pub mute: Option<Vec<Span<'static>>>,
+    /// Volume pill spans.
+    pub volume: Vec<Span<'static>>,
+    /// Fully built right segment (scope label, username, service glyphs).
+    pub right: Vec<Span<'static>>,
+}
+
+/// The status row's pointer regions, retained by the mounted
+/// `StatusBarPanel` after painting (the deleted
+/// the deleted indicator side channel side channel, task 2.2).
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(in crate::app) struct StatusBarRegions {
+    /// Volume pill: scroll-wheel adjusts the volume.
+    pub volume: Option<Rect>,
+    /// Mute pill: click toggles mute.
+    pub mute: Option<Rect>,
+    /// Remote/session pill region (retained verbatim; the production
+    /// projection always passes `show_session_pill: false`, so the pill
+    /// never paints and there is no click dispatch behind the region).
+    pub remote: Option<Rect>,
+}
+
+/// Paint the one-row status bar within `area` (the `RootFrame.status_bar`
+/// placement) and return the painted pill regions.
+///
+/// Persistent bottom status bar. Left side: volume, connection,
+/// and mute status groups. Right side: queue source/save-state/scope
+/// detail and the service-state glyphs (Emby, Audiobookshelf,
+/// stay-alive, shared-data).
+/// The playlist status pill renders in the left queue panel instead.
+pub(in crate::app) fn render_status_bar(
+    f: &mut Frame,
+    area: Rect,
+    model: &StatusBarModel,
+) -> StatusBarRegions {
+    let mut regions = StatusBarRegions::default();
+    // Keep the row itself darker so the pills read as segments sitting on top of it.
+    let bar_style =
+        Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
+    // `Clear` blanks every cell's symbol first (task 12.2): a bare
+    // `Block::style` only recolors a cell, it never overwrites a stale
+    // glyph left by whatever painted this placement before the status bar
+    // owned it.
+    f.render_widget(Clear, area);
+    f.render_widget(Block::default().style(bar_style), area);
+
+    let mute_status = model.mute.clone();
+    let vol_status = model.volume.clone();
+    let remote_status = if model.show_session_pill {
+        model.remote.clone()
+    } else {
+        Vec::new()
+    };
+
+    // Preserve the existing left-segment overflow order: mute drops
+    // first, then the volume pill, then remote. (The service-state
+    // glyphs now live in the right segment.)
+    let remote_w = App::status_width(&remote_status);
+    let mute_w: u16 = mute_status
+        .as_ref()
+        .map(|spans| App::status_width(spans))
+        .unwrap_or(0);
+    let vol_w = App::status_width(&vol_status);
+    let available = area.width;
+    let joined_width = |widths: &[u16]| -> u16 {
+        let mut total = 0u16;
+        for (count, width) in widths.iter().copied().filter(|w| *w > 0).enumerate() {
+            total = total.saturating_add(width);
+            if count > 0 {
+                total = total.saturating_add(1);
+            }
+        }
+        total
+    };
+    let fits_all = joined_width(&[remote_w, mute_w, vol_w]) <= available;
+    let fits_without_mute = !fits_all && joined_width(&[remote_w, vol_w]) <= available;
+    let fits_without_volume =
+        !fits_all && !fits_without_mute && joined_width(&[remote_w, mute_w]) <= available;
+    let fits_without_remote = !fits_all
+        && !fits_without_mute
+        && !fits_without_volume
+        && joined_width(&[mute_w, vol_w]) <= available;
+
+    let show_remote = remote_w > 0 && (fits_all || fits_without_mute || fits_without_volume);
+    let show_volume = fits_all || fits_without_mute || fits_without_remote;
+
+    let mut spans: Vec<Span> = Vec::new();
+    if show_volume {
+        let vol_x = area.x + App::status_width(&spans);
+        App::append_status(&mut spans, vol_status);
+        regions.volume = Some(Rect {
+            x: vol_x,
+            y: area.y,
+            width: vol_w,
+            height: 1,
+        });
+    }
+    let remote_x =
+        show_remote.then(|| area.x + App::status_width(&spans) + u16::from(!spans.is_empty()));
+    if show_remote {
+        App::append_status(&mut spans, remote_status);
+        regions.remote = remote_x.map(|x| Rect {
+            x,
+            y: area.y,
+            width: remote_w,
+            height: 1,
+        });
+    }
+    if fits_all || fits_without_mute {
+        if let Some(mute) = mute_status {
+            let mute_x = area.x + App::status_width(&spans);
+            let mute_w = App::status_width(&mute);
+            App::append_status(&mut spans, mute);
+            regions.mute = Some(Rect {
+                x: mute_x,
                 y: area.y,
-                width: remote_w,
+                width: mute_w,
                 height: 1,
-            };
-        } else {
-            layout.ind_rc = Rect::default();
+            });
         }
     }
 
-    /// Persistent bottom status bar. Left side: volume, connection,
-    /// and mute status groups. Right side: queue source/save-state/scope
-    /// detail and the service-state glyphs (Emby, Audiobookshelf,
-    /// stay-alive, shared-data).
-    /// The playlist status pill renders in the left queue panel instead.
-    pub(in crate::app) fn render_status_bar(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        layout: &mut LayoutPlayback,
-        show_session_pill: bool,
-    ) {
-        // Keep the row itself darker so the pills read as segments sitting on top of it.
-        let bar_style =
-            Style::default().bg(palette::surface_colors(palette::Surface::StatusBar, false).fill);
-        f.render_widget(Block::default().style(bar_style), area);
-        layout.ind_mu = Rect::default();
+    // `left_content_w` tracks how far the left segment actually extends after
+    // the above priority drop, so the right-segment overlap check can compare
+    // against the real left edge instead of a hardcoded constant.
+    let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
+    let left_content_w: u16 = label_w;
+    if !spans.is_empty() {
+        let label_rect = Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: 1,
+        };
+        f.render_widget(
+            Paragraph::new(Line::from(spans)).style(bar_style),
+            label_rect,
+        );
+    }
 
-        let remote_state = self.remote_slot_state();
-        let (daemon_endpoint, username) = {
-            let config = self.config.lock().unwrap();
-            let cfg = &*config;
-            (cfg.daemon_client_endpoint.clone(), cfg.username.clone())
-        };
-        let remote_status = if show_session_pill {
-            self.remote_status_spans(remote_state, &daemon_endpoint)
-        } else {
-            Vec::new()
-        };
-        // Stay-alive (local daemon) indicator: red when the daemon is the active
-        // target (stay-alive's brand colour), yellow when the daemon is lost —
-        // the error state since red already means active, grey when not in use.
-        let alive_color = if self.dim_backdrop_active {
-            palette::TEXT_FOCUS_ACCENT
-        } else if self.is_local_daemon() {
-            palette::STATUS_ERROR
-        } else {
-            palette::TEXT_MUTED
-        };
-        let shared_color = if self.shared_client.as_ref().is_some_and(|client| {
-            matches!(
-                client.state(),
-                mbv_core::shared_client::SharedClientState::Shared
-            )
-        }) {
-            palette::TEXT_METADATA
-        } else {
-            palette::TEXT_MUTED
-        };
-        let mute_status = self.mute_status_spans();
-        let vol_status = self.volume_status_spans();
-
-        // Preserve the existing left-segment overflow order: mute drops
-        // first, then the volume pill, then remote. (The service-state
-        // glyphs now live in the right segment.)
-        let remote_w = Self::status_width(&remote_status);
-        let mute_w: u16 = mute_status
-            .as_ref()
-            .map(|spans| Self::status_width(spans))
-            .unwrap_or(0);
-        let vol_w = Self::status_width(&vol_status);
-        let available = area.width;
-        let joined_width = |widths: &[u16]| -> u16 {
-            let mut total = 0u16;
-            for (count, width) in widths.iter().copied().filter(|w| *w > 0).enumerate() {
-                total = total.saturating_add(width);
-                if count > 0 {
-                    total = total.saturating_add(1);
-                }
-            }
-            total
-        };
-        let fits_all = joined_width(&[remote_w, mute_w, vol_w]) <= available;
-        let fits_without_mute = !fits_all && joined_width(&[remote_w, vol_w]) <= available;
-        let fits_without_volume =
-            !fits_all && !fits_without_mute && joined_width(&[remote_w, mute_w]) <= available;
-        let fits_without_remote = !fits_all
-            && !fits_without_mute
-            && !fits_without_volume
-            && joined_width(&[mute_w, vol_w]) <= available;
-
-        let show_remote = remote_w > 0 && (fits_all || fits_without_mute || fits_without_volume);
-        let show_volume = fits_all || fits_without_mute || fits_without_remote;
-
-        let mut spans: Vec<Span> = Vec::new();
-        if show_volume {
-            let vol_x = area.x + Self::status_width(&spans);
-            Self::append_status(&mut spans, vol_status);
-            layout.ind_vol = Rect {
-                x: vol_x,
+    let right_spans = &model.right;
+    if !right_spans.is_empty() {
+        let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
+        // Compare against `left_content_w` (pill + session label, from Task 2),
+        // not a hardcoded pill-only width -- otherwise this check passes while
+        // the right segment still overlaps a rendered session label (e.g.
+        // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
+        let left_end = area.x + left_content_w;
+        let right_x = area.x + area.width.saturating_sub(right_w);
+        if right_x > left_end {
+            let right_rect = Rect {
+                x: right_x,
                 y: area.y,
-                width: vol_w,
-                height: 1,
-            };
-        } else {
-            layout.ind_vol = Rect::default();
-        }
-        let remote_x =
-            show_remote.then(|| area.x + Self::status_width(&spans) + u16::from(!spans.is_empty()));
-        if show_remote {
-            Self::append_status(&mut spans, remote_status);
-        }
-        self.render_remote_status_hitbox(layout, area, remote_x, remote_w);
-        if fits_all || fits_without_mute {
-            if let Some(mute) = mute_status {
-                let mute_x = area.x + Self::status_width(&spans);
-                let mute_w = Self::status_width(&mute);
-                Self::append_status(&mut spans, mute);
-                layout.ind_mu = Rect {
-                    x: mute_x,
-                    y: area.y,
-                    width: mute_w,
-                    height: 1,
-                };
-            }
-        }
-
-        // `left_content_w` tracks how far the left segment actually extends after
-        // the above priority drop, so the right-segment overlap check can compare
-        // against the real left edge instead of a hardcoded constant.
-        let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
-        let left_content_w: u16 = label_w;
-        if !spans.is_empty() {
-            let label_rect = Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
+                width: right_w,
                 height: 1,
             };
             f.render_widget(
-                Paragraph::new(Line::from(spans)).style(bar_style),
-                label_rect,
+                Paragraph::new(Line::from(right_spans.clone())).style(bar_style),
+                right_rect,
             );
         }
+        // else: terminal too narrow for both segments -- right segment drops
+        // silently rather than overlapping the pill or the session label.
+        // (Design doc's open question on narrow-terminal truncation: right
+        // segment yields first.)
+    }
+    regions
+}
 
-        {
-            let mut right_spans: Vec<Span> = Vec::new();
-            let source_label: Option<(String, Color)> = match &self.queue_source {
-                crate::config::QueueSource::Playlist { .. } => None,
-                crate::config::QueueSource::Album
-                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-                {
-                    Some(("ALBUM".to_string(), palette::TEXT_MUTED))
-                }
-                crate::config::QueueSource::Series
-                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-                {
-                    Some(("SERIES".to_string(), palette::TEXT_MUTED))
-                }
-                crate::config::QueueSource::Shuffle
-                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-                {
-                    Some(("SHUFFLE".to_string(), palette::TEXT_MUTED))
-                }
-                crate::config::QueueSource::Remote
-                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-                {
-                    Some(("REMOTE Q".to_string(), palette::TEXT_MUTED))
-                }
-                crate::config::QueueSource::Collection { collection_type }
-                    if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
-                {
-                    Some((collection_type.to_uppercase(), palette::TEXT_MUTED))
-                }
-                crate::config::QueueSource::Unknown => None,
-                _ => None,
-            };
-            let append_right = |right_spans: &mut Vec<Span<'static>>, span: Span<'static>| {
-                if !right_spans.is_empty() {
-                    right_spans.push(Span::raw(" "));
-                }
-                right_spans.push(span);
-            };
-            if let Some((label, color)) = source_label {
-                append_right(
-                    &mut right_spans,
-                    Span::styled(
-                        format!(" {label} "),
-                        Style::default().fg(color).bg(palette::surface_colors(
-                            palette::Surface::StatusBarPill,
-                            false,
-                        )
-                        .fill),
-                    ),
-                );
-            }
-            if !username.is_empty() {
-                if !right_spans.is_empty() {
-                    right_spans.push(Span::raw(" "));
-                }
-                right_spans.push(Span::styled(
-                    " 🯅",
-                    Style::default()
-                        .fg(palette::TEXT_METADATA)
-                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
-                ));
-                right_spans.push(Span::styled(
-                    format!(" {username} "),
-                    Style::default()
-                        .fg(palette::PLAYBACK_META_FG)
-                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
-                ));
-            }
-            // Service-state glyphs — Emby, Audiobookshelf, stay-alive, shared-data —
-            // always visible, coloured by state (brand colour when active,
-            // grey when inactive; stay-alive daemon lost = yellow). One
-            // leading space per glyph, no trailing space.
-            right_spans.extend([
-                Span::raw(" "),
-                Span::styled(
-                    "\u{F06B4}",
-                    Style::default().fg(service_state_color(
-                        self.emby_runtime.state,
-                        palette::ACCENT,
-                    )),
-                ),
-                Span::raw(" "),
-                Span::styled(
-                    "\u{EDE2}",
-                    Style::default().fg(service_state_color(
-                        self.audiobookshelf_runtime.state,
-                        palette::ACCENT_AUDIOBOOKSHELF,
-                    )),
-                ),
-                Span::raw(" "),
-                Span::styled(
-                    if self.use_nerd_fonts {
-                        "\u{f004}"
-                    } else {
-                        "\u{2665}"
-                    },
-                    Style::default().fg(alive_color),
-                ),
-                Span::raw(" "),
-                Span::styled("\u{F1C0}", Style::default().fg(shared_color)),
-                // Right edge of the segment: the shared-data glyph gets its own
-                // trailing margin like a pill.
-                Span::raw(" "),
-            ]);
-            // Remote queue scope is omitted here: the active queue is already
-            // apparent from the queue UI.
-            if !right_spans.is_empty() {
-                let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
-                // Compare against `left_content_w` (pill + session label, from Task 2),
-                // not a hardcoded pill-only width -- otherwise this check passes while
-                // the right segment still overlaps a rendered session label (e.g.
-                // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
-                let left_end = area.x + left_content_w;
-                let right_x = area.x + area.width.saturating_sub(right_w);
-                if right_x > left_end {
-                    let right_rect = Rect {
-                        x: right_x,
-                        y: area.y,
-                        width: right_w,
-                        height: 1,
-                    };
-                    f.render_widget(
-                        Paragraph::new(Line::from(right_spans)).style(bar_style),
-                        right_rect,
-                    );
-                }
-                // else: terminal too narrow for both segments -- right segment drops
-                // silently rather than overlapping the pill or the session label.
-                // (Design doc's open question on narrow-terminal truncation: right
-                // segment yields first.)
-            }
-        }
+#[cfg(test)]
+mod playback_host_label_tests {
+    use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub, make_session};
+    use crate::app::QueueScope;
+
+    /// The playback target's host label (task 3.3): the same value the queue
+    /// title row resolves — the attached session's device name, with no
+    /// tracking suffix and no uppercasing.
+    #[test]
+    fn attached_session_label_has_no_tracking_suffix_or_uppercasing() {
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("sess-1".into());
+        app.connected_session_state = Some(make_session("living-room", "Emby"));
+
+        let label = app.playback_host_label();
+
+        assert_eq!(label, "living-room");
+        assert!(!label.contains(" · TRACKING"));
+        assert!(!label.contains("TRACKING"));
+    }
+
+    /// Local playback (no session, no direct remote) resolves to this
+    /// machine's device name, verbatim.
+    #[test]
+    fn local_playback_resolves_this_machine_device_name() {
+        let app = make_app_stub();
+        assert_eq!(app.playback_host_label(), mbv_core::api::device_name());
+    }
+
+    /// A direct-remote connection resolves the direct-remote label, and the
+    /// queue title still builds its own tracking suffix on top (the
+    /// characterization tests pin that unchanged).
+    #[test]
+    fn direct_remote_resolves_the_direct_label() {
+        let mut app = make_remote_app_stub(
+            vec![make_item("local", "Movie")],
+            vec![make_item("remote", "Movie")],
+        );
+        app.direct_remote_label = Some("direct-device".into());
+        app.queue_scope = QueueScope::Local;
+
+        assert_eq!(app.playback_host_label(), "direct-device");
+        assert!(!app.playback_host_label().contains(" · TRACKING"));
     }
 }

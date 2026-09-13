@@ -78,11 +78,10 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
             // Mouse events are otherwise delivered to components through
             // `mouse_sub()` subscriptions (ADR 0024); the observer only needs
             // them as a redraw signal, same as the other non-chord events. A
-            // left-click press is the one exception: it is also the only
-            // signal shell-painted chrome with no mounted component of its
-            // own (the tab bar, task 6.5) ever sees, so it is carried through
-            // as `MouseClick` for the shell to resolve against painted
-            // geometry.
+            // left-click press is distinguished from the other mouse kinds
+            // because it used to be the shell-resolved tab-bar click (task
+            // 6.5); the tab bar is a mounted `TabPanel` now (task 2.1), so a
+            // click is only the redraw echo and no shell geometry is read.
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                 TerminalObserverEvent::MouseClick {
                     column: mouse.column,
@@ -100,7 +99,6 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::FeedsComponent;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
     #[test]
@@ -109,8 +107,11 @@ mod tests {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
         });
-        let mut feeds = FeedsComponent::new();
-        assert!(feeds.on(&event).is_none());
+        // Any component whose local handler leaves the key unclaimed (here the
+        // status panel, which has no keyboard interpretation) must still be
+        // observed as processed by the root's terminal fold.
+        let mut panel = crate::app::components::status_bar_panel::StatusBarPanel::new();
+        assert!(panel.on(&event).is_none());
 
         let mut root = UiRootComponent::new();
         assert!(matches!(

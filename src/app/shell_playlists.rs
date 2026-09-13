@@ -9,6 +9,7 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
+        let panel = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(playlists) = comp.as_any_mut().downcast_mut::<PlaylistsComponent>() {
                 playlists.set_content(PlaylistsContent {
@@ -28,8 +29,6 @@ impl Model {
                         _ => None,
                     },
                 });
-                let panel = (self.app.layout.main.panel_area.width > 0)
-                    .then_some(self.app.layout.main.panel_area);
                 playlists.set_panel_area(panel);
             }
         }

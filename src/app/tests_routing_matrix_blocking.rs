@@ -3,10 +3,9 @@
 use super::tests_routing_matrix_support::*;
 use crate::app::action::Command;
 use crate::app::components::msg::ConfirmIntent;
-use crate::app::components::{BrowserKey, BrowserKind, ComponentId, ModalId, Msg, ShellRequest};
+use crate::app::components::{ComponentId, ModalId, Msg, ShellRequest};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crossterm::event::KeyCode;
-use mbv_core::config::ServiceKind;
 
 #[test]
 fn focused_blocking_overlay_keeps_its_own_unbound_chord() {
@@ -92,11 +91,7 @@ fn router_command_discards_focused_leaf_message() {
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Char('q')),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         RouterOutcome::Command(Command::Stop),
     );
     assert!(
@@ -110,11 +105,7 @@ fn fallthrough_leaves_exactly_one_leaf_message_standing() {
     let out = fold_tick_with_outcome(
         leaf,
         key(KeyCode::Down),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         RouterOutcome::FallThrough,
     );
     assert_eq!(out.len(), 1, "exactly one leaf message must stand");
@@ -125,7 +116,7 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
     let out = fold_tick_with_outcome(
         None,
         key(KeyCode::Down),
-        Some(ComponentId::Home),
+        Some(ComponentId::Library),
         RouterOutcome::FallThrough,
     );
     assert!(

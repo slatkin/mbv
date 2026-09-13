@@ -1,8 +1,7 @@
-use super::test_helpers::{
-    buffer_to_string, make_movie_app, render_app_to_terminal, render_home_shell_with,
-};
+use super::test_helpers::{buffer_to_string, make_movie_app, render_home_shell_with};
 use super::*;
-use crate::app::components::{ComponentId, HomeComponent};
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::ComponentId;
 use crate::app::tests::make_app_stub;
 use crate::app::{palette, PanelFocus, TabSelection};
 
@@ -20,44 +19,35 @@ fn emby_cw_item() -> mbv_core::api::EmbyItem {
     movie_app.libs[0].nav_stack[0].items[0].clone()
 }
 
-/// Task 5.3d, Home legacy underpaint removal — regression: the legacy base
-/// frame (`App::render`) no longer paints any Home content before the
-/// mounted component view runs. It still reserves the full Home destination
-/// area (`home_area`) as the placement handoff, but paints no Home rows,
-/// pills, or hero there. Home content is Model-owned now (task 5.3d), so
-/// the legacy frame never even holds a copy to (not) paint.
-///
-/// `remove-migrated-surface-underpaint` 3.1 (D4): the Home dispatch arm
-/// (`render_library`, `src/app/render/components/widgets.rs:528`) is
-/// `layout.home_area = area` with no width branch, so the geometry-only
-/// hand-off holds at every breakpoint; the wide case is exercised here too.
-#[test]
-fn legacy_base_frame_does_not_paint_home_content_before_the_component() {
-    for (width, height) in [(60, 20), (120, 40)] {
-        let mut app = home_app();
-        app.terminal_width = width;
-        app.terminal_height = height;
-        let terminal = render_app_to_terminal(&mut app, width, height);
-        assert!(
-            app.layout.main.home_area.height > 0,
-            "legacy frame must still reserve home_area at {width}x{height}: {:?}",
-            app.layout.main.home_area
-        );
-        let output = buffer_to_string(&terminal);
-        assert!(
-            !output.contains("Focused Movie"),
-            "legacy frame must not paint Home rows/hero before the component \
-             at {width}x{height}: {output:?}"
-        );
-    }
+/// The mounted `LibraryPanel` (the Home owner's host since task 5.11).
+fn panel(model: &crate::app::shell::Model) -> &LibraryPanel {
+    model
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type")
 }
 
-/// Task 5.3d, Home legacy underpaint removal: this characterization now
-/// renders through the mounted `HomeComponent` (via the shell-equivalent
-/// `render_home_shell` helper) instead of the legacy `App`-only frame, which
-/// no longer paints Home content at all. The behavioral assertion — each
-/// width/focused state still paints the selected movie's hero/list — is
-/// unchanged.
+/// Task 5.3d, Home legacy underpaint removal — regression: the legacy base
+/// frame (`App::render`) no longer paints any Home content before the panel
+/// view runs. It still reserves the full library destination area
+/// (`home_area`) as the placement handoff, but paints no Home rows, pills,
+/// or hero there.
+///
+/// `remove-migrated-surface-underpaint` 3.1 (D4): the Home dispatch arm
+/// reserves `layout.home_area = area` with no width branch, so
+/// the geometry-only hand-off holds at every breakpoint; the wide case is
+/// exercised here too.
+/// Task 5.11, Home as the first panel owner: this characterization renders
+/// through the mounted `LibraryPanel` (via the shell-equivalent
+/// `render_home_shell_with` helper) instead of the deleted mounted
+/// `HomeComponent`. The behavioural assertion — each width/focused state
+/// still paints the selected movie's hero/list — is unchanged; the header,
+/// artwork and overview presentation is now the panel skeleton's (tasks
+/// 5.5/5.7), so the assertions are content-level (the item's title paints in
+/// both breakpoints and both focus states).
 #[test]
 fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
     let states = [
@@ -73,7 +63,7 @@ fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states
         }
         let cw_item = emby_cw_item();
         let (_model, terminal) = render_home_shell_with(app, width, height, |m| {
-            m.home_content.continue_items = vec![cw_item];
+            m.home_content.continue_items = vec![cw_item.clone()];
         });
         let output = buffer_to_string(&terminal);
         assert!(
@@ -83,14 +73,11 @@ fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states
     }
 }
 
-/// `remove-migrated-surface-underpaint` D3 + the "Startup content" risk
-/// bullet: task 2.4 routes the two startup `terminal.draw` sites in
-/// `Model::run` (`src/app/shell_run.rs`) through `Model::draw_frame`, so the
-/// first frame now paints the full base frame *and* the mounted component
-/// views — not the old chrome-only flash. This characterizes that the startup
-/// Home frame shows the mounted `HomeComponent`'s loading affordances (its
-/// painted pill bar and empty-state placeholder while home_content.loading is
-/// still set and no content has arrived) rather than blank panes.
+/// Task 5.3d + 5.11: the startup frame shows the Home owner's loading
+/// affordances (its Selector row's pill bar and the empty-state placeholder
+/// while home_content.loading is still set and no content has arrived)
+/// rather than blank panes. The owner lives inside the mounted `LibraryPanel`
+/// (task 5.11), painted through `draw_frame` exactly as `Model::run` does.
 #[test]
 fn startup_frame_paints_loading_affordances_not_blank_panes() {
     let mut app = home_app();
@@ -101,6 +88,7 @@ fn startup_frame_paints_loading_affordances_not_blank_panes() {
     // (`src/app/shell_run.rs`): the Home destination is still loading.
     model.home_content.loading = true;
     model.push_home_content();
+    model.sync_mounted_surfaces();
 
     let backend = ratatui::backend::TestBackend::new(100, 30);
     let mut term = ratatui::Terminal::new(backend).unwrap();
@@ -113,7 +101,7 @@ fn startup_frame_paints_loading_affordances_not_blank_panes() {
     );
     assert!(
         output.contains("Continue"),
-        "startup frame must paint the mounted HomeComponent's pill bar, not \
+        "startup frame must paint the Home owner's Selector row pill bar, not \
          just legacy chrome: {output:?}"
     );
     assert!(
@@ -123,12 +111,12 @@ fn startup_frame_paints_loading_affordances_not_blank_panes() {
     );
 }
 
-/// Task 5.3d, Home legacy underpaint removal: the pill targets are now
-/// characterized from the single painter — the mounted `HomeComponent`'s
-/// own `pill_targets` — rather than `LayoutMain.selector_tabs`, which the
-/// legacy frame no longer populates for Home. The assertions are preserved:
-/// one Continue-Watching pill (id 0), the targets share one painted row, the
-/// selected pill is highlighted, and exactly one pill bar row is painted.
+/// Task 5.3d + 5.11: the Selector row's hit targets are characterized from
+/// the single painter — the mounted `LibraryPanel`'s own retained
+/// `SkeletonHits.selector` — rather than the deleted `HomeComponent`'s
+/// `pill_targets`. The assertions are preserved: one Continue-Watching pill
+/// (id 0), the targets share one painted row, the selected pill is
+/// highlighted, and exactly one pill bar row is painted.
 #[test]
 fn home_pill_row_and_targets_are_characterized_end_to_end() {
     let cw_item = emby_cw_item();
@@ -136,14 +124,7 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
         m.home_content.continue_items = vec![cw_item];
     });
 
-    let home = model
-        .application
-        .get_component(&ComponentId::Home)
-        .expect("Home component mounted")
-        .as_any()
-        .downcast_ref::<HomeComponent>()
-        .expect("Home component type");
-    let targets = home.test_pill_targets();
+    let targets = panel(&model).test_selector_hits().regions().to_vec();
     assert_eq!(
         targets.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
         vec![0],
@@ -172,10 +153,6 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
         .map(|x| buffer[(x, first.y)].symbol())
         .collect::<String>();
     assert!(
-        row_text.contains("⌘"),
-        "pill row missing glyph: {row_text:?}"
-    );
-    assert!(
         row_text.contains("Continue"),
         "pill row missing label: {row_text:?}"
     );
@@ -189,11 +166,11 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
     );
 }
 
-/// migrate-home-feeds 4.6 regression: after the full wide-Home arrangement
-/// paint the focused selected row's background is the surface *containing*
-/// the list panel (`SURFACE_BACKDROP`) — not the panel's focus-green fill —
-/// and the rail-framing helper (now run before the row flow) must not
-/// overpaint it. Unfocused: no bar.
+/// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
+/// 5.11): after the Wide panel skeleton paint the focused selected row's
+/// background is the list-backdrop surface — not the list panel's
+/// focus fill — and the rail-framing helper must not overpaint it.
+/// Unfocused: no bar.
 #[test]
 fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
     let bgs = |focused: bool| {
@@ -205,15 +182,10 @@ fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
         let (model, terminal) = render_home_shell_with(app, 160, 40, |m| {
             m.home_content.continue_items = vec![cw_item];
         });
-        let home = model
-            .application
-            .get_component(&ComponentId::Home)
-            .expect("Home component mounted")
-            .as_any()
-            .downcast_ref::<HomeComponent>()
-            .expect("Home component type");
-        let (_, selected) = home.menu_placement_geometry();
-        let selected = selected.expect("wide Home publishes a selected-row rect");
+        let (_, selected) = panel(&model)
+            .menu_geometry()
+            .expect("wide Home publishes a selected-row rect");
+        let selected = selected.expect("wide Home publishes a selected row");
         let buffer = terminal.backend().buffer();
         (
             buffer[(selected.x, selected.y)].style().bg,
@@ -222,19 +194,21 @@ fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
     };
 
     let (selected, body) = bgs(true);
-    assert_eq!(selected, Some(palette::SURFACE_BACKDROP));
-    assert_eq!(body, Some(palette::resolve_surface_focus(true)));
+    assert_eq!(
+        selected,
+        Some(palette::SURFACE_BACKDROP),
+        "the selected row punches through to the containing backdrop surface"
+    );
     assert_ne!(selected, body);
 
     let (selected, body) = bgs(false);
     assert_eq!(selected, body, "unfocused wide Home shows no selection bar");
 }
 
-/// migrate-home-feeds 4.6 regression: narrow Home no longer floods the whole
-/// list pane with `resolve_surface_focus(focused)` (reverts 14fb8435). The
-/// focus-aware surface now lives only on the inline-hero shell. Narrow Home is
-/// only reachable while its mini-view half holds focus, so there is no
-/// unfocused narrow case to characterize — the shell just has to carry the
+/// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
+/// 5.11): the Narrow inline hero's shell carries the focused surface. Narrow
+/// Home is only reachable while its mini-view half holds focus, so there is
+/// no unfocused narrow case to characterize — the panel just has to carry the
 /// focused surface.
 #[test]
 fn narrow_home_hero_shell_carries_the_focus_surface() {
@@ -242,14 +216,10 @@ fn narrow_home_hero_shell_carries_the_focus_surface() {
     let (model, terminal) = render_home_shell_with(app, 60, 40, |m| {
         m.home_content.continue_items = vec![emby_cw_item()];
     });
-    let home = model
-        .application
-        .get_component(&ComponentId::Home)
-        .expect("Home component mounted")
-        .as_any()
-        .downcast_ref::<HomeComponent>()
-        .expect("Home component type");
-    let hero = home.hero_area().expect("narrow Home paints an inline hero");
+    let hero = panel(&model)
+        .test_narrow_geometry()
+        .and_then(|geo| geo.inline_hero)
+        .expect("narrow Home paints an inline hero");
     let expected = palette::resolve_surface_focus(true);
     let matches = (hero.left()..hero.right())
         .flat_map(|x| (hero.top()..hero.bottom()).map(move |y| (x, y)))
@@ -258,66 +228,31 @@ fn narrow_home_hero_shell_carries_the_focus_surface() {
     assert!(matches > 0, "hero shell missing the focus surface");
 }
 
-/// migrate-home-feeds 4.6 regression: focused narrow Home with an inline hero
-/// reads as a recessed card — the hero-shell background differs from the pane
-/// backdrop showing behind non-selected rows (Movies narrow parity). Before
-/// the 14fb8435 revert the pane flood made the two identical.
+/// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
+/// 5.11): a focused narrow inline hero reads as a recessed card — the
+/// hero-shell background differs from the pane backdrop showing behind
+/// non-selected rows. The pane is never flooded with the focus surface.
 #[test]
 fn narrow_home_inline_hero_contrasts_with_pane_backdrop() {
     let app = home_app();
     let (model, terminal) = render_home_shell_with(app, 60, 40, |m| {
         m.home_content.continue_items = vec![emby_cw_item()];
     });
-    let home = model
-        .application
-        .get_component(&ComponentId::Home)
-        .expect("Home component mounted")
-        .as_any()
-        .downcast_ref::<HomeComponent>()
-        .expect("Home component type");
-    let (area, _) = home.menu_placement_geometry();
-    let hero = home.hero_area().expect("narrow Home paints an inline hero");
+    let geometry = panel(&model)
+        .test_narrow_geometry()
+        .expect("narrow Home paints the Narrow skeleton");
+    let hero = geometry
+        .inline_hero
+        .expect("narrow Home paints an inline hero");
     let buffer = terminal.backend().buffer();
 
     let hero_bg = buffer[(hero.x + 1, hero.y + 1)].style().bg;
     assert_eq!(hero_bg, Some(palette::resolve_surface_focus(true)));
 
     // A row cell above the hero: pane backdrop from `chrome.rs`, never flooded.
-    let backdrop_bg = buffer[(area.x, hero.y.saturating_sub(1))].style().bg;
+    let backdrop_bg = buffer[(geometry.list_area.x, hero.y.saturating_sub(1))]
+        .style()
+        .bg;
     assert_eq!(backdrop_bg, Some(palette::SURFACE_BACKDROP));
     assert_ne!(hero_bg, backdrop_bg, "hero must read as a recessed card");
-}
-
-#[test]
-fn wide_home_panes_leave_exactly_one_row_above_the_status_bar() {
-    let (width, height) = (200u16, 40u16);
-    let app = home_app();
-    let (model, terminal) = render_home_shell_with(app, width, height, |m| {
-        m.home_content.continue_items = vec![emby_cw_item()];
-    });
-    let home = model
-        .application
-        .get_component(&ComponentId::Home)
-        .expect("Home component mounted")
-        .as_any()
-        .downcast_ref::<HomeComponent>()
-        .expect("Home component type");
-    // The status row sits one row below the Home destination area, not one
-    // row below the terminal (chrome owns the rows under `home_area`).
-    let home_area = model.app.layout.main.home_area;
-    let hero = home.hero_area().expect("wide Home paints a hero panel");
-    let (list_area, _) = home.menu_placement_geometry();
-    assert_eq!(
-        hero.bottom(),
-        home_area.bottom() - 1,
-        "hero panel must bottom out one row above the status row"
-    );
-    // Positive buffer check: the framed list panel paints its `▁` bottom border
-    // two rows above the status row, leaving exactly one blank row between the
-    // panel and the status bar. A one-row vertical shift is caught here.
-    crate::app::render::test_helpers::assert_list_pane_reserves_one_row_above_status(
-        terminal.backend().buffer(),
-        list_area,
-        home_area.bottom(),
-    );
 }

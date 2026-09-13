@@ -23,11 +23,9 @@ Throughout this section, a bare `components/` means `src/app/render/components/`
 the TuiRealm Interactive Components in `src/app/components/` are a separate tree,
 described below.
 
-The visual migration ledger is archived with the completed design-system change.
-The interactive-ownership migration to TuiRealm (ADR 0022) is **complete**: every
-row of `docs/architecture/interactive-surface-ledger.md` reached `migrated` on
-2026-08-27. Existing violations are not licence to add new ones, including in the
-same file.
+The interactive-surface ledger records current ownership and composition. A
+row's state describes interaction authority; it does not by itself prove that
+the root composes the painted surface. Follow the Panel/slot workflow below.
 
 ## Two trees, not one
 
@@ -68,30 +66,26 @@ helpers that project validated snapshots. A `sync_*` that reads component-local
 interaction state back into `App` reintroduces exactly the mirror that was
 removed — if you find yourself needing one, the state is on the wrong side.
 
-## Canonical media-list composition
+## Panel and slot composition
 
-The target embedded `MediaList<Target>` owner (introduced by
-`complete-shared-media-list-ownership`) will own each logical media-row flow.
-It will own provider-neutral rows, stable-target selection, cursor/scroll,
-row-local behavior, and retained geometry; it will never be mounted, focused,
-subscribed, or given a `ComponentId`. `WideMediaList<Target>` will be its
-fixed-row, one-column Wide Variant (including Queue), `InlineMediaBrowser<Target>`
-its one-column Normal/Narrow selected-row replacement Variant, and `Grid
-presentation` its Variant over the existing non-hero two-column catalog policy.
-The arrangement retains placement, traversal policy, and cell geometry; Grid
-executes within it. These Variants will be embedded and painted by their
-destination parent; `Inline Search` is the separate `InlineSearchComponent`, not
-a media-list Variant. Destinations retain Service content, chrome, workspace
-focus, effects, persistence, and typed intent translation; ordinary refresh will
-stay in the owner, with one `ViewportAnchor` only for discrete
-presentation/navigation transitions.
+The root composes the Tab, Library, Library playback, Queue, Queue playback,
+Status bar, boundary, and overlay Panels. A Panel owns placement, fills, slots,
+painting, and retained hit geometry; no base frame paints beneath it. A
+ destination/content owner supplies typed slot content only. If a needed visual
+ element has no slot, extend the Panel content type for every destination rather
+ than adding a destination painter or caller-selected arm.
 
-The primary destination owners and painters are Home (`HomeComponent`), generic
-Emby/Movies/homevideos (`BrowserComponent`), TV Series
-(`TvWorkspaceComponent` in Wide, `BrowserComponent` in Normal), grouped Music
-(`MusicWorkspaceComponent`), Audiobookshelf Podcast (`AudiobookshelfPodcastComponent`),
-Audiobookshelf Books (`AudiobookshelfBookComponent`), Feeds (`FeedsComponent`),
-and Queue (`QueueComponent`). The ledger is the detailed breakpoint record.
+The Library Panel has Wide and Narrow skeletons with Selector row, List controls
+row, list, Hero header, and optional Workspace slots. The embedded
+`MediaList<Target>` owner is never mounted or focused; Wide and Inline
+presentations read the same owner. The Panel derives breakpoint presentation
+from shared geometry and Hero header shape from content policy; destinations do
+not choose either.
+
+Workflow: identify the root-composed Panel; project content into its typed slots;
+let the Panel arrange and paint; retain pointer geometry in the painter; and
+translate slot intents at the destination boundary. Verify one painter per
+surface at Wide and Narrow, including absent Panels in each Panel mode.
 
 ## Keyboard routing (ADR 0023)
 
@@ -173,8 +167,7 @@ None of these rows permit screen-owned geometry, raw Ratatui calls, or raw
 | Kind of difference | Where it lives | Screen does |
 |---|---|---|
 | **Content change** (different title, metadata, rows, image) | The screen's own typed content model | Populate the model's fields; call the same component/arrangement |
-| **Named policy** (a small closed set of valid style/behaviour combinations already exists) | The component/arrangement that defines the policy | Select the named policy constructor, e.g. a focus/unfocus style pair like `list_rows::focused_or_muted(focused)` |
-| **Central variant** (a new but still centrally-owned presentation, e.g. Inline hero vs. Hero-on-left) | The owning arrangement or component, as a new named variant | Select the variant; never paint the alternate presentation itself |
+| **Named policy** (a small closed set derived from shared content/state) | The owning Panel or shared component | Derive it centrally; do not pass a caller-only choice |
 | **New component** (no existing painter fits, but the need is general) | A new function in `components/` or `arrangements/`, exposed like `modal_frame::render_modal_frame` | Call the new component; the component is reviewable and reusable by other screens |
 | **Bespoke surface** (reuse genuinely does not fit after a real attempt) | A named bespoke component, with its stated reason and its own buffer coverage | Call the bespoke component; it still obeys ownership, semantic theming, and verification rules — it is not exempt from them |
 
@@ -187,14 +180,11 @@ None of these rows permit screen-owned geometry, raw Ratatui calls, or raw
   Use the existing `focused_or_muted`/`focused_or_subtle` style pair in
   `components/list_rows.rs` rather than inlining
   `if focused { palette::X } else { palette::Y }` in the screen.
-- *"This browse surface wants hero-on-left instead of inline hero."* Central
-  variant. Both presentations already exist in `arrangements/hero_left.rs`
-  and `components/hero.rs`; the screen selects which one applies (per the
-  width/height gate), it does not build a third layout.
+- *"This destination wants a different Hero arm."* Defect. Derive the arm from
+  shared content policy in the Library Panel; do not add a caller-owned choice.
 - *"Nothing existing places two panes side by side with this sizing rule."*
-  New component/arrangement. Add the placement function to `arrangements/`
-  (or extend an existing one with a named variant if the shape is close
-  enough) — not a one-off `Layout::horizontal([...])` call inside the screen.
+  Extend the owning Panel or its arrangement centrally — not a local layout
+  call inside a destination.
 - *"This surface's presentation is genuinely unlike anything else in the
   app."* Bespoke surface. Register it as a named bespoke component with the
   reason written down and its own buffer test; it still may not call Ratatui

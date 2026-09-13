@@ -8,30 +8,30 @@
 
 #![allow(dead_code)]
 
-pub mod audiobookshelf_book;
-pub mod audiobookshelf_podcast;
-pub mod browser;
-pub mod browser_narrow;
+pub mod book_content;
+pub mod browser_content;
 pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
-pub mod feeds;
+pub mod feeds_content;
 pub mod feeds_manage;
 pub mod help;
-pub mod home;
+pub mod home_content;
 pub mod inline_search;
+pub mod library_panel;
+pub mod library_playback_panel;
 pub mod library_routes;
 pub mod media_list;
 pub mod mouse;
 pub mod msg;
 pub mod multiselect;
-pub mod music_workspace;
-mod music_workspace_keys;
-pub mod playback;
+pub mod music_content;
 pub mod playlists;
+pub mod podcast_content;
 pub mod queue;
 pub mod queue_boundary;
+pub mod queue_playback_panel;
 pub mod remote_reanchor;
 pub mod root;
 pub mod save_playlist;
@@ -39,22 +39,19 @@ pub mod search_sidebar;
 pub mod selection_modal;
 pub mod sessions;
 pub mod settings;
-pub mod tv_workspace;
+pub mod status_bar_panel;
+pub mod tab_panel;
+pub mod tv_content;
 pub mod user_event;
-pub mod wide_hero_boundary;
 
-pub use self::audiobookshelf_book::AudiobookshelfBookComponent;
-pub use self::audiobookshelf_podcast::AudiobookshelfPodcastComponent;
-pub use self::browser::BrowserComponent;
 pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;
-pub use self::feeds::FeedsComponent;
 pub use self::feeds_manage::FeedsManageComponent;
 pub use self::help::HelpComponent;
-pub use self::home::HomeComponent;
 pub(in crate::app) use self::inline_search::{InlineSearchHost, SearchPool};
+pub(in crate::app) use self::library_playback_panel::{LibraryPlaybackPanel, PlaybackProjection};
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::mouse::{mouse_event_clause, mouse_sub};
 pub use self::msg::{
@@ -62,13 +59,14 @@ pub use self::msg::{
     SettingsIntent, ShellRequest, TerminalObserverEvent,
 };
 pub use self::multiselect::MultiselectComponent;
-pub use self::music_workspace::MusicWorkspaceComponent;
-pub(in crate::app) use self::playback::{PlaybackComponent, PlaybackProjection};
+#[cfg(test)]
+pub(in crate::app) use self::music_content::MusicContent;
 pub use self::playlists::PlaylistsComponent;
 pub(in crate::app) use self::playlists::PlaylistsContent;
 pub use self::queue::QueueComponent;
 pub(in crate::app) use self::queue::QueueCursorUpdate;
 pub use self::queue_boundary::QueueBoundaryComponent;
+pub use self::queue_playback_panel::QueuePlaybackPanel;
 pub use self::remote_reanchor::RemoteReanchorComponent;
 pub(in crate::app) use self::root::UiRootComponent;
 pub use self::save_playlist::SavePlaylistComponent;
@@ -78,24 +76,13 @@ pub use self::sessions::SessionsComponent;
 pub(in crate::app) use self::settings::{
     ServiceRow, SettingsComponent, SettingsRow, SettingsSnapshot, SetupDraft,
 };
-pub use self::tv_workspace::TvWorkspaceComponent;
+pub use self::status_bar_panel::StatusBarPanel;
+pub use self::tab_panel::TabPanel;
 pub use self::user_event::UserEvent;
-pub use self::wide_hero_boundary::WideHeroBoundaryComponent;
 
 #[cfg(test)]
-#[path = "audiobookshelf_book_component_tests.rs"]
-mod audiobookshelf_book_component_tests;
-#[cfg(test)]
-#[path = "audiobookshelf_podcast_component_tests.rs"]
-mod audiobookshelf_podcast_component_tests;
-#[cfg(test)]
-#[path = "audiobookshelf_podcast_geometry_tests.rs"]
-mod audiobookshelf_podcast_geometry_tests;
-#[cfg(test)]
-mod audiobookshelf_podcast_test_support;
-#[cfg(test)]
-#[path = "browser_component_tests.rs"]
-mod browser_component_tests;
+#[path = "browser_inline_search_tests.rs"]
+mod browser_inline_search_tests;
 #[cfg(test)]
 #[path = "feeds_component_tests.rs"]
 mod feeds_component_tests;
@@ -103,22 +90,11 @@ mod feeds_component_tests;
 #[path = "feeds_manage_component_tests.rs"]
 mod feeds_manage_component_tests;
 #[cfg(test)]
-#[path = "home_component_tests.rs"]
-mod home_component_tests;
-#[cfg(test)]
 #[path = "library_routes_component_tests.rs"]
 mod library_routes_component_tests;
 #[cfg(test)]
 #[path = "multiselect_component_tests.rs"]
 mod multiselect_component_tests;
-#[cfg(test)]
-#[path = "music_workspace_actions_tests.rs"]
-mod music_workspace_actions_tests;
-#[cfg(test)]
-#[path = "music_workspace_cursor_tests.rs"]
-mod music_workspace_cursor_tests;
-#[cfg(test)]
-mod music_workspace_test_support;
 #[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;
@@ -141,7 +117,5 @@ mod search_sidebar_component_tests;
 #[path = "selection_modal_component_tests.rs"]
 mod selection_modal_component_tests;
 #[cfg(test)]
-#[path = "tv_workspace_component_tests.rs"]
-mod tv_workspace_component_tests;
-#[cfg(test)]
-mod wide_hero_boundary_component_tests;
+#[path = "tv_content_component_tests.rs"]
+mod tv_content_component_tests;

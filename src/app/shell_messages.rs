@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::library_panel::LibraryPanel;
 use std::time::Instant;
 
 impl Model {
@@ -95,6 +96,13 @@ impl Model {
                 }
                 // Help overlay cross-boundary requests (design D4).
                 ShellRequest::Quit => quit = true,
+                // Tab bar click: the mounted `TabPanel` resolved the tab from
+                // its own painted hit regions (task 2.1); the shell runs the
+                // same tab-switch entry point the keyboard path uses.
+                ShellRequest::TabSelect(tab_pos) => {
+                    self.dismiss_active_inline_search();
+                    self.app.set_library_tab(tab_pos);
+                }
                 ShellRequest::DismissHelp => self.umount_help(),
                 ShellRequest::OpenSettings => {
                     self.umount_help();
@@ -114,7 +122,7 @@ impl Model {
                     // Confirmations rewrite Home content/focus; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::DaemonLostIntent(intent) => {
                     if self.handle_daemon_lost_intent(intent) {
@@ -132,14 +140,14 @@ impl Model {
                     // Enter executes the action, which can refetch Home; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::ContextMenuSelect(idx) => {
                     self.handle_context_menu_select(idx);
                     // A selected action can refetch Home; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::ContextMenuDismiss => {
                     self.app.pending_overlay =
@@ -230,7 +238,7 @@ impl Model {
                     // Hiding libraries/pills refetches Home inside the commit; re-project (5.3d).
                     self.push_home_content();
                     // Emby browser content may have changed (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 request @ ShellRequest::LibraryRoutesEnter
                 | request @ ShellRequest::LibraryRoutesEsc => {
@@ -315,7 +323,7 @@ impl Model {
                     );
                     self.handle_browser_request(request);
                     // Browser navigation/effects change library content; re-project (5.3d.15/M2).
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                     if reproject_workspace {
                         self.push_music_workspace_content();
                         self.push_tv_workspace_content();
@@ -327,6 +335,45 @@ impl Model {
                 request @ ShellRequest::BrowserCursorIndex { .. } => {
                     self.handle_browser_request(request);
                 }
+                ShellRequest::LibraryScroll { key, index, scroll } => {
+                    let active_key = self
+                        .active_migrated_browser_owner()
+                        .map(|(_, active, _)| active);
+                    if active_key.as_ref()
+                        == Some(&crate::app::components::library_panel::LibraryKey::Service(
+                            key.clone(),
+                        ))
+                    {
+                        let Some(lib_idx) = self
+                            .app
+                            .libs
+                            .iter()
+                            .position(|lib| lib.library.id == key.library_id)
+                        else {
+                            return quit;
+                        };
+                        if self.app.tab.emby_library_index() != Some(lib_idx) {
+                            return quit;
+                        }
+                        {
+                            self.app.persist_library_scroll(lib_idx, scroll);
+                            // The owner already applied the movement; retain
+                            // the resolved cursor for App-side effects only.
+                            if index
+                                < self.app.libs[lib_idx]
+                                    .nav_stack
+                                    .last()
+                                    .map_or(0, |level| level.items.len())
+                            {
+                                self.app.libs[lib_idx]
+                                    .nav_stack
+                                    .last_mut()
+                                    .expect("validated nav stack")
+                                    .set_resting_cursor(index);
+                            }
+                        }
+                    }
+                }
                 ShellRequest::BrowserPillClick { target } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         self.app.handle_mouse_selector_click_emby(lib_idx, target);
@@ -334,7 +381,7 @@ impl Model {
                     // A music-group pill switch replaces the album level;
                     // re-anchor the workspace cursor at this nav event.
                     self.music_workspace_reanchor = true;
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::BrowserRowClick { target } => {
                     if let (Some(lib_idx), Some(target)) =
@@ -342,7 +389,7 @@ impl Model {
                     {
                         self.app.handle_mouse_single_click_emby(lib_idx, target);
                     }
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::BrowserRowActivate { target } => {
                     if let (Some(lib_idx), Some(target)) =
@@ -350,7 +397,7 @@ impl Model {
                     {
                         self.app.handle_mouse_double_click_emby(lib_idx, target);
                     }
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::BrowserRowContextMenu { target, anchor } => {
                     if let (Some(lib_idx), Some(target)) =
@@ -359,7 +406,7 @@ impl Model {
                         self.app
                             .handle_mouse_right_click_emby(lib_idx, target, anchor.0, anchor.1);
                     }
-                    self.push_emby_browser_content();
+                    self.push_active_browser_owner_content();
                 }
                 ShellRequest::HomeRowClick { .. } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
@@ -490,7 +537,7 @@ impl Model {
                 // override. There is no end/persist arm -- nothing is
                 // persisted.
                 ShellRequest::ResizeListPaneLive(width) => {
-                    if let Some(content_area) = self.wide_hero_boundary_content_area() {
+                    if let Some(content_area) = self.library_panel_content_area() {
                         self.app.list_pane_width =
                             crate::app::list_pane_width::normalize_list_pane_width(
                                 Some(width),
@@ -499,7 +546,7 @@ impl Model {
                     }
                 }
                 // Component owns episode-pane focus/episode_filter; mutated locally in
-                // AudiobookshelfPodcastComponent::handle_key before the request is emitted, and
+                // PodcastContent::on_key before the request is emitted, and
                 // handle_audiobookshelf_podcast_episode_intent resolves the target from the
                 // component, not App state (commit 0227d748, migrate-tui-to-tuirealm task
                 // 5.3d.11 U2). No shell effect remains.
@@ -525,7 +572,26 @@ impl Model {
                 }
             }
         }
+        if self.drain_deferred_library_message(music_resize, tv_resize) {
+            quit = true;
+        }
         quit
+    }
+
+    pub(crate) fn drain_deferred_library_message(
+        &mut self,
+        music_resize: &mut bool,
+        tv_resize: &mut bool,
+    ) -> bool {
+        let Some(deferred) = self
+            .application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(LibraryPanel::take_deferred_msg)
+        else {
+            return false;
+        };
+        self.handle_terminal_message(deferred, music_resize, tv_resize)
     }
 
     /// Re-project after a Queue click: the click moves panel focus to the
@@ -533,6 +599,6 @@ impl Model {
     /// browser content (5.3d.15/M2).
     fn queue_click_reproject(&mut self) {
         self.push_home_content();
-        self.push_emby_browser_content();
+        self.push_active_browser_owner_content();
     }
 }

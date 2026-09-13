@@ -1,7 +1,13 @@
-use super::feeds::FeedsComponent;
+//! Feeds embedded-owner tests (tasks 7.1/7.3). These exercise `FeedsContent`
+//! directly for the group/Watched-filter selection, the canonical row
+//! projection, and the typed message translation; panel geometry and pointer
+//! resolution are exercised through the mounted `LibraryPanel` that hosts the
+//! owner (the destination component is deleted).
+
+use super::feeds_content::{FeedsContent, FeedsOwnerPush};
+use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::media_list::MediaListRow;
 use super::msg::{Msg, ShellRequest};
-use super::user_event::UserEvent;
 use crate::app::types_feed_tab::WatchedFilter;
 use mbv_core::config::{FeedKind, FeedSubscription};
 use mbv_core::playback_queue::FeedEntry;
@@ -12,6 +18,7 @@ use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
+use tuirealm::props::{AttrValue, Attribute};
 
 fn entry(title: &str, played: bool) -> FeedEntry {
     FeedEntry {
@@ -29,60 +36,89 @@ fn entry(title: &str, played: bool) -> FeedEntry {
     }
 }
 
-fn component() -> FeedsComponent {
-    let subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
+fn subscription(name: &str) -> FeedSubscription {
+    FeedSubscription {
+        name: name.into(),
+        url: format!("https://example.test/{name}"),
         kind: FeedKind::Audio,
-    }];
-    let entries = vec![entry("First", false), entry("Second", true)];
-    let grouped_entries = vec![entries];
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &grouped_entries, &grouped_entries[0], false);
-    component.set_focused(true);
-    component
+    }
 }
 
-fn grouped_component() -> FeedsComponent {
-    let subscriptions = [
-        FeedSubscription {
-            name: "A".into(),
-            url: "https://example.test/a".into(),
-            kind: FeedKind::Audio,
-        },
-        FeedSubscription {
-            name: "B".into(),
-            url: "https://example.test/b".into(),
-            kind: FeedKind::Audio,
-        },
-    ];
+fn owner_with(
+    subscriptions: Vec<FeedSubscription>,
+    entries: Vec<Vec<FeedEntry>>,
+    all_entries: Vec<FeedEntry>,
+) -> FeedsContent {
+    let mut owner = FeedsContent::new();
+    owner.set_content(FeedsOwnerPush {
+        subscriptions,
+        entries,
+        all_entries,
+        loading: false,
+    });
+    owner
+}
+
+fn component() -> FeedsContent {
+    let subscriptions = vec![subscription("Test Feed")];
+    let entries = vec![entry("First", false), entry("Second", true)];
+    owner_with(subscriptions, vec![entries.clone()], entries)
+}
+
+fn grouped_component() -> FeedsContent {
+    let subscriptions = vec![subscription("A"), subscription("B")];
     let entries = vec![
         vec![entry("A-unplayed", false), entry("A-played", true)],
         vec![entry("B-unplayed", false), entry("B-played", true)],
     ];
     let all_entries = entries.iter().flatten().cloned().collect::<Vec<_>>();
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false);
-    component.set_focused(true);
-    component
+    owner_with(subscriptions, entries, all_entries)
+}
+
+fn panel_with(owner: FeedsContent, focused: bool) -> LibraryPanel {
+    let mut panel = LibraryPanel::new();
+    panel.insert_owner(LibraryKey::Feeds, Box::new(owner));
+    panel.set_active(Some(LibraryKey::Feeds));
+    Component::attr(&mut panel, Attribute::Focus, AttrValue::Flag(focused));
+    panel
+}
+
+fn paint(panel: &mut LibraryPanel, width: u16, height: u16) -> Terminal<TestBackend> {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| Component::view(panel, frame, Rect::new(0, 0, width, height)))
+        .unwrap();
+    terminal
+}
+
+fn feeds(panel: &LibraryPanel) -> &FeedsContent {
+    panel
+        .owner(&LibraryKey::Feeds)
+        .and_then(|owner| owner.as_any().downcast_ref::<FeedsContent>())
+        .expect("Feeds owner installed")
+}
+
+fn feeds_mut(panel: &mut LibraryPanel) -> &mut FeedsContent {
+    panel
+        .owner_mut(&LibraryKey::Feeds)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<FeedsContent>())
+        .expect("Feeds owner installed")
+}
+
+fn key(code: Key) -> KeyEvent {
+    KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    }
+}
+
+fn down(owner: &mut FeedsContent, code: Key) -> Option<Msg> {
+    owner.on_key(&key(code))
 }
 
 #[test]
-fn unfocused_component_ignores_keyboard_input() {
-    let mut component = component();
-    let subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
-    let entries = vec![entry("First", false), entry("Second", true)];
-    component.set_content(
-        &subscriptions,
-        std::slice::from_ref(&entries),
-        &entries,
-        false,
-    );
-    component.set_focused(false);
+fn unfocused_panel_does_not_forward_keys_to_the_feeds_owner() {
+    let mut panel = panel_with(component(), false);
     let keys = [
         Key::Char('r'),
         Key::Char('w'),
@@ -102,41 +138,32 @@ fn unfocused_component_ignores_keyboard_input() {
 
     for code in keys {
         assert_eq!(
-            component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-                code,
-                modifiers: KeyModifiers::NONE,
-            })),
+            panel.on(&Event::<super::user_event::UserEvent>::Keyboard(key(code))),
             None
         );
     }
-    assert_eq!(component.cursor(), 0);
-    assert_eq!(component.scroll(), 0);
-    assert_eq!(component.selected_group(), 0);
-    assert_eq!(component.watched_filter(), WatchedFilter::All);
+    assert_eq!(feeds(&panel).cursor(), 0);
+    assert_eq!(feeds(&panel).scroll(), 0);
+    assert_eq!(feeds(&panel).selected_group(), 0);
+    assert_eq!(feeds(&panel).watched_filter(), WatchedFilter::All);
 }
 
 #[test]
 fn down_moves_the_component_cursor_without_app_state() {
-    let mut component = component();
-    let msg = component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
+    let mut owner = component();
+    let msg = down(&mut owner, Key::Down);
 
-    assert_eq!(component.cursor(), 1);
+    assert_eq!(owner.cursor(), 1);
     assert_eq!(msg, None);
 }
 
 #[test]
 fn watched_filter_rebuilds_the_component_visible_list() {
-    let mut component = component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char('w'),
-        modifiers: KeyModifiers::NONE,
-    }));
+    let mut owner = component();
+    down(&mut owner, Key::Char('w'));
 
-    assert_eq!(component.watched_filter(), WatchedFilter::Watched);
-    assert_eq!(component.visible_titles(), ["Second"]);
+    assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
+    assert_eq!(owner.visible_titles(), ["Second"]);
 }
 
 #[test]
@@ -146,12 +173,9 @@ fn visible_entries_all_group() {
 
 #[test]
 fn visible_entries_subscription_group() {
-    let mut component = grouped_component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char(']'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(component.visible_titles(), ["A-unplayed", "A-played"]);
+    let mut owner = grouped_component();
+    down(&mut owner, Key::Char(']'));
+    assert_eq!(owner.visible_titles(), ["A-unplayed", "A-played"]);
 }
 
 #[test]
@@ -162,229 +186,173 @@ fn group_count_includes_all() {
 
 #[test]
 fn clamp_state_works() {
-    let mut component = component();
-    component.set_content(&[], &[], &[], false);
-    component.set_focused(true);
-    assert_eq!(component.cursor(), 0);
-    assert_eq!(component.scroll(), 0);
+    let mut owner = component();
+    owner.set_content(FeedsOwnerPush {
+        subscriptions: Vec::new(),
+        entries: Vec::new(),
+        all_entries: Vec::new(),
+        loading: false,
+    });
+    assert_eq!(owner.cursor(), 0);
+    assert_eq!(owner.scroll(), 0);
 }
 
 #[test]
 fn watched_filter_cycle_order() {
-    let mut component = component();
+    let mut owner = component();
     for expected in [
         WatchedFilter::Watched,
         WatchedFilter::Unwatched,
         WatchedFilter::All,
     ] {
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Char('w'),
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(component.watched_filter(), expected);
+        down(&mut owner, Key::Char('w'));
+        assert_eq!(owner.watched_filter(), expected);
     }
 }
 
 #[test]
 fn watched_filter_shows_only_played() {
-    let mut component = component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char('w'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(component.visible_titles(), ["Second"]);
+    let mut owner = component();
+    down(&mut owner, Key::Char('w'));
+    assert_eq!(owner.visible_titles(), ["Second"]);
 }
 
 #[test]
 fn unwatched_filter_shows_only_unplayed() {
-    let mut component = component();
+    let mut owner = component();
     for _ in 0..2 {
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Char('w'),
-            modifiers: KeyModifiers::NONE,
-        }));
+        down(&mut owner, Key::Char('w'));
     }
-    assert_eq!(component.visible_titles(), ["First"]);
+    assert_eq!(owner.visible_titles(), ["First"]);
 }
 
 #[test]
 fn watched_filter_empty_result() {
-    let subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
-    let entries = vec![vec![entry("First", false)]];
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &entries[0], false);
-    component.set_focused(true);
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char('w'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert!(component.visible_titles().is_empty());
+    let mut owner = owner_with(
+        vec![subscription("Test Feed")],
+        vec![vec![entry("First", false)]],
+        vec![entry("First", false)],
+    );
+    down(&mut owner, Key::Char('w'));
+    assert!(owner.visible_titles().is_empty());
 }
 
 #[test]
 fn filter_cycle_resets_cursor_and_scroll() {
-    let mut component = component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char('w'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(component.cursor(), 0);
-    assert_eq!(component.scroll(), 0);
+    let mut owner = component();
+    down(&mut owner, Key::Down);
+    down(&mut owner, Key::Char('w'));
+    assert_eq!(owner.cursor(), 0);
+    assert_eq!(owner.scroll(), 0);
 }
 
 #[test]
 fn filter_applies_to_subscription_group() {
-    let mut component = grouped_component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char(']'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char('w'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(component.visible_titles(), ["A-played"]);
+    let mut owner = grouped_component();
+    down(&mut owner, Key::Char(']'));
+    down(&mut owner, Key::Char('w'));
+    assert_eq!(owner.visible_titles(), ["A-played"]);
 }
 
 #[test]
 fn group_change_reflects_active_filter() {
-    let mut component = grouped_component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char('w'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char(']'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(component.visible_titles(), ["A-played"]);
+    let mut owner = grouped_component();
+    down(&mut owner, Key::Char('w'));
+    down(&mut owner, Key::Char(']'));
+    assert_eq!(owner.visible_titles(), ["A-played"]);
 }
 
 #[test]
 fn unfocused_component_handles_mouse_input() {
-    let mut component = grouped_component();
-    let subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
-    let entries = vec![entry("First", false), entry("Second", true)];
-    component.set_content(
-        &subscriptions,
-        std::slice::from_ref(&entries),
-        &entries,
-        false,
-    );
-    component.set_focused(false);
-    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-        .unwrap();
-    let selector = component.layout().selector_tabs[1].0;
-    component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+    let mut panel = panel_with(grouped_component(), false);
+    let _ = paint(&mut panel, 60, 20);
+    let selector = panel
+        .test_selector_hits()
+        .regions()
+        .iter()
+        .find(|(_, id)| *id == 1)
+        .map(|(rect, _)| *rect)
+        .expect("the second feed-group pill is painted");
+    panel.on(&Event::Mouse(MouseEvent {
         column: selector.x,
         row: selector.y,
         kind: MouseEventKind::Down(MouseButton::Left),
         modifiers: KeyModifiers::NONE,
     }));
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-        .unwrap();
-    component.on(&Event::<UserEvent>::Mouse(MouseEvent {
-        column: component.layout().left_area.x,
-        row: component.layout().left_area.y,
+    // A group change re-projects the list, so repaint before the wheel that
+    // resolves the fresh retained frame (the legacy two-draw test shape).
+    let _ = paint(&mut panel, 60, 20);
+    let list = panel
+        .test_narrow_geometry()
+        .expect("narrow skeleton")
+        .list_area;
+    panel.on(&Event::Mouse(MouseEvent {
+        column: list.x,
+        row: list.y,
         kind: MouseEventKind::ScrollDown,
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.selected_group(), 1);
-    assert_eq!(component.cursor(), 1);
+    assert_eq!(feeds(&panel).selected_group(), 1);
+    assert_eq!(feeds(&panel).cursor(), 1);
 }
 
 #[test]
 fn mouse_owns_feed_selector_and_row_geometry() {
-    let mut component = grouped_component();
-    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-        .unwrap();
-    let selector = component.layout().selector_tabs[1].0;
-    component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+    let mut panel = panel_with(grouped_component(), true);
+    let _ = paint(&mut panel, 60, 20);
+    let selector = panel
+        .test_selector_hits()
+        .regions()
+        .iter()
+        .find(|(_, id)| *id == 1)
+        .map(|(rect, _)| *rect)
+        .expect("the second feed-group pill is painted");
+    panel.on(&Event::Mouse(MouseEvent {
         column: selector.x,
         row: selector.y,
         kind: MouseEventKind::Down(MouseButton::Left),
         modifiers: KeyModifiers::NONE,
     }));
-    assert_eq!(component.selected_group(), 1);
-    assert_eq!(component.cursor(), 0);
+    assert_eq!(feeds(&panel).selected_group(), 1);
+    assert_eq!(feeds(&panel).cursor(), 0);
 }
 
 #[test]
 fn subscription_change_resets_component_selection() {
-    let mut component = grouped_component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(component.cursor(), 1);
-    let subscriptions = [FeedSubscription {
-        name: "Replacement".into(),
-        url: "https://example.test/replacement".into(),
-        kind: FeedKind::Audio,
-    }];
-    component.set_content(&subscriptions, &[Vec::new()], &[], false);
-    component.set_focused(true);
-    assert_eq!(component.selected_group(), 0);
-    assert_eq!(component.cursor(), 0);
-    assert_eq!(component.scroll(), 0);
+    let mut owner = grouped_component();
+    down(&mut owner, Key::Down);
+    assert_eq!(owner.cursor(), 1);
+    owner.set_content(FeedsOwnerPush {
+        subscriptions: vec![subscription("Replacement")],
+        entries: vec![Vec::new()],
+        all_entries: Vec::new(),
+        loading: false,
+    });
+    assert_eq!(owner.selected_group(), 0);
+    assert_eq!(owner.cursor(), 0);
+    assert_eq!(owner.scroll(), 0);
 }
 
 #[test]
 fn playback_requests_use_the_selected_entry_guid() {
-    let subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
+    let subscriptions = vec![subscription("Test Feed")];
     let entries = vec![
         entry("Hidden", false),
         entry("Second", true),
         entry("Third", true),
     ];
-    let mut component = FeedsComponent::new();
-    let grouped_entries = vec![entries.clone()];
-    component.set_content(&subscriptions, &grouped_entries, &entries, false);
-    component.set_focused(true);
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char('w'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
+    let mut owner = owner_with(subscriptions, vec![entries.clone()], entries);
+    down(&mut owner, Key::Char('w'));
+    down(&mut owner, Key::Down);
 
     assert_eq!(
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        })),
+        down(&mut owner, Key::Enter),
         Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry(
             "Third", true
         )))))
     );
     assert_eq!(
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Char('e'),
-            modifiers: KeyModifiers::NONE,
-        })),
+        down(&mut owner, Key::Char('e')),
         Some(Msg::Shell(ShellRequest::FeedsEnqueue(Some(entry(
             "Third", true
         )))))
@@ -393,18 +361,7 @@ fn playback_requests_use_the_selected_entry_guid() {
 
 #[test]
 fn feed_actions_preserve_the_selected_entry_when_guids_collide() {
-    let subscriptions = [
-        FeedSubscription {
-            name: "A".into(),
-            url: "https://example.test/a".into(),
-            kind: FeedKind::Audio,
-        },
-        FeedSubscription {
-            name: "B".into(),
-            url: "https://example.test/b".into(),
-            kind: FeedKind::Audio,
-        },
-    ];
+    let subscriptions = vec![subscription("A"), subscription("B")];
     let mut first = entry("First", false);
     first.guid = "shared-guid".into();
     first.feed_id = Some("https://example.test/a".into());
@@ -413,128 +370,102 @@ fn feed_actions_preserve_the_selected_entry_when_guids_collide() {
     second.feed_id = Some("https://example.test/b".into());
     let entries = vec![vec![first.clone()], vec![second.clone()]];
     let all_entries = entries.iter().flatten().cloned().collect::<Vec<_>>();
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &entries, &all_entries, false);
-    component.set_focused(true);
+    let mut owner = owner_with(subscriptions, entries, all_entries);
     for _ in 0..2 {
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Char(']'),
-            modifiers: KeyModifiers::NONE,
-        }));
+        down(&mut owner, Key::Char(']'));
     }
 
     assert_eq!(
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        })),
+        down(&mut owner, Key::Enter),
         Some(Msg::Shell(ShellRequest::FeedsPlay(Some(second.clone()))))
     );
     assert_eq!(
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Char('e'),
-            modifiers: KeyModifiers::NONE,
-        })),
+        down(&mut owner, Key::Char('e')),
         Some(Msg::Shell(ShellRequest::FeedsEnqueue(Some(second))))
     );
 }
 
 #[test]
 fn empty_feed_actions_request_shell_feedback() {
-    let mut component = FeedsComponent::new();
-    component.set_content(&[], &[], &[], false);
-    component.set_focused(true);
+    let mut owner = FeedsContent::new();
+    owner.set_content(FeedsOwnerPush {
+        subscriptions: Vec::new(),
+        entries: Vec::new(),
+        all_entries: Vec::new(),
+        loading: false,
+    });
 
     assert_eq!(
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Enter,
-            modifiers: KeyModifiers::NONE,
-        })),
+        down(&mut owner, Key::Enter),
         Some(Msg::Shell(ShellRequest::FeedsPlay(None)))
     );
     assert_eq!(
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Char('e'),
-            modifiers: KeyModifiers::NONE,
-        })),
+        down(&mut owner, Key::Char('e')),
         Some(Msg::Shell(ShellRequest::FeedsEnqueue(None)))
     );
 }
 
 #[test]
 fn changing_group_invalidates_previous_row_geometry() {
-    let mut component = grouped_component();
-    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-        .unwrap();
-    let previous_row = component
-        .layout()
-        .selected_item_rect
+    let mut panel = panel_with(grouped_component(), true);
+    let _ = paint(&mut panel, 60, 20);
+    let previous_row = panel
+        .test_narrow_geometry()
+        .expect("narrow skeleton")
+        .selected
         .expect("the initial selected row is painted");
 
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Char(']'),
-        modifiers: KeyModifiers::NONE,
-    }));
-    component.set_content(&[], &[], &[], false);
-    assert!(component
+    down(feeds_mut(&mut panel), Key::Char(']'));
+    feeds_mut(&mut panel).set_content(FeedsOwnerPush {
+        subscriptions: Vec::new(),
+        entries: Vec::new(),
+        all_entries: Vec::new(),
+        loading: false,
+    });
+    assert!(feeds(&panel)
         .resolve_row_id(Position::new(previous_row.x, previous_row.y))
         .is_none());
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert_eq!(component.cursor(), 0);
+    down(feeds_mut(&mut panel), Key::Down);
+    assert_eq!(feeds(&panel).cursor(), 0);
 }
 
 #[test]
 fn wide_feeds_keep_the_list_out_of_the_inline_hero_flow() {
-    let mut wide = component();
-    let mut wide_terminal =
-        Terminal::new(TestBackend::new(crate::app::TWO_COLUMN_THRESHOLD, 20)).unwrap();
-    wide_terminal
-        .draw(|frame| wide.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 20)))
-        .unwrap();
-    assert_eq!(wide.layout().inline_hero_area, Rect::default());
-    assert!(wide.layout().selected_item_rect.is_some());
+    let wide = crate::app::TWO_COLUMN_THRESHOLD;
+    let mut wide_panel = panel_with(component(), true);
+    let _ = paint(&mut wide_panel, wide, 20);
+    let wide_geometry = wide_panel.test_wide_geometry().expect("wide skeleton");
+    assert!(wide_panel.test_narrow_geometry().is_none());
+    assert!(wide_geometry.selected.is_some());
 
-    let mut narrow = component();
-    let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
-    let mut narrow_terminal = Terminal::new(TestBackend::new(width, 20)).unwrap();
-    narrow_terminal
-        .draw(|frame| narrow.view(frame, Rect::new(0, 0, width, 20)))
-        .unwrap();
-    assert!(narrow.layout().inline_hero_area.height > 0);
+    let narrow = wide - 1;
+    let mut narrow_panel = panel_with(component(), true);
+    let _ = paint(&mut narrow_panel, narrow, 20);
+    let narrow_geometry = narrow_panel
+        .test_narrow_geometry()
+        .expect("narrow skeleton");
+    assert!(narrow_geometry.inline_hero.unwrap_or_default().height > 0);
 }
 
 #[test]
 fn unchanged_snapshot_does_not_overwrite_component_cursor() {
-    let mut component = component();
-    component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-        code: Key::Down,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
+    let mut owner = component();
+    down(&mut owner, Key::Down);
     let entries = vec![entry("First", false), entry("Second", true)];
-    let grouped_entries = vec![entries.clone()];
-    component.set_content(&subscriptions, &grouped_entries, &entries, false);
-    component.set_focused(true);
+    owner.set_content(FeedsOwnerPush {
+        subscriptions: vec![subscription("Test Feed")],
+        entries: vec![entries.clone()],
+        all_entries: entries,
+        loading: false,
+    });
 
-    assert_eq!(component.cursor(), 1);
+    assert_eq!(owner.cursor(), 1);
 }
 
 #[test]
 fn feeds_render_without_app_state() {
-    let mut component = component();
-    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-        .unwrap();
+    let mut panel = panel_with(component(), true);
+    let terminal = paint(&mut panel, 60, 20);
 
     let buffer = terminal.backend().buffer();
     let output: String = (0..buffer.area().height)
@@ -558,17 +489,10 @@ fn dated_entry(title: &str, played: bool, days_ago: u64) -> FeedEntry {
     }
 }
 
-fn dated_component(entries: Vec<FeedEntry>) -> FeedsComponent {
-    let subscriptions = [FeedSubscription {
-        name: "Test Feed".into(),
-        url: "https://example.test/feed".into(),
-        kind: FeedKind::Audio,
-    }];
+fn dated_owner(entries: Vec<FeedEntry>) -> FeedsContent {
+    let subscriptions = vec![subscription("Test Feed")];
     let grouped = vec![entries.clone()];
-    let mut component = FeedsComponent::new();
-    component.set_content(&subscriptions, &grouped, &entries, false);
-    component.set_focused(true);
-    component
+    owner_with(subscriptions, grouped, entries)
 }
 
 #[test]
@@ -576,19 +500,16 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
     // Three entries in three distinct age groups -> the projected flow is
     // Heading/Item/Spacer/Heading/Item/Spacer/Heading/Item (8 display rows,
     // 3 selectable). Cursor movement addresses only the entries.
-    let mut component = dated_component(vec![
+    let mut owner = dated_owner(vec![
         dated_entry("New One", false, 0),
         dated_entry("Recent One", false, 5),
         dated_entry("Old One", true, 40),
     ]);
+    assert_eq!(owner.visible_titles(), ["New One", "Recent One", "Old One"]);
+    assert_eq!(owner.cursor(), 0);
+    assert_eq!(owner.canonical_selectable_len(), 3);
     assert_eq!(
-        component.visible_titles(),
-        ["New One", "Recent One", "Old One"]
-    );
-    assert_eq!(component.cursor(), 0);
-    assert_eq!(component.canonical_selectable_len(), 3);
-    assert_eq!(
-        component
+        owner
             .canonical_rows()
             .iter()
             .filter(|row| matches!(row, MediaListRow::Heading { .. } | MediaListRow::Spacer))
@@ -596,27 +517,22 @@ fn structural_rows_are_non_selectable_and_cursor_movement_skips_them() {
         5
     );
     for expected in [1, 2, 2] {
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(component.cursor(), expected);
+        down(&mut owner, Key::Down);
+        assert_eq!(owner.cursor(), expected);
     }
     for expected in [1, 0, 0] {
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Up,
-            modifiers: KeyModifiers::NONE,
-        }));
-        assert_eq!(component.cursor(), expected);
+        down(&mut owner, Key::Up);
+        assert_eq!(owner.cursor(), expected);
     }
 
-    let mut terminal =
-        Terminal::new(TestBackend::new(crate::app::TWO_COLUMN_THRESHOLD, 30)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, crate::app::TWO_COLUMN_THRESHOLD, 30)))
-        .unwrap();
-    assert_eq!(component.cursor(), 0);
-    assert!(component.layout().selected_item_rect.is_some());
+    assert_eq!(owner.cursor(), 0);
+    let mut panel = panel_with(owner, true);
+    let _ = paint(&mut panel, crate::app::TWO_COLUMN_THRESHOLD, 30);
+    assert!(panel
+        .test_wide_geometry()
+        .expect("wide skeleton")
+        .selected
+        .is_some());
 }
 
 #[test]
@@ -624,55 +540,44 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
     let entries = (0..20)
         .map(|index| dated_entry(&format!("Entry {index:02}"), index == 15, 0))
         .collect();
-    let mut component = dated_component(entries);
+    let mut owner = dated_owner(entries);
     for _ in 0..15 {
-        component.on(&Event::<UserEvent>::Keyboard(KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        }));
+        down(&mut owner, Key::Down);
     }
-    assert_eq!(component.cursor(), 15);
+    assert_eq!(owner.cursor(), 15);
 
     let wide = crate::app::TWO_COLUMN_THRESHOLD;
-    Terminal::new(TestBackend::new(wide, 10))
-        .unwrap()
-        .draw(|frame| component.view(frame, Rect::new(0, 0, wide, 10)))
-        .unwrap();
+    let mut panel = panel_with(owner, true);
+    let _ = paint(&mut panel, wide, 10);
     assert!(
-        component.scroll() > 0,
+        feeds(&panel).scroll() > 0,
         "wide viewport scrolled to the selection"
     );
 
     // Breakpoint flip Wide -> Narrow: one ViewportAnchor carries the
     // selection and keeps it on screen.
     let narrow = wide - 1;
-    Terminal::new(TestBackend::new(narrow, 10))
-        .unwrap()
-        .draw(|frame| component.view(frame, Rect::new(0, 0, narrow, 10)))
-        .unwrap();
-    assert_eq!(component.cursor(), 15);
+    let _ = paint(&mut panel, narrow, 10);
+    assert_eq!(feeds(&panel).cursor(), 15);
     assert_eq!(
-        component.canonical_selected_target(),
+        feeds(&panel).canonical_selected_target(),
         Some(&"Entry 15".to_string())
     );
 }
 
-/// Task 4.1/4.5: a click on a list row resolves through the active canonical
-/// control's `resolve_point`, selects the row on both controls, and emits the
-/// `FeedsRowClick` focus request. A right-click is ignored (task 4.6: no
-/// keyboard context-menu equivalent on this surface).
+/// Task 4.1/4.5: a click on a list row resolves through the panel's slot
+/// resolution into the owner's typed `FeedsRowClick`; a right-click is
+/// ignored (task 4.6: no keyboard context-menu equivalent on this surface).
 #[test]
 fn feeds_mouse_click_resolves_row_and_right_click_is_ignored() {
-    let mut component = component();
-    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-        .unwrap();
-    let list = component.layout().left_area;
-    // Scan for a painted selectable row below the hero-covered top rows; the
-    // gesture recognizer is reset between probes.
-    let click = |component: &mut FeedsComponent, column: u16, row: u16, kind: MouseEventKind| {
-        component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+    let mut panel = panel_with(component(), true);
+    let _ = paint(&mut panel, 60, 20);
+    let list = panel
+        .test_narrow_geometry()
+        .expect("narrow skeleton")
+        .list_area;
+    let click = |panel: &mut LibraryPanel, column: u16, row: u16, kind: MouseEventKind| {
+        panel.on(&Event::Mouse(MouseEvent {
             kind,
             column,
             row,
@@ -681,9 +586,8 @@ fn feeds_mouse_click_resolves_row_and_right_click_is_ignored() {
     };
     let mut resolved = None;
     for row in (list.y..list.y + list.height).rev() {
-        component.reset_mouse_gestures_for_test();
         if click(
-            &mut component,
+            &mut panel,
             list.x,
             row,
             MouseEventKind::Down(MouseButton::Left),
@@ -696,13 +600,12 @@ fn feeds_mouse_click_resolves_row_and_right_click_is_ignored() {
     }
     let row = resolved.expect("a painted selectable row must resolve FeedsRowClick");
     assert!(
-        component.cursor() > 0 || row < list.y + 4,
+        feeds(&panel).cursor() > 0 || row < list.y + 4,
         "click must select the resolved row on both controls"
     );
-    component.reset_mouse_gestures_for_test();
     assert_eq!(
         click(
-            &mut component,
+            &mut panel,
             list.x,
             row,
             MouseEventKind::Down(MouseButton::Right)
@@ -716,18 +619,17 @@ fn feeds_mouse_click_resolves_row_and_right_click_is_ignored() {
 /// the existing `FeedsPlay` request.
 #[test]
 fn feeds_mouse_double_click_plays_the_resolved_entry() {
-    let mut component = component();
-    let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, Rect::new(0, 0, 60, 20)))
-        .unwrap();
-    let list = component.layout().left_area;
+    let mut panel = panel_with(component(), true);
+    let _ = paint(&mut panel, 60, 20);
+    let list = panel
+        .test_narrow_geometry()
+        .expect("narrow skeleton")
+        .list_area;
     // Two quick Downs at the same painted row = DoubleClick on the second;
     // scan for a row whose double-click resolves a played entry.
     for row in (list.y..list.y + list.height).rev() {
-        component.reset_mouse_gestures_for_test();
         let mut played = None;
-        let _ = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+        let _ = panel.on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: list.x,
             row,
@@ -736,7 +638,7 @@ fn feeds_mouse_double_click_plays_the_resolved_entry() {
         // A selection-only click leaves the painted frame valid, so the second
         // Down resolves the same row without an intervening redraw (design.md
         // D6, ADR 0024).
-        let msg = component.on(&Event::<UserEvent>::Mouse(MouseEvent {
+        let msg = panel.on(&Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: list.x,
             row,

@@ -1,11 +1,8 @@
 use crate::app::components::mouse::gesture::{MouseGesture, MouseGestureState};
 use crate::app::components::msg::{Msg, QueueRequest};
 use crate::app::components::UserEvent;
-use crate::app::palette;
 use crate::app::queue_column_width::normalize_queue_column_width;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::Style;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -19,7 +16,6 @@ pub struct QueueBoundaryComponent {
     area: Rect,
     frame_left: u16,
     terminal_width: u16,
-    focused: bool,
     enabled: bool,
     changed: bool,
     width: u16,
@@ -32,7 +28,6 @@ impl QueueBoundaryComponent {
             area: Rect::default(),
             frame_left: 0,
             terminal_width: 0,
-            focused: false,
             enabled: false,
             changed: false,
             width: 0,
@@ -46,7 +41,6 @@ impl QueueBoundaryComponent {
         frame_left: u16,
         terminal_width: u16,
         width: u16,
-        focused: bool,
         enabled: bool,
     ) {
         if !enabled {
@@ -57,7 +51,6 @@ impl QueueBoundaryComponent {
         self.frame_left = frame_left;
         self.terminal_width = terminal_width;
         self.width = width;
-        self.focused = focused;
         self.enabled = enabled;
     }
 
@@ -114,19 +107,12 @@ impl Default for QueueBoundaryComponent {
 }
 
 impl Component for QueueBoundaryComponent {
-    fn view(&mut self, frame: &mut Frame, area: Rect) {
-        if self.enabled && area.width > 0 && area.height > 0 {
-            frame.render_widget(
-                Block::default().style(
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::QueueColumn,
-                        self.focused,
-                    )
-                    .fill),
-                ),
-                area,
-            );
-        }
+    fn view(&mut self, _frame: &mut Frame, _area: Rect) {
+        // The boundary is a resize hit-region, not a painted surface: it sits
+        // over the queue panel's own rightmost (scrollbar) column, which the
+        // Queue panel already paints. Painting here would overwrite that
+        // column with its own surface value and erase the scrollbar glyph
+        // the panel just drew.
     }
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
         None

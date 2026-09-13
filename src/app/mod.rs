@@ -110,13 +110,16 @@ mod shell;
 mod shell_audiobookshelf_book;
 mod shell_audiobookshelf_podcast;
 mod shell_browser;
-mod shell_destination_mounts;
+mod shell_browser_content;
+mod shell_chrome_panels;
 mod shell_feeds;
 mod shell_feeds_manage;
 mod shell_home;
 mod shell_home_content;
 mod shell_inline_search;
 mod shell_library;
+#[path = "shell_library_panel.rs"]
+mod shell_library_panel;
 mod shell_modal_actions;
 mod shell_music_workspace;
 mod shell_overlays;
@@ -131,6 +134,7 @@ mod app_init;
 use self::app_init::AppInit;
 use self::bootstrap::{bootstrap_local_daemon_queue, bootstrap_unified_queue};
 use self::notify_actions::ToastSeverity;
+pub(in crate::app) use self::playback_target::NowPlayingStatus;
 use self::resize::spawn_resize_worker;
 use self::types_browse::{
     restore_library_position, AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel,

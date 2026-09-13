@@ -1,8 +1,7 @@
 use super::wide_row::wide_media_row;
 use crate::app::components::media_list::{
-    GridMediaList, GridPaintPolicy, InlineLayout, InlineMediaBrowser,
-    InlineMediaBrowserPaintPolicy, RowGeometry, SelectedRowSurface, WideMediaList,
-    WideMediaListPaintPolicy,
+    InlineLayout, InlineMediaBrowser, InlineMediaBrowserPaintPolicy, RowGeometry,
+    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::palette;
 use ratatui::layout::Rect;
@@ -85,6 +84,19 @@ pub(super) fn render_wide_media_list<Target: Clone>(
     f.render_widget(List::new(list_items), row_paint_area);
 
     if scrollbar {
+        let scrollbar_x = if row_paint_area.right() < f.area().right() {
+            row_paint_area.right()
+        } else {
+            row_paint_area.x + row_paint_area.width.saturating_sub(1)
+        };
+        f.render_widget(
+            Block::default().style(Style::default().bg(selected_bg)),
+            Rect {
+                x: scrollbar_x,
+                width: 1,
+                ..row_paint_area
+            },
+        );
         crate::app::render::render_right_scrollbar(
             f,
             row_paint_area,
@@ -235,56 +247,6 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
         paint.row_geometry,
         paint.selected_row_rect,
     );
-}
-
-/// Component-view adapter for the Grid retained-cell seam.
-pub(in crate::app) fn render_grid_media_list_component<Target: Clone + PartialEq>(
-    f: &mut Frame,
-    area: Rect,
-    grid: &mut GridMediaList<Target>,
-    policy: GridPaintPolicy,
-) {
-    #[cfg(test)]
-    super::GRID_MEDIA_LIST_PAINTS.with(|count| count.set(count.get() + 1));
-    grid.begin_view();
-    let (claim, content) = grid.geometry(area);
-    if area.is_empty() || claim.is_empty() || content.is_empty() || grid.rows().is_empty() {
-        return;
-    }
-    let cells = grid.cells(content);
-    let rows = grid.rows();
-    let selected = grid.selected_target();
-    for (cell, source_row) in &cells {
-        let Some(row) = rows.get(*source_row) else {
-            continue;
-        };
-        let selected_row = cell
-            .target
-            .as_ref()
-            .zip(selected)
-            .is_some_and(|(a, b)| a == b);
-        let item = wide_media_row(
-            row,
-            selected_row,
-            policy.focused(),
-            palette::surface_colors(palette::Surface::SelectedRow, false).fill,
-            cell.rect.width as usize,
-            false,
-            None,
-        );
-        f.render_widget(List::new(vec![item]), cell.rect);
-    }
-    let viewport = grid.resolve_viewport(content.height as usize);
-    if policy.focused() && viewport.overflows() {
-        crate::app::render::render_right_scrollbar(
-            f,
-            content,
-            viewport.total_rows.saturating_sub(viewport.height),
-            grid.scroll(),
-            palette::SCROLLBAR,
-        );
-    }
-    grid.finish_view(claim, content, cells);
 }
 
 /// Component-view adapter for the Inline retained-result seam.

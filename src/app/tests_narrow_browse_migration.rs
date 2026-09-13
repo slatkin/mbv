@@ -15,10 +15,12 @@
 //! - `wide_podcast_*`: wide Audiobookshelf podcast body snapshot/paint.
 
 use super::*;
-use crate::app::components::BrowserComponent;
+use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::shell::Model;
 use crate::app::tests::*;
-use crate::app::{BrowseLevel, LibraryTab, PanelFocus, TabSelection};
+use crate::app::{BrowseLevel, LibraryTab, PanelFocus, PanelMode, TabSelection};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
@@ -174,6 +176,26 @@ fn draw(model: &mut Model, term: &mut Terminal<TestBackend>) -> String {
     buffer_text(term)
 }
 
+/// The embedded Movies/HomeVideos/Generic owner's cursor, read through the
+/// mounted `LibraryPanel` (task 6.1: the panel is the library surface's one
+/// event boundary; the owner is never a component).
+fn owner_cursor(model: &mut Model) -> usize {
+    let (_, key, _) = model
+        .active_migrated_browser_owner()
+        .expect("the active library's owner has migrated");
+    model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any_mut()
+        .downcast_mut::<LibraryPanel>()
+        .expect("Library panel type")
+        .owner_mut(&key)
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserOwner>())
+        .map(|owner| owner.cursor())
+        .expect("browser owner installed")
+}
+
 /// Feed one key into whatever component currently holds focus and route any
 /// emitted `Msg` the way the run loop does. Pre-migration the narrow browse
 /// surfaces have no owning component, so focus rests on `UiRoot` and the key
@@ -231,39 +253,21 @@ fn tv_shows_app() -> App {
     app
 }
 
-/// Regression 3: narrow TV `j` moves the painted selection. Post-task-3.4 the
-/// mounted `BrowserComponent` owns the surface, so the painted selection lives
-/// in its own layout (`test_layout`), keyed off its component-local cursor.
+/// Regression 3: narrow TV `j` moves the painted selection. The panel-hosted
+/// `TvContent` owner owns the surface at every breakpoint (task 8.4), so the
+/// painted selection lives in the mounted panel's retained geometry, keyed
+/// off the owner's local cursor.
 #[test]
 fn narrow_tv_browse_j_moves_painted_selection() {
     let mut model = Model::new(tv_shows_app());
     model.sync_mounted_surfaces();
-    let id = model
-        .emby_browser_id
-        .clone()
-        .expect("narrow TV browser mounted");
     let mut term = narrow_backend();
 
     // Seed past the selected-Series inline hero (which swallows its own row)
     // so both samples are plain rows.
-    model
-        .application
-        .get_component_mut(&id)
-        .unwrap()
-        .as_any_mut()
-        .downcast_mut::<BrowserComponent>()
-        .unwrap()
-        .set_cursor_for_test(1);
+    model.test_tv_owner_mut().set_cursor_for_test(1);
     draw(&mut model, &mut term);
-    let before = model
-        .application
-        .get_component(&id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .unwrap()
-        .test_layout()
-        .selected_item_rect;
+    let before = model.test_painted_library_layout().selected_item_rect;
     assert!(
         before.is_some(),
         "narrow TV browse must paint a selected row"
@@ -271,15 +275,7 @@ fn narrow_tv_browse_j_moves_painted_selection() {
 
     press(&mut model, Key::Char('j'));
     draw(&mut model, &mut term);
-    let after = model
-        .application
-        .get_component(&id)
-        .unwrap()
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .unwrap()
-        .test_layout()
-        .selected_item_rect;
+    let after = model.test_painted_library_layout().selected_item_rect;
 
     assert_ne!(
         before, after,
@@ -308,7 +304,7 @@ fn narrow_grouped_music_j_moves_painted_selection() {
     let mut term = narrow_backend();
 
     draw(&mut model, &mut term);
-    let before = model.app.layout.main.selected_item_rect;
+    let before = model.test_painted_library_layout().selected_item_rect;
     assert!(
         before.is_some(),
         "narrow grouped Music must paint a selected album row"
@@ -316,7 +312,7 @@ fn narrow_grouped_music_j_moves_painted_selection() {
 
     press(&mut model, Key::Char('j'));
     draw(&mut model, &mut term);
-    let after = model.app.layout.main.selected_item_rect;
+    let after = model.test_painted_library_layout().selected_item_rect;
 
     assert_ne!(
         before, after,
@@ -484,18 +480,23 @@ fn selected_feed_row_region(output: &str, title: &str) -> String {
 
 #[test]
 fn feed_home_video_group_narrow_uses_shared_inline_hero() {
-    // The picker routes through `render_narrow_browse_with_ctx` now: a
-    // feed-group pill row, then the shared inline-hero replacement for the
-    // selected row (framed, meta line inside) - identical to a generic narrow
-    // home-video library.
-    let output = feed_snapshot(60, 20);
+    // Task 6.1 (design D7): the migrated feed-group picker paints through
+    // the mounted `LibraryPanel`'s one Narrow skeleton — a feed-group pill
+    // row, then the shared inline-hero replacement for the selected row
+    // (framed, meta line and overview inside) — identical to a generic
+    // narrow home-video library. The taller fixture gives the D7 detail
+    // block room to fit the list viewport; when it would not, the skeleton
+    // falls back to the ordinary selected row by design.
+    let output = feed_snapshot(60, 30);
     let lines: Vec<&str> = output.lines().collect();
     assert!(
         output.contains("All") && output.contains("Channel A"),
         "feed-group pills missing:\n{output}"
     );
     // Framed inline hero: a `▁` top rule above and a `▔` bottom rule below,
-    // with the selected item's meta line between them.
+    // with the selected item's meta line and overview between them (design
+    // D5 producer: a Movie's meta rows are its release date and duration,
+    // not its genre).
     let top = lines
         .iter()
         .position(|l| l.trim_start().starts_with('\u{2581}'))
@@ -506,7 +507,15 @@ fn feed_home_video_group_narrow_uses_shared_inline_hero() {
         .expect("inline-hero bottom rule missing");
     assert!(top < bottom);
     let framed = lines[top..=bottom].join("\n");
-    assert!(framed.contains("Video One") && framed.contains("Family") && framed.contains("1h"));
+    // The D7 wrap splits text across the beside-image column, so collapse the
+    // frame's whitespace before matching the unwrapped content.
+    let framed_text = framed.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        framed_text.contains("Video One")
+            && framed_text.contains("1h")
+            && framed_text.contains("Distinctive wrapping overview fragment"),
+        "the selected item's title, meta and overview must paint inside the frame:\n{framed}"
+    );
     assert_eq!(
         output
             .lines()
@@ -555,6 +564,12 @@ fn feed_home_video_group_paints_each_row_once() {
 
 #[test]
 fn feed_home_video_group_metadata_bearing_hero_keeps_complete_frame() {
+    // Task 6.1 (design D7/D5): a metadata-bearing selected item's inline
+    // hero grows to fit its wrapped overview and the `▁`/`▔` frame closes
+    // below the last overview row — never clipping it. The D7 form wraps the
+    // overview to the beside-image column width, so the final overview words
+    // may split across rows (the deleted legacy painter kept the source
+    // line breaks).
     let mut app = feed_home_video_group_app();
     app.terminal_height = 30;
     let overview = "First overview line with enough detail to wrap across the narrow hero.\nSecond overview line remains visible.\nFINAL OVERVIEW LINE";
@@ -566,15 +581,46 @@ fn feed_home_video_group_metadata_bearing_hero_keeps_complete_frame() {
     let mut term = Terminal::new(TestBackend::new(60, 30)).unwrap();
     let output = draw(&mut model, &mut term);
     let lines: Vec<_> = output.lines().collect();
-    let top = lines.iter().position(|line| line.trim_start().starts_with('▁')).unwrap();
-    let bottom = lines.iter().rposition(|line| line.trim_start().starts_with('▔')).unwrap();
-    let final_line = lines.iter().position(|line| line.contains("FINAL OVERVIEW LINE")).unwrap();
-    assert!(top < final_line && final_line < bottom, "hero frame clips overview:\n{output}");
+    let top = lines
+        .iter()
+        .position(|line| line.trim_start().starts_with('▁'))
+        .expect("inline-hero top rule missing");
+    let bottom = lines
+        .iter()
+        .rposition(|line| line.trim_start().starts_with('▔'))
+        .expect("inline-hero bottom rule missing");
+    let framed = lines[top..=bottom].join("\n");
+    // The D7 wrap splits text across the beside-image column, so collapse the
+    // frame's whitespace before matching the unwrapped overview lines.
+    let framed_text = framed.split_whitespace().collect::<Vec<_>>().join(" ");
+    for needle in [
+        "First overview line with enough detail to wrap across the narrow hero.",
+        "Second overview line remains visible.",
+        "FINAL OVERVIEW LINE",
+    ] {
+        assert!(
+            framed_text.contains(needle),
+            "the hero frame must keep the complete overview ({needle:?} clipped):\n{output}"
+        );
+    }
+    // The final overview word lands strictly inside the closing rule.
+    let final_row = (top..=bottom)
+        .rev()
+        .find(|&row| lines[row].contains("LINE"))
+        .expect("the final overview word paints");
+    assert!(
+        final_row < bottom,
+        "the hero frame must close below the last overview row:\n{output}"
+    );
 }
 
 #[test]
 fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     let mut app = feed_home_video_group_app();
+    app.terminal_width = 140;
+    app.terminal_height = 40;
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
     for i in 0..30 {
         let mut item = make_item(&format!("Video extra {i}"), "Movie");
@@ -582,68 +628,49 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
         state.groups[0].items.push(item.clone());
         state.all_items.push(item);
     }
-    state.groups[0].folder.is_folder = true;
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();
-    let id = model.emby_browser_id.clone().expect("feed browser mounted");
-    // Use the wide fixed-row control so its one-row-per-item geometry gives a
-    // durable maximum without reading the removed narrow `left_item_rows`.
+    // The wide fixed-row control gives a durable one-row-per-item geometry.
     let mut term = Terminal::new(TestBackend::new(140, 40)).unwrap();
     draw(&mut model, &mut term);
-    let (area, total_rows) = {
-        let component = model.application.get_component(&id).unwrap();
-        let browser = component
-            .as_any()
-            .downcast_ref::<BrowserComponent>()
-            .unwrap();
-        let layout = browser.test_layout();
-        let total_rows = model.app.libs[0]
-            .feed_home_video
-            .as_ref()
-            .unwrap()
-            .selected_len();
-        (layout.left_area, total_rows)
-    };
-    let max_offset = total_rows.saturating_sub(area.height as usize);
-    assert!(max_offset > 0, "feed fixture must overflow the mounted control");
+    let list_area = model
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_list_rect())
+        .expect("the Library panel painted a list slot");
+    let total_rows = model.app.libs[0]
+        .feed_home_video
+        .as_ref()
+        .unwrap()
+        .selected_len();
+    assert!(total_rows > 2, "the feed fixture must hold several rows");
+    assert!(
+        list_area.width > 0 && list_area.height > 0,
+        "the panel's list slot must have painted"
+    );
     let mut music_resize = false;
     let mut tv_resize = false;
-    // Drive the typed wheel path through the mounted control: one wheel step
-    // moves one row and the shell persists the resolved cursor as
-    // `video_cursor`; the persisted viewport scroll is no longer wheel-driven.
-    for _ in 0..total_rows {
-        model
-            .application
-            .get_component_mut(&id)
-            .unwrap()
-            .as_any_mut()
-            .downcast_mut::<BrowserComponent>()
-            .unwrap()
-            .reset_mouse_gestures_for_test();
-        let msg = model
-            .application
-            .get_component_mut(&id)
-            .unwrap()
-            .on(&Event::Mouse(MouseEvent {
-                kind: MouseEventKind::ScrollDown,
-                column: area.x + 1,
-                row: area.y + 1,
-                modifiers: KeyModifiers::NONE,
-            }))
-            .expect("scroll emits typed request");
-        model.handle_terminal_message(msg, &mut music_resize, &mut tv_resize);
-        // The wheel move re-resolves the viewport and invalidates the retained
-        // frame; production draws between events, so refresh the painted claim
-        // here too (design.md D6).
-        draw(&mut model, &mut term);
-    }
-    let control_cursor = model
+
+    // Seed the control selection at the last row through the panel's
+    // keyboard delivery (task 6.1: the panel forwards the chord to the
+    // embedded owner, which echoes its resolved index).
+    let end = model
         .application
-        .get_component(&id)
-        .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
-        .expect("feed browser remains mounted")
-        .cursor();
-    assert_eq!(control_cursor, total_rows - 1, "wheel clamps at the last row");
+        .get_component_mut(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .on(&Event::Keyboard(KeyEvent {
+            code: Key::End,
+            modifiers: KeyModifiers::NONE,
+        }))
+        .expect("End emits the typed cursor echo");
+    model.handle_terminal_message(end, &mut music_resize, &mut tv_resize);
+    draw(&mut model, &mut term);
+    assert_eq!(
+        owner_cursor(&mut model),
+        total_rows - 1,
+        "End selects the last row"
+    );
     assert_eq!(
         model.app.libs[0]
             .feed_home_video
@@ -651,7 +678,49 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
             .unwrap()
             .video_cursor,
         total_rows - 1,
-        "shell resting state follows the resolved control selection"
+        "the shell resting cursor follows the control selection"
+    );
+
+    // One wheel notch through the mounted panel: the control resolves its
+    // own new index and the typed `BrowserCursorIndex` echo persists it as
+    // the shell's resting `video_cursor` — the control is authoritative and
+    // the shell follows, never the reverse.
+    let wheel = model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: list_area.x + 1,
+            row: list_area.y + 1,
+            modifiers: KeyModifiers::NONE,
+        }))
+        .expect("the wheel emits the typed cursor echo");
+    assert!(
+        matches!(
+            wheel,
+            Msg::Shell(ShellRequest::BrowserCursorIndex { index }) if index == total_rows - 2
+        ),
+        "the wheel echo carries the control's resolved index: {wheel:?}"
+    );
+    model.handle_terminal_message(wheel, &mut music_resize, &mut tv_resize);
+    // The wheel move re-resolves the viewport and invalidates the retained
+    // frame; production draws between events, so refresh the painted claim
+    // here too (design.md D6).
+    draw(&mut model, &mut term);
+    assert_eq!(
+        owner_cursor(&mut model),
+        total_rows - 2,
+        "the wheel moves the control one row up"
+    );
+    assert_eq!(
+        model.app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .unwrap()
+            .video_cursor,
+        total_rows - 2,
+        "the shell resting state follows the resolved control selection"
     );
 }
 

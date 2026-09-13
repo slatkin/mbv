@@ -62,7 +62,7 @@ pub(in crate::app) fn wide_hero_fits(content_area: Rect) -> bool {
         && content_area.height.saturating_sub(1) >= WIDE_HERO_MIN_AREA_HEIGHT
 }
 
-pub(in crate::app) fn wide_hero_presentation(
+pub(in crate::app::render) fn wide_hero_presentation(
     content_area: Rect,
     override_width: Option<u16>,
 ) -> Option<WideHeroPanes> {
@@ -260,30 +260,10 @@ pub(in crate::app) fn wide_hero_browser_pane(
     }
 }
 
-/// The Wide hero left pane's focus resolution (design.md D-B). A closed
-/// enum rather than a `bool`: the defect class this primitive exists to
-/// prevent is exactly the read-only-versus-workspace confusion (e.g. passing
-/// a bare `focused` when the correct value is `focused &&
-/// interaction.episode_focused`). `ReadOnly` and `Workspace(..)`
-/// are two visibly different call shapes, so a reviewer can check the
-/// variant rather than the expression.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum LeftPaneFocus {
-    /// The pane is never focusable (Movies/home-videos/Emby-podcasts/
-    /// feed-group browser, Home, Feeds): always the HeroPane surface's
-    /// resting fill.
-    ReadOnly,
-    /// The pane belongs to a focusable workspace (TV, Music, ABS Books, ABS
-    /// Podcasts); `true` when that workspace currently holds focus.
-    Workspace(bool),
-}
-
-/// Paints the Wide hero right pane: fills the [`wide_hero_presentation`]
-/// right pane with the surface [`LeftPaneFocus`] resolves to, and returns the
-/// shared content inset (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill,
-/// extent, inset, and focus resolution (design.md D-A) -- callers must not
-/// resize, re-derive, or conditionally skip the fill, and must not apply a
-/// destination-specific inset.
+/// Paints the Wide hero right pane and returns the shared content inset
+/// (`PANE_PAD_X`, `PANE_PAD_Y`). One owner for fill, extent, inset, and focus
+/// resolution -- callers must not resize, re-derive, or conditionally skip the
+/// fill, and must not apply a destination-specific inset.
 ///
 /// Takes `content_area` rather than a pane rect so a caller has nothing to
 /// hand in but the rect the arrangement already consumes -- it cannot supply
@@ -292,18 +272,12 @@ pub(in crate::app) enum LeftPaneFocus {
 pub(in crate::app) fn wide_hero_hero_pane(
     f: &mut Frame,
     content_area: Rect,
-    focus: LeftPaneFocus,
+    focused: bool,
     override_width: Option<u16>,
 ) -> Option<Rect> {
     let WideHeroPanes {
         hero: hero_panel, ..
     } = wide_hero_presentation(content_area, override_width)?;
-    // D3(d): `ReadOnly` and `Workspace(held)` describe the same HeroPane
-    // surface; the match collapses to the one bool the fill depends on.
-    let focused = match focus {
-        LeftPaneFocus::ReadOnly => false,
-        LeftPaneFocus::Workspace(held) => held,
-    };
     let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
@@ -337,8 +311,7 @@ mod wide_hero_hero_pane_tests {
         } = wide_hero_presentation(area, None).expect("wide fits");
         terminal
             .draw(|f| {
-                let returned =
-                    wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly, None).expect("wide fits");
+                let returned = wide_hero_hero_pane(f, area, false, None).expect("wide fits");
                 assert_eq!(returned, padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y));
             })
             .unwrap();
@@ -357,8 +330,7 @@ mod wide_hero_hero_pane_tests {
         let expected = padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y);
         terminal
             .draw(|f| {
-                let returned = wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(true), None)
-                    .expect("wide fits");
+                let returned = wide_hero_hero_pane(f, area, true, None).expect("wide fits");
                 assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
                 assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
                 assert_eq!(returned, expected);
@@ -370,8 +342,7 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
             .draw(|f| {
-                wide_hero_hero_pane(f, area, LeftPaneFocus::Workspace(false), None)
-                    .expect("wide fits");
+                wide_hero_hero_pane(f, area, false, None).expect("wide fits");
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
@@ -389,10 +360,7 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
             .draw(|f| {
-                assert_eq!(
-                    wide_hero_hero_pane(f, area, LeftPaneFocus::ReadOnly, None),
-                    None
-                );
+                assert_eq!(wide_hero_hero_pane(f, area, false, None), None);
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
@@ -433,116 +401,29 @@ pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, 
     );
 }
 
-/// Semantic surface variants for the shared Wide hero content-box framing.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app::render) enum WideHeroContentBoxSurface {
-    Backdrop,
-    FocusedTrackList,
-}
-
 /// Paints the Wide hero arrangement's main content box: the `MainContentBox`
-/// surface (the table's soft content body) inset within the Wide hero left
-/// pane, present on every Wide hero surface with a kind-dependent payload (the
-/// episode listing on TV, the track listing on Music, item description and
-/// metadata elsewhere) and one shared padding value (design.md D9, matching
-/// the pane inset from D6). Returns both rects so callers can use `panel` for
-/// full-bleed row backgrounds and `content` for text layout.
+/// surface's resting fill inset within the Wide hero left pane, present on every
+/// Wide hero surface with a kind-dependent payload (the episode listing on TV,
+/// the track listing on Music, item description and metadata elsewhere) and one
+/// shared padding value (design.md D9, matching the pane inset from D6).
+/// Returns both rects so callers can use `panel` for full-bleed row backgrounds
+/// and `content` for text layout.
 ///
-/// Shared by Music's track panel and Home's overview block.
-pub(in crate::app::render) fn wide_hero_hero_content_box(
-    f: &mut Frame,
-    area: Rect,
-) -> (Rect, Rect) {
-    wide_hero_hero_content_box_with_surface(f, area, WideHeroContentBoxSurface::Backdrop)
-}
-
-pub(in crate::app::render) fn wide_hero_hero_content_box_with_surface(
-    f: &mut Frame,
-    area: Rect,
-    surface: WideHeroContentBoxSurface,
-) -> (Rect, Rect) {
-    let panel = Rect {
-        x: area.x.saturating_add(PANE_PAD_X),
-        width: area.width.saturating_sub(PANE_PAD_X * 2),
-        ..area
-    };
-    // Each declared variant is the one `MainContentBox` bool it describes:
-    // `FocusedTrackList` is the soft focused half, `Backdrop` the resting one.
-    let focused = match surface {
-        WideHeroContentBoxSurface::Backdrop => false,
-        WideHeroContentBoxSurface::FocusedTrackList => true,
-    };
-    let background = palette::surface_colors(palette::Surface::MainContentBox, focused).fill;
-    f.render_widget(
-        Block::default().style(Style::default().bg(background)),
-        panel,
-    );
-    let content = Rect {
-        x: panel.x.saturating_add(PANE_PAD_X),
-        y: panel.y.saturating_add(PANE_PAD_Y),
-        width: panel.width.saturating_sub(PANE_PAD_X * 2),
-        height: panel.height.saturating_sub(PANE_PAD_Y * 2),
-    };
-    (panel, content)
-}
-
-/// Named Rect-only extension points within a Wide hero content rect
-/// (design.md D-D): an optional artwork region and the overview text area
-/// filling the remainder. Placement only -- no painting, no Service/image
-/// effects, no list ownership.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct WideHeroSlots {
-    pub artwork: Option<Rect>,
-    pub overview: Rect,
-}
-
-/// Slices `content` top-to-bottom into `WideHeroSlots`: an `artwork_height`
-/// row artwork slot (omitted when `0`), and the overview slot filling the
-/// remainder. Callers place an embedded media list afterward via
-/// [`place_media_list_below`].
-pub(in crate::app::render) fn wide_hero_slots(
-    content: Rect,
-    artwork_height: u16,
-    images_enabled: bool,
-) -> WideHeroSlots {
-    let artwork_height = artwork_height.min(content.height);
-    let artwork = hero_artwork_slot(
-        Rect {
-            height: artwork_height,
-            ..content
-        },
-        images_enabled,
-    );
-    // One blank row between the artwork and the title below it, matching the
-    // wide Wide hero card (`prepare_wide_emby_hero_card`, which starts its
-    // metadata at `img_area.bottom() + 1`) and every other tab's hero.
-    let reserved_artwork_height = artwork.map_or(0, |area| area.height + 1);
-    let reserved_artwork_height = reserved_artwork_height.min(content.height);
-    let overview = Rect {
-        y: content.y.saturating_add(reserved_artwork_height),
-        height: content.height.saturating_sub(reserved_artwork_height),
-        ..content
-    };
-    WideHeroSlots { artwork, overview }
-}
-
-/// Applies the global image policy to an artwork region. Images-off removes
-/// the region entirely so its sibling can use the full content width.
-pub(in crate::app::render) fn hero_artwork_slot(area: Rect, images_enabled: bool) -> Option<Rect> {
-    (images_enabled && area.width > 0 && area.height > 0).then_some(area)
-}
-
+/// The focused arm is gone with the deleted `WideHeroContentBoxSurface` (task
+/// 5.6, design D6): the Library panel derives the Workspace box's surface from
+/// its focus itself, and Music paints the same two fills directly until its
+/// conversion (task 9.1).
 /// Places an embedded media-list box `gap` rows below `overview_bottom` (the
 /// caller's already-painted overview content's real bottom row -- not a
 /// pre-reserved slot height), sized to `height` rows and clamped to fit
 /// within `content`'s bottom edge. Returns `None` when there is no room
-/// (same "omitted when no room" convention as [`wide_hero_slots`]).
+/// (same "omitted when no room" convention as the other slot arrangements).
 ///
 /// Rect-only: no painting, no text measurement -- callers supply the
 /// already-measured overview bottom and desired height. Reusable by any
 /// Wide hero surface embedding a media list below its overview (TV's
-/// episode list; a future Music tracks / Audiobookshelf list).
-pub(in crate::app::render) fn place_media_list_below(
+/// episode list; the Library panel's Workspace, task 5.2).
+pub(in crate::app) fn place_media_list_below(
     content: Rect,
     overview_bottom: u16,
     gap: u16,
@@ -573,32 +454,6 @@ mod wide_hero_slots_tests {
             width: 30,
             height: 20,
         }
-    }
-
-    #[test]
-    fn splits_artwork_and_overview_slots() {
-        let slots = wide_hero_slots(content(), 5, true);
-        let artwork = slots.artwork.expect("artwork slot present");
-        assert_eq!(artwork.y, content().y);
-        assert_eq!(artwork.height, 5);
-        assert_eq!(slots.overview.y, artwork.bottom() + 1);
-        assert_eq!(slots.overview.bottom(), content().bottom());
-    }
-
-    #[test]
-    fn omits_absent_artwork_slot() {
-        let slots = wide_hero_slots(content(), 0, true);
-        assert!(slots.artwork.is_none());
-        assert_eq!(slots.overview, content());
-    }
-
-    #[test]
-    fn images_off_collapses_artwork_and_preserves_full_content_width() {
-        let area = content();
-        let slots = wide_hero_slots(area, 5, false);
-        assert!(slots.artwork.is_none());
-        assert_eq!(slots.overview, area);
-        assert_eq!(hero_artwork_slot(area, false), None);
     }
 
     #[test]
@@ -637,8 +492,9 @@ mod wide_hero_slots_tests {
 /// "Consequence": text wrapping moves into `Hero`, screens hand over
 /// unwrapped strings). Style is screen-chosen (e.g. focus-derived bold),
 /// matching how `HeroContent::meta_color` lets an inline browser pick its
-/// own colour.
-pub(in crate::app::render) struct WrappedHeroLine<'a> {
+/// own colour. `pub(in crate::app)`: the Library panel's pre-5.5 hero
+/// placeholder paints through it too.
+pub(in crate::app) struct WrappedHeroLine<'a> {
     pub text: &'a str,
     pub style: Style,
 }
@@ -646,7 +502,7 @@ pub(in crate::app::render) struct WrappedHeroLine<'a> {
 /// Paints `lines` wrapped to `area`'s width, top to bottom, stopping at
 /// `area`'s bottom edge; empty line text is skipped. Returns the first
 /// unpainted row.
-pub(in crate::app::render) fn paint_wide_hero_text(
+pub(in crate::app) fn paint_wide_hero_text(
     f: &mut Frame,
     area: Rect,
     lines: &[WrappedHeroLine],

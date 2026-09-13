@@ -53,25 +53,8 @@ fn expect_fixed(
     );
 }
 
-/// `unify-surface-colour-neutral` 4.1: the wide hero split gap's painter pins
-/// the `WideSplitGutter` fill across the gap rect while the boundary is armed.
-#[test]
-fn wide_split_gutter_follows_the_table() {
-    use crate::app::components::WideHeroBoundaryComponent;
-    use tuirealm::component::Component;
-
-    let gap = Rect::new(60, 4, 2, 8);
-    let mut boundary = WideHeroBoundaryComponent::new();
-    boundary.sync(gap, 0, 200, 80, true);
-    let buffer = rendered(|f| Component::view(&mut boundary, f, gap));
-    expect_fixed(
-        &buffer,
-        "wide split gutter",
-        palette::Surface::WideSplitGutter,
-        gap,
-    );
-}
-
+// `unify-surface-colour-neutral` 4.1: the wide hero split gap's painter pins
+// the `WideSplitGutter` fill across the gap rect while the boundary is armed.
 /// `unify-surface-colour-neutral` 4.1: the context menu's selected row paints
 /// `ACCENT_ACTIVE` through the production context-menu painter.
 #[test]
@@ -183,7 +166,7 @@ fn playback_status_pill_follows_the_table() {
     }
     let row = Rect::new(0, 0, 60, 1);
     let mut term = Terminal::new(TestBackend::new(60, 1)).unwrap();
-    let mut layout = crate::app::layout::LayoutPlayback::default();
+    let mut layout = crate::app::render::PlaybackStripAreas::default();
     let mut marquee = String::new();
     let marquee_at = std::time::Instant::now();
     term.draw(|f| {

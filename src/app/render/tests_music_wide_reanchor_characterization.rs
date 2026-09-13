@@ -15,7 +15,7 @@ use super::test_helpers::{
     mounted_music_scroll,
 };
 use super::*;
-use crate::app::components::{ComponentId, MusicWorkspaceComponent};
+use crate::app::components::ComponentId;
 use crate::app::shell::Model;
 use crate::app::tests::make_item;
 use crate::app::PanelFocus;
@@ -36,13 +36,8 @@ fn music_app_many_albums() -> App {
     app
 }
 
-fn album_cursor(model: &Model, id: &ComponentId) -> usize {
-    model
-        .application
-        .get_component(id)
-        .and_then(|c| c.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(MusicWorkspaceComponent::album_cursor)
-        .expect("music workspace album cursor")
+fn album_cursor(model: &Model, _id: &ComponentId) -> usize {
+    model.test_music_owner().album_cursor()
 }
 
 /// Shell-driven re-anchor: move the resting cursor/scroll and fire the
@@ -57,16 +52,7 @@ fn re_anchor_to(model: &mut Model, cursor: usize, scroll: usize) {
 }
 
 fn album_targets(model: &Model, want: usize) -> Vec<usize> {
-    let id = model
-        .music_workspace_id
-        .as_ref()
-        .expect("music workspace mounted");
-    model
-        .application
-        .get_component(id)
-        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(|music| music.album_target_rows(want))
-        .unwrap_or_default()
+    model.test_music_owner().album_target_rows(want)
 }
 
 #[test]
@@ -76,13 +62,12 @@ fn grouped_music_wide_reanchor_characterization() {
     // ---- Wide: shell re-anchor to a mid-list album --------------------------
     let mut model = mounted_model_at(music_app_many_albums(), 160, 40);
     let _ = draw_mounted_frame(&mut model, 160, 40);
-    let id = model
-        .music_workspace_id
-        .clone()
-        .expect("grouped Music workspace mounted");
+    let id = ComponentId::Library;
     assert!(
-        model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0
+        super::test_helpers::mounted_music_wide_geometry(&model)
+            .hero
+            .width
+            > 0
     );
     assert_eq!(
         album_cursor(&model, &id),
@@ -110,14 +95,12 @@ fn grouped_music_wide_reanchor_characterization() {
         "wide rail publishes one Album(6) target below the artist header + Album(0..=5)"
     );
     {
-        let layout = mounted_music_layout(&model);
-        let rect = layout
-            .selected_item_rect
-            .expect("wide selected-row rect published");
+        let geometry = super::test_helpers::mounted_music_wide_geometry(&model);
+        let rect = geometry.selected.expect("wide selected-row rect published");
         assert_eq!(
-            rect.y - layout.wide_music_browser_area.y,
+            rect.y - geometry.list_area.y,
             selected_rows[0] as u16,
-            "selected-row screen offset agrees between the rect and the row-target index"
+            "selected-row screen offset agrees with the panel list geometry"
         );
     }
 
@@ -137,10 +120,6 @@ fn grouped_music_wide_reanchor_characterization() {
     // album_cursor across the round trip and the wide scroll recomputes to the
     // identical bottom-anchored offset.
     let _ = draw_mounted_frame(&mut model, 60, 30);
-    assert!(
-        !(model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0)
-    );
     assert_eq!(
         album_cursor(&model, &id),
         last,
@@ -148,8 +127,10 @@ fn grouped_music_wide_reanchor_characterization() {
     );
     let _ = draw_mounted_frame(&mut model, 160, 40);
     assert!(
-        model.app.layout.main.wide_music_right_area.width > 0
-            && model.app.layout.main.wide_music_right_area.height > 0
+        super::test_helpers::mounted_music_wide_geometry(&model)
+            .hero
+            .width
+            > 0
     );
     assert_eq!(album_cursor(&model, &id), last);
     assert_eq!(
@@ -164,14 +145,7 @@ fn grouped_music_wide_reanchor_characterization() {
     let _ = draw_mounted_frame(&mut narrow_model, 60, 30);
     re_anchor_to(&mut narrow_model, 6, 0);
     let narrow = draw_mounted_frame(&mut narrow_model, 60, 30);
-    let n_id = narrow_model
-        .music_workspace_id
-        .clone()
-        .expect("narrow Music workspace mounted");
-    assert!(
-        !(narrow_model.app.layout.main.wide_music_right_area.width > 0
-            && narrow_model.app.layout.main.wide_music_right_area.height > 0)
-    );
+    let n_id = ComponentId::Library;
     assert_eq!(album_cursor(&narrow_model, &n_id), 6);
     assert!(
         narrow.contains("Album 06"),

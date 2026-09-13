@@ -1,8 +1,8 @@
-use super::super::components::audiobookshelf_book::AudiobookshelfBookComponent;
+use super::super::components::library_panel::LibraryPanel;
 use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
-    BrowserComponent, ComponentId, ContextMenuComponent, HomeComponent, LibraryRoutesComponent,
-    MultiselectComponent, OverlayId, PopupId, SelectionModalComponent, ShellRequest,
+    ComponentId, ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, OverlayId,
+    PopupId, QueueComponent, SelectionModalComponent, ShellRequest,
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{
@@ -19,12 +19,13 @@ impl Model {
         ComponentId::Overlay(OverlayId::ContextMenu)
     }
 
-    /// The mounted `HomeComponent`'s painted panel rect (list area) and
-    /// selected-row rect, when Home is the active destination with the Library
-    /// panel focused. Returns `None` otherwise, so the caller falls back to the
-    /// legacy `AppLayout` geometry. The component gains this geometry from its
-    /// own `view()` paint (`render_home_content`), so the menu placement tracks
-    /// the component's real paint rather than any copied-back legacy geometry.
+    /// The Library panel's painted panel rect (list slot) and selected-row
+    /// rect, when the Home owner is the migrated active destination with the
+    /// Library panel focused (task 5.11). Returns `None` otherwise, so the
+    /// caller falls back to the legacy `AppLayout` geometry. The panel gains
+    /// this geometry from its own `view()` paint, so the menu placement
+    /// tracks the panel's real paint rather than any copied-back legacy
+    /// geometry.
     fn home_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
         if !matches!(self.app.tab, TabSelection::Home)
             || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
@@ -32,50 +33,32 @@ impl Model {
             return None;
         }
         self.application
-            .get_component(&ComponentId::Home)
-            .and_then(|c| c.as_any().downcast_ref::<HomeComponent>())
-            .map(HomeComponent::menu_placement_geometry)
+            .get_component(&ComponentId::Library)
+            .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(LibraryPanel::menu_geometry)
     }
 
-    /// The active Emby Browser's painted panel and selected-row anchor. The
-    /// Browser delegates this to its persistent media-list control, so context
-    /// menus follow the same flow geometry as the painted rows.
-    fn browser_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
-        if !matches!(self.app.tab, TabSelection::EmbyLibrary(_)) {
-            return None;
-        }
-        let id = self.emby_browser_id.as_ref()?;
-        if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
-            return None;
-        }
-        self.application
-            .get_component(id)
-            .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
-            .and_then(BrowserComponent::menu_placement_geometry)
-    }
-
-    /// Like `home_menu_geometry`, but for the mounted `AudiobookshelfBookComponent`
-    /// (task 5.3d.13, render ownership). Returns the book surface's painted
-    /// selected-item rect so the context menu anchors to what the component
-    /// actually painted rather than the legacy `AppLayout` copy.
+    /// Context-menu geometry for a migrated Audiobookshelf Books owner.
     fn book_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
-        let id = self.abs_book_id.clone()?;
-        if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
+        if !matches!(self.app.tab, TabSelection::AudiobookshelfLibrary(_))
+            || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
+        {
             return None;
         }
         self.application
-            .get_component(&id)
-            .and_then(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<AudiobookshelfBookComponent>()
-            })
-            .map(|component| {
-                (
-                    self.app.layout.main.left_area,
-                    component.geometry().selected_item_rect,
-                )
-            })
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(LibraryPanel::menu_geometry)
+    }
+
+    /// Like `home_menu_geometry`, but for the mounted `QueueComponent` (task
+    /// 3.1, design D11): the queue panel answers the context-menu keyboard
+    /// anchor from its own retained geometry, not a shell mirror.
+    fn queue_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
+        self.application
+            .get_component(&ComponentId::Queue)
+            .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+            .map(|queue| (queue.content_area(), queue.selected_row_rect()))
     }
 
     /// Compute the context menu's painted rect from the current anchor/entries
@@ -89,20 +72,22 @@ impl Model {
         // active control (or the existing Home/ABS book component seam). Other
         // destinations and Queue focus keep using `AppLayout` as before.
         let home = self.home_menu_geometry();
-        let browser = self.browser_menu_geometry();
         let (panel_rect, anchor_rect): (Rect, Option<Rect>) = match &anchor {
             ContextMenuAnchor::SelectedItem(focus) => {
                 let (panel, selected) = match focus {
-                    PanelFocus::Library => match home.or(browser) {
+                    PanelFocus::Library => match home {
                         Some((panel, selected)) => (panel, selected),
                         None => match self.book_menu_geometry() {
                             Some((panel, selected)) => (panel, selected),
-                            None => (layout.main.left_area, layout.main.selected_item_rect),
+                            // No owning component publishes a selected-row
+                            // anchor for this destination yet; the panel
+                            // still places the menu, just without a row
+                            // anchor (matches the legacy `AppLayout` mirror's
+                            // behaviour, which never populated this field).
+                            None => (layout.left_area, None),
                         },
                     },
-                    PanelFocus::Queue => {
-                        (layout.main.queue_area, layout.main.queue_selected_item_rect)
-                    }
+                    PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),
                 };
                 (panel, selected)
             }
@@ -116,18 +101,20 @@ impl Model {
                             self.app.wide_tv_library_area(lib_idx).is_some()
                         }) =>
                     {
-                        let pos = match &anchor {
-                            ContextMenuAnchor::Pointer { x, y } => (*x, *y).into(),
-                            ContextMenuAnchor::SelectedItem(_) => unreachable!(),
-                        };
-                        if layout.main.tv_wide_left_area.contains(pos) {
-                            layout.main.tv_wide_left_area
-                        } else {
-                            layout.main.tv_wide_right_area
-                        }
+                        // Task 8.2 deleted the `tv_wide_*` pane rects; the
+                        // panel's paint-free library content area is the
+                        // placement region for the whole Wide TV workspace.
+                        self.app
+                            .tab
+                            .emby_library_index()
+                            .and_then(|lib_idx| self.app.wide_tv_library_area(lib_idx))
+                            .unwrap_or_default()
                     }
-                    PanelFocus::Library => layout.main.left_area,
-                    PanelFocus::Queue => layout.main.queue_area,
+                    PanelFocus::Library => layout.left_area,
+                    PanelFocus::Queue => self
+                        .queue_menu_geometry()
+                        .map(|(panel, _)| panel)
+                        .unwrap_or_default(),
                 };
                 (panel, None)
             }

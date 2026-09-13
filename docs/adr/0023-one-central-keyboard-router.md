@@ -8,6 +8,15 @@ mbv has exactly one keyboard routing authority. It lives in the `UiRoot`
 Interactive Component. No other component, subscription, or shell method
 resolves a chord that is not its own local interaction.
 
+## Composition boundary
+
+ADR 0022 is the primary composition decision: the root composes Panels and
+there is no legacy base frame. Destinations and Library content owners supply
+only typed slot content; Panels own placement and painting. The Keyboard Router
+therefore routes the mounted Panel hierarchy rather than destination painters.
+This ADR records keyboard precedence within that composition and does not grant
+a caller a presentation arm.
+
 ## Problem
 
 ADR 0002 made keyboard precedence explicit as an ordered, first-match

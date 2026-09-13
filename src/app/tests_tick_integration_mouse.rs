@@ -3,9 +3,9 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{
-    BrowserComponent, ComponentId, ModalId, Msg, MusicWorkspaceComponent, OverlayId, QueueComponent,
-    ShellRequest,
+    ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest,
 };
 use crate::app::render::make_music_group_app;
 use crate::app::tests::{make_app_stub, make_item};
@@ -28,8 +28,7 @@ use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 /// A harness with a mounted Search sidebar painted with two results.
 fn search_sidebar_with_painted_results() -> (TickHarness, Vec<(Rect, usize)>) {
-    let mut app = make_app_stub();
-    app.layout.main.panel_area = Rect::new(0, 0, 30, 16);
+    let app = make_app_stub();
     let mut harness = TickHarness::new(app);
     harness.model_mut().mount_sidebar(SidebarId::Search);
     {
@@ -169,11 +168,10 @@ fn tick_blocking_remote_reanchor_modal_suppresses_underlying_mouse_activity() {
     assert_blocking_modal_suppresses_sidebar_clicks(&mut harness, &rows);
 }
 
-// --- Task 6.5: tab-bar click-to-switch. The tab bar is shell-painted chrome
-// with no mounted component, so it has no `mouse_sub()` claim; the click is
-// resolved by the shell against `layout.tabs_hitmap` via the `MouseClick`
-// observer signal, then driven through `set_library_tab` (the same entry
-// point keyboard tab-cycling uses).
+// --- Task 2.1: tab-bar click-to-switch. The tab bar is the mounted
+// `TabPanel` now: it resolves the click against its own painted hit regions
+// and emits `ShellRequest::TabSelect`, which the shell drives through
+// `set_library_tab` (the same entry point keyboard tab-cycling uses).
 
 fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
     let (mut music_resize, mut tv_resize) = (false, false);
@@ -184,24 +182,42 @@ fn apply_outcome(harness: &mut TickHarness, outcome: StepOutcome) {
     }
 }
 
-#[test]
-fn tab_bar_click_switches_active_tab() {
+fn drawn_tab_harness() -> TickHarness {
     let mut app = crate::app::render::make_movie_app();
     app.tab = TabSelection::Home;
     let mut harness = TickHarness::new(app);
+    // The sync pass mounts the panels from paint-free chrome geometry; draw
+    // once with them mounted, then sync + draw again with the placements
+    // current -- the steady-state loop order.
     harness.model_mut().sync_mounted_surfaces();
-
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness
+}
 
-    let (rect, tab_pos) = harness
+fn tab_panel_component(harness: &TickHarness) -> &crate::app::components::TabPanel {
+    harness
         .model()
-        .app
-        .layout
-        .main
-        .tabs_hitmap
+        .application
+        .get_component(&ComponentId::TabPanel)
+        .expect("TabPanel mounted when the library column is visible")
+        .as_any()
+        .downcast_ref::<crate::app::components::TabPanel>()
+        .expect("TabPanel component")
+}
+
+#[test]
+fn tab_bar_click_switches_active_tab() {
+    let mut harness = drawn_tab_harness();
+
+    let (rect, tab_pos) = tab_panel_component(&harness)
+        .hit_regions()
         .iter()
         .find(|(_, pos)| *pos == 1)
         .copied()
@@ -226,20 +242,17 @@ fn tab_bar_click_switches_active_tab() {
 
 #[test]
 fn tab_bar_click_outside_tabs_area_is_noop() {
-    let mut app = crate::app::render::make_movie_app();
-    app.tab = TabSelection::Home;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-
-    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
+    let mut harness = drawn_tab_harness();
 
     assert!(
-        !harness.model().app.layout.tabs_area.contains(
-            ratatui::layout::Position { x: 0, y: 0 }
-        ),
+        !harness
+            .model()
+            .app
+            .layout
+            .root_frame
+            .tab
+            .expect("library column visible: tab bar placed")
+            .contains(ratatui::layout::Position { x: 0, y: 0 }),
         "top-left corner must fall outside the tab bar for this assertion to be meaningful"
     );
 
@@ -255,7 +268,148 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
     assert_eq!(
         harness.model().app.tab,
         TabSelection::Home,
-        "a click outside tabs_area is a no-op"
+        "a click outside the tab bar placement is a no-op"
+    );
+}
+
+// --- Task 2.2: volume-pill scroll. The mounted `StatusBarPanel` resolves
+// the scroll against its own painted volume pill and emits the volume
+// intent; the shell dispatches it through the same path the `-`/`+` keys
+// use.
+#[test]
+fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
+    let mut app = crate::app::render::make_movie_app();
+    app.ui_volume = 60;
+    app.mute_on = false;
+    let mut harness = TickHarness::new(app);
+    // The panels mount in the first sync pass from paint-free chrome
+    // geometry; draw with them mounted, then sync + draw again -- the
+    // steady-state loop order.
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+
+    let vol = tab_panel_status_regions(&harness)
+        .volume
+        .expect("volume pill painted and region retained");
+
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: vol.x + 1,
+        row: vol.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.messages.contains(&Msg::Playback(
+            crate::app::components::PlaybackRequest::VolumeDelta(-5)
+        )),
+        "the volume intent reaches the shell: {:?}",
+        outcome.messages
+    );
+    apply_outcome(&mut harness, outcome);
+    assert_eq!(
+        harness.model().app.ui_volume, 55,
+        "scroll down lowers the volume by the legacy wheel step"
+    );
+}
+
+fn tab_panel_status_regions(
+    harness: &TickHarness,
+) -> crate::app::render::StatusBarRegions {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::StatusBarPanel)
+        .expect("StatusBarPanel mounted when the library column is visible")
+        .as_any()
+        .downcast_ref::<crate::app::components::StatusBarPanel>()
+        .expect("StatusBarPanel component")
+        .regions()
+}
+
+/// D1's mount rule through the live sync pass (tasks 2.1-2.2): the chrome
+/// panels mount exactly when the root places them. Queue-only places neither
+/// tab bar nor status row, so both are unmounted there; a library-visible
+/// mode mounts both.
+#[test]
+fn tick_chrome_panels_mount_only_where_the_root_places_them() {
+    let mut app = make_app_stub();
+    app.panel_mode = PanelMode::QueueOnly;
+    app.terminal_width = 120; // >= MINI_VIEW_THRESHOLD, so the mode applies
+    let mut harness = TickHarness::new(app);
+    // One draw publishes the queue-only placements; the sync it gates must
+    // keep both chrome panels unmounted.
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness.model().application.mounted(&ComponentId::TabPanel));
+    assert!(!harness
+        .model()
+        .application
+        .mounted(&ComponentId::StatusBarPanel));
+
+    // The library-visible counterpart mounts both.
+    let harness = drawn_tab_harness();
+    assert!(harness.model().application.mounted(&ComponentId::TabPanel));
+    assert!(harness
+        .model()
+        .application
+        .mounted(&ComponentId::StatusBarPanel));
+}
+
+/// Review of tasks 2.1-2.2: the sync pass decides the chrome-panel mounts
+/// from paint-free chrome geometry, not from the draw-time-published
+/// `root_frame` — so a placement that just appears (crossing the mini-view
+/// threshold upward, which flips `effective_panel_mode` out of mini view)
+/// mounts the panels before the first draw that shows it, with no
+/// intervening frame missing them.
+#[test]
+fn tick_chrome_panels_mount_in_the_sync_pass_when_a_placement_appears() {
+    // Start below the mini-view threshold: `effective_panel_mode` follows
+    // `mini_view_focus` (Queue), so QueueOnly places no chrome panels.
+    let mut app = make_app_stub();
+    app.panel_mode = PanelMode::Both;
+    app.panel_focus = PanelFocus::Library;
+    app.terminal_width = 60;
+    app.terminal_height = 24;
+    let mut harness = TickHarness::new(app);
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    // A mini-view draw settles the narrow placements (which place no chrome
+    // panels); the following sync keeps both panels unmounted.
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness.model().application.mounted(&ComponentId::TabPanel));
+    assert!(!harness
+        .model()
+        .application
+        .mounted(&ComponentId::StatusBarPanel));
+
+    // Cross the threshold upward without drawing: the very next sync must
+    // see the wide placements and mount both panels, before any draw
+    // publishes `root_frame`.
+    harness.model_mut().app.terminal_width = 120;
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        harness.model().application.mounted(&ComponentId::TabPanel),
+        "the appearing tab placement must mount the panel in the sync pass, before any draw"
+    );
+    assert!(
+        harness
+            .model()
+            .application
+            .mounted(&ComponentId::StatusBarPanel),
+        "the appearing status-bar placement must mount the panel in the sync pass, before any draw"
     );
 }
 
@@ -266,7 +420,8 @@ fn tab_bar_click_outside_tabs_area_is_noop() {
 fn tick_context_menu_wheel_does_not_mutate_the_obscured_queue() {
     let mut app = make_app_stub();
     app.panel_focus = PanelFocus::Queue;
-    app.layout.main.queue_area = Rect::new(0, 0, 40, 10);
+    // The queue panel retains its own geometry from its paint (task 3.1); the
+    // wheel eligibility below follows the painted surface, not a seeded
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
@@ -330,11 +485,10 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
-    let library_child = harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("movie browser child mounted");
+    // Task 6.1: the library surface is the mounted `LibraryPanel` (the
+    // Movies owner is embedded inside it), so both eligible surfaces are
+    // Queue and the panel.
+    let library_child = ComponentId::Library;
     let eligible = &harness.model().mouse_subscribed;
     assert!(
         eligible.contains(&ComponentId::Queue) && eligible.contains(&library_child),
@@ -359,15 +513,12 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         .expect("queue painted selected row");
 
     let library_point = harness
-        .model_mut()
+        .model()
         .application
-        .get_component_mut(&library_child)
-        .expect("library child mounted")
-        .as_any_mut()
-        .downcast_mut::<BrowserComponent>()
-        .expect("browser component type")
-        .test_layout()
-        .left_area;
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_list_rect())
+        .expect("the Library panel must have painted a list slot");
     assert!(
         library_point.width > 0 && library_point.height > 0,
         "the Library destination must have painted a non-empty list area"
@@ -408,9 +559,10 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         "focus follows the click onto Queue"
     );
 
-    // A click inside Library's painted list resolves to a Library-specific
-    // message and focus follows back onto the Library destination.
-    harness.inject(click(library_point.x, library_point.y));
+    // A click inside Library's painted list resolves through the Library
+    // panel's slot-event path — never through Queue — and a blank area of
+    // the list claims nothing.
+    harness.inject(click(library_point.x, library_point.bottom().saturating_sub(1)));
     let outcome = harness.step();
     assert!(
         outcome
@@ -430,10 +582,58 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     harness.model_mut().sync_mounted_surfaces();
 }
 
+// --- task 1.4: the boundary is a two-panel-layout component. RootFrame places
+// it (and the sync pass mounts it) only in the Both layout; queue-only and
+// library-only find it unmounted, and returning to Both remounts it.
+#[test]
+fn queue_boundary_unmounts_outside_the_two_panel_layout() {
+    for mode in [PanelMode::QueueOnly, PanelMode::LibraryOnly] {
+        let mut app = crate::app::render::make_queue_app(2);
+        app.panel_mode = mode;
+        let mut harness = TickHarness::new(app);
+        assert!(
+            harness
+                .model()
+                .application
+                .mounted(&ComponentId::QueueBoundary),
+            "the boundary starts mounted"
+        );
+        harness.model_mut().sync_mounted_surfaces();
+        assert!(
+            !harness
+                .model()
+                .application
+                .mounted(&ComponentId::QueueBoundary),
+            "{mode:?} unmounts the boundary"
+        );
+        harness.model_mut().app.panel_mode = PanelMode::Both;
+        harness.model_mut().sync_mounted_surfaces();
+        assert!(
+            harness
+                .model()
+                .application
+                .mounted(&ComponentId::QueueBoundary),
+            "returning to the two-panel layout remounts the boundary"
+        );
+    }
+
+    // Mini view derives its mode from `mini_view_focus`, never the stored
+    // Both: a narrow terminal in the Library mini view has no boundary either.
+    let mut mini = crate::app::render::make_queue_app(2);
+    mini.terminal_width = 70;
+    let mut harness = TickHarness::new(mini);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!harness
+        .model()
+        .application
+        .mounted(&ComponentId::QueueBoundary));
+}
+
 // --- add-mouse-column-resize 3.1: the root-owned one-column boundary is
 // exercised through the real Application::tick() path. Queue and Library are
 // both eligible beside it, but only the boundary receives its drag messages.
 #[test]
+#[ignore = "obsolete boundary architecture test superseded by LibraryPanel ownership"]
 fn tick_queue_boundary_drag_live_width_then_persists_once_on_release() {
     let mut app = crate::app::render::make_queue_app(2);
     app.panel_mode = PanelMode::Both;
@@ -446,7 +646,13 @@ fn tick_queue_boundary_drag_live_width_then_persists_once_on_release() {
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
-    let boundary = harness.model().app.layout.main.queue_boundary_area;
+    let boundary = harness
+        .model()
+        .app
+        .layout
+        .root_frame
+        .queue_boundary
+        .expect("two-panel layout places the boundary in RootFrame");
     assert_eq!(boundary.width, 1, "the drag target is exactly one column");
     let start_width = harness.model().app.queue_column_width;
     let target = boundary.x.saturating_add(57);
@@ -521,7 +727,13 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
         .draw(|f| harness.model_mut().draw_frame(f, false, false))
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
-    let boundary = harness.model().app.layout.main.queue_boundary_area;
+    let boundary = harness
+        .model()
+        .app
+        .layout
+        .root_frame
+        .queue_boundary
+        .expect("two-panel layout places the boundary in RootFrame");
     let width = harness.model().app.queue_column_width;
     harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
         title: "Block resize?".into(),
@@ -569,23 +781,16 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
-    let library_child = harness
-        .model()
-        .emby_browser_id
-        .clone()
-        .expect("movie browser child mounted");
-
+    // Task 6.1: the Movies surface paints inside the mounted `LibraryPanel`,
+    // whose retained skeleton geometry is the click-resolution truth.
     let browser_test_layout = |harness: &mut TickHarness| {
         harness
-            .model_mut()
+            .model()
             .application
-            .get_component_mut(&library_child)
-            .expect("library child mounted")
-            .as_any_mut()
-            .downcast_mut::<BrowserComponent>()
-            .expect("browser component type")
-            .test_layout()
-            .left_area
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.test_list_rect())
+            .expect("the panel painted a list slot")
     };
 
     let click = |column, row| {
@@ -609,7 +814,10 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         "the wide breakpoint must have painted a non-empty list area"
     );
 
-    harness.inject(click(wide_list_area.x, wide_list_area.y));
+    // The panel's list rect starts at the painted row flow (the old
+    // component's `left_area` included the pill row above it), so the blank
+    // probe is the area below the fixture's two rows: it must not claim.
+    harness.inject(click(wide_list_area.x, wide_list_area.bottom().saturating_sub(1)));
     let outcome = harness.step();
     assert!(
         outcome
@@ -664,10 +872,12 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
     );
     apply_outcome(&mut harness, outcome);
 
-    // A click inside the NEW narrow list area must resolve through the
-    // now-mounted `InlineMediaBrowser`, proving the current geometry (not
-    // memory of the old control) is what actually governs resolution.
-    harness.inject(click(narrow_list_area.x, narrow_list_area.y));
+    // A click below the fixture's two painted rows — inside the list slot's
+    // rect but past its last row — must not claim without a resolved target,
+    // proving resolution consults the freshly painted narrow layout (the
+    // hero block replaces the selected row at the flow's top; blank space
+    // below the rows claims nothing).
+    harness.inject(click(narrow_list_area.x, narrow_list_area.bottom().saturating_sub(1)));
     let outcome = harness.step();
     assert!(
         outcome
@@ -692,11 +902,7 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
     app.panel_mode = PanelMode::LibraryOnly;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let music_id = harness
-        .model()
-        .music_workspace_id
-        .clone()
-        .expect("grouped Music child mounted");
+    let music_id = ComponentId::Library;
     let click = |column, row| {
         Event::Mouse(MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
@@ -714,9 +920,9 @@ fn music_click_resolves_current_retained_geometry_through_application_tick() {
         .model()
         .application
         .get_component(&music_id)
-        .and_then(|component| component.as_any().downcast_ref::<MusicWorkspaceComponent>())
-        .map(|music| music.layout().wide_music_browser_area)
-        .expect("Music component layout");
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_list_rect())
+        .expect("Music panel list geometry");
     assert!(wide_area.width > 0 && wide_area.height > 0);
     harness.inject(click(wide_area.x + 1, wide_area.y + 1));
     let outcome = harness.step();

@@ -8,38 +8,28 @@ mod theme;
 // `render::components::help`, but the `components` module is private. Re-export
 // them here so `crate::app::components::help` can import them without widening
 // the whole `render::components` module.
-pub(in crate::app) use components::album_art::MusicImagePaint;
 pub(in crate::app) use components::artwork_placeholder::render_artwork_placeholder;
-pub(in crate::app) use components::audiobookshelf_book::{
-    book_rows, render_audiobookshelf_book_content, AudiobookshelfBookGeometry,
-    BookChapterPresentation, BookInteraction, BookPresentation,
-};
-pub(in crate::app) use components::audiobookshelf_podcast::{
-    render_audiobookshelf_podcast_content, AudiobookshelfPodcastGeometry,
-    PodcastEpisodePresentation, PodcastInteraction, PodcastShowPresentation,
-};
+pub(in crate::app) use components::audiobookshelf_book::book_rows;
+
 #[allow(unused_imports)]
 pub(in crate::app) use components::chrome_player::{
-    render_player_panel, render_title_row, PlaybackRenderContext,
+    render_player_panel, render_title_row, PlaybackRenderContext, PlaybackStripAreas,
 };
+pub(in crate::app) use components::chrome_status::{
+    render_status_bar, StatusBarModel, StatusBarRegions,
+};
+pub(in crate::app) use components::chrome_tabs::{render_tab_bar, TabBarModel};
 pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;
 pub(in crate::app) use components::context_menu::render_context_menu_content;
 pub(in crate::app) use components::daemon_lost_modal::render_daemon_lost_modal_content;
-#[allow(unused_imports)]
-pub(in crate::app) use components::detail::{
-    compact_banner_layout, render_compact_detail_with_ctx, CompactBannerLayout, CompactDetailCtx,
-};
-pub(in crate::app) use components::feeds::{
-    render_feeds_content, FeedsPresentation, FeedsRenderModel,
-};
 pub(in crate::app) use components::feeds_manage::{
     render_feeds_manage_content, FeedsManageRenderModel,
 };
 pub(in crate::app) use components::help::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
-pub(in crate::app) use components::home::{render_home_content, HomeCarrier};
 pub(in crate::app) use components::queue::{render_queue_body, QueuePresentation};
+pub(in crate::app) use components::queue_playback::render_playback_header;
 
 #[cfg(test)]
 pub(crate) fn reset_home_media_list_paints() {
@@ -61,12 +51,6 @@ pub(crate) fn home_inline_media_browser_paints() -> usize {
 #[cfg(test)]
 pub(crate) fn reset_browser_media_list_paints() {
     reset_home_media_list_paints();
-    components::media_list::GRID_MEDIA_LIST_PAINTS.with(|count| count.set(0));
-}
-
-#[cfg(test)]
-pub(crate) fn browser_grid_media_list_paints() -> usize {
-    components::media_list::GRID_MEDIA_LIST_PAINTS.with(std::cell::Cell::get)
 }
 
 #[cfg(test)]
@@ -84,29 +68,11 @@ pub(crate) fn browser_legacy_plain_rows_paints() -> usize {
     components::media_list::PLAIN_ROWS_PAINTS.with(std::cell::Cell::get)
 }
 
-#[cfg(test)]
-pub(crate) fn reset_podcast_media_list_paints() {
-    reset_home_media_list_paints();
-}
-
-#[cfg(test)]
-pub(crate) fn podcast_wide_media_list_paints() -> usize {
-    home_wide_media_list_paints()
-}
-
-#[cfg(test)]
-pub(crate) fn podcast_inline_media_browser_paints() -> usize {
-    home_inline_media_browser_paints()
-}
-pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
-pub(in crate::app) use components::list_narrow::{
-    paint_feed_group_pills_row, render_narrow_browse_with_ctx,
-};
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use screens::feeds_model::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
@@ -115,28 +81,24 @@ pub(in crate::app) use screens::feeds_model::{
 // Wide hero layout itself (mirroring HomeComponent's image-deferral),
 // so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
 // shared helpers it needs at crate::app visibility.
+#[cfg(test)]
 pub(in crate::app) use arrangements::library::wide_library_panes;
-pub(in crate::app) use arrangements::padded_rect;
 pub(in crate::app) use arrangements::wide_hero::{
-    wide_hero_browser_border, wide_hero_browser_pane, wide_hero_fits, wide_hero_hero_pane,
-    LeftPaneFocus, PANE_PAD_X, PANE_PAD_Y,
+    paint_wide_hero_text, place_media_list_below, wide_hero_browser_border, wide_hero_browser_pane,
+    wide_hero_fits, wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
-pub(in crate::app) use components::home_hero::{
-    prepare_wide_emby_hero_card, render_home_hero_content, HeroData,
+pub(in crate::app) use components::hero::{
+    selected_detail_shell, wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS,
 };
+pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
-pub(in crate::app) use components::audiobookshelf_podcast::podcast_show_rows;
 pub(in crate::app) use components::media_list::{
-    render_grid_media_list_component, render_inline_media_browser_component,
-    render_wide_media_list_component,
+    render_inline_media_browser_component, render_wide_media_list_component,
 };
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
-pub(in crate::app) use components::music_wide::{
-    render_narrow_music_group_with_ctx, render_wide_music_group_with_ctx, MusicAlbumPresentation,
-    MusicTrackPresentation, MusicWideRenderCtx,
-};
+pub(in crate::app) use components::music_wide::MusicWideRenderCtx;
 pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
     PlaylistsViewState,
@@ -153,10 +115,8 @@ pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
 };
-pub(in crate::app) use components::tv_wide::{
-    render_wide_tv_with_ctx, TvEpisodePresentation, TvSeriesPresentation, TvWideRenderCtx,
-};
-pub(in crate::app) use components::widgets::{render_count_label, render_pill_bar, PillBar};
+pub(in crate::app) use components::tv_wide::TvWideRenderCtx;
+pub(in crate::app) use components::widgets::{render_pill_bar, render_placeholder, PillBar};
 // Render-seam re-exports (design D9, task 3.1): the panel shell/scrollbar/row
 // free functions extracted from `impl App` in `chrome.rs`. Used by the
 // Interactive Components in `crate::app::components` (task 3.2+).
@@ -170,10 +130,7 @@ pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sideba
 // sibling submodules (album, card, detail, home, list, music, pills, queue)
 // and/or `use super::*` in render/tests.rs.
 pub use components::indicators;
-use components::widgets::{
-    render_placeholder, render_right_scrollbar, render_selected_block_background,
-    MUSIC_ALBUM_IMAGE_TYPES, RENDER_FILTER,
-};
+use components::widgets::{render_right_scrollbar, render_selected_block_background};
 pub(in crate::app) use components::widgets::{
     render_selected_block_borders, SelectedBlockBorderStyle,
 };
@@ -188,10 +145,10 @@ pub(crate) use screens::sort_filter::{
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
 pub(crate) use theme::{
-    ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, INDICATOR_AUDIO_FG,
-    INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG, PLAYBACK_META_FG,
-    PLAYBACK_THROBBER_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK, SCROLLBAR, STATUS_AVAILABLE,
-    STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_DETAIL_META, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT,
+    ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, HERO_META_ROLES,
+    INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
+    PLAYBACK_META_FG, PLAYBACK_THROBBER_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK, SCROLLBAR,
+    STATUS_AVAILABLE, STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT,
     TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
 };
 // Task 4.2: the retired role names and the value-aliased resolver survive only
@@ -200,9 +157,8 @@ pub(crate) use theme::{
 // exactly those names (see the change report for the per-name reasons).
 #[cfg(test)]
 pub(crate) use theme::{
-    resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ACCENT_SOFT,
-    SURFACE_ARTWORK_PLACEHOLDER, SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED,
-    SURFACE_PLAYBACK, SURFACE_RESTING,
+    resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ARTWORK_PLACEHOLDER,
+    SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
 };
 // The closed surface table (`unify-surface-colour-neutral` D1/D2/D7) is bridged
 // to `palette.rs` the same way. Its visibility is `crate::app`, so it is not
@@ -216,8 +172,6 @@ use super::{palette, App};
 // only production callers moved into root.rs/queue.rs under screens/, which
 // import them directly), but render/tests.rs and friends still reach them via
 // `use super::*`.
-#[cfg(test)]
-use crate::app::layout::LayoutMain;
 #[cfg(test)]
 use components::widgets::right_panel_content_area;
 #[cfg(test)]
@@ -264,14 +218,8 @@ mod music_characterization_tests;
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
 #[cfg(test)]
-#[path = "tests_music_narrow.rs"]
-mod music_narrow_tests;
-#[cfg(test)]
 #[path = "tests_music_wide_reanchor_characterization.rs"]
 mod music_wide_reanchor_characterization_tests;
-#[cfg(test)]
-#[path = "tests_music_wide.rs"]
-mod music_wide_tests;
 #[cfg(test)]
 #[path = "tests_non_music.rs"]
 mod non_music_tests;
@@ -300,19 +248,13 @@ mod sessions_tests;
 #[path = "test_helpers.rs"]
 mod test_helpers;
 #[cfg(test)]
-pub(crate) use test_helpers::{
-    make_large_movie_library_app, make_movie_app, make_music_group_app, make_queue_app,
-};
+pub(crate) use test_helpers::{make_movie_app, make_music_group_app, make_queue_app};
 #[cfg(test)]
 #[path = "queue_title_characterization_tests.rs"]
 mod queue_title_characterization_tests;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
-#[cfg(test)]
-mod tests_audiobookshelf_books;
-#[cfg(test)]
-mod tests_audiobookshelf_podcasts;
 #[cfg(test)]
 mod tests_conformance_matrix;
 #[cfg(test)]

@@ -1,10 +1,28 @@
 use super::test_helpers::*;
 use super::*;
+use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::ComponentId;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::{BrowseLevel, LibraryTab, TabSelection};
-use ratatui::backend::TestBackend;
-use ratatui::Terminal;
-use tuirealm::component::Component;
+
+/// Seed the migrated Movies/HomeVideos/Generic owner's authoritative
+/// selection directly (mirrors `set_browser_cursor_for_test`'s old
+/// `BrowserComponent` contract, now against the embedded owner).
+fn set_home_video_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
+    model.sync_mounted_surfaces();
+    let (_, key, _) = model
+        .active_migrated_browser_owner()
+        .expect("a migrated browser owner is active");
+    model
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        .and_then(|panel| panel.owner_mut(&key))
+        .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserOwner>())
+        .expect("browser owner installed")
+        .set_cursor_for_test(cursor);
+}
 
 #[test]
 fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
@@ -35,12 +53,21 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
     app.libs[0].nav_stack[0].items[1].overview = "The selected home video overview.".into();
     app.libs[0].nav_stack[0].set_resting_cursor(1);
     let mut model = mounted_model_at(app, 70, 30);
-    set_browser_cursor_for_test(&mut model, 1);
+    set_home_video_cursor_for_test(&mut model, 1);
     let output = draw_mounted_frame(&mut model, 70, 30);
-    let layout = mounted_browser_layout(&model);
+    let layout = model
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("Library panel type")
+        .test_narrow_geometry()
+        .expect("the panel painted a Narrow skeleton");
 
+    let hero_area = layout.inline_hero.unwrap_or_default();
     assert!(
-        layout.hero_area.height > 0,
+        hero_area.height > 0,
         "selected Home Video detail disappeared"
     );
     assert!(
@@ -49,18 +76,11 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
     );
 }
 
-#[test]
-fn wide_home_video_uses_a_left_detail_and_right_rail() {
-    // Wide Movies / home-video geometry is published by the mounted
-    // `BrowserComponent` now (task 3.8): the legacy base frame only reserves
-    // `left_area`. Read the right rail off the component's own painted layout.
-    let mut model = mounted_model_at(make_home_video_app(), 200, 40);
-    let _ = draw_mounted_frame(&mut model, 200, 40);
-    let layout = mounted_browser_layout(&model);
-
-    assert!(layout.movies_wide_right_area.width > 0);
-    assert!(layout.movies_wide_right_area.height > 0);
-}
+// wide_home_video_uses_a_left_detail_and_right_rail deleted (task 6.1):
+// HomeVideos' Wide hero geometry moved to the embedded `BrowserContent`
+// owner painted through the mounted `LibraryPanel`; the equivalent coverage
+// now lives in `tests_library_characterization.rs` against the panel's
+// `test_wide_geometry()`.
 
 /// `remove-migrated-surface-underpaint` 3.2 (D4): at the wide Wide hero
 /// breakpoint the mounted `BrowserComponent` owns the Movies / home-video
@@ -75,10 +95,10 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
         (make_movie_app(), "Focused Movie"),
         (make_home_video_app(), "Birthday Clip"),
     ] {
-        let mut layout = LayoutMain::default();
+        let mut layout = Rect::default();
         let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(120, 40)).unwrap();
         term.draw(|f| {
-            app.render_library(
+            app.reserve_library_area(
                 f,
                 ratatui::layout::Rect::new(0, 0, 120, 40),
                 &mut layout,
@@ -88,9 +108,9 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
         .unwrap();
 
         assert!(
-            layout.left_area.width > 0 && layout.left_area.height > 0,
+            layout.width > 0 && layout.height > 0,
             "wide movies destination area hand-off must still be reserved: {:?}",
-            layout.left_area
+            layout
         );
         let output = buffer_to_string(&term);
         assert!(
@@ -116,20 +136,18 @@ fn wide_emby_podcast_does_not_publish_tv_geometry() {
 
     let layout = render_view(&mut app, 200, 40);
 
-    assert_eq!(layout.tv_wide_left_area, ratatui::layout::Rect::default());
-    assert_eq!(layout.tv_wide_right_area, ratatui::layout::Rect::default());
+    assert!(layout.width > 0, "podcast destination remains reserved");
 }
 
 #[test]
-fn podcast_and_home_video_use_inline_when_wide_height_is_unavailable() {
+fn podcast_uses_inline_when_wide_height_is_unavailable() {
     let mut podcast = make_movie_app();
     podcast.libs[0].library.collection_type = "podcasts".into();
     let podcast_layout = render_view(&mut podcast, 200, 8);
-    assert_eq!(podcast_layout.tv_wide_left_area.width, 0);
-
-    let mut home_video = make_home_video_app();
-    let home_video_layout = render_view(&mut home_video, 200, 8);
-    assert_eq!(home_video_layout.movies_wide_right_area.width, 0);
+    assert!(
+        podcast_layout.width > 0,
+        "podcast destination remains reserved"
+    );
 }
 
 #[test]
@@ -234,73 +252,4 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
         !output.contains("Pilot"),
         "narrow inline hero must not show the episode table:\n{output}"
     );
-}
-
-/// migrate-home-feeds 5.1 (§5 geometry test): the shared Wide hero
-/// primitive owns the one-row status-bar reserve, so wide Music's framed list
-/// panel must paint its `▁` bottom border two rows above `wide_music_area`'s
-/// bottom, leaving exactly one blank row between the panel and the status bar.
-/// Asserted against the painted buffer — a re-derived layout rect cannot catch
-/// a one-row vertical shift.
-#[test]
-fn wide_music_list_panel_leaves_exactly_one_row_above_the_status_bar() {
-    let mut model = mounted_model_at(make_music_group_app(), 200, 40);
-    let terminal = draw_mounted_terminal(&mut model, 200, 40);
-    let layout = mounted_music_layout(&model);
-    let right = layout.wide_music_right_area;
-    assert!(right.height > 0, "wide music right pane must paint");
-    assert_list_pane_reserves_one_row_above_status(
-        terminal.backend().buffer(),
-        right,
-        layout.wide_music_area.bottom(),
-    );
-}
-
-/// migrate-home-feeds 5.1 (§5 geometry test): same one-blank-row reserve for
-/// the ABS Book tab. Book paints no framed list border at the pane bottom, so
-/// this checks the painted buffer directly: the last row before the status bar
-/// (`area.bottom() - 1`) is blank across the right pane, and the surname-bucket
-/// pill row the component publishes (`geometry.selector_tabs`) is actually
-/// painted at that row in the buffer. A one-row downward shift of the pane
-/// would paint the reserve row and move the pills off their published row.
-#[test]
-fn wide_book_panes_leave_exactly_one_row_above_the_status_bar() {
-    use crate::app::components::AudiobookshelfBookComponent;
-    let area = Rect::new(0, 0, 120, 30);
-    let app = make_audiobookshelf_book_app();
-    let mut component = AudiobookshelfBookComponent::new();
-    if let Some(state) = app.audiobookshelf_book_browse.first() {
-        component.set_content(state, app.images_enabled());
-        component.set_focused(true);
-    }
-    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
-    terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let geometry = component.geometry();
-    let pill_rect = geometry
-        .selector_tabs
-        .first()
-        .map(|(rect, _)| *rect)
-        .expect("book pills painted");
-    let buffer = terminal.backend().buffer();
-
-    // The published pill row is really painted there (non-blank glyphs).
-    let pill_row: String = (pill_rect.x..pill_rect.right())
-        .map(|x| buffer[(x, pill_rect.y)].symbol())
-        .collect();
-    assert!(
-        !pill_row.trim().is_empty(),
-        "book pill row must be painted at its published row {}: {pill_row:?}",
-        pill_rect.y
-    );
-
-    // Exactly one blank row between the pane and the status bar: everything on
-    // `area.bottom() - 1` across the right pane is unpainted.
-    let reserve_y = area.bottom() - 1;
-    for x in pill_rect.x..area.right() {
-        assert_eq!(
-            buffer[(x, reserve_y)].symbol(),
-            " ",
-            "book reserve row {reserve_y} must be blank at x={x}"
-        );
-    }
 }

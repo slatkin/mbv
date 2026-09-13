@@ -157,7 +157,6 @@ declare_surfaces!(
     QueueCardVisualizer,
     // --- recess: a non-focusable inset inside a content body ---
     PlaybackRecess,
-    PlaybackBottomRow,
     PlaybackStatusPill,
     ArtworkPlaceholder,
     ArtworkLoadingPlaceholder,

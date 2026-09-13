@@ -2,13 +2,15 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::{ComponentId, HomeComponent, Msg, ShellRequest};
+use crate::app::components::home_content::HomeContent;
+use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::{
     home_inline_media_browser_paints, home_wide_media_list_paints, reset_home_media_list_paints,
 };
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::{PanelFocus, TabSelection};
+use crate::app::{PanelFocus, PanelMode, TabSelection};
 
 fn home_harness(width: u16, height: u16, count: usize) -> TickHarness {
     let mut app = make_app_stub();
@@ -31,15 +33,41 @@ fn home_harness(width: u16, height: u16, count: usize) -> TickHarness {
     harness
 }
 
-fn home(harness: &TickHarness) -> &HomeComponent {
+/// The Home content owner inside the mounted `LibraryPanel` (task 5.11):
+/// the panel is the library area's one event boundary, and Home's state is
+/// read through the owner the panel hosts — never a destination component.
+fn home_owner(harness: &TickHarness) -> &HomeContent {
     harness
         .model()
         .application
-        .get_component(&ComponentId::Home)
-        .expect("Home mounted")
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
         .as_any()
-        .downcast_ref::<HomeComponent>()
-        .expect("Home component")
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel type")
+        .owner(&crate::app::components::library_panel::LibraryKey::Home)
+        .and_then(|owner| owner.as_any().downcast_ref::<HomeContent>())
+        .expect("Home owner installed")
+}
+
+/// The painted row cell for one row title (the panel's own paint is the
+/// authoritative hit geometry; the deleted `HomeComponent::test_hitmap` is
+/// replaced by buffer-text lookup on the panel output).
+fn row_cell(terminal: &Terminal<TestBackend>, title: &str) -> (u16, u16) {
+    let buf = terminal.backend().buffer();
+    for y in 0..buf.area().height {
+        for x in 0..buf.area().width {
+            if buf[(x, y)].symbol() == &title[..1] {
+                let row: String = (x.saturating_sub(2)..buf.area().width)
+                    .map(|cx| buf[(cx, y)].symbol())
+                    .collect();
+                if row.contains(title) {
+                    return (x, y);
+                }
+            }
+        }
+    }
+    panic!("row text {title:?} not painted");
 }
 
 fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBackend> {
@@ -53,6 +81,43 @@ fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBack
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
     terminal
+}
+
+fn assert_tick_frame_nonempty(mode: PanelMode, width: u16) {
+    let mut harness = home_harness(width, 24, 1);
+    harness.model_mut().app.panel_mode = mode;
+    harness.inject(key(Key::Char('x')));
+    harness.step();
+    let terminal = draw(&mut harness, width, 24);
+    assert!(
+        terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .any(|cell| cell.symbol() != " "),
+        "panel mode {mode:?} produced an empty frame"
+    );
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_both_mode() {
+    assert_tick_frame_nonempty(PanelMode::Both, 140);
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_queue_only_mode() {
+    assert_tick_frame_nonempty(PanelMode::QueueOnly, 140);
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_library_only_mode() {
+    assert_tick_frame_nonempty(PanelMode::LibraryOnly, 140);
+}
+
+#[test]
+fn tick_frame_is_nonempty_in_mini_view() {
+    assert_tick_frame_nonempty(PanelMode::QueueOnly, 60);
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {
@@ -81,30 +146,33 @@ fn home_wide_tick_navigation_paints_the_selected_row_once() {
 
     reset_home_media_list_paints();
     let terminal = draw(&mut harness, 160, 30);
-    let selected = home(&harness).menu_placement_geometry().1.expect("selected row");
-    assert_eq!(home(&harness).cursor(), 1);
+    assert_eq!(home_owner(&harness).cursor(), 1);
     assert_eq!(home_wide_media_list_paints(), 1);
-    let row: String = (selected.x..selected.right())
-        .map(|x| terminal.backend().buffer()[(x, selected.y)].symbol())
+    let (x, y) = row_cell(&terminal, "Home Item 1");
+    let row: String = (x..terminal.backend().buffer().area().width)
+        .map(|cx| terminal.backend().buffer()[(cx, y)].symbol())
         .collect();
-    assert!(row.contains("Home Item 1"), "painted row must match selection: {row:?}");
+    assert!(
+        row.contains("Home Item 1"),
+        "painted row must match selection: {row:?}"
+    );
 }
 
 #[test]
 fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
     let mut harness = home_harness(60, 20, 8);
     let _ = draw(&mut harness, 60, 20);
-    let (selected, _) = home(&harness).test_hitmap()[0];
-    harness.inject(wheel(selected.x, selected.y));
+    let (x, y) = row_cell(&draw(&mut harness, 60, 20), "Home Item 0");
+    harness.inject(wheel(x, y));
     let _outcome = harness.step();
-    assert_eq!(home(&harness).cursor(), 1);
+    assert_eq!(home_owner(&harness).cursor(), 1);
     let _ = draw(&mut harness, 60, 20);
 
-    let (target, _) = home(&harness).test_hitmap()[1];
+    let (target_x, target_y) = row_cell(&draw(&mut harness, 60, 20), "Home Item 2");
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
-        column: target.x,
-        row: target.y,
+        column: target_x,
+        row: target_y,
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
@@ -112,7 +180,7 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
         .messages
         .iter()
         .any(|message| matches!(message, Msg::Shell(ShellRequest::HomeRowClick { target: _ }))));
-    assert_eq!(home(&harness).cursor(), 2);
+    assert_eq!(home_owner(&harness).cursor(), 2);
     reset_home_media_list_paints();
     let terminal = draw(&mut harness, 60, 20);
     assert_eq!(home_inline_media_browser_paints(), 1);
@@ -138,17 +206,39 @@ fn home_tick_refresh_preserves_target_and_breakpoint_handoff_preserves_offset() 
         harness.step();
     }
     let _ = draw(&mut harness, 160, 30);
-    assert_eq!(home(&harness).cursor(), 15);
+    assert_eq!(home_owner(&harness).cursor(), 15);
     harness.model_mut().home_content.continue_items.swap(0, 15);
     harness.model_mut().push_home_content();
-    assert_eq!(home(&harness).cursor(), 0, "flat cursor follows stable id after reorder");
+    assert_eq!(
+        home_owner(&harness).cursor(),
+        0,
+        "flat cursor follows stable id after reorder"
+    );
 
-    // Move to a distant row, then flip presentation. The component's single
-    // retained anchor transfers target and screen-row offset.
+    // Move to a distant row, then flip presentation. The owner's single
+    // retained anchor transfers target and screen-row offset (the panel
+    // drives the presentation through `set_presentation`).
     harness.inject(key(Key::End));
     harness.step();
     let _ = draw(&mut harness, 160, 30);
     let _ = draw(&mut harness, 60, 12);
-    assert_eq!(home(&harness).cursor(), 39);
-    assert!(home(&harness).test_active_scroll() > 0);
+    assert_eq!(home_owner(&harness).cursor(), 39);
+    assert!(home_owner(&harness).test_active_scroll() > 0);
+}
+
+/// Task 5.11: local navigation through the panel's keyboard forwarding keeps
+/// the owner's cursor local — a content push preserves it (no App mirror).
+#[test]
+fn home_owner_cursor_survives_a_content_push() {
+    let mut harness = home_harness(160, 30, 2);
+    let _ = draw(&mut harness, 160, 30);
+    harness.inject(key(Key::Down));
+    harness.step();
+    assert_eq!(home_owner(&harness).cursor(), 1);
+    harness.model_mut().push_home_content();
+    assert_eq!(
+        home_owner(&harness).cursor(),
+        1,
+        "the owner's cursor survives the content projection"
+    );
 }

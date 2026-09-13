@@ -93,7 +93,6 @@ impl Model {
             }
         };
         let title = self.app.queue_title_model();
-        let title_area = self.app.layout.main.queue_title_area;
         // `sync_queue` runs on every run-loop tick. When nothing the projection
         // depends on changed and no authoritative cursor re-anchor is armed,
         // rebuilding the row vec (slot clone + per-row `format!`) would only
@@ -149,6 +148,14 @@ impl Model {
             NOW_PLAYING_THROBBER_FRAMES
                 [self.app.now_playing_throbber_index % NOW_PLAYING_THROBBER_FRAMES.len()]
         });
+        // The visual slot's image projection (task 3.4, D9): the queue
+        // projection — not the painter — issues every fetch for the now-playing
+        // item and projects the slot's image state. The slot only paints while
+        // playback is active (idle collapse), so the projection follows the
+        // same gate the card's render used.
+        if self.app.effective_playback_state().active {
+            self.app.refresh_queue_card_image();
+        }
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
                 queue.set_pending_slot(pending_slot);
@@ -160,38 +167,54 @@ impl Model {
                 queue.set_throbber(throbber);
                 queue.set_cursor(cursor);
                 queue.set_scope_chrome(scope, title);
-                queue.set_area(self.app.layout.main.queue_area);
-                queue.set_title_area(title_area);
+                queue.set_status_pills(
+                    self.app.playlist_status_spans(),
+                    self.app.autosave_status_spans(),
+                );
+                // The queue panel's placement (task 3.1): computed from the
+                // same paint-free checkpoint the draw path consumes (the last
+                // published card geometry; see `App::queue_panel_placement`).
+                queue.set_frame_focused(matches!(
+                    self.app.effective_panel_focus(),
+                    PanelFocus::Queue
+                ));
+                queue.set_area(self.app.queue_panel_placement().panel_area);
             }
         }
     }
 
-    pub(super) fn render_queue_boundary(&mut self, frame: &mut ratatui::Frame) {
+    pub(super) fn render_queue_boundary_at(
+        &mut self,
+        frame: &mut ratatui::Frame,
+        area: ratatui::layout::Rect,
+    ) {
         let id = ComponentId::QueueBoundary;
         if self.application.mounted(&id) {
-            self.application
-                .view(&id, frame, self.app.layout.main.queue_boundary_area);
+            self.application.view(&id, frame, area);
         }
     }
 
-    pub(super) fn render_queue_component(&mut self, frame: &mut ratatui::Frame) {
+    pub(super) fn render_queue_panel_at(
+        &mut self,
+        frame: &mut ratatui::Frame,
+        _placement: ratatui::layout::Rect,
+    ) {
         let id = ComponentId::Queue;
         if !self.application.mounted(&id) {
             return;
         }
+        // The queue panel paints its whole surface (frame, title, status,
+        // list) at the placement computed by the root loop (task 3.1).
+        let placement = _placement;
+        if placement.width == 0 || placement.height == 0 {
+            return;
+        }
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
-                queue.set_area(self.app.layout.main.queue_area);
-                queue.set_title_area(self.app.layout.main.queue_title_area);
+                queue.set_area(placement);
             }
         }
-        self.application
-            .view(&id, frame, self.app.layout.main.queue_area);
-        self.app.layout.main.queue_selected_item_rect = self
-            .application
-            .get_component(&id)
-            .and_then(|comp| comp.as_any().downcast_ref::<QueueComponent>())
-            .and_then(QueueComponent::selected_row_rect);
+        self.application.view(&id, frame, placement);
     }
 
     pub(super) fn handle_queue_request(&mut self, request: QueueRequest) {
@@ -392,6 +415,54 @@ mod tests {
     use crate::app::components::{Msg, QueueRequest};
     use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub};
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
+
+    #[test]
+    fn queue_projection_fetches_now_playing_image_once_and_none_on_repaint() {
+        // Task 3.4 (D9): the queue projection — not the painter — issues the
+        // visual slot's fetch. One fetch per new now-playing key, and a
+        // repaint tick (same fingerprint) starts none: the reservation set
+        // and the fetch counters stay untouched. The fixture has no Emby
+        // client, so `spawn_image_fetch` balances `image_fetches_active`
+        // synchronously — the counters cannot see a duplicate spawn; the
+        // reservation set and counters together pin the request count.
+        let mut app = make_app_stub();
+        let items = crate::app::tests::make_items(2);
+        app.player_tab.set_queue_items(
+            items
+                .into_iter()
+                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
+                .collect::<Vec<_>>(),
+            0,
+        );
+        app.panel_focus = PanelFocus::Queue;
+        app.image_protocol_enabled = true;
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+        }
+        let mut model = Model::new(app);
+
+        model.sync_queue();
+        assert!(
+            model.app.card_image_loading.contains("id0:P"),
+            "the now-playing key must be reserved by the projection push"
+        );
+        let loading = model.app.card_image_loading.clone();
+        let active = model.app.image_fetches_active;
+        let pending = model.app.pending_image_fetches.len();
+
+        // Repaint tick: nothing changed, so the push starts no new fetch.
+        model.sync_queue();
+        assert_eq!(model.app.card_image_loading, loading);
+        assert_eq!(model.app.image_fetches_active, active);
+        assert_eq!(model.app.pending_image_fetches.len(), pending);
+
+        // A new now-playing key reserves exactly one new key.
+        model.app.player.status.lock().unwrap().current_idx = 1;
+        model.sync_queue();
+        assert!(model.app.card_image_loading.contains("id1:P"));
+    }
 
     #[test]
     fn queue_arrow_moves_component_cursor_only_not_app_follow() {

@@ -15,20 +15,30 @@ use mbv_core::config::ServiceKind;
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ComponentId {
     UiRoot,
-    Playback,
+    /// The tab bar panel (`TabPanel`, task 2.1): paints the `RootFrame.tab`
+    /// placement and resolves tab clicks against its own painted hit
+    /// regions.
+    TabPanel,
+    /// The status row panel (`StatusBarPanel`, task 2.2): paints the
+    /// `RootFrame.status_bar` placement and owns the volume/mute/remote
+    /// pill regions.
+    StatusBarPanel,
+    /// The right-column playback strip (`LibraryPlaybackPanel`, task 4.1):
+    /// paints the `RootFrame.library_playback` placement — mounted only when
+    /// the queue column is hidden (D1's mount rule), where it is the frame's
+    /// one transport — and resolves transport clicks against its own
+    /// retained hit geometry.
+    LibraryPlaybackPanel,
+    /// The Queue playback panel (`QueuePlaybackPanel`, task 3.5): paints the
+    /// `RootFrame.queue_playback` placement — the always-painted header row,
+    /// the visual slot's region and the queue-column transport — and resolves
+    /// transport clicks against its own retained hit geometry (task 3.7).
+    QueuePlaybackPanel,
     Queue,
     QueueBoundary,
-    /// The Wide hero split's gap-columns gesture owner (add-mouse-wide-split-resize).
-    WideHeroBoundary,
-    Home,
-    Browser(BrowserKey),
-    /// Wide TV workspace (`TvWorkspaceComponent`). Distinct from
-    /// `Browser(BrowserKey { kind: TvShows })` -- which the narrow TV
-    /// `BrowserComponent` uses -- so both can stay mounted across a
-    /// wide<->narrow breakpoint flip (keep-mounted, D1) without one
-    /// component type shadowing the other under a shared id.
-    TvWorkspace(BrowserKey),
-    Feeds,
+    /// The Library panel (`LibraryPanel`, task 5.9, design D2): the
+    /// library area's one event boundary.
+    Library,
     Overlay(OverlayId),
     Modal(ModalId),
     Popup(PopupId),

@@ -80,6 +80,11 @@ pub enum ShellRequest {
     /// stores the session override. Live-only: there is no end/persist
     /// variant, because nothing is persisted.
     ResizeListPaneLive(u16),
+    /// Select the left-panel tab at the position the mounted `TabPanel`
+    /// resolved from its own painted hit regions (task 2.1). The shell owns
+    /// the tab switch and its side effects; the panel only reports which tab
+    /// was clicked.
+    TabSelect(usize),
     /// Quit the application.
     Quit,
     /// Dismiss the Help overlay (Esc/F1 while help is open).
@@ -292,7 +297,7 @@ pub enum ShellRequest {
     QueueScopeClick {
         scope: QueueScope,
     },
-    /// A TV-workspace row the user single-clicked. `TvWorkspaceComponent`
+    /// A TV-workspace row the user single-clicked. The library panel
     /// painted the two panes and resolved which pane + hit the click landed
     /// in (season pill, episode row, blank Episodes-pane space, or a series
     /// row resolved through the embedded `WideMediaList`); the shell applies
@@ -532,6 +537,14 @@ pub enum ShellRequest {
     /// whole-surface control.
     BrowserCycleGroup {
         delta: i64,
+    },
+    /// A library list wheel movement resolved by the embedded owner. The
+    /// stable library key and owner-resolved cursor/scroll cross the panel
+    /// boundary; the shell persists the resting scroll without re-reading it.
+    LibraryScroll {
+        key: crate::app::components::component_id::BrowserKey,
+        index: usize,
+        scroll: usize,
     },
     /// Every local browser cursor key (arrows/hjkl, Page keys, Home/End) on
     /// the focused generic/Movies/home-video `BrowserComponent` (task 5.3d,

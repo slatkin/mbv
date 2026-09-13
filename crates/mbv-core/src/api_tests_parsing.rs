@@ -34,6 +34,7 @@ fn make_item(name: &str, item_type: &str) -> EmbyItem {
         audio_info: String::new(),
         genre: String::new(),
         playlist_item_id: String::new(),
+        image_tags: Default::default(),
     }
 }
 
@@ -83,6 +84,79 @@ fn parse_item_missing_fields_use_defaults() {
     assert_eq!(item.runtime_ticks, 0);
     assert!(!item.played);
     assert!(!item.is_folder);
+    assert_eq!(item.image_tags, EmbyImageTags::default());
+}
+
+// ── parse_item: declared image availability (task 5.3) ─────────────────
+
+#[test]
+fn parse_item_image_tags_when_present() {
+    let raw = json!({
+        "Type": "Movie",
+        "ImageTags": { "Thumb": "thumb-tag", "Primary": "primary-tag" },
+        "BackdropImageTags": ["backdrop-a", "backdrop-b"],
+        "UserData": {}
+    });
+    let item = parse_item(&raw);
+    assert_eq!(item.image_tags.thumb, "thumb-tag");
+    assert_eq!(item.image_tags.primary, "primary-tag");
+    assert_eq!(item.image_tags.backdrops, vec!["backdrop-a", "backdrop-b"]);
+}
+
+#[test]
+fn parse_item_image_tags_absent_members_default_empty() {
+    // Only `Primary` declared: `Thumb` and the backdrop list default empty.
+    let raw = json!({ "Type": "Movie", "ImageTags": { "Primary": "primary-tag" } });
+    let item = parse_item(&raw);
+    assert_eq!(item.image_tags.thumb, "");
+    assert_eq!(item.image_tags.primary, "primary-tag");
+    assert!(item.image_tags.backdrops.is_empty());
+    assert_eq!(item.image_tags.series_thumb, "");
+    assert!(item.image_tags.series_backdrops.is_empty());
+}
+
+#[test]
+fn parse_item_without_image_tags_defaults_empty() {
+    let item = parse_item(&json!({ "Type": "Movie" }));
+    assert_eq!(item.image_tags, EmbyImageTags::default());
+}
+
+#[test]
+fn parse_item_episode_series_image_tags() {
+    // An episode reports the series' artwork as `ParentThumbImageTag` /
+    // `ParentBackdropImageTags`.
+    let raw = json!({
+        "Type": "Episode", "SeriesName": "Lost",
+        "ParentThumbImageTag": "series-thumb",
+        "ParentBackdropImageTags": ["series-backdrop"],
+        "UserData": {}
+    });
+    let item = parse_item(&raw);
+    assert_eq!(item.image_tags.series_thumb, "series-thumb");
+    assert_eq!(item.image_tags.series_backdrops, vec!["series-backdrop"]);
+    assert!(item.image_tags.thumb.is_empty());
+}
+
+#[test]
+fn parse_item_episode_series_thumb_tag_falls_back_to_series_level_tag() {
+    let raw = json!({
+        "Type": "Episode",
+        "SeriesThumbImageTag": "series-thumb",
+        "UserData": {}
+    });
+    let item = parse_item(&raw);
+    assert_eq!(item.image_tags.series_thumb, "series-thumb");
+}
+
+#[test]
+fn parse_item_parent_thumb_tag_wins_over_series_level_tag() {
+    let raw = json!({
+        "Type": "Episode",
+        "ParentThumbImageTag": "parent",
+        "SeriesThumbImageTag": "series",
+        "UserData": {}
+    });
+    assert_eq!(parse_item(&raw).image_tags.series_thumb, "parent");
 }
 
 #[test]

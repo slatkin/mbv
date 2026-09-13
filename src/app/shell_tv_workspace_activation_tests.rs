@@ -6,7 +6,6 @@ fn wide_tv_handoff_does_not_fetch_empty_series_id() {
     app.libs[0].library.collection_type = "tvshows".into();
     app.libs[0].nav_stack[0].items[0].item_type = "Series".into();
     app.libs[0].nav_stack[0].items[0].id.clear();
-    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
     let mut model = Model::new(app);
     let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
     client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
@@ -20,7 +19,7 @@ fn wide_tv_handoff_does_not_fetch_empty_series_id() {
 
     // This is the first wide-TV handoff, so the mounted component cannot have
     // already captured a valid ID before the guard is exercised.
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
 
     assert!(model.app.series_detail_loading.is_empty());
@@ -32,41 +31,22 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     let mut model = mounted_tv_model();
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
-    model.sync_emby_browser();
 
-    // Divergence: the mounted BrowserComponent selects index 0 while App's
-    // mirrored BrowseLevel cursor is stale at index 1. Resolve narrow extras
-    // using the component-owned cursor, as the production seam does.
+    // Divergence: the panel-hosted TvContent owner selects index 0 while
+    // App's mirrored BrowseLevel cursor is stale at index 1. Resolve narrow
+    // extras using the component-owned cursor, as the production seam does.
     model.app.libs[0].nav_stack[0].set_resting_cursor(1);
-    let component_cursor = model
-        .application
-        .get_component(&model.emby_browser_id.clone().expect("browser mounted"))
-        .expect("browser mounted")
-        .as_any()
-        .downcast_ref::<crate::app::components::BrowserComponent>()
-        .expect("browser component")
-        .cursor();
+    let component_cursor = model.test_tv_owner().browse_cursor();
     assert_eq!(component_cursor, 0);
     assert_eq!(model.app.libs[0].nav_stack[0].resting().cursor(), 1);
 
-    let component_extras = model.app.narrow_browse_extras(0, component_cursor);
-    match component_extras.inline_hero {
-        Some(NarrowInlineHero::Series { item, .. }) => {
-            assert_eq!(item.id, "movie-focused");
-        }
-        _ => panic!("component cursor must resolve the focused Series"),
-    }
-    let stale_extras = model
-        .app
-        .narrow_browse_extras(0, model.app.libs[0].nav_stack[0].resting().cursor());
-    match stale_extras.inline_hero {
-        Some(NarrowInlineHero::Series { item, .. }) => {
-            assert_eq!(item.id, "movie-second");
-        }
-        _ => panic!("stale App cursor must resolve the other Series"),
-    }
+    assert_eq!(
+        model.test_tv_owner().selected_item_id(),
+        Some("movie-focused".into()),
+        "the shared TV owner resolves its own selected Series"
+    );
 
     model.app.libs[0].nav_stack[0].set_resting_cursor(component_cursor);
 
@@ -133,11 +113,10 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     }
     app.libs.push(tv_lib);
     app.tab = TabSelection::EmbyLibrary(1);
-    app.layout.main.tv_wide_right_area = Rect::new(40, 0, 60, 20);
     app.terminal_width = 160;
     app.terminal_height = 40;
     let mut model = Model::new(app);
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
 
     assert!(model.app.wide_tv_library_area(0).is_none());
@@ -155,14 +134,13 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
 /// gates on `App::wide_tv_library_area`, a paint-free predicate driven solely
 /// by terminal size. Resizing narrow -> wide through the real
 /// `Msg::TerminalEvent(Resize)` path must flip the activation branch on that
-/// same tick, before any repaint refreshes `tv_wide_left_area`/
-/// `tv_wide_right_area`.
+/// same tick, before any repaint refreshes the TV component's geometry.
 #[test]
 fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
     let mut model = mounted_tv_model();
     model.app.terminal_width = 60;
     model.app.terminal_height = 24;
-    model.sync_tv_workspace();
+    model.sync_tv_content();
     model.sync_active_destination();
     assert!(model.app.wide_tv_library_area(0).is_none());
 

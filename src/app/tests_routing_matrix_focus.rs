@@ -1,13 +1,10 @@
 //! Routing matrix: focus precedence and policy rows.
 
 use super::tests_routing_matrix_support::*;
-use crate::app::components::{
-    BrowserKey, BrowserKind, ComponentId, Msg, QueueRequest, ShellRequest,
-};
+use crate::app::components::{ComponentId, Msg, QueueRequest, ShellRequest};
 use crate::app::input_resolver::KeyChord;
 use crate::app::types_playback::QueueScope;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::config::ServiceKind;
 
 #[test]
 fn queue_focus_routes_queue_chord_to_queue_owner() {
@@ -29,11 +26,7 @@ fn library_focus_routes_bracket_to_library_leaf() {
     let out = fold_tick(
         leaf,
         key(KeyCode::Char('[')),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         idle_snapshot(),
     );
     assert_eq!(out.len(), 1);
@@ -50,11 +43,7 @@ fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
     let out = fold_tick(
         leaf,
         KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         active_snapshot(),
     );
     assert_eq!(
@@ -86,11 +75,7 @@ fn lib_key_ctrl_catchall_swallows_unmapped_chord() {
     let out = fold_tick(
         None,
         KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL),
-        Some(ComponentId::Browser(BrowserKey {
-            service: ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: BrowserKind::Generic,
-        })),
+        Some(ComponentId::Library),
         idle_snapshot(),
     );
     assert!(
