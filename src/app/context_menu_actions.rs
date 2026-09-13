@@ -93,16 +93,8 @@ impl App {
                 }
             }
             Some(ContextAction::RemoveFromQueue(pos)) => self.remove_from_queue(pos),
-            Some(ContextAction::FeedsPlay(entries)) => {
-                for entry in entries {
-                    self.play_feed_entry(entry);
-                }
-            }
-            Some(ContextAction::FeedsEnqueue(entries)) => {
-                for entry in entries {
-                    self.enqueue_feed_entry(entry);
-                }
-            }
+            Some(ContextAction::FeedsPlay(entries)) => self.play_feed_entries(entries),
+            Some(ContextAction::FeedsEnqueue(entries)) => self.enqueue_feed_entries(entries),
             Some(ContextAction::FeedsMarkPlayed(entries)) => {
                 self.set_feed_entries_played(entries, true)
             }

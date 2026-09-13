@@ -189,9 +189,8 @@ impl Model {
                     if entries.is_empty() {
                         self.app
                             .flash("No feed entry selected".into(), ToastSeverity::Neutral);
-                    }
-                    for entry in entries {
-                        self.app.play_feed_entry(entry);
+                    } else {
+                        self.app.play_feed_entries(entries);
                     }
                 }
                 ShellRequest::FeedsRowClick => {
@@ -205,9 +204,8 @@ impl Model {
                     if entries.is_empty() {
                         self.app
                             .flash("No feed entry selected".into(), ToastSeverity::Neutral);
-                    }
-                    for entry in entries {
-                        self.app.enqueue_feed_entry(entry);
+                    } else {
+                        self.app.enqueue_feed_entries(entries);
                     }
                 }
                 request @ ShellRequest::DismissSelectionModal
@@ -442,6 +440,7 @@ impl Model {
                     match targets {
                         crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {
                             if let Some(item) = items.pop() {
+                                self.focus_emby_context_item(&item);
                                 if let Some((x, y)) = anchor {
                                     self.app.open_context_menu_for_at(item, x, y);
                                 } else {
@@ -464,6 +463,7 @@ impl Model {
                                     })
                                     .cloned()
                                 {
+                                    self.focus_emby_context_item(&item);
                                     if let Some((x, y)) = anchor {
                                         self.app.open_context_menu_for_at(item, x, y);
                                     } else {
@@ -593,5 +593,33 @@ impl Model {
     fn queue_click_reproject(&mut self) {
         self.push_home_content();
         self.push_active_browser_owner_content();
+    }
+
+    /// Context-menu targets are resolved by a component, but retain the old
+    /// library click side effects: a library row context menu focuses Library
+    /// and pins the persistence-facing cursor to that row. This is shared by
+    /// keyboard and pointer requests so actions cannot fall back to a stale
+    /// cursor in another panel.
+    fn focus_emby_context_item(&mut self, item: &mbv_core::api::EmbyItem) {
+        self.app.set_panel_focus(crate::app::PanelFocus::Library);
+        let Some(lib_idx) = self.app.tab.emby_library_index() else {
+            return;
+        };
+        let Some(level) = self
+            .app
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        else {
+            return;
+        };
+        if let Some(index) = level
+            .items
+            .iter()
+            .position(|candidate| candidate.id == item.id)
+        {
+            level.set_resting_cursor(index);
+            self.app.save_default_library_position(lib_idx);
+        }
     }
 }

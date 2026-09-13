@@ -181,6 +181,38 @@ impl App {
         self.submit_queue_item(QueueItem::Feed(entry), false);
     }
 
+    /// Play a feed selection in its supplied order. The first entry starts the
+    /// playback run once; subsequent entries append instead of replacing the
+    /// queue and moving playback to the last selected entry.
+    pub(super) fn play_feed_entries(&mut self, entries: Vec<FeedEntry>) {
+        let mut playable = Vec::with_capacity(entries.len());
+        for entry in entries {
+            if entry.primary_source().is_none() {
+                self.flash(
+                    "Feed entry has no playable source".into(),
+                    ToastSeverity::Error,
+                );
+            } else {
+                playable.push(self.hydrate_feed_entry_state(entry));
+            }
+        }
+        if playable.is_empty() {
+            return;
+        }
+        let first = playable.remove(0);
+        self.play_feed_entry(first);
+        for entry in playable {
+            self.submit_queue_item(QueueItem::Feed(entry), false);
+        }
+    }
+
+    /// Enqueue a feed selection in its supplied order.
+    pub(super) fn enqueue_feed_entries(&mut self, entries: Vec<FeedEntry>) {
+        for entry in entries {
+            self.enqueue_feed_entry(entry);
+        }
+    }
+
     /// The Emby user id that keys local feed-entry state, or an empty sentinel
     /// for a feed-only client with no Emby Service. The store is machine-local,
     /// so the sentinel only has to be stable, not globally unique.
