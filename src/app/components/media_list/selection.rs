@@ -1,0 +1,116 @@
+use super::MediaList;
+
+impl<Target: Clone + PartialEq> MediaList<Target> {
+    /// Toggle a target, selecting the cursor and clicked target on the first
+    /// toggle so Ctrl+Click behaves naturally when starting from one cursor.
+    pub fn toggle_selection(&mut self, target: &Target) {
+        let was_empty = self.multi_selection.is_empty();
+        if was_empty {
+            let cursor = self.selected_target().cloned();
+            if let Some(cursor) = cursor {
+                self.multi_selection.push(cursor.clone());
+                self.selection_anchor = Some(cursor);
+            }
+        }
+        if let Some(index) = self.multi_selection.iter().position(|item| item == target) {
+            if !was_empty {
+                self.multi_selection.remove(index);
+            }
+        } else if self.position_of(target).is_some() {
+            self.multi_selection.push(target.clone());
+        }
+        if self.multi_selection.is_empty() {
+            self.selection_anchor = None;
+        } else if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(target.clone());
+        }
+    }
+
+    /// Select the contiguous range from the stable anchor to `target`.
+    /// Rebuilding from the anchor makes repeated Shift clicks deterministic.
+    pub fn extend_selection_to(&mut self, target: &Target) {
+        let Some(end) = self.position_of(target) else {
+            return;
+        };
+        let anchor = self
+            .selection_anchor
+            .clone()
+            .or_else(|| self.selected_target().cloned())
+            .unwrap_or_else(|| target.clone());
+        let Some(start) = self.position_of(&anchor) else {
+            self.selection_anchor = Some(target.clone());
+            self.multi_selection = vec![target.clone()];
+            return;
+        };
+        let (lo, hi) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        self.multi_selection = self.selectable[lo..=hi]
+            .iter()
+            .filter_map(|&row| self.rows[row].selectable_target().cloned())
+            .collect();
+        self.selection_anchor = Some(anchor);
+    }
+
+    /// Exit Visual mode and discard all selected targets.
+    pub fn clear_selection(&mut self) {
+        self.multi_selection.clear();
+        self.selection_anchor = None;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{MediaList, MediaListRow};
+
+    fn list() -> MediaList<u8> {
+        let mut list = MediaList::new();
+        list.set_content((1..=8).map(item).collect());
+        list
+    }
+
+    fn item(target: u8) -> MediaListRow<u8> {
+        MediaListRow::Item {
+            target,
+            primary: target.to_string(),
+            trailing: None,
+            duration: None,
+            kind: super::super::MediaKind::Media,
+            semantic_state: super::super::MediaSemanticState::Ordinary,
+        }
+    }
+
+    #[test]
+    fn toggle_adds_and_removes() {
+        let mut list = list();
+        list.delegate(
+            super::super::RowLocalInput::Click(ratatui::layout::Position { x: 0, y: 0 }),
+            Some(2),
+        );
+        list.toggle_selection(&2);
+        assert_eq!(list.multi_selection(), &[2]);
+        list.toggle_selection(&2);
+        assert!(list.multi_selection().is_empty());
+    }
+
+    #[test]
+    fn first_toggle_includes_prior_cursor() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&6);
+        assert_eq!(list.multi_selection(), &[3, 6]);
+    }
+
+    #[test]
+    fn range_recomputes_from_anchor() {
+        let mut list = list();
+        list.select_target(&2);
+        list.toggle_selection(&5);
+        list.extend_selection_to(&7);
+        assert_eq!(list.multi_selection(), &[2, 3, 4, 5, 6, 7]);
+        list.extend_selection_to(&4);
+        assert_eq!(list.multi_selection(), &[2, 3, 4]);
+    }
+}

@@ -95,6 +95,17 @@ impl<Target> MediaListCarrier<Target> {
         }
     }
 
+    pub fn multi_selection(&self) -> &[Target] {
+        match self.active {
+            Presentation::Wide => self.wide.multi_selection(),
+            Presentation::Inline => self.inline.multi_selection(),
+        }
+    }
+
+    pub fn is_visual_mode(&self) -> bool {
+        !self.multi_selection().is_empty()
+    }
+
     /// The active owner's cursor as an index into its selectable rows.
     pub fn cursor(&self) -> usize {
         match self.active {
@@ -232,6 +243,27 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.select_target(target),
             Presentation::Inline => self.inline.select_target(target),
+        }
+    }
+
+    pub fn toggle_selection(&mut self, target: &Target) {
+        match self.active {
+            Presentation::Wide => self.wide.toggle_selection(target),
+            Presentation::Inline => self.inline.toggle_selection(target),
+        }
+    }
+
+    pub fn extend_selection_to(&mut self, target: &Target) {
+        match self.active {
+            Presentation::Wide => self.wide.extend_selection_to(target),
+            Presentation::Inline => self.inline.extend_selection_to(target),
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        match self.active {
+            Presentation::Wide => self.wide.clear_selection(),
+            Presentation::Inline => self.inline.clear_selection(),
         }
     }
 

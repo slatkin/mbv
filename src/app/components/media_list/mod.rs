@@ -12,6 +12,7 @@ mod anchor;
 mod carrier;
 mod grouping;
 mod inline;
+mod selection;
 #[cfg(test)]
 mod tests;
 mod wide;
@@ -371,6 +372,10 @@ pub struct MediaList<Target> {
     /// Display-row index parked at the viewport top. Height-aware clamping
     /// happens in `resolve_viewport` at paint time.
     scroll: usize,
+    /// Stable targets selected for a bulk action, in selection order.
+    multi_selection: Vec<Target>,
+    /// The stable target from which range selection is extended.
+    selection_anchor: Option<Target>,
 }
 
 impl<Target> MediaList<Target> {
@@ -381,6 +386,8 @@ impl<Target> MediaList<Target> {
             selectable: Vec::new(),
             cursor: 0,
             scroll: 0,
+            multi_selection: Vec::new(),
+            selection_anchor: None,
         }
     }
 
@@ -423,6 +430,16 @@ impl<Target> MediaList<Target> {
     /// Store the offset a painter resolved, so the next frame resumes from it.
     fn set_scroll(&mut self, offset: usize) {
         self.scroll = offset.min(self.rows.len().saturating_sub(1));
+    }
+
+    /// Stable targets currently selected for a bulk action.
+    pub fn multi_selection(&self) -> &[Target] {
+        &self.multi_selection
+    }
+
+    /// A non-empty multi-selection is Visual mode.
+    pub fn is_visual_mode(&self) -> bool {
+        !self.multi_selection.is_empty()
     }
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
@@ -597,6 +614,20 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .unwrap_or_else(|| self.cursor.min(selectable.len().saturating_sub(1)));
         self.rows = rows;
         self.selectable = selectable;
+        let present: Vec<Target> = self
+            .selectable
+            .iter()
+            .filter_map(|&row| self.rows[row].selectable_target().cloned())
+            .collect();
+        self.multi_selection
+            .retain(|target| present.contains(target));
+        if self
+            .selection_anchor
+            .as_ref()
+            .is_some_and(|target| !present.contains(target))
+        {
+            self.selection_anchor = self.selected_target().cloned();
+        }
         self.cursor = if self.selectable.is_empty() {
             0
         } else {
