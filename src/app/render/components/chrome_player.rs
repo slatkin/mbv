@@ -235,11 +235,11 @@ fn render_transport_glyphs(
     x0: u16,
     show_buttons: bool,
     glyph_text: &str,
+    glyph_w: u16,
+    stop_w: u16,
+    next_w: u16,
     glyphs: &TransportGlyphs,
 ) -> Vec<Span<'static>> {
-    let glyph_w = glyph_text.width() as u16;
-    let stop_w = glyphs.stop.0.width() as u16;
-    let next_w = glyphs.next.0.width() as u16;
     let mut spans = vec![Span::styled(
         glyph_text.to_string(),
         Style::default()
@@ -369,8 +369,17 @@ fn render_queue_title_rows(
     // No title competes on the upper row, so the buttons show whenever the
     // glyphs, buttons and pills fit.
     let show_buttons = upper.width as usize >= glyph_w as usize + buttons_w + pills_w as usize;
-    let mut upper_spans =
-        render_transport_glyphs(ctx, upper.y, upper.x, show_buttons, &glyph_text, &glyphs);
+    let mut upper_spans = render_transport_glyphs(
+        ctx,
+        upper.y,
+        upper.x,
+        show_buttons,
+        &glyph_text,
+        glyph_w,
+        stop_w,
+        next_w,
+        &glyphs,
+    );
     let upper_left_w: u16 = upper_spans
         .iter()
         .map(|span| span.content.width() as u16)
@@ -515,7 +524,17 @@ pub(in crate::app) fn render_title_row(
         TransportIndicators::ElapsedOnly => (right_elapsed, right_elapsed_w),
     };
 
-    let mut left = render_transport_glyphs(ctx, area.y, area.x, show_buttons, &glyph_text, &glyphs);
+    let mut left = render_transport_glyphs(
+        ctx,
+        area.y,
+        area.x,
+        show_buttons,
+        &glyph_text,
+        glyph_w,
+        stop_w,
+        next_w,
+        &glyphs,
+    );
     let fixed_w = glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
     let title_parts = if ctx.title_parts.is_empty() {
         vec![(title.to_string(), title_color)]

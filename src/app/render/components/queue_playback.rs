@@ -77,31 +77,28 @@ pub(in crate::app) fn render_playback_header(
     let status_color = status_color(status);
     let status = header_status_word(status);
     let status_w = unicode_width::UnicodeWidthStr::width(status) as u16;
-    let target = format!("on {host}");
-    let target_w = target.width() as u16;
+    let full_target = format!("on {host}");
+    let full_target_w = full_target.width() as u16;
     // One space of text padding on each side inside the header band. The
     // content budget is the band minus those two cells; when the band is
     // too narrow to hold even the padding, paint the background only.
     let content_w = area.width.saturating_sub(2);
     let status_fits = status_w <= content_w;
     let status_w = if status_fits { status_w } else { 0 };
-    let remaining = content_w.saturating_sub(status_w);
+    let avail = content_w.saturating_sub(status_w);
     // The gap between the status word and the right-aligned target; when
     // the row is too narrow, the target truncates with an ellipsis before
     // it can overlap the status. It never drops, so the header keeps
     // stating `on <host>` (the queue-playback-panel delta).
-    let avail = remaining;
     let (target, inner) = if !status_fits {
         (String::new(), 0)
-    } else if target_w <= avail {
-        (target, avail - target_w)
+    } else if full_target_w <= avail {
+        (full_target, avail - full_target_w)
     } else if avail > 1 {
-        (ellipsize(&target, avail - 1), 1)
+        (ellipsize(&full_target, avail - 1), 1)
     } else {
         (String::new(), 0)
     };
-    // The truncated target's own width, for the trailing-pad calculation
-    // below (shadows the pre-truncation `target_w` above, no longer needed).
     let target_w = target.width() as u16;
     let bg_style = Style::default().bg(bg);
     let mut spans = vec![Span::styled(" ", bg_style)];
