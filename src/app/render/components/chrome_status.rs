@@ -151,8 +151,8 @@ impl App {
     /// row already resolves it (design D10; folded change D2/D3): the
     /// connected session's device name (falling back to its host), the
     /// direct-remote route/label, or this machine's device name when playback
-    /// is local. No tracking suffix, no uppercasing — callers style it and
-    /// the header row shows it verbatim.
+    /// is local. Callers style the returned label and the header row shows it
+    /// verbatim.
     pub(in crate::app) fn playback_host_label(&self) -> String {
         let remote_state = self.remote_slot_state();
         let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
@@ -531,17 +531,14 @@ pub(in crate::app) struct StatusBarModel {
 }
 
 /// The status row's pointer regions, retained by the mounted
-/// `StatusBarPanel` after painting (the deleted
-/// the deleted indicator side channel side channel, task 2.2).
+/// `StatusBarPanel` after painting.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct StatusBarRegions {
     /// Volume pill: scroll-wheel adjusts the volume.
     pub volume: Option<Rect>,
     /// Mute pill: click toggles mute.
     pub mute: Option<Rect>,
-    /// Remote/session pill region (retained verbatim; the production
-    /// projection always passes `show_session_pill: false`, so the pill
-    /// never paints and there is no click dispatch behind the region).
+    /// Remote/session pill region, when the session pill is enabled.
     pub remote: Option<Rect>,
 }
 

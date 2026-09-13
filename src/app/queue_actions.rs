@@ -439,11 +439,10 @@ impl App {
             .is_some_and(|state| state.active.is_some() || !state.queued.is_empty())
     }
 
-    /// Clears `playlist_item_id` from the local queue's items after a full
-    /// playlist update that recreates server entry identities. The local queue
-    /// is the queue whose items every full update (Save/Replace/CreateAs)
-    /// pushes to Emby, so those identities are invalidated whether or not
-    /// tracking is active.
+    /// Clears `playlist_item_id` from local queue items after a full playlist
+    /// update recreates server entry identities. Every full update
+    /// (Save/Replace/CreateAs) pushes this queue to Emby, so those identities
+    /// are invalidated.
     pub(super) fn clear_local_playlist_entry_ids(&mut self) {
         let slot_ids: Vec<_> = self
             .player_tab

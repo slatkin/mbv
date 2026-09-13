@@ -62,10 +62,8 @@ impl App {
         // run loop's idle check, which won't run again.
         self.flush_library_position_now();
         self.stop_visualizer_worker();
-        // Process-local tracking must not outlive the process: retire the
-        // session, its projection, and its unresolved presentation through the
-        // same helper every other lifecycle boundary uses. Late consume
-        // outcomes and stale unresolved counts are discarded with the exit.
+        // Advance the queue lineage so any late work from this process cannot
+        // be applied after teardown.
         self.advance_remote_queue_lineage();
         // #236: persist whichever remote connection (if any) is active
         // right now, before anything below or in the caller's cleanup

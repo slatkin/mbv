@@ -257,7 +257,7 @@ fn direct_selection_dispatches_and_reports_errors_without_tracking() {
 }
 
 #[test]
-fn remote_jump_target_is_independent_of_tracking() {
+fn remote_jump_target_resolves_next_and_previous_without_tracking() {
     let mut app = attached_app();
     let mut first = app.player_tab.emby_items()[0].clone();
     first.id = "a".into();
@@ -274,10 +274,6 @@ fn remote_jump_target_is_independent_of_tracking() {
 
     let target = crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1);
     assert_eq!(target, Some((1, 20)));
-    assert_eq!(
-        crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1),
-        target
-    );
     assert_eq!(
         crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("b"), -1),
         Some((1, 20))

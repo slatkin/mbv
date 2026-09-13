@@ -7,8 +7,6 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 #[path = "tests_queue_mutation_playlist_save.rs"]
 mod tests_queue_mutation_playlist_save;
 
-
-
 #[test]
 fn canceled_active_item_removal_leaves_queue_intact() {
     let _guard = crate::config::TestStateDirGuard::new();

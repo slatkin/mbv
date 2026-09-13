@@ -12,7 +12,7 @@ impl App {
         let start_ticks = items
             .get(start_idx)
             .map_or(0, |item| item.playback_position_ticks);
-        self.dispatch_session_command(move |client| {
+        self.do_session_command(move |client| {
             client.session_play_items(&id, &item_ids, start_idx, start_ticks)
         });
     }
@@ -51,17 +51,15 @@ impl App {
             .connected_session_state
             .as_ref()
             .and_then(|s| s.now_playing_item_id.as_deref());
-        // This path is untracked: the destination and payload come only from
-        // `remote_jump_target` and `submit_attached_sequence`, with no tracking
-        // on this path.
+        // Resolve the destination and payload directly from the visible queue.
         let Some((target_idx, _)) = remote_jump_target(&self.player_tab, current_remote_id, delta)
         else {
             self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
             return;
         };
         let emby_items = self.player_tab.emby_items();
-        // Remap the canonical queue index to the Emby-only projection index
-        // used by the session API.
+        // Remap the canonical queue index to the Emby-only item index used by
+        // the session API.
         let emby_start = self
             .player_tab
             .queue
@@ -99,13 +97,6 @@ impl App {
         &mut self,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
-        self.dispatch_session_command(f);
-    }
-
-    fn dispatch_session_command(
-        &self,
-        f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
-    ) {
         let Some(client) = self.emby_snapshot() else {
             return;
         };
@@ -128,10 +119,8 @@ impl App {
     }
 }
 
-/// The pre-tracking destination and payload for a remote Next/Previous jump:
-/// resolve the connected session's now-playing item against the visible queue
-/// and apply the delta. Tracking must never change this choice, so command
-/// construction routes through this established untracked path first.
+/// Resolve a remote Next/Previous destination by locating the connected
+/// session's now-playing item in the visible queue and applying the delta.
 pub(super) fn remote_jump_target(
     player_tab: &crate::app::PlayerTab,
     now_playing_item_id: Option<&str>,

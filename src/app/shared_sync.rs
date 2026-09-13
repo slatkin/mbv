@@ -106,9 +106,9 @@ impl App {
         self.last_played_item_id = state.last_played_item_id;
         self.last_played_completed = state.last_played_completed;
         self.queue_source = state.source;
-        // A shared replacement may recycle QueueSlotIds. Retire the old
-        // projection before installing it so late consume outcomes cannot
-        // alias a slot in this new queue lineage.
+        // A shared replacement may recycle QueueSlotIds. Advance the queue
+        // lineage before installing it so late consume outcomes cannot alias
+        // a slot in this new lineage.
         self.advance_remote_queue_lineage();
         self.player_tab.set_queue_items(queue_items, cursor);
         self.queue_dirty = false;
