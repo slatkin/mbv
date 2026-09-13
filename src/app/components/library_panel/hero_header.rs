@@ -187,10 +187,17 @@ pub(in crate::app) fn paint_hero_pane_content(
             .is_some_and(|workspace| workspace.focused);
         let box_y = next_row.saturating_add(OVERVIEW_GAP_ROWS);
         let room = area.bottom().saturating_sub(box_y);
-        let box_height = (lines.len() as u16)
-            .max(1)
-            .saturating_add(PANE_PAD_Y * 2)
-            .min(room);
+        let content_height = (lines.len() as u16).max(1).saturating_add(PANE_PAD_Y * 2);
+        // The bottom-most recessed box on the hero fills the pane's
+        // remaining rows (`area` is already inset from the hero panel, so
+        // `area.bottom()` is the panel less one padding row). With no
+        // Workspace the overview box is that bottom-most box; with one, the
+        // overview stays content-sized and the Workspace box below it fills.
+        let box_height = if content.workspace.is_some() {
+            content_height.min(room)
+        } else {
+            room
+        };
         // Room only for padding: no box renders (the shared padding is part
         // of the box's reserved rows).
         if box_height > PANE_PAD_Y * 2 {
@@ -546,6 +553,35 @@ mod hero_header_tests {
             },
             "A very long overview."
         ));
+    }
+
+    #[test]
+    fn overview_box_fills_the_pane_when_no_workspace_follows_it() {
+        let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
+        let with = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("A very long overview.".into()),
+            workspace: None,
+        };
+        let buf = draw_pane(AREA.width, AREA.height, &with);
+        // The bottom-most recessed box reaches the content area's last row:
+        // the hero panel's own bottom padding row sits outside `area`.
+        assert_eq!(buf[(AREA.x + 2, AREA.bottom() - 1)].bg, box_fill);
+
+        // With a Workspace below it the overview is no longer the bottom-most
+        // box, so it stays content-sized.
+        let mut workspace_list = NoopList;
+        let with_workspace = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("A very long overview.".into()),
+            workspace: Some(Workspace {
+                selector: None,
+                list: &mut workspace_list,
+                focused: false,
+            }),
+        };
+        let buf = draw_pane(AREA.width, AREA.height, &with_workspace);
+        assert_ne!(buf[(AREA.x + 2, AREA.bottom() - 1)].bg, box_fill);
     }
 
     #[test]

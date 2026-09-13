@@ -360,6 +360,39 @@ fn workspace_box_sits_one_blank_row_below_the_hero_content() {
         content_row.contains("2020"),
         "content ends directly above the gap"
     );
+    // The Workspace is the hero's bottom-most recessed box, so it reaches the
+    // hero pane's content bottom: the panel less its one bottom padding row.
+    assert_eq!(box_panel.bottom(), geo.hero_area.bottom());
+}
+
+#[test]
+fn overview_box_fills_the_hero_pane_when_there_is_no_workspace() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut content = LibraryPanelContent {
+        selector: None,
+        controls: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Dune"),
+            overview: Some("A very long overview.".into()),
+            workspace: None,
+        }),
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
+    let pane_fill = palette::surface_colors(palette::Surface::HeroPane, false).fill;
+    assert!(geo.workspace.is_none());
+    // The overview is the hero's bottom-most recessed box, so it reaches the
+    // hero pane's content bottom (the panel less its bottom padding row).
+    assert_eq!(
+        buf[(geo.hero_area.x + 2, geo.hero_area.bottom() - 1)].bg,
+        box_fill
+    );
+    // That bottom padding row itself keeps the pane's resting fill.
+    assert_eq!(
+        buf[(geo.hero_area.x + 2, geo.hero.bottom() - 1)].bg,
+        pane_fill
+    );
 }
 
 #[test]
