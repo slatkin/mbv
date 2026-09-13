@@ -59,30 +59,6 @@ fn tracking_retirement_clears_reanchor_popup() {
 }
 
 #[test]
-fn submitted_sequence_without_exact_visible_queue_has_no_projection() {
-    let mut app = attached_app();
-    let mut item_a = app.player_tab.emby_items()[0].clone();
-    item_a.id = "visible-a".into();
-    let mut item_b = app.player_tab.emby_items()[1].clone();
-    item_b.id = "visible-b".into();
-    app.player_tab.set_item_at(
-        0,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
-    );
-    app.player_tab.set_item_at(
-        1,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
-    );
-    let submitted = vec![
-        make_item("submitted-a", "Movie"),
-        make_item("submitted-b", "Movie"),
-    ];
-    app.submit_attached_sequence("session", &submitted, 0);
-    assert!(app.remote_tracker.is_some());
-    assert!(app.remote_queue_projection.is_none());
-}
-
-#[test]
 fn replacement_tracker_ignores_an_earlier_in_flight_poll() {
     let mut app = attached_app();
     let mut item_a = app.player_tab.emby_items()[0].clone();

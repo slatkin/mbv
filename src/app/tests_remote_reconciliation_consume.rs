@@ -190,7 +190,7 @@ fn remote_jump_target_is_independent_of_tracking() {
 }
 
 #[test]
-fn session_jump_track_records_occurrence_intent_for_untracked_destination() {
+fn session_jump_track_does_not_record_occurrence_intent() {
     let mut app = attached_app();
     let mut item_a = app.player_tab.emby_items()[0].clone();
     item_a.id = "a".into();
@@ -226,23 +226,13 @@ fn session_jump_track_records_occurrence_intent_for_untracked_destination() {
         ],
     ));
 
-    // Next from visible "a" (index 0) resolves to index 1 = "b" through the
-    // untracked path and records the submitted occurrence intent.
+    // Generic Session transport does not correlate commands with observations.
     app.session_jump_track("session", 1, "NextTrack");
-
-    assert_eq!(
-        app.remote_tracker
-            .as_ref()
-            .unwrap()
-            .expected()
-            .unwrap()
-            .intent,
-        RemoteIntent::Next { target: 2 }
-    );
+    assert!(app.remote_tracker.as_ref().unwrap().expected().is_none());
 }
 
 #[test]
-fn consume_followed_by_next_targets_the_projected_occurrence() {
+fn consume_followed_by_next_does_not_target_a_projected_occurrence() {
     let mut app = attached_app();
     let mut item_a = app.player_tab.emby_items()[0].clone();
     item_a.id = "a".into();
@@ -303,24 +293,9 @@ fn consume_followed_by_next_targets_the_projected_occurrence() {
         state
     });
 
-    // Next resolves visible "b" (index 0) to "c" (index 1) and records the
-    // submitted occurrence for "c" without confusing visible index with the
-    // submitted sequence.
+    // Generic Session transport does not target a projected occurrence.
     app.session_jump_track("session", 1, "NextTrack");
-    assert_eq!(
-        app.remote_tracker
-            .as_ref()
-            .unwrap()
-            .expected()
-            .unwrap()
-            .intent,
-        RemoteIntent::Next { target: 3 }
-    );
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().submitted().len(),
-        3,
-        "immutable Submitted sequence is preserved"
-    );
+    assert!(app.remote_tracker.as_ref().unwrap().expected().is_none());
 }
 
 // ── task 5.4: consume followed by Previous / direct selection / duplicate ──
@@ -382,15 +357,11 @@ fn consume_first_of_three(app: &mut App) {
 }
 
 #[test]
-fn consume_followed_by_previous_targets_the_projected_occurrence() {
+fn consume_followed_by_previous_does_not_target_a_projected_occurrence() {
     let mut app = attached_app();
     consume_first_of_three(&mut app);
-    // Advance the tracked occurrence to c so Previous has a resolved source
-    // and a real destination inside the visible queue.
-    app.remote_tracker
-        .as_mut()
-        .unwrap()
-        .observe(RemoteObservation::playing(3, "session", "c", 1, 100, 3));
+    // The observed item only determines the ordinary transport destination.
+
     app.connected_session_state = Some({
         let mut state = make_session("Client", "Emby");
         state.id = "session".into();
@@ -398,24 +369,8 @@ fn consume_followed_by_previous_targets_the_projected_occurrence() {
         state
     });
 
-    // Previous from visible "c" (index 1) resolves through the untracked path
-    // to visible "b" (index 0), then translates that slot back to the
-    // Submitted occurrence for "b" — never the consumed "a".
     app.session_jump_track("session", -1, "PreviousTrack");
-    assert_eq!(
-        app.remote_tracker
-            .as_ref()
-            .unwrap()
-            .expected()
-            .unwrap()
-            .intent,
-        RemoteIntent::Previous { target: 2 }
-    );
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().submitted().len(),
-        3,
-        "immutable Submitted sequence is preserved"
-    );
+    assert!(app.remote_tracker.as_ref().unwrap().expected().is_none());
 }
 
 #[test]
