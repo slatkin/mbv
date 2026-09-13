@@ -488,6 +488,14 @@ mod tests {
                 .any(|e| e.label == "Remove from Continue Watching"),
             "menu target must be the Continue Watching item, not the clicked folder"
         );
+        assert_eq!(
+            model
+                .home_context_item
+                .as_ref()
+                .map(|item| item.id.as_str()),
+            Some("id0"),
+            "unified Home handler must retain the Continue Watching item"
+        );
 
         // Task 5.3d, Home context-menu section decoupling: the authoritative
         // "is Continue Watching selected?" fact comes from the Home owner at
@@ -524,14 +532,17 @@ mod tests {
         );
         model.app.panel_focus = PanelFocus::Queue;
         model.app.pending_overlay = None;
-        model.handle_home_request(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
-                item_id: None,
-                source: None,
-                from_continue_watching: false,
-            }]),
-            None,
-        ));
+        route(
+            &mut model,
+            ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
+                    item_id: None,
+                    source: None,
+                    from_continue_watching: false,
+                }]),
+                None,
+            ),
+        );
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_non_cw)) =
             model.app.pending_overlay
         else {
@@ -543,6 +554,10 @@ mod tests {
                 .iter()
                 .any(|e| e.label == "Remove from Continue Watching"),
             "owner on a non-CW section must drop the keyboard-menu CW entry"
+        );
+        assert!(
+            model.home_context_item.is_none(),
+            "unified Home handler must not attach a non-Continue-Watching row"
         );
         assert!(
             matches!(model.app.effective_panel_focus(), PanelFocus::Queue),
@@ -560,14 +575,17 @@ mod tests {
             "resolver must report CW when the owner is back on section 0"
         );
         model.app.pending_overlay = None;
-        model.handle_home_request(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
-                item_id: Some("id0".into()),
-                source: None,
-                from_continue_watching: true,
-            }]),
-            None,
-        ));
+        route(
+            &mut model,
+            ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
+                    item_id: Some("id0".into()),
+                    source: None,
+                    from_continue_watching: true,
+                }]),
+                None,
+            ),
+        );
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_cw)) =
             model.app.pending_overlay
         else {
@@ -587,14 +605,17 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let target = make_item("cw-target", "Movie");
         model.home_content.continue_items = vec![target.clone()];
-        model.handle_home_request(ShellRequest::RowContextMenu(
-            crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
-                item_id: Some(target.id.clone()),
-                source: None,
-                from_continue_watching: true,
-            }]),
-            None,
-        ));
+        route(
+            &mut model,
+            ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
+                    item_id: Some(target.id.clone()),
+                    source: None,
+                    from_continue_watching: true,
+                }]),
+                None,
+            ),
+        );
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {

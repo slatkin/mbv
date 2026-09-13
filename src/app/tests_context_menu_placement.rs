@@ -121,14 +121,14 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout() {
     model.app.tab = TabSelection::Home;
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
-    model.handle_home_request(crate::app::components::ShellRequest::RowContextMenu(
+    model.handle_terminal_message(Msg::Shell(crate::app::components::ShellRequest::RowContextMenu(
         crate::app::types_context_menu::ContextMenuTargets::Home(vec![crate::app::components::msg::HomeRowTarget {
             item_id: Some("id0".into()),
             source: None,
             from_continue_watching: true,
         }]),
         None,
-    ));
+    )), &mut false, &mut false);
     assert!(
         matches!(
             model.app.pending_overlay,
@@ -223,14 +223,14 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
     model.app.tab = TabSelection::Home;
     model.app.panel_focus = PanelFocus::Library;
     model.home_content.continue_items = make_items(5);
-    model.handle_home_request(crate::app::components::ShellRequest::RowContextMenu(
+    model.handle_terminal_message(Msg::Shell(crate::app::components::ShellRequest::RowContextMenu(
         crate::app::types_context_menu::ContextMenuTargets::Home(vec![crate::app::components::msg::HomeRowTarget {
             item_id: Some("id0".into()),
             source: None,
             from_continue_watching: true,
         }]),
         None,
-    ));
+    )), &mut false, &mut false);
     assert!(
         matches!(
             model.app.pending_overlay,

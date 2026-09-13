@@ -416,27 +416,6 @@ impl Model {
                     }
                     self.push_home_content();
                 }
-                ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Home(targets),
-                    anchor,
-                ) => {
-                    let target = targets.into_iter().next();
-                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    let cw_selected = target.as_ref().is_some_and(|t| t.from_continue_watching);
-                    let item = target
-                        .as_ref()
-                        .and_then(|t| self.home_stable_target(t))
-                        .and_then(|(item, _)| match item {
-                            mbv_core::playback_queue::QueueItem::Emby(item) => Some(*item),
-                            _ => None,
-                        });
-                    if let Some((x, y)) = anchor {
-                        self.app.open_context_menu_at(x, y, cw_selected, item);
-                    } else {
-                        self.app.open_context_menu(cw_selected, item);
-                    }
-                    self.push_home_content();
-                }
                 ShellRequest::HomePillClick { target } => {
                     self.select_home_section_from_component(target);
                 }
@@ -447,6 +426,10 @@ impl Model {
                 // is acted on directly (no App-owned flat cursor remains).
                 request @ (ShellRequest::HomePlay(_)
                 | ShellRequest::HomeEnqueue(_)
+                | ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Home(_),
+                    _,
+                )
                 | ShellRequest::HomeDelete(_)
                 | ShellRequest::HomeToggleWatched(_)
                 | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),

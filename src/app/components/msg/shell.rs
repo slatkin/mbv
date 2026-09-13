@@ -170,6 +170,11 @@ pub enum ShellRequest {
     /// Enqueue the Home item at the component-owned flat cursor.
     HomeEnqueue(super::intents::HomeRowTarget),
     /// Open a destination row context menu at an optional pointer anchor.
+    ///
+    /// The anchor remains a raw pointer-coordinate tuple because the shell
+    /// must preserve the click position across the component-to-shell
+    /// boundary; keyboard requests use `None` and resolve placement from the
+    /// freshly painted selection geometry.
     RowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
     /// Remove the Home item at the component-owned flat cursor from
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
