@@ -23,7 +23,7 @@ use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::arrangements::queue::queue_panel_subareas;
 use crate::app::render::components::queue::render_queue_status;
-use crate::app::render::components::widgets::render_queue_panel_frame;
+use crate::app::render::components::widgets::{queue_panel_inset, render_queue_panel_frame};
 use crate::app::render::{
     render_queue_body, render_queue_title_content, QueuePresentation, QueueRenderGeometry,
     QueueTitleModel,
@@ -550,7 +550,11 @@ impl Component for QueueComponent {
         // row and framed content area derive from the placement through the
         // shared arrangement helper, replacing the legacy queue geometry
         // mirror.
-        let (content_area, title_area, pill_row, _title_reserved) = queue_panel_subareas(area);
+        // Keep the QueuePanel recessed on all four sides inside the
+        // QueueColumn-owned placement. The frame painter uses the same inset.
+        let panel_area = queue_panel_inset(area);
+        let (content_area, title_area, pill_row, _title_reserved) =
+            queue_panel_subareas(panel_area);
         self.content_area = content_area;
         self.title_area = title_area;
         // The panel fills its own placement: the left column's queue-panel

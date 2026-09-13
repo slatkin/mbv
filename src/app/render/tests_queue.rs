@@ -161,13 +161,40 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
 
         let (term, layout) = render_queue_view_to_terminal(&mut app, width, 20);
         let buf = term.backend().buffer();
-        let cell = &buf[(layout.content_area.x + 1, layout.content_area.y + 1)];
+        let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, 20));
+        let queue = chrome.root.queue.expect("queue panel placement");
+        let cell = &buf[(queue.x + 2, layout.content_area.y + 1)];
         assert_eq!(
             cell.style().bg,
-            Some(palette::SURFACE_ACCENT_SOFT),
-            "queue-only with queue focus at width {width} must use the queue's focused frame background, got {:?}",
+            Some(palette::surface_colors(palette::Surface::QueuePanel, true).fill),
+            "queue-only with queue focus at width {width} must use the queue panel's focused frame background, got {:?}",
             cell.style().bg
         );
+    }
+}
+
+#[test]
+fn both_queue_column_surface_covers_outer_padding_and_boundary() {
+    for focused in [true, false] {
+        let mut app = make_queue_app(20);
+        app.panel_focus = if focused {
+            crate::app::PanelFocus::Queue
+        } else {
+            crate::app::PanelFocus::Library
+        };
+        let (term, _) = render_queue_view_to_terminal(&mut app, 80, 20);
+        let buffer = term.backend().buffer();
+        let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 80, 20));
+        let column = chrome.left_area;
+        let expected = palette::surface_colors(palette::Surface::QueueColumn, focused).fill;
+        // The outer padding and boundary column have no queue content or
+        // title/pill decoration, so every row must be owned by the queue
+        // column surface there.
+        for y in column.y + 1..column.bottom() {
+            for x in [column.x, column.right() - 1] {
+                assert_eq!(buffer[(x, y)].style().bg, Some(expected), "({x}, {y})");
+            }
+        }
     }
 }
 
@@ -180,10 +207,29 @@ fn both_mode_focused_queue_keeps_focused_styling() {
     let cell = &buf[(layout.content_area.x + 1, layout.content_area.y + 1)];
     assert_eq!(
         cell.style().bg,
-        Some(palette::SURFACE_ACCENT_SOFT),
-        "focused queue in both mode must keep the queue's focused frame background, got {:?}",
+        Some(palette::surface_colors(palette::Surface::QueuePanel, true).fill),
+        "focused queue in both mode must keep the queue panel's recessed background, got {:?}",
         cell.style().bg
     );
+}
+
+#[test]
+fn both_mode_resting_queue_keeps_outer_and_recessed_surfaces_distinct() {
+    let mut app = make_queue_app(20);
+    app.panel_focus = crate::app::PanelFocus::Library;
+    let (term, layout) = render_queue_view_to_terminal(&mut app, 80, 20);
+    let buffer = term.backend().buffer();
+    let outer = palette::surface_colors(palette::Surface::QueueColumn, false).fill;
+    let inner = palette::surface_colors(palette::Surface::QueuePanel, false).fill;
+    assert_eq!(
+        buffer[(layout.content_area.x - 2, layout.content_area.y)].bg,
+        outer
+    );
+    assert_eq!(
+        buffer[(layout.content_area.x, layout.content_area.y)].bg,
+        inner
+    );
+    assert_ne!(outer, inner);
 }
 
 #[test]

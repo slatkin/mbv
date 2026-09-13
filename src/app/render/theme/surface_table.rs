@@ -422,7 +422,7 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     ),
     (
         Surface::QueuePanel,
-        "the queue panel's resting half has always painted the app backdrop",
+        "the queue panel's recessed resting box paints the app backdrop",
     ),
     (
         Surface::MainContentBox,

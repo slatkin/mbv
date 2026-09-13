@@ -42,7 +42,7 @@
 //! | `SelectedRowOnLibraryPane` | — | `components/tv_wide_tests.rs::wide_tv_episode_selected_row_uses_the_shared_focused_surface` |
 //! | `ContextMenuSelectedRow` | yes (context-menu popup, component view) | — |
 //! | `LibraryPanel` | yes (Both, LibraryOnly, wide music) | `tests_library_characterization.rs` rail-body suites |
-//! | `QueuePanel` | yes (wide Both, both bools) | `tests_queue.rs` (focused soft fill) |
+//! | `QueuePanel` | yes (wide Both, both bools) | — |
 //! | `MainContentBox` | — | `components/tv_wide_tests.rs` (focused soft fill), `components/music_workspace_cursor_tests.rs` |
 //! | `InlineHero` | yes (selected detail, component view, both bits) | — |
 //! | `PlaybackPanel` | yes (Both, mini library) | `tests.rs` panel suites |
@@ -388,7 +388,7 @@ fn queue_only_strip_and_queue_follow_the_table() {
     // header row.
     let panel = Rect {
         x: chrome.left_content.x + layout.card.width + 2,
-        y: chrome.left_content.y + 1,
+        y: chrome.left_area.y + 1,
         width: chrome
             .left_content
             .width

@@ -239,6 +239,5 @@ mod tests {
         }
         // The soft variant is not the default focused content body.
         assert_ne!(primitives::SOFT_CONTENT_BODY_BG, SURFACE_FOCUSED);
-        assert_eq!(row(Surface::QueuePanel).resting, SURFACE_BACKDROP);
     }
 }

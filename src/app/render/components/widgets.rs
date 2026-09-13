@@ -231,18 +231,32 @@ pub(in crate::app) fn render_selected_block_borders(
     }
 }
 
+/// The QueuePanel's recessed content box inside its QueueColumn placement:
+/// two columns of horizontal padding, one row of vertical padding.
+pub(in crate::app) fn queue_panel_inset(area: Rect) -> Rect {
+    Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    }
+}
+
 pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rect {
     if area.width == 0 || area.height == 0 {
         return Rect::default();
     }
 
-    let bg = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
-    // `Clear` blanks every cell's symbol first (task 12.2): a bare
-    // `Block::style` only recolors a cell, it never overwrites a stale
-    // glyph left by whatever painted this placement before the queue panel
-    // owned it.
+    // The Queue panel owns a recessed box inside the Queue column surface.
+    // Paint the complete parent placement first, then the semantic content
+    // box inset by the standard two-column horizontal padding.
+    let outer = palette::surface_colors(palette::Surface::QueueColumn, focused).fill;
+    let inner = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
     f.render_widget(Clear, area);
-    f.render_widget(Block::default().style(Style::default().bg(bg)), area);
+    f.render_widget(Block::default().style(Style::default().bg(outer)), area);
+    let inset = queue_panel_inset(area);
+    f.render_widget(Clear, inset);
+    f.render_widget(Block::default().style(Style::default().bg(inner)), inset);
 
     area
 }

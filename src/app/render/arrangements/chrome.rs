@@ -346,16 +346,19 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         input.playback_active,
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
-        left_content,
+        left_content: left_area,
         header_height: QUEUE_PLAYBACK_HEADER_ROWS,
         card_height: playback_rows,
     });
     let queue_playback_area = Rect {
-        x: left_content.x,
-        y: left_content.y,
-        width: left_content.width,
-        height: queue_geo.panel_area.y.saturating_sub(left_content.y),
+        x: left_area.x,
+        y: left_area.y,
+        width: left_area.width,
+        height: queue_geo.panel_area.y.saturating_sub(left_area.y),
     };
+    // The boundary is a hit region over the queue panel's rightmost column,
+    // not a separate divider placement. The queue panels therefore paint
+    // beneath it across the full queue column.
     let queue_boundary_area = Rect {
         x: area.x.saturating_add(left_w).saturating_sub(1),
         y: area.y,
@@ -460,6 +463,11 @@ mod root_frame_tests {
         }
         for (i, (an, ar)) in present.iter().enumerate() {
             for (bn, br) in present.iter().skip(i + 1) {
+                // The resize boundary is an intentionally overlapping hit
+                // region over the queue panel's rightmost column.
+                if an == &"queue_boundary" || bn == &"queue_boundary" {
+                    continue;
+                }
                 assert!(!ar.intersects(*br), "{an} overlaps {bn}");
             }
         }
@@ -546,8 +554,7 @@ mod root_frame_tests {
     }
 
     /// Both: the queue column's two placements tile it exactly (playback
-    /// region above, queue panel below, sharing one column geometry), the
-    /// boundary is the one-column divider beside the queue column, and the
+    /// region above, queue panel below, sharing one column geometry), and the
     /// right column's placed panels -- tab, library, status bar -- tile it
     /// exactly from the tab bar's bottom edge down: the strip's rows are
     /// reserved only where the strip paints (task 4.1), so the library
@@ -560,20 +567,13 @@ mod root_frame_tests {
         let tab = f.tab.expect("tab placed");
         let library = f.library.expect("library placed");
         let status = f.status_bar.expect("status bar placed");
-        let boundary = f.queue_boundary.expect("boundary placed");
-
         assert_eq!(
             (queue_playback.x, queue_playback.width),
             (queue.x, queue.width)
         );
-        assert_eq!(queue_playback.y, area().y + 1);
+        assert_eq!(queue_playback.y, area().y);
         assert_eq!(queue_playback.bottom(), queue.y);
-        assert_eq!(queue.bottom(), area().bottom() - 1);
-        assert!(queue.right() <= boundary.x);
-
-        assert_eq!(boundary.width, 1);
-        assert_eq!(boundary.height, area().height);
-        assert_eq!(boundary.x + 1 + COLUMN_GAP, tab.x);
+        assert_eq!(queue.bottom(), area().bottom());
         assert_eq!(tab.y, area().y);
         // Partition property: tab, library and status bar tile the right
         // column with no unowned band between them (the library covers the
@@ -601,10 +601,10 @@ mod root_frame_tests {
             (queue_playback.x, queue_playback.width),
             (queue.x, queue.width)
         );
-        assert_eq!(queue_playback.y, area().y + 1);
+        assert_eq!(queue_playback.y, area().y);
         assert_eq!(queue_playback.bottom(), queue.y);
-        assert_eq!(queue.bottom(), area().bottom() - 1);
-        assert_eq!(queue.width, area().width - 4);
+        assert_eq!(queue.bottom(), area().bottom());
+        assert_eq!(queue.width, area().width);
         assert!(f.tab.is_none());
         assert!(f.library.is_none());
         assert!(f.library_playback.is_none());
@@ -628,9 +628,6 @@ mod root_frame_tests {
             "idle placement is the always-painted header row plus the separator row"
         );
         assert_eq!(queue_playback.bottom(), queue.y);
-        assert_eq!(
-            queue_playback.height + queue.height,
-            area().height.saturating_sub(2)
-        );
+        assert_eq!(queue_playback.height + queue.height, area().height);
     }
 }

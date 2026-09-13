@@ -84,6 +84,19 @@ pub(super) fn render_wide_media_list<Target: Clone>(
     f.render_widget(List::new(list_items), row_paint_area);
 
     if scrollbar {
+        let scrollbar_x = if row_paint_area.right() < f.area().right() {
+            row_paint_area.right()
+        } else {
+            row_paint_area.x + row_paint_area.width.saturating_sub(1)
+        };
+        f.render_widget(
+            Block::default().style(Style::default().bg(selected_bg)),
+            Rect {
+                x: scrollbar_x,
+                width: 1,
+                ..row_paint_area
+            },
+        );
         crate::app::render::render_right_scrollbar(
             f,
             row_paint_area,

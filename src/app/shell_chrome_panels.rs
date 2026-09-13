@@ -257,12 +257,26 @@ impl Model {
         if !self.application.mounted(&id) {
             return;
         }
-        // The root loop supplies the placement and is the paint gate.
-        // The slot region starts on the row below the placement's header row.
+        // The root loop supplies the placement and is the paint gate. Fill
+        // the complete queue-column placement before the slot and transport
+        // paint, including the outer padding and the boundary column.
+        frame.render_widget(ratatui::widgets::Clear, placement);
+        frame.render_widget(
+            ratatui::widgets::Block::default().style(
+                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
+                    crate::app::palette::Surface::QueueColumn,
+                    matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
+                )
+                .fill),
+            ),
+            placement,
+        );
+        // The slot region starts on the row below the placement's header row
+        // and keeps the queue panel's shared horizontal inner padding.
+        let inset = crate::app::render::components::widgets::queue_panel_inset(placement);
         let slot_region = Rect {
-            y: placement.y + 1,
             height: placement.height.saturating_sub(1),
-            ..placement
+            ..inset
         };
         let wide = queue_playback_column_wide(placement.width);
         let (transport_area, _): (Option<Rect>, CardGeometry) =

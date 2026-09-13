@@ -157,9 +157,8 @@ pub(crate) use theme::{
 // exactly those names (see the change report for the per-name reasons).
 #[cfg(test)]
 pub(crate) use theme::{
-    resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ACCENT_SOFT,
-    SURFACE_ARTWORK_PLACEHOLDER, SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED,
-    SURFACE_PLAYBACK, SURFACE_RESTING,
+    resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ARTWORK_PLACEHOLDER,
+    SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
 };
 // The closed surface table (`unify-surface-colour-neutral` D1/D2/D7) is bridged
 // to `palette.rs` the same way. Its visibility is `crate::app`, so it is not

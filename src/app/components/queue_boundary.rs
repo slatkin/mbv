@@ -1,11 +1,8 @@
 use crate::app::components::mouse::gesture::{MouseGesture, MouseGestureState};
 use crate::app::components::msg::{Msg, QueueRequest};
 use crate::app::components::UserEvent;
-use crate::app::palette;
 use crate::app::queue_column_width::normalize_queue_column_width;
 use ratatui::layout::{Position, Rect};
-use ratatui::style::Style;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 use tuirealm::command::{Cmd, CmdResult};
 use tuirealm::component::{AppComponent, Component};
@@ -114,28 +111,12 @@ impl Default for QueueBoundaryComponent {
 }
 
 impl Component for QueueBoundaryComponent {
-    fn view(&mut self, frame: &mut Frame, area: Rect) {
-        // `enabled` gates drag eligibility (mouse handling), not painting
-        // (task 12.2): the boundary is mounted only while `RootFrame`
-        // places it (Both mode), so it must paint its column whenever it
-        // has a real area, independent of whether a drag can start.
-        if area.width > 0 && area.height > 0 {
-            // `Clear` blanks every cell's symbol first: a bare `Block::style`
-            // only recolors a cell, it never overwrites a stale glyph left
-            // by whatever painted this placement before the boundary owned
-            // it.
-            frame.render_widget(ratatui::widgets::Clear, area);
-            frame.render_widget(
-                Block::default().style(
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::QueueColumn,
-                        self.focused,
-                    )
-                    .fill),
-                ),
-                area,
-            );
-        }
+    fn view(&mut self, _frame: &mut Frame, _area: Rect) {
+        // The boundary is a resize hit-region, not a painted surface: it sits
+        // over the queue panel's own rightmost (scrollbar) column, which the
+        // Queue panel already paints. Painting here would overwrite that
+        // column with its own surface value and erase the scrollbar glyph
+        // the panel just drew.
     }
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
         None
