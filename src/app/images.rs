@@ -1067,6 +1067,32 @@ mod tests {
     }
 
     #[test]
+    fn wide_hero_projection_encodes_the_capped_box_height() {
+        use crate::app::components::library_panel::content::HeroImageState as State;
+        use crate::app::components::library_panel::{ArtworkShape, HeroArtwork, HeroFacts};
+
+        let facts = HeroFacts {
+            title: "Dune".into(),
+            meta_rows: vec!["2021".into()],
+            artwork: HeroArtwork {
+                shape: ArtworkShape::Landscape,
+                source: None,
+                image: State::None,
+            },
+        };
+        let area = ratatui::layout::Rect::new(0, 0, 113, 60);
+        let box_cells = crate::app::components::library_panel::hero_header::hero_artwork_box(
+            area, &facts, false,
+        );
+        assert_eq!(box_cells.height, 25);
+
+        let source = image::DynamicImage::new_rgb8(800, 600);
+        let encoded = cover_fill_hero_box(&source, 160, u32::from(box_cells.height) * 20);
+        use image::GenericImageView;
+        assert_eq!(encoded.dimensions(), (160, 500));
+    }
+
+    #[test]
     fn series_image_cache_key_pins_both_live_chains() {
         assert_eq!(
             series_image_cache_key("abc", &["Primary"]),
