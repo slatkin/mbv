@@ -1,5 +1,4 @@
 use ratatui::backend::TestBackend;
-use ratatui::layout::Rect;
 use ratatui::Terminal;
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,

@@ -226,7 +226,7 @@ impl LibraryPanel {
                 hero_area: wide.hero_area,
                 inline_hero_area: wide.hero_area,
                 selected_item_rect: wide.selected,
-                ..Default::default()
+                selector_tabs: Vec::new(),
             };
         }
         if let Some(narrow) = self.narrow_geometry.as_ref() {
@@ -237,7 +237,6 @@ impl LibraryPanel {
                 inline_hero_area: inline_hero,
                 selected_item_rect: narrow.selected,
                 selector_tabs: Vec::new(),
-                ..Default::default()
             };
         }
         crate::app::layout::PaintedRowGeometry::default()

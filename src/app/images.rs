@@ -890,96 +890,6 @@ pub(in crate::app) fn cover_fill_hero_box(
     source.resize_to_fill(w, h, image::imageops::FilterType::Lanczos3)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{cover_fill_hero_box, series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
-    use crate::app::tests::make_app_stub;
-    use std::time::{Duration, Instant};
-
-    /// A 4:3 source filled into a 16:9 box is cropped top and bottom (design
-    /// D5: the artwork fills its box; the excess is cropped, centred). The
-    /// source has white bands in its top and bottom eighths so a squashed or
-    /// letterboxed fit would show white at the box edges; only the cover
-    /// crop removes them.
-    #[test]
-    fn cover_fill_crops_a_4_3_source_into_a_16_9_box() {
-        let (w, h) = (800u32, 600u32);
-        let mut img = image::DynamicImage::new_rgb8(w, h);
-        for (_x, y, pixel) in img.as_mut_rgb8().unwrap().enumerate_pixels_mut() {
-            let white = y < h / 8 || y >= h * 7 / 8;
-            *pixel = if white {
-                image::Rgb([255, 255, 255])
-            } else {
-                image::Rgb([0, 0, 0])
-            };
-        }
-        let filled = cover_fill_hero_box(&img, 160, 90);
-        // The box is filled exactly: no letterbox margin remains.
-        use image::GenericImageView;
-        assert_eq!(filled.dimensions(), (160, 90));
-        let brightness = |pixel: &image::Rgb<u8>| {
-            let [r, g, b] = pixel.0;
-            (u16::from(r) + u16::from(g) + u16::from(b)) / 3
-        };
-        let rgb = filled.as_rgb8().unwrap();
-        // Cropped at the top: the white top band is gone (the visible top
-        // row maps inside the source's black middle; Lanczos ringing may
-        // bleed a little, so compare against the white band's brightness).
-        assert!(brightness(rgb.get_pixel(80, 0)) < 64, "top band cropped");
-        // Cropped at the bottom likewise.
-        assert!(
-            brightness(rgb.get_pixel(80, 89)) < 64,
-            "bottom band cropped"
-        );
-    }
-
-    #[test]
-    fn series_image_cache_key_pins_both_live_chains() {
-        assert_eq!(
-            series_image_cache_key("abc", &["Primary"]),
-            "abc:ser:Primary"
-        );
-        assert_eq!(
-            series_image_cache_key("abc", &["Thumb", "Primary", "Backdrop", "Logo"]),
-            "abc:ser:Thumb,Primary,Backdrop,Logo"
-        );
-    }
-
-    #[test]
-    fn recent_navigation_blocks_list_card_image_fetch() {
-        let mut app = make_app_stub();
-        app.last_nav_at = Instant::now();
-
-        app.fetch_list_card_image_when_idle(
-            "recent-nav:P".into(),
-            "recent-nav".into(),
-            String::new(),
-            &["Primary"],
-        );
-
-        assert!(!app.card_image_loading.contains("recent-nav:P"));
-        assert!(!app.card_image_states.contains_key("recent-nav:P"));
-    }
-
-    #[test]
-    fn idle_navigation_allows_list_card_image_fetch() {
-        let mut app = make_app_stub();
-        app.last_nav_at = Instant::now() - NAV_IMAGE_FETCH_IDLE_DELAY - Duration::from_millis(1);
-
-        app.fetch_list_card_image_when_idle(
-            "idle-nav:P".into(),
-            "idle-nav".into(),
-            String::new(),
-            &["Primary"],
-        );
-
-        assert!(
-            app.card_image_loading.contains("idle-nav:P")
-                || app.card_image_states.contains_key("idle-nav:P")
-        );
-    }
-}
-
 impl App {
     /// One panel hero's projected image state (task 5.10, design D9): the
     /// projection — never the painter — issues every fetch, then projects the
@@ -1115,5 +1025,86 @@ impl App {
             library_item_id,
             self.current_protocol_suffix(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{cover_fill_hero_box, series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
+    use crate::app::tests::make_app_stub;
+    use std::time::{Duration, Instant};
+
+    /// A 4:3 source filled into a 16:9 box is cropped top and bottom (design
+    /// D5: the artwork fills its box; the excess is cropped, centred). The
+    /// source has white bands in its top and bottom eighths so a squashed or
+    /// letterboxed fit would show white at the box edges; only the cover
+    /// crop removes them.
+    #[test]
+    fn cover_fill_crops_a_4_3_source_into_a_16_9_box() {
+        let (w, h) = (800u32, 600u32);
+        let mut img = image::DynamicImage::new_rgb8(w, h);
+        for (_x, y, pixel) in img.as_mut_rgb8().unwrap().enumerate_pixels_mut() {
+            let white = y < h / 8 || y >= h * 7 / 8;
+            *pixel = if white {
+                image::Rgb([255, 255, 255])
+            } else {
+                image::Rgb([0, 0, 0])
+            };
+        }
+        let filled = cover_fill_hero_box(&img, 160, 90);
+        use image::GenericImageView;
+        assert_eq!(filled.dimensions(), (160, 90));
+        let brightness = |pixel: &image::Rgb<u8>| {
+            let [r, g, b] = pixel.0;
+            (u16::from(r) + u16::from(g) + u16::from(b)) / 3
+        };
+        let rgb = filled.as_rgb8().unwrap();
+        assert!(brightness(rgb.get_pixel(80, 0)) < 64, "top band cropped");
+        assert!(
+            brightness(rgb.get_pixel(80, 89)) < 64,
+            "bottom band cropped"
+        );
+    }
+
+    #[test]
+    fn series_image_cache_key_pins_both_live_chains() {
+        assert_eq!(
+            series_image_cache_key("abc", &["Primary"]),
+            "abc:ser:Primary"
+        );
+        assert_eq!(
+            series_image_cache_key("abc", &["Thumb", "Primary", "Backdrop", "Logo"]),
+            "abc:ser:Thumb,Primary,Backdrop,Logo"
+        );
+    }
+
+    #[test]
+    fn recent_navigation_blocks_list_card_image_fetch() {
+        let mut app = make_app_stub();
+        app.last_nav_at = Instant::now();
+        app.fetch_list_card_image_when_idle(
+            "recent-nav:P".into(),
+            "recent-nav".into(),
+            String::new(),
+            &["Primary"],
+        );
+        assert!(!app.card_image_loading.contains("recent-nav:P"));
+        assert!(!app.card_image_states.contains_key("recent-nav:P"));
+    }
+
+    #[test]
+    fn idle_navigation_allows_list_card_image_fetch() {
+        let mut app = make_app_stub();
+        app.last_nav_at = Instant::now() - NAV_IMAGE_FETCH_IDLE_DELAY - Duration::from_millis(1);
+        app.fetch_list_card_image_when_idle(
+            "idle-nav:P".into(),
+            "idle-nav".into(),
+            String::new(),
+            &["Primary"],
+        );
+        assert!(
+            app.card_image_loading.contains("idle-nav:P")
+                || app.card_image_states.contains_key("idle-nav:P")
+        );
     }
 }

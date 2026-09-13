@@ -1,6 +1,4 @@
-use super::test_helpers::{
-    buffer_to_string, make_movie_app, render_app_to_terminal, render_home_shell_with,
-};
+use super::test_helpers::{buffer_to_string, make_movie_app, render_home_shell_with};
 use super::*;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::ComponentId;

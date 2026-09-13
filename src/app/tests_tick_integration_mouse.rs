@@ -28,7 +28,7 @@ use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 /// A harness with a mounted Search sidebar painted with two results.
 fn search_sidebar_with_painted_results() -> (TickHarness, Vec<(Rect, usize)>) {
-    let mut app = make_app_stub();
+    let app = make_app_stub();
     let mut harness = TickHarness::new(app);
     harness.model_mut().mount_sidebar(SidebarId::Search);
     {

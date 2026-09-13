@@ -93,7 +93,7 @@ impl PanelPlacement {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(crate) struct RootFrame {
     /// Tab bar at the top of the library column (`TabPanel`, task 2.1).
     pub tab: Option<Rect>,
@@ -123,20 +123,6 @@ pub(crate) struct RootFrame {
     /// The one-column queue boundary between the two panels (the mounted
     /// `QueueBoundaryComponent`), placed only in the two-panel layout.
     pub queue_boundary: Option<Rect>,
-}
-
-impl Default for RootFrame {
-    fn default() -> Self {
-        Self {
-            tab: None,
-            library: None,
-            library_playback: None,
-            queue: None,
-            queue_playback: None,
-            status_bar: None,
-            queue_boundary: None,
-        }
-    }
 }
 
 impl RootFrame {
