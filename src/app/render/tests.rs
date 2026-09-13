@@ -314,7 +314,8 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
 /// The queue column's split title band: the upper row keeps the transport
 /// controls, while the title and the `pos / dur` time move one row down —
 /// the title left with one space of indent, the time right with one space
-/// of indent. The throbber and percent ride in the header, never here.
+/// of indent. The header carries no throbber or percent; neither does
+/// this row.
 #[test]
 fn queue_panel_moves_title_progress_and_time_to_the_lower_row() {
     use crate::app::types_settings::PanelMode;
@@ -365,7 +366,7 @@ fn queue_panel_moves_title_progress_and_time_to_the_lower_row() {
     );
     assert!(
         !lines[2].contains('%'),
-        "throbber/percent live in the header, never here:\n{}",
+        "no percent on the lower row:\n{}",
         lines[2]
     );
     assert!(

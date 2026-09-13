@@ -41,8 +41,8 @@ const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackP
 
 pub struct QueuePlaybackPanel {
     /// The header's projected facts: status word left, playback target
-    /// right (`App::playback_host_label`, no tracking suffix) with its
-    /// remote flag (`App::playback_host_is_remote`) for the hostname colour.
+    /// right (`App::playback_host_label_and_remote`, no tracking suffix)
+    /// with its remote flag for the hostname colour.
     status: NowPlayingStatus,
     host: String,
     host_is_remote: bool,
@@ -189,18 +189,7 @@ impl Component for QueuePlaybackPanel {
             height: 1,
             ..queue_panel_inset(area)
         };
-        render_playback_header(
-            frame,
-            header,
-            self.status,
-            &self.host,
-            self.host_is_remote,
-            &self.transport.throbber,
-            &crate::app::ui_util::fmt_playback_pct(
-                self.transport.state.position_ticks,
-                self.transport.state.runtime_ticks,
-            ),
-        );
+        render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
         // panel paints nothing else and its hit geometry stays cleared.
@@ -470,11 +459,11 @@ mod tests {
         );
     }
 
-    /// The header carries the transport's throbber and percent right of the
-    /// status word while playing, through the panel's own projected
-    /// transport state — no shell re-resolution at paint time.
+    /// The header carries no progress while playing: the transport's
+    /// throbber and percent stay out of the header row even when the
+    /// projected transport state has position and runtime to state.
     #[test]
-    fn header_shows_throbber_and_percent_while_playing() {
+    fn header_shows_no_progress_while_playing() {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.state.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
@@ -488,9 +477,10 @@ mod tests {
         let buf = terminal.backend().buffer();
         let header: String = (0..40).map(|x| buf[(x, 1)].symbol().to_owned()).collect();
         assert!(
-            header.contains(" PLAYING ~50%"),
-            "progress rides right of PLAYING: {header:?}"
+            !header.contains('~') && !header.contains('%'),
+            "no throbber or percent in the header: {header:?}"
         );
+        assert!(header.contains(" PLAYING"), "status still left: {header:?}");
         assert!(
             header.trim_end().ends_with("on music-box"),
             "target still right: {header:?}"

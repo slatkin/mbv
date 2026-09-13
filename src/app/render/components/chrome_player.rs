@@ -188,22 +188,17 @@ fn split_title_rows(surface: palette::Surface) -> bool {
     surface == palette::Surface::QueueOnlyPlaybackPanel
 }
 
-/// The transport control glyphs and their colours for one render context:
-/// play/pause glyph + colour, stop glyph + colour, next glyph + colour.
+/// The transport control glyphs and their colours for one render context.
 /// Shared by the single title row and the queue column's split rows so the
 /// glyphs cannot drift between the two presentations.
-fn control_glyphs(
-    ctx: &PlaybackRenderContext<'_>,
-    paused: bool,
-) -> (
-    &'static str,
-    Color,
-    &'static str,
-    Color,
-    &'static str,
-    Color,
-) {
-    let (glyph, gcolor): (&str, Color) = if paused {
+struct TransportGlyphs {
+    play: (&'static str, Color),
+    stop: (&'static str, Color),
+    next: (&'static str, Color),
+}
+
+fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGlyphs {
+    let play = if paused {
         (play_icon(ctx.use_nerd_fonts), palette::ACCENT)
     } else {
         (
@@ -211,26 +206,92 @@ fn control_glyphs(
             palette::TEXT_FOCUS_ACCENT,
         )
     };
-    let stop_glyph = if ctx.use_nerd_fonts { "\u{f04d}" } else { "X" };
-    let next_glyph = if ctx.use_nerd_fonts { "\u{f051}" } else { ">>" };
-    let next_color = if ctx.next_available {
-        palette::TEXT_STRONG
-    } else {
-        palette::TEXT_MUTED
+    let stop = (
+        if ctx.use_nerd_fonts { "\u{f04d}" } else { "X" },
+        if ctx.stop_available {
+            palette::STATUS_ERROR
+        } else {
+            palette::TEXT_MUTED
+        },
+    );
+    let next = (
+        if ctx.use_nerd_fonts { "\u{f051}" } else { ">>" },
+        if ctx.next_available {
+            palette::TEXT_STRONG
+        } else {
+            palette::TEXT_MUTED
+        },
+    );
+    TransportGlyphs { play, stop, next }
+}
+
+/// The play/pause(+stop/next when `show_buttons`) glyph row and its hit-area
+/// rects on `ctx.playback`. Shared by the single title row and the queue
+/// column's upper split row so the glyphs and hit geometry cannot drift
+/// between the two presentations.
+fn render_transport_glyphs(
+    ctx: &mut PlaybackRenderContext<'_>,
+    row_y: u16,
+    x0: u16,
+    show_buttons: bool,
+    glyph_text: &str,
+    glyphs: &TransportGlyphs,
+) -> Vec<Span<'static>> {
+    let glyph_w = glyph_text.width() as u16;
+    let stop_w = glyphs.stop.0.width() as u16;
+    let next_w = glyphs.next.0.width() as u16;
+    let mut spans = vec![Span::styled(
+        glyph_text.to_string(),
+        Style::default()
+            .fg(glyphs.play.1)
+            .add_modifier(Modifier::BOLD),
+    )];
+    let mut x = x0;
+    ctx.playback.play_pause_area = Rect {
+        x,
+        y: row_y,
+        width: glyph_w,
+        height: 1,
     };
-    let stop_color = if ctx.stop_available {
-        palette::STATUS_ERROR
+    x += glyph_w;
+    if show_buttons {
+        ctx.playback.stop_area = Rect {
+            x,
+            y: row_y,
+            width: stop_w,
+            height: 1,
+        };
+        x += stop_w;
+        spans.push(Span::styled(
+            glyphs.stop.0,
+            Style::default().fg(glyphs.stop.1),
+        ));
+        spans.push(Span::raw(" "));
+        x += 1;
+        ctx.playback.next_area = Rect {
+            x,
+            y: row_y,
+            width: next_w,
+            height: 1,
+        };
+        spans.push(Span::styled(
+            glyphs.next.0,
+            Style::default().fg(glyphs.next.1),
+        ));
+        spans.push(Span::raw(" "));
     } else {
-        palette::TEXT_MUTED
-    };
-    (
-        glyph, gcolor, stop_glyph, stop_color, next_glyph, next_color,
-    )
+        ctx.playback.stop_area = Rect::default();
+        ctx.playback.next_area = Rect::default();
+    }
+    spans
 }
 
 /// The status-indicator pills (codec/res/aud/sub, uppercased on the pill
 /// surface): the right side of the single title row and of the queue
-/// column's upper split row. No trailing space; callers pad after merging.
+/// column's upper split row. Opens with one pill-background space so the
+/// resolution pill never touches the panel fill on the left, mirroring the
+/// trailing space on the right. No other trailing space; callers pad after
+/// merging.
 fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
     let mut codec_value_next = false;
@@ -268,6 +329,9 @@ fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     for span in &mut right {
         *span = Span::styled(span.content.to_string(), span.style.bg(pill_bg));
     }
+    if !right.is_empty() {
+        right.insert(0, Span::styled(" ", Style::default().bg(pill_bg)));
+    }
     right
 }
 
@@ -294,54 +358,19 @@ fn render_queue_title_rows(
     }
     let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
     let (pos_ticks, rt_ticks, paused) = ctx.progress;
-    let (glyph, gcolor, stop_glyph, stop_color, next_glyph, next_color) =
-        control_glyphs(ctx, paused);
+    let glyphs = control_glyphs(ctx, paused);
     let pills = status_pill_spans(ctx);
     let pills_w: u16 = pills.iter().map(|span| span.content.width() as u16).sum();
-    let glyph_text = format!("{glyph} ");
+    let glyph_text = format!("{} ", glyphs.play.0);
     let glyph_w = glyph_text.width() as u16;
-    let stop_w = stop_glyph.width() as u16;
-    let next_w = next_glyph.width() as u16;
+    let stop_w = glyphs.stop.0.width() as u16;
+    let next_w = glyphs.next.0.width() as u16;
     let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
     // No title competes on the upper row, so the buttons show whenever the
     // glyphs, buttons and pills fit.
     let show_buttons = upper.width as usize >= glyph_w as usize + buttons_w + pills_w as usize;
-    let mut left = vec![Span::styled(
-        glyph_text,
-        Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
-    )];
-    let mut x = upper.x;
-    ctx.playback.play_pause_area = Rect {
-        x,
-        y: upper.y,
-        width: glyph_w,
-        height: 1,
-    };
-    x += glyph_w;
-    if show_buttons {
-        ctx.playback.stop_area = Rect {
-            x,
-            y: upper.y,
-            width: stop_w,
-            height: 1,
-        };
-        x += stop_w;
-        left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
-        left.push(Span::raw(" "));
-        x += 1;
-        ctx.playback.next_area = Rect {
-            x,
-            y: upper.y,
-            width: next_w,
-            height: 1,
-        };
-        left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
-        left.push(Span::raw(" "));
-    } else {
-        ctx.playback.stop_area = Rect::default();
-        ctx.playback.next_area = Rect::default();
-    }
-    let mut upper_spans = left;
+    let mut upper_spans =
+        render_transport_glyphs(ctx, upper.y, upper.x, show_buttons, &glyph_text, &glyphs);
     let upper_left_w: u16 = upper_spans
         .iter()
         .map(|span| span.content.width() as u16)
@@ -400,8 +429,7 @@ pub(in crate::app) fn render_title_row(
     let (pos_ticks, rt_ticks, paused) = ctx.progress;
     let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
     let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
-    let (glyph, gcolor, stop_glyph, stop_color, next_glyph, next_color) =
-        control_glyphs(ctx, paused);
+    let glyphs = control_glyphs(ctx, paused);
     let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
     let mut right = status_pill_spans(ctx);
     let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
@@ -462,10 +490,10 @@ pub(in crate::app) fn render_title_row(
         .iter()
         .map(|span| span.content.width() as u16)
         .sum();
-    let glyph_text = format!("{glyph} ");
+    let glyph_text = format!("{} ", glyphs.play.0);
     let glyph_w = glyph_text.width() as u16;
-    let stop_w = stop_glyph.width() as u16;
-    let next_w = next_glyph.width() as u16;
+    let stop_w = glyphs.stop.0.width() as u16;
+    let next_w = glyphs.next.0.width() as u16;
     let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
     let available = area.width as usize;
     // The width-driven decision (task 3.5): which indicator set shows and
@@ -487,41 +515,7 @@ pub(in crate::app) fn render_title_row(
         TransportIndicators::ElapsedOnly => (right_elapsed, right_elapsed_w),
     };
 
-    let mut left = vec![Span::styled(
-        glyph_text,
-        Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
-    )];
-    let mut x = area.x;
-    ctx.playback.play_pause_area = Rect {
-        x,
-        y: area.y,
-        width: glyph_w,
-        height: 1,
-    };
-    x += glyph_w;
-    if show_buttons {
-        ctx.playback.stop_area = Rect {
-            x,
-            y: area.y,
-            width: stop_w,
-            height: 1,
-        };
-        x += stop_w;
-        left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
-        left.push(Span::raw(" "));
-        x += 1;
-        ctx.playback.next_area = Rect {
-            x,
-            y: area.y,
-            width: next_w,
-            height: 1,
-        };
-        left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
-        left.push(Span::raw(" "));
-    } else {
-        ctx.playback.stop_area = Rect::default();
-        ctx.playback.next_area = Rect::default();
-    }
+    let mut left = render_transport_glyphs(ctx, area.y, area.x, show_buttons, &glyph_text, &glyphs);
     let fixed_w = glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
     let title_parts = if ctx.title_parts.is_empty() {
         vec![(title.to_string(), title_color)]

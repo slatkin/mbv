@@ -65,7 +65,7 @@ fn assert_title(
     nerd_fonts: bool,
     split: bool,
     mbv_session: bool,
-    target: Option<&str>,
+    _target: Option<&str>,
     scopes: (Rect, Rect),
     local_selected: bool,
 ) {
@@ -77,12 +77,13 @@ fn assert_title(
     let icon = if nerd_fonts { "\u{f0afe}" } else { "🖧" };
     let remote_icon = if nerd_fonts { "\u{f1616}" } else { "🖧" };
     let hostname = mbv_core::api::device_name().to_uppercase();
+    // While connected the column header already names the playback target
+    // (`on <host>`), so the split title is the icon-only pill: no
+    // `CONNECTED: <host>` text, only the scope toggle (mbv sessions).
     let prefix = if !split {
         format!(" {icon}{}{hostname}", if nerd_fonts { " " } else { "  " })
-    } else if mbv_session {
-        format!(" {icon} CONNECTED:  {}", target.expect("split target"))
     } else {
-        format!(" {icon} CONNECTED: {}", target.expect("split target"))
+        format!(" {icon} ")
     };
 
     let mut expected = vec![" ".to_string(); area.width as usize];
@@ -115,36 +116,27 @@ fn assert_title(
     );
 
     let local_fg = palette::TEXT_FOCUS_ACCENT;
-    let local_start = area.x + if split && mbv_session { 0 } else { 2 };
-    let local_end = if split {
-        area.x + 14
+    if split {
+        // The icon-only pill: the flanking spaces carry the pill
+        // foreground; the icon cell keeps its metadata colour (pinned
+        // above at `icon_x`). Both icon variants paint one cell (pinned
+        // by the text assertion above), so the trailing pad sits at +2.
+        assert_style(&buffer[(area.x, area.y)], local_fg, base, false);
+        assert_style(&buffer[(area.x + 2, area.y)], local_fg, base, false);
     } else {
+        let local_start = area.x + 2;
         let label_len = if nerd_fonts { 1 } else { 2 } + hostname.chars().count();
-        area.x + 2 + label_len as u16
-    };
-    for x in local_start..local_end {
-        if x != icon_x {
-            assert_style(&buffer[(x, area.y)], local_fg, base, false);
+        let local_end = area.x + 2 + label_len as u16;
+        for x in local_start..local_end {
+            if x != icon_x {
+                assert_style(&buffer[(x, area.y)], local_fg, base, false);
+            }
         }
-    }
-    if !split {
         assert_style(&buffer[(area.x, area.y)], Color::Reset, base, false);
     }
 
-    if split {
-        let target_start = area.x + if mbv_session { 15 } else { 14 };
-        let target_len = target.expect("split target").chars().count() as u16;
-        let target_fg = if mbv_session {
-            palette::ACCENT
-        } else {
-            palette::TEXT_FOCUS_ACCENT
-        };
+    {
         let (local_scope, remote_scope) = scopes;
-        let target_end = (target_start + target_len).min(local_scope.x);
-        for x in target_start..target_end {
-            assert_style(&buffer[(x, area.y)], target_fg, base, true);
-        }
-
         if mbv_session {
             assert!(local_scope.width > 0 && remote_scope.width > 0);
             for x in local_scope.x..local_scope.right() {
@@ -187,10 +179,6 @@ fn assert_title(
             assert_eq!(local_scope, Rect::default());
             assert_eq!(remote_scope, Rect::default());
         }
-    } else {
-        let (local_scope, remote_scope) = scopes;
-        assert_eq!(local_scope, Rect::default());
-        assert_eq!(remote_scope, Rect::default());
     }
 }
 

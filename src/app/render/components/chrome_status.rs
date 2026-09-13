@@ -147,31 +147,24 @@ impl App {
         (icon, label)
     }
 
-    /// The playback target's host label, resolved the way the queue title
-    /// row already resolves it (design D10; folded change D2/D3): the
-    /// connected session's device name (falling back to its host), the
-    /// direct-remote route/label, or this machine's device name when playback
-    /// is local. Callers style the returned label and the header row shows it
-    /// verbatim.
-    pub(in crate::app) fn playback_host_label(&self) -> String {
+    /// The playback target's host label plus whether it names a remote target
+    /// (a cast attachment, an attached session, or a direct-remote
+    /// route/label): the connected session's device name (falling back to
+    /// its host), the direct-remote route/label, or this machine's device
+    /// name when playback is local — computed together from one
+    /// `remote_slot_state()` resolution for callers (the queue header sync)
+    /// that need both every tick. Callers style the returned label and the
+    /// header row shows it verbatim.
+    pub(in crate::app) fn playback_host_label_and_remote(&self) -> (String, bool) {
         let remote_state = self.remote_slot_state();
+        let is_remote = self.cast_attachment.is_some()
+            || matches!(
+                remote_state,
+                RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
+            );
         let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
         let (_, label) = self.remote_icon_and_label(remote_state, &daemon_endpoint);
-        label.trim_start().to_string()
-    }
-
-    /// Whether `playback_host_label` names a remote target: a cast
-    /// attachment, an attached session, or a direct-remote route/label.
-    /// Mirrors the label's own resolution so the header's hostname colour
-    /// cannot drift from the name it paints.
-    pub(in crate::app) fn playback_host_is_remote(&self) -> bool {
-        if self.cast_attachment.is_some() {
-            return true;
-        }
-        matches!(
-            self.remote_slot_state(),
-            RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
-        )
+        (label.trim_start().to_string(), is_remote)
     }
 
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
@@ -715,7 +708,7 @@ mod playback_host_label_tests {
         app.connected_session_id = Some("sess-1".into());
         app.connected_session_state = Some(make_session("living-room", "Emby"));
 
-        let label = app.playback_host_label();
+        let (label, _) = app.playback_host_label_and_remote();
 
         assert_eq!(label, "living-room");
     }
@@ -725,7 +718,10 @@ mod playback_host_label_tests {
     #[test]
     fn local_playback_resolves_this_machine_device_name() {
         let app = make_app_stub();
-        assert_eq!(app.playback_host_label(), mbv_core::api::device_name());
+        assert_eq!(
+            app.playback_host_label_and_remote().0,
+            mbv_core::api::device_name()
+        );
     }
 
     /// A direct-remote connection resolves the direct-remote label.
@@ -738,6 +734,6 @@ mod playback_host_label_tests {
         app.direct_remote_label = Some("direct-device".into());
         app.queue_scope = QueueScope::Local;
 
-        assert_eq!(app.playback_host_label(), "direct-device");
+        assert_eq!(app.playback_host_label_and_remote().0, "direct-device");
     }
 }

@@ -236,8 +236,7 @@ impl Model {
         transport.panel = crate::app::palette::Surface::QueueOnlyPlaybackPanel;
         transport.panel_focused = false;
         let status = self.app.now_playing_status();
-        let host = self.app.playback_host_label();
-        let host_is_remote = self.app.playback_host_is_remote();
+        let (host, host_is_remote) = self.app.playback_host_label_and_remote();
         let transport_area = if status != NowPlayingStatus::Idle {
             placement.map(|placement| {
                 let inset = queue_panel_inset(placement);

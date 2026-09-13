@@ -578,7 +578,6 @@ fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
         local_icon: "L".into(),
         local_label: "Local".into(),
         remote_icon: "R".into(),
-        remote_label: "Remote".into(),
         local_selected: true,
         show_split: true,
         is_mbv_session: true,
