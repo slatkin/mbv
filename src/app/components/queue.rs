@@ -1,4 +1,4 @@
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Span;
 use ratatui::widgets::Paragraph;
@@ -14,7 +14,6 @@ use super::media_list::{
     RowLocalInput, RowLocalOutcome,
 };
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::mouse::hit::HitRegions;
 use super::msg::{
     Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
     TerminalObserverEvent,
@@ -24,10 +23,7 @@ use crate::app::palette;
 use crate::app::render::arrangements::queue::queue_panel_subareas;
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::{queue_panel_inset, render_queue_panel_frame};
-use crate::app::render::{
-    render_queue_body, render_queue_title_content, QueuePresentation, QueueRenderGeometry,
-    QueueTitleModel,
-};
+use crate::app::render::{render_queue_body, QueuePresentation};
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -57,8 +53,6 @@ pub struct QueueComponent {
     /// focused surface, exactly as before.
     frame_focused: bool,
     empty_text: String,
-    title: Option<QueueTitleModel>,
-    title_area: Option<Rect>,
     area: Rect,
     /// The framed list content area the panel derives from its placement each
     /// `view()` (component-retained geometry, task 3.1): the list body, the
@@ -68,15 +62,11 @@ pub struct QueueComponent {
     /// the queue projection and painted at the panel's own status row.
     status_playlist: Vec<Span<'static>>,
     status_autosave: Option<Vec<Span<'static>>>,
-    geometry: QueueRenderGeometry,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle.
     mouse_gestures: MouseGestureState,
-    /// Scope-pill rects (design.md D6), repopulated in `view()` from the
-    /// geometry the title painter just produced.
-    scope_regions: HitRegions<QueueScope>,
 }
 
 impl QueueComponent {
@@ -91,17 +81,13 @@ impl QueueComponent {
             focused: false,
             frame_focused: false,
             empty_text: String::new(),
-            title: None,
-            title_area: None,
             area: Rect::default(),
             content_area: Rect::default(),
             status_playlist: Vec::new(),
             status_autosave: None,
-            geometry: QueueRenderGeometry::default(),
             pending_slot: None,
             drag_grab: None,
             mouse_gestures: MouseGestureState::new(),
-            scope_regions: HitRegions::new(),
         }
     }
 
@@ -117,11 +103,10 @@ impl QueueComponent {
         cursor: QueueCursorUpdate,
         scope: QueueScope,
         playback: PlaybackState,
-        title: QueueTitleModel,
     ) {
         self.set_rows(slots, playback);
         self.set_cursor(cursor);
-        self.set_scope_chrome(scope, title);
+        self.set_scope(scope);
     }
 
     /// Replace projected rows while preserving the canonical list's selection.
@@ -154,8 +139,8 @@ impl QueueComponent {
         }
     }
 
-    /// Deliver the current scope and title/chrome independently of row delivery.
-    pub(in crate::app) fn set_scope_chrome(&mut self, scope: QueueScope, title: QueueTitleModel) {
+    /// Deliver the current scope independently of row delivery.
+    pub(in crate::app) fn set_scope(&mut self, scope: QueueScope) {
         if scope != self.scope {
             self.carrier.set_scroll(0);
         }
@@ -165,7 +150,6 @@ impl QueueComponent {
         } else {
             "  Remote queue is empty".into()
         };
-        self.title = Some(title);
     }
 
     pub(in crate::app) fn set_pending_slot(&mut self, slot: Option<QueueSlotId>) {
@@ -198,13 +182,6 @@ impl QueueComponent {
     /// (task 3.1; the the former queue-area mirror mirror is gone).
     pub(in crate::app) fn content_area(&self) -> Rect {
         self.content_area
-    }
-
-    /// Test-only: the framed title band the panel retained from its last
-    /// paint.
-    #[cfg(test)]
-    pub(in crate::app) fn test_title_area(&self) -> Option<Rect> {
-        self.title_area
     }
 
     fn cursor_message(&self) -> Option<Msg> {
@@ -394,10 +371,9 @@ impl QueueComponent {
     /// Gesture recognition (click / double-click / right-click / wheel) comes
     /// from the private `MouseGestureState` (ADR 0024, design.md D3). Row
     /// identity comes from the embedded control's retained current-frame
-    /// point resolution
-    /// (design.md D6); scope pills from `scope_regions`. The component emits a
-    /// semantic `Msg` with a resolved `QueueSlotId`/scope — never raw
-    /// coordinates — except the context-menu anchor (design.md D4).
+    /// point resolution (design.md D6). The component emits a semantic `Msg`
+    /// with a resolved `QueueSlotId`/scope — never raw coordinates — except
+    /// the context-menu anchor (design.md D4).
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         // Queue does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
@@ -415,9 +391,6 @@ impl QueueComponent {
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
             MouseGesture::Click(at) => {
-                if let Some(scope) = self.claim_scope_pill(at) {
-                    return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
-                }
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
@@ -431,9 +404,6 @@ impl QueueComponent {
                 }))
             }
             MouseGesture::DoubleClick(at) => {
-                if let Some(scope) = self.claim_scope_pill(at) {
-                    return Some(Msg::Shell(ShellRequest::QueueScopeClick { scope }));
-                }
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
@@ -476,15 +446,6 @@ impl QueueComponent {
         }
     }
 
-    /// If `at` lands on a scope pill, switch the component's own scope and
-    /// reset its scroll (design.md D3), and return the new scope.
-    fn claim_scope_pill(&mut self, at: Position) -> Option<QueueScope> {
-        let &scope = self.scope_regions.resolve(at)?;
-        self.scope = scope;
-        self.carrier.set_scroll(0);
-        Some(scope)
-    }
-
     #[cfg(test)]
     pub(crate) fn test_selected_target(&self) -> Option<QueueSlotId> {
         self.carrier.selected_target().copied()
@@ -498,14 +459,6 @@ impl QueueComponent {
     #[cfg(test)]
     pub(crate) fn test_scroll(&self) -> usize {
         self.carrier.scroll()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_scope_pill_areas(&self) -> (Rect, Rect) {
-        (
-            self.geometry.scope_local_area,
-            self.geometry.scope_remote_area,
-        )
     }
 }
 
@@ -522,34 +475,20 @@ impl Component for QueueComponent {
         // is hidden or resized: stale geometry would repaint the old queue
         // panel and leave a ghost behind.
         self.area = area;
-        // Component-retained geometry (task 3.1): the title band, status pill
-        // row and framed content area derive from the placement through the
-        // shared arrangement helper, replacing the legacy queue geometry
-        // mirror.
+        // Component-retained geometry (task 3.1): the status pill row and
+        // framed content area derive from the placement through the shared
+        // arrangement helper, replacing the legacy queue geometry mirror.
+        // There is no title band: the list starts at the panel's top inset
+        // and the queue-scope pills live in the status bar.
         // Keep the QueuePanel recessed on all four sides inside the
         // QueueColumn-owned placement. The frame painter uses the same inset.
         let panel_area = queue_panel_inset(area);
-        let (content_area, title_area, pill_row, _title_reserved) =
-            queue_panel_subareas(panel_area);
+        let (content_area, pill_row) = queue_panel_subareas(panel_area);
         self.content_area = content_area;
-        self.title_area = title_area;
         // The panel fills its own placement: the left column's queue-panel
         // backdrop (moved from `render_main`'s `render_queue_panel_frame`,
         // task 3.1).
         render_queue_panel_frame(frame, area, self.frame_focused);
-        self.geometry = QueueRenderGeometry::default();
-        if let (Some(title_area), Some(title)) = (self.title_area, self.title.as_ref()) {
-            render_queue_title_content(frame, title_area, title, &mut self.geometry);
-        }
-        // Adopt the scope-pill rects the title painter just produced into the
-        // irregular-chrome registry (design.md D6).
-        self.scope_regions.clear();
-        if self.title.is_some() {
-            self.scope_regions
-                .push(self.geometry.scope_local_area, QueueScope::Local);
-            self.scope_regions
-                .push(self.geometry.scope_remote_area, QueueScope::Remote);
-        }
         // The status pill row the projection pushed (moved from
         // `render_main`'s `render_queue_status`, task 3.1).
         if let Some(pill_row) = pill_row {

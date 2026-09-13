@@ -103,9 +103,6 @@ pub(in crate::app) use components::playlists::{
     render_playlists_content, render_save_playlist_content, PlaylistsRenderGeometry,
     PlaylistsViewState,
 };
-pub(in crate::app) use components::queue::{
-    render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
-};
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
 pub(in crate::app) use components::selection_modal::{
     render_selection_modal_content, SelectionModalRenderModel,
@@ -156,7 +153,7 @@ pub(crate) use theme::{
 // exactly those names (see the change report for the per-name reasons).
 #[cfg(test)]
 pub(crate) use theme::{
-    resolve_surface_focus, PILL_BG, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ARTWORK_PLACEHOLDER,
+    resolve_surface_focus, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ARTWORK_PLACEHOLDER,
     SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
 };
 // The closed surface table (`unify-surface-colour-neutral` D1/D2/D7) is bridged
@@ -246,9 +243,6 @@ mod sessions_tests;
 mod test_helpers;
 #[cfg(test)]
 pub(crate) use test_helpers::{make_movie_app, make_music_group_app, make_queue_app};
-#[cfg(test)]
-#[path = "queue_title_characterization_tests.rs"]
-mod queue_title_characterization_tests;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;

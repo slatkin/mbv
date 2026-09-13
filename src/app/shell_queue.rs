@@ -92,7 +92,6 @@ impl Model {
                 progress_bucket: progress_bucket(playback),
             }
         };
-        let title = self.app.queue_title_model();
         // `sync_queue` runs on every run-loop tick. When nothing the projection
         // depends on changed and no authoritative cursor re-anchor is armed,
         // rebuilding the row vec (slot clone + per-row `format!`) would only
@@ -161,7 +160,7 @@ impl Model {
                     queue.set_row_patch(&target, row);
                 }
                 queue.set_cursor(cursor);
-                queue.set_scope_chrome(scope, title);
+                queue.set_scope(scope);
                 queue.set_status_pills(
                     self.app.playlist_status_spans(),
                     self.app.autosave_status_spans(),

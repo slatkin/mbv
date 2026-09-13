@@ -1,7 +1,6 @@
 use super::media_list::{MediaListRow, MediaSemanticState};
 use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueRequest, ShellRequest};
 use super::queue::{queue_media_rows, QueueComponent, QueueCursorUpdate};
-use crate::app::render::QueueTitleModel;
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
 use ratatui::backend::TestBackend;
@@ -44,7 +43,6 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
 
@@ -60,7 +58,6 @@ fn queue_activation_uses_slot_id_after_snapshot_reorder() {
         QueueCursorUpdate::Preserve,
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     assert!(matches!(
@@ -86,7 +83,6 @@ fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     assert_eq!(component.test_cursor(), 0);
@@ -98,7 +94,6 @@ fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
         QueueCursorUpdate::Set(1),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     assert_eq!(
@@ -116,7 +111,6 @@ fn queue_component_emits_typed_keyboard_intents() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     assert!(matches!(
@@ -158,7 +152,6 @@ fn queue_component_renders_a_snapshot_without_app_state() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -184,7 +177,6 @@ fn queue_right_click_uses_the_rendered_slot_target() {
         QueueCursorUpdate::Set(1),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -217,7 +209,6 @@ fn queue_dot_opens_the_context_menu_for_the_selected_row() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     assert!(matches!(
@@ -234,7 +225,6 @@ fn queue_right_click_on_blank_space_opens_no_menu() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -278,7 +268,6 @@ fn queue_component_upward_scrolling_reaches_top() {
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -303,7 +292,6 @@ fn queue_component_page_up_from_bottom_reaches_top() {
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     // The page stride derives from the framed content area the panel retains
@@ -332,7 +320,6 @@ fn queue_component_instances_isolate_viewport_state() {
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     bottom.set_focused(true);
     let mut untouched = QueueComponent::new();
@@ -341,7 +328,6 @@ fn queue_component_instances_isolate_viewport_state() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     untouched.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -399,7 +385,6 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
         QueueCursorUpdate::Set(20),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -411,7 +396,6 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
         QueueCursorUpdate::Preserve,
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     terminal
@@ -430,7 +414,6 @@ fn queue_movement_uses_single_row_stride_and_follows_focus() {
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     assert!(matches!(
@@ -464,7 +447,6 @@ fn now_playing_queue_row_drops_elapsed_and_keeps_progress() {
             runtime_ticks: 120 * mbv_core::api::TICKS_PER_SECOND,
             paused: false,
         },
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -490,7 +472,6 @@ fn queue_scope_switch_resets_component_scroll() {
         QueueCursorUpdate::Set(29),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     // The framed sub-areas derive from the placement the view receives (task
@@ -526,7 +507,6 @@ fn queue_scope_switch_resets_component_scroll() {
         QueueCursorUpdate::Set(29),
         QueueScope::Remote,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     // Same framed-subarea note (task 3.1): the in-view cursor below needs
@@ -552,7 +532,6 @@ fn queue_scope_switch_resets_component_scroll() {
         QueueCursorUpdate::Set(3),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     // Assert after a draw, not immediately after `set_content`: only a draw
@@ -565,102 +544,5 @@ fn queue_scope_switch_resets_component_scroll() {
         component.test_scroll(),
         0,
         "set_content scope change must reset the component's own scroll"
-    );
-}
-
-#[test]
-fn queue_scope_mouse_pills_reset_component_scroll_from_nonzero() {
-    // The mouse scope-pill branches (components/queue.rs handle_mouse) must
-    // reset the component's own scroll from a nonzero viewport, just like the
-    // '['/']' keys and set_content scope changes. Drive each pill branch
-    // independently from nonzero scroll and assert the reset.
-    let title = QueueTitleModel {
-        local_icon: "L".into(),
-        local_label: "Local".into(),
-        remote_icon: "R".into(),
-        local_selected: true,
-        show_split: true,
-        is_mbv_session: true,
-    };
-
-    let slots = long_queue();
-    let mut component = QueueComponent::new();
-    component.set_content(
-        slots,
-        QueueCursorUpdate::Set(29),
-        QueueScope::Local,
-        PlaybackState::default(),
-        title.clone(),
-    );
-    component.set_focused(true);
-    // The title band (and its scope pills) derive from the panel placement
-    // the view receives (task 3.1): no shell-pushed title area any more.
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
-    terminal
-        .draw(|frame| component.view(frame, frame.area()))
-        .unwrap();
-    assert!(
-        component.test_scroll() > 0,
-        "bottom cursor must produce nonzero scroll, got {}",
-        component.test_scroll()
-    );
-    let (local_pill, remote_pill) = component.test_scope_pill_areas();
-    assert!(
-        local_pill.width > 0 && remote_pill.width > 0,
-        "scope pills must be painted for the split title"
-    );
-
-    // Click the Remote pill: scope preassigned to Remote, scroll reset to 0.
-    let message = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: remote_pill.x,
-        row: remote_pill.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert!(
-        matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::QueueScopeClick {
-                scope: QueueScope::Remote,
-            }))
-        ),
-        "remote pill click must emit a Remote QueueScopeClick"
-    );
-    assert_eq!(
-        component.test_scroll(),
-        0,
-        "remote pill click must reset the component's own scroll"
-    );
-
-    // Re-render at the bottom cursor to restore nonzero scroll, then click
-    // the Local pill: scope preassigned to Local, scroll reset to 0.
-    terminal
-        .draw(|frame| component.view(frame, frame.area()))
-        .unwrap();
-    assert!(
-        component.test_scroll() > 0,
-        "bottom cursor must again produce nonzero scroll, got {}",
-        component.test_scroll()
-    );
-    let (local_pill, _) = component.test_scope_pill_areas();
-    let message = component.on(&Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: local_pill.x,
-        row: local_pill.y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    assert!(
-        matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::QueueScopeClick {
-                scope: QueueScope::Local,
-            }))
-        ),
-        "local pill click must emit a Local QueueScopeClick"
-    );
-    assert_eq!(
-        component.test_scroll(),
-        0,
-        "local pill click must reset the component's own scroll"
     );
 }

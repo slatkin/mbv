@@ -230,12 +230,11 @@ pub fn render_view_to_terminal(
 }
 
 /// Queue panel geometry the mounted `QueuePanel` retained after a real shell
-/// draw (task 3.1): the framed list content area and the title band. The
-/// legacy queue geometry mirror is gone — the panel owns its geometry.
+/// draw (task 3.1): the framed list content area. The legacy queue geometry
+/// mirror is gone — the panel owns its geometry.
 #[derive(Clone, Copy, Debug)]
 pub struct QueuePanelView {
     pub content_area: Rect,
-    pub title_area: Option<Rect>,
 }
 
 /// Read the queue panel's component-retained geometry from a model.
@@ -247,7 +246,6 @@ pub fn queue_panel_view(model: &Model) -> QueuePanelView {
         .expect("QueueComponent mounted");
     QueuePanelView {
         content_area: queue.content_area(),
-        title_area: queue.test_title_area(),
     }
 }
 

@@ -192,7 +192,7 @@ impl Model {
         self.mount_to_placement(ChromePanel::StatusBar, placement);
         let id = ChromePanel::StatusBar.id();
         // The base frame has always passed `show_session_pill: false` here:
-        // the queue column's title pills show the same remote/session info.
+        // the queue-scope pills below show the same remote/session info.
         let show_session_pill = false;
         let remote_status = if show_session_pill {
             let endpoint = self
@@ -207,12 +207,17 @@ impl Model {
         } else {
             Vec::new()
         };
+        // Queue-scope pills (moved from the queue column's removed title
+        // band): shown only while connected to an mbv-based session.
+        let title = self.app.queue_title_model();
+        let queue_scope = (title.show_split && title.is_mbv_session).then_some(title);
         let model = StatusBarModel {
             show_session_pill,
             remote: remote_status,
             mute: self.app.mute_status_spans(),
             volume: self.app.volume_status_spans(),
             right: self.app.status_bar_right_spans(),
+            queue_scope,
         };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>() {

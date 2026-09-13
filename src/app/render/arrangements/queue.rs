@@ -4,9 +4,7 @@ use ratatui::layout::Rect;
 pub(in crate::app) struct QueuePanelGeometry {
     pub panel_area: Rect,
     pub content_area: Rect,
-    pub title_area: Option<Rect>,
     pub pill_row: Option<Rect>,
-    pub title_reserved: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -22,36 +20,29 @@ pub(in crate::app) struct QueuePanelInputs {
 }
 
 /// The Queue panel's framed sub-areas inside its placement: the framed content
-/// box, the title band and the status pill row. Shared by the root placement
+/// box and the status pill row. Shared by the root placement
 /// (`queue_panel_geometry`) and the mounted `QueuePanel`'s own view, which
 /// derives the same sub-areas from the placement it is handed (task 3.1) --
-/// one source for the panel's internal geometry.
-pub(in crate::app) fn queue_panel_subareas(
-    panel_area: Rect,
-) -> (Rect, Option<Rect>, Option<Rect>, bool) {
-    let title_reserved = panel_area.height >= 4;
-    let title_overhead = u16::from(title_reserved) * 3;
-    let status_overhead = u16::from(panel_area.height >= title_overhead + 4) * 3;
+/// one source for the panel's internal geometry. There is no title band:
+/// the list starts below one blank top-inset row, and the queue-scope pills
+/// live in the status bar. A degenerate panel reserves nothing.
+pub(in crate::app) fn queue_panel_subareas(panel_area: Rect) -> (Rect, Option<Rect>) {
+    let top_inset = u16::from(panel_area.height >= 4);
+    let status_overhead = u16::from(panel_area.height >= top_inset + 4) * 3;
     let content_area = Rect {
-        y: panel_area.y + title_overhead,
+        y: panel_area.y + top_inset,
         height: panel_area
             .height
-            .saturating_sub(title_overhead + status_overhead),
+            .saturating_sub(top_inset + status_overhead),
         ..panel_area
     };
-    let title_area = title_reserved.then_some(Rect {
-        x: panel_area.x + 2,
-        y: panel_area.y + 1,
-        width: panel_area.width.saturating_sub(4),
-        height: 1,
-    });
     let pill_row = (status_overhead > 0).then(|| Rect {
         x: panel_area.x + 2,
         y: panel_area.y + panel_area.height.saturating_sub(2),
         width: panel_area.width.saturating_sub(4),
         height: 1,
     });
-    (content_area, title_area, pill_row, title_reserved)
+    (content_area, pill_row)
 }
 
 /// Places the complete queue panel and its framed sub-areas.
@@ -72,13 +63,11 @@ pub(in crate::app) fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePane
             .saturating_sub(gap),
         ..input.left_content
     };
-    let (content_area, title_area, pill_row, title_reserved) = queue_panel_subareas(panel_area);
+    let (content_area, pill_row) = queue_panel_subareas(panel_area);
     QueuePanelGeometry {
         panel_area,
         content_area,
-        title_area,
         pill_row,
-        title_reserved,
     }
 }
 
@@ -131,42 +120,39 @@ mod tests {
                 "{label}: the queue panel ends at the column's content bottom"
             );
             assert!(
-                geometry.title_area.unwrap_or_default().y >= geometry.panel_area.y
-                    && geometry.content_area.y >= geometry.panel_area.y,
+                geometry.content_area.y >= geometry.panel_area.y,
                 "{label}: sub-areas live inside the panel"
             );
         }
     }
 
     /// The framed sub-area split is shared with the mounted panel's view:
-    /// title band, content box and status pill row all sit inside the panel.
+    /// content box and status pill row sit inside the panel (no title band:
+    /// the list starts below one blank top-inset row).
     #[test]
     fn queue_panel_subareas_stay_inside_the_panel() {
         let panel = Rect::new(2, 5, 30, 20);
-        let (content, title, pill, title_reserved) = queue_panel_subareas(panel);
-        assert!(title_reserved);
-        let title = title.expect("20-row panel reserves a title band");
+        let (content, pill) = queue_panel_subareas(panel);
         let pill = pill.expect("20-row panel reserves a status row");
-        assert!(panel.contains((title.x, title.y).into()));
         assert!(panel.contains((content.x, content.y).into()));
         assert!(panel.contains((pill.x, pill.y).into()));
-        assert_eq!(title.width, panel.width.saturating_sub(4));
+        assert_eq!(content.y, panel.y + 1);
         assert!(content.bottom() <= pill.y);
 
         // A degenerate panel reserves nothing.
-        let (content, title, pill, reserved) = queue_panel_subareas(Rect::new(0, 0, 10, 3));
-        assert!(title.is_none() && pill.is_none() && !reserved);
+        let (content, pill) = queue_panel_subareas(Rect::new(0, 0, 10, 3));
+        assert!(pill.is_none());
         assert_eq!(content.height, 3);
     }
 
     /// The idle queue-only pane-geometry chain (review of tasks 3.1-3.4,
     /// moved from the queue render test): with no visual slot or transport
-    /// rows, the list content starts below the header row and the panel's
-    /// reserved title band — the panel's recessed inset is the single space
-    /// row below the header — all from the arrangement's own inputs, not
-    /// pulled from a render-test buffer.
+    /// rows, the list content starts below the header row plus the panel's
+    /// one blank top-inset row (the panel's recessed inset is the single
+    /// space row below the header) — all from the arrangement's own inputs,
+    /// not pulled from a render-test buffer.
     #[test]
-    fn idle_pane_starts_below_header_and_title_band() {
+    fn idle_pane_starts_below_header_without_a_title_band() {
         let header = 1u16;
         let left = left_content(30);
         let geometry = queue_panel_geometry(QueuePanelInputs {
@@ -174,9 +160,10 @@ mod tests {
             header_height: header,
             card_height: 0,
         });
-        // Header row (the panel's own inset is the one space row) + the
-        // panel's 3-row title band.
-        assert_eq!(geometry.content_area.y, left.y + header + 3);
+        // Header row (the panel's own inset is the one space row) plus the
+        // panel's one blank top-inset row; no title band is reserved above
+        // the list any more.
+        assert_eq!(geometry.content_area.y, left.y + header + 1);
         assert_eq!(geometry.panel_area.bottom(), 30);
     }
 }

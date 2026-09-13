@@ -1,6 +1,5 @@
 use super::msg::{Msg, QueueRequest};
 use super::queue::{QueueComponent, QueueCursorUpdate};
-use crate::app::render::QueueTitleModel;
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
 use ratatui::backend::TestBackend;
@@ -31,7 +30,6 @@ fn component_with_slots(slots: Vec<mbv_core::playback_queue::QueueSlot>) -> Queu
         QueueCursorUpdate::Set(0),
         QueueScope::Local,
         PlaybackState::default(),
-        QueueTitleModel::default(),
     );
     component.set_focused(true);
     component
@@ -44,8 +42,8 @@ fn drawn_component() -> (
 ) {
     let slots = queue_three();
     let mut component = component_with_slots(slots.clone());
-    // The panel derives its title/status overhead from the placement it is
-    // handed (task 3.1); 14 rows leave eight framed body rows, enough for the
+    // The panel derives its status overhead from the placement it is
+    // handed (task 3.1); 14 rows leave enough framed body rows for the
     // three dragged rows to resolve.
     let mut terminal = Terminal::new(TestBackend::new(40, 14)).unwrap();
     terminal

@@ -47,13 +47,11 @@ impl App {
             self.terminal_height,
         ));
         let panel_area = chrome.root.queue.unwrap_or_default();
-        let (content_area, title_area, pill_row, title_reserved) = queue_panel_subareas(panel_area);
+        let (content_area, pill_row) = queue_panel_subareas(panel_area);
         QueuePanelGeometry {
             panel_area,
             content_area,
-            title_area,
             pill_row,
-            title_reserved,
         }
     }
 

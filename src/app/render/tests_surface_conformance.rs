@@ -220,14 +220,26 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
                 1,
             ),
         );
-        let queue_title = queue_view
-            .title_area
-            .expect("the queue panel retains a title band");
-        painted.expect(
-            &format!("{label}/queue title band"),
-            palette::Surface::QueuePanelBand,
-            queue_bit,
-            Rect::new(queue_title.right() - 1, queue_title.y, 1, 1),
+        // No title band: one blank QueuePanel row sits above the list (the
+        // scope pills moved to the status bar — covered by the status-bar
+        // scope-pill tests).
+        let placement = model.app.queue_panel_placement();
+        let blank_y = queue_view.content_area.y - 1;
+        assert!(
+            blank_y > placement.panel_area.y,
+            "{label}: the blank row sits inside the panel"
+        );
+        let buffer = term.backend().buffer();
+        let blank = &buffer[(queue_view.content_area.x, blank_y)];
+        assert_eq!(
+            blank.symbol(),
+            " ",
+            "{label}: the row above the list is blank"
+        );
+        assert_eq!(
+            blank.bg,
+            palette::surface_colors(palette::Surface::QueuePanel, queue_bit).fill,
+            "{label}: the blank row carries the queue panel surface"
         );
         let browser = panel_wide_geometry(&model);
         let list_panel = browser.list_panel;
@@ -405,14 +417,22 @@ fn queue_only_strip_and_queue_follow_the_table() {
             1,
         ),
     );
-    let queue_title = queue_view
-        .title_area
-        .expect("the queue panel retains a title band");
-    painted.expect(
-        "QueueOnly/queue title band",
-        palette::Surface::QueuePanelBand,
-        true,
-        Rect::new(queue_title.right() - 1, queue_title.y, 1, 1),
+    // No title band: one blank QueuePanel row sits above the list (the
+    // scope pills moved to the status bar — covered by the status-bar
+    // scope-pill tests).
+    let placement = model.app.queue_panel_placement();
+    let blank_y = queue_view.content_area.y - 1;
+    assert!(
+        blank_y > placement.panel_area.y,
+        "the blank row sits inside the panel"
+    );
+    let buffer = term.backend().buffer();
+    let blank = &buffer[(queue_view.content_area.x, blank_y)];
+    assert_eq!(blank.symbol(), " ", "the row above the list is blank");
+    assert_eq!(
+        blank.bg,
+        palette::surface_colors(palette::Surface::QueuePanel, true).fill,
+        "the blank row carries the queue panel surface"
     );
     // The strip: the shell's queue-only branch paints the panel body and its
     // recess rows as one fixed chrome band.
