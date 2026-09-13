@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::tests::*;
 use mbv_core::playback_queue::QueueItem;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[cfg(test)]
 #[path = "tests_queue_mutation_playlist_save.rs"]
@@ -17,6 +18,40 @@ fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
         0,
     )
     .unwrap()
+}
+
+#[test]
+fn canceled_active_item_removal_leaves_queue_intact() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.set_items(make_items(3), 1);
+    app.player.status.lock().unwrap().active = true;
+    app.player.status.lock().unwrap().current_idx = 1;
+    app.remove_from_queue(1);
+    assert!(app.pending_overlay.is_some());
+    let mut model = Model::new(app);
+    model.sync_modal_requests();
+    model.handle_confirm_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    let app = &model.app;
+
+    assert!(app.pending_overlay.is_none());
+    assert_eq!(app.player_tab.emby_items().len(), 3);
+}
+
+#[test]
+fn confirmed_active_item_removal_removes_item_after_confirmation() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.player_tab.set_items(make_items(3), 1);
+    app.player.status.lock().unwrap().active = true;
+    app.player.status.lock().unwrap().current_idx = 1;
+    app.remove_from_queue(1);
+    let mut model = Model::new(app);
+    model.sync_modal_requests();
+    model.handle_confirm_key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE));
+    let app = &model.app;
+
+    assert_eq!(app.player_tab.emby_items().len(), 2);
 }
 
 /// Task 5.3d, Home typed-effect keyboard ownership: the Ctrl+A chord is

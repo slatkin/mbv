@@ -30,6 +30,27 @@ fn consume_occurrence(app: &mut App, slot_index: usize) {
 }
 
 #[test]
+fn stale_playlist_mutation_completion_is_rejected_after_queue_change() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = saved_playlist_app();
+    app.save_playlist_to_emby();
+    let stale_lineage = app.remote_queue_lineage;
+    app.remove_from_queue(0);
+    assert!(app.remote_queue_lineage > stale_lineage);
+    app.queue_dirty = true;
+
+    app.handle_session_event(SessionEvent::PlaylistMutationComplete {
+        mutation_id: 1,
+        playlist_id: "pl-1".into(),
+        queue_lineage: stale_lineage,
+        source_playlist_id: "pl-1".into(),
+        result: Ok(()),
+    });
+
+    assert!(app.queue_dirty, "stale completion must not clear current queue edits");
+}
+
+#[test]
 fn untracked_save_invalidates_and_persists_entry_identities() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = saved_playlist_app();

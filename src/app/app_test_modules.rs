@@ -124,6 +124,10 @@ mod tests_queue_reorder;
 mod tests_remote_reconciliation;
 
 #[cfg(test)]
+#[path = "tests_remote_commands.rs"]
+mod tests_remote_commands;
+
+#[cfg(test)]
 #[path = "tests_route_state.rs"]
 mod tests_route_state;
 

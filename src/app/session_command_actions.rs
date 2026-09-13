@@ -2,8 +2,7 @@ use super::notify_actions::ToastSeverity;
 use super::{App, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
 use mbv_core::remote_reconciliation::RemoteIntent;
-#[cfg(test)]
-use mbv_core::remote_reconciliation::{ReconciliationTracker, SequenceSource, SubmittedOccurrence};
+
 use std::time::SystemTime;
 
 impl App {
@@ -36,41 +35,6 @@ impl App {
         });
     }
 
-    #[cfg(test)]
-    #[expect(
-        dead_code,
-        reason = "tracker test helper is removed with reconciliation in row 4"
-    )]
-    pub(super) fn build_remote_tracker_with_source(
-        conn_id: &str,
-        items: &[mbv_core::api::EmbyItem],
-        start_idx: usize,
-        generation: u64,
-        playlist_id: Option<String>,
-    ) -> Option<ReconciliationTracker> {
-        let occurrences = items
-            .iter()
-            .enumerate()
-            .map(|(index, item)| {
-                let mut occurrence = SubmittedOccurrence::new(index as u64 + 1, item.id.clone())
-                    .runtime_ticks(item.runtime_ticks);
-                if let Some(id) = playlist_id.as_ref() {
-                    occurrence = occurrence.source(SequenceSource::Playlist { id: id.clone() });
-                }
-                if !item.playlist_item_id.is_empty() {
-                    occurrence = occurrence.playlist_entry(item.playlist_item_id.clone());
-                }
-                occurrence
-            })
-            .collect();
-        ReconciliationTracker::new(conn_id, occurrences, start_idx, Self::now_ms()).map(
-            |mut tracker| {
-                tracker.accept_observations_from(generation);
-                tracker
-            },
-        )
-    }
-
     pub(super) fn issue_remote_intent(&mut self, intent: RemoteIntent) {
         if let Some(tracker) = self.remote_tracker.as_mut() {
             tracker.issue_intent(intent, Self::now_ms());
@@ -94,7 +58,9 @@ impl App {
         }
     }
 
-    pub(super) fn bump_remote_queue_lineage(&mut self) {
+    /// Advances whenever queue identity or state is replaced, so in-flight
+    /// playlist mutations can detect stale completions.
+    pub(super) fn advance_remote_queue_lineage(&mut self) {
         self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
     }
 
@@ -112,7 +78,7 @@ impl App {
             self.dismiss_remote_reanchor();
         }
         if invalidate_lineage {
-            self.bump_remote_queue_lineage();
+            self.advance_remote_queue_lineage();
         }
     }
 

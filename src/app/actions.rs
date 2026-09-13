@@ -314,7 +314,7 @@ impl App {
                 }
                 if self.sync_playback_queue_after_append(scope, appended) {
                     self.persist_local_queue_state_if_needed(scope);
-                    self.bump_remote_queue_lineage();
+                    self.advance_remote_queue_lineage();
                 } else {
                     self.queue_dirty = previous_dirty;
                     *self.queue_for_scope_mut(scope) = previous_queue;
@@ -350,7 +350,7 @@ impl App {
             }
             if self.sync_playback_queue_items_after_append(scope, vec![item]) {
                 self.persist_local_queue_state_if_needed(scope);
-                self.bump_remote_queue_lineage();
+                self.advance_remote_queue_lineage();
                 return true;
             }
             self.queue_dirty = previous_dirty;

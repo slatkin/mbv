@@ -16,7 +16,7 @@ fn tracker(media: &[&str]) -> ReconciliationTracker {
     .unwrap()
 }
 
-fn attached_app() -> App {
+pub(super) fn attached_app() -> App {
     let mut app = make_app_stub();
     app.connected_session_id = Some("session".into());
     app.connected_session_state = Some(make_session("Client", "Emby"));

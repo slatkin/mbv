@@ -1,9 +1,10 @@
 //! Attached generic Emby Session commands remain direct operations.
 
-use super::attached_app;
+use super::tests_remote_reconciliation::attached_app;
 use crate::app::tests::{install_test_emby, make_item, make_session};
 use crate::app::*;
 use std::io::{BufRead, BufReader, Read, Write};
+use mbv_core::remote_reconciliation::{ReconciliationTracker, SubmittedOccurrence};
 
 fn remote_command_app(listener: &std::net::TcpListener) -> App {
     let url = format!("http://{}", listener.local_addr().unwrap());
@@ -226,4 +227,52 @@ fn direct_selection_dispatches_and_reports_errors_without_tracking() {
     assert!(request.contains("ItemIds"));
     assert!(request.contains("StartIndex"));
     assert!(request.contains("StartPositionTicks"));
+}
+
+#[test]
+fn remote_jump_target_is_independent_of_tracking() {
+    let mut app = attached_app();
+    let mut first = app.player_tab.emby_items()[0].clone();
+    first.id = "a".into();
+    first.playback_position_ticks = 10;
+    let mut second = app.player_tab.emby_items()[1].clone();
+    second.id = "a".into();
+    second.playback_position_ticks = 20;
+    let mut third = make_item("b", "Movie");
+    third.id = "b".into();
+    third.playback_position_ticks = 30;
+    app.player_tab.set_item_at(0, mbv_core::playback_queue::QueueItem::Emby(Box::new(first)));
+    app.player_tab.set_item_at(1, mbv_core::playback_queue::QueueItem::Emby(Box::new(second)));
+    app.player_tab.append_item(third);
+
+    let target = crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1);
+    assert_eq!(target, Some((1, 20)));
+    app.remote_tracker = Some(
+        ReconciliationTracker::new(
+            "session",
+            vec![
+                SubmittedOccurrence::new(1, "a"),
+                SubmittedOccurrence::new(2, "a"),
+                SubmittedOccurrence::new(3, "b"),
+            ],
+            0,
+            0,
+        )
+        .unwrap(),
+    );
+    assert_eq!(
+        crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1),
+        target
+    );
+    assert_eq!(
+        crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("b"), -1),
+        Some((1, 20))
+    );
+
+    let items: Vec<_> = app.player_tab.emby_items().iter().skip(1).cloned().collect();
+    let visible = PlayerTab::from_emby_items(items, 0);
+    assert_eq!(
+        crate::app::session_command_actions::remote_jump_target(&visible, Some("a"), 1),
+        Some((1, 30))
+    );
 }
