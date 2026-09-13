@@ -24,6 +24,10 @@ use super::content::{HeroContent, HeroFacts, HeroHeader};
 /// `wide_hero_slots` convention: metadata starts at `img_area.bottom() + 1`).
 const ARTWORK_TEXT_GAP_ROWS: u16 = 1;
 
+/// Blank rows between the header text block and the recessed overview box.
+/// The row belongs to the hero pane (its fill), never to the box.
+const OVERVIEW_GAP_ROWS: u16 = 1;
+
 /// Vertical room a present Workspace keeps below the header (design D5: the
 /// artwork shrinks before a Workspace viewport would drop). Two padding rows
 /// plus a few visible list rows.
@@ -174,7 +178,15 @@ pub(in crate::app) fn paint_hero_pane_content(
     {
         let content_w = area.width.saturating_sub(PANE_PAD_X * 2) as usize;
         let lines = wrap_overview_lines(overview, |_| content_w);
-        let room = area.bottom().saturating_sub(next_row);
+        // One blank hero-pane row always separates the header text from the
+        // recessed overview box. The gap row keeps the pane's own fill;
+        // only the rows below it carry the box surface.
+        let focused = content
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.focused);
+        let box_y = next_row.saturating_add(OVERVIEW_GAP_ROWS);
+        let room = area.bottom().saturating_sub(box_y);
         let box_height = (lines.len() as u16)
             .max(1)
             .saturating_add(PANE_PAD_Y * 2)
@@ -182,8 +194,17 @@ pub(in crate::app) fn paint_hero_pane_content(
         // Room only for padding: no box renders (the shared padding is part
         // of the box's reserved rows).
         if box_height > PANE_PAD_Y * 2 {
+            let pane_bg = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
+            f.render_widget(
+                Block::default().style(Style::default().bg(pane_bg)),
+                Rect {
+                    y: next_row,
+                    height: OVERVIEW_GAP_ROWS.min(area.bottom().saturating_sub(next_row)),
+                    ..area
+                },
+            );
             let box_area = Rect {
-                y: next_row,
+                y: box_y,
                 height: box_height,
                 ..area
             };
@@ -210,10 +231,6 @@ pub(in crate::app) fn paint_hero_pane_content(
             };
             // Plain text, never destination-styled; the hero pane's own focus
             // (derived from the Workspace, design D6) picks the row colour.
-            let focused = content
-                .workspace
-                .as_ref()
-                .is_some_and(|workspace| workspace.focused);
             let fg = if focused {
                 palette::TEXT_STRONG
             } else {
@@ -496,6 +513,39 @@ mod hero_header_tests {
             "overview box painted below the header"
         );
         assert!(text_in(&buf, below, "A very long overview."));
+    }
+
+    #[test]
+    fn overview_box_keeps_a_blank_hero_pane_row_above_it() {
+        let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
+        let pane_fill = palette::surface_colors(palette::Surface::HeroPane, false).fill;
+        assert_ne!(box_fill, pane_fill, "seam needs distinct fills");
+        let with = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("A very long overview.".into()),
+            workspace: None,
+        };
+        let buf = draw_pane(AREA.width, AREA.height, &with);
+        // Start below the artwork box: the imageless placeholder shares the
+        // box's resting fill, so a full-pane scan would catch row 0.
+        let artwork = hero_artwork_box(AREA, &with.facts, with.workspace.is_some());
+        let box_top =
+            (artwork.bottom()..AREA.bottom()).find(|y| buf[(AREA.x + 2, *y)].bg == box_fill);
+        assert!(box_top.is_some(), "overview box paints");
+        let box_top = box_top.unwrap();
+        assert!(box_top > AREA.top() + 1, "header text paints above the box");
+        let gap = box_top - 1;
+        assert_ne!(buf[(AREA.x + 2, gap)].bg, box_fill);
+        assert_eq!(buf[(AREA.x + 2, gap)].bg, pane_fill);
+        assert!(!text_in(
+            &buf,
+            Rect {
+                y: gap,
+                height: 1,
+                ..AREA
+            },
+            "A very long overview."
+        ));
     }
 
     #[test]
