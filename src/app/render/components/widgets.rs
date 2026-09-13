@@ -271,13 +271,14 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
     }
 
     // The Queue panel owns a recessed box inside the Queue column surface.
-    // Paint the complete parent placement first, then the semantic content
-    // box inset by the standard two-column horizontal padding. The outer
-    // fill already clears the inset rect, so only paint its background.
+    // Paint the complete parent placement first (which covers the QueueColumn
+    // footer band around the status bar), then the recessed box, which ends
+    // above the footer band. The outer fill already clears the inset rect, so
+    // only paint its background.
     fill_surface(f, area, palette::Surface::QueueColumn, focused);
-    let inset = queue_panel_inset(area);
+    let box_area = crate::app::render::arrangements::queue::queue_list_box(area);
     let inner = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
-    f.render_widget(Block::default().style(Style::default().bg(inner)), inset);
+    f.render_widget(Block::default().style(Style::default().bg(inner)), box_area);
 
     area
 }

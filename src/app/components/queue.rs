@@ -20,9 +20,11 @@ use super::msg::{
 };
 use super::user_event::UserEvent;
 use crate::app::palette;
-use crate::app::render::arrangements::queue::queue_panel_subareas;
+use crate::app::render::arrangements::queue::{
+    queue_footer_row, queue_list_box, queue_panel_subareas,
+};
 use crate::app::render::components::queue::render_queue_status;
-use crate::app::render::components::widgets::{queue_panel_inset, render_queue_panel_frame};
+use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
@@ -167,7 +169,7 @@ impl QueueComponent {
     }
 
     /// Project the status pill row (playlist source + autosave), painted at
-    /// the panel's own status row each `view()` (task 3.1).
+    /// the QueueColumn footer below the recessed box.
     pub(in crate::app) fn set_status_pills(
         &mut self,
         playlist: Vec<Span<'static>>,
@@ -475,26 +477,26 @@ impl Component for QueueComponent {
         // is hidden or resized: stale geometry would repaint the old queue
         // panel and leave a ghost behind.
         self.area = area;
-        // Component-retained geometry (task 3.1): the status pill row and
-        // framed content area derive from the placement through the shared
-        // arrangement helper, replacing the legacy queue geometry mirror.
-        // There is no title band: the list starts at the panel's top inset
-        // and the queue-scope pills live in the status bar.
-        // Keep the QueuePanel recessed on all four sides inside the
-        // QueueColumn-owned placement. The frame painter uses the same inset.
-        let panel_area = queue_panel_inset(area);
-        let (content_area, pill_row) = queue_panel_subareas(panel_area);
+        // Component-retained geometry (task 3.1): the framed content area
+        // derives from the placement through the shared arrangement
+        // helpers, replacing the legacy queue geometry mirror. There is no
+        // title band: the list starts at the panel's top inset. The status
+        // bar lives in the QueueColumn footer below the recessed box, with
+        // one gap row above and below it.
+        let footer_row = queue_footer_row(area);
+        let content_area = queue_panel_subareas(queue_list_box(area));
         self.content_area = content_area;
-        // The panel fills its own placement: the left column's queue-panel
-        // backdrop (moved from `render_main`'s `render_queue_panel_frame`,
-        // task 3.1).
+        // The panel fills its own placement: the frame painter covers the
+        // whole placement with the QueueColumn surface and the recessed box
+        // above the footer band. The footer band keeps the QueueColumn
+        // surface around the footer row.
         render_queue_panel_frame(frame, area, self.frame_focused);
-        // The status pill row the projection pushed (moved from
-        // `render_main`'s `render_queue_status`, task 3.1).
-        if let Some(pill_row) = pill_row {
+        // The status pill row the projection pushed, painted at the
+        // QueueColumn footer (moved out of the recessed panel).
+        if let Some(footer_row) = footer_row {
             render_queue_status(
                 frame,
-                pill_row,
+                footer_row,
                 self.status_playlist.clone(),
                 self.status_autosave.clone(),
             );

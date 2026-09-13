@@ -1,7 +1,9 @@
 use super::shell_queue::NOW_PLAYING_THROBBER_FRAMES;
 use crate::app::layout::{AppLayout, FrameChromeGeometry};
 use crate::app::render::arrangements::chrome::{chrome_geometry, ChromeGeometryInput};
-use crate::app::render::arrangements::queue::{queue_panel_subareas, QueuePanelGeometry};
+use crate::app::render::arrangements::queue::{
+    queue_footer_row, queue_list_box, queue_panel_subareas, QueuePanelGeometry,
+};
 use crate::app::{palette, App};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -47,11 +49,10 @@ impl App {
             self.terminal_height,
         ));
         let panel_area = chrome.root.queue.unwrap_or_default();
-        let (content_area, pill_row) = queue_panel_subareas(panel_area);
         QueuePanelGeometry {
             panel_area,
-            content_area,
-            pill_row,
+            content_area: queue_panel_subareas(queue_list_box(panel_area)),
+            footer_row: queue_footer_row(panel_area),
         }
     }
 

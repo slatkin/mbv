@@ -799,3 +799,50 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
         "the predicted row keeps its duration: {row_line:?}"
     );
 }
+
+/// The QueueColumn footer: the status bar sits outside the recessed
+/// queue-list box, with one gap row above and below it, as wide as the
+/// QueueColumn header — on the QueueColumn surface, not the recessed panel.
+#[test]
+fn queue_status_bar_paints_as_a_column_footer_below_the_panel() {
+    let mut app = make_queue_app(20);
+    app.panel_mode = crate::app::PanelMode::Both;
+    let (term, _) = render_queue_view_to_terminal(&mut app, 80, 30);
+    let buf = term.backend().buffer();
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 80, 30));
+    let queue = chrome.root.queue.expect("queue panel placement");
+    let bit = chrome.queue_focused;
+    let footer_y = queue.bottom() - 2;
+    // As wide as the QueueColumn header (the column's canonical inset).
+    assert!(queue.width.saturating_sub(4) > 0);
+    let band = palette::surface_colors(palette::Surface::QueuePanelBand, false).fill;
+    let column = palette::surface_colors(palette::Surface::QueueColumn, bit).fill;
+    // The footer row carries the status band across the header width.
+    for x in [queue.x + 2, queue.right() - 3] {
+        assert_eq!(
+            buf[(x, footer_y)].style().bg,
+            Some(band),
+            "the footer row paints the status band at ({x}, {footer_y})"
+        );
+    }
+    // One QueueColumn gap row above and below the footer: the recessed box
+    // ends above the upper gap.
+    for (y, label) in [(footer_y - 1, "above"), (footer_y + 1, "below")] {
+        assert_eq!(
+            buf[(queue.x + 2, y)].style().bg,
+            Some(column),
+            "the gap row {label} the footer keeps the column surface"
+        );
+    }
+    let panel_box = super::arrangements::queue::queue_list_box(queue);
+    assert_eq!(
+        panel_box.bottom() + 1,
+        footer_y,
+        "the recessed box ends one gap row above the footer"
+    );
+    assert_eq!(
+        (panel_box.x, panel_box.width),
+        (queue.x + 2, queue.width.saturating_sub(4)),
+        "the footer spans the recessed box width (the header width)"
+    );
+}
