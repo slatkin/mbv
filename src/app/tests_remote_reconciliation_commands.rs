@@ -33,14 +33,23 @@ fn remote_command_app(listener: &std::net::TcpListener) -> App {
     app
 }
 
-fn accept_one(listener: &std::net::TcpListener) -> std::net::TcpStream {
+fn accept_command_request(
+    listener: &std::net::TcpListener,
+    endpoint: &str,
+) -> (std::net::TcpStream, String) {
     listener.set_nonblocking(true).unwrap();
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     loop {
         match listener.accept() {
             Ok((stream, _)) => {
-                listener.set_nonblocking(false).unwrap();
-                return stream;
+                let request = read_http_request(&stream);
+                if request.starts_with(&format!("POST {endpoint} HTTP/1.1")) {
+                    listener.set_nonblocking(false).unwrap();
+                    return (stream, request);
+                }
+                // Complete unrelated requests so their worker can proceed, then
+                // keep listening for the command request.
+                respond(stream, 200, "[]");
             }
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                 assert!(std::time::Instant::now() <= deadline, "command was not dispatched");
@@ -101,11 +110,11 @@ fn respond(stream: std::net::TcpStream, status: u16, body: &str) {
 fn capture_error(
     listener: &std::net::TcpListener,
     app: &mut App,
+    expected_endpoint: &str,
     act: impl FnOnce(&mut App),
 ) -> String {
     act(app);
-    let stream = accept_one(listener);
-    let request = read_http_request(&stream);
+    let (stream, request) = accept_command_request(listener, expected_endpoint);
     respond(stream, 500, "command failed");
     let event = app
         .sessions_rx
@@ -123,7 +132,7 @@ fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
     let items = app.player_tab.emby_items();
-    let request = capture_error(&listener, &mut app, move |app| {
+    let request = capture_error(&listener, &mut app, "/Sessions/session/Playing", move |app| {
         app.submit_attached_sequence("session", &items, 1);
     });
     assert_post(&request, "/Sessions/session/Playing");
@@ -138,7 +147,11 @@ fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
 fn pause_play_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    let request = capture_error(&listener, &mut app, |app| {
+    let request = capture_error(
+        &listener,
+        &mut app,
+        "/Sessions/session/Playing/PlayPause",
+        |app| {
         app.dispatch(action::Command::TogglePlayPause);
     });
     assert_post(&request, "/Sessions/session/Playing/PlayPause");
@@ -148,7 +161,11 @@ fn pause_play_dispatches_and_reports_errors_without_tracking() {
 fn seek_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    let request = capture_error(&listener, &mut app, |app| {
+    let request = capture_error(
+        &listener,
+        &mut app,
+        "/Sessions/session/Playing/Seek?SeekPositionTicks=650000000",
+        |app| {
         app.dispatch(action::Command::SeekRelative(5.0));
     });
     assert_post(
@@ -161,7 +178,11 @@ fn seek_dispatches_and_reports_errors_without_tracking() {
 fn stop_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    let request = capture_error(&listener, &mut app, |app| {
+    let request = capture_error(
+        &listener,
+        &mut app,
+        "/Sessions/session/Playing/Stop",
+        |app| {
         app.dispatch(action::Command::Stop);
     });
     assert_post(&request, "/Sessions/session/Playing/Stop");
@@ -171,7 +192,7 @@ fn stop_dispatches_and_reports_errors_without_tracking() {
 fn next_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    let request = capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, "/Sessions/session/Playing", |app| {
         app.dispatch(action::Command::NextTrack);
     });
     assert_post(&request, "/Sessions/session/Playing");
@@ -185,7 +206,7 @@ fn previous_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
     app.connected_session_state.as_mut().unwrap().now_playing_item_id = Some("b".into());
-    let request = capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, "/Sessions/session/Playing", |app| {
         app.dispatch(action::Command::PreviousTrack);
     });
     assert_post(&request, "/Sessions/session/Playing");
@@ -198,7 +219,7 @@ fn previous_dispatches_and_reports_errors_without_tracking() {
 fn direct_selection_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    let request = capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, "/Sessions/session/Playing", |app| {
         app.dispatch(action::Command::QueuePlayCursor(1));
     });
     assert_post(&request, "/Sessions/session/Playing");
