@@ -379,7 +379,9 @@ mod hero_header_tests {
     fn square_header_paints_art_right_of_text() {
         let pane = content(ArtworkShape::Square);
         let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
-        let tall = Rect::new(0, 0, 60, 60);
+        // A pane wide enough that the row cap, not the text column minimum, is
+        // the binding constraint.
+        let tall = Rect::new(0, 0, 100, 60);
         let capped = hero_artwork_box(tall, &pane.facts, false);
         assert_eq!(capped.height, HERO_ARTWORK_MAX_ROWS);
         let tall_buf = draw_pane(tall.width, tall.height, &pane);
