@@ -32,7 +32,7 @@ for the Workspace and selection modal.
 #### Scenario: Podcast selection changes
 
 - **WHEN** the user moves selection between podcast shows
-- **THEN** the hero or detail workspace updates to the newly selected podcast
+- **THEN** the Hero header or Workspace updates to the newly selected podcast
 - **AND** the show list retains provider-native selection identity across loaded-page changes
 
 #### Scenario: Selected show scrolls in the inline presentation

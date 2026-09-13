@@ -2,7 +2,7 @@
 
 ### Requirement: Idle feed display in playback panel
 
-The system SHALL display the current feed item's title in the playback panel title row ONLY when playback is idle (nothing playing and no remote session connected), the playback panel is rendered, and the title row is drawn, replacing the otherwise blank title area. The panel's presence is defined by `queue-playback-panel`: in a queue-visible layout an idle player collapses the panel, so the idle feed title SHALL NOT be displayed there; where the panel does render — the right-column player strip, which renders exactly when the queue column is hidden — the idle feed title SHALL display as today.
+The system SHALL display the current feed item's title in the playback panel title row ONLY when playback is idle (nothing playing and no remote session connected), the playback panel is rendered, and the title row is drawn, replacing the otherwise blank title area. The panel's presence is defined by `queue-playback-panel`: in a queue-visible layout an idle player collapses the panel, so the idle feed title SHALL NOT be displayed there; where the panel does render — the Library playback panel, which renders exactly when the queue column is hidden — the idle feed title SHALL display as today.
 
 #### Scenario: Idle state shows feed title
 
@@ -26,7 +26,7 @@ The system SHALL display the current feed item's title in the playback panel tit
 
 ### Requirement: Idle feed open-link command follows the display
 
-The command that opens the current idle feed item's link SHALL be offered only where the idle feed title can be displayed, which is only where the playback panel renders. In a queue-visible layout with nothing playing the panel is collapsed, so the command SHALL NOT fire there; where the panel renders (the right-column player strip), it SHALL fire as today.
+The command that opens the current idle feed item's link SHALL be offered only where the idle feed title can be displayed, which is only where the playback panel renders. In a queue-visible layout with nothing playing the panel is collapsed, so the command SHALL NOT fire there; where the panel renders (the Library playback panel), it SHALL fire as today.
 
 #### Scenario: Open-link suppressed in queue-only idle
 

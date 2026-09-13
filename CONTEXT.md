@@ -292,7 +292,7 @@ _Avoid_: pending active index, cursor push, now-playing index, active_idx
 The target shared provider-neutral owner for one logical media-row flow,
 introduced by `complete-shared-media-list-ownership`. It will own rows,
 stable-target selection, cursor/scroll, delegated row-local behavior, and
-retained geometry while a Variant (Wide, Inline, or Grid presentation) supplies
+retained geometry while a Variant (Wide or Inline presentation) supplies
 painting within its established arrangement. It will be embedded beneath the
 destination Interactive Component; it will never be mounted, focused,
 subscribed, or given a ComponentId. The destination keeps Service content,
@@ -311,43 +311,34 @@ The target provider-neutral, one-column fixed-row TuiRealm Component over a
 `MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
 will provide the Wide Variant without choosing a Service or destination. It is
 the target canonical control for Wide one-column rails, including Queue;
-non-hero two-column catalog presentation remains an arrangement policy.
+the Library panel owns placement and presentation policy.
 _Avoid_: generic list, two-column list, Inline Search
 
 **InlineMediaBrowser**:
 The target provider-neutral, one-column TuiRealm Component over a
 `MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
 will provide the Inline Variant with selected-row replacement while its parent
-owns content authority. Normal/Narrow hero-bearing browse surfaces will use it
+owns content authority. Narrow hero-bearing browse surfaces will use it
 for their one-column list. It is distinct from **Inline Search**, which is a
 library-scoped search capability embedded in a searchable destination and not a
 media-list control.
 _Avoid_: Inline Search, detail panel, generic list
 
-**Grid presentation**:
-The target shared-owner Variant over a `MediaList<Target>`, introduced by
-`complete-shared-media-list-ownership`, for the existing non-hero two-column
-catalog arrangement. The arrangement retains placement, traversal policy,
-scrollbar, and cell geometry; Grid executes within that arrangement. It is not
-a WideMediaList or an InlineMediaBrowser and does not change provider or
-destination ownership.
-_Avoid_: two-column list, generic list, grid mode
-
 **Presentation** (media-list):
-One member of the closed set of media-list presentations — Wide, Inline, Grid
-— each a persistent component (WideMediaList, InlineMediaBrowser, or the Grid
-presentation) over the one shared `MediaList<Target>`. A destination derives
-the active Presentation from its kind, breakpoint, and painted chrome; a
-change re-selects among them and never invents a new one. Exactly one
-Presentation holds (carries) the owner at a time. Narrower than the general
+One member of the closed set of media-list presentations — Wide and Inline —
+each a persistent component (WideMediaList or InlineMediaBrowser) over the one
+shared `MediaList<Target>`. The Library panel derives the active Presentation
+from shared geometry and content policy; a change re-selects among them and
+never invents a new one. Exactly one Presentation holds (carries) the owner at
+a time. Narrower than the general
 **Variant** term: every media-list Presentation is a Variant, but Variant
 also covers non-media-list named presentations (e.g. hero).
 _Avoid_: mode, control (for the carrying presentation), layout, Carrier
 
 **Carrier** (media-list):
 The destination-side `MediaListCarrier<Target>` container that owns a logical
-flow's persistent Presentation adapters (WideMediaList, InlineMediaBrowser,
-Grid) and tracks which one is active. Exactly one of its Presentations holds
+flow's persistent Presentation adapters (WideMediaList and
+InlineMediaBrowser) and tracks which one is active. Exactly one of its Presentations holds
 the shared `MediaList<Target>` — its rows, cursor, scroll, selection, and
 retained geometry — at a time; a responsive change moves the same owner
 between the adapters and preserves only the outgoing selected-row viewport
@@ -357,7 +348,7 @@ _Avoid_: active list, owner swap, second control, active carrier (for the
 owner-holding Presentation)
 
 **Inline Search**:
-A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Normal and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
+A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Narrow and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
 _Avoid_: global search, Search sidebar, search overlay
 
 **Tab selection**:
@@ -424,27 +415,77 @@ _Avoid_: play target, output target, active player
 
 ## Presentation
 
-**Panel focus**:
-Which of Library or Queue currently receives navigation keys. Independent of
-Panel mode.
+**Panel**:
+A root-composed region with its own placement, surface fill, layout, and
+Interactive Component. Panels are Tab, Library, Library playback, Queue, Queue
+playback, Status bar, and the pane boundaries. **Panel focus** still means which
+of Library or Queue receives navigation keys; it is independent of Panel mode.
 _Avoid_: active panel, focused panel, pane focus
 
 **Panel mode**:
-The app-wide layout state, one of Mini, Normal, or Wide:
+The app-wide layout state, one of Mini, Narrow, or Wide:
 - **Mini**: only one of Library or Queue is visible, per Panel focus. Reached
   either by explicit `x` toggle at any terminal width, or forced when terminal
   width is below the mini-view threshold. Both paths are the same state —
   Mini names "only one panel is showing," not the reason it's showing.
-- **Normal**: both panels visible; a hero-bearing Library panel uses the
-  single-column inline hero presentation. Sometimes called "narrow," but only
-  from the Library panel's perspective — Normal is the canonical term.
+- **Narrow**: both panels visible; a hero-bearing Library panel uses the
+  single-column inline hero presentation.
 - **Wide**: both panels visible; a hero-bearing Library panel uses Wide hero
-  when the shared width and minimum-height conditions are met. Non-hero lists
-  retain their existing two-column arrangement.
+  when the shared width and minimum-height conditions are met.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
+**Tab panel**:
+The root-composed Panel that paints tab selection and overflow controls for the
+Library column and owns their hit geometry.
+_Avoid_: tab bar
+
+**Status bar panel**:
+The root-composed Panel that paints the status row and its volume, mute, and
+remote controls when the Library column is visible.
+_Avoid_: status bar
+
+**Library panel**:
+The root-composed Panel that owns the shared Wide and Narrow library skeleton.
+Destinations supply typed Selector row, List controls row, list, Hero header,
+and Workspace content; they do not place or paint those slots.
+_Avoid_: destination panel, library screen
+
+**Library playback panel**:
+The root-composed Panel that paints the playback transport in the Library
+column when the Queue column is hidden.
+_Avoid_: player strip
+
+**Queue playback panel**:
+The root-composed Panel in the Queue column that owns the playback status/target
+header, visual slot, and transport when the Queue column is visible. Its header
+remains while idle; its visual slot and transport collapse while idle.
+_Avoid_: now-playing panel
+
+**Selector row**:
+The Library panel slot for one primary browse selector, such as a letter range,
+group, bucket, section, or feed-group pill row.
+_Avoid_: selector bar
+
+**List controls row**:
+The optional Library panel slot for secondary list controls, such as the Feeds
+Watched filter or a home-video count.
+_Avoid_: secondary selector
+
+**Hero header**:
+The Wide Library panel slot for selected-item facts and artwork. Its closed
+content-derived shapes are **Landscape** (artwork above text), **Portrait** and
+**Square** (text beside artwork). The panel derives the shape from the artwork
+policy; a destination never chooses an arm.
+_Avoid_: hero variant
+
+**Workspace**:
+The optional Wide Hero pane slot for one Selector row and one constituent-item
+list, such as tracks, episodes, or chapters. The Library panel owns its box,
+surface, and placement.
+_Avoid_: detail workspace
+
 **Inline hero**:
-The selected item's detail replacing its ordinary active media row in Normal or
+The selected item's detail replacing its ordinary active media row in Narrow or
 otherwise non-wide geometry. It is one variable-height segment of the
 single-column scrolling browser and owns the selected parent geometry: a single
 click focuses it and a double click performs normal item activation. Existing
@@ -524,27 +565,25 @@ dependency order (`screens -> arrangements -> components`).
 _Avoid_: layout (bare), component, screen
 
 **Variant**:
-One of a small, closed set of named presentations for an arrangement or
-component, centrally defined rather than invented per screen — for example
-Inline hero and Wide hero are the two variants of the hero presentation. A
-screen selects a variant and supplies data; it does not branch on ad hoc
-per-screen painting logic to fake one.
+A centrally owned, closed presentation whose arm is derived from content or
+state available to every caller. A caller-selected arm with only one user is a
+defect, not an endorsed pattern: conform that caller or broaden the shared
+content type. The Library panel derives Wide or Narrow from shared geometry,
+and the Hero header derives Landscape, Portrait, or Square from artwork policy.
 _Avoid_: mode (reserved for Panel mode), option
 
 **Policy**:
-A named constructor exposing a small, closed set of valid style or behavior
-combinations for a component or arrangement, used at the screen/component
-boundary instead of passing arbitrary booleans or raw `Style`/`Color` values
-across it.
+A centrally owned rule that derives a closed style or behavior choice from
+shared content or state. It is not a caller-selected escape hatch: a policy
+value with one caller or one user is a defect to remove, not approved
+vocabulary. Policies own their geometry and painting consequences.
 _Avoid_: config, options, flags (bare)
 
 **Bespoke surface**:
-A surface that, after a genuine attempt to reuse the closed arrangement and
-component vocabulary, still cannot express its presentation that way. It is
-registered as a named component with its own stated reason and its own
-buffer-test coverage, but otherwise obeys the same ownership, semantic
-theming, and verification rules as every other surface — it is not an
-exemption from them.
+A named Interactive or Render Component needed only after the shared Panel,
+slot, arrangement, and content vocabulary genuinely cannot express a surface.
+It records the reason and has buffer coverage, but is not a caller-selected
+variant arm, exemption, or second composition path.
 _Avoid_: one-off, special case, exception
 
 **Sidebar**:

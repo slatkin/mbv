@@ -82,33 +82,29 @@ ADRs 0022–0024; `openspec/specs/interactive-component-framework/spec.md`;
 
 ## Embedded canonical media lists
 
-Destination `AppComponent`s compose reusable plain TuiRealm `Component`s;
-children never mounted/focused/subscribed/given `ComponentId`; destination =
-sole event boundary, translates provider-specific intents.
+The root composes Panels. The Library panel owns the Wide/Narrow skeleton and
+destinations supply typed Selector row, List controls row, list, Hero header,
+and Workspace content; no destination lays out or paints the panel and no base
+frame underpaints it. The Queue and playback Panels own their corresponding
+surfaces.
 
-* The target `MediaList<Target>` shared owner (introduced by
-  `complete-shared-media-list-ownership`) owns each logical media-row flow:
-  rows, stable-target selection, cursor/scroll, row-local behavior, and retained
-  geometry. It will be embedded beneath the destination and never mounted,
-  focused, subscribed, or given a `ComponentId`; destinations retain Service
-  content, chrome, workspace focus, effects, persistence, and typed translation.
-* `WideMediaList<Target>` is the target fixed-height 1-column Wide Variant over
-  that owner; it serves Hero rails + Queue fixed rows.
-* `InlineMediaBrowser<Target>` is the target Normal/Narrow 1-column selected-row
-  replacement Variant over that owner; it is not Inline Search.
-* `Grid presentation` is the target shared-owner Variant for the existing
-  non-hero two-column catalog arrangement. The arrangement retains placement,
-  traversal policy, and cell geometry; Grid executes within it.
-* Rows provider-neutral: selectable `Item`s with stable opaque targets +
-  non-selectable `Heading`/`Spacer`; parents keep provider content, workspaces,
-  pills, images, effects, persistence, message translation.
-* Wide/Inline/Grid transitions will use the same owner; only discrete
-  transitions use one `ViewportAnchor` (selected target + row offset), while
-  ordinary refresh preserves/clamps local state and never adopts shell
-  cursor/scroll.
+* `MediaList<Target>` owns each logical media-row flow: provider-neutral rows,
+  stable-target selection, cursor/scroll, row-local behavior, and retained
+  geometry. It is embedded, never mounted, focused, subscribed, or given a
+  `ComponentId`; the destination retains Service content and typed translation.
+* `WideMediaList<Target>` is the fixed-row one-column Wide presentation over the
+  owner, including Queue. `InlineMediaBrowser<Target>` is the one-column Narrow
+  selected-row replacement presentation and is not Inline Search.
+* The Library panel derives Wide/Narrow from shared geometry; a destination
+  cannot choose a presentation arm or add a slot.
+* Rows are provider-neutral selectable `Item`s with stable opaque targets plus
+  non-selectable `Heading`/`Spacer`; parents retain provider content, workspaces,
+  effects, persistence, and message translation.
+* Wide/Inline transitions reuse the owner; only discrete transitions use one
+  `ViewportAnchor`, while ordinary refresh preserves and clamps local state.
 
-1 owner, 1 painter per surface per breakpoint; no 2nd loop as underpaint/
-fallback. Contract: `openspec/specs/canonical-media-lists/spec.md`.
+1 owner, 1 painter per surface per breakpoint; no second loop or fallback
+painter. Contract: `openspec/specs/canonical-media-lists/spec.md`.
 
 ## Input and rendering boundaries
 
@@ -161,6 +157,6 @@ TUI changes: narrowest component/state + buffer tests. Mounting/focus/
 subscription/routing changes need real `Application::tick()` integration tests
 (`src/app/tests_tick_integration*.rs`) through the shell sync pass — direct
 `Component::on` tests do not verify composition. Also check relevant
-Normal/Narrow and Wide breakpoints, one-painter ownership, and hit geometry
-when painting moves. When a surface is migrated, prove the base frame only
-reserves its area and does not underpaint the mounted component.
+Narrow and Wide presentations, one-painter ownership, and hit geometry when
+painting moves. Prove each Panel paints its own complete placement and that
+absent Panels are not mounted with empty areas.

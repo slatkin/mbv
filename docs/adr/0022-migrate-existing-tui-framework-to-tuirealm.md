@@ -31,7 +31,7 @@ child's outer area; its TuiRealm `Component::view` implementation owns internal
 placement and delegates painting to existing Render Components. Adopting TuiRealm
 does not require replacing those painters with `tui-realm-stdlib` widgets.
 
-Canonical media-list composition uses `WideMediaList` for fixed-row Wide one-column rails and Queue, and `InlineMediaBrowser` for Normal/Narrow selected-row replacement. Inline Search remains the separate `InlineSearchComponent`; non-hero catalog browsers retain their existing two-column policy. The primary child owner/painter map is Home → `HomeComponent`, generic Emby/Movies/homevideos → `BrowserComponent`, TV Series → `TvWorkspaceComponent` in Wide / `BrowserComponent` in Normal, grouped Music → `MusicWorkspaceComponent`, Audiobookshelf Podcast → `AudiobookshelfPodcastComponent`, Audiobookshelf Books → `AudiobookshelfBookComponent`, Feeds → `FeedsComponent`, and Queue → `QueueComponent`.
+Canonical media-list composition uses `WideMediaList` for fixed-row Wide one-column rails and Queue, and `InlineMediaBrowser` for Narrow selected-row replacement. Inline Search remains the separate `InlineSearchComponent`; all library browsers use the Library panel's Wide or Narrow skeleton. The primary child owner/painter map is Home → `HomeComponent`, generic Emby/Movies/homevideos → `BrowserComponent`, TV Series → `TvWorkspaceComponent` in Wide / `BrowserComponent` in Narrow, grouped Music → `MusicWorkspaceComponent`, Audiobookshelf Podcast → `AudiobookshelfPodcastComponent`, Audiobookshelf Books → `AudiobookshelfBookComponent`, Feeds → `FeedsComponent`, and Queue → `QueueComponent`.
 
 > **Superseded for Inline Search by ADR 0025.** This historical migration
 > record retains the accepted separate-component clause above; destination-
@@ -43,11 +43,23 @@ or separate UI crate. TuiRealm supplies the application framework; mbv adds only
 domain-specific IDs, messages, user events, presentation models, and shell-effect
 handling.
 
+## Composition ownership
+
+The root composes the frame from Panels: Tab, Library, Library playback, Queue,
+Queue playback, Status bar, pane boundaries, and overlays. A destination or
+Library content owner supplies only typed slot content to its parent Panel. The
+Panel owns placement, fills, slot layout, and painted hit geometry. There is no
+legacy base frame: no shell base frame paints or underpaints a Panel surface,
+and the draw path does not call per-destination free painters.
+
+This composition rule is the primary record for ADR 0023 and ADR 0024; those
+ADRs apply the same root/Panel boundary to keyboard and mouse delivery.
+
 ## Completion
 
 Internal checkpoints and temporary adapters may organize the conversion, but a
 mixed TuiRealm/legacy architecture is not a completed or mergeable endpoint. The
-migration is complete only when every interactive-surface ledger row uses
+the completion gate is satisfied only when every interactive-surface ledger row uses
 TuiRealm, component-local state and handlers have left `App`, `CONTEXT_STACK` and
 `AppLayout` are removed, and no parallel legacy interaction framework remains.
 

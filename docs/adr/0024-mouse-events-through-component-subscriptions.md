@@ -10,6 +10,14 @@ painted in the most recent frame**, and it recognizes gestures from those events
 itself. There is no global hit map, no global mouse router, and no shell-side
 re-resolution of coordinates a component painted.
 
+## Composition boundary
+
+ADR 0022 is the primary composition decision: the root composes Panels and
+there is no legacy base frame. Destinations and Library content owners supply
+only typed slot content; Panels own placement, fills, painting, and retained
+hit geometry. This ADR applies mouse eligibility to the Panel that painted the
+surface and does not create a caller-selected presentation or shell hit map.
+
 ## Problem
 
 ADR 0022 replaced mbv's framework with TuiRealm and, under decision D16, deleted

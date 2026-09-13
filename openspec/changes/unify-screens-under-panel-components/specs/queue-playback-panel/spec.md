@@ -79,7 +79,7 @@ follow the queue scope being viewed.
 ### Requirement: The playback panel renders in the queue column
 
 In every queue-visible layout the playback panel (seekbar, title row, controls) SHALL render inside
-the queue column, using the same content as the right-column player strip. The panel SHALL NOT
+the queue column, using the same content as the Library playback panel. The panel SHALL NOT
 render in the right column of a queue-visible layout.
 
 When the terminal is narrower than 100 columns the visual slot and the playback panel SHALL stack
@@ -93,7 +93,7 @@ background filling the rows below it.
 #### Scenario: Panel renders in the queue column in the two-panel layout
 
 - **WHEN** the layout shows both columns and playback is active
-- **THEN** the playback panel SHALL render inside the queue column and the right-column player strip
+- **THEN** the playback panel SHALL render inside the queue column and the Library playback panel
   SHALL NOT render
 
 #### Scenario: Narrow terminal stacks vertically
@@ -154,9 +154,9 @@ NOT keep the panel: the header row's `IDLE` wording and target are the only idle
 - **THEN** the visual slot and the panel SHALL NOT render, and the header row SHALL read `IDLE` with
   the connected target
 
-### Requirement: The right-column player strip renders exactly when the queue column is hidden
+### Requirement: The Library playback panel renders exactly when the queue column is hidden
 
-The right-column player strip SHALL render only in layouts where the queue column is hidden
+The Library playback panel SHALL render only in layouts where the queue column is hidden
 (library-only, wide or mini view). In every layout where the queue column is visible the strip SHALL
 NOT render, and the right column's content area SHALL NOT reserve the strip's rows, so the library
 takes them.
@@ -165,13 +165,13 @@ takes them.
 
 - **WHEN** the layout is library-only at a width of 80 columns or more, or the library panel is shown
   in narrow mini view
-- **THEN** the player strip SHALL render below the tab bar and the library content SHALL start below
+- **THEN** the Library playback panel SHALL render below the Tab panel and the library content SHALL start below
   it
 
 #### Scenario: Two-panel layout reclaims the strip rows
 
 - **WHEN** the layout shows both columns
-- **THEN** the player strip SHALL NOT render and the library content SHALL occupy the rows the strip
+- **THEN** the Library playback panel SHALL NOT render and the library content SHALL occupy its rows
   would have used
 
 #### Scenario: Queue-only has no right column
