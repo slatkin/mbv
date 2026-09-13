@@ -127,6 +127,13 @@ impl LibraryPanel {
     /// Point the panel at the active library's owner (the shell drives this
     /// from its tab resolution each sync pass).
     pub(in crate::app) fn set_active(&mut self, key: Option<LibraryKey>) {
+        if self.owners.active_key() != key.as_ref() {
+            if let Some(previous) = self.owners.active_key().cloned() {
+                if let Some(owner) = self.owners.get_mut(&previous) {
+                    owner.clear_selection();
+                }
+            }
+        }
         self.owners.set_active(key);
     }
 

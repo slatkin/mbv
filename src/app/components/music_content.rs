@@ -377,6 +377,10 @@ impl InlineSearchHost for MusicContent {
 }
 
 impl LibraryContentOwner for MusicContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }

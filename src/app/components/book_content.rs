@@ -522,6 +522,11 @@ impl Default for BookContent {
 }
 
 impl LibraryContentOwner for BookContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+        self.chapter_list.clear_selection();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }

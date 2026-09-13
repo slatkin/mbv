@@ -418,6 +418,10 @@ impl Default for FeedsContent {
 }
 
 impl LibraryContentOwner for FeedsContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         // Hero first: it only reads the projected snapshot, while the list
         // slot borrows the shared carrier mutably for the rest of the frame.

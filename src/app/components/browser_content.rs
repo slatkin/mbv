@@ -456,6 +456,10 @@ impl InlineSearchHost for BrowserContent {
 }
 
 impl LibraryContentOwner for BrowserContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     fn scroll_position(&self) -> Option<(usize, usize)> {
         Some((self.cursor(), self.scroll()))
     }

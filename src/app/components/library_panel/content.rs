@@ -228,6 +228,10 @@ pub(in crate::app) trait PanelList {
     /// anchor from its own retained selection).
     fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize);
 
+    /// Clear interaction selection when this owner is replaced as the active
+    /// destination. Overlay focus changes do not call this method.
+    fn clear_selection(&mut self) {}
+
     /// Configure the paint policy used by the next `view` (design D3/D6: the
     /// panel sets focus and the slot's fixed selected-row surface).
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy);

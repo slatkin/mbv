@@ -534,6 +534,10 @@ impl Default for TvContent {
     }
 }
 impl LibraryContentOwner for TvContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }

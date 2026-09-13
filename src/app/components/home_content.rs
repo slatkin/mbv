@@ -379,6 +379,10 @@ impl HomeContent {
 }
 
 impl LibraryContentOwner for HomeContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     /// This frame's panel content (design D3): the section pills as the
     /// Selector row, the shared carrier in the list slot, and the selected
     /// item's hero from the shared producer with the projected image state.

@@ -91,6 +91,10 @@ pub(in crate::app) trait LibraryContentOwner {
     /// 5.10, design D9).
     fn set_hero_image(&mut self, _state: HeroImageState) {}
 
+    /// Clear local multi-selection when the panel activates a different
+    /// destination identity. Overlay activation never calls this.
+    fn clear_selection(&mut self) {}
+
     /// The owner-resolved cursor and resting scroll after local movement.
     /// `None` is used by owners whose position is not persisted by App.
     fn scroll_position(&self) -> Option<(usize, usize)> {
