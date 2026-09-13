@@ -23,9 +23,6 @@ impl Model {
                 ComponentId::Overlay(OverlayId::Help) => self.render_help_overlay(frame),
                 ComponentId::Modal(ModalId::Confirm) => self.render_confirm_overlay(frame),
                 ComponentId::Modal(ModalId::DaemonLost) => self.render_daemon_lost_overlay(frame),
-                ComponentId::Modal(ModalId::RemoteReanchor) => {
-                    self.render_remote_reanchor_overlay(frame)
-                }
                 ComponentId::Overlay(OverlayId::ContextMenu) => {
                     self.render_context_menu_overlay(frame)
                 }
@@ -61,7 +58,6 @@ impl Model {
             ComponentId::Overlay(OverlayId::SelectionModal),
             ComponentId::Modal(ModalId::Confirm),
             ComponentId::Modal(ModalId::DaemonLost),
-            ComponentId::Modal(ModalId::RemoteReanchor),
             ComponentId::Modal(ModalId::SavePlaylist),
             ComponentId::Popup(PopupId::Multiselect),
             ComponentId::Popup(PopupId::LibraryRoutes),

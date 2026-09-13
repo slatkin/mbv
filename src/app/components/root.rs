@@ -16,7 +16,6 @@ const OVERLAY_IDS: &[ComponentId] = &[
     ComponentId::Overlay(super::OverlayId::Help),
     ComponentId::Modal(super::ModalId::Confirm),
     ComponentId::Modal(super::ModalId::DaemonLost),
-    ComponentId::Modal(super::ModalId::RemoteReanchor),
     ComponentId::Overlay(super::OverlayId::ContextMenu),
     ComponentId::Overlay(super::OverlayId::SelectionModal),
     ComponentId::Popup(super::PopupId::Multiselect),

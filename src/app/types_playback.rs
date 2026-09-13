@@ -199,11 +199,6 @@ pub(super) enum PendingQueueAction {
     ClearQueue,
 }
 
-pub(super) struct RemoteReanchorPopup {
-    pub(super) targets: Vec<(usize, String)>,
-    pub(super) cursor: usize,
-}
-
 #[derive(Clone, Debug)]
 pub(super) enum PlaylistMutation {
     Save {

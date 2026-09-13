@@ -181,8 +181,6 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         ),
         help_line(key_w, "Shift+← / →", "Resize queue column"),
         help_line(key_w, "Ctrl+S", "Save playlist"),
-        help_line(key_w, "Ctrl+R", "Re-anchor tracking"),
-        help_line(key_w, "Ctrl+T", "Stop remote tracking"),
         help_blank(),
     ];
     let sec_home = vec![

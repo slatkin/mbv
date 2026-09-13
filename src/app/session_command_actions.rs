@@ -1,4 +1,3 @@
-use super::notify_actions::ToastSeverity;
 use super::{App, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
 use mbv_core::remote_reconciliation::RemoteIntent;
@@ -49,15 +48,6 @@ impl App {
             .flatten()
     }
 
-    pub(super) fn stop_remote_tracking(&mut self) {
-        if self.remote_tracker.is_some() {
-            if let Some(tracker) = self.remote_tracker.as_mut() {
-                tracker.stop_tracking();
-            }
-            self.retire_remote_tracking(false);
-        }
-    }
-
     /// Advances whenever queue identity or state is replaced, so in-flight
     /// playlist mutations can detect stale completions.
     pub(super) fn advance_remote_queue_lineage(&mut self) {
@@ -65,18 +55,8 @@ impl App {
     }
 
     pub(super) fn retire_remote_tracking(&mut self, invalidate_lineage: bool) {
-        // The reanchor modal is only ever raised off an active tracker, so
-        // only emit its dismiss when there was tracking to retire. An
-        // unconditional dismiss writes DismissRemoteReanchor into the
-        // single-slot `pending_overlay` on every queue replace, clobbering
-        // the slot the playlist-Enter paths check before dismissing the
-        // sidebar and focusing Queue (sidebar stays open, focus stays put).
-        let had_tracking = self.remote_tracker.is_some() || self.remote_queue_projection.is_some();
         self.remote_tracker = None;
         self.remote_queue_projection = None;
-        if had_tracking {
-            self.dismiss_remote_reanchor();
-        }
         if invalidate_lineage {
             self.advance_remote_queue_lineage();
         }
@@ -90,65 +70,6 @@ impl App {
                 .and_then(|occurrence| occurrence.playlist_id())
                 == Some(playlist_id)
         })
-    }
-
-    pub(super) fn reanchor_remote_tracking(&mut self) {
-        let Some(tracker) = self.remote_tracker.as_ref() else {
-            return;
-        };
-        let targets = tracker.reanchor_targets();
-        if targets.is_empty() {
-            self.flash(
-                "Choose a unique tracked occurrence to re-anchor".into(),
-                ToastSeverity::Error,
-            );
-        } else if targets.len() == 1 {
-            let target = targets[0].0;
-            let effects = self
-                .remote_tracker
-                .as_mut()
-                .map(|tracker| tracker.reanchor(target))
-                .unwrap_or_default();
-            self.update_remote_projection_epoch();
-            if effects.is_empty() {
-                self.flash(
-                    "Choose a unique tracked occurrence to re-anchor".into(),
-                    ToastSeverity::Error,
-                );
-            } else {
-                self.flash("Queue tracking updated".into(), ToastSeverity::Success);
-            }
-        } else {
-            self.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
-                super::RemoteReanchorPopup { targets, cursor: 0 },
-            ));
-        }
-    }
-
-    pub(super) fn reanchor_remote_target(&mut self, target: usize) {
-        let effects = self
-            .remote_tracker
-            .as_mut()
-            .map(|tracker| tracker.reanchor(target))
-            .unwrap_or_default();
-        self.update_remote_projection_epoch();
-        if effects.is_empty() {
-            self.flash(
-                "That occurrence is no longer available".into(),
-                ToastSeverity::Error,
-            );
-        } else {
-            self.flash("Queue tracking updated".into(), ToastSeverity::Success);
-        }
-    }
-
-    fn update_remote_projection_epoch(&mut self) {
-        if let (Some(projection), Some(tracker)) = (
-            self.remote_queue_projection.as_mut(),
-            self.remote_tracker.as_ref(),
-        ) {
-            projection.epoch = tracker.epoch();
-        }
     }
 
     pub(super) fn spawn_sessions_load(&mut self) {

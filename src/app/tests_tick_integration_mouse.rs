@@ -15,7 +15,6 @@ use crate::app::types_context_menu::{
 };
 use crate::app::types_daemon_lost::DaemonLostModal;
 use crate::app::types_overlay::OverlayRequest;
-use crate::app::types_playback::RemoteReanchorPopup;
 use crate::app::{PanelFocus, PanelMode, SidebarId, TabSelection};
 
 // --- Task 5.3: blocking modals suppress mouse activity by eligibility (D2
@@ -133,26 +132,6 @@ fn tick_blocking_daemon_lost_modal_suppresses_underlying_mouse_activity() {
         daemon_log_path: "/tmp/mbvd.log".into(),
         restart_error: None,
     }));
-    harness.model_mut().sync_mounted_surfaces();
-    assert!(harness.model().application.mounted(&modal_id));
-    assert_eq!(
-        harness.model().mouse_subscribed,
-        std::iter::once(modal_id).collect(),
-        "rung 1: only the blocking modal is mouse-eligible"
-    );
-
-    assert_blocking_modal_suppresses_sidebar_clicks(&mut harness, &rows);
-}
-
-#[test]
-fn tick_blocking_remote_reanchor_modal_suppresses_underlying_mouse_activity() {
-    let (mut harness, rows) = search_sidebar_with_painted_results();
-    let modal_id = ComponentId::Modal(ModalId::RemoteReanchor);
-    harness.model_mut().app.pending_overlay =
-        Some(OverlayRequest::RemoteReanchor(RemoteReanchorPopup {
-            targets: vec![(0, "Local".into())],
-            cursor: 0,
-        }));
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().application.mounted(&modal_id));
     assert_eq!(

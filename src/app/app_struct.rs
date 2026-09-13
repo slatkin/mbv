@@ -424,10 +424,6 @@ impl App {
         self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissDaemonLost);
     }
 
-    pub(super) fn dismiss_remote_reanchor(&mut self) {
-        self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor);
-    }
-
     pub(super) fn dismiss_save_playlist(&mut self) {
         self.pending_overlay = Some(super::types_overlay::OverlayRequest::DismissSavePlaylist);
     }

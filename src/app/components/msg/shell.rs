@@ -14,7 +14,7 @@ use super::hit_regions::TvHit;
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
-    PodcastEpisodeTransition, RemoteReanchorIntent, SavePlaylistIntent, SettingsIntent,
+    PodcastEpisodeTransition, SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
 use crate::app::types_playback::QueueScope;
@@ -100,8 +100,6 @@ pub enum ShellRequest {
     ConfirmIntent(ConfirmIntent),
     /// Semantic daemon-lost intent; process-lifecycle effects remain shell-owned.
     DaemonLostIntent(DaemonLostIntent),
-    /// Semantic remote-reanchor intent; cursor movement remains component-owned.
-    RemoteReanchorIntent(RemoteReanchorIntent),
     /// Semantic context-menu intent; the component owns key interpretation.
     ContextMenuIntent(ContextMenuIntent),
     /// Activate the context-menu entry at the component-owned cursor. The

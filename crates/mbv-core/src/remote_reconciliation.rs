@@ -280,6 +280,14 @@ impl ReconciliationTracker {
     /// to. Ambiguous tracking is limited to its retained candidates; an
     /// invalid session may recover at any submitted occurrence with the
     /// observed media identity.
+    #[allow(unfulfilled_lint_expectations)]
+    #[cfg_attr(
+        not(test),
+        expect(
+            dead_code,
+            reason = "OpenSpec row 4.2 deletes the remote reconciliation module"
+        )
+    )]
     pub fn reanchor_targets(&self) -> Vec<(usize, String)> {
         if !self.active
             || !matches!(

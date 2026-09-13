@@ -29,23 +29,6 @@ pub(super) fn attached_app() -> App {
 }
 
 #[test]
-fn tracking_retirement_clears_reanchor_popup() {
-    let mut app = attached_app();
-    app.remote_tracker = Some(tracker(&["a", "b"]));
-    app.pending_overlay = Some(super::types_overlay::OverlayRequest::RemoteReanchor(
-        super::types_playback::RemoteReanchorPopup {
-            targets: vec![(0, "a".into())],
-            cursor: 0,
-        },
-    ));
-    app.retire_remote_tracking(false);
-    assert!(matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::DismissRemoteReanchor)
-    ));
-}
-
-#[test]
 fn session_item_change_updates_state_without_mutating_queue() {
     let mut app = attached_app();
     let mut item_a = app.player_tab.emby_items()[0].clone();

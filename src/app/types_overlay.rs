@@ -2,7 +2,6 @@ use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, MultiSelectKind};
 use super::types_daemon_lost::DaemonLostModal;
 use super::types_feed::SavePlaylistDialog;
-use super::types_playback::RemoteReanchorPopup;
 use super::types_selection_modal::{
     SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalSource,
 };
@@ -16,7 +15,6 @@ pub(super) enum OverlayRequest {
     ToggleSidebar(SidebarId),
     Confirm(ConfirmModal),
     DaemonLost(DaemonLostModal),
-    RemoteReanchor(RemoteReanchorPopup),
     SavePlaylist(SavePlaylistDialog),
     SelectionModal(SelectionModal),
     RefreshSelectionModal {
@@ -37,7 +35,6 @@ pub(super) enum OverlayRequest {
     OpenFeedsManage,
     DismissConfirm,
     DismissDaemonLost,
-    DismissRemoteReanchor,
     DismissSavePlaylist,
     DismissSelectionModal,
 }
