@@ -1,112 +1,82 @@
-# Handoff: grouped music images not showing (unresolved)
+# Handoff: grouped music images (resolved)
 
-Date: 2026-09-13 · Worktree: `unify-screens-under-panel-components` · Status: **not fixed, reverted**
+Date: 2026-09-13 · Worktree: `unify-screens-under-panel-components`
 
-## Symptom
+## Symptom (as reported)
 
-In the grouped Music view (albums grouped by artist under the
-`LibraryPanel`'s `MusicContent` owner), album artwork does not load for the
-vast majority of albums: the reserved image box shows only the shared
-placeholder. A minority of albums do load art.
+Grouped Music (albums grouped by artist under the `LibraryPanel`'s
+`MusicContent` owner) showed the shared placeholder for almost every album;
+the few that loaded were painted **Portrait**. Album art did resolve in the
+Queue column's playback panel, and still does.
 
-## Investigation so far (evidence, not guesses)
+## Root cause
 
-1. **The projection pipeline is intact.** An end-to-end test was written
-   (`completed_album_image_reaches_owner_hero_state_as_ready`, since reverted
-   with the fix attempts) proving that a *completed* fetch under key
-   `{album_id}:P` reaches `MusicContent`'s hero as `HeroImageState::Ready`
-   through the real sync path (`sync_mounted_surfaces` →
-   `sync_library_hero_images` → `project_hero_image` → `set_active_hero_image`)
-   and would be painted by `paint_panel_hero_image`. Caveats for re-adding it:
-   the test must do one real `Terminal::draw` first (the hero projection gates
-   on `RootFrame.library` via `library_panel_content_area`, which is only
-   populated once a frame is drawn), and it must pre-seed the completion
-   **before** the first sync — otherwise the stub's spawned fetch thread sends
-   its own `(key, None)` completion and overwrites the seeded image.
-2. **The fetch chain is unchanged by the panel migration.** The `AudioChild`
-   probe in `spawn_image_fetch` (`src/app/images.rs`) is byte-identical to the
-   pre-migration code (compare with `49e3fa8c:src/app/images.rs`).
-3. **Therefore the runtime failure is fetches resolving empty** — and a
-   resolved-empty fetch (`entry.img == None`) is *final for the session*:
-   `project_hero_image` returns `State::None` and `queue_card_image_fetch`
-   dedupes against the existing state forever, so one failed probe means a
-   permanent placeholder until the app restarts.
-
-## Prime suspect
-
-The album art chain (`MUSIC_ALBUM_IMAGE_TYPES = ["AudioChild"]` in
-`src/app/render/components/widgets.rs`) probed **only** the first audio
-child's Primary image:
+Grouped Music's album rows are Emby **`Folder`** items — a folder-view music
+library (`[library.music] levels = ["group", "album"]`) lists album folders as
+plain `Folder`s, exactly as `library_browse_actions.rs`'s album-index comment
+already documents. The panel migration replaced the music painters'
+unconditional call
 
 ```text
-GET /Items?ParentId={album_id}&IncludeItemTypes=Audio&Limit=1&api_key=…
-→ Items[0].Id
-GET /Items/{child_id}/Images/Primary?maxHeight=400&quality=80&api_key=…
+fetch_card_image(inline_album_art_cache_key(&album.id), album.id, series_id,
+                 MUSIC_ALBUM_IMAGE_TYPES)          // {id}:P, ["AudioChild"]
 ```
 
-Failure modes that would produce "vast majority of albums":
+with the shared `emby_artwork_policy`, whose music arm is gated on
+`item_type == "MusicAlbum" || is_audio()`. A `Folder` album matches neither, so
+every album row fell to the tag-based arm:
 
-- The first track has no embedded Primary image (404) → chain yields nothing,
-  even when the album's own Primary image (Emby metadata art) exists. Most
-  likely cause: the old widgets.rs comment claims album Primary images are
-  "not reliable", but the chain never even *tried* them; metadata-filled
-  libraries typically carry album-level art.
-- Tracks nested under disc parents: the probe is not `Recursive=true`, so
-  `/Items?ParentId` may return disc folders instead of Audio items.
-- Disk-cache note: only successful fetches are written to
-  `read_image_disk_cache`/`write_image_disk_cache`, so cache hits explain why
-  *some* albums load (plus first-track-art albums).
+- no declared image tags → `source: None` → **no fetch is issued at all**, the
+  reserved box stays a placeholder (the vast majority);
+- a declared `Primary` tag → `Portrait` + `{id}:Primary,Backdrop,Logo` (the
+  handful that loaded, painted in the wrong shape).
 
-## What was tried and reverted
+Observed in `~/.local/state/mbv/mbv.log`:
 
-- `e1bec1e6` — restored the deleted neighbour pre-warm
-  (`prewarm_grouped_music_album_images`, lost in the 9.x panel migration).
-  Reverted (`b80ad2e2`): pre-warm only speeds up art that the fetch chain can
-  already resolve; it did not fix the placeholders.
-- `d813ec61` — album `Primary`-first chain + `Recursive=true` child probe +
-  shared chain constructor. Reverted (`937cb6f9`): **unverified at runtime** —
-  the user reported no improvement, but it is *unknown whether they rebuilt
-  and restarted*. Both commits are referenced here; restore them (or their
-  ideas) only behind a confirmed reproduction.
+```text
+[img] policy id=525079 type=Folder media= collection= folder=true primary="" music=false
+[img] policy id=525081 type=Folder media= collection= folder=true primary="db6906…" music=false
+```
 
-## Critical unknown for the next agent
+The Queue column was unaffected because its card path keys off the queued
+**Audio track** (`is_audio()` is true there), so it never hit the arm.
 
-**Confirm the reproduction before changing any more code.** Specifically:
+## Fix
 
-1. Was the user running a build that contained `d813ec61`? The resolved-empty
-   marker is per-session, so testing requires a **fresh start of the new
-   build** — existing sessions keep placeholders regardless.
-2. Which presentation shows the placeholders (Wide hero header, Narrow inline
-   hero, or both)? Does art ever appear for an album the user sits on for
-   10+ seconds?
-3. Do images still load elsewhere (movie posters via `fetch_nearby_movie_posters`
-   under `:cmp_primary`, TV series art)? That discriminates "music-only chain
-   fails" from "hero pipeline broken at runtime".
+`hero.rs` factors the album chain into `album_source()` (one constructor, shared
+by the `MusicAlbum` arm and the new one so the chain and `{id}:P` key cannot
+drift), adds `music_album_artwork()` (always Square, always the album chain) and
+`hero_content_music_album()`. `MusicContent` uses that producer for its rows:
+the destination knows its rows are albums, so it asks for the music arm instead
+of a type dispatch that cannot see them.
 
-There is no logging framework initialised (`log::debug!` calls go nowhere);
-if runtime evidence is needed, add a temporary `eprintln!` (or init
-`env_logger`) around the `AudioChild` arm in `spawn_image_fetch` to log the
-probe URL/child id/HTTP result for a few albums, and have the user run the
-app against their server. Do not commit diagnostics.
+## Why the two earlier attempts could not work
 
-## Candidate fixes (in order)
+Both changed the *chain* for items typed `MusicAlbum` (`d813ec61`,
+`e1bec1e6`), which these rows are not — `music_source` was never reached, so
+neither the chain nor the pre-warm could affect the outcome. The handoff's
+"prime suspect" (a failing `AudioChild` probe) was wrong for the same reason.
 
-1. Album `Primary` first, then the (recursive) `AudioChild` probe — as in the
-   reverted `d813ec61`, but **only after** confirming the user actually ran
-   it; if their album art is track-embedded-only, this changes nothing.
-2. If the `/Items?ParentId` probe itself fails on their server, log the raw
-   response; older Emby versions may require `UserId`, or the library may
-   organise albums differently.
-3. Make the resolved-empty marker retryable for music keys (today one failed
-   probe poisons the session), instead of/in addition to chain changes.
+## Server evidence (read-only probes against the user's Emby)
 
-## Worktree notes
+```text
+GET /Items?ParentId={album}&IncludeItemTypes=Audio&Limit=1  → 200, returns the first track
+GET /Items/{track}/Images/Primary                           → 200, image/jpeg
+GET /Items/{album}/Images/Primary   (album without a Primary tag) → 404, text/plain, 45 bytes
+GET /Items/{album}/Images/Primary   (album with a Primary tag)    → 200, image/jpeg
+```
 
-- Reverts are `937cb6f9` and `b80ad2e2`; the two reverted commits are kept in
-  history (`d813ec61`, `e1bec1e6`) for reference.
-- Unrelated dirty files in the worktree (`library_panel/wide.rs`,
-  `render/components/widgets.rs`, `queue_playback_panel.rs`,
-  `render/arrangements/chrome.rs`, `shell_chrome_panels.rs`) belong to other
-  in-flight sessions — do not commit or revert them.
-- `mini_view_panel_does_not_overlay_queue_on_mode_switch`
-  (`tests_queue_regression.rs`) fails at HEAD independent of all of this.
+So the `AudioChild` probe is healthy, and album-`Primary`-first is the wrong
+chain for this library — which is why the fix restores the pre-panel chain
+rather than adding one.
+
+## Remaining risks (not addressed here)
+
+1. `spawn_image_fetch` writes **any** HTTP body to the disk cache when a
+   candidate returns bytes, including the 45-byte `text/plain` 404 body. That
+   poisons `{album_id}:P` permanently: every later run short-circuits on
+   `read_image_disk_cache` and decodes nothing. A "cache only what decodes"
+   guard would make chains safe to extend, and is the precondition for ever
+   trying album-`Primary`-first.
+2. A resolved-empty fetch is still final for the session (`project_hero_image`
+   returns `None` and the fetch dedupes against the existing state).

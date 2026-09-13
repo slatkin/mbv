@@ -13,7 +13,7 @@ use super::inline_search::{InlineSearch, InlineSearchHost, SearchPool};
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
-use super::library_panel::hero::hero_content_emby;
+use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
@@ -285,7 +285,10 @@ impl MusicContent {
 
     fn resolved_hero_data(&self) -> Option<HeroContentData> {
         let album = self.selected_item()?;
-        let mut data = hero_content_emby(&album);
+        // Grouped Music's rows are Emby `Folder` items, so the type-based
+        // `emby_artwork_policy` cannot recognise them as albums: the Music
+        // owner asks for the album arm directly.
+        let mut data = hero_content_music_album(&album);
         if let Some((artist, _, _)) = self.context.album_info.get(self.selected_album_index()) {
             let (title, year) = wide_album_metadata(&album, artist);
             data.facts.title = title;
@@ -698,6 +701,30 @@ mod tests {
             content.hero.unwrap().facts.artwork.shape,
             super::super::library_panel::ArtworkShape::Square
         );
+    }
+
+    #[test]
+    fn content_uses_square_artwork_for_a_folder_album_row() {
+        // Folder-view music libraries list album rows as Emby `Folder` items,
+        // which the type-based artwork policy cannot recognise as music; the
+        // owner must still resolve the album arm (Square, `{id}:P` album
+        // chain) or the hero paints a placeholder for every album.
+        let mut owner = MusicContent::new();
+        owner.set_content(context(make_item("Album", "Folder"), "overview"));
+        let content = owner.content();
+        let artwork = &content.hero.unwrap().facts.artwork;
+        assert_eq!(
+            artwork.shape,
+            super::super::library_panel::ArtworkShape::Square
+        );
+        match artwork.source.as_ref() {
+            Some(super::super::library_panel::content::ArtworkSource::Emby {
+                cache_key, ..
+            }) => {
+                assert_eq!(cache_key, "id:P");
+            }
+            other => panic!("expected the album art source, got {other:?}"),
+        }
     }
 
     #[test]

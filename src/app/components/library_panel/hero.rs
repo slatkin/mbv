@@ -163,24 +163,35 @@ pub(in crate::app) fn feed_artwork_policy(entry: &FeedEntry) -> HeroArtwork {
     }
 }
 
+/// The shared album art source (design D5): the `AudioChild` chain under the
+/// album's `{id}:P` key. One constructor for every album-shaped caller — the
+/// typed `MusicAlbum` arm here and grouped Music's `music_album_artwork`
+/// (whose rows are Emby `Folder` items) — so the chain and key cannot drift.
+fn album_source(item: &EmbyItem) -> Option<ArtworkSource> {
+    if item.id.is_empty() {
+        return None;
+    }
+    Some(ArtworkSource::Emby {
+        item_id: item.id.clone(),
+        series_id: String::new(),
+        image_types: MUSIC_ALBUM_IMAGE_TYPES
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+        cache_key: format!("{}:P", item.id),
+    })
+}
+
 /// Music's image chain and cache key (design D5): albums use the shared
 /// `AudioChild` album chain under the album's `{id}:P` key; tracks the
 /// `Primary` chain under the album's key when the album id is known (the
 /// queue-card convention), else the item's own.
 fn music_source(item: &EmbyItem) -> Option<ArtworkSource> {
+    if item.item_type == "MusicAlbum" {
+        return album_source(item);
+    }
     if item.id.is_empty() && item.album_id.is_empty() {
         return None;
-    }
-    if item.item_type == "MusicAlbum" {
-        return Some(ArtworkSource::Emby {
-            item_id: item.id.clone(),
-            series_id: String::new(),
-            image_types: MUSIC_ALBUM_IMAGE_TYPES
-                .iter()
-                .map(|s| s.to_string())
-                .collect(),
-            cache_key: format!("{}:P", item.id),
-        });
     }
     let key_scope = if item.album_id.is_empty() {
         &item.id
@@ -193,6 +204,21 @@ fn music_source(item: &EmbyItem) -> Option<ArtworkSource> {
         image_types: vec!["Primary".into()],
         cache_key: format!("{}:P", key_scope),
     })
+}
+
+/// The artwork policy for a grouped-Music album row (design D5): always
+/// Square, always the shared album art chain under the album's `{id}:P` key.
+/// Album rows in a folder-view music library (`[library.music] levels =
+/// ["group", "album"]`) are Emby `Folder` items with no `MusicAlbum`/audio
+/// type, so `emby_artwork_policy`'s type dispatch cannot recognise them: the
+/// Music destination knows its rows are albums and asks for the music arm
+/// directly (the pre-panel music painters' unconditional chain).
+pub(in crate::app) fn music_album_artwork(item: &EmbyItem) -> HeroArtwork {
+    HeroArtwork {
+        shape: ArtworkShape::Square,
+        source: album_source(item),
+        image: HeroImageState::None,
+    }
 }
 
 /// The landscape chain for a non-music item with a declared landscape image:
@@ -238,6 +264,16 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
         facts,
         overview: (!overview.is_empty()).then_some(overview),
     }
+}
+
+/// The Music album producer (design D5): the `EmbyItem` producer's facts with
+/// the album arm's artwork (`music_album_artwork`) instead of the type-based
+/// policy. Grouped Music's album rows are Emby `Folder` items, so their
+/// artwork cannot be derived from `item_type`.
+pub(in crate::app) fn hero_content_music_album(item: &EmbyItem) -> HeroContentData {
+    let mut data = hero_content_emby(item);
+    data.facts.artwork = music_album_artwork(item);
+    data
 }
 
 /// The queue-item producer (design D5): dispatches to the item kind's
@@ -445,6 +481,55 @@ mod tests {
                 assert_eq!(image_types, &["AudioChild"]);
                 assert_eq!(cache_key, "al1:P");
             }
+            _ => panic!("expected Emby source"),
+        }
+    }
+
+    #[test]
+    fn album_folder_row_uses_the_album_arm_not_the_type_dispatch() {
+        // Grouped Music's album rows in a folder-view music library arrive as
+        // Emby `Folder` items (no `MusicAlbum`/audio type, no image tags), so
+        // the type dispatch cannot recognise them: the Music owner asks for
+        // the album arm, which is Square with the shared album chain under the
+        // album's `{id}:P` key (the pre-panel music painters' contract).
+        let item = emby_item(json!({
+            "Id": "525079", "Name": "Aaliyah (2000) Try Again", "Type": "Folder",
+            "IsFolder": true, "UserData": {}
+        }));
+        // The type dispatch alone yields no source at all.
+        assert!(emby_artwork_policy(&item).source.is_none());
+
+        let artwork = music_album_artwork(&item);
+        assert_eq!(shape(&artwork), ArtworkShape::Square);
+        match source(&artwork) {
+            ArtworkSource::Emby {
+                item_id,
+                image_types,
+                cache_key,
+                ..
+            } => {
+                assert_eq!(item_id, "525079");
+                assert_eq!(image_types, &["AudioChild"]);
+                assert_eq!(cache_key, "525079:P");
+            }
+            _ => panic!("expected Emby source"),
+        }
+    }
+
+    #[test]
+    fn music_album_producer_overrides_the_type_dispatch_artwork() {
+        let item = emby_item(json!({
+            "Id": "525081", "Name": "Aaliyah (2002) I Care 4 U", "Type": "Folder",
+            "IsFolder": true,
+            "ImageTags": { "Primary": "cover" }, "UserData": {}
+        }));
+        let data = hero_content_music_album(&item);
+        assert_eq!(shape(&data.facts.artwork), ArtworkShape::Square);
+        // The type dispatch would have painted this folder Portrait under the
+        // `{id}:Primary,Backdrop,Logo` key.
+        assert_eq!(shape(&emby_artwork_policy(&item)), ArtworkShape::Portrait);
+        match source(&data.facts.artwork) {
+            ArtworkSource::Emby { cache_key, .. } => assert_eq!(cache_key, "525081:P"),
             _ => panic!("expected Emby source"),
         }
     }
