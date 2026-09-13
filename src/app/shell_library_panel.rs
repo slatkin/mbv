@@ -86,6 +86,47 @@ impl Model {
             .is_some_and(|panel| panel.has_owner(key))
     }
 
+    /// Typed immutable access to the panel's owner for `key`: the shared
+    /// lookup/downcast path every per-content-type `*_owner` reader collapses
+    /// to (design D2 — one panel, many typed owners).
+    pub(super) fn library_owner<T: LibraryContentOwner + 'static>(
+        &self,
+        key: &LibraryKey,
+    ) -> Option<&T> {
+        self.application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| panel.owner(key))
+            .and_then(|owner| owner.as_any().downcast_ref::<T>())
+    }
+
+    /// Typed mutable access to the panel's owner for `key`.
+    pub(super) fn library_owner_mut<T: LibraryContentOwner + 'static>(
+        &mut self,
+        key: &LibraryKey,
+    ) -> Option<&mut T> {
+        self.application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(|panel| panel.owner_mut(key))
+            .and_then(|owner| owner.as_any_mut().downcast_mut::<T>())
+    }
+
+    /// Mutate the owner for `key`, creating it via `make` on first reach: the
+    /// shared create-if-absent path every per-content-type `update_*_owner`
+    /// collapses to.
+    pub(super) fn update_library_owner<T: LibraryContentOwner + 'static, R>(
+        &mut self,
+        key: LibraryKey,
+        make: impl FnOnce() -> Box<T>,
+        f: impl FnOnce(&mut T) -> R,
+    ) -> Option<R> {
+        if !self.library_panel_has_owner(&key) {
+            self.push_library_owner(key.clone(), make());
+        }
+        self.library_owner_mut(&key).map(f)
+    }
+
     /// Push one content owner into the panel, addressed by `LibraryKey`
     /// (design D2). Production callers are the per-destination conversion
     /// slices (tasks 5.11+); the test harness pushes fixture owners to prove

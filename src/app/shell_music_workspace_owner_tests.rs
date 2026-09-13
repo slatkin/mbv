@@ -12,7 +12,7 @@ use super::*;
 use crate::app::components::library_panel::owner::LibraryContentOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::msg::AlbumCursorKind;
-use crate::app::components::{Msg, ShellRequest};
+use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_music_group_app;
 use crate::app::tests::make_item;
 use crate::app::{BrowseLevel, LibraryTab, PanelFocus};

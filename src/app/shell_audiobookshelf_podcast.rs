@@ -1,7 +1,7 @@
-use super::components::library_panel::{LibraryKey, LibraryPanel};
+use super::components::library_panel::LibraryKey;
 use super::components::msg::PodcastEpisodeIntent;
 use super::components::podcast_content::PodcastContent;
-use super::components::{BrowserKey, BrowserKind, ComponentId};
+use super::components::{BrowserKey, BrowserKind};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::TabSelection;
@@ -28,34 +28,18 @@ impl Model {
 
     pub(in crate::app) fn abs_podcast_owner(&self) -> Option<&PodcastContent> {
         let key = self.abs_podcast_key()?;
-        self.application
-            .get_component(&ComponentId::Library)
-            .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(|p| p.owner(&key))
-            .and_then(|o| o.as_any().downcast_ref::<PodcastContent>())
+        self.library_owner(&key)
     }
     pub(in crate::app) fn abs_podcast_owner_mut(&mut self) -> Option<&mut PodcastContent> {
         let key = self.abs_podcast_key()?;
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|p| p.owner_mut(&key))
-            .and_then(|o| o.as_any_mut().downcast_mut::<PodcastContent>())
+        self.library_owner_mut(&key)
     }
     fn update_abs_podcast_owner<R>(
         &mut self,
         f: impl FnOnce(&mut PodcastContent) -> R,
     ) -> Option<R> {
         let key = self.abs_podcast_key()?;
-        if !self.library_panel_has_owner(&key) {
-            self.push_library_owner(key.clone(), Box::new(PodcastContent::new()));
-        }
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|p| p.owner_mut(&key))
-            .and_then(|o| o.as_any_mut().downcast_mut::<PodcastContent>())
-            .map(f)
+        self.update_library_owner(key, || Box::new(PodcastContent::new()), f)
     }
 
     pub(super) fn push_audiobookshelf_podcast_content(&mut self) {

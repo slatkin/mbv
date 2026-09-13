@@ -1,6 +1,5 @@
 use super::components::feeds_content::{FeedsContent, FeedsOwnerPush};
-use super::components::library_panel::{LibraryKey, LibraryPanel};
-use super::components::ComponentId;
+use super::components::library_panel::LibraryKey;
 use super::shell::Model;
 
 impl Model {
@@ -31,16 +30,7 @@ impl Model {
         &mut self,
         f: impl FnOnce(&mut FeedsContent) -> R,
     ) -> Option<R> {
-        let key = LibraryKey::Feeds;
-        if !self.library_panel_has_owner(&key) {
-            self.push_library_owner(key.clone(), Box::new(FeedsContent::new()));
-        }
-        let panel = self
-            .application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())?;
-        let owner = panel.owner_mut(&key)?;
-        owner.as_any_mut().downcast_mut::<FeedsContent>().map(f)
+        self.update_library_owner(LibraryKey::Feeds, || Box::new(FeedsContent::new()), f)
     }
 }
 

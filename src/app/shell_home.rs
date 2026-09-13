@@ -5,8 +5,8 @@
 //! content writers, then routes its typed effects to the App handlers.
 
 use super::components::home_content::HomeContent;
-use super::components::library_panel::{LibraryKey, LibraryPanel};
-use super::components::{ComponentId, ShellRequest};
+use super::components::library_panel::LibraryKey;
+use super::components::ShellRequest;
 use super::shell::Model;
 use mbv_core::playback_queue::QueueItem;
 
@@ -78,16 +78,7 @@ impl Model {
         &mut self,
         f: impl FnOnce(&mut HomeContent) -> R,
     ) -> Option<R> {
-        let key = LibraryKey::Home;
-        if !self.library_panel_has_owner(&key) {
-            self.push_library_owner(key.clone(), Box::new(HomeContent::new()));
-        }
-        let panel = self
-            .application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())?;
-        let owner = panel.owner_mut(&key)?;
-        owner.as_any_mut().downcast_mut::<HomeContent>().map(f)
+        self.update_library_owner(LibraryKey::Home, || Box::new(HomeContent::new()), f)
     }
 
     /// Event-scoped projection at the writers of Home's inputs (task 5.3d,

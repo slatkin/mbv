@@ -12,9 +12,13 @@
 //! the shell's dispatch is keyed by the active tab, not by which owner sent
 //! it.
 
-use super::components::library_panel::{LibraryKey, LibraryPanel};
+use super::components::library_panel::LibraryKey;
+#[cfg(test)]
+use super::components::library_panel::LibraryPanel;
 use super::components::tv_content::TvContent;
-use super::components::{BrowserKey, BrowserKind, ComponentId, ShellRequest};
+#[cfg(test)]
+use super::components::ComponentId;
+use super::components::{BrowserKey, BrowserKind, ShellRequest};
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
 use super::TabSelection;
@@ -96,11 +100,7 @@ impl Model {
     /// `as_any`, exactly as the former mounted-owner downcast did).
     fn tv_owner(&self) -> Option<&TvContent> {
         let key = self.tv_owner_key()?;
-        self.application
-            .get_component(&ComponentId::Library)
-            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(|panel| panel.owner(&key))
-            .and_then(|owner| owner.as_any().downcast_ref::<TvContent>())
+        self.library_owner(&key)
     }
 
     /// Mutate the TV owner inside the mounted `LibraryPanel` (design D2: the
@@ -108,15 +108,7 @@ impl Model {
     /// push.
     fn update_tv_owner<R>(&mut self, f: impl FnOnce(&mut TvContent) -> R) -> Option<R> {
         let key = self.tv_owner_key()?;
-        if !self.library_panel_has_owner(&key) {
-            self.push_library_owner(key.clone(), Box::new(TvContent::new()));
-        }
-        let panel = self
-            .application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())?;
-        let owner = panel.owner_mut(&key)?;
-        owner.as_any_mut().downcast_mut::<TvContent>().map(f)
+        self.update_library_owner(key, || Box::new(TvContent::new()), f)
     }
 
     /// Test-only: the active TV owner's key, for shell tests' owner-map
@@ -160,34 +152,14 @@ impl Model {
     #[cfg(test)]
     pub(super) fn test_tv_owner(&self) -> &TvContent {
         let key = self.tv_owner_key().expect("TV library active");
-        self.application
-            .get_component(&ComponentId::Library)
-            .expect("library panel mounted")
-            .as_any()
-            .downcast_ref::<LibraryPanel>()
-            .expect("LibraryPanel")
-            .owner(&key)
-            .expect("tv owner installed")
-            .as_any()
-            .downcast_ref::<TvContent>()
-            .expect("TvContent")
+        self.library_owner(&key).expect("tv owner installed")
     }
 
     /// Test-only: mutable twin of [`Model::test_tv_owner`].
     #[cfg(test)]
     pub(super) fn test_tv_owner_mut(&mut self) -> &mut TvContent {
         let key = self.tv_owner_key().expect("TV library active");
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .expect("library panel mounted")
-            .as_any_mut()
-            .downcast_mut::<LibraryPanel>()
-            .expect("LibraryPanel")
-            .owner_mut(&key)
-            .expect("tv owner installed")
-            .as_any_mut()
-            .downcast_mut::<TvContent>()
-            .expect("TvContent")
+        self.library_owner_mut(&key).expect("tv owner installed")
     }
 
     /// Test-only: paint the mounted `LibraryPanel` into `area` and take the

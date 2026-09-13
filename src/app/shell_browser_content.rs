@@ -16,8 +16,8 @@
 
 use super::components::browser_content::BrowserIdentity;
 use super::components::browser_content::{BrowserContent, BrowserOwnerPush};
-use super::components::library_panel::{LibraryKey, LibraryPanel};
-use super::components::{BrowserKey, BrowserKind, ComponentId};
+use super::components::library_panel::LibraryKey;
+use super::components::{BrowserKey, BrowserKind};
 use super::shell::Model;
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -57,15 +57,7 @@ impl Model {
         kind: BrowserKind,
         f: impl FnOnce(&mut BrowserContent) -> R,
     ) -> Option<R> {
-        if !self.library_panel_has_owner(key) {
-            self.push_library_owner(key.clone(), Box::new(BrowserContent::new(kind)));
-        }
-        let panel = self
-            .application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())?;
-        let owner = panel.owner_mut(key)?;
-        owner.as_any_mut().downcast_mut::<BrowserContent>().map(f)
+        self.update_library_owner(key.clone(), || Box::new(BrowserContent::new(kind)), f)
     }
 
     /// The browse identity of library `index`'s current level (mirrors

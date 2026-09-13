@@ -1,7 +1,7 @@
 use super::components::book_content::BookContent;
-use super::components::library_panel::{LibraryKey, LibraryPanel};
+use super::components::library_panel::LibraryKey;
 use super::components::msg::{AudiobookshelfBookIntent, AudiobookshelfBookMove, ShellRequest};
-use super::components::{BrowserKey, BrowserKind, ComponentId};
+use super::components::{BrowserKey, BrowserKind};
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::TabSelection;
@@ -28,24 +28,12 @@ impl Model {
 
     pub fn abs_book_owner(&self) -> Option<&BookContent> {
         let key = self.abs_book_key()?;
-        self.application
-            .get_component(&ComponentId::Library)
-            .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(|p| p.owner(&key))
-            .and_then(|o| o.as_any().downcast_ref::<BookContent>())
+        self.library_owner(&key)
     }
 
     fn update_abs_book_owner<R>(&mut self, f: impl FnOnce(&mut BookContent) -> R) -> Option<R> {
         let key = self.abs_book_key()?;
-        if !self.library_panel_has_owner(&key) {
-            self.push_library_owner(key.clone(), Box::new(BookContent::new()));
-        }
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|p| p.owner_mut(&key))
-            .and_then(|o| o.as_any_mut().downcast_mut::<BookContent>())
-            .map(f)
+        self.update_library_owner(key, || Box::new(BookContent::new()), f)
     }
 
     pub(super) fn push_audiobookshelf_book_content(&mut self) {
@@ -130,11 +118,6 @@ impl Model {
     #[cfg(test)]
     pub(super) fn test_abs_book_owner_mut(&mut self) -> &mut BookContent {
         let key = self.abs_book_key().expect("book key");
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|p| p.owner_mut(&key))
-            .and_then(|o| o.as_any_mut().downcast_mut::<BookContent>())
-            .expect("book owner")
+        self.library_owner_mut(&key).expect("book owner")
     }
 }

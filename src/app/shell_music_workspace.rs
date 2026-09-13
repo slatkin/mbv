@@ -2,9 +2,9 @@
 //! Music is retained by the LibraryPanel under `LibraryKey::Service(Music)`;
 //! it is not a mounted destination component.
 
-use super::components::library_panel::{LibraryKey, LibraryPanel};
+use super::components::library_panel::LibraryKey;
 use super::components::music_content::MusicContent;
-use super::components::{BrowserKey, BrowserKind, ComponentId, InlineSearchHost};
+use super::components::{BrowserKey, BrowserKind, InlineSearchHost};
 use super::shell::{Model, MusicTrackFocusRequest};
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -29,33 +29,17 @@ impl Model {
 
     pub fn music_owner(&self) -> Option<&MusicContent> {
         let key = self.music_owner_key()?;
-        self.application
-            .get_component(&ComponentId::Library)
-            .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(|p| p.owner(&key))
-            .and_then(|o| o.as_any().downcast_ref::<MusicContent>())
+        self.library_owner(&key)
     }
 
     pub fn music_owner_mut(&mut self) -> Option<&mut MusicContent> {
         let key = self.music_owner_key()?;
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|p| p.owner_mut(&key))
-            .and_then(|o| o.as_any_mut().downcast_mut::<MusicContent>())
+        self.library_owner_mut(&key)
     }
 
     fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
         let key = self.music_owner_key()?;
-        if !self.library_panel_has_owner(&key) {
-            self.push_library_owner(key.clone(), Box::new(MusicContent::new()));
-        }
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|p| p.owner_mut(&key))
-            .and_then(|o| o.as_any_mut().downcast_mut::<MusicContent>())
-            .map(f)
+        self.update_library_owner(key, || Box::new(MusicContent::new()), f)
     }
 
     pub(super) fn push_music_workspace_content(&mut self) {

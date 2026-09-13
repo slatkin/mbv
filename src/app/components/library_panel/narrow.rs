@@ -15,7 +15,6 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
-use unicode_width::UnicodeWidthStr;
 
 use crate::app::components::media_list::Presentation;
 use crate::app::palette;
@@ -23,7 +22,7 @@ use crate::app::render::arrangements::library::selected_detail_content_area;
 use crate::app::render::arrangements::wide_hero::pill_bar_areas;
 use crate::app::render::{
     render_artwork_placeholder, render_inline_search, render_placeholder, selected_detail_shell,
-    HERO_BLOCK_EXTRA_ROWS, SELECTED_BLOCK_SIDE_PADDING,
+    wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS, SELECTED_BLOCK_SIDE_PADDING,
 };
 
 use super::content::{LibraryPanelContent, ListSlot, PanelHeroImagePaint, PanelListPaintPolicy};
@@ -199,22 +198,15 @@ fn inline_hero_lines(
 
     let mut lines: Vec<(String, Style)> = Vec::new();
     for (text, style) in segments {
-        let mut current = String::new();
-        for word in text.split_whitespace() {
-            let available = width_at_row(lines.len());
-            if current.is_empty() {
-                current.push_str(word);
-            } else if current.width() + 1 + word.width() <= available {
-                current.push(' ');
-                current.push_str(word);
-            } else {
-                lines.push((std::mem::take(&mut current), style));
-                current.push_str(word);
-            }
-        }
+        let start = lines.len();
+        let wrapped = wrap_overview_lines(&text, |row| width_at_row(start + row));
         // Each segment occupies at least one row, so the meta rows stay on
         // distinct lines exactly as the Wide header paints them.
-        lines.push((current, style));
+        if wrapped.is_empty() {
+            lines.push((String::new(), style));
+        } else {
+            lines.extend(wrapped.into_iter().map(|line| (line, style)));
+        }
     }
     lines
 }
