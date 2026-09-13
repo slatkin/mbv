@@ -151,6 +151,42 @@ vertical space is constrained, the artwork SHALL shrink before a Workspace list 
 - **WHEN** a header's artwork is still loading or absent
 - **THEN** the artwork box keeps its size and shows the shared placeholder
 
+### Requirement: Wide Hero artwork height is capped
+
+The Wide Hero header's artwork box SHALL be at most 25 rows tall for all three header types: Landscape,
+Portrait and Square. The cap applies to the artwork box, not to the pane.
+
+The cap SHALL be one rule: painting the artwork, sizing the shared placeholder, the shell's image
+projection and its cover-fit encoding SHALL all use the same capped box, so a tall pane never fetches or
+encodes an image larger than the box that paints it.
+
+Smaller-space constraints SHALL still apply on top of the cap. A header in a pane that offers fewer
+rows, or whose box is shrunk by a present Workspace or by the Landscape text block's room, SHALL use
+that smaller height.
+
+The Narrow inline hero SHALL be unaffected by this cap.
+
+#### Scenario: A tall Wide pane with a Portrait header
+- **WHEN** a Portrait header renders in a Wide Hero pane with more than 25 rows available for artwork
+- **THEN** the artwork box is 25 rows tall and the encoded image matches that box
+
+#### Scenario: A tall Wide pane with a Square header
+- **WHEN** a Square header renders in a Wide Hero pane with more than 25 rows available for artwork
+- **THEN** the artwork box is 25 rows tall and the encoded image matches that box
+
+#### Scenario: A tall Wide pane with a Landscape header
+- **WHEN** a Landscape header's 16:9 artwork box would be taller than 25 rows at the pane's width
+- **THEN** the artwork box is capped at 25 rows
+
+#### Scenario: A constrained pane
+- **WHEN** a Wide Hero pane offers fewer than 25 rows for artwork, or a present Workspace or starved
+  text block shrinks the box below the cap
+- **THEN** the artwork box uses the smaller height
+
+#### Scenario: Artwork has not loaded in a capped box
+- **WHEN** a header's artwork is still loading or absent in a box that the cap limits
+- **THEN** the shared placeholder renders at the capped box's size
+
 ### Requirement: The overview is a Main content box below the Hero header
 
 When the shown item has overview text, the Hero pane SHALL render it in one Main content box directly

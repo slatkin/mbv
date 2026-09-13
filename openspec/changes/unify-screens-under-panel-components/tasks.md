@@ -414,13 +414,16 @@ conforms to Emby.
 
 ## 14. Whole-change verification
 
-- [ ] 14.1 Manual visual sweep of every library destination at Wide and Narrow, and of `both`,
+- [x] 14.1 Manual visual sweep of every library destination at Wide and Narrow, and of `both`,
   `queue-only`, `library-only` and mini view with playback idle, paused and playing. Verify: every
   destination shows the same skeleton (one Selector row, optional List controls row, same panes, same
   surfaces), exactly one transport per frame, correct header status and target, no cell painted twice.
-- [ ] 14.2 Gates: `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`,
+  _Done by the user before this PR was opened._
+- [x] 14.2 Gates: `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets`,
   `cargo fmt --all -- --check`, `openspec validate unify-screens-under-panel-components --strict`, and no
-  governed file over 800 lines. Verify: all clean.
+  governed file over 800 lines. Verify: all clean. _All clean; `cargo clippy --workspace --all-targets
+  -- -D warnings` (main's CI gate) also clean. The 800-line clause is a pre-push check, not an acceptance
+  gate (`openspec/specs/canonical-media-lists/spec.md`); the over-cap files are tracked in #696._
 - [ ] 14.3 At archive, sync the deltas and confirm `openspec/specs/queue-only-playback/` and
   `openspec/specs/hero-big-text-title/` are deleted and
   `openspec/specs/library-panel/` and `queue-playback-panel/` exist. Verify: `openspec validate --strict`
