@@ -214,7 +214,7 @@ impl PlaybackRun {
                             change: PropertyData::Int64(pos),
                             ..
                         }) => {
-                            self.on_playlist_pos_changed(pos);
+                            self.on_playlist_pos_changed(pos, mpv_position_ticks(&mpv));
                         }
                         Ok(Event::PropertyChange {
                             name: "playlist-count",

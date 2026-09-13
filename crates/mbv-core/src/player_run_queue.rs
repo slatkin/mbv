@@ -143,6 +143,104 @@ impl PlaybackRun {
         true
     }
 
+    /// mpv's current entry, when it is not the one the run believes in — the
+    /// only evidence that mpv navigated itself, since nothing asked it to.
+    /// `None` for an `active_file` run: that projection keeps one entry in
+    /// mpv's playlist, so `playlist-pos` never names the run's ordinal.
+    fn mpv_divergent_entry(&self, mpv: &Mpv) -> Option<usize> {
+        if self.active_file {
+            return None;
+        }
+        let pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
+        divergent_entry(pos, self.current_idx, self.queue_len())
+    }
+
+    /// Adopt an entry mpv moved to on its own as the active one, bringing the
+    /// run's per-item state with it and re-pointing Emby reporting at the item
+    /// actually playing, so the reported identity follows playback rather than
+    /// the ordinal the run asked for. `mpv_position_ticks` is mpv's position in
+    /// the adopted entry (it is already playing, so the item's stored resume
+    /// would misreport progress). Callers announce the observation.
+    fn adopt_mpv_entry(&mut self, index: usize, mpv_position_ticks: i64) -> bool {
+        if !self.set_active_index(index) {
+            return false;
+        }
+        self.load_active_item_state();
+        if mpv_position_ticks > 0 {
+            self.last_valid_pos = mpv_position_ticks;
+        }
+        let Some(item) = self.active_item().cloned() else {
+            return true;
+        };
+        {
+            let mut s = self.status.lock().unwrap();
+            s.position_ticks = mpv_position_ticks.max(0);
+            s.runtime_ticks = item.runtime_ticks();
+            s.current_idx = self.current_idx;
+            s.queue_len = self.queue_len();
+            if let Some(emby) = item.as_emby() {
+                s.set_current_item_metadata(emby);
+            } else {
+                s.title = item.title().to_string();
+                s.art_item_id = item.id().to_string();
+            }
+        }
+        self.report_active_item();
+        // Tracks and next-up belong to the entry that just started.
+        self.tracks_initialized = false;
+        self.queue_next_up.reset();
+        true
+    }
+
+    /// Announce an entry the run adopted because mpv moved to it on its own:
+    /// the abandoned slot completed without finishing, and the adopted slot is
+    /// the observation (no request identity — nothing asked for the move).
+    fn announce_adopted_entry(
+        &mut self,
+        abandoned_slot: Option<QueueSlotId>,
+        abandoned_pos: i64,
+        stop_accepted: bool,
+    ) {
+        if let Some(slot_id) = abandoned_slot {
+            let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
+                slot_id,
+                position_ticks: abandoned_pos,
+                played: false,
+                consume: false,
+                progress_report_accepted: stop_accepted,
+            });
+        }
+        if let Some(slot_id) = self.active_slot_id() {
+            let _ = self.event_tx.send(PlayerEvent::TrackChanged {
+                slot_id,
+                transition: None,
+            });
+        }
+    }
+
+    /// Report the active slot's item as started on Emby — or clear the Emby
+    /// session for a non-Emby item — the same switch a track transition makes,
+    /// so reporting identity always names the item playback is on.
+    fn report_active_item(&mut self) {
+        match self.active_item().cloned() {
+            Some(QueueItem::Emby(emby)) => {
+                let (urls, ok) = self.reporter.start_item(&emby);
+                self.ext_sub_urls = urls;
+                if !ok {
+                    log::warn!(
+                        target: "player",
+                        "start_item failed for adopted item={}",
+                        emby.id
+                    );
+                }
+            }
+            _ => {
+                self.ext_sub_urls = vec![];
+                self.reporter.clear_session();
+            }
+        }
+    }
+
     fn prepare_item(&mut self, item: &QueueItem) -> Result<PreparedSource, AudiobookshelfError> {
         // A new Audiobookshelf source opens a server session during preparation.
         // Finalize the current lifecycle first so normal transitions cannot

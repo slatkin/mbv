@@ -32,7 +32,7 @@ fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
 fn playlist_pos_does_not_clobber_pending_initial_playlist_layout() {
     let (mut session, status) = make_queue_session_for_pos_tests(2);
 
-    session.on_playlist_pos_changed(0);
+    session.on_playlist_pos_changed(0, 0);
 
     assert_eq!(session.current_idx, 2);
     assert_eq!(status.lock().unwrap().current_idx, 2);
@@ -44,7 +44,7 @@ fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
     session.pending_initial_playlist_layout = false;
     session.load_state = LoadState::begin_single();
 
-    session.on_playlist_pos_changed(0);
+    session.on_playlist_pos_changed(0, 0);
 
     assert_eq!(session.current_idx, 1);
     assert_eq!(status.lock().unwrap().current_idx, 1);
@@ -61,7 +61,7 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
     session.forced_transition =
         Some(crate::playback_transition::Transition::new(42, 1, target));
 
-    session.on_playlist_pos_changed(1);
+    session.on_playlist_pos_changed(1, 0);
 
     assert_eq!(session.current_idx, 0);
     assert_eq!(status.lock().unwrap().current_idx, 0);
@@ -75,13 +75,25 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
 
 #[test]
 fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
-    let (mut session, status) = make_queue_session_for_pos_tests(0);
+    let (mut session, status, events) = make_queue_session_for_pos_tests_with_events(0);
     session.pending_initial_playlist_layout = false;
 
-    session.on_playlist_pos_changed(2);
+    session.on_playlist_pos_changed(2, 0);
 
     assert_eq!(session.current_idx, 2);
     assert_eq!(status.lock().unwrap().current_idx, 2);
+    // Nothing asked for this move, so mpv is authoritative for what is playing
+    // now: the adoption has to be announced, or the owner and the UI keep
+    // reporting the entry mpv left.
+    let announced = events.try_iter().find_map(|event| match event {
+        PlayerEvent::TrackChanged { slot_id, transition } => Some((slot_id, transition)),
+        _ => None,
+    });
+    assert_eq!(
+        announced,
+        Some((session.slot_id_at(2).unwrap(), None)),
+        "an mpv-initiated move is announced as a natural track change"
+    );
 }
 
 #[test]
@@ -547,6 +559,18 @@ fn queue_loads_selected_item_first_and_restores_playlist_order() {
     assert_eq!(queue_load_location(0, 2), ("insert-at", "0".into()));
     assert_eq!(queue_load_location(1, 2), ("insert-at", "1".into()));
     assert_eq!(queue_load_location(3, 2).0, "append");
+}
+
+#[test]
+fn divergent_entry_names_only_an_entry_mpv_actually_moved_to() {
+    // mpv is where the run already believes playback is: nothing to adopt.
+    assert_eq!(divergent_entry(2, 2, 4), None);
+    // mpv is on another entry: that entry is what is playing now.
+    assert_eq!(divergent_entry(0, 2, 4), Some(0));
+    assert_eq!(divergent_entry(3, 2, 4), Some(3));
+    // Nothing playing, or an ordinal this queue no longer holds.
+    assert_eq!(divergent_entry(-1, 2, 4), None);
+    assert_eq!(divergent_entry(4, 2, 4), None);
 }
 
 #[test]

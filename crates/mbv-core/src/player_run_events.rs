@@ -114,7 +114,7 @@ impl PlaybackRun {
         );
     }
 
-    fn on_playlist_pos_changed(&mut self, pos: i64) {
+    fn on_playlist_pos_changed(&mut self, pos: i64, mpv_position_ticks: i64) {
         if self.active_file {
             return;
         }
@@ -140,7 +140,28 @@ impl PlaybackRun {
             );
             return;
         }
-        let _ = self.set_active_index(pos);
+        if pos == self.current_idx {
+            return;
+        }
+        // Nothing in flight, so mpv navigated itself: it is authoritative for
+        // what is playing now. Report the outgoing item stopped, adopt mpv's
+        // entry, re-point reporting at it, and announce the observation (no
+        // request identity) — otherwise the run keeps a stale ordinal while
+        // another item streams and Emby keeps counting the old one as playing.
+        let previous = self.current_idx;
+        let previous_slot = self.slot_id_at(previous);
+        let previous_pos = self.last_valid_pos;
+        self.stop_report =
+            StopReport::mark_sent(self.reporter.report_stopped(previous_pos));
+        if !self.adopt_mpv_entry(pos, mpv_position_ticks) {
+            return;
+        }
+        log::warn!(
+            target: "player",
+            "playlist-pos={pos}: mpv moved off the active entry (was {previous}); reporting now follows it"
+        );
+        let stop_accepted = self.stop_report.is_accepted();
+        self.announce_adopted_entry(previous_slot, previous_pos, stop_accepted);
     }
 
     fn on_playlist_count_changed(&mut self, count: usize) {
@@ -451,10 +472,39 @@ impl PlaybackRun {
         let was_next_up = std::mem::replace(&mut self.next_up_jump, false);
         let track_finished = natural || near_end || was_next_up;
         if is_superseded_jump_end_file(reason, self.forced_slot_id.is_some(), track_finished) {
-            log::info!(
+            // A `Stop` with no jump in flight is usually debris from a
+            // superseded jump, but it is also exactly what a real abandonment
+            // looks like: mpv left the entry by itself. mpv's current entry is
+            // the only thing that tells them apart, and dropping the real one
+            // leaves the run reporting an item mpv is not playing.
+            let Some(index) = self.mpv_divergent_entry(mpv) else {
+                // mpv is still on the entry the run believes in — the debris
+                // this guard was written for — or it has no entry at all. The
+                // idle case is left as-is deliberately: a transient idle is
+                // indistinguishable from a real stop here, and stopping the
+                // run on a transient one would cost playback. The logged
+                // ordinal makes the difference visible in the field.
+                log::info!(
+                    target: "player",
+                    "on_end_file: dropping superseded-jump EndFile (reason={reason:?}); \
+                     mpv drives the next start-file (mpv_pos={:?})",
+                    mpv.get_property::<i64>("playlist-pos"),
+                );
+                return true;
+            };
+            log::warn!(
                 target: "player",
-                "on_end_file: dropping superseded-jump EndFile (reason={reason:?}); mpv drives the next start-file"
+                "on_end_file: EndFile(Stop) abandoned the active entry; mpv is on entry {index} \
+                 (was {}) — adopting it",
+                self.current_idx,
             );
+            self.stop_report =
+                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
+            let abandoned_pos = self.last_valid_pos;
+            let stop_accepted = self.stop_report.is_accepted();
+            if self.adopt_mpv_entry(index, mpv_position_ticks(mpv)) {
+                self.announce_adopted_entry(completed_slot_id, abandoned_pos, stop_accepted);
+            }
             return true;
         }
         // played_out drives mark-played/Emby watched-status and stays video-only;
