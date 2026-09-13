@@ -5,10 +5,10 @@
 
 ## 2. Player policy projection
 
-- [ ] 2.1 Carry the resolved video cache values from each binary's existing `Config` through `Player` and every `MpvRunConfig` construction without adding another configuration reader or global; update affected construction tests and verify `cargo check -p mbv-core -p mbv -p mbvd` passes.
-- [ ] 2.2 Update `init_mpv` so non-headless runs use the configured video cache values, headless runs remain fixed at 10M/10M, and cache-property failures are logged; extend the existing real-mpv headless/non-headless initialization tests to prove custom video values apply only to the non-headless arm, then verify `cargo nextest run -p mbv-core player_tests_submit` passes.
-- [ ] 2.3 Set `hwdec=auto-safe` only for non-headless runs with `use_mpv_config=false`, leaving headless runs and `use_mpv_config=true` untouched; extend the existing real-mpv initialization coverage to assert the resolved `hwdec` property for the isolated path and a temporary user `mpv.conf` override for the full-config path, then verify the targeted mbv-core tests pass without requiring GPU hardware.
+- [x] 2.1 Carry the resolved video cache values from each binary's existing `Config` through `Player` and every `MpvRunConfig` construction without adding another configuration reader or global; update affected construction tests and verify `cargo check -p mbv-core -p mbv -p mbvd` passes.
+- [x] 2.2 Update `init_mpv` so non-headless runs use the configured video cache values, headless runs remain fixed at 10M/10M, and cache-property failures are logged; extend the existing real-mpv headless/non-headless initialization tests to prove custom video values apply only to the non-headless arm, then verify `cargo nextest run -p mbv-core player_tests_submit` passes.
+- [x] 2.3 Set `hwdec=auto-safe` only for non-headless runs with `use_mpv_config=false`, leaving headless runs and `use_mpv_config=true` untouched; extend the existing real-mpv initialization coverage to assert the resolved `hwdec` property for the isolated path and a temporary user `mpv.conf` override for the full-config path, then verify the targeted mbv-core tests pass without requiring GPU hardware.
 
 ## 3. Final verification
 
-- [ ] 3.1 Run `cargo fmt`, `cargo nextest run -p mbv-core`, and `cargo clippy --workspace --all-targets -- -D warnings`; confirm the generated private mpv configuration still protects mbv's IPC option and no protocol or Settings-sidebar surface changed.
+- [x] 3.1 Run `cargo fmt`, `cargo nextest run -p mbv-core`, and `cargo clippy --workspace --all-targets -- -D warnings`; confirm the generated private mpv configuration still protects mbv's IPC option and no protocol or Settings-sidebar surface changed.
