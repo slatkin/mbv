@@ -19,6 +19,23 @@ pub(in crate::app) const PLAYER_BOX_HEIGHT: u16 = 3;
 /// padding above it, which recesses the header from the column's top edge.
 pub(in crate::app) const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
 
+/// Rows the right column reserves at the bottom for the floating status
+/// bar: the status row plus one padding row below it, the same floating
+/// shape as the QueueColumn footer.
+pub(in crate::app) const STATUS_BAR_BAND_HEIGHT: u16 = 2;
+
+/// The status row inside its reserved band: two columns of padding each
+/// side, so the bar floats clear of the library column's edges instead of
+/// touching them (the QueueColumn footer's inset).
+pub(in crate::app) fn status_bar_row(band: Rect) -> Rect {
+    Rect {
+        x: band.x + 2,
+        width: band.width.saturating_sub(4),
+        height: 1,
+        ..band
+    }
+}
+
 /// Columns at which the queue column's visual slot and transport render
 /// side by side rather than stacked (the folded change's placement rule).
 const QUEUE_PLAYBACK_WIDE_COLUMNS: u16 = 100;
@@ -273,7 +290,7 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         y: area.y + tab_h + strip_h,
         width: right_w.saturating_sub(COLUMN_GAP),
         height: content_h
-            .saturating_sub(1)
+            .saturating_sub(STATUS_BAR_BAND_HEIGHT)
             .saturating_sub(tab_h)
             .saturating_sub(strip_h),
     };
@@ -291,12 +308,15 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         Rect::default()
     };
 
-    // Status bar sits at the bottom of the right panel only.
+    // The floating status bar band sits at the bottom of the right panel
+    // only: the status row plus one padding row below it. The panel paints
+    // the row inset inside the band (`status_bar_row`), so the band's own
+    // row and gutters keep the library column's backdrop.
     let status_area = Rect {
         x: right_area.x,
         y: right_area.y + right_area.height,
         width: right_area.width,
-        height: 1,
+        height: STATUS_BAR_BAND_HEIGHT,
     };
 
     // Tab bar at the very top of the right column.

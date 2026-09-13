@@ -357,9 +357,24 @@ impl Model {
         self.render_placed_panel(frame, Some(area), &ComponentId::LibraryPlaybackPanel);
     }
 
-    /// Paint the mounted `StatusBarPanel` into the `RootFrame.status_bar`
-    /// placement.
+    /// Paint the mounted `StatusBarPanel` into its `RootFrame.status_bar`
+    /// band. The band's own row and gutter columns are the library column's
+    /// backdrop (the same `LibraryColumn` fill `render_library_panel_at`
+    /// gives that placement) and the status row is inset two columns each
+    /// side with one padding row below it, so the bar floats clear of the
+    /// column's edges.
     pub(super) fn render_status_bar_panel_at(&mut self, frame: &mut Frame, area: Rect) {
-        self.render_placed_panel(frame, Some(area), &ComponentId::StatusBarPanel);
+        let id = ComponentId::StatusBarPanel;
+        if !self.application.mounted(&id) {
+            return;
+        }
+        fill_surface(
+            frame,
+            area,
+            crate::app::palette::Surface::LibraryColumn,
+            false,
+        );
+        let row = crate::app::render::arrangements::chrome::status_bar_row(area);
+        self.application.view(&id, frame, row);
     }
 }

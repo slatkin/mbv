@@ -283,7 +283,9 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             &format!("{label}/status bar"),
             palette::Surface::StatusBar,
             queue_bit,
-            Rect::new(chrome.status_area.x + 1, chrome.status_area.y, 1, 1),
+            // The status row is inset two columns inside its band; the band's
+            // gutters and the padding row below keep the column backdrop.
+            Rect::new(chrome.status_area.x + 3, chrome.status_area.y, 1, 1),
         );
 
         // Selected rows are probed in the bool state their column holds.
@@ -367,7 +369,9 @@ fn wide_library_only_hero_and_rail_follow_the_table() {
         "LibraryOnly/status bar",
         palette::Surface::StatusBar,
         false,
-        Rect::new(chrome.status_area.x + 1, chrome.status_area.y, 1, 1),
+        // The status row is inset two columns inside its band; the band's
+        // gutters and the padding row below keep the column backdrop.
+        Rect::new(chrome.status_area.x + 3, chrome.status_area.y, 1, 1),
     );
 }
 
@@ -501,7 +505,9 @@ fn mini_view_halves_follow_the_table() {
         "mini library/status bar",
         palette::Surface::StatusBar,
         false,
-        Rect::new(chrome.status_area.x + 1, chrome.status_area.y, 1, 1),
+        // The status row is inset two columns inside its band; the band's
+        // gutters and the padding row below keep the column backdrop.
+        Rect::new(chrome.status_area.x + 3, chrome.status_area.y, 1, 1),
     );
 
     // Queue half: the queue-only strip paints its fixed chrome band.
@@ -724,4 +730,70 @@ fn coverage_table_accounts_for_every_surface_row() {
         palette::Surface::ALL.len(),
         "the coverage lists must account for every declared surface"
     );
+}
+
+/// The status bar floats inside its reserved band at the bottom of the
+/// library column (the QueueColumn footer's shape): the status row is inset
+/// two columns each side, one padding row sits below it, and the band's
+/// gutters and padding row keep the library column's backdrop rather than
+/// the status fill. The bar no longer touches the column's bottom, left or
+/// right edge.
+#[test]
+fn status_bar_floats_inside_its_band_clear_of_the_edges() {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    app.mini_view_focus = PanelFocus::Library;
+    let mut model = mounted_model_at(app, 120, 30);
+    let term = draw_mounted_terminal(&mut model, 120, 30);
+    let painted = painted(&term);
+    let area = Rect::new(0, 0, 120, 30);
+    let chrome = model.app.compute_chrome_geometry(area);
+    let band = chrome.status_area;
+    assert_eq!(
+        band,
+        Rect {
+            x: chrome.right_area.x,
+            y: chrome.right_area.bottom(),
+            width: chrome.right_area.width,
+            height: 2,
+        },
+        "the band is the column's own width and the two bottom rows"
+    );
+    let row = super::arrangements::chrome::status_bar_row(band);
+    assert_eq!(
+        (row.x, row.width),
+        (band.x + 2, band.width - 4),
+        "the status row is inset two columns each side"
+    );
+    assert_eq!(row.height, 1, "the status row is one row");
+    assert_eq!(
+        row.y,
+        area.bottom() - 2,
+        "one padding row sits below the status row"
+    );
+
+    painted.expect("status row", palette::Surface::StatusBar, false, row);
+    // The two columns each side of the row are the column's backdrop.
+    painted.expect(
+        "band left gutter",
+        palette::Surface::LibraryColumn,
+        false,
+        Rect::new(band.x, row.y, 1, 1),
+    );
+    painted.expect(
+        "band right gutter",
+        palette::Surface::LibraryColumn,
+        false,
+        Rect::new(band.right() - 1, row.y, 1, 1),
+    );
+    // The padding row below the bar keeps the backdrop in every column.
+    for x in [band.x, row.x, row.right() - 1, band.right() - 1] {
+        painted.expect(
+            "band padding row",
+            palette::Surface::LibraryColumn,
+            false,
+            Rect::new(x, band.bottom() - 1, 1, 1),
+        );
+    }
 }
