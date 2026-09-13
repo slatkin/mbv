@@ -151,9 +151,8 @@ impl App {
     /// row already resolves it (design D10; folded change D2/D3): the
     /// connected session's device name (falling back to its host), the
     /// direct-remote route/label, or this machine's device name when playback
-    /// is local. No tracking suffix, no uppercasing — callers style and
-    /// extend it themselves (the queue title appends its own tracking
-    /// suffix; the header row shows it verbatim).
+    /// is local. No tracking suffix, no uppercasing — callers style it and
+    /// the header row shows it verbatim.
     pub(in crate::app) fn playback_host_label(&self) -> String {
         let remote_state = self.remote_slot_state();
         let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
@@ -698,9 +697,8 @@ mod playback_host_label_tests {
     use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub, make_session};
     use crate::app::QueueScope;
 
-    /// The playback target's host label (task 3.3): the same value the queue
-    /// title row resolves — the attached session's device name, with no
-    /// tracking suffix and no uppercasing.
+    /// The playback target's host label: the attached session's device name,
+    /// with no tracking suffix and no uppercasing.
     #[test]
     fn attached_session_label_has_no_tracking_suffix_or_uppercasing() {
         let mut app = make_app_stub();
@@ -722,9 +720,8 @@ mod playback_host_label_tests {
         assert_eq!(app.playback_host_label(), mbv_core::api::device_name());
     }
 
-    /// A direct-remote connection resolves the direct-remote label, and the
-    /// queue title still builds its own tracking suffix on top (the
-    /// characterization tests pin that unchanged).
+    /// A direct-remote connection resolves the direct-remote label without a
+    /// tracking suffix.
     #[test]
     fn direct_remote_resolves_the_direct_label() {
         let mut app = make_remote_app_stub(

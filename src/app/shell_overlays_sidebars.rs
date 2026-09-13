@@ -105,7 +105,6 @@ impl Model {
         }
         let panel_area = crate::app::shell_chrome_panels::sync_panel_area(&self.app);
         let connected_session_id = self.app.connected_session_id.as_deref();
-        let tracking = self.app.remote_tracker.is_some();
         let cast_attachment_id = self
             .app
             .cast_attachment
@@ -117,7 +116,6 @@ impl Model {
                     &self.app.panel_targets,
                     self.app.sessions_loading,
                     connected_session_id,
-                    tracking,
                     cast_attachment_id,
                     self.app.can_disconnect_remote(),
                     panel_area,

@@ -576,7 +576,6 @@ fn the_f3_panel_labels_a_mixed_emby_and_cast_target_list_by_kind() {
                 &mut cursor,
                 &mut scroll,
                 None,
-                false,
                 None,
                 false,
             );
