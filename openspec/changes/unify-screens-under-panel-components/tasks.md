@@ -384,12 +384,14 @@ conforms to Emby.
   `LeftPaneFocus`, `SelectedRowSurface` as a caller argument) and the tests that only exercised them.
   Verify: `cargo check -p mbv`; `rg GridMediaList|NarrowBrowseControl|GridPaintPolicy|LeftPaneFocus src`
   finds nothing.
-- [ ] 12.6 Delete the last dead branches (Music/TV list-level search painters, `HomeCarrier`, leftover
-  per-destination paint helpers) with `src/app/render/tests_conformance_matrix.rs`, then make
-  `wide_hero_presentation`, `pill_bar_areas`, `wide_hero_browser_pane`, `wide_hero_hero_content_box` and
-  `place_media_list_below` private to the Library panel's arrangement module (no caller outside it
-  remains). Verify: `cargo clippy --workspace --all-targets` reports no dead code; `cargo nextest run -p
-  mbv` green.
+- [x] 12.6 Delete the last dead branches (including the retired `BrowserComponent` and
+  `MusicWorkspaceComponent`, their tests, Music/TV list-level search painters, `HomeCarrier`, and leftover
+  per-destination paint helpers), with `src/app/render/tests_conformance_matrix.rs` retargeted at the
+  Library panel. Delete `wide_hero_hero_content_box` and narrow `wide_hero_presentation` to the render
+  tree. `pill_bar_areas`, `wide_hero_browser_pane`, and `place_media_list_below` remain
+  `pub(in crate::app)` because the live Library panel callers cross the render/components boundary; do not
+  move callers merely to force narrower visibility (user decision 2026-09-13). Verify:
+  `cargo clippy --workspace --all-targets` reports no dead code; `cargo nextest run -p mbv` green.
 
 ## 13. Docs and glossary (S12)
 
