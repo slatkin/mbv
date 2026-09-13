@@ -51,15 +51,19 @@ When no Remote Service is configured and the Feeds Service has no subscriptions,
 - **WHEN** mbv starts with at least one configured Remote Service or feed subscription
 - **THEN** mbv SHALL use its ordinary content-oriented initial navigation
 
-### Requirement: Optional shared state cannot gate local operation
-Absence or failure of an optional shared-state endpoint SHALL NOT prevent Service-independent startup, local feed state, browsing, or playback. This change SHALL NOT introduce an mbv account or require a redb-backed service.
+### Requirement: Local feed-entry state cannot gate startup or playback
 
-#### Scenario: Feed-only client has no shared-state endpoint
-- **WHEN** mbv starts with feed subscriptions but without Emby or a shared-state endpoint
-- **THEN** it SHALL use local feed state and remain fully usable
+Feed-entry playback state SHALL be stored locally and SHALL NOT be required for startup, browsing, or playback. Absence, unreadability, or unparseability of the local feed-state file SHALL NOT produce a startup failure, block feed browsing, or block playback; the client SHALL continue with unplayed, zero-position entries. mbv SHALL NOT require an account or a database service for feed-entry state.
 
-#### Scenario: Configured shared state cannot authenticate
-- **WHEN** shared state is configured but cannot authenticate because Emby is absent or unavailable
-- **THEN** mbv SHALL use its existing local fallback behavior
-- **THEN** startup and local playback SHALL continue
+#### Scenario: Feed-only client starts with no state file
+
+- **WHEN** mbv starts with feed subscriptions and no Emby setup and no feed-entry-state file exists
+- **THEN** it SHALL treat every entry as unplayed with zero position
+- **THEN** it SHALL remain fully usable for browsing and playback
+
+#### Scenario: Local feed-entry state cannot be read
+
+- **WHEN** the feed-entry-state file is unreadable or invalid
+- **THEN** startup and playback SHALL continue
+- **THEN** the failure SHALL be recorded without presenting the Feeds tab as unavailable
 

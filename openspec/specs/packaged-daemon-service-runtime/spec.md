@@ -64,13 +64,6 @@ Packaged `mbvd` SHALL advertise its supported protocol and ordinary queue/playba
 - **THEN** its hello SHALL retain its service-neutral supported ctrl capabilities
 - **THEN** its hello SHALL omit `control-auth` and every Service credential field
 
-### Requirement: Shared data remains an independent optional facility
-This change SHALL NOT alter shared-data enablement, Emby-scoped identity, authentication, storage, or fallback behavior. Shared-data absence or inability to authenticate SHALL NOT prevent packaged-daemon startup, ctrl, queue control, or playback.
-
-#### Scenario: Emby-independent daemon cannot host usable shared data
-- **WHEN** packaged `mbvd` runs without the Emby identity currently required by optional shared data
-- **THEN** core daemon behavior SHALL continue without redesigning or substituting shared-data identity
-
 ### Requirement: Audiobookshelf behavior is owned by an optional runtime
 Packaged `mbvd` SHALL load owner-local Audiobookshelf setup, credential, generation, and stable device identity only while it has usable owner-local Audiobookshelf setup. Absence or loss of that context SHALL NOT disable unrelated Services or core daemon control, and SHALL NOT enable Audiobookshelf playback. This change SHALL NOT start Audiobookshelf lookup, source preparation, or playback lifecycle from the packaged owner.
 
