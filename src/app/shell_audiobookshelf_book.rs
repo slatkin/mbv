@@ -101,6 +101,13 @@ impl Model {
                         self.app.enqueue_selected_audiobookshelf_book(index);
                     }
                 }
+                AudiobookshelfBookIntent::FocusChapters => {
+                    if self.app.is_right_panel_wide() {
+                        self.update_abs_book_owner(|owner| owner.enter_chapter_focus());
+                    } else {
+                        self.app.activate_audiobookshelf_book_parent();
+                    }
+                }
                 AudiobookshelfBookIntent::ActivateChapter(target) => {
                     self.app.activate_audiobookshelf_book_row_target(target)
                 }

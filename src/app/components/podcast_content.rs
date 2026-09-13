@@ -396,18 +396,6 @@ impl LibraryContentOwner for PodcastContent {
                 self.sync_show_selection();
                 self.show_move()
             }
-            Key::Left | Key::Char('h') if episode => {
-                self.episode_focused = false;
-                Some(Msg::Shell(
-                    ShellRequest::AudiobookshelfPodcastEpisodeTransition(
-                        PodcastEpisodeTransition::Exit,
-                    ),
-                ))
-            }
-            Key::Right | Key::Char('l') if !episode => {
-                self.episode_focused = true;
-                None
-            }
             Key::Up | Key::Char('k') if episode => {
                 self.episode_list.delegate(RowLocalInput::Move(-1), None);
                 Some(Msg::Shell(
@@ -530,18 +518,35 @@ mod tests {
     }
 
     #[test]
-    fn horizontal_keys_change_pane_focus_instead_of_moving_shows() {
+    fn enter_asks_the_shell_to_focus_episodes_and_arrows_do_not() {
         let mut owner = PodcastContent::new();
         owner.set_content(&state(), false);
         owner.set_focused(true);
 
         assert!(!owner.episode_focused());
+        // Arrows never move focus between panels.
+        assert!(owner
+            .on_key(&KeyEvent::new(Key::Right, KeyModifiers::NONE))
+            .is_none());
         assert!(owner
             .on_key(&KeyEvent::new(Key::Char('l'), KeyModifiers::NONE))
             .is_none());
-        assert!(owner.episode_focused());
+        assert!(!owner.episode_focused());
+        // Enter on the selected show is the only keyboard way into the
+        // episode pane; the shell owns the focus transition.
         assert!(matches!(
-            owner.on_key(&KeyEvent::new(Key::Char('h'), KeyModifiers::NONE)),
+            owner.on_key(&KeyEvent::new(Key::Enter, KeyModifiers::NONE)),
+            Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    None
+                ))
+            ))
+        ));
+        assert!(!owner.episode_focused());
+        // With the episode pane focused, Esc exits back to the show list.
+        owner.enter_episode_focus();
+        assert!(matches!(
+            owner.on_key(&KeyEvent::new(Key::Esc, KeyModifiers::NONE)),
             Some(Msg::Shell(
                 ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                     PodcastEpisodeTransition::Exit

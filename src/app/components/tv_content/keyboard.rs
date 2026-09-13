@@ -60,14 +60,6 @@ impl TvContent {
     /// Wide pane-based keyboard handling (unchanged from before the merge).
     fn handle_key_wide(&mut self, key: &KeyEvent) -> Option<Msg> {
         let request = match key.code {
-            Key::Left | Key::Char('h') => {
-                self.pane = Pane::Series;
-                Some(ShellRequest::TvMoveColumn { delta: -1 })
-            }
-            Key::Right | Key::Char('l') => {
-                self.pane = Pane::Episodes;
-                Some(ShellRequest::TvMoveColumn { delta: 1 })
-            }
             Key::Enter if self.pane == Pane::Series => {
                 self.episodes.select_first();
                 self.pane = Pane::Episodes;

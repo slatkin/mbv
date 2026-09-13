@@ -481,7 +481,6 @@ impl Model {
                 // component-local; the shell handles only cross-boundary
                 // effects such as activation, back, and letter pills.
                 request @ (ShellRequest::TvMoveRows { .. }
-                | ShellRequest::TvMoveColumn { .. }
                 | ShellRequest::TvJumpCursor { .. }
                 | ShellRequest::TvActivate { .. }
                 | ShellRequest::TvEpisodeActivate { .. }

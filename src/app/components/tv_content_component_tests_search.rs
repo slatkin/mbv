@@ -309,14 +309,15 @@ fn ctrl_w_emits_library_toggle_watched() {
         false,
     ));
 
-    // The local Episodes pane is focused, but legacy library actions target
-    // the selected series-list item rather than the highlighted episode.
+    // Enter moves focus into the Episodes pane; legacy library actions
+    // still target the selected series-list item rather than the
+    // highlighted episode.
     assert!(matches!(
         owner.on_key(&KeyEvent {
-            code: Key::Right,
+            code: Key::Enter,
             modifiers: KeyModifiers::NONE,
         }),
-        Some(Msg::Shell(ShellRequest::TvMoveColumn { delta: 1 }))
+        Some(Msg::Shell(ShellRequest::TvActivate { .. }))
     ));
     let message = owner.on_key(&KeyEvent {
         code: Key::Char('w'),

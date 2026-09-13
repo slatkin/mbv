@@ -325,12 +325,6 @@ pub enum ShellRequest {
     TvMoveRows {
         rows: i64,
     },
-    /// Left/right TV pane navigation. Wide TV is a one-column App list, so
-    /// the shell intentionally treats this as a no-op after the component
-    /// changes its local pane.
-    TvMoveColumn {
-        delta: i64,
-    },
     /// Home/End movement in the TV series list.
     TvJumpCursor {
         to_end: bool,

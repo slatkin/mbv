@@ -223,7 +223,7 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
 }
 
 #[test]
-fn tv_right_selects_first_episode_for_activation() {
+fn tv_enter_selects_first_episode_for_activation() {
     let mut series = make_item("Series", "Series");
     series.id = "series-id".into();
     let mut season = make_item("Season 1", "Season");
@@ -249,9 +249,11 @@ fn tv_right_selects_first_episode_for_activation() {
         code,
         modifiers: KeyModifiers::NONE,
     };
+    // Enter on the selected series is the only way into the Episodes pane:
+    // arrows never move focus between wide-library panes.
     assert!(matches!(
-        owner.on_key(&key(Key::Right)),
-        Some(Msg::Shell(ShellRequest::TvMoveColumn { delta: 1 }))
+        owner.on_key(&key(Key::Enter)),
+        Some(Msg::Shell(ShellRequest::TvActivate { .. }))
     ));
     assert_eq!(
         owner.selected_episode_item().map(|episode| episode.id),
@@ -260,6 +262,42 @@ fn tv_right_selects_first_episode_for_activation() {
     assert!(matches!(
         owner.on_key(&key(Key::Enter)),
         Some(Msg::Shell(ShellRequest::TvEpisodeActivate { .. }))
+    ));
+}
+
+#[test]
+fn tv_right_does_not_move_focus_between_panes() {
+    let mut series = make_item("Series", "Series");
+    series.id = "series-id".into();
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-id".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-id".into();
+    let detail = crate::app::SeriesDetail {
+        seasons: vec![season],
+        episodes: [("season-id".into(), vec![episode])].into_iter().collect(),
+    };
+    let mut owner = TvContent::new();
+
+    owner.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        Some(series),
+        Some(detail),
+        0,
+        None,
+        false,
+    ));
+
+    let key = |code| KeyEvent {
+        code,
+        modifiers: KeyModifiers::NONE,
+    };
+    assert_eq!(owner.on_key(&key(Key::Right)), None);
+    assert_eq!(owner.on_key(&key(Key::Left)), None);
+    // Enter still resolves the Series-pane arm — the pane never moved.
+    assert!(matches!(
+        owner.on_key(&key(Key::Enter)),
+        Some(Msg::Shell(ShellRequest::TvActivate { .. }))
     ));
 }
 
@@ -296,7 +334,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
         code,
         modifiers: KeyModifiers::NONE,
     };
-    owner.on_key(&key(Key::Right));
+    owner.on_key(&key(Key::Enter));
     owner.on_key(&key(Key::Down));
     owner.on_key(&key(Key::Down));
     assert_eq!(
@@ -441,7 +479,7 @@ fn tv_episode_brackets_wrap_season_selection() {
         code,
         modifiers: KeyModifiers::NONE,
     };
-    owner.on_key(&key(Key::Right));
+    owner.on_key(&key(Key::Enter));
 
     assert!(matches!(
         owner.on_key(&key(Key::Char('['))),

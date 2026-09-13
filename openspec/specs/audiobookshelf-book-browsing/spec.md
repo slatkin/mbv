@@ -74,10 +74,14 @@ pane-focus behavior.
 - **WHEN** the user selects an author-surname bucket pill
 - **THEN** the browser contains only books in that bucket until another bucket is selected
 
-#### Scenario: Arrow focus in wide presentation
-- **WHEN** the user presses left or right while the wide book tab is focused
-- **THEN** focus toggles between the chapter list and left-rail browser
+#### Scenario: Enter focus in wide presentation
+- **WHEN** the user presses Enter while the wide book tab is focused on a selected book
+- **THEN** focus moves into the chapter Workspace
 - **AND** neither pane is hidden or replaced
+
+#### Scenario: Horizontal arrows do not change pane focus
+- **WHEN** the user presses left or right while the wide book tab is focused
+- **THEN** pane focus does not change
 
 #### Scenario: Shared Wide hero presentation changes
 - **WHEN** the Wide library panel's presentation changes
@@ -87,8 +91,8 @@ pane-focus behavior.
 - **WHEN** the book tab crosses the shared width threshold
 - **THEN** it recomputes Wide versus Narrow library panel using the shared minimum-height guard
 
-#### Scenario: Arrow focus leaves both panes visible
-- **WHEN** the user changes pane focus in wide Audiobookshelf book browsing
+#### Scenario: Focus changes leave both panes visible
+- **WHEN** the user moves focus between the chapter Workspace and the book browser in wide Audiobookshelf book browsing
 - **THEN** the chapter Workspace and book browser both remain visible
 
 #### Scenario: The Wide hero arrangement changes

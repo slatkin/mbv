@@ -78,16 +78,19 @@ fn typed_tv_requests_keep_component_cursor_authoritative() {
         "TvCycleLetterPill must not write the component cursor into App's browse level"
     );
 
-    // TvMoveColumn (Right): fresh mount again — the pane moves to
-    // Episodes; the request carries delta: 1 (distinct from Left's
-    // delta: -1); App's browse cursor still stays 0.
-    let (mut model, request) = drive(Key::Right);
-    assert!(matches!(request, ShellRequest::TvMoveColumn { delta: 1 }));
-    model.handle_tv_request(request);
+    // Right: arrows never move focus between wide-library panes — no
+    // request, no pane change, and App's browse cursor stays put.
+    let mut model = mounted_tv_model();
+    model.app.libs[0].library_total = Some(1000);
+    let request = model.test_tv_owner_mut().test_key(&KeyEvent {
+        code: Key::Right,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(request.is_none(), "Right must not move focus between panes");
     assert_eq!(
         model.app.libs[0].nav_stack[0].resting().cursor(),
         0,
-        "TvMoveColumn must not write the component cursor into App's browse level"
+        "Right must not write the component cursor into App's browse level"
     );
 }
 

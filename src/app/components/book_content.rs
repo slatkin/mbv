@@ -550,14 +550,6 @@ impl LibraryContentOwner for BookContent {
                 self.move_chapter(1);
                 self.chapter_focus_request()
             }
-            Key::Right if self.chapter_focused => {
-                self.clear_chapter_focus();
-                self.chapter_focus_request()
-            }
-            Key::Left if !self.chapter_list.is_empty() && !self.chapter_focused => {
-                self.enter_chapter_focus();
-                self.chapter_focus_request()
-            }
             Key::Up | Key::Char('k') => self.move_book(RowLocalInput::Move(-1)),
             Key::Down | Key::Char('j') => self.move_book(RowLocalInput::Move(1)),
             Key::PageUp if !self.chapter_focused => self.move_book(RowLocalInput::Page(-1)),
@@ -584,6 +576,13 @@ impl LibraryContentOwner for BookContent {
                     AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
                 )))
             }
+            // Enter on the selected book moves focus into the chapter
+            // workspace (the same rule as grouped Music's track pane); the
+            // shell decides wide focus vs narrow modal. Arrows never move
+            // focus between panels.
+            Key::Enter if !self.chapter_list.rows().is_empty() => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfBookIntent(AudiobookshelfBookIntent::FocusChapters),
+            )),
             Key::Char(' ') => Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
                 AudiobookshelfBookIntent::Play,
             ))),

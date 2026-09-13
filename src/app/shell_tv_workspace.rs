@@ -40,7 +40,6 @@ impl Model {
             // owner's selection directly (item-targeted) or from the App
             // nav stack; no cursor mirror remains.
             ShellRequest::TvMoveRows { .. }
-            | ShellRequest::TvMoveColumn { .. }
             | ShellRequest::TvJumpCursor { .. }
             | ShellRequest::TvActivate { .. }
             | ShellRequest::TvBack
@@ -54,7 +53,7 @@ impl Model {
                         self.app.cycle_letter_pill(lib_idx, delta)
                     }
                     // closed set: the outer arm's guard already restricts this to
-                    // TvMoveRows/TvMoveColumn/TvJumpCursor/TvActivate/TvBack/
+                    // TvMoveRows/TvJumpCursor/TvActivate/TvBack/
                     // TvCycleLetterPill; the pure cursor moves need no App effect.
                     _ => {}
                 }
@@ -71,7 +70,7 @@ impl Model {
                 }
             }
             // unreachable: shell_messages.rs routes only the Tv* group
-            // (MoveRows/MoveColumn/JumpCursor/Activate/EpisodeActivate/Back/
+            // (MoveRows/JumpCursor/Activate/EpisodeActivate/Back/
             // CycleLetterPill/EpisodeMove/SeasonMove) into handle_tv_request;
             // every one has an arm above.
             _ => {}

@@ -44,7 +44,7 @@ fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
         false,
     ));
     component.test_key(&KeyEvent {
-        code: Key::Right,
+        code: Key::Enter,
         modifiers: KeyModifiers::NONE,
     });
     let message = component.test_key(&KeyEvent {
