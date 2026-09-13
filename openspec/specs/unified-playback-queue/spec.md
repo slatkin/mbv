@@ -330,7 +330,7 @@ A refresh sourced from one Service SHALL update or prune only queue slots that b
 - **AND** SHALL NOT be reported as pruned because it has no Emby identity
 
 #### Scenario: Emby refresh observes both Audiobookshelf shapes
-- **WHEN** an Emby refresh merges into a mixed queue containing a podcast episode and a book from Audiobookshelf
+- **WHEN** an Emby refresh merges into a mixed queue containing an Audiobookshelf podcast episode and a book
 - **THEN** both Audiobookshelf slots SHALL remain unchanged
 - **AND** Emby-owned slots SHALL continue to reconcile normally
 

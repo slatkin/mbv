@@ -41,7 +41,7 @@ Every hero-bearing right-panel browse surface SHALL use Wide hero for its wide p
 #### Scenario: Audiobookshelf podcast library is displayed at a wide width
 - **WHEN** an Audiobookshelf podcast library meets the wide geometry conditions
 - **THEN** the selected show and its filtered episode workspace are on the right
-- **AND** the one-column podcast-show browser is in the left rail
+- **AND** the one-column Audiobookshelf podcast-show browser is in the left rail
 
 #### Scenario: Audiobookshelf book library is displayed at a wide width
 - **WHEN** an Audiobookshelf book library meets the wide geometry conditions
@@ -391,7 +391,7 @@ Grouped Music and Audiobookshelf Podcast and Book destinations SHALL use the sam
 
 The Audiobookshelf Podcast Wide surface SHALL render through the shared Wide hero left-pane arrangement rather than a bespoke painter. The Audiobookshelf Book Wide left rail already routes through the shared left pane; its defect is that the `render_book_browser` call reused there carries the inline selected-row replacement path, and that replacement path SHALL NOT be used in the Wide left rail. These are provider-arrangement repairs this slice owns, distinct from the canonical list control itself. The Podcast Wide left rail SHALL present the same pill row it presents at Narrow width. The Book Wide right pane SHALL use the shared provider-detail-workspace framing and content spacing used by grouped Music, and its left rail SHALL show ordinary fixed-height one-column rows with no selected-row replacement and no Inline hero. Neither surface SHALL define a destination-specific breakpoint, column-sizing rule, or fallback.
 
-#### Scenario: Podcast Wide has pill-row parity with Narrow
+#### Scenario: Audiobookshelf Podcast Wide has pill-row parity with Narrow
 - **WHEN** an Audiobookshelf Podcast library meets the shared Wide geometry conditions
 - **THEN** its left rail renders the shared pill row over the one-column show browser
 - **AND** it routes through the shared Wide hero left pane, not a surface-specific painter.

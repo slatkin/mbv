@@ -466,13 +466,13 @@ remains while idle; its visual slot and transport collapse while idle.
 _Avoid_: now-playing panel
 
 **Selector row**:
-The Library panel slot for one primary browse selector, such as a letter range,
-group, bucket, section, or feed-group pill row.
+The Library panel slot for one browse pill bar, such as a letter range, group,
+bucket, section, or the Feeds watched-filter pills followed by feed groups.
 _Avoid_: selector bar
 
 **List controls row**:
-The optional Library panel slot for secondary list controls, such as the Feeds
-Watched filter or a home-video count.
+The optional Library panel slot for secondary list controls, such as an Emby
+home-video count. Feeds does not use this row.
 _Avoid_: secondary selector
 
 **Hero header**:
@@ -608,16 +608,20 @@ type filter pill and per-query result deduplication.
 _Avoid_: library search, global search (bare), omnibox
 
 **Watched filter**:
-The All / Watched / Unwatched selector in the Feeds tab (`w` key). Filters feed
+The All / Played / Unplayed selector in the Feeds tab (`w` key). Filters feed
 entries by their played flag. Audiobookshelf podcast browsing has an analogous
 All / Played / Unplayed episode filter.
 _Avoid_: played filter, hide watched, unwatched filter
 
 ## Audiobookshelf
 
+**Podcast**:
+An Audiobookshelf podcast show or one of its downloaded episodes. The word never means an Emby library: Emby has no podcast feature, and a Channel or `podcasts` collection library from an Emby addon receives only generic Emby handling with no podcast behavior.
+_Avoid_: Emby podcast, Emby channel, podcast library (bare), podcast channel
+
 **Audiobookshelf library**:
 One Audiobookshelf library exposed as a peer tab, resolved once into a
-podcast kind or a book kind at tab selection. Book and podcast libraries
+podcast kind or a book kind at tab selection. Book and Audiobookshelf podcast libraries
 interleave as peer tabs in the server's `/api/libraries` order, exactly as
 Emby libraries do; no type-partitioning or reordering. Identity is Service
 kind + library ID.

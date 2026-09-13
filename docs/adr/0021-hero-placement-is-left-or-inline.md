@@ -17,8 +17,10 @@ if even the minimum active row and minimum detail cannot fit, detail is suppress
 
 ## Scope
 
-The rule applies to Home, Movies, TV shows, grouped Music, Emby podcasts, Emby
-home videos, Audiobookshelf podcasts, Audiobookshelf books, and Feeds. Surface
+The rule applies to Home, Movies, TV shows, grouped Music, Emby
+home videos, Audiobookshelf podcasts, Audiobookshelf books, and Feeds. (Emby has no podcast
+feature; a Channel or `podcasts`-collection library from an Emby addon receives only generic
+Emby handling.) Surface
 renderers retain ownership of content, artwork, provider-native state, and explicit
 child targets, but not placement geometry.
 
@@ -38,7 +40,6 @@ after render-path changes:
 | Movies | hero-on-left | inline | inline or suppressed |
 | TV shows | hero-on-left | inline | inline or suppressed |
 | Grouped Music | hero-on-left | inline | inline or suppressed |
-| Emby podcasts | hero-on-left | inline | inline or suppressed |
 | Emby home videos | hero-on-left | inline | inline or suppressed |
 | Audiobookshelf podcasts | hero-on-left | inline | inline or suppressed |
 | Audiobookshelf books | hero-on-left | inline | inline or suppressed |

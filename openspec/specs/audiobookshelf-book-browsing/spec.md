@@ -9,14 +9,14 @@ Defines read-only discovery and browsing of Audiobookshelf book libraries — li
 ### Requirement: Book libraries are peer tabs with provider-specific behavior
 Each accessible Audiobookshelf book library SHALL appear as a peer tab alongside Home, Emby libraries, Audiobookshelf podcast libraries, and Feeds, in the server's library order. Selecting a book tab SHALL dispatch only book browsing behavior and SHALL NOT fall through to Emby or Audiobookshelf podcast actions.
 
-#### Scenario: Book and podcast libraries interleave in server order
+#### Scenario: Book and Audiobookshelf podcast libraries interleave in server order
 - **WHEN** an Audiobookshelf server exposes both book and podcast libraries
 - **THEN** mbv SHALL present their tabs in the order `/api/libraries` returns them
 - **THEN** mbv SHALL NOT group or reorder tabs by `media_type`
 
-#### Scenario: User invokes a podcast- or Emby-specific action from a book tab
+#### Scenario: User invokes an Audiobookshelf-podcast- or Emby-specific action from a book tab
 - **WHEN** an Audiobookshelf book library is selected
-- **THEN** podcast played-state filtering, playlist, watched-state, shuffle, route, search, and Emby context-menu actions SHALL NOT operate on the book selection
+- **THEN** Audiobookshelf podcast played-state filtering, playlist, watched-state, shuffle, route, search, and Emby context-menu actions SHALL NOT operate on the book selection
 
 ### Requirement: Books load incrementally, grouped and sorted by author surname
 mbv SHALL list books from the selected Audiobookshelf book library using bounded pagination, grouped and sorted by author surname only, and further bucketed into alphabetical author-surname ranges (e.g. A-C, D-F) for pill-filtered browsing. Book identity SHALL be the Audiobookshelf Service kind plus `libraryItemId`, and refresh or page loading SHALL preserve the selected book when that identity remains present.

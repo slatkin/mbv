@@ -119,12 +119,12 @@ An Audiobookshelf destination SHALL resolve its `media_type` (podcast or book) e
 - **WHEN** the user selects an Audiobookshelf tab whose library `media_type` is `book`
 - **THEN** mbv SHALL dispatch book browse behavior for every subsequent action on that tab without re-checking `media_type`
 
-#### Scenario: User selects a podcast library tab
+#### Scenario: User selects an Audiobookshelf podcast library tab
 
 - **WHEN** the user selects an Audiobookshelf tab whose library `media_type` is `podcast`
-- **THEN** mbv SHALL dispatch podcast browse behavior for every subsequent action on that tab without re-checking `media_type`
+- **THEN** mbv SHALL dispatch Audiobookshelf podcast browse behavior for every subsequent action on that tab without re-checking `media_type`
 
-#### Scenario: Book and podcast tabs are both present
+#### Scenario: Book and Audiobookshelf podcast tabs are both present
 
 - **WHEN** Home, one or more Emby libraries, one or more Audiobookshelf book libraries, one or more Audiobookshelf podcast libraries, and Feeds are visible
 - **THEN** each Audiobookshelf tab SHALL retain the browse kind resolved for it regardless of tab order or navigation between tabs

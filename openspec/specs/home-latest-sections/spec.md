@@ -13,7 +13,7 @@ Home SHALL show one Latest pill per visible Emby library (existing behavior), on
 #### Scenario: Home lists pills for a mixed server
 
 - **WHEN** the user has visible Emby libraries, at least one Audiobookshelf podcast library, an Audiobookshelf book library, and one or more feed subscriptions
-- **THEN** Home SHALL display a Latest pill for each Emby library, a Latest pill for the podcast library, and a single "Feeds" pill
+- **THEN** Home SHALL display a Latest pill for each Emby library, a Latest pill for the Audiobookshelf podcast library, and a single "Feeds" pill
 - **THEN** Home SHALL NOT display a pill for the Audiobookshelf book library or a separate pill per feed subscription
 
 #### Scenario: Audiobookshelf podcast library has no newest-episodes data
@@ -119,7 +119,7 @@ When the selected Home item is from an Audiobookshelf or Feed Latest pill, Home 
 #### Scenario: Selecting an Audiobookshelf episode with a description
 
 - **WHEN** the selected Home item is an Audiobookshelf episode whose catalog response carries a `recentEpisode.description`
-- **THEN** Home SHALL display the episode title, its podcast/show name, its duration, and the episode description
+- **THEN** Home SHALL display the episode title, its show name, its duration, and the episode description
 - **THEN** the description SHALL have its HTML converted to terminal text: paragraph tags as line breaks, decoded entities (e.g. `&amp;`), and links as `text (URL)`
 
 #### Scenario: Selecting a Feed entry with no known duration

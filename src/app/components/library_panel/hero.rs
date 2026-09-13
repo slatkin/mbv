@@ -83,7 +83,7 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
 }
 
 /// The artwork policy for one queue item: dispatches to the item kind's
-/// policy (Emby, podcast episode, book, or feed entry).
+/// policy (Emby, Audiobookshelf podcast episode, book, or feed entry).
 pub(in crate::app) fn queue_artwork_policy(item: &QueueItem) -> HeroArtwork {
     match item {
         QueueItem::Emby(item) => emby_artwork_policy(item),

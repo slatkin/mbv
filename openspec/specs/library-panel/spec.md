@@ -46,20 +46,19 @@ change a slot, and SHALL NOT remain as a destination-only difference.
 - **WHEN** an Audiobookshelf destination renders a slot differently from the Emby destinations
 - **THEN** the Audiobookshelf destination is non-conforming and renders the Emby presentation
 
-### Requirement: The Browser pane has one Selector row and one List controls row
+### Requirement: The Browser pane has one Selector row and one optional List controls row
 
 The Browser pane (the Wide panel's left pane, and the whole Narrow panel) SHALL present, top to bottom:
 at most one Selector row (a single pill bar followed by the panel's spacer row), at most one List
-controls row, and the list box. The Selector row carries the destination's primary browse selector
-(letter ranges, music groups, surname buckets, Home sections, feed groups). The List controls row
-carries secondary list controls: the Feeds Watched filter and the Emby home-video item count. No
-destination SHALL render a second pill bar.
+controls row, and the list box. The Selector row carries destination browse selectors, including the
+Feeds All / Played / Unplayed watched filter followed by its feed-group pills. The List controls row
+carries secondary controls such as the Emby home-video item count. No destination SHALL render a
+second pill bar.
 
 #### Scenario: Feeds renders its selectors
 - **WHEN** the Feeds destination renders with subscriptions available
-- **THEN** its feed-group pills render in the Selector row
-- **AND** its All / Watched / Unwatched filter renders in the List controls row
-- **AND** no second pill bar renders
+- **THEN** its All / Played / Unplayed filter and feed-group pills render in the one Selector row
+- **AND** no List controls row or second pill bar renders
 
 #### Scenario: An Emby home-video library renders its count
 - **WHEN** an Emby home-video library renders
@@ -93,11 +92,12 @@ The Wide Hero pane SHALL begin with a Hero header of exactly one of three types:
 The type SHALL be the shape of the artwork chosen by one artwork policy, applied in exactly one place
 for every item wherever it appears (including Home rows), and never selected by a destination:
 
-- Music (albums and tracks) and podcasts (Audiobookshelf podcast shows and episodes, and podcast Feeds
-  entries) SHALL always use Square artwork.
+- Music (albums and tracks), Audiobookshelf podcasts (shows and episodes), and audio Feeds
+  entries SHALL always use Square artwork.
 - Every other item SHALL use the most preferred artwork shape its provider declares available, in the
   order Landscape, then Square, then Portrait.
-- An item with no available artwork SHALL use Landscape (Square for Music and podcasts) with the
+- An item with no available artwork SHALL use Landscape (Square for Music, Audiobookshelf podcasts,
+  and audio Feeds entries) with the
   shared placeholder.
 
 Availability SHALL be decided from provider metadata before any image is fetched, so the header type
@@ -122,8 +122,8 @@ vertical space is constrained, the artwork SHALL shrink before a Workspace list 
 - **WHEN** a Music album is the selected item in the Wide panel
 - **THEN** a Square header renders title and metadata on the left and square artwork on the right
 
-#### Scenario: A podcast is selected at Wide geometry
-- **WHEN** an Audiobookshelf podcast show, or a podcast Feeds entry, is the selected item
+#### Scenario: An Audiobookshelf podcast is selected at Wide geometry
+- **WHEN** an Audiobookshelf podcast show, or an audio Feeds entry, is the selected item
 - **THEN** a Square header renders
 
 #### Scenario: An Audiobookshelf book appears in a Home row
@@ -240,7 +240,7 @@ Wide Hero header types SHALL NOT apply in Narrow, and no destination SHALL suppl
 hero. The inline hero SHALL NOT contain Selector rows, List controls,
 or constituent-item rows.
 
-#### Scenario: Narrow Movie and Narrow podcast
+#### Scenario: Narrow Movie and Narrow Audiobookshelf podcast
 - **WHEN** a Movie and an Audiobookshelf podcast are each selected in the Narrow panel
 - **THEN** both inline heroes render their image right-aligned with text wrapping around it
 

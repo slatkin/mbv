@@ -7,7 +7,7 @@ Provides a modal overlay that lists constituent items (seasons, tracks, episodes
 
 ### Requirement: Enter opens a constituent-list modal on inline-hero surfaces
 
-When a surface with constituent items (TV seasons/episodes, Music tracks, podcast episodes, audiobook chapters) is selected in the inline-hero presentation, pressing Enter SHALL open a modal listing those items. The modal SHALL reuse the existing modal-frame vocabulary used by confirm, multiselect, and context-menu overlays. The inline hero SHALL remain visible behind the modal, unchanged in shape or content. Surfaces without constituent items (Movies, Feeds entries, Home items without children) SHALL not open a modal on Enter; Enter SHALL perform the surface's existing activation behavior instead.
+When a surface with constituent items (TV seasons/episodes, Music tracks, Audiobookshelf podcast episodes, audiobook chapters) is selected in the inline-hero presentation, pressing Enter SHALL open a modal listing those items. The modal SHALL reuse the existing modal-frame vocabulary used by confirm, multiselect, and context-menu overlays. The inline hero SHALL remain visible behind the modal, unchanged in shape or content. Surfaces without constituent items (Movies, Feeds entries, Home items without children) SHALL not open a modal on Enter; Enter SHALL perform the surface's existing activation behavior instead.
 
 #### Scenario: Enter on a surface with constituent items
 

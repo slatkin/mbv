@@ -46,7 +46,7 @@ decide locally whether the item direct-plays or is transcoded.
 - **WHEN** the request for playback information fails
 - **THEN** mbv SHALL report the item as uncastable and SHALL NOT guess a URL
 
-### Requirement: Feed and podcast items use their existing media URLs
+### Requirement: Feed and Audiobookshelf podcast items use their existing media URLs
 
 For feed entries and Audiobookshelf podcast episodes, mbv SHALL provide the receiver with
 the media URL those sources already resolve to, without negotiating an alternative

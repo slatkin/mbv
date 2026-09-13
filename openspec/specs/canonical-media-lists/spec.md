@@ -193,9 +193,9 @@ Grouped Music album and track browsing, Audiobookshelf Podcast show and episode 
 
 #### Scenario: Audiobookshelf shows compose without losing episodes
 
-- **WHEN** a Podcast library is shown Wide or Normal
+- **WHEN** an Audiobookshelf podcast library is shown Wide or Normal
 - **THEN** show and filtered episode rows use shared canonical ownership and delegation
-- **AND** episode filtering, active-pane focus, images, content lookup, and typed playback intents remain Podcast-owned
+- **AND** episode filtering, active-pane focus, images, content lookup, and typed playback intents remain Audiobookshelf-podcast-owned
 - **AND** episode rows are not reseeded or reselected during painting.
 
 #### Scenario: Audiobookshelf books compose without duplicate detail
@@ -291,7 +291,7 @@ Every in-scope media-row presentation SHALL paint through its shared presentatio
 
 #### Scenario: Workspace row painting completes once
 
-- **WHEN** a Music track, TV episode, Podcast episode, or Book chapter/audio-part flow paints
+- **WHEN** a Music track, TV episode, Audiobookshelf podcast episode, or Book chapter/audio-part flow paints
 - **THEN** its shared presentation adapter paints the media rows once
 - **AND** content and selection are not reseeded during painting
 - **AND** a later point resolves only through retained current-frame geometry.
