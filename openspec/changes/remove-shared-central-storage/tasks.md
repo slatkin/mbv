@@ -77,7 +77,7 @@
   to its own `config.toml`, while a machine that edited routes keeps them
   (`shell_overlays_menus.rs:696` saves config before `persist_roaming_settings` at `:700`).
 
-- [ ] 2.5 Remove `mbvd --export-shared-data`: the action, its usage/message strings, and its
+- [x] 2.5 Remove `mbvd --export-shared-data`: the action, its usage/message strings, and its
   tests. Verify `cargo nextest run -p mbvd` is green and the documented usage line lists no
   export action.
 
