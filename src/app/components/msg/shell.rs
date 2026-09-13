@@ -17,6 +17,7 @@ use super::intents::{
     PodcastEpisodeTransition, SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
+use crate::app::types_context_menu::ContextMenuTargets;
 use crate::app::types_playback::QueueScope;
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
@@ -168,12 +169,8 @@ pub enum ShellRequest {
     HomePlay(super::intents::HomeRowTarget),
     /// Enqueue the Home item at the component-owned flat cursor.
     HomeEnqueue(super::intents::HomeRowTarget),
-    /// Open Home's context menu for the Continue Watching target resolved by
-    /// the mounted component.
-    HomeContextMenu {
-        home_cw_selected: bool,
-        target: super::intents::HomeRowTarget,
-    },
+    /// Open a destination row context menu at an optional pointer anchor.
+    RowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
     /// Remove the Home item at the component-owned flat cursor from
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
     /// Delete arm applied.
@@ -196,14 +193,7 @@ pub enum ShellRequest {
     HomeRowActivate {
         target: super::intents::HomeRowTarget,
     },
-    /// A right-click in the Home list; `anchor` is the click position the
-    /// component forwards as the context-menu anchor — the one legitimate
-    /// forwarded coordinate (design.md D4). The component has already moved
-    /// its selection to the row under the click.
-    HomeRowContextMenu {
-        target: super::intents::HomeRowTarget,
-        anchor: (u16, u16),
-    },
+
     /// A Home section pill the user clicked; `target` is the section index the
     /// component resolved from its `HitRegions` and already applied locally
     /// (design.md D4/D6). The shell persists the selected source.
@@ -277,19 +267,7 @@ pub enum ShellRequest {
     QueueRowActivate {
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
     },
-    /// A right-click in the Queue list; `slot_id` is the component-resolved
-    /// row and `anchor` the forwarded context-menu position (design.md D4).
-    QueueRowContextMenu {
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
-        anchor: (u16, u16),
-    },
-    /// Keyboard `.` in the Queue panel: open the queue context menu for the
-    /// component's currently selected row (`None` when the queue is empty).
-    /// `.` is selection-dependent, so the focused `QueueComponent` owns it
-    /// rather than the central router.
-    QueueContextMenu {
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
-    },
+
     /// A Queue scope pill the user clicked; the component has already switched
     /// its own scope and reset its scroll (design.md D3).
     QueueScopeClick {

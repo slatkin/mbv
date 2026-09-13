@@ -416,18 +416,25 @@ impl Model {
                     }
                     self.push_home_content();
                 }
-                ShellRequest::HomeRowContextMenu { target, anchor } => {
+                ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Home(targets),
+                    anchor,
+                ) => {
+                    let target = targets.into_iter().next();
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    self.app.open_context_menu_at(
-                        anchor.0,
-                        anchor.1,
-                        target.from_continue_watching,
-                        self.home_stable_target(&target)
-                            .and_then(|(item, _)| match item {
-                                mbv_core::playback_queue::QueueItem::Emby(item) => Some(*item),
-                                _ => None,
-                            }),
-                    );
+                    let cw_selected = target.as_ref().is_some_and(|t| t.from_continue_watching);
+                    let item = target
+                        .as_ref()
+                        .and_then(|t| self.home_stable_target(t))
+                        .and_then(|(item, _)| match item {
+                            mbv_core::playback_queue::QueueItem::Emby(item) => Some(*item),
+                            _ => None,
+                        });
+                    if let Some((x, y)) = anchor {
+                        self.app.open_context_menu_at(x, y, cw_selected, item);
+                    } else {
+                        self.app.open_context_menu(cw_selected, item);
+                    }
                     self.push_home_content();
                 }
                 ShellRequest::HomePillClick { target } => {
@@ -440,7 +447,6 @@ impl Model {
                 // is acted on directly (no App-owned flat cursor remains).
                 request @ (ShellRequest::HomePlay(_)
                 | ShellRequest::HomeEnqueue(_)
-                | ShellRequest::HomeContextMenu { .. }
                 | ShellRequest::HomeDelete(_)
                 | ShellRequest::HomeToggleWatched(_)
                 | ShellRequest::HomeSectionSelected(_)) => self.handle_home_request(request),
@@ -456,26 +462,28 @@ impl Model {
                     self.app.handle_mouse_double_click_queue(slot_id);
                     self.queue_click_reproject();
                 }
-                ShellRequest::QueueContextMenu { slot_id } => {
-                    self.app.handle_keyboard_context_menu_queue(
-                        slot_id,
-                        self.home_continue_watching_selected(),
-                    );
+                ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Queue(slot_ids),
+                    anchor,
+                ) => {
+                    let slot_id = slot_ids.into_iter().next();
+                    let cw_selected = self.home_continue_watching_selected();
+                    if let Some((x, y)) = anchor {
+                        self.app
+                            .handle_mouse_right_click_queue(slot_id, x, y, cw_selected);
+                    } else {
+                        self.app
+                            .handle_keyboard_context_menu_queue(slot_id, cw_selected);
+                    }
                     self.queue_click_reproject();
                 }
-                ShellRequest::QueueRowContextMenu { slot_id, anchor } => {
-                    // The authoritative Continue-Watching-selected fact is
-                    // resolved here (Model boundary) and passed into the App
-                    // builder, so the odd queue->Home coupling reflects the
-                    // mounted Home component's section (task 5.3d).
-                    self.app.handle_mouse_right_click_queue(
-                        slot_id,
-                        anchor.0,
-                        anchor.1,
-                        self.home_continue_watching_selected(),
-                    );
-                    self.queue_click_reproject();
-                }
+                // Other destination payloads are converted in later slices.
+                ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Browser(_)
+                    | crate::app::types_context_menu::ContextMenuTargets::Emby(_)
+                    | crate::app::types_context_menu::ContextMenuTargets::Feeds(_),
+                    _,
+                ) => {}
                 // TV keyboard requests are resolved by the mounted
                 // workspace component. Cursor and pane movement remain
                 // component-local; the shell handles only cross-boundary

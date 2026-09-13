@@ -26,19 +26,26 @@ impl Model {
                     self.app.home_enqueue_target(item, from_cw);
                 }
             }
-            ShellRequest::HomeContextMenu {
-                home_cw_selected,
-                target,
-            } => {
-                let cw_item = self
-                    .home_stable_target(&target)
+            ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Home(targets),
+                anchor,
+            ) => {
+                let target = targets.into_iter().next();
+                let cw_selected = target.as_ref().is_some_and(|t| t.from_continue_watching);
+                let cw_item = target
+                    .as_ref()
+                    .and_then(|target| self.home_stable_target(target))
                     .and_then(|(item, from_cw)| from_cw.then_some(item))
                     .and_then(|item| match item {
                         QueueItem::Emby(item) => Some(*item),
                         _ => None,
                     });
                 self.home_context_item = cw_item.clone();
-                self.app.open_context_menu(home_cw_selected, cw_item);
+                if let Some((x, y)) = anchor {
+                    self.app.open_context_menu_at(x, y, cw_selected, cw_item);
+                } else {
+                    self.app.open_context_menu(cw_selected, cw_item);
+                }
             }
             // Delete / watched-toggle refetch Home: re-project (5.3d).
             ShellRequest::HomeDelete(target) => {
@@ -458,10 +465,12 @@ mod tests {
         // by Home — a CW movie, not the folder.
         route(
             &mut model,
-            ShellRequest::HomeRowContextMenu {
-                target: home_target("id0", true),
-                anchor: (70, 20),
-            },
+            ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Home(vec![home_target(
+                    "id0", true,
+                )]),
+                Some((70, 20)),
+            ),
         );
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
             model.app.pending_overlay
@@ -502,7 +511,7 @@ mod tests {
         );
 
         // Keyboard '.' path under Queue panel focus while Home is the active
-        // Tab selection: the typed `HomeContextMenu` request the central
+        // Tab selection: the typed `RowContextMenu` request the central
         // router dispatches reaches `handle_home_request` at the Model
         // boundary, and the odd coupling entry is present iff the Home owner
         // has Continue Watching selected. With the owner on a non-CW section
@@ -515,14 +524,14 @@ mod tests {
         );
         model.app.panel_focus = PanelFocus::Queue;
         model.app.pending_overlay = None;
-        model.handle_home_request(ShellRequest::HomeContextMenu {
-            home_cw_selected: model.home_continue_watching_selected(),
-            target: HomeRowTarget {
+        model.handle_home_request(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
                 item_id: None,
                 source: None,
                 from_continue_watching: false,
-            },
-        });
+            }]),
+            None,
+        ));
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_non_cw)) =
             model.app.pending_overlay
         else {
@@ -551,14 +560,14 @@ mod tests {
             "resolver must report CW when the owner is back on section 0"
         );
         model.app.pending_overlay = None;
-        model.handle_home_request(ShellRequest::HomeContextMenu {
-            home_cw_selected: model.home_continue_watching_selected(),
-            target: HomeRowTarget {
+        model.handle_home_request(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
                 item_id: Some("id0".into()),
                 source: None,
                 from_continue_watching: true,
-            },
-        });
+            }]),
+            None,
+        ));
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu_cw)) =
             model.app.pending_overlay
         else {
@@ -578,14 +587,14 @@ mod tests {
         let mut model = Model::new(make_app_stub());
         let target = make_item("cw-target", "Movie");
         model.home_content.continue_items = vec![target.clone()];
-        model.handle_home_request(ShellRequest::HomeContextMenu {
-            home_cw_selected: true,
-            target: HomeRowTarget {
+        model.handle_home_request(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Home(vec![HomeRowTarget {
                 item_id: Some(target.id.clone()),
                 source: None,
                 from_continue_watching: true,
-            },
-        });
+            }]),
+            None,
+        ));
         let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(menu)) =
             model.app.pending_overlay
         else {

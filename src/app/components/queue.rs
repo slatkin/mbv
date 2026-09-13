@@ -26,6 +26,7 @@ use crate::app::render::arrangements::queue::{
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};
+use crate::app::types_context_menu::ContextMenuTargets;
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -335,11 +336,15 @@ impl QueueComponent {
                 // request for the currently selected row.
                 return match self.delegate_row_local_input(RowLocalInput::Context, None) {
                     RowLocalOutcome::External(RowIntent::Context(slot_id)) => {
-                        Some(Msg::Shell(ShellRequest::QueueContextMenu {
-                            slot_id: Some(slot_id),
-                        }))
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            ContextMenuTargets::Queue(vec![slot_id]),
+                            None,
+                        )))
                     }
-                    _ => Some(Msg::Shell(ShellRequest::QueueContextMenu { slot_id: None })),
+                    _ => Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        ContextMenuTargets::Queue(vec![]),
+                        None,
+                    ))),
                 };
             }
             Key::Char('i') => {
@@ -423,10 +428,10 @@ impl QueueComponent {
                 // never fall back to the prior selection (design.md D4).
                 let slot_id = self.carrier.resolve_current_point(at).copied()?;
                 self.delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id));
-                Some(Msg::Shell(ShellRequest::QueueRowContextMenu {
-                    slot_id: Some(slot_id),
-                    anchor: (mouse.column, mouse.row),
-                }))
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    ContextMenuTargets::Queue(vec![slot_id]),
+                    Some((mouse.column, mouse.row)),
+                )))
             }
             MouseGesture::Drag { to, .. } => {
                 let grabbed = self.drag_grab?;

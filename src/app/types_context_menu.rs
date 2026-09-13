@@ -1,5 +1,19 @@
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::{FeedEntry, QueueSlotId};
 use ratatui::layout::Rect;
+
+use crate::app::components::msg::HomeRowTarget;
+
+/// Destination-qualified targets supplied by row context-menu requests.
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ContextMenuTargets {
+    Home(Vec<HomeRowTarget>),
+    Browser(Vec<String>),
+    Emby(Vec<EmbyItem>),
+    Queue(Vec<QueueSlotId>),
+    Feeds(Vec<FeedEntry>),
+}
 use unicode_width::UnicodeWidthStr;
 
 use super::PanelFocus;

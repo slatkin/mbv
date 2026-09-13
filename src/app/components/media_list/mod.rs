@@ -299,6 +299,7 @@ pub enum RowLocalOutcome<Target> {
 pub enum RowIntent<Target> {
     Activate(Target),
     Context(Target),
+    ContextSelection(Vec<Target>),
 }
 
 /// A closed, provider-neutral row vocabulary for embedded media lists.

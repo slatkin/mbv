@@ -193,9 +193,9 @@ fn queue_right_click_uses_the_rendered_slot_target() {
         modifiers: KeyModifiers::NONE,
     }));
     assert!(
-        matches!(message, Some(Msg::Shell(super::msg::ShellRequest::QueueRowContextMenu {
-        slot_id: Some(slot_id), ..
-    })) if slot_id == second)
+        matches!(message, Some(Msg::Shell(super::msg::ShellRequest::RowContextMenu(
+        crate::app::types_context_menu::ContextMenuTargets::Queue(ids), Some(_)
+    ))) if ids == vec![second])
     );
 }
 
@@ -213,7 +213,9 @@ fn queue_dot_opens_the_context_menu_for_the_selected_row() {
     component.set_focused(true);
     assert!(matches!(
         component.on(&Event::Keyboard(key(Key::Char('.')))),
-        Some(Msg::Shell(ShellRequest::QueueContextMenu { slot_id: Some(slot_id) })) if slot_id == first
+        Some(Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Queue(ids), None
+        ))) if ids == vec![first]
     ));
 }
 

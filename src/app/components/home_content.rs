@@ -24,6 +24,8 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
     RowLocalInput, RowLocalOutcome,
 };
+use crate::app::types_context_menu::ContextMenuTargets;
+
 use super::msg::{Msg, ShellRequest};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::{fmt_duration_short, trunc_str};
@@ -337,10 +339,10 @@ impl HomeContent {
                     }
                     _ => self.row_target(),
                 };
-                Some(Msg::Shell(ShellRequest::HomeContextMenu {
-                    home_cw_selected: true,
-                    target,
-                }))
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    ContextMenuTargets::Home(vec![target]),
+                    None,
+                )))
             }
             Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
@@ -476,10 +478,10 @@ impl LibraryContentOwner for HomeContent {
                         }))
                     }
                     RowLocalInput::ContextClick(at) => {
-                        Some(Msg::Shell(ShellRequest::HomeRowContextMenu {
-                            target: self.row_target(),
-                            anchor: (at.x, at.y),
-                        }))
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            ContextMenuTargets::Home(vec![self.row_target()]),
+                            Some((at.x, at.y)),
+                        )))
                     }
                     RowLocalInput::Click(_) => Some(Msg::Shell(ShellRequest::HomeRowClick {
                         target: self.row_target(),
