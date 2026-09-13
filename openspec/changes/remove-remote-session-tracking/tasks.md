@@ -1,6 +1,6 @@
 ## 1. Preserve the Attached-Session Boundary
 
-- [ ] 1.1 Simplify attached generic Emby Session sequence submission and transport dispatch so they create no tracker, expected transition, epoch, or correlated reconciliation result; amend the existing attached-session command tests to verify multi-item play, pause/play, seek, stop, next, previous, and direct selection still dispatch and report command errors, then run `cargo nextest run -p mbv` for those test modules.
+- [x] 1.1 Simplify attached generic Emby Session sequence submission and transport dispatch so they create no tracker, expected transition, epoch, or correlated reconciliation result; amend the existing attached-session command tests to verify multi-item play, pause/play, seek, stop, next, previous, and direct selection still dispatch and report command errors, then run `cargo nextest run -p mbv` for those test modules.
 
 ## 2. Remove Observer-Driven Queue Mutation
 
