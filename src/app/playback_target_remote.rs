@@ -1,6 +1,6 @@
 use super::ui_util::take_chars;
 use super::{App, LocalPlaybackTarget, RemotePlaybackTarget};
-use crate::app::render::indicators::IndicatorData;
+use crate::app::render::indicators::{short_resolution_label, IndicatorData};
 
 impl RemotePlaybackTarget {
     pub(super) fn toggle_play_pause(&self, app: &mut App) {
@@ -171,11 +171,15 @@ impl RemotePlaybackTarget {
                 .unwrap_or(&remote.media_info.video_label)
                 .to_string()
         };
-        let res_label = res_label
+        let stripped = res_label
             .strip_suffix('p')
             .or_else(|| res_label.strip_suffix('P'))
-            .unwrap_or(&res_label)
-            .to_string();
+            .unwrap_or(&res_label);
+        let res_label = match stripped.parse::<u64>() {
+            Ok(h) => short_resolution_label(h).to_string(),
+            Err(_) if stripped.eq_ignore_ascii_case("4k") => "4K".to_string(),
+            Err(_) => stripped.to_string(),
+        };
         Some(IndicatorData {
             res_label: res_label.clone(),
             res_dim: res_label == "---",
@@ -185,5 +189,34 @@ impl RemotePlaybackTarget {
             sub_label,
             sub_on,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_session};
+
+    fn res_label_for(video_label: &str) -> String {
+        let mut app = make_app_stub();
+        let mut session = make_session("Client", "Emby");
+        session.media_info.video_label = video_label.to_string();
+        app.connected_session_state = Some(session);
+        RemotePlaybackTarget {
+            session_id: "sess-1".to_string(),
+        }
+        .indicator_data(&app)
+        .unwrap()
+        .res_label
+    }
+
+    #[test]
+    fn remote_indicator_uses_short_resolution_labels() {
+        assert_eq!(res_label_for("2160p HEVC"), "4K");
+        assert_eq!(res_label_for("4K HEVC"), "4K");
+        assert_eq!(res_label_for("1440p H264"), "QHD");
+        assert_eq!(res_label_for("1080p H264"), "FHD");
+        assert_eq!(res_label_for("720p H264"), "HD");
+        assert_eq!(res_label_for("480p H264"), "SD");
     }
 }

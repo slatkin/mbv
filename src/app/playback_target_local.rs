@@ -1,7 +1,7 @@
 use super::notify_actions::ToastSeverity;
 use super::ui_util::take_chars;
 use super::{App, LocalPlaybackTarget};
-use crate::app::render::indicators::IndicatorData;
+use crate::app::render::indicators::{short_resolution_label, IndicatorData};
 use mbv_core::player::PlayerCommand;
 
 impl LocalPlaybackTarget {
@@ -172,7 +172,7 @@ impl LocalPlaybackTarget {
                 pst.audio_codec.to_uppercase()
             }
         } else {
-            res_h.to_string()
+            short_resolution_label(res_h.max(0) as u64).to_string()
         };
         let res_dim = res_str == "--";
         let raw_lang = pst.audio_lang.to_lowercase();
@@ -199,5 +199,30 @@ impl LocalPlaybackTarget {
             sub_label,
             sub_on,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_app_stub;
+
+    fn res_label_for(video_height: i64) -> String {
+        let app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.video_height = video_height;
+        }
+        LocalPlaybackTarget.indicator_data(&app).unwrap().res_label
+    }
+
+    #[test]
+    fn local_indicator_uses_short_resolution_labels() {
+        assert_eq!(res_label_for(2160), "4K");
+        assert_eq!(res_label_for(1440), "QHD");
+        assert_eq!(res_label_for(1080), "FHD");
+        assert_eq!(res_label_for(720), "HD");
+        assert_eq!(res_label_for(480), "SD");
     }
 }

@@ -76,6 +76,22 @@ impl IndicatorData {
     }
 }
 
+/// Short resolution pill: 2160+ -> 4K, 1440+ -> QHD, 1080+ -> FHD,
+/// 720+ -> HD, anything lower -> SD.
+pub fn short_resolution_label(height: u64) -> &'static str {
+    if height >= 2160 {
+        "4K"
+    } else if height >= 1440 {
+        "QHD"
+    } else if height >= 1080 {
+        "FHD"
+    } else if height >= 720 {
+        "HD"
+    } else {
+        "SD"
+    }
+}
+
 /// Build the fully-styled indicator spans for the chosen treatment.
 /// Widths are self-describing (each span carries its own padding), so callers
 /// can measure with `span.content.width()` and right/center-align as needed.
@@ -136,7 +152,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
     out
 }
 
-// --- Legacy brackets: [720p] [en] [CC] -----------------------------------
+// --- Legacy brackets: [FHD] [en] [CC] -----------------------------------
 fn bracket_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
     let b = bold(palette::TEXT_STRONG);
     out.push(Span::styled("[", b));
@@ -198,7 +214,7 @@ fn dots(d: &IndicatorData) -> Vec<Span<'static>> {
     out
 }
 
-// --- Pipe statusline: 720p │ en │ CC -------------------------------------
+// --- Pipe statusline: FHD │ en │ CC --------------------------------------
 fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
     let sep = || Span::styled(" \u{2502} ", Style::default().fg(palette::BORDER_UNFOCUSED));
     let mut out = vec![Span::styled(
@@ -220,20 +236,11 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
     out
 }
 
-// --- Labeled key·value: aac ⧸ en ⧸ CC, or 720P ⧸ en ⧸ CC ------------------
+// --- Labeled key·value: aac ⧸ en ⧸ CC, or FHD ⧸ en ⧸ CC -------------------
 fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
-    if d.audio_only {
-        out.push(Span::styled(d.res_label.clone(), bold(d.res_color())));
-    } else {
-        // No "RES" key -- the "P" suffix already reads as a resolution.
-        let res_val = if d.res_dim {
-            d.res_label.clone()
-        } else {
-            format!("{}P", d.res_label)
-        };
-        out.push(Span::styled(res_val, bold(d.res_color())));
-    }
+    // res_label already reads as a resolution (FHD/HD/SD/QHD/4K) — no suffix.
+    out.push(Span::styled(d.res_label.clone(), bold(d.res_color())));
     if !d.audio_only {
         out.push(Span::styled(
             " ⧸ ",
@@ -276,4 +283,20 @@ fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
         out.push(Span::styled(ARROW, arrow));
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn short_resolution_buckets() {
+        assert_eq!(short_resolution_label(2160), "4K");
+        assert_eq!(short_resolution_label(3840), "4K");
+        assert_eq!(short_resolution_label(1440), "QHD");
+        assert_eq!(short_resolution_label(1080), "FHD");
+        assert_eq!(short_resolution_label(720), "HD");
+        assert_eq!(short_resolution_label(480), "SD");
+        assert_eq!(short_resolution_label(360), "SD");
+    }
 }
