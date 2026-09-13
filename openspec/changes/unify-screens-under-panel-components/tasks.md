@@ -395,16 +395,16 @@ conforms to Emby.
 
 ## 13. Docs and glossary (S12)
 
-- [ ] 13.1 `CONTEXT.md`: broaden **Panel** to every root-composed region (Panel focus still means
+- [x] 13.1 `CONTEXT.md`: broaden **Panel** to every root-composed region (Panel focus still means
   Library vs Queue); rename Panel mode **Normal** to **Narrow**; add **Tab panel**, **Status bar
   panel**, **Library panel**, **Library playback panel**, **Queue playback panel**, **Selector row**,
   **List controls row**, **Hero header** (Landscape/Portrait/Square), **Workspace**; rewrite
   **Variant**/**Policy**/**Bespoke surface** so a caller-selected arm with one user is named a defect.
   Verify: every term used in this change's specs appears once; no *Avoid* term is used in the specs.
-- [ ] 13.2 Amend ADRs 0022–0024 with composition ownership (root composes panels; destinations supply
+- [x] 13.2 Amend ADRs 0022–0024 with composition ownership (root composes panels; destinations supply
   slot content; no base frame), or add one ADR recording it that the three reference. Verify: ADR text
   names composition, not only state, ownership.
-- [ ] 13.3 Update `docs/architecture/interactive-surface-ledger.md` (rows per panel; the 2026-08-27
+- [x] 13.3 Update `docs/architecture/interactive-surface-ledger.md` (rows per panel; the 2026-08-27
   `migrated` note re-scoped to state ownership), `docs/architecture/interactive-tui-component-map.md`,
   `.agents/skills/mbv-frontend/SKILL.md` (remove "migration complete", "Central variant" and Grid
   guidance; add the panel/slot workflow), and the `AGENTS.md` repository map and embedded-list section.
