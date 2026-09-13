@@ -124,9 +124,10 @@ impl Model {
             }
         }
         // Pre-warm the display-order neighbours' album art (the `{id}:P` keys
-        // the hero projection consumes), so browsing the grouped list shows
-        // art instantly instead of re-walking the two-request `AudioChild`
-        // chain on every cursor move (the seam the pre-panel painter used).
+        // the hero projection consumes, same album art chain), so browsing
+        // the grouped list shows art instantly instead of waiting on the
+        // album art chain on every cursor move (the seam the pre-panel
+        // painter used).
         if self.app.images_enabled() && !search_active {
             self.app.prewarm_grouped_music_album_images(
                 &context.list.items,
@@ -317,6 +318,52 @@ mod tests {
         assert!(
             !model.app.card_image_loading.contains("album-2:P"),
             "a fresh navigation must suppress the neighbour pre-warm"
+        );
+    }
+
+    /// End-to-end state round-trip: a *completed* album-image fetch must
+    /// reach the owner's projected hero state as `Ready` through the real
+    /// sync path (drain → re-project). If this holds, the fetch/projection
+    /// pipeline is intact and a runtime placeholder means the fetch itself
+    /// resolved empty (the `AudioChild` chain's first-track probe).
+    #[test]
+    fn completed_album_image_reaches_owner_hero_state_as_ready() {
+        let mut app = make_music_group_app();
+        app.image_protocol_enabled = true;
+        let mut model = Model::new(app);
+        // Pre-seed the completed fetch before any sync: the projection's
+        // unconditional `fetch_card_image` then dedupes against the existing
+        // state instead of spawning a real (failing) fetch thread whose
+        // resolved-empty completion would overwrite the seeded image.
+        let img = image::DynamicImage::new_rgb8(400, 400);
+        model
+            .app
+            .card_image_tx
+            .send(("album-1:P".to_string(), Some(img)))
+            .expect("completion");
+        model.drain_card_image_completions();
+        // One real frame so the root-frame placements exist (the hero
+        // projection gates on the library panel's content area).
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(80, 24)).expect("terminal");
+        model.sync_mounted_surfaces();
+        terminal
+            .draw(|frame| model.draw_frame(frame, false, false))
+            .expect("draw");
+        model.sync_mounted_surfaces();
+
+        let data = model
+            .music_owner_mut()
+            .expect("music owner")
+            .hero_data()
+            .expect("hero data");
+        assert!(
+            matches!(
+                data.facts.artwork.image,
+                crate::app::components::library_panel::content::HeroImageState::Ready { .. }
+            ),
+            "a completed fetch must project Ready into the owner, got {:?}",
+            data.facts.artwork.image
         );
     }
 }
