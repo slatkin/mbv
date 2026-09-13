@@ -1,6 +1,6 @@
 use super::queue::{queue_panel_geometry, QueuePanelInputs};
 use crate::app::layout::FrameChromeGeometry;
-use crate::app::render::components::widgets::COLUMN_GAP;
+use crate::app::render::components::widgets::{queue_panel_inset, COLUMN_GAP};
 use crate::app::{PanelFocus, PanelMode, TABBAR_LEFT_RESERVE};
 use ratatui::layout::Rect;
 
@@ -8,8 +8,8 @@ use ratatui::layout::Rect;
 const TAB_BAR_BOX_HEIGHT: u16 = 3;
 
 /// Height of the player panel box below the tab bar (seekbar + title +
-/// controls rows).
-pub(in crate::app) const PLAYER_BOX_HEIGHT: u16 = 4;
+/// blank trailing row).
+pub(in crate::app) const PLAYER_BOX_HEIGHT: u16 = 3;
 
 /// Rows the Queue playback panel always spends on its header row in every
 /// queue-visible layout, idle included (design D10; the painted row lands
@@ -267,12 +267,7 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         left_area
     };
     // Inner content area with padding inside the colored box (queue uses this).
-    let left_content = Rect {
-        x: left_area.x + 2,
-        y: left_area.y + 1,
-        width: left_area.width.saturating_sub(4),
-        height: left_area.height.saturating_sub(2),
-    };
+    let left_content = queue_panel_inset(left_area);
 
     let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
     // The playback strip's rows are reserved only where the strip paints

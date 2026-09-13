@@ -166,7 +166,7 @@ pub(in crate::app) fn paint_hero_pane_content(
         .map(str::trim)
         .filter(|text| !text.is_empty())
     {
-        let content_w = area.width.saturating_sub(PANE_PAD_X * 4) as usize;
+        let content_w = area.width.saturating_sub(PANE_PAD_X * 2) as usize;
         let lines = wrap_overview_lines(overview, |_| content_w);
         let room = area.bottom().saturating_sub(next_row);
         let box_height = (lines.len() as u16)
@@ -181,11 +181,11 @@ pub(in crate::app) fn paint_hero_pane_content(
                 height: box_height,
                 ..area
             };
-            let panel = Rect {
-                x: box_area.x.saturating_add(PANE_PAD_X),
-                width: box_area.width.saturating_sub(PANE_PAD_X * 2),
-                ..box_area
-            };
+            // The box fills `box_area` flush, matching the hero pane's own
+            // single inset (`hero_area` is already inset from the raw hero
+            // panel): no second outer margin on top of it. Only `box_content`
+            // below carries the box's own interior padding.
+            let panel = box_area;
             f.render_widget(
                 Block::default().style(
                     Style::default().bg(palette::surface_colors(

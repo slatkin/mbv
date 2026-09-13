@@ -16,7 +16,7 @@ fn mouse(kind: MouseEventKind, column: u16) -> Event<UserEvent> {
 
 fn boundary() -> QueueBoundaryComponent {
     let mut component = QueueBoundaryComponent::new();
-    component.sync(Rect::new(10, 0, 1, 8), 10, 200, 50, true, true);
+    component.sync(Rect::new(10, 0, 1, 8), 10, 200, 50, true);
     component
 }
 
@@ -74,7 +74,7 @@ fn click_only_and_disabled_sync_cancel_without_messages() {
         component.on(&mouse(MouseEventKind::Up(MouseButton::Left), 10)),
         None
     );
-    component.sync(Rect::default(), 0, 100, 50, true, false);
+    component.sync(Rect::default(), 0, 100, 50, false);
     assert_eq!(
         component.on(&mouse(MouseEventKind::Drag(MouseButton::Left), 80)),
         None

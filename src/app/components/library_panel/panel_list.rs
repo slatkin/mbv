@@ -53,6 +53,13 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
         }
     }
 
+    fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        match self.active() {
+            Presentation::Wide => self.wide_mut().set_geometry(claim_rect, content_rect),
+            Presentation::Inline => self.inline_mut().set_geometry(claim_rect, content_rect),
+        }
+    }
+
     fn detail_rect(&self) -> Option<Rect> {
         self.inline().current_detail_rect()
     }

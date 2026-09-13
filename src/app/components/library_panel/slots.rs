@@ -27,6 +27,7 @@ pub(in crate::app) fn paint_pill_bar_row(
     area: Rect,
     labels: &[String],
     active: Option<usize>,
+    prefix: Option<&str>,
     hits: &mut HitRegions<usize>,
 ) {
     let ids: Vec<usize> = (0..labels.len()).collect();
@@ -40,12 +41,18 @@ pub(in crate::app) fn paint_pill_bar_row(
             labels,
             ids: &ids,
             selected_pos,
-            prefix: None,
+            prefix,
         },
     ) {
         hits.push(rect, id);
     }
 }
+
+/// The Selector row's leading glyph, every library destination's pill bar
+/// before the D8 migration (`home_pills.rs`, `music.rs`, `feeds.rs`,
+/// `tv_wide.rs`, both Audiobookshelf destinations) and restored here as the
+/// one shared painter's prefix rather than re-duplicated per destination.
+pub(in crate::app) const SELECTOR_ROW_PREFIX: &str = " \u{2318} ";
 
 /// Paints one Selector row: the single pill bar into `bar_area` — pushing
 /// the painted pills' hitboxes into `hits` — followed by the panel's spacer
@@ -59,7 +66,14 @@ pub(in crate::app) fn paint_selector_row(
     hits: &mut HitRegions<usize>,
 ) {
     if !row.pills.is_empty() && bar_area.height > 0 && bar_area.width > 0 {
-        paint_pill_bar_row(f, bar_area, &row.pills, row.active, hits);
+        paint_pill_bar_row(
+            f,
+            bar_area,
+            &row.pills,
+            row.active,
+            Some(SELECTOR_ROW_PREFIX),
+            hits,
+        );
     }
     paint_pill_row_gap(f, spacer_area);
 }
@@ -93,7 +107,7 @@ pub(in crate::app) fn paint_list_controls_row(
     let area = Rect { height: 1, ..area };
     if let Some((pills, active)) = &controls.pills {
         if !pills.is_empty() {
-            paint_pill_bar_row(f, area, pills, Some(*active), hits);
+            paint_pill_bar_row(f, area, pills, Some(*active), None, hits);
         }
     }
     if let Some(label) = &controls.label {

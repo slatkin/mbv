@@ -118,9 +118,7 @@ fn startup_frame_paints_loading_affordances_not_blank_panes() {
 /// `SkeletonHits.selector` — rather than the deleted `HomeComponent`'s
 /// `pill_targets`. The assertions are preserved: one Continue-Watching pill
 /// (id 0), the targets share one painted row, the selected pill is
-/// highlighted, and exactly one pill bar row is painted (no `⌘` prefix: the
-/// panel's shared pill painter carries none — a visible Selector-row change
-/// recorded by design D8).
+/// highlighted, and exactly one pill bar row is painted.
 #[test]
 fn home_pill_row_and_targets_are_characterized_end_to_end() {
     let cw_item = emby_cw_item();

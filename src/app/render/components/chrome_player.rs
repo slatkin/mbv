@@ -115,19 +115,6 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             blank_area,
         );
     }
-
-    if let Some(bottom_area) = rows.bottom {
-        frame.render_widget(
-            Paragraph::new(Span::raw(" ".repeat(bottom_area.width as usize))).style(
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::PlaybackBottomRow,
-                    false,
-                )
-                .fill),
-            ),
-            bottom_area,
-        );
-    }
 }
 
 fn render_seekbar(

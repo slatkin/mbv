@@ -32,7 +32,7 @@ fn library_panel_wheel_persists_owner_resolved_scroll() {
     app.libs[0].nav_stack[0].set_resting_cursor(60);
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    let mut terminal = Terminal::new(TestBackend::new(120, 15)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(120, 16)).unwrap();
     terminal
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
         .unwrap();

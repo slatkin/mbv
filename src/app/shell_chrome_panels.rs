@@ -20,6 +20,7 @@ use crate::app::render::arrangements::chrome::{
     queue_playback_column_wide, queue_playback_transport_area, RootFrame,
 };
 use crate::app::render::components::card::queue_card_reserved_rect;
+use crate::app::render::components::widgets::{fill_surface, queue_panel_inset};
 use crate::app::render::StatusBarModel;
 use crate::app::NowPlayingStatus;
 
@@ -260,20 +261,15 @@ impl Model {
         // The root loop supplies the placement and is the paint gate. Fill
         // the complete queue-column placement before the slot and transport
         // paint, including the outer padding and the boundary column.
-        frame.render_widget(ratatui::widgets::Clear, placement);
-        frame.render_widget(
-            ratatui::widgets::Block::default().style(
-                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
-                    crate::app::palette::Surface::QueueColumn,
-                    matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
-                )
-                .fill),
-            ),
+        fill_surface(
+            frame,
             placement,
+            crate::app::palette::Surface::QueueColumn,
+            matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
         );
         // The slot region starts on the row below the placement's header row
         // and keeps the queue panel's shared horizontal inner padding.
-        let inset = crate::app::render::components::widgets::queue_panel_inset(placement);
+        let inset = queue_panel_inset(placement);
         let slot_region = Rect {
             height: placement.height.saturating_sub(1),
             ..inset
@@ -291,7 +287,9 @@ impl Model {
                 // zero-width slot at the wide breakpoint -- must still show
                 // this panel's own background rather than whatever was
                 // painted underneath before this panel owned the placement.
-                frame.render_widget(ratatui::widgets::Clear, slot_region);
+                // The outer `fill_surface` call above already cleared all of
+                // `placement`, including this subrect, so only the
+                // background needs (re)painting here.
                 frame.render_widget(
                     ratatui::widgets::Block::default().style(
                         ratatui::style::Style::default().bg(crate::app::palette::surface_colors(

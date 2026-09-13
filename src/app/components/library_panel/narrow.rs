@@ -29,6 +29,7 @@ use crate::app::render::{
 use super::content::{LibraryPanelContent, ListSlot, PanelHeroImagePaint, PanelListPaintPolicy};
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
+    SELECTOR_ROW_PREFIX,
 };
 use super::wide::SkeletonHits;
 
@@ -338,7 +339,14 @@ pub(in crate::app) fn render_narrow_skeleton(
             // the same one `paint_selector_row` calls for an empty pill
             // list, so the row never keeps whatever was painted underneath
             // it before this panel owned the placement.
-            paint_pill_bar_row(f, areas.pills_area, &[], None, &mut hits.selector);
+            paint_pill_bar_row(
+                f,
+                areas.pills_area,
+                &[],
+                None,
+                Some(SELECTOR_ROW_PREFIX),
+                &mut hits.selector,
+            );
             paint_pill_row_gap(f, areas.spacer_area);
         }
         (_, true) => paint_pill_row_gap(f, areas.spacer_area),

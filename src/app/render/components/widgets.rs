@@ -34,6 +34,15 @@ pub(in crate::app) const COLUMN_GAP: u16 = 0;
 pub(in crate::app) const TAB_LEFT_PAD: u16 = 2;
 
 pub(in crate::app) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
+    // One row of top padding between the right panel's content and whatever
+    // sits above it (tab bar, or the top of the terminal in mini view):
+    // previously supplied incidentally by the wide playback strip's reserved
+    // band, which now mounts only in LibraryOnly and no longer covers Both.
+    let area = Rect {
+        y: area.y + 1,
+        height: area.height.saturating_sub(1),
+        ..area
+    };
     if left_collapsed {
         Rect {
             x: area.x + 1,
@@ -242,6 +251,18 @@ pub(in crate::app) fn queue_panel_inset(area: Rect) -> Rect {
     }
 }
 
+/// Fill `area` with `surface`'s resolved background, clearing it first.
+pub(in crate::app) fn fill_surface(
+    f: &mut Frame,
+    area: Rect,
+    surface: palette::Surface,
+    focused: bool,
+) {
+    let bg = palette::surface_colors(surface, focused).fill;
+    f.render_widget(Clear, area);
+    f.render_widget(Block::default().style(Style::default().bg(bg)), area);
+}
+
 pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focused: bool) -> Rect {
     if area.width == 0 || area.height == 0 {
         return Rect::default();
@@ -249,13 +270,11 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
 
     // The Queue panel owns a recessed box inside the Queue column surface.
     // Paint the complete parent placement first, then the semantic content
-    // box inset by the standard two-column horizontal padding.
-    let outer = palette::surface_colors(palette::Surface::QueueColumn, focused).fill;
-    let inner = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
-    f.render_widget(Clear, area);
-    f.render_widget(Block::default().style(Style::default().bg(outer)), area);
+    // box inset by the standard two-column horizontal padding. The outer
+    // fill already clears the inset rect, so only paint its background.
+    fill_surface(f, area, palette::Surface::QueueColumn, focused);
     let inset = queue_panel_inset(area);
-    f.render_widget(Clear, inset);
+    let inner = palette::surface_colors(palette::Surface::QueuePanel, focused).fill;
     f.render_widget(Block::default().style(Style::default().bg(inner)), inset);
 
     area

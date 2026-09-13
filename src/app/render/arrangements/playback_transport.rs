@@ -9,15 +9,14 @@
 use ratatui::layout::Rect;
 
 /// The transport's rows for one panel rect: the seekbar, the title row that
-/// carries the transport controls, the blank indicator row and the bottom
-/// recess row. A row shows only when the panel has rows to spend on it.
+/// carries the transport controls, and a blank trailing row. A row shows
+/// only when the panel has rows to spend on it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct TransportRows {
     pub(in crate::app) seekbar: Option<Rect>,
     pub(in crate::app) title: Option<Rect>,
-    /// The blank row between title and bottom recess (row 2).
+    /// The blank row below the title (row 2).
     pub(in crate::app) indicator_row: Option<Rect>,
-    pub(in crate::app) bottom: Option<Rect>,
 }
 
 /// How much of the title row's right side the indicators take at a given
@@ -65,7 +64,6 @@ pub(in crate::app) fn transport_rows(area: Rect, rows: u16) -> TransportRows {
         seekbar: row(0),
         title: row(1),
         indicator_row: row(2),
-        bottom: row(3),
     }
 }
 
@@ -117,15 +115,15 @@ mod tests {
     /// stacks downward from the panel's top.
     #[test]
     fn rows_show_by_height() {
-        let full = transport_rows(panel(60, 4), 4);
+        let full = transport_rows(panel(60, 3), 3);
         assert!(full.seekbar.is_some() && full.title.is_some());
-        assert!(full.indicator_row.is_some() && full.bottom.is_some());
+        assert!(full.indicator_row.is_some());
         assert_eq!(full.seekbar.unwrap().y, 7);
-        assert_eq!(full.bottom.unwrap().y, 10);
+        assert_eq!(full.indicator_row.unwrap().y, 9);
 
         let short = transport_rows(panel(60, 2), 2);
         assert!(short.seekbar.is_some() && short.title.is_some());
-        assert!(short.indicator_row.is_none() && short.bottom.is_none());
+        assert!(short.indicator_row.is_none());
     }
 
     /// Wide panels show the full indicator set and the transport buttons.
@@ -154,14 +152,13 @@ mod tests {
     /// A zero-width panel places no rows.
     #[test]
     fn degenerate_panel_places_no_rows() {
-        let a = transport_rows(panel(0, 4), 4);
+        let a = transport_rows(panel(0, 3), 3);
         assert_eq!(
             a,
             TransportRows {
                 seekbar: None,
                 title: None,
                 indicator_row: None,
-                bottom: None,
             }
         );
         let b = transport_rows(panel(60, 0), 0);

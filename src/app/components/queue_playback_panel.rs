@@ -28,6 +28,7 @@ use super::library_playback_panel::PlaybackProjection;
 use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
 use crate::app::palette;
+use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_playback_header, render_player_panel, PlaybackRenderContext};
 use crate::app::NowPlayingStatus;
@@ -180,7 +181,7 @@ impl Component for QueuePlaybackPanel {
                 .style(Style::default().bg(palette::surface_colors(TRANSPORT_SURFACE, false).fill)),
             transport_area,
         );
-        let player_h = transport_area.height.min(4);
+        let player_h = transport_area.height.min(PLAYER_BOX_HEIGHT);
         let mut playback = PlaybackStripAreas::default();
         render_player_panel(
             frame,

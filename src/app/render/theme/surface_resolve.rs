@@ -116,7 +116,6 @@ mod tests {
             Surface::NonHeroSidebarBody => (SURFACE_SIDEBAR, SURFACE_SIDEBAR),
             Surface::QueueCardVisualizer => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackRecess => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::PlaybackBottomRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkLoadingPlaceholder => (

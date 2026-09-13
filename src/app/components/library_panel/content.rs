@@ -243,6 +243,15 @@ pub(in crate::app) trait PanelList {
     /// geometry.
     fn view(&mut self, frame: &mut Frame, rect: Rect);
 
+    /// Configure a split claim/content geometry for the next `view` (the
+    /// canonical-list contract: the selected row's background reaches the
+    /// full-width `claim_rect` while the row flow and hit geometry stay on
+    /// the inset `content_rect`, matching the pre-migration wide rail). A
+    /// destination that always paints one rect keeps the no-op default.
+    fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        let _ = (claim_rect, content_rect);
+    }
+
     /// The admitted Inline detail block's rect from the current view — the
     /// Narrow inline hero paints into it; `None` on fallback or Wide.
     fn detail_rect(&self) -> Option<Rect> {

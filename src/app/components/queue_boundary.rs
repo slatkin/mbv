@@ -16,7 +16,6 @@ pub struct QueueBoundaryComponent {
     area: Rect,
     frame_left: u16,
     terminal_width: u16,
-    focused: bool,
     enabled: bool,
     changed: bool,
     width: u16,
@@ -29,7 +28,6 @@ impl QueueBoundaryComponent {
             area: Rect::default(),
             frame_left: 0,
             terminal_width: 0,
-            focused: false,
             enabled: false,
             changed: false,
             width: 0,
@@ -43,7 +41,6 @@ impl QueueBoundaryComponent {
         frame_left: u16,
         terminal_width: u16,
         width: u16,
-        focused: bool,
         enabled: bool,
     ) {
         if !enabled {
@@ -54,7 +51,6 @@ impl QueueBoundaryComponent {
         self.frame_left = frame_left;
         self.terminal_width = terminal_width;
         self.width = width;
-        self.focused = focused;
         self.enabled = enabled;
     }
 

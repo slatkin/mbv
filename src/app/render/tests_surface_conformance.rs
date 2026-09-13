@@ -51,7 +51,6 @@
 //! | `NonHeroSidebarBody` | yes (non-hero sidebar shell, component view) | — |
 //! | `QueueCardVisualizer` | — | residual (see below): its fill is byte-identical to the containing queue column's in both bool states |
 //! | `PlaybackRecess` | yes (wide Both, both bools) | `tests.rs` panel suites |
-//! | `PlaybackBottomRow` | yes (QueueOnly strip, mini queue) | — (pinned only here at buffer level) |
 //! | `PlaybackStatusPill` | yes (title-row pill, component view) | — |
 //! | `ArtworkPlaceholder` | — | `components/artwork_placeholder_tests.rs::artwork_placeholder_paints_requested_extent` |
 //! | `ArtworkLoadingPlaceholder` | — | `components/tv_wide_tests.rs` (unpainted portrait cells) |
@@ -81,6 +80,7 @@
 //! equals. Their painters remain guarded by the ast-grep rules and the
 //! table's own unit tests; only a rendered-fill assertion is impossible.
 
+use super::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use super::test_helpers::{
     draw_mounted_terminal, make_movie_app, make_music_group_app, make_queue_app, mounted_model_at,
     mounted_music_wide_geometry,
@@ -246,25 +246,18 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
         // transport is the Queue playback panel's, stacked below the visual
         // slot; the right-column strip reserves its rows but paints nothing
         // until task 4.1 reclaims them. The band is the fixed chrome surface
-        // (focused == resting), and the bottom recess row is main's
-        // `PlaybackBottomRow`.
+        // (focused == resting).
         let transport = Rect {
             x: chrome.left_content.x,
             y: chrome.left_content.y + 1 + layout.card.height,
             width: chrome.left_content.width,
-            height: 4,
+            height: PLAYER_BOX_HEIGHT,
         };
         painted.expect(
             &format!("{label}/playback transport band"),
             palette::Surface::QueueOnlyPlaybackPanel,
             queue_bit,
             Rect::new(transport.x + 1, transport.y, 1, 1),
-        );
-        painted.expect(
-            &format!("{label}/playback transport bottom row"),
-            palette::Surface::PlaybackBottomRow,
-            queue_bit,
-            Rect::new(transport.x + 1, transport.y + 3, 1, 1),
         );
 
         // Structural chrome (fixed rows; the bit is a formality).
@@ -393,10 +386,10 @@ fn queue_only_strip_and_queue_follow_the_table() {
             .left_content
             .width
             .saturating_sub(layout.card.width + 2),
-        height: layout.card.height.max(4),
+        height: layout.card.height.max(PLAYER_BOX_HEIGHT),
     };
     assert!(
-        panel.width > 4 && panel.height >= 4,
+        panel.width > 4 && panel.height >= PLAYER_BOX_HEIGHT,
         "wide Queue-only must locate the playback strip, got {panel:?}"
     );
 
@@ -429,20 +422,11 @@ fn queue_only_strip_and_queue_follow_the_table() {
         true,
         Rect::new(panel.x + 1, panel.y, 1, 1),
     );
-    // The bottom "On Now" row is main's `PlaybackBottomRow` (the panel
-    // paints it with the backdrop in every mode); the rest of the strip is the
-    // fixed chrome band.
-    painted.expect(
-        "QueueOnly/playback strip bottom row",
-        palette::Surface::PlaybackBottomRow,
-        true,
-        Rect::new(panel.x + 1, panel.y + 3, 1, 1),
-    );
     painted.expect(
         "QueueOnly/playback strip body",
         palette::Surface::QueueOnlyPlaybackPanel,
         true,
-        Rect::new(panel.x + 1, panel.y + 4, 1, 1),
+        Rect::new(panel.x + 1, panel.y + PLAYER_BOX_HEIGHT, 1, 1),
     );
 }
 
@@ -513,19 +497,13 @@ fn mini_view_halves_follow_the_table() {
         x: 2,
         y: 2 + layout.card.height,
         width: 56,
-        height: 4,
+        height: PLAYER_BOX_HEIGHT,
     };
     queue_painted.expect(
         "mini queue/playback strip recess row",
         palette::Surface::QueueOnlyPlaybackPanel,
         true,
         Rect::new(panel.x + 1, panel.y, 1, 1),
-    );
-    queue_painted.expect(
-        "mini queue/playback strip bottom row",
-        palette::Surface::PlaybackBottomRow,
-        true,
-        Rect::new(panel.x + 1, panel.y + 3, 1, 1),
     );
 }
 
@@ -658,7 +636,6 @@ fn coverage_table_accounts_for_every_surface_row() {
         palette::Surface::SidebarBody,
         palette::Surface::NonHeroSidebarBody,
         palette::Surface::PlaybackRecess,
-        palette::Surface::PlaybackBottomRow,
         palette::Surface::PlaybackStatusPill,
         palette::Surface::ArtworkPlaceholder,
         palette::Surface::ArtworkLoadingPlaceholder,

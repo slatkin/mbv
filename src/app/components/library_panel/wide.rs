@@ -26,12 +26,18 @@ use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroIma
 use super::hero_header::paint_hero_pane_content;
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
+    SELECTOR_ROW_PREFIX,
 };
 use crate::app::render::place_media_list_below;
 
 /// Blank rows between the header/overview content's painted bottom edge and
 /// the Workspace box (design D3: the Workspace sits below the overview).
 const WORKSPACE_GAP_ROWS: u16 = 1;
+
+/// The Workspace selector's leading label (TV's season pills, the only
+/// current Workspace selector): the pre-migration wide rail's own prefix
+/// (`tv_wide.rs`), distinct from the Selector row's universal `⌘` glyph.
+const WORKSPACE_SELECTOR_PREFIX: &str = " Series: ";
 
 /// The skeleton's retained irregular-chrome hit registries, one per painted
 /// pill row (ADR 0024: the mounted panel owns gesture state and resolves the
@@ -122,7 +128,14 @@ pub(in crate::app) fn render_wide_skeleton(
             // the same one `paint_selector_row` calls for an empty pill
             // list, so the row never keeps whatever was painted underneath
             // it before this panel owned the placement.
-            paint_pill_bar_row(f, pane.pills_area, &[], None, &mut hits.selector);
+            paint_pill_bar_row(
+                f,
+                pane.pills_area,
+                &[],
+                None,
+                Some(SELECTOR_ROW_PREFIX),
+                &mut hits.selector,
+            );
             paint_pill_row_gap(f, pane.spacer_area);
         }
         (_, true) => paint_pill_row_gap(f, pane.spacer_area),
@@ -187,6 +200,18 @@ pub(in crate::app) fn render_wide_skeleton(
                 focused: browser_focused,
                 throbber: None,
             });
+            // The canonical rail owns the full panel row (matching the
+            // pre-migration wide rail): the selected background reaches
+            // `list_panel`'s border while the row flow/hit geometry stays on
+            // the inset `list_area`, so `wide_media_row`'s own 2-column text
+            // indent is the row's only indent instead of stacking atop
+            // `list_area`'s inset.
+            let claim_area = Rect {
+                x: list_panel.x,
+                width: list_panel.width,
+                ..list_area
+            };
+            list.set_geometry(claim_area, list_area);
             list.view(f, list_area);
         }
         ListSlot::Empty { loading, text } => {
@@ -287,8 +312,18 @@ fn paint_workspace_box(
         if bar.height > 0 {
             // `render_pill_bar` fully repaints the row's background even
             // with no pills (task 12.2): the row stays reserved, so it must
-            // still own its own paint.
-            paint_pill_bar_row(f, bar, &selector.pills, selector.active, hits);
+            // still own its own paint. TV's season pills are this selector
+            // (`tv_content/mod.rs`); the legacy wide rail's own prefix
+            // (`tv_wide.rs`, pre-migration) is restored here rather than the
+            // Selector row's universal `⌘` glyph, which this row never used.
+            paint_pill_bar_row(
+                f,
+                bar,
+                &selector.pills,
+                selector.active,
+                Some(WORKSPACE_SELECTOR_PREFIX),
+                hits,
+            );
         }
         box_area = Rect {
             y: bar.bottom(),
@@ -296,14 +331,12 @@ fn paint_workspace_box(
             ..workspace_rect
         };
     }
-    // The panel's own surface derivation (design D6): accent-soft while the
-    // workspace list holds focus, backdrop otherwise. The deleted
-    // `WideHeroContentBoxSurface` enum's focused arm is this one bool.
-    let panel = Rect {
-        x: box_area.x.saturating_add(PANE_PAD_X),
-        width: box_area.width.saturating_sub(PANE_PAD_X * 2),
-        ..box_area
-    };
+    // The box fills `box_area` flush (matching the list panel and hero pane's
+    // own single inset): `workspace_rect` is already inset from the hero
+    // panel's edge by `hero_area`'s padding, so the panel must not add a
+    // second outer margin on top of it. Only `content` carries the box's own
+    // interior padding, matching every other recessed box.
+    let panel = box_area;
     let background =
         palette::surface_colors(palette::Surface::MainContentBox, workspace.focused).fill;
     f.render_widget(
@@ -318,6 +351,14 @@ fn paint_workspace_box(
         .set_paint_policy(super::content::PanelListPaintPolicy::WideWorkspace {
             focused: workspace.focused,
         });
+    // Full-width claim so the selected row's background reaches the box's
+    // own border, matching the Browser pane's list (see above).
+    let claim_area = Rect {
+        x: panel.x,
+        width: panel.width,
+        ..content
+    };
+    workspace.list.set_geometry(claim_area, content);
     workspace.list.view(f, content);
     (panel, content)
 }

@@ -237,15 +237,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // Main paints this row whenever the panel is four rows high
-        // (`render/components/chrome_player.rs:122,158`), in every mode; only
-        // its "On Now" title is Mini-only (`:125`).
-        Surface::PlaybackBottomRow => Row {
-            level: Level::Recess,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_BACKDROP,
-        },
         Surface::PlaybackStatusPill => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
