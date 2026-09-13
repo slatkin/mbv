@@ -270,7 +270,7 @@ fn unfocused_component_handles_mouse_input() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == 1)
+        .find(|(_, id)| *id == WatchedFilter::COUNT + 1)
         .map(|(rect, _)| *rect)
         .expect("the second feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {
@@ -304,7 +304,7 @@ fn mouse_owns_feed_selector_and_row_geometry() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == 1)
+        .find(|(_, id)| *id == WatchedFilter::COUNT + 1)
         .map(|(rect, _)| *rect)
         .expect("the second feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {
