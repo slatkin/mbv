@@ -538,9 +538,20 @@ impl Player {
                 };
                 let (mode, index) = queue_load_location(i, start_idx);
                 let opts = prepared.mpv_load_options(item);
-                if let Err(e) =
-                    mpv.command("loadfile", &[prepared.url.as_str(), mode, &index, &opts])
-                {
+                let url = prepared.url.clone();
+                let result = mpv.command("loadfile", &[url.as_str(), mode, &index, &opts]);
+                // TEMP DIAGNOSTIC (queue_play): what mpv actually received and
+                // where its playlist stood after each load.
+                log::debug!(
+                    target: "queue_play",
+                    "load i={i} mode={mode} index={index} url=..{} opts={opts} \
+                     err={result:?} pos={:?} count={:?} playing={:?}",
+                    &url[url.len().saturating_sub(48)..],
+                    mpv.get_property::<i64>("playlist-pos"),
+                    mpv.get_property::<i64>("playlist-count"),
+                    mpv.get_property::<String>("filename"),
+                );
+                if let Err(e) = result {
                     log::warn!(
                         target: "player",
                         "submit_queue loadfile error: {e} | mode={mode}",
@@ -563,6 +574,9 @@ impl Player {
                 if i == start_idx {
                     active_prepared_source = Some(prepared);
                 }
+            }
+            if !active_file_projection {
+                reassert_queue_layout(&mpv, start_idx, items.len());
             }
             // send_ep_info only for Emby items.
             if let Some(emby) = items.get(start_idx).and_then(|i| i.as_emby()) {

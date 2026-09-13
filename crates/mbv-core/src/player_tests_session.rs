@@ -550,6 +550,23 @@ fn queue_loads_selected_item_first_and_restores_playlist_order() {
 }
 
 #[test]
+fn queue_layout_verdict_reasserts_only_a_complete_playlist() {
+    // Every item landed and the active one is playing: nothing to repair.
+    assert_eq!(queue_layout_verdict(2, 4, 2, 4), QueueLayoutVerdict::Ok);
+    // mpv finished the layout on another entry — the ordinal the whole run
+    // (current_idx, status, every reported item) is derived from is wrong and
+    // has to be reasserted from the layout we built.
+    assert_eq!(queue_layout_verdict(2, 4, 0, 4), QueueLayoutVerdict::Reassert);
+    assert_eq!(queue_layout_verdict(2, 4, -1, 4), QueueLayoutVerdict::Reassert);
+    // A short playlist means an ordinal no longer names its item: report it
+    // instead of seeking to a position that means something else.
+    assert_eq!(
+        queue_layout_verdict(2, 4, 2, 3),
+        QueueLayoutVerdict::ShortLayout
+    );
+}
+
+#[test]
 fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
     let status = PlayerStatus {
         active: true,

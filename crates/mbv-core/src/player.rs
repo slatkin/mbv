@@ -92,6 +92,74 @@ fn queue_load_location(index: usize, start_idx: usize) -> (&'static str, String)
     }
 }
 
+/// What the initial queue layout verification found in mpv's playlist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QueueLayoutVerdict {
+    /// Every item present, active one playing.
+    Ok,
+    /// The playlist holds every item but mpv is on another entry: reassert
+    /// the ordinal the run's `current_idx` (and every reported item) is
+    /// derived from.
+    Reassert,
+    /// The playlist is missing entries, so an ordinal no longer names the
+    /// item it should: report instead of repairing by position.
+    ShortLayout,
+}
+
+fn queue_layout_verdict(
+    start_idx: usize,
+    item_count: usize,
+    mpv_pos: i64,
+    mpv_count: i64,
+) -> QueueLayoutVerdict {
+    if mpv_count != item_count as i64 {
+        QueueLayoutVerdict::ShortLayout
+    } else if mpv_pos == start_idx as i64 {
+        QueueLayoutVerdict::Ok
+    } else {
+        QueueLayoutVerdict::Reassert
+    }
+}
+
+/// Verify — and if needed reassert — the playlist projection the load
+/// sequence above is supposed to have built: every item present, in `items`
+/// order, with the active one playing at `start_idx`.
+///
+/// The run's `current_idx` and mpv's `playlist-pos` are one coordinate:
+/// `on_playlist_pos_changed` maps mpv's index straight back to a queue slot.
+/// If mpv finishes the layout on a different entry, that coordinate is
+/// silently wrong, and the `playlist-pos` events that would report it are
+/// suppressed as transient (`pending_initial_playlist_layout`) until the
+/// layout settles, so nothing else ever re-derives it: reports keep naming the
+/// requested item while mpv streams another one.
+///
+/// Called once after the loads; a layout that is short an entry is reported
+/// rather than repaired, because a missing entry means the ordinal no longer
+/// names the item we think it does.
+fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
+    let mpv_count = mpv.get_property::<i64>("playlist-count").unwrap_or(-1);
+    let mpv_pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
+    match queue_layout_verdict(start_idx, item_count, mpv_pos, mpv_count) {
+        QueueLayoutVerdict::Ok => {}
+        QueueLayoutVerdict::Reassert => {
+            log::warn!(
+                target: "player",
+                "queue layout mismatch: start_idx={start_idx} items={item_count} \
+                 mpv_pos={mpv_pos} mpv_count={mpv_count}; reasserting the active ordinal",
+            );
+            let _ = mpv.set_property("playlist-pos", start_idx as i64);
+            let _ = mpv.set_property("pause", false);
+        }
+        QueueLayoutVerdict::ShortLayout => {
+            log::error!(
+                target: "player",
+                "queue layout incomplete: start_idx={start_idx} items={item_count} \
+                 mpv_pos={mpv_pos} mpv_count={mpv_count}",
+            );
+        }
+    }
+}
+
 fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
     let val =
         if item.item_type == "Episode" && item.parent_index_number > 0 && item.index_number > 0 {

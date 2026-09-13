@@ -429,6 +429,7 @@ impl PlaybackRun {
                 );
             }
         }
+        reassert_queue_layout(mpv, start_idx, items.len());
 
         let active_item = &items[start_idx].1;
         if let Some(emby) = active_item.as_emby() {
