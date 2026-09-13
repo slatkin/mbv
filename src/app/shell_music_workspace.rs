@@ -113,12 +113,26 @@ impl Model {
                 );
             }
         }
+        let search_active = self
+            .music_owner()
+            .is_some_and(|owner| owner.inline_search().is_active());
         if let Some(album) = context.selected_album.as_ref() {
             if !self.app.album_tracks_cache.contains_key(&album.id)
                 && !self.app.album_tracks_loading.contains(&album.id)
             {
                 self.app.fetch_album_tracks(album.id.clone());
             }
+        }
+        // Pre-warm the display-order neighbours' album art (the `{id}:P` keys
+        // the hero projection consumes), so browsing the grouped list shows
+        // art instantly instead of re-walking the two-request `AudioChild`
+        // chain on every cursor move (the seam the pre-panel painter used).
+        if self.app.images_enabled() && !search_active {
+            self.app.prewarm_grouped_music_album_images(
+                &context.list.items,
+                context.list.cursor(),
+                &context.album_order,
+            );
         }
         let reanchor = std::mem::take(&mut self.music_workspace_reanchor)
             .then(|| resting.unwrap_or((context.list.cursor(), 0)));
@@ -241,6 +255,68 @@ mod tests {
         assert!(
             model.app.album_tracks_loading.contains("album-1"),
             "the selected album's tracks must be fetched"
+        );
+    }
+
+    /// Restored from the pre-panel painter (49e3fa8c, lost in the 9.x
+    /// migration): the grouped Music push pre-warms the display-order
+    /// neighbours' `{id}:P` art when navigation is idle, so browsing shows
+    /// art instantly instead of re-walking the two-request `AudioChild`
+    /// chain on every cursor move. Only the ±window around the cursor
+    /// warms; distant albums stay untouched.
+    #[test]
+    fn grouped_music_push_prewarms_neighbour_album_images() {
+        let mut app = make_music_group_app();
+        app.image_protocol_enabled = true;
+        for number in 2..=7 {
+            let mut album = crate::app::tests::make_item(&format!("Album {number}"), "MusicAlbum");
+            album.id = format!("album-{number}");
+            album.artist = "Alpha".into();
+            app.libs[0].nav_stack[1].items.push(album);
+        }
+        app.libs[0].nav_stack[1].set_resting_cursor(2);
+        let mut model = Model::new(app);
+
+        model.sync_music_workspace();
+
+        // The neighbours of the selected album-3 (cursor 2) warm: one behind
+        // and three ahead in display order.
+        assert!(
+            model.app.card_image_loading.contains("album-2:P"),
+            "the album behind the cursor must pre-warm"
+        );
+        assert!(
+            model.app.card_image_loading.contains("album-4:P"),
+            "the albums ahead of the cursor must pre-warm"
+        );
+        assert!(
+            !model.app.card_image_loading.contains("album-1:P"),
+            "albums outside the window must not fetch"
+        );
+        assert!(
+            !model.app.card_image_loading.contains("album-7:P"),
+            "albums outside the window must not fetch"
+        );
+    }
+
+    /// The pre-warm is idle-gated: navigation in the last
+    /// `NAV_IMAGE_FETCH_IDLE_DELAY` must not issue neighbour fetches.
+    #[test]
+    fn grouped_music_prewarm_waits_for_navigation_idle() {
+        let mut app = make_music_group_app();
+        app.image_protocol_enabled = true;
+        let mut album = crate::app::tests::make_item("Album 2", "MusicAlbum");
+        album.id = "album-2".into();
+        album.artist = "Alpha".into();
+        app.libs[0].nav_stack[1].items.push(album);
+        app.last_nav_at = std::time::Instant::now();
+        let mut model = Model::new(app);
+
+        model.sync_music_workspace();
+
+        assert!(
+            !model.app.card_image_loading.contains("album-2:P"),
+            "a fresh navigation must suppress the neighbour pre-warm"
         );
     }
 }

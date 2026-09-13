@@ -467,6 +467,42 @@ impl App {
         }
     }
 
+    /// Pre-warm nearby grouped-Music album art after navigation has gone
+    /// idle. `order` is the already-resolved display order, so this does not
+    /// repeat the grouping/sorting work used to build the render context.
+    /// The keys are the shared `{album_id}:P` art keys the hero projection
+    /// consumes, so a warmed neighbour's art shows instantly when the cursor
+    /// reaches it instead of waiting on the two-request `AudioChild` chain.
+    pub(in crate::app) fn prewarm_grouped_music_album_images(
+        &mut self,
+        albums: &[mbv_core::api::EmbyItem],
+        cursor: usize,
+        order: &[usize],
+    ) {
+        const PREFETCH_AHEAD: usize = 3;
+        const PREFETCH_BEHIND: usize = 1;
+
+        let Some(cursor_pos) = order.iter().position(|&idx| idx == cursor) else {
+            return;
+        };
+        let start = cursor_pos.saturating_sub(PREFETCH_BEHIND);
+        let end = (cursor_pos + PREFETCH_AHEAD + 1).min(order.len());
+        for (offset, &idx) in order[start..end].iter().enumerate() {
+            if start + offset == cursor_pos {
+                continue;
+            }
+            let Some(album) = albums.get(idx) else {
+                continue;
+            };
+            self.fetch_list_card_image_when_idle(
+                format!("{}:P", album.id),
+                album.id.clone(),
+                album.series_id.clone(),
+                crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES,
+            );
+        }
+    }
+
     pub(super) fn ensure_placeholder_card_image(&mut self) {
         if self
             .card_image_states
