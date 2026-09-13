@@ -1,7 +1,7 @@
 ## 1. Video cache configuration
 
-- [ ] 1.1 Add positive integer `video_cache_forward_mb` and `video_cache_back_mb` fields with 50/100 defaults to the core `Config`, parse each `[mpv]` value independently with invalid values falling back to its default, and persist both through the existing save path; extend the existing configuration parse/save tests with one compact valid-and-invalid table and verify `cargo nextest run -p mbv-core config` passes.
-- [ ] 1.2 Add the two optional keys and concise memory-versus-buffering guidance to `dist/config.toml` and `dist/mbvd.toml`, keeping packaged defaults unchanged; verify both examples parse through the existing configuration loader tests.
+- [x] 1.1 Add positive integer `video_cache_forward_mb` and `video_cache_back_mb` fields with 50/100 defaults to the core `Config`, parse each `[mpv]` value independently with invalid values falling back to its default, and persist both through the existing save path; extend the existing configuration parse/save tests with one compact valid-and-invalid table and verify `cargo nextest run -p mbv-core config` passes.
+- [x] 1.2 Add the two optional keys and concise memory-versus-buffering guidance to `dist/config.toml` and `dist/mbvd.toml`, keeping packaged defaults unchanged; verify both examples parse through the existing configuration loader tests.
 
 ## 2. Player policy projection
 
