@@ -296,6 +296,8 @@ fn init_mpv_projects_mutually_exclusive_output() {
     let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
         headless: true,
         use_mpv_config: false,
+        video_cache_forward_mb: 50,
+        video_cache_back_mb: 100,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: None,
@@ -321,6 +323,8 @@ fn init_mpv_projects_mutually_exclusive_output() {
     let (mpv, startup_pause_armed) = init_mpv(&MpvRunConfig {
         headless: true,
         use_mpv_config: false,
+        video_cache_forward_mb: 50,
+        video_cache_back_mb: 100,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: Some(pipe_path.clone()),
@@ -353,6 +357,8 @@ fn init_mpv_headless_disables_cover_art_display() {
     let (mpv, _) = init_mpv(&MpvRunConfig {
         headless: true,
         use_mpv_config: false,
+        video_cache_forward_mb: 7,
+        video_cache_back_mb: 13,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: None,
@@ -385,6 +391,8 @@ fn init_mpv_non_headless_uses_video_sized_demuxer_cache() {
     let (mpv, _) = init_mpv(&MpvRunConfig {
         headless: false,
         use_mpv_config: false,
+        video_cache_forward_mb: 7,
+        video_cache_back_mb: 13,
         no_scripts: true,
         always_skip_intro: false,
         audio_pipe_path: None,
@@ -395,12 +403,13 @@ fn init_mpv_non_headless_uses_video_sized_demuxer_cache() {
     .unwrap();
     assert_eq!(
         mpv.get_property::<i64>("demuxer-max-bytes").unwrap(),
-        50 * 1024 * 1024
+        7 * 1024 * 1024
     );
     assert_eq!(
         mpv.get_property::<i64>("demuxer-max-back-bytes").unwrap(),
-        100 * 1024 * 1024
+        13 * 1024 * 1024
     );
+    assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "auto-safe");
     mpv.set_property("ao", "null").unwrap();
     mpv.set_property("vo", "null").unwrap();
     drop(mpv);

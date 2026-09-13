@@ -45,6 +45,8 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
         MpvRunConfig {
             headless: true,
             use_mpv_config: false,
+            video_cache_forward_mb: 50,
+            video_cache_back_mb: 100,
             no_scripts: true,
             always_skip_intro: false,
             audio_pipe_path: None,

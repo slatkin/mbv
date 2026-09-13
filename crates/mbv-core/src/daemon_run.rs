@@ -54,6 +54,10 @@ pub fn run_with_options(
         player_tx,
         ws_send_tx.clone(),
     )
+    .with_video_cache(
+        client_locked.config.video_cache_forward_mb,
+        client_locked.config.video_cache_back_mb,
+    )
     .with_audio_device(audio_device);
     player.pre_warm(
         client_locked.config.audio_pipe_target(),

@@ -62,6 +62,8 @@ pub struct Player {
     audiobookshelf_context: Arc<Mutex<Option<AudiobookshelfPlayerContext>>>,
     show_audio_window: bool,
     use_mpv_config: bool,
+    video_cache_forward_mb: u32,
+    video_cache_back_mb: u32,
     no_scripts: bool,
     /// Fixed for this Player's lifetime; `Some` only for packaged-daemon
     /// clocked output (see `with_audio_device`). `None` for bare mode and
@@ -105,6 +107,8 @@ impl Player {
             audiobookshelf_context: Arc::new(Mutex::new(None)),
             show_audio_window,
             use_mpv_config,
+            video_cache_forward_mb: crate::config::DEFAULT_VIDEO_CACHE_FORWARD_MB,
+            video_cache_back_mb: crate::config::DEFAULT_VIDEO_CACHE_BACK_MB,
             no_scripts,
             audio_device: None,
             always_skip_intro,
@@ -137,6 +141,13 @@ impl Player {
             .collect()
     }
 
+    /// Sets the video cache budgets projected on every run for this Player's lifetime.
+    pub fn with_video_cache(mut self, forward_mb: u32, back_mb: u32) -> Self {
+        self.video_cache_forward_mb = forward_mb;
+        self.video_cache_back_mb = back_mb;
+        self
+    }
+
     /// Sets the fixed ALSA device identifier packaged-daemon clocked output
     /// projects on every run for the remainder of this Player's lifetime
     /// (restart-required, matching `audio_device`'s owner-local semantics).
@@ -153,6 +164,8 @@ impl Player {
         let config = MpvRunConfig {
             headless: true,
             use_mpv_config: self.use_mpv_config,
+            video_cache_forward_mb: self.video_cache_forward_mb,
+            video_cache_back_mb: self.video_cache_back_mb,
             no_scripts: self.no_scripts,
             always_skip_intro: self.always_skip_intro,
             audio_pipe_path: pipe_path,
@@ -425,6 +438,8 @@ impl Player {
         let config = MpvRunConfig {
             headless,
             use_mpv_config: self.use_mpv_config,
+            video_cache_forward_mb: self.video_cache_forward_mb,
+            video_cache_back_mb: self.video_cache_back_mb,
             no_scripts: self.no_scripts,
             always_skip_intro,
             audio_pipe_path,
