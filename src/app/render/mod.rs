@@ -68,7 +68,6 @@ pub(crate) fn browser_legacy_plain_rows_paints() -> usize {
     components::media_list::PLAIN_ROWS_PAINTS.with(std::cell::Cell::get)
 }
 
-pub(in crate::app) use components::home_hero::HomeImagePaint;
 pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
@@ -131,9 +130,7 @@ pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sideba
 // sibling submodules (album, card, detail, home, list, music, pills, queue)
 // and/or `use super::*` in render/tests.rs.
 pub use components::indicators;
-use components::widgets::{
-    render_right_scrollbar, render_selected_block_background, RENDER_FILTER,
-};
+use components::widgets::{render_right_scrollbar, render_selected_block_background};
 pub(in crate::app) use components::widgets::{
     render_selected_block_borders, SelectedBlockBorderStyle,
 };
@@ -151,9 +148,8 @@ pub(crate) use theme::{
     ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, HERO_META_ROLES,
     INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
     PLAYBACK_META_FG, PLAYBACK_THROBBER_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK, SCROLLBAR,
-    STATUS_AVAILABLE, STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_DETAIL_META, TEXT_EMPHASIS,
-    TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY,
-    TEXT_STRONG,
+    STATUS_AVAILABLE, STATUS_ERROR, TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT,
+    TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
 };
 // Task 4.2: the retired role names and the value-aliased resolver survive only
 // as test-fed re-exports — each is pinned by a frozen pre-existing test file

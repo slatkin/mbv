@@ -1,6 +1,6 @@
-use super::components::{BrowserKind, ComponentId};
+use super::components::ComponentId;
 use super::shell::Model;
-use super::{PanelFocus, PanelMode, TabSelection};
+use super::{PanelFocus, PanelMode};
 
 impl Model {
     /// Route TuiRealm's native LIFO focus to the active destination's child
@@ -42,19 +42,6 @@ impl Model {
         Some(ComponentId::Library)
     }
 
-    pub(super) fn library_child_id(&self) -> Option<ComponentId> {
-        match self.app.tab {
-            // The Home owner is installed with the panel (Model::new), so
-            // the Home tab always routes through the Library panel (task
-            // 5.11); `None` is unreachable via the transitional branch's
-            // migrated check. The Feeds owner is installed the same way
-            // (task 7.3).
-            TabSelection::Home | TabSelection::Feeds => None,
-            TabSelection::EmbyLibrary(index) => self.emby_library_child_id(index),
-            TabSelection::AudiobookshelfLibrary(index) => self.abs_library_child_id(index),
-        }
-    }
-
     /// Whether the right-panel library destination is painted this frame.
     /// The queue-only mode (including the narrow mini view) hides the library
     /// entirely, so its mounted destination must not paint over the queue that
@@ -63,43 +50,8 @@ impl Model {
         self.app.effective_panel_mode() != PanelMode::QueueOnly
     }
 
-    fn emby_library_child_id(&self, index: usize) -> Option<ComponentId> {
-        let library = self.app.libs.get(index)?;
-        let kind = BrowserKind::from_collection_type(&library.library.collection_type);
-        let mounted_surface = match kind {
-            // Generic, Movies and HomeVideos moved to the embedded
-            // `BrowserContent` owner inside the mounted `LibraryPanel` (task
-            // 6.1, design D2): `emby_browser_component_id` never mounts the
-            // standalone `BrowserComponent` for them, so their
-            // All Emby library surfaces route through `ComponentId::Library`.
-            // TV joined them in task 8.4 (`TvContent` under
-            // `LibraryKey::Service(TvShows)`), deleting the TV-specific
-            // component registration.
-            BrowserKind::Generic
-            | BrowserKind::Movies
-            | BrowserKind::HomeVideos
-            | BrowserKind::TvShows => return Some(ComponentId::Library),
-            BrowserKind::Music => {
-                // Music mounts one component type at all widths (no TV-style
-                // split), so narrow Music is focusable too — the mount gate is
-                // already width-agnostic; only this focus gate was wide-only.
-                self.app.is_music_group_view(index) && self.app.is_viewing_album_folders(index)
-            }
-            BrowserKind::AudiobookshelfPodcast | BrowserKind::AudiobookshelfBook => false,
-        };
-        mounted_surface.then_some(ComponentId::Library)
-    }
-
-    fn abs_library_child_id(&self, index: usize) -> Option<ComponentId> {
-        self.app.audiobookshelf_libraries.get(index)?;
-        self.app.audiobookshelf_kind_at(index)?;
-        // Both Audiobookshelf destinations are embedded LibraryPanel owners;
-        // neither gets a standalone mounted destination component.
-        Some(ComponentId::Library)
-    }
-
     /// ADR 0024 D2: the mouse-eligible component set for the current frame, a
-    /// three-rung ladder derived off the same `library_child_id()` the
+    /// three-rung ladder derived from the active mounted surfaces the
     /// active-destination pass uses (no second "did I paint" ledger).
     pub(super) fn mouse_eligible_ids(&self) -> Vec<ComponentId> {
         use super::components::{ModalId, OverlayId, PopupId};

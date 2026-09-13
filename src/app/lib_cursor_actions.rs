@@ -72,17 +72,6 @@ impl App {
             .unwrap_or(false)
     }
 
-    pub(super) fn is_viewing_season_grid(&self, lib_idx: usize) -> bool {
-        let lib = &self.libs[lib_idx];
-        let lvl = match lib.nav_stack.last() {
-            Some(l) => l,
-            None => return false,
-        };
-        lvl.items
-            .first()
-            .map(|i| i.item_type == "Season")
-            .unwrap_or(false)
-    }
     /// Ensures the series detail is fetched for the wide TV component.
     pub(super) fn enter_series_selection(&mut self, _lib_idx: usize, item: &EmbyItem) {
         if item.item_type != "Series" || item.id.is_empty() {

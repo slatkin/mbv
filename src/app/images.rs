@@ -752,16 +752,6 @@ impl App {
         )
     }
 
-    /// The decoded source image's pixel size cached under `cache_key`, when
-    /// one is (the Narrow inline hero's decoded-size arm, design D7).
-    pub(in crate::app) fn decoded_image_size(&self, cache_key: &str) -> Option<(u32, u32)> {
-        use image::GenericImageView;
-        self.card_image_states
-            .get(cache_key)
-            .and_then(|entry| entry.img.as_ref())
-            .map(|img| img.dimensions())
-    }
-
     /// Ensure the hero cover-fit protocol for `cache_key` matches
     /// `box_cells` (task 5.10, design D5): the protocol is rebuilt from the
     /// decoded source through `cover_fill_hero_box` at the box's pixel size

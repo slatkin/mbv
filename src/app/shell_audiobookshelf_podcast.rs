@@ -121,13 +121,4 @@ impl Model {
             PodcastEpisodeIntent::Enqueue(None) => {}
         }
     }
-
-    #[cfg(test)]
-    pub(super) fn test_abs_podcast_owner(&self) -> &PodcastContent {
-        self.abs_podcast_owner().expect("podcast owner")
-    }
-    #[cfg(test)]
-    pub(super) fn test_abs_podcast_owner_mut(&mut self) -> &mut PodcastContent {
-        self.abs_podcast_owner_mut().expect("podcast owner")
-    }
 }

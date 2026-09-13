@@ -20,11 +20,10 @@
 //! the effect into the router. Playback rows additionally pin the live
 //! first-press FallThrough / second-press Command policy.
 
-use crate::app::components::{BrowserKey, BrowserKind, ComponentId, Msg, TerminalObserverEvent};
+use crate::app::components::{ComponentId, Msg, TerminalObserverEvent};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crate::app::shell::apply_router_outcome;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use mbv_core::config::ServiceKind;
 
 pub(crate) fn fold_tick(
     leaf: Option<Msg>,
@@ -94,10 +93,3 @@ pub(crate) fn text_entry_snapshot() -> RouterSnapshot {
     }
 }
 
-pub(crate) fn browser_key() -> BrowserKey {
-    BrowserKey {
-        service: ServiceKind::Emby,
-        library_id: "lib".into(),
-        kind: BrowserKind::Generic,
-    }
-}

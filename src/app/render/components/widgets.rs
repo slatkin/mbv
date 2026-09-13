@@ -1,5 +1,7 @@
 use super::chrome::thin_vertical_thumb;
-use crate::app::{palette, App, TabSelection};
+#[cfg(test)]
+use crate::app::TabSelection;
+use crate::app::{palette, App};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
@@ -515,6 +517,7 @@ pub(in crate::app) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
 }
 
 impl App {
+    #[cfg(test)]
     pub(in crate::app) fn reserve_library_area(
         &mut self,
         _f: &mut Frame,

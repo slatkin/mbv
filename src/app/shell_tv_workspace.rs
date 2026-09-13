@@ -103,14 +103,6 @@ impl Model {
             .and_then(|owner| owner.as_any().downcast_ref::<TvContent>())
     }
 
-    /// The active TV owner's series cursor and scroll, for the base frame's
-    /// cursor/scroll input (the same pair the removed mounted component's
-    /// downcast supplied).
-    pub(super) fn tv_tv_content_cursor_scroll(&self) -> Option<(usize, usize)> {
-        self.tv_owner()
-            .map(|owner| (owner.cursor(), owner.scroll()))
-    }
-
     /// Mutate the TV owner inside the mounted `LibraryPanel` (design D2: the
     /// shell pushes content addressed by `LibraryKey`), creating it on first
     /// push.

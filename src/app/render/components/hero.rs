@@ -8,7 +8,6 @@ use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-pub(in crate::app) const HERO_PLACEHOLDER_ROWS: u16 = 18;
 pub(in crate::app) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
 
 pub(in crate::app) fn wrap_overview_lines(

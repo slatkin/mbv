@@ -24,8 +24,6 @@ pub(super) mod help;
 pub(super) mod hero;
 pub(in crate::app) mod hero_model;
 pub(super) mod home_feed;
-pub(super) mod home_hero;
-pub(super) mod home_hero_emby;
 pub(super) mod home_video;
 pub mod indicators;
 pub(in crate::app) mod inline_search;
@@ -54,7 +52,3 @@ pub(in crate::app) mod widgets;
 #[cfg(test)]
 #[path = "home_video_tests.rs"]
 mod home_video_tests;
-
-#[cfg(test)]
-#[path = "tv_wide_tests.rs"]
-mod tv_wide_tests;

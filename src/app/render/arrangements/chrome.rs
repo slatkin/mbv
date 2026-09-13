@@ -1,6 +1,5 @@
 use super::queue::{queue_panel_geometry, QueuePanelInputs};
 use crate::app::layout::FrameChromeGeometry;
-use crate::app::render::components::chrome;
 use crate::app::render::components::widgets::COLUMN_GAP;
 use crate::app::{PanelFocus, PanelMode, TABBAR_LEFT_RESERVE};
 use ratatui::layout::Rect;
@@ -78,8 +77,7 @@ pub(crate) enum PanelPlacement {
 }
 
 impl PanelPlacement {
-    /// The placed rect, regardless of which panel it belongs to (task 12.2's
-    /// sentinel test walks every placement generically).
+    #[cfg(test)]
     pub(crate) fn rect(self) -> Rect {
         match self {
             Self::Tab(rect)
@@ -259,6 +257,8 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
             height: content_h,
         }
     };
+    #[cfg(test)]
+    let queue_focused = matches!(input.panel_focus, PanelFocus::Queue);
     let panel_area = if input.terminal_width < crate::app::MINI_VIEW_THRESHOLD
         && input.panel_mode == PanelMode::LibraryOnly
     {
@@ -266,17 +266,6 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
     } else {
         left_area
     };
-    let panel_content_area = chrome::left_panel_content_area(panel_area);
-    let queue_focused = matches!(input.panel_focus, PanelFocus::Queue);
-
-    // Full-column background behind the card image and queue list.
-    let right_full_area = Rect {
-        x: area.x + left_w + COLUMN_GAP,
-        y: area.y,
-        width: right_w.saturating_sub(COLUMN_GAP),
-        height: area.height,
-    };
-
     // Inner content area with padding inside the colored box (queue uses this).
     let left_content = Rect {
         x: left_area.x + 2,
@@ -398,15 +387,16 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
 
     FrameChromeGeometry {
         panel_area,
-        panel_content_area,
         left_area,
         right_area,
-        right_full_area,
         left_content,
         tab_bar_area,
-        player_area,
-        status_area,
         right_visible,
+        #[cfg(test)]
+        player_area,
+        #[cfg(test)]
+        status_area,
+        #[cfg(test)]
         queue_focused,
         root,
     }

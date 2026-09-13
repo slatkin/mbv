@@ -102,10 +102,7 @@ impl MusicContent {
                 0,
                 Vec::new(),
                 Vec::new(),
-                false,
                 None,
-                false,
-                false,
             ),
             carrier: MediaListCarrier::new(Presentation::Inline),
             track_list: MediaListCarrier::new(Presentation::Wide),
@@ -688,10 +685,7 @@ mod tests {
             0,
             vec![("Artist".into(), "2024".into(), "Album".into())],
             vec![0],
-            true,
             None,
-            false,
-            false,
         )
     }
 

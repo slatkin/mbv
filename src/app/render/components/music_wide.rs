@@ -16,14 +16,7 @@ pub(in crate::app) struct MusicWideRenderCtx {
     pub(in crate::app) album_info: Vec<(String, String, String)>,
     pub(in crate::app) album_order: Vec<usize>,
     pub(in crate::app) focused: bool,
-    pub(in crate::app) images_enabled: bool,
     pub(in crate::app) album_tracks: Option<Vec<EmbyItem>>,
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(in crate::app) album_tracks_loading: bool,
-    /// Parent-owned track-pane focus (design.md D5). The track owner stays
-    /// authoritative for the selected track; this only says whether the track
-    /// pane currently paints focused.
-    pub(in crate::app) track_focused: bool,
 }
 
 impl MusicWideRenderCtx {
@@ -36,10 +29,7 @@ impl MusicWideRenderCtx {
         group_cursor: usize,
         album_info: Vec<(String, String, String)>,
         album_order: Vec<usize>,
-        images_enabled: bool,
         album_tracks: Option<Vec<EmbyItem>>,
-        album_tracks_loading: bool,
-        track_focused: bool,
     ) -> Self {
         let mut counts = HashMap::<&str, usize>::new();
         for album in &list.items {
@@ -68,10 +58,7 @@ impl MusicWideRenderCtx {
             // Framework focus is owned by `MusicWorkspaceComponent` and applied
             // from `Attribute::Focus`; content projection never sets it.
             focused: false,
-            images_enabled,
             album_tracks,
-            album_tracks_loading,
-            track_focused,
         }
     }
 }
@@ -163,15 +150,9 @@ impl App {
                     .collect()
             })
             .unwrap_or_else(|| crate::app::render::sorted_group_album_order(&album_info));
-        let (album_tracks, album_tracks_loading) = selected_album
+        let album_tracks = selected_album
             .as_ref()
-            .map(|album| {
-                (
-                    self.album_tracks_cache.get(&album.id).cloned(),
-                    self.album_tracks_loading.contains(&album.id),
-                )
-            })
-            .unwrap_or((None, false));
+            .and_then(|album| self.album_tracks_cache.get(&album.id).cloned());
 
         MusicWideRenderCtx::new(
             list,
@@ -181,14 +162,7 @@ impl App {
             group_cursor,
             album_info,
             album_order,
-            self.images_enabled(),
             album_tracks,
-            album_tracks_loading,
-            // The App side never owns inline track focus: the wide
-            // `MusicWorkspaceComponent` repaints over this underpaint with
-            // its parent-owned track-pane focus, and narrow keeps track focus
-            // explicitly off (design.md D5).
-            false,
         )
     }
 }

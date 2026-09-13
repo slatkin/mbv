@@ -35,15 +35,6 @@ impl Model {
             .and_then(|o| o.as_any().downcast_ref::<BookContent>())
     }
 
-    pub fn abs_book_owner_mut(&mut self) -> Option<&mut BookContent> {
-        let key = self.abs_book_key()?;
-        self.application
-            .get_component_mut(&ComponentId::Library)
-            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
-            .and_then(|p| p.owner_mut(&key))
-            .and_then(|o| o.as_any_mut().downcast_mut::<BookContent>())
-    }
-
     fn update_abs_book_owner<R>(&mut self, f: impl FnOnce(&mut BookContent) -> R) -> Option<R> {
         let key = self.abs_book_key()?;
         if !self.library_panel_has_owner(&key) {
@@ -138,6 +129,12 @@ impl Model {
 
     #[cfg(test)]
     pub(super) fn test_abs_book_owner_mut(&mut self) -> &mut BookContent {
-        self.abs_book_owner_mut().expect("book owner")
+        let key = self.abs_book_key().expect("book key");
+        self.application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
+            .and_then(|p| p.owner_mut(&key))
+            .and_then(|o| o.as_any_mut().downcast_mut::<BookContent>())
+            .expect("book owner")
     }
 }

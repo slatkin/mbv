@@ -60,27 +60,23 @@ pub(crate) struct FrameChromeGeometry {
     /// Full expanded sidebar covered by an F1-F4 panel, when present
     /// (the former panel area).
     pub panel_area: Rect,
-    /// Content bounds inside `panel_area` (the former panel content area).
-    pub panel_content_area: Rect,
     /// Left panel (card + queue) column rect.
     pub left_area: Rect,
     /// Right panel (tabs, player, library, status) rect.
     pub right_area: Rect,
-    /// Full-column right-panel background rect (tabs/player/library/status).
-    pub right_full_area: Rect,
     /// Inner left-column content rect with the shared horizontal padding
     /// applied (queue and card paint areas are derived from this).
     pub left_content: Rect,
+    #[cfg(test)]
+    pub player_area: Rect,
+    #[cfg(test)]
+    pub status_area: Rect,
+    #[cfg(test)]
+    pub queue_focused: bool,
     /// Tab-bar box rect at the top of the right column.
     pub tab_bar_area: Rect,
-    /// Player-panel rect directly below the tab bar (right column only).
-    pub player_area: Rect,
-    /// Status-bar rect at the bottom of the right panel.
-    pub status_area: Rect,
     /// Whether the right panel is visible this frame (`panel_mode != QueueOnly`).
     pub right_visible: bool,
-    /// Whether the queue panel holds panel focus this frame.
-    pub queue_focused: bool,
     /// The root frame's panel placements for the current Panel mode (design
     /// D1, task 1.3): data only, consumed by later panel slices and by the
     /// mounted `QueueBoundaryComponent` (task 1.4).

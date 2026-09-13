@@ -207,11 +207,6 @@ pub(in crate::app) struct LibraryListRenderCtx {
     pub(in crate::app) loading: bool,
     pub(in crate::app) search_query: Option<String>,
     pub(in crate::app) search_loading: bool,
-    /// The projected surface shows a feed/home-video group-pill row
-    /// (`is_feed_home_video_group_view`; migrate-narrow-browse task 2.2). The
-    /// focused `BrowserComponent`'s `[`/`]` chord then means group cycling
-    /// (`BrowserCycleGroup`) rather than letter-pill cycling.
-    pub(in crate::app) group_pills: bool,
     /// Session-only Wide hero list-pane width override (`None` = default
     /// ratio). Carried here so the wide TV/Music render contexts that embed
     /// this struct forward it into the shared split; normalized against the
@@ -236,24 +231,8 @@ impl LibraryListRenderCtx {
             loading: false,
             search_query: None,
             search_loading: false,
-            group_pills: false,
             list_pane_width: None,
         }
-    }
-
-    /// Marks this projection as a feed/home-video group picker (task 2.2).
-    pub(in crate::app) fn with_group_pills(mut self, group_pills: bool) -> Self {
-        self.group_pills = group_pills;
-        self
-    }
-
-    pub(in crate::app) fn set_cursor(&mut self, cursor: usize) {
-        self.cursor = cursor;
-    }
-
-    pub(in crate::app) fn with_loading(mut self, loading: bool) -> Self {
-        self.loading = loading;
-        self
     }
 
     pub(in crate::app) fn with_search(mut self, query: String, loading: bool) -> Self {

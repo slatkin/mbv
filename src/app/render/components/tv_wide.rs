@@ -51,13 +51,6 @@ impl TvWideRenderCtx {
             hero_image: HeroImageState::None,
         }
     }
-
-    /// Attach the shell-projected hero image state for this frame (design
-    /// D9/D16).
-    pub(in crate::app) fn with_hero_image(mut self, hero_image: HeroImageState) -> Self {
-        self.hero_image = hero_image;
-        self
-    }
 }
 
 impl App {
@@ -122,32 +115,5 @@ impl App {
         }
         let lib_area = self.right_panel_lib_area()?;
         wide_hero::wide_hero_fits(lib_area).then_some(lib_area)
-    }
-
-    pub(in crate::app) fn wide_tv_render_ctx(
-        &self,
-        lib_idx: usize,
-        cursor_scroll: Option<(usize, usize)>,
-    ) -> TvWideRenderCtx {
-        let list = self.library_list_render_ctx(
-            lib_idx,
-            cursor_scroll.map_or_else(|| 0, |v| v.0),
-            cursor_scroll.map_or_else(|| 0, |v| v.1),
-        );
-        let selected_series = list
-            .selected_item()
-            .cloned()
-            .filter(|item| item.item_type == "Series");
-        let series_detail = selected_series
-            .as_ref()
-            .and_then(|item| self.series_detail_cache.get(&item.id).cloned());
-        TvWideRenderCtx::new(
-            list,
-            selected_series,
-            series_detail,
-            0,
-            None,
-            self.should_show_letter_pills(lib_idx),
-        )
     }
 }

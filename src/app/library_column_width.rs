@@ -9,25 +9,8 @@
 
 use ratatui::layout::Rect;
 
-use super::TWO_COLUMN_THRESHOLD;
-
 /// Columns of empty space between adjacent library list cells.
 pub(super) const LIBRARY_COLUMN_GAP: u16 = 2;
-/// Cap on the library list column count (two-column list; never more).
-pub(super) const LIBRARY_MAX_COLUMNS: usize = 2;
-
-/// Column count for a list pane of the given width: two when the pane meets
-/// `TWO_COLUMN_THRESHOLD` (the shared two-column threshold
-/// also used by the Home view's hero/list split), else one. Capped at
-/// `LIBRARY_MAX_COLUMNS`.
-pub(super) fn library_column_count(list_width: u16) -> usize {
-    if list_width >= TWO_COLUMN_THRESHOLD {
-        LIBRARY_MAX_COLUMNS
-    } else {
-        1
-    }
-}
-
 /// Width of one cell when `content_area` holds `cols` columns:
 /// `(content_width - gap * (cols - 1)) / cols`, floored. A width that does
 /// not divide evenly leaves the leftover columns unpainted at the right edge
@@ -38,18 +21,4 @@ pub(super) fn library_cell_width(content_area: Rect, cols: usize) -> u16 {
         .width
         .saturating_sub(LIBRARY_COLUMN_GAP.saturating_mul(cols.saturating_sub(1)))
         / cols
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn column_count_threshold_boundary_both_directions() {
-        // Two cells at MIN_WIDTH plus one gap: 40 + 2 + 40 = 82.
-        assert_eq!(library_column_count(81), 1, "just below the threshold");
-        assert_eq!(library_column_count(82), 2, "exactly at the threshold");
-        assert_eq!(library_column_count(40), 1);
-        assert_eq!(library_column_count(200), 2, "very wide panes cap at 2");
-    }
 }
