@@ -29,6 +29,48 @@ fn parse_empty_string_returns_default() {
 
 #[cfg(test)]
 #[test]
+fn parse_video_cache_settings_and_save_round_trip() {
+    let cases = [
+        ("", 50, 100),
+        ("video_cache_forward_mb = 75\nvideo_cache_back_mb = 125", 75, 125),
+        ("video_cache_forward_mb = \"75\"\nvideo_cache_back_mb = 0", 50, 100),
+        ("video_cache_forward_mb = 0\nvideo_cache_back_mb = -1", 50, 100),
+        (
+            "video_cache_forward_mb = -1\nvideo_cache_back_mb = 9223372036854775807",
+            50,
+            100,
+        ),
+    ];
+    for (body, forward, back) in cases {
+        let cfg = parse_config(&format!("[mpv]\n{body}")).unwrap();
+        assert_eq!(cfg.video_cache_forward_mb, forward, "toml: {body:?}");
+        assert_eq!(cfg.video_cache_back_mb, back, "toml: {body:?}");
+    }
+
+    let _g = SYS_ENV_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "mbv-config-test-{}",
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos()
+    ));
+    std::fs::create_dir_all(dir.join("mbv")).unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &dir);
+    std::env::remove_var("MBV_SYSTEM");
+    let cfg = Config {
+        video_cache_forward_mb: 75,
+        video_cache_back_mb: 125,
+        ..Default::default()
+    };
+    save_config_settings(&cfg).unwrap();
+    let saved = std::fs::read_to_string(config_path()).unwrap();
+    let reparsed = parse_config(&saved).unwrap();
+    assert_eq!(reparsed.video_cache_forward_mb, 75);
+    assert_eq!(reparsed.video_cache_back_mb, 125);
+    std::env::remove_var("XDG_CONFIG_HOME");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[cfg(test)]
+#[test]
 fn parse_audio_pipe_settings() {
     let toml = r#"
 [server]
