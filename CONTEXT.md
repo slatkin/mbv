@@ -711,59 +711,13 @@ _Avoid_: feed type, media type, category
 One parsed item from a subscribed feed. Identity is guid, else enclosure-URL
 hash, else title+pub-date hash. Carries enclosure URL, link, mime type,
 pub_date, duration in Emby ticks, description, and the normalized subscription
-URL as `feed_id` — the stable identity used by the shared feed-entry store.
-Each entry also carries roaming `position_ticks` and `played` fields hydrated
-from the shared feed-entry store on refresh and updated on playback lifecycle
-events (stop, pause, seek, EOF). Entries never report progress to Emby. With no
-shared-data daemon, entries degrade to zero position and unplayed without
-blocking browsing or playback. Queued FeedEntries are owned snapshots: deleting
-the subscription leaves them playable for the lifetime of the Bound queue.
+URL as `feed_id` — the stable identity used by local feed-entry state.
+Each entry carries local `position_ticks` and `played` playback state, restored
+from the local state directory and updated on playback lifecycle events (stop,
+pause, seek, EOF). Entries never report progress to Emby. Queued FeedEntries are
+owned snapshots: deleting the subscription leaves them playable for the lifetime
+of the Bound queue.
 _Avoid_: episode, post, feed item, rss item
-
-## Shared data and roaming
-
-**Shared data**:
-The optional, opt-in durable roaming of mbv-owned state through the packaged
-mbvd's redb database. Hosting is enabled on the daemon side; use is enabled by
-an explicit endpoint on each client. Shared-data endpoint is independent of
-ctrl and library routes. Isolated per Emby user, transport limited to
-loopback/private-network TCP or Unix socket (WAN rejected before any credential
-is sent), and optional TLS where the client validates the certificate before
-sending its Emby token.
-_Avoid_: sync, cloud sync, roaming service, shared state (bare)
-
-**Shared document / Roaming document**:
-One of the four revisioned documents roamed per user: Queue state, Library
-position state, Last remote connection, and Roaming settings. Each has an
-independent monotonic revision; writes use compare-and-swap — stale expected
-revisions are rejected and the winner is adopted with a toast.
-_Avoid_: shared file, roaming file, synced document
-
-**Roaming settings**:
-The exactly two settings that roam across machines: `auto_reconnect` and
-`library_routes`. Stored in the shared database and mirrored locally via
-`roaming_settings.json`; never written to `config.toml`. When shared or its
-local mirror is active, shared values override explicit local config values
-with a once-per-connection conflict log.
-_Avoid_: roaming config, synced settings, shared library routes
-
-**Feed entry state**:
-Per-entry playback state keyed by `(user_id, feed_id, entry_guid)` in the
-shared-database `feed_entry_state` table. Each row holds `position_ticks` and
-`played`. Writes are last-write-wins (no CAS); reads support prefix scan by
-`feed_id`. Negotiated as an additive `shared-mbv-feed-entry-state-v1`
-capability; older daemons without it degrade to local-only feed state.
-_Avoid_: feed progress, episode state, feed resume state
-
-**Shared-data fallback / Local mirror**:
-The local-filesystem mirrors of shared documents (and feed entry table) used
-when shared data is unavailable. A client restores from local state, shows one
-fallback toast, and retries with bounded exponential backoff. On reconnect,
-existing shared documents replace divergent fallback values without prompting;
-an absent shared document is first-writer initialized from local state.
-Database open/corruption/serialization/disk-full failures disable hosting or
-the operation without stopping playback or corrupting committed data.
-_Avoid_: offline cache, local backup, sync fallback
 
 ## Remote sessions
 
@@ -775,9 +729,8 @@ reaching a Player owner over a socket.
 **Session**:
 An Emby-tracked record that some device is playing something. Exists
 independently of mbv — including for non-mbv devices — and is what the
-Sessions sidebar lists. Emby Sessions may advertise private-LAN ctrl and shared-
-data ports in `supported_commands` (`mbv-direct-tcp-port`, `mbv-shared-data-
-tcp-port`).
+Sessions sidebar lists. Emby Sessions may advertise a private-LAN control port
+in `supported_commands` (`mbv-direct-tcp-port`).
 _Avoid_: connection, stream, remote instance
 
 **Session watch**:

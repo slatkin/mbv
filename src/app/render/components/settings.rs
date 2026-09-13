@@ -131,10 +131,8 @@ impl App {
                 }
             }
         }
-        if key == SettingKey::AutoReconnect {
-            if self.config.lock().unwrap().auto_reconnect {
-                self.persist_current_auto_reconnect_target();
-            }
+        if key == SettingKey::AutoReconnect && self.config.lock().unwrap().auto_reconnect {
+            self.persist_current_auto_reconnect_target();
         }
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
     }
