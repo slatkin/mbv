@@ -1,0 +1,235 @@
+impl TvContent {
+    fn handle_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+        // Inline Search gets first refusal while active (design.md D6): the
+        // panel paints the box in the Selector row's rect and the results in
+        // the list box, so a list-slot input belongs to the search session.
+        if self.inline_search.is_active() {
+            if let LibrarySlotEvent::List(input) = event {
+                return self.handle_search_pointer(input);
+            }
+            return None;
+        }
+        match event {
+            // The letter pills are the one Selector row at both breakpoints.
+            LibrarySlotEvent::SelectorPicked(index) => Some(Msg::Shell(ShellRequest::TvHitClick {
+                hit: TvHit::LetterPill(index),
+            })),
+            // The season pills ride in the hero pane's Workspace Selector
+            // row (Wide only).
+            LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
+                self.apply_pane_click(TvHit::SeasonTab(index), Position::new(0, 0));
+                Some(Msg::Shell(ShellRequest::TvHitClick {
+                    hit: TvHit::SeasonTab(index),
+                }))
+            }
+            // The Browser pane's series list.
+            LibrarySlotEvent::List(input) => self.series_list_event(input),
+            // The hero pane: the episode box's rows, or the pane itself.
+            LibrarySlotEvent::HeroPane(input) => self.hero_pane_event(input),
+            LibrarySlotEvent::ControlPicked(_) => None,
+        }
+    }
+
+    /// The series list's row-local input. Wide and Narrow share the one
+    /// carrier, so the resolved target and the emitted `TvHit` are the same
+    /// at both breakpoints; the shell's `TvHit*` arms do the rest.
+    fn series_list_event(&mut self, input: RowLocalInput) -> Option<Msg> {
+        match input {
+            RowLocalInput::Wheel { at, delta } => {
+                // The series rail is the only scrollable TV surface. Its
+                // canonical control claims the painted region.
+                if !self.carrier.claims_current_point(at) {
+                    return None;
+                }
+                self.move_rows(delta);
+                // Return a framework-visible claim after mutating local
+                // state; dropping the message would let the framework's
+                // mutation be discarded by the mouse fold.
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            RowLocalInput::Click(at) => {
+                let hit = self.resolve_series_hit(at)?;
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
+            }
+            RowLocalInput::DoubleClick(at) => {
+                let hit = self.resolve_series_hit(at)?;
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
+            }
+            RowLocalInput::ContextClick(at) => {
+                let hit = self.resolve_series_hit(at)?;
+                Some(Msg::Shell(ShellRequest::TvHitContextMenu {
+                    hit,
+                    anchor: (at.x, at.y),
+                }))
+            }
+            _ => None,
+        }
+    }
+
+    /// The hero pane's row-local input: the Workspace episode box resolves
+    /// its row through its own carrier, and blank pane space is the
+    /// `EpisodesPane` hit the deleted `resolve_hit` fallback produced.
+    fn hero_pane_event(&mut self, input: RowLocalInput) -> Option<Msg> {
+        let at = match input {
+            RowLocalInput::Click(at)
+            | RowLocalInput::DoubleClick(at)
+            | RowLocalInput::ContextClick(at) => at,
+            // The series rail is the only scrollable TV surface; a wheel
+            // over the hero pane is unclaimed (legacy `handle_mouse_wide`).
+            RowLocalInput::Wheel { .. } => return None,
+            _ => return None,
+        };
+        let hit = if self.episodes.claims_current_point(at) {
+            self.episodes
+                .resolve_current_point(at)
+                .cloned()
+                .map(TvHit::EpisodeRow)?
+        } else {
+            TvHit::EpisodesPane
+        };
+        match input {
+            RowLocalInput::Click(_) => {
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
+            }
+            RowLocalInput::DoubleClick(_) => {
+                self.apply_pane_click(hit.clone(), at);
+                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
+            }
+            RowLocalInput::ContextClick(_) => Some(Msg::Shell(ShellRequest::TvHitContextMenu {
+                hit,
+                anchor: (at.x, at.y),
+            })),
+            _ => None,
+        }
+    }
+
+    /// Inline Search pointer handling (mirrors `BrowserContent::
+    /// handle_search_pointer`): the panel's own recognizer already collapsed
+    /// the raw event into a normalized `RowLocalInput`, so click /
+    /// double-click / right-click / wheel against a painted result row are
+    /// reproduced here.
+    fn handle_search_pointer(&mut self, input: RowLocalInput) -> Option<Msg> {
+        match input {
+            RowLocalInput::Click(at) => {
+                self.inline_search.select_row_at_point(at);
+                None
+            }
+            RowLocalInput::DoubleClick(at) => {
+                self.inline_search.select_row_at_point(at);
+                self.inline_search.selected_item().map(|item| {
+                    Msg::Shell(ShellRequest::InlineSearchActivate {
+                        id: item.id,
+                        item_type: item.item_type,
+                    })
+                })
+            }
+            RowLocalInput::ContextClick(at) => {
+                self.inline_search.select_row_at_point(at);
+                self.inline_search
+                    .selected_item()
+                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
+            }
+            RowLocalInput::Wheel { delta, .. } => {
+                self.inline_search.move_cursor_by(delta);
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
+            _ => None,
+        }
+    }
+
+    /// Resolve a click in the Browser pane's list slot to the series row it
+    /// landed on from the carrier's own retained frame geometry.
+    fn resolve_series_hit(&mut self, at: Position) -> Option<TvHit> {
+        self.carrier
+            .resolve_current_point(at)
+            .cloned()
+            .map(TvHit::SeriesRow)
+    }
+
+    /// Move the owner's local pane + pane cursor to the clicked `hit` (Wide
+    /// only). A click in the unfocused pane moves local focus there; a click
+    /// in the already-focused pane keeps it. Clicking a season pill also
+    /// selects that season; blank Episodes-pane space is consumed without
+    /// changing the pane. Right-clicks never call this.
+    fn apply_pane_click(&mut self, hit: TvHit, at: Position) {
+        match hit {
+            TvHit::SeasonTab(index) => {
+                self.pane = Pane::Episodes;
+                self.season_cursor = index;
+                self.refresh_episode_rows();
+                self.episodes.select_first();
+            }
+            TvHit::EpisodeRow(target) => {
+                self.pane = Pane::Episodes;
+                self.episodes
+                    .delegate(RowLocalInput::Click(at), Some(target));
+            }
+            TvHit::SeriesRow(target) => {
+                self.pane = Pane::Series;
+                self.carrier
+                    .delegate(RowLocalInput::Click(at), Some(target));
+            }
+            TvHit::EpisodesPane | TvHit::LetterPill(_) => {}
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_episode_claim_rect(&self) -> Option<ratatui::layout::Rect> {
+        self.episodes.wide().current_claim_rect()
+    }
+
+    /// Test-only: the owner's local key interpretation, so shell tests can
+    /// drive it without importing `LibraryContentOwner`.
+    #[cfg(test)]
+    pub(in crate::app) fn test_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        self.handle_key(key)
+    }
+
+    /// Test-only: translate one panel slot event, so shell tests can drive
+    /// pointer semantics without importing `LibraryContentOwner`.
+    #[cfg(test)]
+    pub(in crate::app) fn test_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+        self.handle_slot_event(event)
+    }
+
+    /// Test-only: the embedded Inline Search session, for the component-level
+    /// search tests (the panel forwards the index/keyboard to it).
+    #[cfg(test)]
+    pub(crate) fn inline_search(&self) -> &InlineSearch {
+        &self.inline_search
+    }
+
+    #[cfg(test)]
+    pub(crate) fn inline_search_mut(&mut self) -> &mut InlineSearch {
+        &mut self.inline_search
+    }
+
+    /// Test-only cursor seed (mirrors `BrowserComponent::set_cursor_for_test`):
+    /// seeds the shared owner's stable target from a raw `context.list.items`
+    /// index, for tests driving the merged component directly.
+    #[cfg(test)]
+    pub(crate) fn set_cursor_for_test(&mut self, cursor: usize) {
+        if let Some(item) = self.context.list.items.get(cursor) {
+            let target = item.id.clone();
+            self.carrier.select_target(&target);
+        }
+    }
+
+    /// Test-only: the shared owner's current rows' semantic states, in
+    /// display order.
+    #[cfg(test)]
+    pub(crate) fn test_row_semantic_states(&self) -> Vec<MediaSemanticState> {
+        self.carrier
+            .rows()
+            .iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item { semantic_state, .. } => Some(semantic_state.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+}
+

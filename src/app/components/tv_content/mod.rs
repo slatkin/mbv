@@ -15,11 +15,6 @@
 //! it painted and hands over typed slot events; this owner resolves the
 //! row-local target through its own carriers and emits the same
 //! `ShellRequest::TvHit*` messages the deleted component emitted.
-
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
-use ratatui::layout::Position;
-use tuirealm::event::KeyEvent;
-
 use super::inline_search::InlineSearch;
 use super::library_panel::{
     hero_content_emby, HeroContent, HeroContentData, HeroImageState, LibraryContentOwner,
@@ -33,18 +28,18 @@ use super::mouse::gesture::MouseGestureState;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{list_duration_secs, natural_sort_key};
+use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use ratatui::layout::Position;
 #[cfg(test)]
 use tuirealm::event::Key;
-
+use tuirealm::event::KeyEvent;
 mod keyboard;
 mod navigation;
-
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Pane {
     Series,
     Episodes,
 }
-
 pub(in crate::app) struct TvContent {
     context: TvWideRenderCtx,
     /// The one shared series-row owner, holding both the Wide and Inline
@@ -87,7 +82,6 @@ pub(in crate::app) struct TvContent {
     /// tests) keeps painting the Wide workspace.
     is_wide: bool,
 }
-
 /// Derives the Emby-specific semantic state for a Narrow series row (mirrors
 /// `browser::emby_semantic_state`/`browser_content::emby_semantic_state`; the
 /// provider-neutral `media_list` layer deliberately stays free of `EmbyItem`,
@@ -109,7 +103,6 @@ fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
         MediaSemanticState::Ordinary
     }
 }
-
 /// Build the embedded episode `WideMediaList`'s rows from a season's
 /// episodes (task 4.2d): the same title/duration formatting the hand-painted
 /// table previously rendered, now the canonical control's row content.
@@ -134,7 +127,6 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
         })
         .collect()
 }
-
 impl TvContent {
     pub fn new() -> Self {
         let mut context = TvWideRenderCtx::new(
@@ -164,14 +156,12 @@ impl TvContent {
             is_wide: true,
         }
     }
-
     /// Records the session-only Wide hero list-pane width override for the
     /// next frame's content producer. Pushed each sync pass by the shell
     /// beside the other per-frame facts; it is a layout fact, not content.
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
         self.context.list.list_pane_width = list_pane_width;
     }
-
     /// Records this frame's breakpoint (design.md D12): `true` selects the
     /// Wide pane-based workspace, `false` the flat Narrow series list. Must
     /// be pushed before `set_content` so the carrier's presentation switch
@@ -179,7 +169,6 @@ impl TvContent {
     pub(in crate::app) fn set_is_wide(&mut self, is_wide: bool) {
         self.is_wide = is_wide;
     }
-
     /// The presentation the shared owner holds for this frame's breakpoint.
     fn active_presentation(&self) -> Presentation {
         if self.is_wide {
@@ -188,7 +177,6 @@ impl TvContent {
             Presentation::Inline
         }
     }
-
     /// Move the shared owner into the active presentation when they diverge.
     /// A responsive presentation change reads the same owner and preserves
     /// only the outgoing selected-row viewport offset (design.md D12); no
@@ -198,7 +186,6 @@ impl TvContent {
         let viewport_height = self.painted_viewport_height();
         self.carrier.set_presentation(target, viewport_height);
     }
-
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
         let grouped = !context.list.is_search_active()
@@ -312,7 +299,6 @@ impl TvContent {
             self.refresh_episode_rows();
         }
     }
-
     /// Records whether the library pane holds Panel focus this frame. Pushed
     /// by the shell each sync pass, like `set_is_wide`: framework focus lives
     /// on the mounted `LibraryPanel` (task 8.4), while this bit drives the
@@ -322,7 +308,6 @@ impl TvContent {
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.context.focused = focused;
     }
-
     /// The current season's episode `Vec`, `&[]` when the season has no
     /// episodes loaded yet or `series_detail`/`season_cursor` cannot resolve
     /// one.
@@ -337,7 +322,6 @@ impl TvContent {
             .map(Vec::as_slice)
             .unwrap_or(&[])
     }
-
     /// Whether the current season's episode key is present in
     /// `series_detail.episodes` at all (even mapped to an empty `Vec`) --
     /// the loaded/loading distinction the refresh guard in `set_content`
@@ -353,7 +337,6 @@ impl TvContent {
             })
             .is_some()
     }
-
     /// Rebuild the embedded episode `WideMediaList`'s content from the
     /// current season's episodes (design.md D3): preserves the selected
     /// target where still present, otherwise clamps locally -- the same
@@ -369,7 +352,6 @@ impl TvContent {
             self.last_episode_rows = Some(rows);
         }
     }
-
     /// This frame's typed Library panel content (design D3, task 8.2): the
     /// letter pills are the one Selector row, the hero comes from the shared
     /// `EmbyItem` producer with the shell-projected image state, and the
@@ -438,11 +420,9 @@ impl TvContent {
             hero,
         }
     }
-
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier.cursor()
     }
-
     /// The shared owner's selection as a position in `context.list.items`
     /// (raw, shell-projected order) rather than the active presentation's
     /// displayed (natural-sorted, grouped) row order. Used for the Narrow
@@ -461,14 +441,12 @@ impl TvContent {
             })
             .unwrap_or(0)
     }
-
     pub(in crate::app) fn viewport_anchor(
         &self,
         viewport_height: usize,
     ) -> Option<ViewportAnchor<String>> {
         self.carrier.viewport_anchor(viewport_height)
     }
-
     /// The painted item-row height the owner's pagination strides by: the
     /// active presentation's retained content rect from the last frame the
     /// panel viewed it (ADR 0024: the owner reads only geometry it helped
@@ -484,17 +462,14 @@ impl TvContent {
             painted
         }
     }
-
     /// Whether letter pills are enabled in the pushed context.
     pub(in crate::app) fn show_letter_pills(&self) -> bool {
         self.context.show_letter_pills
     }
-
     /// The scroll offset the component tracks for its series list.
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
     }
-
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         let target = self.carrier.selected_target()?;
         self.context
@@ -504,7 +479,6 @@ impl TvContent {
             .find(|item| &item.id == target)
             .map(|item| item.id.clone())
     }
-
     /// The series item under the component's own cursor, cloned out of the
     /// cached render context. `handle_key`'s Series Enter attaches this to
     /// `ShellRequest::TvActivate` so the shell effect targets the component
@@ -518,7 +492,6 @@ impl TvContent {
         items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
         items.get(self.carrier.cursor()).cloned().cloned()
     }
-
     /// The Series snapshot the shell pushed for this frame (`context
     /// .selected_series`), exposed so tests can verify the pushed detail
     /// follows the component's authoritative selection rather than the App
@@ -526,7 +499,6 @@ impl TvContent {
     pub(in crate::app) fn selected_series_snapshot(&self) -> Option<&EmbyItem> {
         self.context.selected_series.as_ref()
     }
-
     /// The episode item under the episode owner's current selection, resolved
     /// from the pushed season detail (design.md D4: the component carries the
     /// stable episode identity; the shell never reads the cursor).
@@ -535,7 +507,6 @@ impl TvContent {
             .get(self.episodes.cursor())
             .cloned()
     }
-
     /// Test-only: the episode owner's selectable cursor index, used to prove
     /// the cursor survives a loading refresh where no episode item is
     /// resolvable.
@@ -543,7 +514,6 @@ impl TvContent {
     pub(in crate::app) fn episode_cursor(&self) -> usize {
         self.episodes.cursor()
     }
-
     pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();
         let season_id = self
@@ -556,257 +526,17 @@ impl TvContent {
             .clone();
         Some((series_id, season_id))
     }
-
-    /// Translate one resolved slot event from the panel into TV's existing
-    /// typed `Msg`s (design D2/D12). The panel resolved the pointer against
-    /// the pills, list slot and hero pane it painted; this owner resolves
-    /// the row-local target through its own carriers, exactly as the deleted
-    /// mounted component did.
-    fn handle_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
-        // Inline Search gets first refusal while active (design.md D6): the
-        // panel paints the box in the Selector row's rect and the results in
-        // the list box, so a list-slot input belongs to the search session.
-        if self.inline_search.is_active() {
-            if let LibrarySlotEvent::List(input) = event {
-                return self.handle_search_pointer(input);
-            }
-            return None;
-        }
-        match event {
-            // The letter pills are the one Selector row at both breakpoints.
-            LibrarySlotEvent::SelectorPicked(index) => Some(Msg::Shell(ShellRequest::TvHitClick {
-                hit: TvHit::LetterPill(index),
-            })),
-            // The season pills ride in the hero pane's Workspace Selector
-            // row (Wide only).
-            LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
-                self.apply_pane_click(TvHit::SeasonTab(index), Position::new(0, 0));
-                Some(Msg::Shell(ShellRequest::TvHitClick {
-                    hit: TvHit::SeasonTab(index),
-                }))
-            }
-            // The Browser pane's series list.
-            LibrarySlotEvent::List(input) => self.series_list_event(input),
-            // The hero pane: the episode box's rows, or the pane itself.
-            LibrarySlotEvent::HeroPane(input) => self.hero_pane_event(input),
-            LibrarySlotEvent::ControlPicked(_) => None,
-        }
-    }
-
-    /// The series list's row-local input. Wide and Narrow share the one
-    /// carrier, so the resolved target and the emitted `TvHit` are the same
-    /// at both breakpoints; the shell's `TvHit*` arms do the rest.
-    fn series_list_event(&mut self, input: RowLocalInput) -> Option<Msg> {
-        match input {
-            RowLocalInput::Wheel { at, delta } => {
-                // The series rail is the only scrollable TV surface. Its
-                // canonical control claims the painted region.
-                if !self.carrier.claims_current_point(at) {
-                    return None;
-                }
-                self.move_rows(delta);
-                // Return a framework-visible claim after mutating local
-                // state; dropping the message would let the framework's
-                // mutation be discarded by the mouse fold.
-                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-            }
-            RowLocalInput::Click(at) => {
-                let hit = self.resolve_series_hit(at)?;
-                self.apply_pane_click(hit.clone(), at);
-                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
-            }
-            RowLocalInput::DoubleClick(at) => {
-                let hit = self.resolve_series_hit(at)?;
-                self.apply_pane_click(hit.clone(), at);
-                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
-            }
-            RowLocalInput::ContextClick(at) => {
-                let hit = self.resolve_series_hit(at)?;
-                Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-                    hit,
-                    anchor: (at.x, at.y),
-                }))
-            }
-            _ => None,
-        }
-    }
-
-    /// The hero pane's row-local input: the Workspace episode box resolves
-    /// its row through its own carrier, and blank pane space is the
-    /// `EpisodesPane` hit the deleted `resolve_hit` fallback produced.
-    fn hero_pane_event(&mut self, input: RowLocalInput) -> Option<Msg> {
-        let at = match input {
-            RowLocalInput::Click(at)
-            | RowLocalInput::DoubleClick(at)
-            | RowLocalInput::ContextClick(at) => at,
-            // The series rail is the only scrollable TV surface; a wheel
-            // over the hero pane is unclaimed (legacy `handle_mouse_wide`).
-            RowLocalInput::Wheel { .. } => return None,
-            _ => return None,
-        };
-        let hit = if self.episodes.claims_current_point(at) {
-            self.episodes
-                .resolve_current_point(at)
-                .cloned()
-                .map(TvHit::EpisodeRow)?
-        } else {
-            TvHit::EpisodesPane
-        };
-        match input {
-            RowLocalInput::Click(_) => {
-                self.apply_pane_click(hit.clone(), at);
-                Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
-            }
-            RowLocalInput::DoubleClick(_) => {
-                self.apply_pane_click(hit.clone(), at);
-                Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
-            }
-            RowLocalInput::ContextClick(_) => Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-                hit,
-                anchor: (at.x, at.y),
-            })),
-            _ => None,
-        }
-    }
-
-    /// Inline Search pointer handling (mirrors `BrowserContent::
-    /// handle_search_pointer`): the panel's own recognizer already collapsed
-    /// the raw event into a normalized `RowLocalInput`, so click /
-    /// double-click / right-click / wheel against a painted result row are
-    /// reproduced here.
-    fn handle_search_pointer(&mut self, input: RowLocalInput) -> Option<Msg> {
-        match input {
-            RowLocalInput::Click(at) => {
-                self.inline_search.select_row_at_point(at);
-                None
-            }
-            RowLocalInput::DoubleClick(at) => {
-                self.inline_search.select_row_at_point(at);
-                self.inline_search.selected_item().map(|item| {
-                    Msg::Shell(ShellRequest::InlineSearchActivate {
-                        id: item.id,
-                        item_type: item.item_type,
-                    })
-                })
-            }
-            RowLocalInput::ContextClick(at) => {
-                self.inline_search.select_row_at_point(at);
-                self.inline_search
-                    .selected_item()
-                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
-            }
-            RowLocalInput::Wheel { delta, .. } => {
-                self.inline_search.move_cursor_by(delta);
-                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-            }
-            _ => None,
-        }
-    }
-
-    /// Resolve a click in the Browser pane's list slot to the series row it
-    /// landed on from the carrier's own retained frame geometry.
-    fn resolve_series_hit(&mut self, at: Position) -> Option<TvHit> {
-        self.carrier
-            .resolve_current_point(at)
-            .cloned()
-            .map(TvHit::SeriesRow)
-    }
-
-    /// Move the owner's local pane + pane cursor to the clicked `hit` (Wide
-    /// only). A click in the unfocused pane moves local focus there; a click
-    /// in the already-focused pane keeps it. Clicking a season pill also
-    /// selects that season; blank Episodes-pane space is consumed without
-    /// changing the pane. Right-clicks never call this.
-    fn apply_pane_click(&mut self, hit: TvHit, at: Position) {
-        match hit {
-            TvHit::SeasonTab(index) => {
-                self.pane = Pane::Episodes;
-                self.season_cursor = index;
-                self.refresh_episode_rows();
-                self.episodes.select_first();
-            }
-            TvHit::EpisodeRow(target) => {
-                self.pane = Pane::Episodes;
-                self.episodes
-                    .delegate(RowLocalInput::Click(at), Some(target));
-            }
-            TvHit::SeriesRow(target) => {
-                self.pane = Pane::Series;
-                self.carrier
-                    .delegate(RowLocalInput::Click(at), Some(target));
-            }
-            TvHit::EpisodesPane | TvHit::LetterPill(_) => {}
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_episode_claim_rect(&self) -> Option<ratatui::layout::Rect> {
-        self.episodes.wide().current_claim_rect()
-    }
-
-    /// Test-only: the owner's local key interpretation, so shell tests can
-    /// drive it without importing `LibraryContentOwner`.
-    #[cfg(test)]
-    pub(in crate::app) fn test_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        self.handle_key(key)
-    }
-
-    /// Test-only: translate one panel slot event, so shell tests can drive
-    /// pointer semantics without importing `LibraryContentOwner`.
-    #[cfg(test)]
-    pub(in crate::app) fn test_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
-        self.handle_slot_event(event)
-    }
-
-    /// Test-only: the embedded Inline Search session, for the component-level
-    /// search tests (the panel forwards the index/keyboard to it).
-    #[cfg(test)]
-    pub(crate) fn inline_search(&self) -> &InlineSearch {
-        &self.inline_search
-    }
-
-    #[cfg(test)]
-    pub(crate) fn inline_search_mut(&mut self) -> &mut InlineSearch {
-        &mut self.inline_search
-    }
-
-    /// Test-only cursor seed (mirrors `BrowserComponent::set_cursor_for_test`):
-    /// seeds the shared owner's stable target from a raw `context.list.items`
-    /// index, for tests driving the merged component directly.
-    #[cfg(test)]
-    pub(crate) fn set_cursor_for_test(&mut self, cursor: usize) {
-        if let Some(item) = self.context.list.items.get(cursor) {
-            let target = item.id.clone();
-            self.carrier.select_target(&target);
-        }
-    }
-
-    /// Test-only: the shared owner's current rows' semantic states, in
-    /// display order.
-    #[cfg(test)]
-    pub(crate) fn test_row_semantic_states(&self) -> Vec<MediaSemanticState> {
-        self.carrier
-            .rows()
-            .iter()
-            .filter_map(|row| match row {
-                MediaListRow::Item { semantic_state, .. } => Some(semantic_state.clone()),
-                _ => None,
-            })
-            .collect()
-    }
 }
-
+include!("interaction.rs");
 impl Default for TvContent {
     fn default() -> Self {
         Self::new()
     }
 }
-
 impl LibraryContentOwner for TvContent {
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }
-
     /// Translate one resolved slot event from the panel into TV's existing
     /// typed `Msg`s (design D2/D12). The panel hands over the pills, list
     /// and hero-pane input it painted; this owner resolves the row-local
@@ -814,218 +544,24 @@ impl LibraryContentOwner for TvContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         self.handle_slot_event(event)
     }
-
     /// This owner's local key interpretation, forwarded by the focused panel
     /// (the merged component's `handle_key` contract, unchanged: the router
     /// owns every global chord and keeps precedence).
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
     }
-
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.context.selected_series.as_ref().map(hero_content_emby)
     }
-
     fn set_hero_image(&mut self, state: HeroImageState) {
         self.context.hero_image = state;
     }
-
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
-
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
 }
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::app::render::LibraryListRenderCtx;
-    use crate::app::tests::make_item;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-    use tuirealm::event::{KeyEvent, KeyModifiers};
-
-    /// Task 4.2d: the embedded episode `WideMediaList` field replaces the
-    /// old `Option<usize>` episode cursor. This exercises the same
-    /// component-local persistence through the canonical control -- moving
-    /// the cursor via keyboard, then re-syncing the same series/season data,
-    /// must preserve it (target-preserving `WideMediaList::set_content`).
-    #[test]
-    fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
-        let mut component = TvContent::new();
-        component.set_focused(true);
-        let mut series = make_item("Series", "Series");
-        series.id = "series-id".into();
-        let mut season = make_item("Season 1", "Season");
-        season.id = "season-1".into();
-        let episode = |name: &str, id: &str| {
-            let mut item = make_item(name, "Episode");
-            item.id = id.into();
-            item
-        };
-        let detail = crate::app::SeriesDetail {
-            seasons: vec![season],
-            episodes: [(
-                "season-1".into(),
-                vec![
-                    episode("Episode 1", "episode-1"),
-                    episode("Episode 2", "episode-2"),
-                ],
-            )]
-            .into_iter()
-            .collect(),
-        };
-        component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
-            Some(series.clone()),
-            Some(detail.clone()),
-            0,
-            None,
-            false,
-        ));
-        component.test_key(&KeyEvent {
-            code: Key::Right,
-            modifiers: KeyModifiers::NONE,
-        });
-        let message = component.test_key(&KeyEvent {
-            code: Key::Down,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert!(matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::TvEpisodeMove { delta: 1 }))
-        ));
-        assert_eq!(component.episodes.cursor(), 1);
-
-        component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
-            Some(series),
-            Some(detail),
-            0,
-            None,
-            false,
-        ));
-        assert_eq!(component.episodes.cursor(), 1);
-    }
-
-    #[test]
-    fn tv_workspace_series_change_resets_local_selection() {
-        let mut component = TvContent::new();
-        component.set_focused(true);
-        let mut season_one = make_item("Season 1", "Season");
-        season_one.id = "season-1".into();
-        let mut season_two = make_item("Season 2", "Season");
-        season_two.id = "season-2".into();
-        let detail = crate::app::SeriesDetail {
-            seasons: vec![season_one, season_two],
-            episodes: std::collections::HashMap::new(),
-        };
-        let mut series_a = make_item("Series A", "Series");
-        series_a.id = "series-a".into();
-        let mut series_b = make_item("Series B", "Series");
-        series_b.id = "series-b".into();
-
-        component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![series_a.clone()], 0, 0),
-            Some(series_a),
-            Some(detail.clone()),
-            0,
-            None,
-            false,
-        ));
-        component.move_season(1);
-
-        component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![series_b.clone()], 0, 0),
-            Some(series_b),
-            Some(detail),
-            0,
-            None,
-            false,
-        ));
-
-        assert_eq!(component.season_cursor, 0);
-        assert!(component.episodes.is_empty());
-        assert!(matches!(component.pane, Pane::Series));
-    }
-
-    #[test]
-    fn tv_workspace_renders_the_wide_workspace_without_app() {
-        let mut component = TvContent::new();
-        component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
-            None,
-            None,
-            0,
-            None,
-            false,
-        ));
-        let mut panel = crate::app::components::library_panel::LibraryPanel::new();
-        panel.insert_owner(
-            crate::app::components::library_panel::LibraryKey::Service(
-                crate::app::components::BrowserKey {
-                    service: mbv_core::config::ServiceKind::Emby,
-                    library_id: "lib".into(),
-                    kind: crate::app::components::BrowserKind::TvShows,
-                },
-            ),
-            Box::new(component),
-        );
-        panel.set_active(Some(
-            crate::app::components::library_panel::LibraryKey::Service(
-                crate::app::components::BrowserKey {
-                    service: mbv_core::config::ServiceKind::Emby,
-                    library_id: "lib".into(),
-                    kind: crate::app::components::BrowserKind::TvShows,
-                },
-            ),
-        ));
-        let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
-        terminal
-            .draw(|frame| tuirealm::component::Component::view(&mut panel, frame, frame.area()))
-            .unwrap();
-        assert!(terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .any(|cell| cell.symbol() == "S"));
-    }
-
-    #[test]
-    fn tv_workspace_renders_the_narrow_series_list_without_app() {
-        let mut component = TvContent::new();
-        component.set_is_wide(false);
-        component.set_content(TvWideRenderCtx::new(
-            LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
-            None,
-            None,
-            0,
-            None,
-            false,
-        ));
-        let key = crate::app::components::library_panel::LibraryKey::Service(
-            crate::app::components::BrowserKey {
-                service: mbv_core::config::ServiceKind::Emby,
-                library_id: "lib".into(),
-                kind: crate::app::components::BrowserKind::TvShows,
-            },
-        );
-        let mut panel = crate::app::components::library_panel::LibraryPanel::new();
-        panel.insert_owner(key.clone(), Box::new(component));
-        panel.set_active(Some(key));
-        let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
-        terminal
-            .draw(|frame| tuirealm::component::Component::view(&mut panel, frame, frame.area()))
-            .unwrap();
-        assert!(terminal
-            .backend()
-            .buffer()
-            .content()
-            .iter()
-            .any(|cell| cell.symbol() == "S"));
-    }
-}
+mod tests;

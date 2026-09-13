@@ -1,0 +1,117 @@
+use super::*;
+
+use ratatui::Frame;
+use tuirealm::command::{Cmd, CmdResult};
+use tuirealm::component::{AppComponent, Component};
+use tuirealm::event::Event;
+use tuirealm::props::{AttrValue, Attribute, QueryResult};
+use tuirealm::state::State;
+
+use crate::app::components::msg::Msg;
+use crate::app::components::UserEvent;
+
+impl Default for LibraryPanel {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Component for LibraryPanel {
+    fn view(&mut self, frame: &mut Frame, area: ratatui::layout::Rect) {
+        // Each frame's retained geometry is exactly what that frame painted
+        // (ADR 0024): the reset also drops the other breakpoint's geometry, so
+        // a Wide→Narrow resize leaves neither the vanished split's gap armed
+        // nor the stale Wide list rect claiming clicks.
+        self.reset_frame();
+        let Some(owner) = self.owners.active_mut() else {
+            return;
+        };
+        let mut content = owner.content();
+        let mut hits = std::mem::take(&mut self.hits);
+        // One breakpoint predicate (design D4): `wide_hero_fits` stays the
+        // single Wide/Narrow choice; the panel drives the presentation
+        // transition through the list's `set_presentation` inside each
+        // skeleton.
+        if wide_hero_fits(area) {
+            if let Some(geometry) = render_wide_skeleton(
+                frame,
+                area,
+                &mut content,
+                self.focused,
+                self.list_pane_width,
+                &mut hits,
+            ) {
+                // The split gesture owns the gap columns it painted: the
+                // gutter between the browser and hero panes, resolved
+                // against the panel's own content area.
+                let gap = ratatui::layout::Rect {
+                    x: geometry.browser.right(),
+                    y: area.y,
+                    width: geometry.hero.x.saturating_sub(geometry.browser.right()),
+                    height: area.height,
+                };
+                self.split = (gap.width > 0 && gap.height > 0).then_some(SplitGeometry {
+                    gap,
+                    pane_origin_x: area.x,
+                    content_width: area.width,
+                    width: geometry.browser.width,
+                });
+                self.wide_geometry = Some(geometry);
+            }
+        } else {
+            let geometry =
+                render_narrow_skeleton(frame, area, &mut content, self.focused, &mut hits);
+            self.narrow_geometry = Some(geometry.clone());
+        }
+        // The projected hero image's reserved box (task 5.10, design D9): the
+        // shell paints the protocol into it right after view returns.
+        self.image_paint = self
+            .wide_geometry
+            .as_ref()
+            .and_then(|geometry| geometry.hero_image.clone())
+            .or_else(|| {
+                self.narrow_geometry
+                    .as_ref()
+                    .and_then(|geometry| geometry.inline_hero_image.clone())
+            });
+        self.hits = hits;
+        self.painted_area = Some(area);
+    }
+
+    fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
+        None
+    }
+
+    fn attr(&mut self, attr: Attribute, value: AttrValue) {
+        if attr == Attribute::Focus {
+            self.focused = matches!(value, AttrValue::Flag(true));
+        }
+    }
+
+    fn state(&self) -> State {
+        State::None
+    }
+
+    fn perform(&mut self, _cmd: Cmd) -> CmdResult {
+        CmdResult::NoChange
+    }
+}
+
+impl AppComponent<Msg, UserEvent> for LibraryPanel {
+    fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
+        match event {
+            Event::Mouse(mouse) => self.handle_mouse(mouse),
+            // The panel's minimal keyboard forwarding (task 5.11, design D3):
+            // the focused panel hands the already-routed chord to the active
+            // owner, which keeps its local key interpretation exactly as a
+            // mounted destination did. The router keeps precedence — this is
+            // not a second resolution site, only delivery.
+            Event::Keyboard(key) if self.focused => {
+                // Focus is panel-owned; keep the embedded owner's derived
+                // focus bit aligned before translating its local chord.
+                self.owners.active_mut().and_then(|owner| owner.on_key(key))
+            }
+            _ => None,
+        }
+    }
+}

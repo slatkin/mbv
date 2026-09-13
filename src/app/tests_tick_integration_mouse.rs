@@ -4,9 +4,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::library_panel::LibraryPanel;
-use crate::app::components::{
-    ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest,
-};
+use crate::app::components::{ComponentId, ModalId, Msg, OverlayId, QueueComponent, ShellRequest};
 use crate::app::render::make_music_group_app;
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::{StepOutcome, TickHarness};
@@ -130,12 +128,11 @@ fn tick_blocking_confirm_modal_suppresses_underlying_mouse_activity() {
 fn tick_blocking_daemon_lost_modal_suppresses_underlying_mouse_activity() {
     let (mut harness, rows) = search_sidebar_with_painted_results();
     let modal_id = ComponentId::Modal(ModalId::DaemonLost);
-    harness.model_mut().app.pending_overlay =
-        Some(OverlayRequest::DaemonLost(DaemonLostModal {
-            last_playing_title: Some("Birthday Clip".into()),
-            daemon_log_path: "/tmp/mbvd.log".into(),
-            restart_error: None,
-        }));
+    harness.model_mut().app.pending_overlay = Some(OverlayRequest::DaemonLost(DaemonLostModal {
+        last_playing_title: Some("Birthday Clip".into()),
+        daemon_log_path: "/tmp/mbvd.log".into(),
+        restart_error: None,
+    }));
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().application.mounted(&modal_id));
     assert_eq!(
@@ -151,12 +148,11 @@ fn tick_blocking_daemon_lost_modal_suppresses_underlying_mouse_activity() {
 fn tick_blocking_remote_reanchor_modal_suppresses_underlying_mouse_activity() {
     let (mut harness, rows) = search_sidebar_with_painted_results();
     let modal_id = ComponentId::Modal(ModalId::RemoteReanchor);
-    harness.model_mut().app.pending_overlay = Some(OverlayRequest::RemoteReanchor(
-        RemoteReanchorPopup {
+    harness.model_mut().app.pending_overlay =
+        Some(OverlayRequest::RemoteReanchor(RemoteReanchorPopup {
             targets: vec![(0, "Local".into())],
             cursor: 0,
-        },
-    ));
+        }));
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().application.mounted(&modal_id));
     assert_eq!(
@@ -315,14 +311,13 @@ fn tick_scroll_on_the_volume_pill_emits_the_volume_intent() {
     );
     apply_outcome(&mut harness, outcome);
     assert_eq!(
-        harness.model().app.ui_volume, 55,
+        harness.model().app.ui_volume,
+        55,
         "scroll down lowers the volume by the legacy wheel step"
     );
 }
 
-fn tab_panel_status_regions(
-    harness: &TickHarness,
-) -> crate::app::render::StatusBarRegions {
+fn tab_panel_status_regions(harness: &TickHarness) -> crate::app::render::StatusBarRegions {
     harness
         .model()
         .application
@@ -562,7 +557,10 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
     // A click inside Library's painted list resolves through the Library
     // panel's slot-event path — never through Queue — and a blank area of
     // the list claims nothing.
-    harness.inject(click(library_point.x, library_point.bottom().saturating_sub(1)));
+    harness.inject(click(
+        library_point.x,
+        library_point.bottom().saturating_sub(1),
+    ));
     let outcome = harness.step();
     assert!(
         outcome
@@ -585,350 +583,6 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
 // --- task 1.4: the boundary is a two-panel-layout component. RootFrame places
 // it (and the sync pass mounts it) only in the Both layout; queue-only and
 // library-only find it unmounted, and returning to Both remounts it.
-#[test]
-fn queue_boundary_unmounts_outside_the_two_panel_layout() {
-    for mode in [PanelMode::QueueOnly, PanelMode::LibraryOnly] {
-        let mut app = crate::app::render::make_queue_app(2);
-        app.panel_mode = mode;
-        let mut harness = TickHarness::new(app);
-        assert!(
-            harness
-                .model()
-                .application
-                .mounted(&ComponentId::QueueBoundary),
-            "the boundary starts mounted"
-        );
-        harness.model_mut().sync_mounted_surfaces();
-        assert!(
-            !harness
-                .model()
-                .application
-                .mounted(&ComponentId::QueueBoundary),
-            "{mode:?} unmounts the boundary"
-        );
-        harness.model_mut().app.panel_mode = PanelMode::Both;
-        harness.model_mut().sync_mounted_surfaces();
-        assert!(
-            harness
-                .model()
-                .application
-                .mounted(&ComponentId::QueueBoundary),
-            "returning to the two-panel layout remounts the boundary"
-        );
-    }
 
-    // Mini view derives its mode from `mini_view_focus`, never the stored
-    // Both: a narrow terminal in the Library mini view has no boundary either.
-    let mut mini = crate::app::render::make_queue_app(2);
-    mini.terminal_width = 70;
-    let mut harness = TickHarness::new(mini);
-    harness.model_mut().sync_mounted_surfaces();
-    assert!(!harness
-        .model()
-        .application
-        .mounted(&ComponentId::QueueBoundary));
-}
-
-// --- add-mouse-column-resize 3.1: the root-owned one-column boundary is
-// exercised through the real Application::tick() path. Queue and Library are
-// both eligible beside it, but only the boundary receives its drag messages.
-#[test]
-#[ignore = "obsolete boundary architecture test superseded by LibraryPanel ownership"]
-fn tick_queue_boundary_drag_live_width_then_persists_once_on_release() {
-    let mut app = crate::app::render::make_queue_app(2);
-    app.panel_mode = PanelMode::Both;
-    app.panel_focus = PanelFocus::Library;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
-    let boundary = harness
-        .model()
-        .app
-        .layout
-        .root_frame
-        .queue_boundary
-        .expect("two-panel layout places the boundary in RootFrame");
-    assert_eq!(boundary.width, 1, "the drag target is exactly one column");
-    let start_width = harness.model().app.queue_column_width;
-    let target = boundary.x.saturating_add(57);
-    let mouse = |kind, column| {
-        Event::Mouse(MouseEvent {
-            kind,
-            column,
-            row: boundary.y,
-            modifiers: KeyModifiers::NONE,
-        })
-    };
-
-    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), boundary.x));
-    let outcome = harness.step();
-    assert!(outcome.raw_messages.iter().all(|msg| {
-        !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
-            && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
-    }));
-    apply_outcome(&mut harness, outcome);
-
-    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), target));
-    let outcome = harness.step();
-    assert!(outcome.raw_messages.iter().any(|msg| {
-        matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnLive(_)))
-    }));
-    assert!(outcome.raw_messages.iter().all(|msg| {
-        !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
-            && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
-    }));
-    let live_width = outcome
-        .raw_messages
-        .iter()
-        .find_map(|msg| match msg {
-            Msg::Queue(crate::app::components::QueueRequest::ResizeColumnLive(width)) => {
-                Some(*width)
-            }
-            _ => None,
-        })
-        .expect("boundary owner emits the live width");
-    assert_eq!(live_width, 55);
-    apply_outcome(&mut harness, outcome);
-    assert_eq!(harness.model().app.queue_column_width, live_width);
-    assert_ne!(live_width, start_width);
-
-    harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), target));
-    let outcome = harness.step();
-    assert_eq!(
-        outcome
-            .raw_messages
-            .iter()
-            .filter(|msg| matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnEnd(_))))
-            .count(),
-        1,
-        "release persists exactly once"
-    );
-    assert!(outcome.raw_messages.iter().all(|msg| {
-        !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
-            && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
-    }));
-    apply_outcome(&mut harness, outcome);
-    assert_eq!(harness.model().app.queue_column_width, live_width);
-}
-
-#[test]
-fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
-    let mut app = crate::app::render::make_queue_app(2);
-    app.panel_mode = PanelMode::Both;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
-    harness.model_mut().sync_mounted_surfaces();
-    let boundary = harness
-        .model()
-        .app
-        .layout
-        .root_frame
-        .queue_boundary
-        .expect("two-panel layout places the boundary in RootFrame");
-    let width = harness.model().app.queue_column_width;
-    harness.model_mut().app.pending_overlay = Some(OverlayRequest::Confirm(ConfirmModal {
-        title: "Block resize?".into(),
-        message: "overlay owns the pointer".into(),
-        hint: "[Esc] Cancel".into(),
-        on_confirm: ConfirmAction::ClearQueue,
-    }));
-    harness.model_mut().sync_mounted_surfaces();
-    assert_eq!(harness.model().mouse_subscribed.len(), 1);
-
-    for kind in [
-        MouseEventKind::Down(MouseButton::Left),
-        MouseEventKind::Drag(MouseButton::Left),
-        MouseEventKind::Up(MouseButton::Left),
-    ] {
-        harness.inject(Event::Mouse(MouseEvent {
-            kind,
-            column: boundary.x.saturating_add(20),
-            row: boundary.y,
-            modifiers: KeyModifiers::NONE,
-        }));
-        let outcome = harness.step();
-        assert!(outcome.raw_messages.iter().all(|msg| {
-            !matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnLive(_)))
-                && !matches!(msg, Msg::Queue(crate::app::components::QueueRequest::ResizeColumnEnd(_)))
-                && !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
-                && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
-        }));
-    }
-    assert_eq!(harness.model().app.queue_column_width, width);
-}
-
-// --- Task 7.3 (breakpoint half): the Movies destination switches its
-// embedded canonical control (`WideMediaList` -> `InlineMediaBrowser`) when a
-// resize crosses the wide/narrow breakpoint. A click must resolve against the
-// `row_geometry` the CURRENT frame painted, never the rect a prior frame left
-// behind. The scroll half of this proof already lives in
-// `media_list::tests::resolve_point::wide_resolves_against_a_scrolled_viewport`.
-
-#[test]
-fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_stale_one() {
-    let mut app = crate::app::render::make_movie_app();
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-
-    // Task 6.1: the Movies surface paints inside the mounted `LibraryPanel`,
-    // whose retained skeleton geometry is the click-resolution truth.
-    let browser_test_layout = |harness: &mut TickHarness| {
-        harness
-            .model()
-            .application
-            .get_component(&ComponentId::Library)
-            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(|panel| panel.test_list_rect())
-            .expect("the panel painted a list slot")
-    };
-
-    let click = |column, row| {
-        Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: KeyModifiers::NONE,
-        })
-    };
-
-    // Wide breakpoint: paints via `WideMediaList` into the right-hand list
-    // pane, well clear of column 0.
-    let mut wide_terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    wide_terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
-    let wide_list_area = browser_test_layout(&mut harness);
-    assert!(
-        wide_list_area.width > 0 && wide_list_area.height > 0,
-        "the wide breakpoint must have painted a non-empty list area"
-    );
-
-    // The panel's list rect starts at the painted row flow (the old
-    // component's `left_area` included the pill row above it), so the blank
-    // probe is the area below the fixture's two rows: it must not claim.
-    harness.inject(click(wide_list_area.x, wide_list_area.bottom().saturating_sub(1)));
-    let outcome = harness.step();
-    assert!(
-        outcome
-            .raw_messages
-            .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
-        "a blank wide-list click must not claim without a resolved target"
-    );
-    apply_outcome(&mut harness, outcome);
-
-    // Resize below the two-column threshold: the destination switches to
-    // `InlineMediaBrowser`, and its list geometry starts far to the left of
-    // where the wide list used to live.
-    let mut narrow_terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-    narrow_terminal
-        .draw(|f| harness.model_mut().draw_frame(f, false, false))
-        .unwrap();
-    let narrow_list_area = browser_test_layout(&mut harness);
-    assert!(
-        narrow_list_area.width > 0 && narrow_list_area.height > 0,
-        "the narrow breakpoint must have painted a non-empty list area"
-    );
-    assert_ne!(
-        wide_list_area, narrow_list_area,
-        "the breakpoint change must have actually repainted different list geometry"
-    );
-
-    // A click on the OLD wide list's bottom row, now below the bottom edge
-    // of the shorter narrow-painted list area (the wide browser pane sits
-    // left of the hero and is vertically taller than the narrow list), must
-    // not resolve to a row: if resolution consulted stale wide geometry
-    // instead of the freshly painted narrow layout, this click would
-    // incorrectly still land on a list row.
-    let stale_probe_col = wide_list_area.x;
-    let stale_probe_row = wide_list_area.bottom() - 1;
-    assert!(
-        stale_probe_row >= narrow_list_area.bottom()
-            && stale_probe_col >= narrow_list_area.x
-            && stale_probe_col < narrow_list_area.right(),
-        "the old wide list must genuinely extend below the narrow list's new bottom edge at a \
-         shared column for this click to be a meaningful stale-geometry probe"
-    );
-    harness.inject(click(stale_probe_col, stale_probe_row));
-    let outcome = harness.step();
-    assert!(
-        outcome
-            .raw_messages
-            .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
-        "a click at the old wide-list position must not resolve through stale wide geometry \
-         after the narrow repaint"
-    );
-    apply_outcome(&mut harness, outcome);
-
-    // A click below the fixture's two painted rows — inside the list slot's
-    // rect but past its last row — must not claim without a resolved target,
-    // proving resolution consults the freshly painted narrow layout (the
-    // hero block replaces the selected row at the flow's top; blank space
-    // below the rows claims nothing).
-    harness.inject(click(narrow_list_area.x, narrow_list_area.bottom().saturating_sub(1)));
-    let outcome = harness.step();
-    assert!(
-        outcome
-            .raw_messages
-            .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
-        "a blank narrow-list click must not claim without a resolved target"
-    );
-    apply_outcome(&mut harness, outcome);
-}
-
-/// A Music click delivered through `Application::tick` resolves against the
-/// retained wide-list geometry rather than a parent hitmap.
-#[test]
-fn music_click_resolves_current_retained_geometry_through_application_tick() {
-    let mut app = make_music_group_app();
-    let mut second_album = make_item("Album 2", "MusicAlbum");
-    second_album.id = "album-2".into();
-    second_album.artist = "Alpha".into();
-    app.libs[0].nav_stack[1].items.push(second_album);
-    app.panel_focus = PanelFocus::Library;
-    app.panel_mode = PanelMode::LibraryOnly;
-    let mut harness = TickHarness::new(app);
-    harness.model_mut().sync_mounted_surfaces();
-    let music_id = ComponentId::Library;
-    let click = |column, row| {
-        Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column,
-            row,
-            modifiers: KeyModifiers::NONE,
-        })
-    };
-
-    let mut wide_terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
-    wide_terminal
-        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
-        .unwrap();
-    let wide_area = harness
-        .model()
-        .application
-        .get_component(&music_id)
-        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_list_rect())
-        .expect("Music panel list geometry");
-    assert!(wide_area.width > 0 && wide_area.height > 0);
-    harness.inject(click(wide_area.x + 1, wide_area.y + 1));
-    let outcome = harness.step();
-    assert!(outcome.raw_messages.iter().any(|message| matches!(
-        message,
-        Msg::Shell(ShellRequest::MusicAlbumCursor { .. })
-    )));
-    apply_outcome(&mut harness, outcome);
-}
+#[path = "tests_tick_integration_mouse_panels.rs"]
+mod tests_tick_integration_mouse_panels;
