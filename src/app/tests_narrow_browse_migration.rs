@@ -341,10 +341,6 @@ fn narrow_tv_paints_each_browse_row_once() {
     }
 }
 
-fn wide_backend() -> Terminal<TestBackend> {
-    Terminal::new(TestBackend::new(140, 40)).unwrap()
-}
-
 fn feed_home_video_group_app() -> App {
     let mut app = make_app_stub();
     app.terminal_width = 60;

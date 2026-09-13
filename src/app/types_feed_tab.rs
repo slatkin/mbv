@@ -13,6 +13,10 @@ pub(super) enum WatchedFilter {
 }
 
 impl WatchedFilter {
+    /// Number of variants; also the width of the Selector row's watched-filter
+    /// pill block, so feed-group pills start at this offset.
+    pub const COUNT: usize = 3;
+
     /// Next filter in the cycle.
     pub fn cycle(self) -> Self {
         match self {
@@ -22,6 +26,7 @@ impl WatchedFilter {
         }
     }
 
+    #[cfg(test)]
     pub fn position(self) -> usize {
         match self {
             Self::All => 0,

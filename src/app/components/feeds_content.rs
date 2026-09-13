@@ -433,7 +433,7 @@ impl LibraryContentOwner for FeedsContent {
             .collect(),
             // `[`/`]` move the feed-group selection, so the active pill and
             // overflow window follow that group within the combined row.
-            active: Some(3 + self.selected_group),
+            active: Some(WatchedFilter::COUNT + self.selected_group),
         });
         let controls = None;
         let list = if !has_subs {
@@ -464,10 +464,10 @@ impl LibraryContentOwner for FeedsContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
-                if index < 3 {
+                if index < WatchedFilter::COUNT {
                     self.select_watched_filter(index);
                 } else {
-                    self.select_group(index - 3);
+                    self.select_group(index - WatchedFilter::COUNT);
                 }
                 None
             }
