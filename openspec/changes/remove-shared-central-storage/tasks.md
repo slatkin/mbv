@@ -53,13 +53,13 @@
   `rg -n "shared_client|SharedClient|shared_sync|persist_roaming" src/` returns nothing and
   `cargo nextest run -p mbv` is green.
 
-- [ ] 2.2 Delete the core modules (`shared_client`, `shared_client_transport`,
+- [x] 2.2 Delete the core modules (`shared_client`, `shared_client_transport`,
   `shared_client_tests`, `shared_service`, `shared_protocol`, `shared_state`, `shared_store`,
   `shared_worker`), their `lib.rs` exports, and the `redb` dependency from the workspace and
   `mbv-core` manifests. Verify `cargo check -p mbv-core` passes, `rg -n redb --glob '!Cargo.lock'`
   returns nothing outside archived change docs, and the remaining core tests are green.
 
-- [ ] 2.3 Remove daemon-side hosting and advertisement: the shared-data hosting block in
+- [x] 2.3 Remove daemon-side hosting and advertisement: the shared-data hosting block in
   `daemon_run.rs`, the `mbv-shared-data-tcp-port` session `supported_commands` entry and its
   parser, and the unused `CTRL_CAP_SHARED_MBV_STATE` constant. Do NOT remove `daemon_core.rs`'s
   `SharedQueueState` — it is ctrl snapshot state (queue, source, observed active slot) and is
@@ -68,7 +68,7 @@
   nothing and the daemon test suites are green (including the `mbv-shared-data-tcp-port` parser
   tests in `api_tests_client.rs`).
 
-- [ ] 2.4 Remove the configuration surface: the five `shared_data_*` fields, their parse and
+- [x] 2.4 Remove the configuration surface: the five `shared_data_*` fields, their parse and
   save paths, and their validation; drop a leftover `[shared_data]` section on the next
   settings save; remove the sections from `dist/config.toml` and `dist/mbvd.toml`. Verify with
   a config test asserting a saved file no longer contains `[shared_data]`, removal of the
