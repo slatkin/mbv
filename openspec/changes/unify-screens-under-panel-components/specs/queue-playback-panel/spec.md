@@ -37,9 +37,12 @@ the Queue playback panel's transport (seekbar, title row, controls), not its hea
 ### Requirement: Queue-visible layouts paint a now-playing header row
 
 In every layout that renders the queue column, the left column SHALL paint one header row at the top
-of its content, above the visual slot, on the chrome surface. The header SHALL always be painted,
-including while playback is idle. Its left side SHALL state the playback status and its right side
-SHALL state the playback target as `on <host>`.
+of its content, above the visual slot, on the chrome surface. The header SHALL sit in the queue
+column's recessed inset: one row of column surface above it and two columns of column surface on
+each side, with no padding below it, so it is not flush with the column's top, left, or right edge
+and its text aligns with the slot and transport below. The header SHALL always be painted, including
+while playback is idle. Its left side SHALL state the playback status and its right side SHALL state
+the playback target as `on <host>`.
 
 The status word SHALL be `PLAYING` while playback is active and not paused, `PAUSED` while it is
 active and paused, and `IDLE` while it is inactive.
@@ -49,6 +52,12 @@ when playback is local, and the connected session's device name (then its host) 
 label when it is remote. The header SHALL NOT append the queue title's tracking suffix. The header
 SHALL follow the effective playback target — cast, then connected session, then local — and SHALL NOT
 follow the queue scope being viewed.
+
+#### Scenario: Header is recessed in the queue column
+
+- **WHEN** a queue-visible layout is painted
+- **THEN** the header SHALL sit one row below the column's top edge, inset two columns from each side
+  edge, with no blank row between it and the slot/transport band below
 
 #### Scenario: Active local playback
 

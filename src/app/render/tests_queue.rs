@@ -507,6 +507,51 @@ fn queue_playback_header_states_status_and_target_at_both_widths() {
     }
 }
 
+/// The header is recessed in the queue column: the row above it and the two
+/// columns each side carry the column's own gutter surface rather than the
+/// header band, so the header is not flush with the column's top, left, or
+/// right edge. It keeps no bottom padding: the row below it is the
+/// slot/transport band's first row (the arrangement tests pin that start).
+#[test]
+fn queue_playback_header_is_recessed_in_the_queue_column() {
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.paused = false;
+    }
+    let (term, _) = render_queue_view_to_terminal(&mut app, 80, 40);
+    let buf = term.backend().buffer();
+    let band = palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
+    // The header band's paint starts two columns in, on the second row.
+    assert_eq!(buf[(2, 1)].style().bg, Some(band), "header paints inset");
+    // The columns left of the header are the queue column's own gutter, not
+    // the header band; the same value paints the placement's first row.
+    let gutter = buf[(0, 1)].style().bg;
+    assert_ne!(gutter, Some(band), "the header is not flush on the left");
+    assert_eq!(
+        gutter,
+        buf[(0, 2)].style().bg,
+        "the gutter is the column fill"
+    );
+    assert_ne!(
+        buf[(2, 0)].style().bg,
+        Some(band),
+        "the row above the header is not the header band"
+    );
+    assert_eq!(
+        buf[(2, 0)].style().bg,
+        gutter,
+        "the row above the header is the column gutter"
+    );
+    assert_ne!(
+        buf[(79, 1)].style().bg,
+        Some(band),
+        "the header is not flush on the right"
+    );
+}
+
 /// Task 3.5: the header follows the playback target, not the viewed queue —
 /// a remote-attached frame with the Local scope selected still names the
 /// remote target.

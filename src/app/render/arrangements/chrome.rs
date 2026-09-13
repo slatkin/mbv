@@ -11,11 +11,13 @@ const TAB_BAR_BOX_HEIGHT: u16 = 3;
 /// blank trailing row).
 pub(in crate::app) const PLAYER_BOX_HEIGHT: u16 = 3;
 
-/// Rows the Queue playback panel always spends on its header row in every
+/// Rows the Queue playback panel always spends on its header in every
 /// queue-visible layout, idle included (design D10; the painted row lands
 /// with task 3.2). The root placement reserves it now so the Queue panel's
-/// placement already starts below the Queue playback panel's header.
-pub(in crate::app) const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 1;
+/// placement already starts below the Queue playback panel's header. Two
+/// rows: the header text row plus the `queue_panel_inset` row of column
+/// padding above it, which recesses the header from the column's top edge.
+pub(in crate::app) const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
 
 /// Columns at which the queue column's visual slot and transport render
 /// side by side rather than stacked (the folded change's placement rule).

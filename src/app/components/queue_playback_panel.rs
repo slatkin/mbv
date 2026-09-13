@@ -29,6 +29,7 @@ use super::msg::{Msg, PlaybackRequest};
 use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
+use crate::app::render::components::widgets::queue_panel_inset;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_playback_header, render_player_panel, PlaybackRenderContext};
 use crate::app::NowPlayingStatus;
@@ -163,9 +164,16 @@ impl Default for QueuePlaybackPanel {
 
 impl Component for QueuePlaybackPanel {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
-        // The header row is the placement's first row, painted in every
-        // queue-visible layout, idle included (D10).
-        let header = Rect { height: 1, ..area };
+        // The header row is the placement's painted row, painted in every
+        // queue-visible layout, idle included (D10). It sits one row down
+        // under the column's recessed top padding and is inset two columns
+        // each side (the queue column's canonical content inset), so it is
+        // not flush with the column's top, left, or right edge. Bottom
+        // padding stays zero: the slot/transport band follows it directly.
+        let header = Rect {
+            height: 1,
+            ..queue_panel_inset(area)
+        };
         render_playback_header(frame, header, self.status, &self.host);
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
@@ -261,7 +269,10 @@ mod tests {
             "music-box".into(),
         );
         panel.transport.show_controls = !idle;
-        let transport_area = (!idle).then_some(Rect::new(0, 1, 40, 4));
+        // The shell hands the transport band the rows below the header's
+        // band: row 0 is the header's recessed padding, row 1 the header
+        // itself.
+        let transport_area = (!idle).then_some(Rect::new(0, 2, 40, 4));
         panel.set_transport_area(transport_area);
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
@@ -307,7 +318,7 @@ mod tests {
         panel.set_header(NowPlayingStatus::Playing, "music-box".into());
         panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.show_controls = true;
-        panel.set_transport_area(Some(Rect::new(0, 1, 40, 4)));
+        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
@@ -333,7 +344,7 @@ mod tests {
         panel.set_header(NowPlayingStatus::Playing, "music-box".into());
         panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.show_controls = true;
-        panel.set_transport_area(Some(Rect::new(0, 1, 40, 4)));
+        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
@@ -367,7 +378,7 @@ mod tests {
     fn transport_band_uses_the_queue_column_chrome_surface() {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into());
-        panel.set_transport_area(Some(Rect::new(0, 1, 40, 4)));
+        panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
@@ -375,8 +386,60 @@ mod tests {
         let buf = terminal.backend().buffer();
         // The transport band's first row paints the chrome-band fill.
         assert_eq!(
-            buf[(1, 1)].style().bg,
+            buf[(1, 2)].style().bg,
             Some(palette::surface_colors(Surface::QueueOnlyPlaybackPanel, false).fill),
+        );
+    }
+
+    /// The header is recessed in the queue column: the row above it and the
+    /// two columns each side carry no header-band paint, and the painted row
+    /// itself starts two columns in from the placement's left edge.
+    #[test]
+    fn header_paints_inset_one_row_down_and_two_columns_in() {
+        let band = palette::surface_colors(Surface::QueueOnlyPlaybackPanel, false).fill;
+        let mut panel = QueuePlaybackPanel::new();
+        panel.set_header(NowPlayingStatus::Playing, "music-box".into());
+        panel.set_transport_area(None);
+        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+        terminal
+            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+            .unwrap();
+        let buf = terminal.backend().buffer();
+
+        assert_eq!(
+            buf[(2, 1)].style().bg,
+            Some(band),
+            "header row paints inset"
+        );
+        assert_ne!(
+            buf[(0, 0)].style().bg,
+            Some(band),
+            "no paint above the inset"
+        );
+        assert_ne!(
+            buf[(2, 0)].style().bg,
+            Some(band),
+            "no paint above the inset"
+        );
+        assert_ne!(
+            buf[(0, 1)].style().bg,
+            Some(band),
+            "no paint left of the inset"
+        );
+        assert_ne!(
+            buf[(1, 1)].style().bg,
+            Some(band),
+            "no paint left of the inset"
+        );
+        assert_ne!(
+            buf[(38, 1)].style().bg,
+            Some(band),
+            "no paint right of the inset"
+        );
+        assert_ne!(
+            buf[(39, 1)].style().bg,
+            Some(band),
+            "no paint right of the inset"
         );
     }
 }

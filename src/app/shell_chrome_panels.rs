@@ -18,6 +18,7 @@ use super::*;
 use crate::app::layout::CardGeometry;
 use crate::app::render::arrangements::chrome::{
     queue_playback_column_wide, queue_playback_transport_area, RootFrame,
+    QUEUE_PLAYBACK_HEADER_ROWS,
 };
 use crate::app::render::components::card::queue_card_reserved_rect;
 use crate::app::render::components::widgets::{fill_surface, queue_panel_inset};
@@ -267,11 +268,13 @@ impl Model {
             crate::app::palette::Surface::QueueColumn,
             matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
         );
-        // The slot region starts on the row below the placement's header row
-        // and keeps the queue panel's shared horizontal inner padding.
+        // The slot region starts on the row below the placement's header band
+        // (the header's recessed padding row plus the painted header row) and
+        // keeps the queue panel's shared horizontal inner padding.
         let inset = queue_panel_inset(placement);
         let slot_region = Rect {
-            height: placement.height.saturating_sub(1),
+            y: placement.y + QUEUE_PLAYBACK_HEADER_ROWS,
+            height: placement.height.saturating_sub(QUEUE_PLAYBACK_HEADER_ROWS),
             ..inset
         };
         let wide = queue_playback_column_wide(placement.width);

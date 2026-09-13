@@ -377,11 +377,11 @@ fn queue_only_strip_and_queue_follow_the_table() {
     let layout = &model.app.layout;
     // The transport band the shell's Queue playback panel paints beside the
     // card in wide Queue-only (task 3.5), reconstructed from published
-    // geometry: beside the freshly painted slot, below the always-painted
-    // header row.
+    // geometry: beside the freshly painted slot, below the header's band
+    // (its recessed padding row plus the painted header row).
     let panel = Rect {
         x: chrome.left_content.x + layout.card.width + 2,
-        y: chrome.left_area.y + 1,
+        y: chrome.left_area.y + super::arrangements::chrome::QUEUE_PLAYBACK_HEADER_ROWS,
         width: chrome
             .left_content
             .width

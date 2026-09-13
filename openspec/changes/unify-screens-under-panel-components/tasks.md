@@ -71,7 +71,7 @@ one paint-free placement.
   paint the left backdrop from the panel, and move `LayoutMain.queue_{area,title_area,selected_item_rect}`
   into the component. Verify: `src/app/render/tests_queue.rs` and `queue_component_tests.rs` pass; the
   context-menu keyboard anchor for a queue row still opens at the selected row (existing test).
-- [x] 3.2 Add `header_height` (always 1 in queue-visible layouts, idle included) to `QueuePanelInputs`
+- [x] 3.2 Add `header_height` (the header's recessed band in queue-visible layouts, idle included) to `QueuePanelInputs`
   and offset `queue_panel_geometry` by it alongside the visual-slot and transport heights, so the Queue
   panel always starts below the Queue playback panel's placement, with its separator row reserved only
   alongside the slot/transport rows (idle reserves only the header row; the panel's recessed inset is
