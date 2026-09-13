@@ -289,14 +289,12 @@ _Avoid_: pending active index, cursor push, now-playing index, active_idx
 ## Browsing and tabs
 
 **MediaList**:
-The target shared provider-neutral owner for one logical media-row flow,
-introduced by `complete-shared-media-list-ownership`. It will own rows,
-stable-target selection, cursor/scroll, delegated row-local behavior, and
-retained geometry while a Variant (Wide or Inline presentation) supplies
-painting within its established arrangement. It will be embedded beneath the
-destination Interactive Component; it will never be mounted, focused,
-subscribed, or given a ComponentId. The destination keeps Service content,
-chrome, workspace focus, effects, persistence, and typed intent translation.
+The shared provider-neutral owner for one logical media-row flow. It owns rows,
+stable-target selection, cursor/scroll, row-local behavior, and retained
+geometry. It is embedded in the destination's `LibraryPanel` slot; it is never
+mounted, focused, subscribed, or given a ComponentId. The Library panel owns
+the skeleton and slot; the destination retains Service content and typed
+translation.
 _Avoid_: generic list, generic media list, two-column list
 
 **Multi-selection**:

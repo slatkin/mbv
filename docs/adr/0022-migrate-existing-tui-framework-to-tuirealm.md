@@ -59,7 +59,7 @@ ADRs apply the same root/Panel boundary to keyboard and mouse delivery.
 
 Internal checkpoints and temporary adapters may organize the conversion, but a
 mixed TuiRealm/legacy architecture is not a completed or mergeable endpoint. The
-the completion gate is satisfied only when every interactive-surface ledger row uses
+completion gate is satisfied only when every interactive-surface ledger row uses
 TuiRealm, component-local state and handlers have left `App`, `CONTEXT_STACK` and
 `AppLayout` are removed, and no parallel legacy interaction framework remains.
 

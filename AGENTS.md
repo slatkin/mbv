@@ -117,9 +117,9 @@ painter. Contract: `openspec/specs/canonical-media-lists/spec.md`.
 * Mouse (ADR 0024): subscriptions decide eligibility pre-delivery, following
   surfaces painted in latest frame (or topmost overlay); mounted parent owns
   gesture state, resolves only geometry it painted; embedded lists resolve own
-  rows; there is no global hit map for component surfaces. Shell-painted chrome
-  (currently the tab bar) may expose its own paint-time hit geometry and resolve
-  the observer message in the shell. Never discard a losing message after its
+  rows; there is no global hit map for component surfaces. `TabPanel` owns the
+  tab regions it paints and resolves them; the shell does not supply a second
+  component-surface routing path. Never discard a losing message after its
   component mutated. TuiRealm pinned 4.1 — re-verify ADR 0024's subscription
   assumption before any bump.
 * Render order: screens → arrangements → Render Components → Ratatui. Screens =
