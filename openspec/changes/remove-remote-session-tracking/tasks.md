@@ -14,8 +14,8 @@
 
 ## 4. Delete the Reconciliation Model
 
-- [ ] 4.1 Remove remaining App tracker/projection fields, reconciliation-only event and overlay types, constructors, exports, helper methods, and dedicated application tests; verify Session watch, Session switching/disappearance, Direct remote control, and local/Local daemon queue tests with `cargo nextest run -p mbv`.
-- [ ] 4.2 Delete `mbv-core`'s remote reconciliation modules and dedicated tests after callers are gone, then run `cargo nextest run -p mbv-core` and `cargo check -p mbv-core`.
+- [x] 4.1 Remove remaining App tracker/projection fields, reconciliation-only event and overlay types, constructors, exports, helper methods, and dedicated application tests; verify Session watch, Session switching/disappearance, Direct remote control, and local/Local daemon queue tests with `cargo nextest run -p mbv`.
+- [x] 4.2 Delete `mbv-core`'s remote reconciliation modules and dedicated tests after callers are gone, then run `cargo nextest run -p mbv-core` and `cargo check -p mbv-core`.
 
 ## 5. Align Documentation and Verify the Deletion
 
