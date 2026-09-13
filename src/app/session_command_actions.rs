@@ -1,6 +1,5 @@
 use super::notify_actions::ToastSeverity;
-use super::types_playback::RemoteQueueProjection;
-use super::{App, ReconciliationCommand, SessionEvent};
+use super::{App, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
 use mbv_core::remote_reconciliation::{
     ReconciliationTracker, RemoteIntent, SequenceSource, SubmittedOccurrence,
@@ -27,54 +26,12 @@ impl App {
         start_idx: usize,
     ) {
         let generation = self.next_session_poll_generation();
-        self.retire_remote_tracking(true);
-        if items.len() < 2 {
-            self.remote_tracker = None;
-            self.remote_queue_projection = None;
-        } else if let Some(tracker) = Self::build_remote_tracker_with_source(
-            conn_id,
-            items,
-            start_idx,
-            generation,
-            self.queue_playlist_id().map(str::to_string),
-        ) {
-            self.remote_tracker = Some(tracker);
-            let queue = self.displayed_queue();
-            let exact_queue = queue.total_queue_len() == items.len()
-                && queue.slots().iter().zip(items).all(|(slot, submitted)| {
-                    slot.item.id() == submitted.id.as_str()
-                        && slot.item.playlist_item_id() == submitted.playlist_item_id.as_str()
-                });
-            if exact_queue {
-                let occurrence_slots: std::collections::HashMap<_, _> = queue
-                    .queue
-                    .slots()
-                    .iter()
-                    .enumerate()
-                    .map(|(index, slot)| (index as u64 + 1, slot.slot_id))
-                    .collect();
-                let slot_occurrences = occurrence_slots
-                    .iter()
-                    .map(|(occurrence_id, slot_id)| (*slot_id, *occurrence_id))
-                    .collect();
-                self.remote_queue_projection = Some(RemoteQueueProjection {
-                    session_id: conn_id.to_string(),
-                    epoch: self.remote_tracker.as_ref().map_or(0, |t| t.epoch()),
-                    queue_lineage: self.remote_queue_lineage,
-                    occurrence_slots,
-                    slot_occurrences,
-                });
-            } else {
-                self.remote_queue_projection = None;
-            }
-        }
         let id = conn_id.to_string();
         let item_ids: Vec<String> = items.iter().map(|item| item.id.clone()).collect();
         let start_ticks = items
             .get(start_idx)
             .map_or(0, |item| item.playback_position_ticks);
-        let reconciliation = self.reconciliation_command(conn_id, generation);
-        self.dispatch_session_command(generation, reconciliation, move |client| {
+        self.dispatch_session_command(generation, move |client| {
             client.session_play_items(&id, &item_ids, start_idx, start_ticks)
         });
     }
@@ -256,8 +213,7 @@ impl App {
         // the visible queue and apply the delta. Tracking only observes the
         // already-selected slot afterward and must never choose a different
         // target_idx or payload.
-        let Some((target_idx, start_ticks)) =
-            remote_jump_target(&self.player_tab, current_remote_id, delta)
+        let Some((target_idx, _)) = remote_jump_target(&self.player_tab, current_remote_id, delta)
         else {
             self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
             return;
@@ -273,28 +229,7 @@ impl App {
             .take(target_idx)
             .filter(|s| s.item.as_emby().is_some())
             .count();
-        if self.remote_tracker.is_some() {
-            if let Some(target) = self.tracked_occurrence_at_queue_index(target_idx) {
-                let intent = if delta > 0 {
-                    RemoteIntent::Next { target }
-                } else {
-                    RemoteIntent::Previous { target }
-                };
-                self.issue_remote_intent(intent);
-            } else {
-                log::debug!(
-                    target: "sessions",
-                    "tracked jump slot {} has no Submitted occurrence; issuing untracked command",
-                    target_idx
-                );
-            }
-            let item_ids: Vec<String> = emby_items.iter().map(|item| item.id.clone()).collect();
-            self.do_reconciliation_session_command(&id.clone(), move |client| {
-                client.session_play_items(&id, &item_ids, emby_start, start_ticks)
-            });
-        } else {
-            self.submit_attached_sequence(&id, &emby_items, emby_start);
-        }
+        self.submit_attached_sequence(&id, &emby_items, emby_start);
     }
 
     /// Compute the absolute tick position for a remote-session seek, given
@@ -324,41 +259,21 @@ impl App {
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
         let generation = self.next_session_poll_generation();
-        self.dispatch_session_command(generation, None, f);
+        self.dispatch_session_command(generation, f);
     }
 
     pub(super) fn do_reconciliation_session_command(
         &mut self,
-        session_id: &str,
+        _session_id: &str,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
         let generation = self.next_session_poll_generation();
-        let reconciliation = self.reconciliation_command(session_id, generation);
-        self.dispatch_session_command(generation, reconciliation, f);
-    }
-
-    fn reconciliation_command(
-        &mut self,
-        session_id: &str,
-        generation: u64,
-    ) -> Option<ReconciliationCommand> {
-        let tracker = self.remote_tracker.as_mut()?;
-        if tracker.session_id() != session_id {
-            return None;
-        }
-        tracker.track_command_generation(generation);
-        Some(ReconciliationCommand {
-            session_id: session_id.to_string(),
-            tracking_id: tracker.tracking_id(),
-            tracker_epoch: tracker.epoch(),
-            generation,
-        })
+        self.dispatch_session_command(generation, f);
     }
 
     fn dispatch_session_command(
         &self,
         generation: u64,
-        reconciliation: Option<ReconciliationCommand>,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
         let Some(client) = self.emby_snapshot() else {
@@ -369,18 +284,11 @@ impl App {
             if let Err(e) = f(&client) {
                 let _ = tx.send(SessionEvent::CommandError {
                     error: e,
-                    reconciliation,
+                    reconciliation: None,
                 });
                 return;
             }
-            // A successful remote command is acknowledged independently of the
-            // post-command session poll, so command acknowledgment never
-            // depends on the follow-up poll succeeding. Tracking may then
-            // reconcile a later ordinary poll issued after the acknowledgment
-            // boundary.
-            if let Some(command) = reconciliation {
-                let _ = tx.send(SessionEvent::CommandAcknowledged(command));
-            }
+            // Refresh the directly observed Session state after a successful command.
             match client.get_sessions() {
                 Ok(sessions) => {
                     let _ = tx.send(SessionEvent::Loaded {
