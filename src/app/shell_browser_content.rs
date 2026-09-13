@@ -157,6 +157,7 @@ impl Model {
             .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
             .unwrap_or_default();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
+        let poster_window = items.clone();
         let push = BrowserOwnerPush {
             items,
             total_count,
@@ -177,7 +178,9 @@ impl Model {
             }
             owner.cursor()
         });
-        let _ = landed_cursor;
+        if let Some(cursor) = landed_cursor {
+            self.app.fetch_nearby_movie_posters(&poster_window, cursor);
+        }
     }
 
     pub(super) fn push_active_browser_owner_content(&mut self) {
