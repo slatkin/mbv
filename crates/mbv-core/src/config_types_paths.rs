@@ -93,32 +93,9 @@ pub struct Config {
     /// (`[[feeds]]` array-of-tables in config.toml). The only persisted
     /// feed data: per-entry playback state is never saved.
     pub feeds: Vec<FeedSubscription>,
-    /// ── Shared-data hosting (daemon) ──────────────────────────────
-    /// When `true`, the daemon opens a dedicated shared-data listener and
-    /// the redb database. Disabled by default: no listener or database is
-    /// created unless this is explicitly enabled.
-    pub shared_data_enabled: bool,
-    /// Endpoint for the shared-data listener (e.g. `192.168.1.20:47789` for
-    /// private TCP, or a Unix socket path). Empty = disabled. TCP endpoints
-    /// are limited to loopback/private addresses; TLS is optional.
-    pub shared_data_listen: String,
-    /// Path to the TLS certificate file for the shared-data listener.
-    /// Optional when `shared_data_listen` is a TCP endpoint; cert and key must
-    /// be supplied together to enable TLS.
-    pub shared_data_tls_cert_path: String,
-    /// Path to the TLS private key file for the shared-data listener.
-    /// Optional when `shared_data_listen` is a TCP endpoint; cert and key must
-    /// be supplied together to enable TLS.
-    pub shared_data_tls_key_path: String,
-    /// ── Shared-data client ────────────────────────────────────────
-    /// Explicit shared-data endpoint for the client. Empty = disabled
-    /// (local-only behavior). Must be a loopback/private TCP or Unix endpoint;
-    /// WAN endpoints are rejected at validation time.
-    pub shared_data_endpoint: String,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
-pub const DEFAULT_SHARED_DATA_TCP_PORT: u16 = 47789;
 
 impl Default for Config {
     fn default() -> Self {
@@ -167,11 +144,6 @@ impl Default for Config {
             idle_feed_rss_url: "https://novaramedia.com/feed/".to_string(),
             idle_feed_rotation_secs: 10,
             feeds: vec![],
-            shared_data_enabled: false,
-            shared_data_listen: String::new(),
-            shared_data_tls_cert_path: String::new(),
-            shared_data_tls_key_path: String::new(),
-            shared_data_endpoint: String::new(),
         }
     }
 }
@@ -243,124 +215,6 @@ pub fn default_daemon_server_tcp_listen() -> String {
     } else {
         String::new()
     }
-}
-
-/// Resolve the shared-data listener without requiring a second address in the
-/// normal configuration. System daemons follow the existing daemon TCP bind;
-/// local daemons use a sibling Unix socket.
-pub fn shared_data_listen(cfg: &Config) -> String {
-    let configured = cfg.shared_data_listen.trim();
-    if !configured.is_empty() {
-        return configured.to_string();
-    }
-    if let Ok(mut address) = cfg
-        .daemon_server_tcp_listen
-        .trim()
-        .parse::<std::net::SocketAddr>()
-    {
-        address.set_port(DEFAULT_SHARED_DATA_TCP_PORT);
-        return address.to_string();
-    }
-    PathBuf::from(control_socket_path())
-        .with_file_name("mbv-shared.sock")
-        .display()
-        .to_string()
-}
-
-/// Validates shared-data configuration. Returns `Err` with a human-readable
-/// message if the configuration is invalid.
-pub fn validate_shared_data_config(cfg: &Config) -> Result<(), String> {
-    if !cfg.shared_data_enabled {
-        return Ok(());
-    }
-    let resolved_listen = shared_data_listen(cfg);
-    let listen = resolved_listen.as_str();
-    if listen.starts_with('/') || listen.starts_with("unix://") {
-        if !cfg.shared_data_tls_cert_path.trim().is_empty()
-            || !cfg.shared_data_tls_key_path.trim().is_empty()
-        {
-            return Err("shared_data TLS paths require a TCP listener".to_string());
-        }
-        return Ok(());
-    }
-    validate_shared_tcp_listener(listen, "shared_data.listen")?;
-    let has_cert = !cfg.shared_data_tls_cert_path.trim().is_empty();
-    let has_key = !cfg.shared_data_tls_key_path.trim().is_empty();
-    if has_cert != has_key {
-        return Err(
-            "shared_data.tls_cert_path and shared_data.tls_key_path must be supplied together"
-                .to_string(),
-        );
-    }
-    Ok(())
-}
-
-fn validate_shared_tcp_listener(address: &str, field: &str) -> Result<(), String> {
-    let addr = shared_tcp_address(address);
-    if addr
-        .parse::<std::net::SocketAddr>()
-        .is_ok_and(|address| address.ip().is_unspecified())
-    {
-        return Ok(());
-    }
-    validate_shared_tcp_address(address, field)
-}
-
-fn validate_shared_tcp_address(address: &str, field: &str) -> Result<(), String> {
-    let addr = shared_tcp_address(address);
-    let is_localhost = addr
-        .rsplit_once(':')
-        .map(|(host, _)| host.eq_ignore_ascii_case("localhost"))
-        .unwrap_or(false);
-    if is_localhost {
-        return Ok(());
-    }
-
-    let socket_addr = addr.parse::<std::net::SocketAddr>().map_err(|_| {
-        format!(
-            "{field} must use localhost or a literal loopback/private IP address, not a hostname ({addr})"
-        )
-    })?;
-    let ip = socket_addr.ip();
-    let allowed = match ip {
-        std::net::IpAddr::V4(ip) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
-        std::net::IpAddr::V6(ip) => {
-            ip.is_loopback() || ip.is_unique_local() || ip.is_unicast_link_local()
-        }
-    };
-    if allowed {
-        Ok(())
-    } else {
-        Err(format!(
-            "{field} must use a loopback/private-network address; WAN address rejected ({addr})"
-        ))
-    }
-}
-
-pub(crate) fn shared_tcp_address(address: &str) -> &str {
-    address
-        .strip_prefix("tcp://")
-        .or_else(|| address.strip_prefix("tls://"))
-        .unwrap_or(address)
-}
-
-/// Validates the client-side shared-data endpoint before any credentials are sent.
-pub fn validate_shared_data_endpoint(endpoint: &str) -> Result<(), String> {
-    let ep = endpoint.trim();
-    if ep.is_empty() {
-        return Ok(());
-    }
-    // Unix domain sockets are always accepted (permissions protect the socket).
-    if ep.starts_with('/') || ep.starts_with("unix://") {
-        return Ok(());
-    }
-    if ep.starts_with("tcp://") || ep.starts_with("tls://") {
-        return validate_shared_tcp_address(ep, "shared_data.endpoint");
-    }
-    Err(format!(
-        "shared_data.endpoint has unrecognized scheme: {ep}; \
-         expected tcp://, tls://, or a Unix socket path"
-    ))
 }
 
 pub(crate) fn config_dir() -> PathBuf {

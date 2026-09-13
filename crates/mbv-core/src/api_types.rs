@@ -434,7 +434,6 @@ pub struct PlaybackInfo {
 }
 
 pub const MBV_DIRECT_TCP_PORT_PREFIX: &str = "mbv-direct-tcp-port:";
-pub const MBV_SHARED_DATA_TCP_PORT_PREFIX: &str = "mbv-shared-data-tcp-port:";
 
 pub fn mbv_direct_tcp_port_command(port: u16) -> String {
     format!("{MBV_DIRECT_TCP_PORT_PREFIX}{port}")
@@ -443,18 +442,6 @@ pub fn mbv_direct_tcp_port_command(port: u16) -> String {
 pub fn parse_mbv_direct_tcp_port(commands: &[String]) -> Option<u16> {
     commands.iter().find_map(|cmd| {
         cmd.strip_prefix(MBV_DIRECT_TCP_PORT_PREFIX)
-            .and_then(|port| port.parse::<u16>().ok())
-            .filter(|port| *port > 0)
-    })
-}
-
-pub fn mbv_shared_data_tcp_port_command(port: u16) -> String {
-    format!("{MBV_SHARED_DATA_TCP_PORT_PREFIX}{port}")
-}
-
-pub fn parse_mbv_shared_data_tcp_port(commands: &[String]) -> Option<u16> {
-    commands.iter().find_map(|cmd| {
-        cmd.strip_prefix(MBV_SHARED_DATA_TCP_PORT_PREFIX)
             .and_then(|port| port.parse::<u16>().ok())
             .filter(|port| *port > 0)
     })

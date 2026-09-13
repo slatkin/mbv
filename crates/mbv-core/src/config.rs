@@ -2,7 +2,6 @@ include!("config_types_paths.rs");
 include!("config_types_setup.rs");
 include!("config_types_queue_state.rs");
 include!("config_test_support.rs");
-include!("config_tests_shared_data.rs");
 include!("config_types_feed.rs");
 include!("config_paths.rs");
 include!("config_state.rs");

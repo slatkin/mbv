@@ -21,12 +21,6 @@ pub mod player_owner_state;
 pub mod remote_player;
 pub(crate) mod remote_player_connect;
 pub mod service_runtime;
-pub mod shared_client;
-pub mod shared_protocol;
-pub mod shared_service;
-pub mod shared_state;
-pub mod shared_store;
-pub mod shared_worker;
 pub(crate) mod stream;
 pub mod ws;
 

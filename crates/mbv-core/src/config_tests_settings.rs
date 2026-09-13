@@ -205,9 +205,11 @@ fn save_config_settings_round_trips_consume_audio_flags() {
     cfg.save_playlist_on_consume_audio = true;
     cfg.quit_timeout_secs = 7;
     cfg.audio_device = "alsa/hw:Loopback,0,0".into();
+    std::fs::write(config_path(), "[shared_data]\nenabled = true\n").unwrap();
     save_config_settings(&cfg).unwrap();
 
     let saved = std::fs::read_to_string(config_path()).unwrap();
+    assert!(!saved.contains("[shared_data]"));
     let reparsed = parse_config(&saved).unwrap();
     assert!(reparsed.consume_audio);
     assert!(reparsed.save_playlist_on_consume_audio);
