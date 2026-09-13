@@ -541,6 +541,5 @@ fn owner_state_survives_a_queue_only_round_trip() {
 /// A library leaving the catalog retires its owner: the catalog-retention
 /// rule (moved inside from `reconcile_destination_mounts`) runs in the sync
 /// pass.
-
 #[path = "tests_tick_integration_library_panel_hero.rs"]
 mod tests_tick_integration_library_panel_hero;

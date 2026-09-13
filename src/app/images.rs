@@ -258,6 +258,9 @@ impl App {
     }
 }
 
+include!("image_fetch.rs");
+include!("image_protocol.rs");
+
 #[cfg(test)]
 mod tests {
     use super::{cover_fill_hero_box, series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
@@ -364,6 +367,3 @@ mod tests {
         );
     }
 }
-
-include!("image_fetch.rs");
-include!("image_protocol.rs");
