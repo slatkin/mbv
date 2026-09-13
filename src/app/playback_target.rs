@@ -209,6 +209,44 @@ impl App {
             .or_else(|| self.bare_in_flight_slot())
     }
 
+    /// The playhead presentation reads: the confirmed playback state, or --
+    /// while a selected slot awaits the playback owner's report -- that slot
+    /// with no progress. Presentation only: authority consumers (transport
+    /// gates, effects, reporting) keep `effective_playback_state`.
+    pub(super) fn displayed_playback_state(&self) -> super::PlaybackState {
+        let state = self.effective_playback_state();
+        let Some(index) = self.predicted_active_index() else {
+            return state;
+        };
+        if state.active && state.active_idx == index {
+            return state;
+        }
+        super::PlaybackState {
+            active: true,
+            active_idx: index,
+            // The owner is still playing the outgoing item, so its position
+            // says nothing about this slot: paint a fresh start against the
+            // selected item's own runtime until the owner confirms.
+            position_ticks: 0,
+            runtime_ticks: self
+                .playback_queue()
+                .item_at(index)
+                .map(|item| item.runtime_ticks())
+                .unwrap_or(0),
+            paused: false,
+        }
+    }
+
+    /// The position of the slot the user selected to play in the playing
+    /// queue, while the playback owner has not yet confirmed it.
+    fn predicted_active_index(&self) -> Option<usize> {
+        let target = self.pending_playback_slot()?;
+        self.queue_for_scope(self.playing_queue_scope())
+            .slots()
+            .iter()
+            .position(|slot| slot.slot_id == target)
+    }
+
     /// The Bare owner's desired-transition slot. The shell owns the local
     /// transition it just dispatched, exactly as the daemon owner owns the
     /// in-flight transition it publishes, so a locally selected slot projects

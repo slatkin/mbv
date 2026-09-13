@@ -307,7 +307,9 @@ impl App {
             self.queue_card_projection = projection;
             return;
         }
-        let playback = self.effective_playback_state();
+        // Presentation: the visual slot follows a selected-but-unconfirmed
+        // slot, so the artwork switches with the queue row's highlight.
+        let playback = self.displayed_playback_state();
         let active_source = if playback.active {
             let queue = self.playback_queue();
             queue

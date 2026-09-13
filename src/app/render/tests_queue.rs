@@ -691,15 +691,15 @@ fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
     );
 }
 
-/// A locally selected row paints as now-playing in the same frame, without
-/// waiting for the playback owner to report the track change
-/// (queue-canonical-list, "Selecting a different item to play"). The
-/// regression this guards is the projection gate: while something is already
-/// playing, an optimistic selection changes no observed active slot, so a
-/// fingerprint that ignores it rebuilds no rows and the highlight stays on the
-/// outgoing row until the owner confirms.
+/// A locally selected row paints as now-playing, and the playback panel
+/// follows it, in the same frame — without waiting for the playback owner to
+/// report the track change (queue-canonical-list, "Selecting a different item
+/// to play"). The regression this guards is the projection gate: while
+/// something is already playing, an optimistic selection changes no observed
+/// active slot, so a fingerprint that ignores it rebuilds no rows and both
+/// surfaces stay on the outgoing item until the owner confirms.
 #[test]
-fn local_play_selection_paints_the_selected_row_as_now_playing_immediately() {
+fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     /// Screen positions of `title` painted in the now-playing title role.
     fn now_playing_cells(buf: &ratatui::buffer::Buffer, title: &str) -> Vec<(u16, u16)> {
         let mut hits = Vec::new();
@@ -715,11 +715,37 @@ fn local_play_selection_paints_the_selected_row_as_now_playing_immediately() {
         hits
     }
 
-    let mut app = make_queue_app(3);
+    fn frame_text(buf: &ratatui::buffer::Buffer) -> String {
+        (0..buf.area().height)
+            .map(|y| {
+                (0..buf.area().width)
+                    .map(|x| buf[(x, y)].symbol().to_string())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Distinct runtimes so the panel's time text names the item it paints.
+    fn queue_item(name: &str, runtime_secs: i64) -> mbv_core::api::EmbyItem {
+        let mut item = crate::app::tests::make_item(name, "Movie");
+        item.id = name.to_string();
+        item.runtime_ticks = runtime_secs * mbv_core::api::TICKS_PER_SECOND;
+        item
+    }
+
+    let mut app = make_queue_app(0);
+    app.player_tab.set_items(
+        vec![
+            queue_item("Playing Film", 90),
+            queue_item("Selected Film", 600),
+        ],
+        0,
+    );
     {
         let mut status = app.player.status.lock().unwrap();
         status.active = true;
-        status.queue_len = 3;
+        status.queue_len = 2;
         status.current_idx = 0;
         status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
         status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
@@ -728,16 +754,35 @@ fn local_play_selection_paints_the_selected_row_as_now_playing_immediately() {
     // assertion frame.
     render_queue_view_to_terminal(&mut app, 100, 40);
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let buf = term.backend().buffer();
     assert!(
-        !now_playing_cells(term.backend().buffer(), "Queue Item 0").is_empty(),
+        !now_playing_cells(buf, "Playing Film").is_empty(),
         "the playing row starts as now-playing"
+    );
+    assert!(
+        now_playing_cells(buf, "Selected Film").is_empty(),
+        "the idle row starts without the now-playing colour"
+    );
+    assert!(
+        frame_text(buf).contains("0:45 / 1:30"),
+        "the panel starts on the playing item's live position"
     );
 
     app.dispatch(crate::app::action::Command::QueuePlayCursor(1));
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let buf = term.backend().buffer();
 
     assert!(
-        !now_playing_cells(term.backend().buffer(), "Queue Item 1").is_empty(),
+        !now_playing_cells(buf, "Selected Film").is_empty(),
         "the selected row paints as now-playing before the owner confirms it"
+    );
+    assert!(
+        now_playing_cells(buf, "Playing Film").is_empty(),
+        "the outgoing row gives up the now-playing colour to the selection"
+    );
+    let text = frame_text(buf);
+    assert!(
+        text.contains("Selected Film") && text.contains("0:00 / 10:00"),
+        "the panel predicts the selection at a fresh start: {text}"
     );
 }

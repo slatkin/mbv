@@ -39,6 +39,8 @@ fn progress_bucket(playback: PlaybackState) -> u16 {
     }
 }
 
+/// The observed active slot, or the predicted selection when nothing is
+/// playing yet (the pending slot is pre-filtered to the viewed queue).
 fn projected_active_target(
     queue: &super::PlayerTab,
     playback: PlaybackState,
@@ -50,7 +52,7 @@ fn projected_active_target(
             .get(playback.active_idx)
             .map(|slot| slot.slot_id)
     } else {
-        pending_slot.filter(|target| queue.slots().iter().any(|slot| slot.slot_id == *target))
+        pending_slot
     }
 }
 
@@ -81,21 +83,29 @@ impl Model {
 
         let scope = self.app.viewed_queue_scope();
         let playback = self.app.displayed_queue_playback_state();
+        // An optimistic selection counts only while its slot is still in the
+        // viewed queue: a stale target (removed by an edit or the owner) must
+        // not move the now-playing state off the row that is really playing.
         let pending_slot = self
             .app
             .queue_scope_is_playback(scope)
             .then(|| self.app.pending_playback_slot())
-            .flatten();
+            .flatten()
+            .filter(|target| {
+                self.app
+                    .queue_for_scope(scope)
+                    .slots()
+                    .iter()
+                    .any(|slot| slot.slot_id == *target)
+            });
         let fingerprint = {
             let queue = self.app.queue_for_scope(scope);
-            let in_queue =
-                |target: &QueueSlotId| queue.slots().iter().any(|s| s.slot_id == *target);
             QueueProjectionFingerprint {
                 revision: queue.revision().raw(),
                 scope,
                 active: playback.active,
                 active_target: projected_active_target(queue, playback, pending_slot),
-                pending_target: pending_slot.filter(in_queue),
+                pending_target: pending_slot,
                 progress_bucket: progress_bucket(playback),
             }
         };

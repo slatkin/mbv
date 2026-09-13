@@ -8,7 +8,10 @@ impl Model {
     /// strip cannot drift in the facts they show. The caller sets its own
     /// panel surface identity on top.
     pub(in crate::app) fn transport_projection(&mut self) -> PlaybackProjection {
-        let state = self.app.effective_playback_state();
+        // Presentation: a selected-but-unconfirmed slot already paints as the
+        // playhead here, at a fresh start, so the panel's title, artwork and
+        // time describe the same item the queue row highlights.
+        let state = self.app.displayed_playback_state();
         let title = if state.active {
             self.app
                 .playback_queue()
