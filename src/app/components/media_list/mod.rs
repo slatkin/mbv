@@ -621,6 +621,11 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .collect();
         self.multi_selection
             .retain(|target| present.contains(target));
+        self.cursor = if self.selectable.is_empty() {
+            0
+        } else {
+            cursor.min(self.selectable.len() - 1)
+        };
         if self
             .selection_anchor
             .as_ref()
@@ -628,11 +633,6 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         {
             self.selection_anchor = self.selected_target().cloned();
         }
-        self.cursor = if self.selectable.is_empty() {
-            0
-        } else {
-            cursor.min(self.selectable.len() - 1)
-        };
         self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
     }
 }

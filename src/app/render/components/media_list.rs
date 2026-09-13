@@ -98,6 +98,53 @@ mod wide_row_regression_tests {
     /// full-width selection treatment, but rows and scrollbar must start at the
     /// content flow's y-coordinate and use its height.
     #[test]
+    fn non_adjacent_multi_selected_rows_and_unfocused_cursor_paint_selected_surface() {
+        let rect = Rect::new(0, 0, 32, 4);
+        let selected_bg = palette::SURFACE_RESTING;
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            item("one", "One", None),
+            item("two", "Two", None),
+            item("three", "Three", None),
+            item("four", "Four", None),
+        ]);
+        list.toggle_selection(&"one".to_string());
+        list.toggle_selection(&"three".to_string());
+
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, false, selected_bg);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(0, 0)].bg, selected_bg);
+        assert_ne!(buf[(0, 1)].bg, selected_bg);
+        assert_eq!(buf[(0, 2)].bg, selected_bg);
+        assert_ne!(buf[(0, 3)].bg, selected_bg);
+
+        let mut single = WideMediaList::new();
+        single.set_content(vec![
+            item("cursor", "Cursor", None),
+            item("other", "Other", None),
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, 2)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(
+                    f,
+                    Rect::new(0, 0, 32, 2),
+                    Rect::new(0, 0, 32, 2),
+                    &mut single,
+                    false,
+                    selected_bg,
+                );
+            })
+            .unwrap();
+        assert_ne!(terminal.backend().buffer()[(0, 0)].bg, selected_bg);
+    }
+
+    #[test]
     fn distinct_claim_and_content_geometry_keeps_rows_on_the_retained_flow() {
         let claim = Rect::new(6, 0, 30, 6);
         let content = Rect::new(8, 2, 26, 2);

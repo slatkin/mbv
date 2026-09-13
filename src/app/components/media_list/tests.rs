@@ -406,6 +406,24 @@ fn responsive_presentations_reuse_one_media_list_owner() {
 }
 
 #[test]
+fn carrier_presentation_switch_preserves_multi_selection() {
+    let mut carrier = super::MediaListCarrier::new(super::Presentation::Wide);
+    carrier.set_content(vec![
+        lifecycle_item("one"),
+        lifecycle_item("two"),
+        lifecycle_item("three"),
+    ]);
+    carrier.toggle_selection(&"one".to_string());
+    carrier.toggle_selection(&"three".to_string());
+    assert_eq!(carrier.multi_selection(), &["one", "three"]);
+
+    carrier.set_presentation(super::Presentation::Inline, 3);
+    assert_eq!(carrier.multi_selection(), &["one", "three"]);
+    carrier.set_presentation(super::Presentation::Wide, 3);
+    assert_eq!(carrier.multi_selection(), &["one", "three"]);
+}
+
+#[test]
 fn browser_refresh_preserves_local_target_until_explicit_anchor_reanchors() {
     let rows = vec![
         lifecycle_item("a"),

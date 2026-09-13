@@ -113,4 +113,29 @@ mod tests {
         list.extend_selection_to(&4);
         assert_eq!(list.multi_selection(), &[2, 3, 4]);
     }
+
+    #[test]
+    fn refresh_keeps_surviving_multi_selection_and_reanchors_vanished_anchor() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&5);
+        list.toggle_selection(&7);
+        assert_eq!(list.multi_selection(), &[3, 5, 7]);
+
+        list.set_content(vec![item(2), item(5), item(7), item(8)]);
+        assert_eq!(list.multi_selection(), &[5, 7]);
+        assert_eq!(list.selected_target(), Some(&7));
+        assert_eq!(list.selection_anchor.as_ref(), Some(&7));
+    }
+
+    #[test]
+    fn refresh_reanchors_after_rows_above_cursor_are_removed() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&6);
+        list.set_content(vec![item(2), item(4), item(6), item(7)]);
+        assert_eq!(list.multi_selection(), &[6]);
+        assert_eq!(list.selected_target(), Some(&6));
+        assert_eq!(list.selection_anchor.as_ref(), Some(&6));
+    }
 }

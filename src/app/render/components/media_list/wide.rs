@@ -68,7 +68,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
             let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
             wide_media_row(
                 &rows[source_row],
-                Some(row) == selected_row && focused || multi_selected,
+                Some(row) == selected_row || multi_selected,
                 focused || multi_selected,
                 selected_bg,
                 inner_width,
