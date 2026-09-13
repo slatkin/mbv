@@ -68,18 +68,6 @@ pub struct App {
     pub(super) pending_emby_replacement: Option<super::service_startup::Startup>,
     pub(super) pending_audiobookshelf_replacement:
         Option<super::service_startup::AudiobookshelfPendingReplacement>,
-    pub(super) shared_client: Option<mbv_core::shared_client::SharedClient>,
-    pub(super) shared_reconnect_rx: Option<
-        mpsc::Receiver<
-            Result<
-                (
-                    mbv_core::shared_client::SharedClient,
-                    mbv_core::shared_state::SharedSnapshotResponse,
-                ),
-                String,
-            >,
-        >,
-    >,
     pub(super) player: PlayerProxy,
     /// Bare mode's owner-side transition state. Remote targets use their
     /// daemon-owned coordinator; this is still hosted here so local jumps
@@ -371,7 +359,6 @@ pub struct App {
     /// Local, machine-scoped feed-entry playback state (resume position and
     /// watched flag) for every configured subscription's entries. Loaded once
     /// at startup; rewritten on each playback lifecycle write. Replaces the
-    /// daemon-hosted table of the removed shared-data capability.
     pub(super) feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore,
     /// When a seek was issued during Feed playback, the slot_id is stored
     /// here. The next `OutputStarted` clears it and persists the resulting

@@ -422,8 +422,6 @@ impl Model {
 
             had_events |= self.app.drain_cast_events();
 
-            had_events |= self.app.drain_shared_events();
-
             // Feed results rebuild Home's Feeds pill via `FeedsLatestRebuilt`,
             // drained next loop pass; re-project for the other inputs (5.3d).
             if self.app.drain_feed_tab_results() {

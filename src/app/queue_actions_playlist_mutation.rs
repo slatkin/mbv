@@ -226,7 +226,6 @@ impl App {
                 log::warn!(target: "queue", "failed to save queue state: {e}");
             }
         }
-        self.persist_shared_queue_state(&state, false);
     }
 
     /// Like `save_queue_state`, but never deletes the on-disk snapshot when the
@@ -243,29 +242,10 @@ impl App {
                 log::warn!(target: "queue", "failed to save queue state (no-clear): {e}");
             }
         }
-        self.persist_shared_queue_state(&state, false);
     }
 
     pub(super) fn save_queue_state_after_explicit_clear(&mut self) {
         self.save_queue_state();
-        let state = self.build_queue_state();
-        self.persist_shared_queue_state(&state, true);
-    }
-
-    pub(super) fn persist_shared_queue_state(
-        &mut self,
-        state: &crate::config::QueueState,
-        allow_empty: bool,
-    ) {
-        if state.items.is_empty() && !allow_empty {
-            return;
-        }
-        if let Ok(value) = serde_json::to_value(state) {
-            let _ = self.persist_shared_document(
-                mbv_core::shared_state::SharedDocumentKind::QueueState,
-                value,
-            );
-        }
     }
 
     /// Wraps `restore_queue_state` with the guard startup needs: a local-
@@ -277,14 +257,6 @@ impl App {
     /// in the cold case.
     pub(in crate::app) fn maybe_restore_queue_state(&mut self) {
         if self.is_local_daemon() {
-            return;
-        }
-        if self.shared_client.as_ref().is_some_and(|client| {
-            matches!(
-                client.state(),
-                mbv_core::shared_client::SharedClientState::Shared
-            )
-        }) {
             return;
         }
         self.restore_queue_state();

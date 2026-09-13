@@ -2,40 +2,47 @@
 
 ## Purpose
 Provide per-user, per-entry feed playback state (resume position and watched flag) as durable machine-local state, stored as independent keyed rows with last-write-wins semantics so unbounded feed entries never share a single revisioned document. The state does not roam between machines.
+
 ## Requirements
+
 ### Requirement: Feed entry state is keyed and per-user
 
-The service SHALL store feed entry playback state as independent rows keyed by `(user_id, feed_id, entry_guid)`, each holding at least `position_ticks` and a `played` flag. Rows SHALL be isolated per authenticated Emby user exactly as the existing shared documents are: a client SHALL access only rows belonging to its own authenticated user ID.
+The client SHALL store feed entry playback state in a local state file under `state_dir()`, as independent rows keyed by `(user_id, feed_id, entry_guid)`, each holding at least `position_ticks` and a `played` flag. Rows SHALL remain isolated per Emby user: a client SHALL read and write only rows belonging to its own authenticated user ID.
 
-Feed entry state SHALL be stored in its own keyed table, separate from the revisioned shared-documents store, and SHALL NOT be one of the fixed shared-document kinds.
+Feed entry state SHALL be stored separately from every other persisted document and SHALL NOT be written into `config.toml`. It SHALL NOT be a revisioned state document and SHALL NOT use compare-and-swap.
 
 #### Scenario: Round-trip of one entry
 
 - **WHEN** a client writes state for `(user_id, feed_id, entry_guid)` and later reads that same key
-- **THEN** the service SHALL return the most recently written `position_ticks` and `played`
+- **THEN** the client SHALL return the most recently written `position_ticks` and `played`
 
 #### Scenario: Two users, same feed and entry
 
-- **WHEN** two clients authenticated as different Emby users write the same `(feed_id, entry_guid)`
-- **THEN** each client SHALL read back only the value it wrote under its own user ID
+- **WHEN** two Emby users have state for the same `(feed_id, entry_guid)` on the same machine
+- **THEN** each SHALL read back only the value written under its own user ID
+
+#### Scenario: State survives a restart
+
+- **WHEN** a client exits after writing entry state and starts again on the same machine
+- **THEN** the stored position and played flag SHALL still be readable
 
 ### Requirement: Feed entry writes are last-write-wins
 
-Feed entry writes SHALL NOT use optimistic revisions or compare-and-swap. A write SHALL unconditionally replace any existing row for its key. No feed entry operation SHALL require an atomic transaction spanning multiple entries or any shared document.
+Feed entry writes SHALL NOT use optimistic revisions or compare-and-swap. A write SHALL unconditionally replace any existing row for its key. The client SHALL be the only writer of the state file, and no feed entry operation SHALL require a transaction spanning multiple entries or any other persisted document.
 
 #### Scenario: Concurrent writes to the same entry
 
-- **WHEN** two writes for the same key are committed in sequence
-- **THEN** the later committed write SHALL be the value subsequently read, with no stale-revision rejection
+- **WHEN** two writes for the same key are stored in sequence
+- **THEN** the later write SHALL be the value subsequently read, with no stale-revision rejection
 
 #### Scenario: Write to an absent entry
 
 - **WHEN** a client writes state for a key that has no existing row
-- **THEN** the service SHALL create the row from that value without requiring the row to be absent or present
+- **THEN** the client SHALL create the row from that value without requiring the row to be absent or present
 
 ### Requirement: A feed's entries can be scanned by prefix
 
-The service SHALL support reading all stored entry rows for a given `(user_id, feed_id)` prefix in a single operation, returning each entry's `entry_guid`, `position_ticks`, and `played`.
+The client SHALL support reading all stored entry rows for a given `(user_id, feed_id)` prefix in a single operation, returning each entry's `entry_guid`, `position_ticks`, and `played`.
 
 #### Scenario: Prefix scan returns a feed's entries
 
@@ -45,29 +52,23 @@ The service SHALL support reading all stored entry rows for a given `(user_id, f
 #### Scenario: Prefix scan of a feed with no state
 
 - **WHEN** a client scans a `(user_id, feed_id)` for which no rows exist
-- **THEN** the service SHALL return an empty result rather than an error
-
-### Requirement: Feed entry state is negotiated as an additive capability
-
-Support for feed entry state operations SHALL be advertised as an additive shared-data capability string during the handshake, without changing the shared-data protocol version. A client SHALL use feed entry operations only against a daemon that advertises the capability; against a daemon that does not, the client SHALL treat feed entry state as unavailable and fall back to local behavior without error.
-
-#### Scenario: Daemon advertises the capability
-
-- **WHEN** a client connects to a daemon whose handshake advertises the feed-entry-state capability
-- **THEN** the client MAY issue feed entry get, put, and prefix-scan operations
-
-#### Scenario: Daemon lacks the capability
-
-- **WHEN** a client connects to a daemon that does not advertise the feed-entry-state capability
-- **THEN** the client SHALL NOT issue feed entry operations and SHALL treat feed entry state as unavailable without reporting a protocol error
+- **THEN** the scan SHALL return an empty result rather than an error
 
 ### Requirement: Feed entry storage failure is isolated from playback
 
-The daemon SHALL acknowledge a feed entry write only after it is durably committed. Feed entry storage failures SHALL fail the affected operation without stopping daemon playback and without corrupting previously committed rows. When feed entry state is unavailable, browsing and playback SHALL remain available.
+A feed entry write SHALL be complete only once the state file has been durably replaced. A failed write SHALL leave the previously written state intact and SHALL NOT be reported as committed.
+
+Feed entry state failures — a missing, unreadable, or invalid state file, or a failed write — SHALL NOT stop playback, block feed browsing, or prevent startup. The client SHALL record the failure and continue with unplayed, zero-position entries.
 
 #### Scenario: Feed entry commit fails
 
-- **WHEN** durable commit of a feed entry write fails
-- **THEN** the service SHALL not acknowledge the write as committed
-- **THEN** daemon playback SHALL continue and previously committed rows SHALL remain intact
+- **WHEN** a durable write of feed entry state fails
+- **THEN** the client SHALL not treat the write as complete
+- **THEN** previously written rows SHALL remain intact and readable
+- **THEN** playback SHALL continue
 
+#### Scenario: State file is unreadable
+
+- **WHEN** the state file is missing, unreadable, or invalid
+- **THEN** feed browsing and playback SHALL remain available
+- **THEN** fetched entries SHALL be treated as unplayed with zero position

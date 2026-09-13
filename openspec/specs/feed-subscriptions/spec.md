@@ -5,7 +5,7 @@ The user can subscribe to RSS/podcast/video feeds in local configuration, browse
 ## Requirements
 ### Requirement: Subscriptions are stored in local config
 
-Feed subscriptions SHALL be stored in `config.toml`, each carrying a display name, a feed URL, and a kind (audio or video). Subscription configuration SHALL remain local to each machine. Per-entry playback position and played state SHALL be stored separately as roaming feed-entry state and SHALL NOT be written into `config.toml`.
+Feed subscriptions SHALL be stored in `config.toml`, each carrying a display name, a feed URL, and a kind (audio or video). Subscription configuration SHALL remain local to each machine. Per-entry playback position and played state SHALL be stored separately as local feed-entry state and SHALL NOT be written into `config.toml`.
 
 #### Scenario: Subscription persists across restarts
 
@@ -17,14 +17,19 @@ Feed subscriptions SHALL be stored in `config.toml`, each carrying a display nam
 - **WHEN** a feed entry gains a playback position or played state
 - **THEN** the subscription's `config.toml` entry SHALL remain unchanged
 
+#### Scenario: Playback state is machine-local
+
+- **WHEN** an entry is played and the client is restarted on the same machine
+- **THEN** the entry SHALL show its stored playback position and watched state
+
 #### Scenario: No playback state is remembered
 
-- **WHEN** an entry is played and the client is restarted
-- **THEN** the entry SHALL show no remembered playback position or watched state
+- **WHEN** an entry is played on one machine and the client starts on a different machine
+- **THEN** that machine SHALL show no remembered playback position or watched state
 
 #### Scenario: A second machine has no matching subscription
 
-- **WHEN** roaming entry state exists but the current machine does not configure the matching feed URL
+- **WHEN** stored entry state exists but the current machine does not configure the matching feed URL
 - **THEN** the state SHALL NOT create a subscription or make that feed appear in the Feeds tab
 
 ### Requirement: The Feeds tab appears only when a subscription exists
@@ -43,7 +48,7 @@ A Feeds tab SHALL be presented as the last tab. It SHALL be visible when at leas
 
 ### Requirement: The Feeds tab lists entries grouped by subscription
 
-The Feeds tab SHALL group entries by subscription and SHALL offer an "All" group that lists every entry across subscriptions sorted by publish date descending, with entries lacking a publish date ordered last. After a feed refresh, each parsed entry SHALL be combined with available roaming state for the same authenticated user, feed identity, and entry identity before it appears in its subscription group or the All group.
+The Feeds tab SHALL group entries by subscription and SHALL offer an "All" group that lists every entry across subscriptions sorted by publish date descending, with entries lacking a publish date ordered last. After a feed refresh, each parsed entry SHALL be combined with available local state for the same authenticated user, feed identity, and entry identity before it appears in its subscription group or the All group.
 
 #### Scenario: Grouped by subscription
 
@@ -67,28 +72,34 @@ The Feeds tab SHALL group entries by subscription and SHALL offer an "All" group
 
 #### Scenario: Shared entry state is unavailable
 
-- **WHEN** the shared-data daemon is disconnected, unsupported, or returns a state-read failure during refresh
+- **WHEN** stored entry state cannot be read during refresh
 - **THEN** fetched entries SHALL remain browsable and playable with zero position and unplayed state
 - **AND** the Feeds tab SHALL NOT present the entries or feed as unavailable
 
 ### Requirement: Feed entries refresh only on explicit user action
 
-Feed entries and their roaming playback state SHALL be refreshed only when the user requests it with the `r` key while the Feeds tab is active. Each successful feed fetch SHALL use one feed-scoped state read rather than one state read per entry. The client SHALL NOT auto-refresh on tab open, on a timer, or when the watched filter changes.
+Feed entries SHALL be fetched and their stored playback state applied only when the user requests it with the `r` key while the Feeds tab is active. Each successful refresh SHALL read stored state once for the whole subscription rather than once per entry. The client SHALL NOT auto-refresh on tab open, on a timer, or when the watched filter changes.
 
 #### Scenario: Manual refresh
 
 - **WHEN** the user presses `r` on the Feeds tab
-- **THEN** the subscriptions SHALL be re-fetched and the entry lists updated with currently available roaming state
+- **THEN** the subscriptions SHALL be re-fetched and the entry lists updated with currently stored state
+
+#### Scenario: Stored state is applied on refresh
+
+- **WHEN** a refresh returns an entry that has stored playback state
+- **THEN** the entry SHALL show that position and played state without a per-entry state read
 
 #### Scenario: State changes on another machine
 
 - **WHEN** a matching feed entry gains a new position or played state on another machine
-- **THEN** pressing `r` SHALL make that state visible on the current machine after the shared state write is available
+- **THEN** this machine's stored state SHALL remain unchanged
+- **AND** pressing `r` SHALL NOT make the other machine's state visible here
 
 #### Scenario: No automatic refresh
 
 - **WHEN** the Feeds tab is opened or re-opened without pressing `r`
-- **THEN** the previously fetched and hydrated entries SHALL be shown without an automatic feed or state read
+- **THEN** the previously fetched entries SHALL be shown without an automatic feed or state read
 
 #### Scenario: Changing the watched filter
 

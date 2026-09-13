@@ -30,7 +30,6 @@ pub enum UserEvent {
     SearchReady(SearchGen),
     Session(SessionGen),
     Cast(CastGen),
-    SharedData(SharedRev),
     Feed(FeedKey, Generation),
     Image(ImageKey),
     Websocket(WsTick),
@@ -92,17 +91,6 @@ pub struct CastGen {
     /// Cast generation counter; the shell compares this against the current
     /// cast generation to discard stale cast events.
     pub generation: u64,
-}
-
-/// Shared-data revision carried by `SharedData` (design Table A row 11).
-///
-/// Fleshed out (task 1.6); not yet injected by the shell shared-data
-/// receiver — wired at per-surface conversion (tasks 3.x/4.x).
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct SharedRev {
-    /// Shared revision counter; the shell compares this against the last-applied
-    /// shared revision to discard stale shared-data updates.
-    pub rev: u64,
 }
 
 /// Feed key identifier carried by `Feed` (design Table A rows 12-13, 19).

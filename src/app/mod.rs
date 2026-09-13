@@ -79,7 +79,6 @@ mod session_command_actions;
 mod session_connect;
 mod session_switch;
 mod settings;
-mod shared_sync;
 mod shell_draw;
 mod shuffle_folder_actions;
 mod types_audiobookshelf_browse;

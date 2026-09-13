@@ -348,8 +348,8 @@ impl App {
     }
 
     /// The status row's right segment: queue-source scope label, username,
-    /// and the service-state glyphs (Emby, Audiobookshelf, stay-alive,
-    /// shared-data) — always visible, coloured by state. Built shell-side
+    /// and the service-state glyphs (Emby, Audiobookshelf, stay-alive) —
+    /// always visible, coloured by state. Built shell-side
     /// (task 2.2); the mounted `StatusBarPanel` positions and paints it.
     pub(in crate::app) fn status_bar_right_spans(&self) -> Vec<Span<'static>> {
         let username = {
@@ -360,16 +360,6 @@ impl App {
             palette::TEXT_FOCUS_ACCENT
         } else if self.is_local_daemon() {
             palette::STATUS_ERROR
-        } else {
-            palette::TEXT_MUTED
-        };
-        let shared_color = if self.shared_client.as_ref().is_some_and(|client| {
-            matches!(
-                client.state(),
-                mbv_core::shared_client::SharedClientState::Shared
-            )
-        }) {
-            palette::TEXT_METADATA
         } else {
             palette::TEXT_MUTED
         };
@@ -440,8 +430,8 @@ impl App {
                     .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
             ));
         }
-        // Service-state glyphs — Emby, Audiobookshelf, stay-alive, shared-data —
-        // always visible, coloured by state (brand colour when active,
+        // Service-state glyphs — Emby, Audiobookshelf, stay-alive — always
+        // visible, coloured by state (brand colour when active,
         // grey when inactive; stay-alive daemon lost = yellow). One
         // leading space per glyph, no trailing space.
         right_spans.extend([
@@ -470,10 +460,6 @@ impl App {
                 },
                 Style::default().fg(alive_color),
             ),
-            Span::raw(" "),
-            Span::styled("\u{F1C0}", Style::default().fg(shared_color)),
-            // Right edge of the segment: the shared-data glyph gets its own
-            // trailing margin like a pill.
             Span::raw(" "),
         ]);
         // Remote queue scope is omitted here: the active queue is already
@@ -555,7 +541,7 @@ pub(in crate::app) struct StatusBarRegions {
 /// Persistent bottom status bar. Left side: volume, connection,
 /// and mute status groups. Right side: queue source/save-state/scope
 /// detail and the service-state glyphs (Emby, Audiobookshelf,
-/// stay-alive, shared-data).
+/// stay-alive).
 /// The playlist status pill renders in the left queue panel instead.
 pub(in crate::app) fn render_status_bar(
     f: &mut Frame,

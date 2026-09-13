@@ -52,8 +52,6 @@ impl App {
             emby_setup_rx: init.emby_setup_rx,
             pending_emby_replacement: None,
             pending_audiobookshelf_replacement: None,
-            shared_client: None,
-            shared_reconnect_rx: None,
             player: init.player,
             bare_owner,
             mpris: None,
@@ -551,7 +549,6 @@ impl App {
         app.player_endpoint = Some(endpoint.clone());
         app.home_is_local_daemon = endpoint.is_local();
         app.sync_subtitle_prefs_to_player();
-        app.initialize_shared_state();
         app.launched_as_remote = true;
         debug_assert_eq!(
             app.player.is_remote(),

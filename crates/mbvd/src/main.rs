@@ -8,7 +8,7 @@ use std::time::Duration;
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn print_usage() {
-    eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--export-shared-data] [--connect emby] [--connect abs] [--disconnect abs] [--version]");
+    eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]");
 }
 
 fn daemon_running() -> bool {
@@ -47,7 +47,6 @@ enum Action {
     ConnectAbs,
     DisconnectAbs,
     Quit,
-    Export,
     Help,
     Version,
 }
@@ -62,7 +61,6 @@ fn parse_action(args: &[String]) -> Result<Action, String> {
             "--help" | "-h" => select_action(&mut action, Action::Help)?,
             "--version" | "-V" => select_action(&mut action, Action::Version)?,
             "--quit" | "-q" => select_action(&mut action, Action::Quit)?,
-            "--export-shared-data" => select_action(&mut action, Action::Export)?,
             "--connect" => {
                 i += 1;
                 let Some(service) = args.get(i) else {
@@ -441,14 +439,6 @@ fn run() -> Result<(), String> {
         Action::DisconnectAbs => return disconnect_abs(),
         Action::Quit => {
             println!("{}", stop_daemon()?);
-            return Ok(());
-        }
-        Action::Export => {
-            if daemon_running() {
-                return Err("mbvd: a daemon is already running".to_string());
-            }
-            let db = mbv_core::shared_store::open_existing_shared_db()?;
-            println!("{}", mbv_core::shared_worker::export_json_pretty(&db)?);
             return Ok(());
         }
         Action::Serve { audio_only } => audio_only,

@@ -10,6 +10,3 @@ audio_pipe_path = "/tmp/mbv-pipe"
 audio_pipe_samplerate = 44100
 audio_pipe_bitdepth = 16
 
-[shared_data]
-# Clients discover this daemon through its authenticated Emby session.
-enabled = false

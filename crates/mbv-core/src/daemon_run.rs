@@ -137,40 +137,6 @@ pub fn run_with_options(
 
     let mut direct_commands = Vec::new();
 
-    // Shared-data hosting is optional and starts only after the playback and
-    // local ctrl listener are operational. A database failure disables this
-    // feature without affecting daemon playback.
-    {
-        let shared_config = config.clone();
-        if emby_runtime.is_some() && shared_config.shared_data_enabled {
-            match crate::shared_store::open_shared_db() {
-                Ok(db) => {
-                    let store =
-                        crate::shared_worker::spawn_shared_store_worker(Arc::new(Mutex::new(db)));
-                    let shared_port = crate::shared_service::start_shared_service(
-                        client.clone(),
-                        store,
-                        &shared_config,
-                    );
-                    if let Some(port) = shared_port {
-                        if port > 0 {
-                            direct_commands
-                                .push(crate::api::mbv_shared_data_tcp_port_command(port));
-                        }
-                        log::info!(target: "shared_data", "shared-data hosting enabled");
-                    } else {
-                        log::warn!(target: "shared_data", "shared-data hosting unavailable; playback remains operational");
-                    }
-                }
-                Err(error) => {
-                    log::error!(
-                        target: "shared_data",
-                        "shared-data database unavailable; playback remains operational: {error}"
-                    );
-                }
-            }
-        }
-    }
     // --- From here on: network/Emby-session-visibility setup (protocol
     // negotiation metadata, capability registration). Local control is
     // already up and serving connections above. ---

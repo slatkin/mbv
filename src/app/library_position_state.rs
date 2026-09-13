@@ -7,18 +7,17 @@ use std::time::{Duration, Instant};
 /// How long a library-position change must sit unflushed before the
 /// deferred write in `flush_library_position_if_idle` fires. Keeps rapid
 /// scrolling (arrow-key repeat, mouse wheel, PageUp/PageDown) from doing a
-/// disk write plus a blocking shared-document round trip on every single
-/// step -- see `save_default_library_position`'s doc comment.
+/// disk write on every single step -- see `save_default_library_position`'s
+/// doc comment.
 const LIBRARY_POSITION_FLUSH_DELAY: Duration = Duration::from_millis(150);
 
 impl App {
     /// Records the current position of `lib_idx` in memory (#361 collapsed
     /// the old Default/Power scope split -- there is one view and one saved
-    /// position per library now). The disk write and shared-document sync
-    /// are deferred: this is called on every cursor move (arrow keys,
-    /// PageUp/Down, mouse wheel), so doing that I/O here would put a
-    /// synchronous disk write -- and, when a shared/roaming daemon is
-    /// attached, a blocking IPC round trip -- on every scroll tick. Callers
+    /// position per library now). The disk write is deferred: this is called
+    /// on every cursor move (arrow keys, PageUp/Down, mouse wheel), so doing
+    /// that I/O here would put a synchronous disk write on every scroll tick.
+    /// Callers
     /// that need the in-memory state (tests, immediate reads) still see it
     /// updated synchronously; only the persistence is deferred, via
     /// `flush_library_position_if_idle` (called from the run loop) and
@@ -70,17 +69,6 @@ impl App {
         }
         self.library_position_dirty = false;
         crate::config::save_library_position_state(&self.library_position_state);
-        if let Ok(value) = serde_json::to_value(&self.library_position_state) {
-            if let Err(error) = self.persist_shared_document(
-                mbv_core::shared_state::SharedDocumentKind::LibraryPositionState,
-                value,
-            ) {
-                log::warn!(
-                    target: "shared_data",
-                    "library position persistence failed: {error}"
-                );
-            }
-        }
     }
 
     /// Whether `lib_idx` is the library currently visible in the left
@@ -113,12 +101,6 @@ impl App {
             .libraries
             .insert(lib.library.id.clone(), position);
         crate::config::save_library_position_state(&self.library_position_state);
-        if let Ok(value) = serde_json::to_value(&self.library_position_state) {
-            let _ = self.persist_shared_document(
-                mbv_core::shared_state::SharedDocumentKind::LibraryPositionState,
-                value,
-            );
-        }
     }
 
     pub(super) fn focus_queue_initial_item(&mut self) {
@@ -216,12 +198,6 @@ impl App {
             return;
         }
         crate::config::save_library_position_state(&self.library_position_state);
-        if let Ok(value) = serde_json::to_value(&self.library_position_state) {
-            let _ = self.persist_shared_document(
-                mbv_core::shared_state::SharedDocumentKind::LibraryPositionState,
-                value,
-            );
-        }
     }
 
     fn audiobookshelf_position_key(&self, index: usize) -> Option<String> {

@@ -28,7 +28,6 @@ pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
 pub const CTRL_CAP_LIFECYCLE_SHUTDOWN: &str = "lifecycle-shutdown";
-pub const CTRL_CAP_SHARED_MBV_STATE: &str = "shared-mbv-state-v1";
 /// Daemon and client exchange item-generic unified queue state and operations.
 /// The only queue shape; the legacy `CtrlState`/`PlayItems`/`AdoptQueue`/
 /// `LoadFeed` split-item shapes were removed (ADR 0020).

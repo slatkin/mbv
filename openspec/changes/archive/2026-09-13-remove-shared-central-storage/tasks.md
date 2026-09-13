@@ -43,7 +43,7 @@
 
 ## 2. Remove the shared-data capability
 
-- [ ] 2.1 Delete the TUI client surface: the remainder of `src/app/shared_sync.rs`, every
+- [x] 2.1 Delete the TUI client surface: the remainder of `src/app/shared_sync.rs`, every
   `persist_shared_document` call site (`queue_actions_playlist_mutation.rs`,
   `library_position_state.rs`, `run_loop_events_teardown.rs`), `App.shared_client` /
   `shared_reconnect_rx` (`app_struct.rs`), startup initialization (`construct.rs`),
@@ -53,13 +53,13 @@
   `rg -n "shared_client|SharedClient|shared_sync|persist_roaming" src/` returns nothing and
   `cargo nextest run -p mbv` is green.
 
-- [ ] 2.2 Delete the core modules (`shared_client`, `shared_client_transport`,
+- [x] 2.2 Delete the core modules (`shared_client`, `shared_client_transport`,
   `shared_client_tests`, `shared_service`, `shared_protocol`, `shared_state`, `shared_store`,
   `shared_worker`), their `lib.rs` exports, and the `redb` dependency from the workspace and
   `mbv-core` manifests. Verify `cargo check -p mbv-core` passes, `rg -n redb --glob '!Cargo.lock'`
   returns nothing outside archived change docs, and the remaining core tests are green.
 
-- [ ] 2.3 Remove daemon-side hosting and advertisement: the shared-data hosting block in
+- [x] 2.3 Remove daemon-side hosting and advertisement: the shared-data hosting block in
   `daemon_run.rs`, the `mbv-shared-data-tcp-port` session `supported_commands` entry and its
   parser, and the unused `CTRL_CAP_SHARED_MBV_STATE` constant. Do NOT remove `daemon_core.rs`'s
   `SharedQueueState` — it is ctrl snapshot state (queue, source, observed active slot) and is
@@ -68,7 +68,7 @@
   nothing and the daemon test suites are green (including the `mbv-shared-data-tcp-port` parser
   tests in `api_tests_client.rs`).
 
-- [ ] 2.4 Remove the configuration surface: the five `shared_data_*` fields, their parse and
+- [x] 2.4 Remove the configuration surface: the five `shared_data_*` fields, their parse and
   save paths, and their validation; drop a leftover `[shared_data]` section on the next
   settings save; remove the sections from `dist/config.toml` and `dist/mbvd.toml`. Verify with
   a config test asserting a saved file no longer contains `[shared_data]`, removal of the
@@ -77,26 +77,26 @@
   to its own `config.toml`, while a machine that edited routes keeps them
   (`shell_overlays_menus.rs:696` saves config before `persist_roaming_settings` at `:700`).
 
-- [ ] 2.5 Remove `mbvd --export-shared-data`: the action, its usage/message strings, and its
+- [x] 2.5 Remove `mbvd --export-shared-data`: the action, its usage/message strings, and its
   tests. Verify `cargo nextest run -p mbvd` is green and the documented usage line lists no
   export action.
 
-- [ ] 2.6 Update the durable docs: delete the six "Shared data and roaming" terms from
+- [x] 2.6 Update the durable docs: delete the six "Shared data and roaming" terms from
   `CONTEXT.md`, rewrite `FeedEntry`'s roaming sentence, and clear the three shared-data
   mentions in `docs/architecture/interactive-tui-component-map.md`. Verify
   `rg -n "shared-mbv-state|shared data|shared-data|roaming" CONTEXT.md docs/` returns nothing
   that describes a live facility.
 
-- [ ] 2.7 Final gates on the whole change: `cargo fmt --all -- --check`, `cargo clippy
+- [x] 2.7 Final gates on the whole change: `cargo fmt --all -- --check`, `cargo clippy
   --workspace --all-targets`, the full `cargo nextest run`, and
   `openspec validate remove-shared-central-storage --strict`. All green with no
   `#[allow(dead_code)]` added to silence removal fallout.
 
-- [ ] 2.8 Update #687 with this change's outcome: the store's `redb` harness — the issue's
+- [x] 2.8 Update #687 with this change's outcome: the store's `redb` harness — the issue's
   byte-weight site, already fixed in 47926ae0 — is deleted outright, and the remaining sweep
   of `temp_dir()` sites stays open. Verify with the posted comment, or record why none is
   needed if the issue was closed by 47926ae0.
 
-- [ ] 2.9 Archive the change, syncing the five capability deltas into `openspec/specs/`
+- [x] 2.9 Archive the change, syncing the five capability deltas into `openspec/specs/`
   without asking (project archive guidance). Verify `openspec validate --specs` after archive
   and that `openspec/specs/shared-mbv-state/` no longer exists.

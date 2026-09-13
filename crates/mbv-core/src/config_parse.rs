@@ -280,33 +280,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .map(|v| v.max(1) as u64)
         .unwrap_or(10);
 
-    // ── Shared-data configuration ────────────────────────────────────
-    let shared = doc.get("shared_data");
-    let shared_data_enabled = shared
-        .and_then(|s| s.get("enabled"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let shared_data_listen = shared
-        .and_then(|s| s.get("listen"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let shared_data_tls_cert_path = shared
-        .and_then(|s| s.get("tls_cert_path"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let shared_data_tls_key_path = shared
-        .and_then(|s| s.get("tls_key_path"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-    let shared_data_endpoint = shared
-        .and_then(|s| s.get("endpoint"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
-
     let server_url = server
         .map(|s| get_str(s, "url"))
         .unwrap_or_default()
@@ -381,11 +354,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         auto_reconnect,
         idle_feed_rss_url,
         idle_feed_rotation_secs,
-        shared_data_enabled,
-        shared_data_listen,
-        shared_data_tls_cert_path,
-        shared_data_tls_key_path,
-        shared_data_endpoint,
         feeds,
     })
 }
