@@ -243,15 +243,7 @@ impl Model {
                 let _ = self.select_queue_slot(scope, slot_id);
             }
             QueueRequest::Play { scope, slot_id } => {
-                let index = self.select_queue_slot(scope, slot_id);
-                log::info!(
-                    target: "queue_play",
-                    "component play request: scope={scope:?} slot={slot_id:?} resolved_index={index:?} \
-                     viewed_scope={:?} playing_scope={:?}",
-                    self.app.viewed_queue_scope(),
-                    self.app.playing_queue_scope(),
-                );
-                if let Some(index) = index {
+                if let Some(index) = self.select_queue_slot(scope, slot_id) {
                     self.app
                         .dispatch(super::action::Command::QueuePlayCursor(index));
                 }

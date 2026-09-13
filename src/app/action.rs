@@ -400,12 +400,10 @@ impl App {
                     (n, item)
                 };
                 if t >= n {
-                    log::info!(target: "queue_play", "play cursor: OUT OF RANGE idx={t} len={n}");
                     return false;
                 }
                 // Validate the item at the cursor exists.
                 let Some(item) = item else {
-                    log::info!(target: "queue_play", "play cursor: NO ITEM AT idx={t}");
                     return false;
                 };
                 let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
@@ -492,14 +490,8 @@ impl App {
                 if active && self.queue_scope_is_playback(scope) {
                     let is_audio = item.is_audio();
                     if t == current_idx && is_audio {
-                        log::info!(target: "queue_play", "play cursor: RESTART idx={t} (seek to start)");
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                     } else if t != current_idx {
-                        log::info!(
-                            target: "queue_play",
-                            "play cursor: JUMP idx={t} current_idx={current_idx} slot_id={slot_id:?} remote={}",
-                            self.player.is_remote(),
-                        );
                         if self.player.is_remote() {
                             let Some(slot_id) = slot_id else {
                                 return false;
@@ -566,12 +558,6 @@ impl App {
                                 .min(eligible.len().saturating_sub(1))
                         });
                     let headless = eligible.iter().all(|item| item.is_audio());
-                    log::info!(
-                        target: "queue_play",
-                        "play cursor: COLD START idx={t} start_idx={start_idx} eligible={} item={:?}",
-                        eligible.len(),
-                        item.display_name(),
-                    );
                     self.player.submit_queue(
                         eligible,
                         start_idx,

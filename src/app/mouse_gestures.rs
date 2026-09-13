@@ -74,10 +74,6 @@ impl App {
             .slots()
             .iter()
             .position(|slot| slot.slot_id == slot_id)?;
-        log::info!(
-            target: "queue_play",
-            "mouse click: slot={slot_id:?} resolved_index={index}"
-        );
         self.mark_queue_cursor_user_active();
         self.displayed_queue_mut().queue_cursor = index;
         Some(index)
