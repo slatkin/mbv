@@ -4,8 +4,8 @@
 
 ## 2. Remove Observer-Driven Queue Mutation
 
-- [ ] 2.1 Remove poll-time occurrence observation, completion consume, queue-slot projection, queue lineage used only by Tracking, content-ID cursor movement, and the previous-item watched/progress refresh event; amend one existing Session integration test to prove item changes update `connected_session_state` while queue slots, cursor, dirty state, and playlist mutation state stay unchanged, then run its focused `cargo nextest run -p mbv` filter.
-- [ ] 2.2 Remove Tracking-specific retirement calls, queue-edit confirmation and pending-action branches while preserving now-playing removal and unsaved-playlist safeguards; delete superseded reconciliation and mutation tests, then run the focused queue mutation, playlist save, Session lifecycle, and queue-scope tests with `cargo nextest run -p mbv`.
+- [x] 2.1 Remove poll-time occurrence observation, completion consume, queue-slot projection, queue lineage used only by Tracking, content-ID cursor movement, and the previous-item watched/progress refresh event; amend one existing Session integration test to prove item changes update `connected_session_state` while queue slots, cursor, dirty state, and playlist mutation state stay unchanged, then run its focused `cargo nextest run -p mbv` filter.
+- [x] 2.2 Remove Tracking-specific retirement calls, queue-edit confirmation and pending-action branches while preserving now-playing removal and unsaved-playlist safeguards; delete superseded reconciliation and mutation tests, then run the focused queue mutation, playlist save, Session lifecycle, and queue-scope tests with `cargo nextest run -p mbv`.
 
 ## 3. Remove Tracking Presentation and Interaction
 
