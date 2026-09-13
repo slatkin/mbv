@@ -178,7 +178,6 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
         mutation_id: 1,
         playlist_id: "pl-2".into(),
         queue_lineage: lineage,
-        source_playlist_id: "pl-2".into(),
         name: "B".into(),
         result: Ok("pl-2".into()),
     });

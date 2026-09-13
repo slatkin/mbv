@@ -2,7 +2,6 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::mpsc;
 
@@ -218,7 +217,6 @@ pub(super) enum PlaylistMutation {
     Replace {
         mutation_id: u64,
         queue_lineage: u64,
-        source_playlist_id: String,
         name: String,
         item_ids: Option<Vec<String>>,
     },
@@ -238,16 +236,4 @@ impl PlaylistMutation {
 pub(super) struct PlaylistMutationState {
     pub(super) active: Option<PlaylistMutation>,
     pub(super) queued: VecDeque<PlaylistMutation>,
-}
-
-#[derive(Clone, Debug)]
-/// Retained as a narrow compatibility stub until the row 4 cleanup deletes
-/// the remaining tracking projection type.
-#[expect(dead_code, reason = "Tracking projection is deleted by OpenSpec row 4")]
-pub(super) struct RemoteQueueProjection {
-    pub(super) session_id: String,
-    pub(super) epoch: u64,
-    pub(super) queue_lineage: u64,
-    pub(super) occurrence_slots: HashMap<u64, QueueSlotId>,
-    pub(super) slot_occurrences: HashMap<QueueSlotId, u64>,
 }

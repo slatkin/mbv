@@ -109,7 +109,7 @@ impl App {
         // A shared replacement may recycle QueueSlotIds. Retire the old
         // projection before installing it so late consume outcomes cannot
         // alias a slot in this new queue lineage.
-        self.retire_remote_tracking(true);
+        self.advance_remote_queue_lineage();
         self.player_tab.set_queue_items(queue_items, cursor);
         self.queue_dirty = false;
         self.spawn_enrich_queue_state(state.positions);

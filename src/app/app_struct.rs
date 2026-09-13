@@ -12,8 +12,7 @@ use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
 use super::types_library_tab::LibraryTab;
 use super::types_playback::{
-    PendingQueueAction, PlaylistMutationState, QueueScope, RemoteQueueProjection,
-    SuspendedLocalSession, UndoEntry,
+    PendingQueueAction, PlaylistMutationState, QueueScope, SuspendedLocalSession, UndoEntry,
 };
 use super::types_player_tab::PlayerTab;
 use super::types_settings::{PanelFocus, PanelMode, SettingsDestination};
@@ -273,12 +272,9 @@ pub struct App {
     pub(super) cast_rx: mpsc::Receiver<CastEvent>,
     pub(super) last_cast_poll: Instant,
     pub(super) cast_status_loading: bool,
-    pub(super) remote_tracker: Option<mbv_core::remote_reconciliation::ReconciliationTracker>,
-    pub(super) remote_queue_projection: Option<RemoteQueueProjection>,
     pub(super) remote_queue_lineage: u64,
     pub(super) playlist_mutations: std::collections::HashMap<String, PlaylistMutationState>,
     pub(super) next_playlist_mutation: u64,
-    pub(super) session_poll_generation: u64,
     pub(super) direct_remote_connected: bool,
     pub(super) direct_remote_label: Option<String>,
     pub(super) last_session_poll: Instant,

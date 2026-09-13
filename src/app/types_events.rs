@@ -179,25 +179,12 @@ pub(super) enum LibEvent {
     Error(String),
 }
 
-pub(super) struct ReconciliationCommand {
-    pub(super) session_id: String,
-    pub(super) tracking_id: u64,
-    pub(super) tracker_epoch: u64,
-    pub(super) generation: u64,
-}
-
 pub(super) enum SessionEvent {
     Loaded {
         sessions: Vec<mbv_core::api::SessionInfo>,
-        #[expect(
-            dead_code,
-            reason = "poll generation is removed with reconciliation in row 4"
-        )]
-        generation: u64,
     },
     CommandError {
         error: String,
-        reconciliation: Option<ReconciliationCommand>,
     },
     PlaylistMutationComplete {
         mutation_id: u64,
@@ -210,7 +197,6 @@ pub(super) enum SessionEvent {
         mutation_id: u64,
         playlist_id: String,
         queue_lineage: u64,
-        source_playlist_id: String,
         name: String,
         result: Result<String, String>,
     },

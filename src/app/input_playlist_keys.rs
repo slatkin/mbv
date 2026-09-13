@@ -16,7 +16,6 @@ impl App {
             PlaylistMutation::Replace {
                 mutation_id,
                 queue_lineage: self.remote_queue_lineage,
-                source_playlist_id: existing_id.to_string(),
                 name: name.to_string(),
                 item_ids: None,
             },

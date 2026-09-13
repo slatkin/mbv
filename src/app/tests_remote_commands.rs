@@ -1,10 +1,38 @@
 //! Attached generic Emby Session commands remain direct operations.
 
-use super::tests_remote_reconciliation::attached_app;
-use crate::app::tests::{install_test_emby, make_item, make_session};
+fn attached_app() -> App {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session".into());
+    app.connected_session_state = Some(make_session("Client", "Emby"));
+    app.terminal_width = 160;
+    app.player_tab.set_items(
+        vec![make_item("a", "Movie"), make_item("b", "Movie")],
+        app.player_tab.queue_cursor,
+    );
+    app
+}
+
+use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_session};
 use crate::app::*;
 use std::io::{BufRead, BufReader, Read, Write};
-use mbv_core::remote_reconciliation::{ReconciliationTracker, SubmittedOccurrence};
+
+#[test]
+fn session_item_change_updates_state_without_mutating_queue() {
+    let mut app = attached_app();
+    app.queue_dirty = true;
+    let slots: Vec<_> = app.player_tab.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect();
+    let mutation_state = format!("{:?}", app.playlist_mutations);
+    let mut changed = make_session("Client", "Emby");
+    changed.id = "session".into();
+    changed.now_playing_item_id = Some("b".into());
+    app.handle_session_event(SessionEvent::Loaded { sessions: vec![changed] });
+    assert_eq!(app.connected_session_state.as_ref().and_then(|s| s.now_playing_item_id.as_deref()), Some("b"));
+    let current: Vec<_> = app.player_tab.queue.slots().iter().map(|slot| (slot.slot_id, slot.item.id().to_string())).collect();
+    assert_eq!(current, slots);
+    assert_eq!(app.player_tab.queue_cursor, 0);
+    assert!(app.queue_dirty);
+    assert_eq!(format!("{:?}", app.playlist_mutations), mutation_state);
+}
 
 fn remote_command_app(listener: &std::net::TcpListener) -> App {
     let url = format!("http://{}", listener.local_addr().unwrap());
@@ -121,10 +149,9 @@ fn capture_error(
         .sessions_rx
         .recv_timeout(std::time::Duration::from_secs(10))
         .expect("command error must be reported");
-    assert!(matches!(event, SessionEvent::CommandError { reconciliation: None, .. }));
+    assert!(matches!(event, SessionEvent::CommandError { .. }));
     app.handle_session_event(event);
     assert!(app.status.contains("Remote command failed"));
-    assert!(app.remote_tracker.is_none());
     request
 }
 
@@ -247,19 +274,6 @@ fn remote_jump_target_is_independent_of_tracking() {
 
     let target = crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1);
     assert_eq!(target, Some((1, 20)));
-    app.remote_tracker = Some(
-        ReconciliationTracker::new(
-            "session",
-            vec![
-                SubmittedOccurrence::new(1, "a"),
-                SubmittedOccurrence::new(2, "a"),
-                SubmittedOccurrence::new(3, "b"),
-            ],
-            0,
-            0,
-        )
-        .unwrap(),
-    );
     assert_eq!(
         crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("a"), 1),
         target

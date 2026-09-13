@@ -1,51 +1,20 @@
 use super::{App, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
-use mbv_core::remote_reconciliation::RemoteIntent;
-
-use std::time::SystemTime;
-
 impl App {
-    fn next_session_poll_generation(&mut self) -> u64 {
-        self.session_poll_generation = self.session_poll_generation.saturating_add(1);
-        self.session_poll_generation
-    }
-
-    pub(super) fn now_ms() -> u64 {
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64
-    }
-
     pub(super) fn submit_attached_sequence(
         &mut self,
         conn_id: &str,
         items: &[mbv_core::api::EmbyItem],
         start_idx: usize,
     ) {
-        let generation = self.next_session_poll_generation();
         let id = conn_id.to_string();
         let item_ids: Vec<String> = items.iter().map(|item| item.id.clone()).collect();
         let start_ticks = items
             .get(start_idx)
             .map_or(0, |item| item.playback_position_ticks);
-        self.dispatch_session_command(generation, move |client| {
+        self.dispatch_session_command(move |client| {
             client.session_play_items(&id, &item_ids, start_idx, start_ticks)
         });
-    }
-
-    pub(super) fn issue_remote_intent(&mut self, intent: RemoteIntent) {
-        if let Some(tracker) = self.remote_tracker.as_mut() {
-            tracker.issue_intent(intent, Self::now_ms());
-        }
-    }
-
-    pub(super) fn tracked_occurrence_at_queue_index(&mut self, index: usize) -> Option<u64> {
-        let slot_id = self.player_tab.resolve_slot_at(index)?;
-        let projection = self.remote_queue_projection.as_ref()?;
-        (projection.queue_lineage == self.remote_queue_lineage)
-            .then(|| projection.slot_occurrences.get(&slot_id).copied())
-            .flatten()
     }
 
     /// Advances whenever queue identity or state is replaced, so in-flight
@@ -54,37 +23,15 @@ impl App {
         self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
     }
 
-    pub(super) fn retire_remote_tracking(&mut self, invalidate_lineage: bool) {
-        self.remote_tracker = None;
-        self.remote_queue_projection = None;
-        if invalidate_lineage {
-            self.advance_remote_queue_lineage();
-        }
-    }
-
-    pub(super) fn remote_tracking_source_is(&self, playlist_id: &str) -> bool {
-        self.remote_tracker.as_ref().is_some_and(|tracker| {
-            tracker
-                .submitted()
-                .first()
-                .and_then(|occurrence| occurrence.playlist_id())
-                == Some(playlist_id)
-        })
-    }
-
     pub(super) fn spawn_sessions_load(&mut self) {
         self.sessions_loading = true;
         let Some(client) = self.emby_snapshot() else {
             return;
         };
         let tx = self.sessions_tx.clone();
-        let generation = self.next_session_poll_generation();
         std::thread::spawn(move || match client.get_sessions() {
             Ok(sessions) => {
-                let _ = tx.send(SessionEvent::Loaded {
-                    sessions,
-                    generation,
-                });
+                let _ = tx.send(SessionEvent::Loaded { sessions });
             }
             Err(e) => {
                 let _ = tx.send(SessionEvent::Error(e));
@@ -152,13 +99,11 @@ impl App {
         &mut self,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
-        let generation = self.next_session_poll_generation();
-        self.dispatch_session_command(generation, f);
+        self.dispatch_session_command(f);
     }
 
     fn dispatch_session_command(
         &self,
-        generation: u64,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
         let Some(client) = self.emby_snapshot() else {
@@ -167,19 +112,13 @@ impl App {
         let tx = self.sessions_tx.clone();
         std::thread::spawn(move || {
             if let Err(e) = f(&client) {
-                let _ = tx.send(SessionEvent::CommandError {
-                    error: e,
-                    reconciliation: None,
-                });
+                let _ = tx.send(SessionEvent::CommandError { error: e });
                 return;
             }
             // Refresh the directly observed Session state after a successful command.
             match client.get_sessions() {
                 Ok(sessions) => {
-                    let _ = tx.send(SessionEvent::Loaded {
-                        sessions,
-                        generation,
-                    });
+                    let _ = tx.send(SessionEvent::Loaded { sessions });
                 }
                 Err(e) => {
                     let _ = tx.send(SessionEvent::Error(e));

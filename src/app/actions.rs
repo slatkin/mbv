@@ -219,7 +219,7 @@ impl App {
         }
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            self.retire_remote_tracking(true);
+            self.advance_remote_queue_lineage();
             self.clear_playback_overlays();
             let id = conn_id.clone();
             let item_id = item.id.clone();

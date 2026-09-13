@@ -38,7 +38,6 @@ impl App {
         if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
             self.connected_session_id = None;
             self.connected_session_state = None;
-            self.retire_remote_tracking(false);
             self.session_miss_count = 0;
             self.remote_pos_s = 0;
             self.flash(

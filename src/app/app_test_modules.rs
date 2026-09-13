@@ -120,10 +120,6 @@ mod tests_queue_mutation;
 mod tests_queue_reorder;
 
 #[cfg(test)]
-#[path = "tests_remote_reconciliation.rs"]
-mod tests_remote_reconciliation;
-
-#[cfg(test)]
 #[path = "tests_remote_commands.rs"]
 mod tests_remote_commands;
 

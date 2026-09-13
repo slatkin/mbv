@@ -149,7 +149,6 @@ impl App {
             PlaylistMutation::Replace {
                 name,
                 queue_lineage,
-                source_playlist_id,
                 item_ids,
                 ..
             } => {
@@ -163,7 +162,6 @@ impl App {
                 let replacement_name = name.to_string();
                 let ids = item_ids.clone().unwrap_or_default();
                 let queue_lineage = *queue_lineage;
-                let source_playlist_id = source_playlist_id.clone();
                 std::thread::spawn(move || {
                     let result = client
                         .delete_playlist(&playlist_id)
@@ -172,7 +170,6 @@ impl App {
                         mutation_id,
                         playlist_id,
                         queue_lineage,
-                        source_playlist_id,
                         name: replacement_name,
                         result,
                     });

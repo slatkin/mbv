@@ -66,7 +66,7 @@ impl App {
         // session, its projection, and its unresolved presentation through the
         // same helper every other lifecycle boundary uses. Late consume
         // outcomes and stale unresolved counts are discarded with the exit.
-        self.retire_remote_tracking(true);
+        self.advance_remote_queue_lineage();
         // #236: persist whichever remote connection (if any) is active
         // right now, before anything below or in the caller's cleanup
         // path clears `active_route` / direct-session identity -- so the

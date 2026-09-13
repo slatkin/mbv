@@ -11,10 +11,7 @@ impl App {
     /// `sessions_rx` drain loop (see `drain_session_events`).
     pub(in crate::app) fn handle_session_event(&mut self, ev: SessionEvent) {
         match ev {
-            SessionEvent::Loaded {
-                sessions,
-                generation: _,
-            } => {
+            SessionEvent::Loaded { sessions } => {
                 self.sessions = sessions;
                 self.sessions_loading = false;
                 self.last_session_poll = Instant::now();
@@ -115,14 +112,7 @@ impl App {
                         self.session_miss_count += 1;
                         // A poll gap means the connected session is not
                         // currently observable, but the logical attachment is
-                        // still held (capable of observing a return), so
-                        // tracking suspends rather than staying confidently
-                        // current or retiring early. Only the three-miss
-                        // policy clears the attachment, and tracking retires
-                        // in that same transition (below).
-                        if let Some(tracker) = self.remote_tracker.as_mut() {
-                            tracker.session_disappeared();
-                        }
+                        // still held (capable of observing a return).
                         if self.session_miss_count >= 3 {
                             log::warn!(target: "sessions", "connected session gone; disconnecting");
                             self.flash(
@@ -131,7 +121,6 @@ impl App {
                             );
                             self.connected_session_id = None;
                             self.connected_session_state = None;
-                            self.retire_remote_tracking(false);
                             self.session_miss_count = 0;
                             self.remote_pos_s = 0;
                         } else {
@@ -140,22 +129,7 @@ impl App {
                     }
                 }
             }
-            SessionEvent::CommandError {
-                error,
-                reconciliation,
-            } => {
-                if let (Some(command), Some(tracker)) =
-                    (reconciliation, self.remote_tracker.as_mut())
-                {
-                    if tracker.session_id() == command.session_id
-                        && tracker.tracking_id() == command.tracking_id
-                        && tracker.epoch() == command.tracker_epoch
-                        && tracker.command_generation_matches(command.generation)
-                    {
-                        tracker.command_failed();
-                        self.retire_remote_tracking(false);
-                    }
-                }
+            SessionEvent::CommandError { error } => {
                 self.flash(
                     format!("Remote command failed: {error}"),
                     ToastSeverity::Error,
@@ -200,15 +174,11 @@ impl App {
                 mutation_id,
                 playlist_id,
                 queue_lineage,
-                source_playlist_id,
                 name,
                 result,
             } => {
                 match result {
                     Ok(id) if queue_lineage == self.remote_queue_lineage => {
-                        if self.remote_tracking_source_is(&source_playlist_id) {
-                            self.retire_remote_tracking(true);
-                        }
                         self.queue_source =
                             crate::config::QueueSource::Playlist { id: Some(id), name };
                         self.queue_dirty = false;

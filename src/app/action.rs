@@ -475,25 +475,6 @@ impl App {
                             ToastSeverity::Neutral,
                         );
                         self.set_queue_scope(self.playing_queue_scope());
-                        if let Some(occurrence_id) = self.tracked_occurrence_at_queue_index(t) {
-                            self.issue_remote_intent(
-                                mbv_core::remote_reconciliation::RemoteIntent::Select {
-                                    target: occurrence_id,
-                                },
-                            );
-                            let item_ids: Vec<String> =
-                                emby_items.iter().map(|e| e.id.clone()).collect();
-                            let start_ticks = item.playback_position_ticks();
-                            self.do_session_command(move |client| {
-                                client.session_play_items(
-                                    &conn_id,
-                                    &item_ids,
-                                    emby_start,
-                                    start_ticks,
-                                )
-                            });
-                            return false;
-                        }
                         self.submit_attached_sequence(&conn_id, &emby_items, emby_start);
                         return false;
                     }

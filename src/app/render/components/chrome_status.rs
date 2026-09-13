@@ -697,10 +697,9 @@ mod playback_host_label_tests {
     use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub, make_session};
     use crate::app::QueueScope;
 
-    /// The playback target's host label: the attached session's device name,
-    /// with no tracking suffix and no uppercasing.
+    /// The playback target's host label preserves the attached session's device name.
     #[test]
-    fn attached_session_label_has_no_tracking_suffix_or_uppercasing() {
+    fn attached_session_label_preserves_device_name() {
         let mut app = make_app_stub();
         app.connected_session_id = Some("sess-1".into());
         app.connected_session_state = Some(make_session("living-room", "Emby"));
@@ -708,8 +707,6 @@ mod playback_host_label_tests {
         let label = app.playback_host_label();
 
         assert_eq!(label, "living-room");
-        assert!(!label.contains(" · TRACKING"));
-        assert!(!label.contains("TRACKING"));
     }
 
     /// Local playback (no session, no direct remote) resolves to this
@@ -720,8 +717,7 @@ mod playback_host_label_tests {
         assert_eq!(app.playback_host_label(), mbv_core::api::device_name());
     }
 
-    /// A direct-remote connection resolves the direct-remote label without a
-    /// tracking suffix.
+    /// A direct-remote connection resolves the direct-remote label.
     #[test]
     fn direct_remote_resolves_the_direct_label() {
         let mut app = make_remote_app_stub(
@@ -732,6 +728,5 @@ mod playback_host_label_tests {
         app.queue_scope = QueueScope::Local;
 
         assert_eq!(app.playback_host_label(), "direct-device");
-        assert!(!app.playback_host_label().contains(" · TRACKING"));
     }
 }

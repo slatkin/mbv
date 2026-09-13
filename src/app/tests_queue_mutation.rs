@@ -7,18 +7,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 #[path = "tests_queue_mutation_playlist_save.rs"]
 mod tests_queue_mutation_playlist_save;
 
-fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
-    mbv_core::remote_reconciliation::ReconciliationTracker::new(
-        "session",
-        vec![
-            mbv_core::remote_reconciliation::SubmittedOccurrence::new(1, "id0"),
-            mbv_core::remote_reconciliation::SubmittedOccurrence::new(2, "id1"),
-        ],
-        0,
-        0,
-    )
-    .unwrap()
-}
+
 
 #[test]
 fn canceled_active_item_removal_leaves_queue_intact() {
@@ -108,53 +97,6 @@ fn home_enqueue_appends_to_direct_remote_queue() {
         cmd_rx.try_recv().is_err(),
         "Ctrl+A append must not follow UnifiedQueueAppend with queue replacement"
     );
-}
-
-#[test]
-fn enqueue_preserves_tracking_and_applies_immediately() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    let item = make_items(1).remove(0);
-    app.remote_tracker = Some(tracking_stub());
-
-    app.home_enqueue_target(QueueItem::Emby(Box::new(item)), true);
-    assert!(!matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
-    ));
-    assert!(app.remote_tracker.is_some());
-    assert_eq!(app.player_tab.emby_items().len(), 1);
-}
-
-#[test]
-fn queue_deletes_preserve_tracking() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(4), app.player_tab.queue_cursor);
-    app.queue_source = crate::config::QueueSource::Playlist {
-        id: Some("playlist-1".into()),
-        name: "Saved".into(),
-    };
-    app.remote_tracker = Some(tracking_stub());
-
-    app.remove_from_queue(1);
-    app.remove_from_queue(1);
-
-    assert!(app.remote_tracker.is_some());
-    assert!(!matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
-    ));
-    assert_eq!(
-        app.player_tab
-            .emby_items()
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["id0", "id3"]
-    );
-    assert!(app.queue_dirty);
 }
 
 #[test]
@@ -316,36 +258,6 @@ fn clear_queue_prompt_refused_for_connected_session_queue() {
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))
     ));
-}
-
-#[test]
-fn clearing_queue_applies_immediately_without_tracking_retirement() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
-    app.remote_tracker = Some(tracking_stub());
-
-    app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
-
-    assert!(app.remote_tracker.is_some());
-    assert!(!matches!(
-        app.pending_overlay,
-        Some(super::types_overlay::OverlayRequest::Confirm(_))
-    ));
-    assert!(app.player_tab.emby_items().is_empty());
-
-    app.connected_session_id = Some("session".into());
-    let mut advanced_session = make_session("Client", "Emby");
-    advanced_session.id = "session".into();
-    advanced_session.now_playing_item_id = Some("id1".into());
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![advanced_session],
-        generation: 1,
-    });
-
-    assert!(app.remote_tracker.is_some());
-    assert!(app.sessions_rx.try_recv().is_err());
 }
 
 #[test]
@@ -556,28 +468,4 @@ fn stale_context_menu_remove_remote_queue_index_is_ignored() {
     );
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
     assert!(app.remote_queue_undo_stack.is_empty());
-}
-
-#[test]
-fn boundary_queue_edit_does_not_retire_tracking() {
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(make_items(2), app.player_tab.queue_cursor);
-    app.remote_tracker = Some(tracking_stub());
-    app.player_tab.queue_cursor = 0;
-
-    app.move_queue_item_up(app.player_tab.queue_cursor);
-
-    assert!(app.remote_tracker.is_some());
-    assert_eq!(app.player_tab.emby_items().len(), 2);
-}
-
-#[test]
-fn empty_clear_queue_does_not_retire_tracking() {
-    let mut app = make_app_stub();
-    app.remote_tracker = Some(tracking_stub());
-
-    app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
-
-    assert!(app.remote_tracker.is_some());
 }

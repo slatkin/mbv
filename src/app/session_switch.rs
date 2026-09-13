@@ -80,7 +80,7 @@ impl App {
         ));
         self.connected_session_id = None;
         self.connected_session_state = None;
-        self.retire_remote_tracking(true);
+        self.advance_remote_queue_lineage();
         self.direct_remote_connected = true;
         self.direct_remote_label = {
             let name = sess.device_name.trim();
@@ -322,7 +322,7 @@ impl App {
         self.set_queue_scope(QueueScope::Local);
         self.connected_session_id = None;
         self.connected_session_state = None;
-        self.retire_remote_tracking(true);
+        self.advance_remote_queue_lineage();
         self.direct_remote_connected = false;
         self.direct_remote_label = None;
         self.active_route = None;
@@ -428,7 +428,7 @@ impl App {
         );
         self.connected_session_id = Some(id);
         self.connected_session_state = Some(sess.clone());
-        self.retire_remote_tracking(true);
+        self.advance_remote_queue_lineage();
         self.session_miss_count = 0;
         self.remote_pos_s = sess.position_s;
         self.remote_pos_at = Instant::now();
