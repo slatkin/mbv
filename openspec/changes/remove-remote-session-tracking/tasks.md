@@ -9,7 +9,7 @@
 
 ## 3. Remove Tracking Presentation and Interaction
 
-- [ ] 3.1 Delete Tracking labels and reasons from the Queue panel and the Tracking marker from the Sessions sidebar, preserving ordinary connected-target and directly observed playback presentation; update or delete existing render characterizations and verify relevant Narrow and Wide buffer tests with `cargo nextest run -p mbv`.
+- [x] 3.1 Delete Tracking labels and reasons from the Queue panel and the Tracking marker from the Sessions sidebar, preserving ordinary connected-target and directly observed playback presentation; update or delete existing render characterizations and verify relevant Narrow and Wide buffer tests with `cargo nextest run -p mbv`.
 - [ ] 3.2 Delete Stop Tracking and re-anchor intents, popup Interactive Component, mount/focus registration, router/modal policy entries, shell dispatch, and tests without adding fallback routing; run focused component tests plus the existing `Application::tick()` overlay/routing integration tests with `cargo nextest run -p mbv`.
 
 ## 4. Delete the Reconciliation Model
