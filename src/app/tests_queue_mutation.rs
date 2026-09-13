@@ -6,10 +6,6 @@ use mbv_core::playback_queue::QueueItem;
 #[path = "tests_queue_mutation_playlist_save.rs"]
 mod tests_queue_mutation_playlist_save;
 
-#[cfg(test)]
-#[path = "tests_queue_mutation_retention.rs"]
-mod tests_queue_mutation_retention;
-
 fn tracking_stub() -> mbv_core::remote_reconciliation::ReconciliationTracker {
     mbv_core::remote_reconciliation::ReconciliationTracker::new(
         "session",
@@ -80,7 +76,7 @@ fn home_enqueue_appends_to_direct_remote_queue() {
 }
 
 #[test]
-fn enqueue_stops_tracking_and_applies_immediately() {
+fn enqueue_preserves_tracking_and_applies_immediately() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let item = make_items(1).remove(0);
@@ -91,12 +87,12 @@ fn enqueue_stops_tracking_and_applies_immediately() {
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))
     ));
-    assert!(app.remote_tracker.is_none());
+    assert!(app.remote_tracker.is_some());
     assert_eq!(app.player_tab.emby_items().len(), 1);
 }
 
 #[test]
-fn tracked_playlist_deletes_apply_immediately() {
+fn queue_deletes_preserve_tracking() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab
@@ -110,7 +106,7 @@ fn tracked_playlist_deletes_apply_immediately() {
     app.remove_from_queue(1);
     app.remove_from_queue(1);
 
-    assert!(app.remote_tracker.is_none());
+    assert!(app.remote_tracker.is_some());
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))
@@ -288,7 +284,7 @@ fn clear_queue_prompt_refused_for_connected_session_queue() {
 }
 
 #[test]
-fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
+fn clearing_queue_applies_immediately_without_tracking_retirement() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab
@@ -297,7 +293,7 @@ fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
 
     app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
-    assert!(app.remote_tracker.is_none());
+    assert!(app.remote_tracker.is_some());
     assert!(!matches!(
         app.pending_overlay,
         Some(super::types_overlay::OverlayRequest::Confirm(_))
@@ -313,7 +309,7 @@ fn clearing_tracked_queue_applies_immediately_and_stops_tracking() {
         generation: 1,
     });
 
-    assert!(app.remote_tracker.is_none());
+    assert!(app.remote_tracker.is_some());
     assert!(app.sessions_rx.try_recv().is_err());
 }
 

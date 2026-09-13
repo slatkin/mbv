@@ -1,19 +1,6 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_item, make_session};
-use mbv_core::playback_queue::QueueSlotId;
 use mbv_core::remote_reconciliation::{ReconciliationTracker, SubmittedOccurrence, TrackingState};
-
-#[cfg(test)]
-#[path = "tests_remote_reconciliation_consume.rs"]
-mod tests_remote_reconciliation_consume;
-
-#[cfg(test)]
-#[path = "tests_remote_reconciliation_commands.rs"]
-mod tests_remote_reconciliation_commands;
-
-#[cfg(test)]
-#[path = "tests_remote_reconciliation_lifecycle.rs"]
-mod tests_remote_reconciliation_lifecycle;
 
 fn tracker(media: &[&str]) -> ReconciliationTracker {
     ReconciliationTracker::new(
@@ -59,7 +46,7 @@ fn tracking_retirement_clears_reanchor_popup() {
 }
 
 #[test]
-fn replacement_tracker_ignores_an_earlier_in_flight_poll() {
+fn session_item_change_updates_state_without_mutating_queue() {
     let mut app = attached_app();
     let mut item_a = app.player_tab.emby_items()[0].clone();
     item_a.id = "a".into();
@@ -74,79 +61,41 @@ fn replacement_tracker_ignores_an_earlier_in_flight_poll() {
         mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
     );
     app.player_tab.queue_cursor = 0;
-    app.session_poll_generation = 4;
-    let items = app.player_tab.emby_items();
-    app.remote_tracker = App::build_remote_tracker_with_source("session", &items, 1, 5, None);
+    app.queue_dirty = true;
+    let slots: Vec<_> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+        .collect();
+    let mutation_state = format!("{:?}", app.playlist_mutations);
 
-    let mut stale_session = make_session("Client", "Emby");
-    stale_session.id = "session".into();
-    stale_session.now_playing_item_id = Some("a".into());
-    stale_session.position_ticks = 1;
-    stale_session.runtime_ticks = 100;
+    let mut changed = make_session("Client", "Emby");
+    changed.id = "session".into();
+    changed.now_playing_item_id = Some("b".into());
     app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![stale_session],
-        generation: 4,
-    });
-
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().state(),
-        TrackingState::Starting
-    );
-
-    let mut submitted_session = make_session("Client", "Emby");
-    submitted_session.id = "session".into();
-    submitted_session.now_playing_item_id = Some("b".into());
-    submitted_session.position_ticks = 1;
-    submitted_session.runtime_ticks = 100;
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![submitted_session],
-        generation: 5,
-    });
-
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().state(),
-        TrackingState::Tracking
-    );
-    assert_eq!(app.player_tab.queue_cursor, 1);
-}
-
-#[test]
-fn repeated_same_item_poll_does_not_move_queue_cursor() {
-    let mut app = attached_app();
-    let mut item_a = app.player_tab.emby_items()[0].clone();
-    item_a.id = "a".into();
-    let mut item_b = app.player_tab.emby_items()[1].clone();
-    item_b.id = "b".into();
-    app.player_tab.set_item_at(
-        0,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
-    );
-    app.player_tab.set_item_at(
-        1,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
-    );
-    app.player_tab.queue_cursor = 0;
-    app.connected_session_state = Some({
-        let mut state = make_session("Client", "Emby");
-        state.id = "session".into();
-        state.now_playing_item_id = Some("a".into());
-        state
-    });
-
-    let mut repeated = app.connected_session_state.clone().unwrap();
-    repeated.now_playing_item_id = Some("b".into());
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![repeated.clone()],
+        sessions: vec![changed],
         generation: 1,
     });
-    assert_eq!(app.player_tab.queue_cursor, 1);
 
-    app.player_tab.queue_cursor = 0;
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![repeated],
-        generation: 2,
-    });
+    assert_eq!(
+        app.connected_session_state
+            .as_ref()
+            .and_then(|state| state.now_playing_item_id.as_deref()),
+        Some("b")
+    );
+    let current_slots: Vec<_> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+        .collect();
+    assert_eq!(current_slots, slots);
     assert_eq!(app.player_tab.queue_cursor, 0);
+    assert!(app.queue_dirty);
+    assert_eq!(format!("{:?}", app.playlist_mutations), mutation_state);
 }
 
 #[test]
@@ -194,94 +143,6 @@ fn stale_reconciliation_command_failure_does_not_invalidate_replacement_tracker(
     );
 }
 
-/// The point of remote tracking: an item the remote client finishes leaves
-/// the queue. Consume is queue removal only, so this must work for an
-/// ordinary ad-hoc queue with no saved playlist behind it.
-#[test]
-fn completed_remote_occurrence_is_consumed_from_an_ad_hoc_queue() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = attached_app();
-    app.config.lock().unwrap().consume_videos = true;
-    let mut item_a = app.player_tab.emby_items()[0].clone();
-    item_a.id = "a".into();
-    let mut item_b = app.player_tab.emby_items()[1].clone();
-    item_b.id = "b".into();
-    app.player_tab.set_item_at(
-        0,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_a)),
-    );
-    app.player_tab.set_item_at(
-        1,
-        mbv_core::playback_queue::QueueItem::Emby(Box::new(item_b)),
-    );
-    app.player_tab.queue_cursor = 0;
-    app.session_poll_generation = 5;
-    let items = app.player_tab.emby_items();
-    app.remote_tracker = App::build_remote_tracker_with_source("session", &items, 0, 5, None);
-    let slots: Vec<QueueSlotId> = app
-        .player_tab
-        .queue
-        .slots()
-        .iter()
-        .map(|slot| slot.slot_id)
-        .collect();
-    app.remote_queue_projection = Some(projection(&app, &[(1, slots[0]), (2, slots[1])]));
 
-    let poll = |media: &str, position: i64| {
-        let mut session = make_session("Client", "Emby");
-        session.id = "session".into();
-        session.now_playing_item_id = Some(media.into());
-        session.position_ticks = position;
-        session.runtime_ticks = 100;
-        session
-    };
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![poll("a", 1)],
-        generation: 5,
-    });
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![poll("a", 99)],
-        generation: 6,
-    });
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![poll("b", 1)],
-        generation: 7,
-    });
 
-    assert_eq!(
-        app.player_tab
-            .emby_items()
-            .iter()
-            .map(|item| item.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["b"],
-        "the finished item is consumed from the queue"
-    );
-    assert_eq!(app.player_tab.queue_cursor, 0);
-    assert_eq!(
-        app.remote_tracker.as_ref().unwrap().submitted().len(),
-        2,
-        "the immutable submitted sequence is preserved"
-    );
-    let persisted = crate::config::load_queue_state().expect("projected queue persisted");
-    assert_eq!(persisted.items.len(), 1);
-    assert_eq!(persisted.items[0].id(), "b");
-}
 
-fn projection(
-    app: &App,
-    occurrences: &[(u64, QueueSlotId)],
-) -> super::types_playback::RemoteQueueProjection {
-    let occurrence_slots: std::collections::HashMap<_, _> = occurrences.iter().copied().collect();
-    let slot_occurrences = occurrence_slots
-        .iter()
-        .map(|(occurrence_id, slot_id)| (*slot_id, *occurrence_id))
-        .collect();
-    super::types_playback::RemoteQueueProjection {
-        session_id: "session".into(),
-        epoch: 0,
-        queue_lineage: app.remote_queue_lineage,
-        occurrence_slots,
-        slot_occurrences,
-    }
-}

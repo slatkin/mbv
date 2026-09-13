@@ -13,7 +13,7 @@ impl App {
         match ev {
             SessionEvent::Loaded {
                 sessions,
-                generation,
+                generation: _,
             } => {
                 self.sessions = sessions;
                 self.sessions_loading = false;
@@ -38,31 +38,6 @@ impl App {
                             .as_ref()
                             .and_then(|p| p.now_playing_item_id.as_deref());
                         let item_changed = s.now_playing_item_id.as_deref() != prev_item_id;
-                        if item_changed {
-                            // Refresh the previous item so played/progress reflects
-                            // what the remote client reported to the server.
-                            if let Some(prev_id) = self
-                                .connected_session_state
-                                .as_ref()
-                                .and_then(|p| p.now_playing_item_id.clone())
-                            {
-                                if let Some(client) = self.emby_snapshot() {
-                                    let tx = self.sessions_tx.clone();
-                                    std::thread::spawn(move || {
-                                        if let Ok(mut items) =
-                                            client.get_items_by_ids(std::slice::from_ref(&prev_id))
-                                        {
-                                            if let Some(fresh) = items.pop() {
-                                                let _ = tx.send(SessionEvent::ItemRefreshed(
-                                                    prev_id,
-                                                    Box::new(fresh),
-                                                ));
-                                            }
-                                        }
-                                    });
-                                }
-                            }
-                        }
                         // Detect playback via API position advancing, not IsPaused.
                         // Some Emby clients always report IsPaused=true even while playing;
                         // the only reliable signal is that PositionTicks keeps moving.
@@ -120,24 +95,10 @@ impl App {
                             self.remote_pos_at = now;
                         }
                         if item_changed {
-                            if !self.queue_cursor_held_by_user() {
-                                if let Some(new_idx) =
-                                    s.now_playing_item_id.as_ref().and_then(|id| {
-                                        self.player_tab
-                                            .queue
-                                            .slots()
-                                            .iter()
-                                            .position(|slot| slot.item.id() == id)
-                                    })
-                                {
-                                    self.player_tab.queue_cursor = new_idx;
-                                }
-                            }
                             self.runtime_zero_since = None;
                         }
                         self.connected_session_state = Some(s.clone());
                         self.session_miss_count = 0;
-                        self.apply_remote_observation(&s, generation);
                         // Remote hasn't started playing yet — repoll sooner.
                         // Cap fast-poll at 30 s: if runtime stays 0 that long the
                         // remote client likely won't report it and we stop hammering.
@@ -177,21 +138,6 @@ impl App {
                             log::warn!(target: "sessions", "connected session not in poll ({}/3); holding", self.session_miss_count);
                         }
                     }
-                }
-            }
-            SessionEvent::ItemRefreshed(item_id, fresh) => {
-                if let Some(slot_id) = self
-                    .player_tab
-                    .queue
-                    .slots()
-                    .iter()
-                    .find(|s| s.item.id() == item_id)
-                    .map(|s| s.slot_id)
-                {
-                    let _ = self.player_tab.queue.update_slot_item(
-                        slot_id,
-                        mbv_core::playback_queue::QueueItem::Emby(fresh),
-                    );
                 }
             }
             SessionEvent::CommandError {

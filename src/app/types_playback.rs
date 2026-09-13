@@ -246,6 +246,9 @@ pub(super) struct PlaylistMutationState {
 }
 
 #[derive(Clone, Debug)]
+/// Retained as a narrow compatibility stub for the row 3/4 cleanup, which
+/// removes the remaining Tracking UI/model seams.
+#[expect(dead_code, reason = "Tracking projection is deleted by OpenSpec row 4")]
 pub(super) struct RemoteQueueProjection {
     pub(super) session_id: String,
     pub(super) epoch: u64,

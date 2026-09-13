@@ -189,9 +189,12 @@ pub(super) struct ReconciliationCommand {
 pub(super) enum SessionEvent {
     Loaded {
         sessions: Vec<mbv_core::api::SessionInfo>,
+        #[expect(
+            dead_code,
+            reason = "poll generation is removed with reconciliation in row 4"
+        )]
         generation: u64,
     },
-    ItemRefreshed(String, Box<mbv_core::api::EmbyItem>), // (item_id, fresh)
     CommandError {
         error: String,
         reconciliation: Option<ReconciliationCommand>,

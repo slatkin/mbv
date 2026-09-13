@@ -102,7 +102,7 @@ impl App {
             // slot. See `PlayerEvent::UnifiedQueueUpdated`.
             self.pending_queue_edit_cursor = Some(queue.queue_cursor);
         }
-        self.retire_remote_tracking(true);
+        self.bump_remote_queue_lineage();
     }
 
     /// Moves the item at `from` one position earlier. No-op at the start of
@@ -149,7 +149,7 @@ impl App {
             return;
         };
         if self.apply_queue_move_by_slot(scope, slot_id, from, to) {
-            self.retire_remote_tracking(true);
+            self.bump_remote_queue_lineage();
             if scope == QueueScope::Remote {
                 self.pending_remote_move_cursor = Some(to);
             }
@@ -223,7 +223,7 @@ impl App {
                     self.queue_dirty = true;
                 }
                 self.persist_local_queue_state_if_needed(scope);
-                self.retire_remote_tracking(true);
+                self.bump_remote_queue_lineage();
             }
             UndoEntry::Move { from, to, slot_id } => {
                 let still_in_place = self.queue_for_scope(scope).slot_id_matches_at(to, slot_id);
@@ -234,7 +234,7 @@ impl App {
                     );
                     return;
                 }
-                self.retire_remote_tracking(true);
+                self.bump_remote_queue_lineage();
             }
         }
         self.set_queue_scope(scope);
@@ -265,7 +265,7 @@ impl App {
     }
 
     fn clear_remote_queue(&mut self) {
-        self.retire_remote_tracking(true);
+        self.bump_remote_queue_lineage();
         self.player.clear_queue();
         if let Some(queue) = self.remote_player_tab.as_mut() {
             queue.clear();
@@ -357,7 +357,7 @@ impl App {
                     queue.clear();
                 }
                 if had_items {
-                    self.retire_remote_tracking(true);
+                    self.bump_remote_queue_lineage();
                 }
                 if self.local_queue_metadata_applies(scope) {
                     self.save_queue_state_after_explicit_clear();

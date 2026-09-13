@@ -37,6 +37,10 @@ impl App {
     }
 
     #[cfg(test)]
+    #[expect(
+        dead_code,
+        reason = "tracker test helper is removed with reconciliation in row 4"
+    )]
     pub(super) fn build_remote_tracker_with_source(
         conn_id: &str,
         items: &[mbv_core::api::EmbyItem],
@@ -90,6 +94,10 @@ impl App {
         }
     }
 
+    pub(super) fn bump_remote_queue_lineage(&mut self) {
+        self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
+    }
+
     pub(super) fn retire_remote_tracking(&mut self, invalidate_lineage: bool) {
         // The reanchor modal is only ever raised off an active tracker, so
         // only emit its dismiss when there was tracking to retire. An
@@ -104,7 +112,7 @@ impl App {
             self.dismiss_remote_reanchor();
         }
         if invalidate_lineage {
-            self.remote_queue_lineage = self.remote_queue_lineage.saturating_add(1);
+            self.bump_remote_queue_lineage();
         }
     }
 
