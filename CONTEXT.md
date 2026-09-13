@@ -220,10 +220,13 @@ _Avoid_: queue origin, queue type, source type
 **Consume**:
 Removal of an item from the queue once it finishes playing, as in ncmpcpp.
 Purely a queue operation — it says nothing about where the queue came from and
-never edits anything on the server. Applies the same way whether playback ran
-in this process, on a Local daemon, or on another device's Session. Addresses
-canonical slot identity; removes only the consumed occurrence.
-_Avoid_: auto-remove, playlist consume, consume-and-save
+never edits anything on the server. Driven only by the authoritative Player
+owner's playback lifecycle (a local in-process Player, a Local daemon, or a
+directly controlled remote Player owner); a Session watch of another device's
+generic Emby Session never consumes, because that observation carries no mbv
+queue authority. Addresses canonical slot identity; removes only the consumed
+occurrence.
+_Avoid_: auto-remove, playlist consume, consume-and-save, remote consume
 
 **Save on consume**:
 The separate, opt-in behaviour of writing the shortened queue back to the Emby
@@ -406,9 +409,12 @@ _Avoid_: idle hide, collapsed queue, empty player
 
 **Playback target**:
 Where explicit playback actions are sent: local in-process Player, directly
-controlled remote Player owner (via ctrl), Emby session (via observed remote
-playback), or an attached cast receiver. Resolved per action from queue
-scope, active route, and attachment.
+controlled remote Player owner (via ctrl), observed Emby Session (via
+supported remote transport commands only), or an attached cast receiver.
+Resolved per action from queue scope, active route, and attachment. Only a
+Player owner target carries queue authority; sending to an observed Emby
+Session dispatches transport actions without conferring queue or occurrence
+identity on that Session.
 _Avoid_: play target, output target, active player
 
 ## Presentation
@@ -775,10 +781,15 @@ tcp-port`).
 _Avoid_: connection, stream, remote instance
 
 **Session watch**:
-A client observing another device's Session read-only — position and title
-only, no queue control. The fallback when Direct remote control to that
-device isn't available.
-_Avoid_: attach, session attach, monitor, remote session (bare)
+A client observing another device's generic Emby Session read-only with respect
+to mbv's queue: it may display directly observed position and title and may
+dispatch supported remote transport commands (play, pause, seek, stop, next,
+previous, volume, mute, stream selection), but it never mutates mbv queue
+membership, ordering, slot snapshots, cursor, or playlist state, and it never
+infers queue position, occurrence identity, completion, or consume from that
+Session. The fallback when Direct remote control to that device isn't
+available.
+_Avoid_: attach, session attach, monitor, remote session (bare), tracked session, tracking
 
 **Direct remote control**:
 A client has its own control-socket connection to another device's Player

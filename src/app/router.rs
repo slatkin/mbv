@@ -117,12 +117,7 @@ pub(super) fn is_blocking_overlay(id: &ComponentId) -> bool {
     matches!(
         id,
         ComponentId::Overlay(OverlayId::ContextMenu | OverlayId::SelectionModal)
-            | ComponentId::Modal(
-                ModalId::Confirm
-                    | ModalId::DaemonLost
-                    | ModalId::RemoteReanchor
-                    | ModalId::SavePlaylist,
-            )
+            | ComponentId::Modal(ModalId::Confirm | ModalId::DaemonLost | ModalId::SavePlaylist,)
             | ComponentId::Popup(
                 PopupId::Multiselect | PopupId::LibraryRoutes | PopupId::FeedManage,
             )

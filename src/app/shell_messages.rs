@@ -129,9 +129,6 @@ impl Model {
                         quit = true;
                     }
                 }
-                ShellRequest::RemoteReanchorIntent(intent) => {
-                    self.handle_remote_reanchor_intent(intent);
-                }
                 // Context menu: the shell owns cursor navigation and
                 // action execution; the component owns key interpretation
                 // (task 5.1).

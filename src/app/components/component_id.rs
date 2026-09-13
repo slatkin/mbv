@@ -144,13 +144,11 @@ pub enum OverlayId {
     SelectionModal,
 }
 
-/// Blocking modal identity (design D3 names: Confirm, DaemonLost,
-/// RemoteReanchor, SavePlaylist).
+/// Blocking modal identity (design D3 names: Confirm, DaemonLost, SavePlaylist).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum ModalId {
     Confirm,
     DaemonLost,
-    RemoteReanchor,
     SavePlaylist,
 }
 

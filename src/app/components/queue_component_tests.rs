@@ -133,15 +133,6 @@ fn queue_component_emits_typed_keyboard_intents() {
         }))
     ));
     assert!(matches!(
-        component.on(&Event::Keyboard(chord(
-            Key::Char('t'),
-            KeyModifiers::CONTROL
-        ))),
-        Some(Msg::Shell(ShellRequest::QueueIntent(
-            QueueIntent::StopRemoteTracking
-        )))
-    ));
-    assert!(matches!(
         component.on(&Event::Keyboard(chord(Key::Left, KeyModifiers::SHIFT))),
         Some(Msg::Shell(ShellRequest::QueueIntent(
             QueueIntent::ResizeColumn(QueueColumnResize::Narrower)

@@ -126,7 +126,7 @@ impl App {
 
     pub(super) fn replace_playback_queue(&mut self, items: Vec<EmbyItem>, cursor: usize) {
         self.reset_bare_transitions();
-        self.retire_remote_tracking(true);
+        self.advance_remote_queue_lineage();
         let cursor = cursor.min(items.len().saturating_sub(1));
         match self.playing_queue_scope() {
             QueueScope::Local => {

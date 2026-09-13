@@ -63,14 +63,6 @@ impl App {
                 )
             });
         if is_full_update {
-            let is_replace = self
-                .playlist_mutations
-                .get(playlist_id)
-                .and_then(|state| state.active.as_ref())
-                .is_some_and(|mutation| matches!(mutation, PlaylistMutation::Replace { .. }));
-            if self.remote_tracking_source_is(playlist_id) {
-                self.retire_remote_tracking(is_replace);
-            }
             // A full update recreates entry identities for the playlist it
             // targets. Only the current source's items carry those identities,
             // so clear and persist them exactly when the update targets that
@@ -157,7 +149,6 @@ impl App {
             PlaylistMutation::Replace {
                 name,
                 queue_lineage,
-                source_playlist_id,
                 item_ids,
                 ..
             } => {
@@ -171,7 +162,6 @@ impl App {
                 let replacement_name = name.to_string();
                 let ids = item_ids.clone().unwrap_or_default();
                 let queue_lineage = *queue_lineage;
-                let source_playlist_id = source_playlist_id.clone();
                 std::thread::spawn(move || {
                     let result = client
                         .delete_playlist(&playlist_id)
@@ -180,7 +170,6 @@ impl App {
                         mutation_id,
                         playlist_id,
                         queue_lineage,
-                        source_playlist_id,
                         name: replacement_name,
                         result,
                     });
@@ -260,18 +249,6 @@ impl App {
     pub(super) fn save_queue_state_after_explicit_clear(&mut self) {
         self.save_queue_state();
         let state = self.build_queue_state();
-        self.persist_shared_queue_state(&state, true);
-    }
-
-    pub(in crate::app) fn save_queue_state_after_remote_projection(&mut self) {
-        let state = self.build_queue_state();
-        if state.items.is_empty() {
-            if let Err(e) = crate::config::clear_queue_state() {
-                log::warn!(target: "queue", "failed to clear projected queue state: {e}");
-            }
-        } else if let Err(e) = crate::config::save_queue_state(&state) {
-            log::warn!(target: "queue", "failed to save projected queue state: {e}");
-        }
         self.persist_shared_queue_state(&state, true);
     }
 
@@ -459,7 +436,7 @@ impl App {
         }
         if self.sync_playback_queue_after_append(scope, vec![appended]) {
             self.persist_local_queue_state_if_needed(scope);
-            self.retire_remote_tracking(true);
+            self.advance_remote_queue_lineage();
         } else {
             self.queue_dirty = previous_dirty;
             *self.queue_for_scope_mut(scope) = previous_queue;

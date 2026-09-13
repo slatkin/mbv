@@ -95,38 +95,6 @@ impl App {
         Self::uppercase_status_label(&mut local_spans);
         let (remote_icon, _remote_label) =
             self.remote_icon_and_label(remote_state, &daemon_endpoint);
-        let tracking = if matches!(remote_state, RemoteSlotState::AttachedSession) {
-            self.remote_tracker
-                .as_ref()
-                .map(|tracker| {
-                    let state = match tracker.state() {
-                        mbv_core::remote_reconciliation::TrackingState::Starting => "STARTING",
-                        mbv_core::remote_reconciliation::TrackingState::Tracking => "TRACKING",
-                        mbv_core::remote_reconciliation::TrackingState::Ambiguous => "AMBIGUOUS",
-                        mbv_core::remote_reconciliation::TrackingState::Invalid => "INVALID",
-                        mbv_core::remote_reconciliation::TrackingState::Suspended => "SUSPENDED",
-                    };
-                    if matches!(
-                        tracker.state(),
-                        mbv_core::remote_reconciliation::TrackingState::Ambiguous
-                            | mbv_core::remote_reconciliation::TrackingState::Invalid
-                            | mbv_core::remote_reconciliation::TrackingState::Suspended
-                    ) {
-                        let reason = match tracker.reason() {
-                            mbv_core::remote_reconciliation::TrackingReason::DuplicateCandidates => "duplicate",
-                            mbv_core::remote_reconciliation::TrackingReason::SessionUnavailable => "session unavailable",
-                            mbv_core::remote_reconciliation::TrackingReason::ReturningStateRequiresReanchor => "re-anchor required",
-                            _ => "sequence mismatch",
-                        };
-                        format!(" · {state} ({reason})")
-                    } else {
-                        format!(" · {state}")
-                    }
-                })
-                .unwrap_or_default()
-        } else {
-            String::new()
-        };
         QueueTitleModel {
             local_icon: local_spans
                 .get(1)
@@ -138,9 +106,9 @@ impl App {
                 .unwrap_or_default(),
             remote_icon: remote_icon.to_string(),
             // The host label comes from the one shared playback-target
-            // resolution (task 3.3); the queue title extends it with its own
-            // tracking suffix.
-            remote_label: format!("{}{}", self.playback_host_label(), tracking),
+            // resolution; attached generic Sessions remain ordinary observed
+            // playback targets without an additional status marker.
+            remote_label: self.playback_host_label(),
             local_selected: self.viewed_queue_scope() == QueueScope::Local,
             show_split,
             is_mbv_session,

@@ -156,14 +156,6 @@ pub enum DaemonLostIntent {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RemoteReanchorIntent {
-    MoveUp,
-    MoveDown,
-    Accept,
-    Dismiss,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ContextMenuIntent {
     MoveUp,
     MoveDown,

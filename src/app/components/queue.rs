@@ -349,24 +349,6 @@ impl QueueComponent {
                     })
                 });
             }
-            Key::Char('t')
-                if key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
-            {
-                return Some(Msg::Shell(ShellRequest::QueueIntent(
-                    QueueIntent::StopRemoteTracking,
-                )));
-            }
-            Key::Char('r')
-                if key
-                    .modifiers
-                    .contains(tuirealm::event::KeyModifiers::CONTROL) =>
-            {
-                return Some(Msg::Shell(ShellRequest::QueueIntent(
-                    QueueIntent::ReanchorRemoteTracking,
-                )));
-            }
             Key::Char('z')
                 if key
                     .modifiers

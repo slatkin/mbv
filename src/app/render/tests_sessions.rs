@@ -25,7 +25,6 @@ fn render_sessions(width: u16, height: u16, selected: bool, loading: bool) -> St
                 &mut cursor,
                 &mut scroll,
                 None,
-                false,
                 None,
                 false,
             );

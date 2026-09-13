@@ -1,9 +1,6 @@
-use super::components::msg::{
-    ConfirmIntent, DaemonLostIntent, RemoteReanchorIntent, SavePlaylistIntent,
-};
+use super::components::msg::{ConfirmIntent, DaemonLostIntent, SavePlaylistIntent};
 use super::components::{
-    ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, RemoteReanchorComponent,
-    SavePlaylistComponent,
+    ComponentId, ConfirmComponent, DaemonLostComponent, ModalId, SavePlaylistComponent,
 };
 use super::shell::Model;
 use super::types_confirm::ConfirmAction;
@@ -77,39 +74,6 @@ impl Model {
         if let Some(component) = self.application.get_component_mut(&id) {
             if let Some(modal) = component.as_any_mut().downcast_mut::<DaemonLostComponent>() {
                 modal.set_restart_error(error);
-            }
-        }
-    }
-
-    pub(super) fn handle_remote_reanchor_intent(&mut self, intent: RemoteReanchorIntent) {
-        let id = ComponentId::Modal(ModalId::RemoteReanchor);
-        if !self.application.mounted(&id) {
-            return;
-        }
-        match intent {
-            RemoteReanchorIntent::Dismiss => self.dismiss_modal(&id),
-            RemoteReanchorIntent::MoveUp | RemoteReanchorIntent::MoveDown => {
-                if let Some(component) = self.application.get_component_mut(&id) {
-                    if let Some(popup) = component
-                        .as_any_mut()
-                        .downcast_mut::<RemoteReanchorComponent>()
-                    {
-                        popup.move_cursor(matches!(intent, RemoteReanchorIntent::MoveDown));
-                    }
-                }
-            }
-            RemoteReanchorIntent::Accept => {
-                let target = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|component| {
-                        component.as_any().downcast_ref::<RemoteReanchorComponent>()
-                    })
-                    .and_then(RemoteReanchorComponent::selected_target);
-                self.dismiss_modal(&id);
-                if let Some(target) = target {
-                    self.app.reanchor_remote_target(target);
-                }
             }
         }
     }

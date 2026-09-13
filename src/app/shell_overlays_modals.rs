@@ -1,6 +1,6 @@
 use super::super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, ModalId, OverlayId,
-    RemoteReanchorComponent, SavePlaylistComponent, SelectionModalComponent,
+    SavePlaylistComponent, SelectionModalComponent,
 };
 use super::super::shell::Model;
 use super::super::types_overlay::OverlayRequest;
@@ -28,21 +28,6 @@ impl Model {
     /// Render the DaemonLost overlay if mounted.
     pub(in crate::app) fn render_daemon_lost_overlay(&mut self, f: &mut ratatui::Frame) {
         let id = Self::daemon_lost_id();
-        if !self.application.mounted(&id) {
-            return;
-        }
-        self.application.view(&id, f, f.area());
-    }
-
-    // --- Remote-reanchor popup ----------------------------------------------
-
-    fn remote_reanchor_id() -> ComponentId {
-        ComponentId::Modal(ModalId::RemoteReanchor)
-    }
-
-    /// Render the RemoteReanchor overlay if mounted.
-    pub(in crate::app) fn render_remote_reanchor_overlay(&mut self, f: &mut ratatui::Frame) {
-        let id = Self::remote_reanchor_id();
         if !self.application.mounted(&id) {
             return;
         }
@@ -88,22 +73,6 @@ impl Model {
                             &modal.daemon_log_path,
                             modal.restart_error.as_deref(),
                         );
-                }
-            }
-            OverlayRequest::RemoteReanchor(popup) => {
-                self.dismiss_blocking_modals();
-                let id = Self::remote_reanchor_id();
-                self.application
-                    .mount(id.clone(), Box::new(RemoteReanchorComponent::new()), vec![])
-                    .expect("mount RemoteReanchor");
-                self.application
-                    .active(&id)
-                    .expect("activate RemoteReanchor");
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    comp.as_any_mut()
-                        .downcast_mut::<RemoteReanchorComponent>()
-                        .expect("RemoteReanchor component")
-                        .set_content(&popup.targets, popup.cursor);
                 }
             }
             OverlayRequest::SavePlaylist(dialog) => {
@@ -167,9 +136,6 @@ impl Model {
             }
             OverlayRequest::DismissConfirm => self.dismiss_modal(&Self::confirm_id()),
             OverlayRequest::DismissDaemonLost => self.dismiss_modal(&Self::daemon_lost_id()),
-            OverlayRequest::DismissRemoteReanchor => {
-                self.dismiss_modal(&Self::remote_reanchor_id())
-            }
             OverlayRequest::DismissSavePlaylist => {
                 self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist))
             }
@@ -224,7 +190,6 @@ impl Model {
     fn dismiss_blocking_modals(&mut self) {
         self.dismiss_modal(&Self::confirm_id());
         self.dismiss_modal(&Self::daemon_lost_id());
-        self.dismiss_modal(&Self::remote_reanchor_id());
         self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist));
         self.dismiss_modal(&ComponentId::Overlay(OverlayId::SelectionModal));
         // Re-homes the playback-event trigger that used to clear `App::context_menu`

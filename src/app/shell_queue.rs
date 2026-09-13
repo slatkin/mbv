@@ -309,16 +309,6 @@ impl Model {
                         .resize_queue_column(direction == QueueColumnResize::Wider);
                 }
             }
-            QueueIntent::StopRemoteTracking => {
-                if self.app.remote_tracker.is_some() {
-                    self.app.stop_remote_tracking();
-                }
-            }
-            QueueIntent::ReanchorRemoteTracking => {
-                if self.app.remote_tracker.is_some() {
-                    self.app.reanchor_remote_tracking();
-                }
-            }
             QueueIntent::PlayNow => {
                 let (active, current_idx) = {
                     let status = self.app.player.status.lock().unwrap();

@@ -11,10 +11,7 @@ impl App {
     /// `sessions_rx` drain loop (see `drain_session_events`).
     pub(in crate::app) fn handle_session_event(&mut self, ev: SessionEvent) {
         match ev {
-            SessionEvent::Loaded {
-                sessions,
-                generation,
-            } => {
+            SessionEvent::Loaded { sessions } => {
                 self.sessions = sessions;
                 self.sessions_loading = false;
                 self.last_session_poll = Instant::now();
@@ -38,31 +35,6 @@ impl App {
                             .as_ref()
                             .and_then(|p| p.now_playing_item_id.as_deref());
                         let item_changed = s.now_playing_item_id.as_deref() != prev_item_id;
-                        if item_changed {
-                            // Refresh the previous item so played/progress reflects
-                            // what the remote client reported to the server.
-                            if let Some(prev_id) = self
-                                .connected_session_state
-                                .as_ref()
-                                .and_then(|p| p.now_playing_item_id.clone())
-                            {
-                                if let Some(client) = self.emby_snapshot() {
-                                    let tx = self.sessions_tx.clone();
-                                    std::thread::spawn(move || {
-                                        if let Ok(mut items) =
-                                            client.get_items_by_ids(std::slice::from_ref(&prev_id))
-                                        {
-                                            if let Some(fresh) = items.pop() {
-                                                let _ = tx.send(SessionEvent::ItemRefreshed(
-                                                    prev_id,
-                                                    Box::new(fresh),
-                                                ));
-                                            }
-                                        }
-                                    });
-                                }
-                            }
-                        }
                         // Detect playback via API position advancing, not IsPaused.
                         // Some Emby clients always report IsPaused=true even while playing;
                         // the only reliable signal is that PositionTicks keeps moving.
@@ -120,24 +92,10 @@ impl App {
                             self.remote_pos_at = now;
                         }
                         if item_changed {
-                            if !self.queue_cursor_held_by_user() {
-                                if let Some(new_idx) =
-                                    s.now_playing_item_id.as_ref().and_then(|id| {
-                                        self.player_tab
-                                            .queue
-                                            .slots()
-                                            .iter()
-                                            .position(|slot| slot.item.id() == id)
-                                    })
-                                {
-                                    self.player_tab.queue_cursor = new_idx;
-                                }
-                            }
                             self.runtime_zero_since = None;
                         }
                         self.connected_session_state = Some(s.clone());
                         self.session_miss_count = 0;
-                        self.apply_remote_observation(&s, generation);
                         // Remote hasn't started playing yet — repoll sooner.
                         // Cap fast-poll at 30 s: if runtime stays 0 that long the
                         // remote client likely won't report it and we stop hammering.
@@ -154,14 +112,7 @@ impl App {
                         self.session_miss_count += 1;
                         // A poll gap means the connected session is not
                         // currently observable, but the logical attachment is
-                        // still held (capable of observing a return), so
-                        // tracking suspends rather than staying confidently
-                        // current or retiring early. Only the three-miss
-                        // policy clears the attachment, and tracking retires
-                        // in that same transition (below).
-                        if let Some(tracker) = self.remote_tracker.as_mut() {
-                            tracker.session_disappeared();
-                        }
+                        // still held (capable of observing a return).
                         if self.session_miss_count >= 3 {
                             log::warn!(target: "sessions", "connected session gone; disconnecting");
                             self.flash(
@@ -170,7 +121,6 @@ impl App {
                             );
                             self.connected_session_id = None;
                             self.connected_session_state = None;
-                            self.retire_remote_tracking(false);
                             self.session_miss_count = 0;
                             self.remote_pos_s = 0;
                         } else {
@@ -179,47 +129,7 @@ impl App {
                     }
                 }
             }
-            SessionEvent::ItemRefreshed(item_id, fresh) => {
-                if let Some(slot_id) = self
-                    .player_tab
-                    .queue
-                    .slots()
-                    .iter()
-                    .find(|s| s.item.id() == item_id)
-                    .map(|s| s.slot_id)
-                {
-                    let _ = self.player_tab.queue.update_slot_item(
-                        slot_id,
-                        mbv_core::playback_queue::QueueItem::Emby(fresh),
-                    );
-                }
-            }
-            SessionEvent::CommandAcknowledged(command) => {
-                if let Some(tracker) = self.remote_tracker.as_mut() {
-                    if tracker.session_id() == command.session_id
-                        && tracker.tracking_id() == command.tracking_id
-                        && tracker.epoch() == command.tracker_epoch
-                    {
-                        tracker.acknowledge_command(command.generation);
-                    }
-                }
-            }
-            SessionEvent::CommandError {
-                error,
-                reconciliation,
-            } => {
-                if let (Some(command), Some(tracker)) =
-                    (reconciliation, self.remote_tracker.as_mut())
-                {
-                    if tracker.session_id() == command.session_id
-                        && tracker.tracking_id() == command.tracking_id
-                        && tracker.epoch() == command.tracker_epoch
-                        && tracker.command_generation_matches(command.generation)
-                    {
-                        tracker.command_failed();
-                        self.retire_remote_tracking(false);
-                    }
-                }
+            SessionEvent::CommandError { error } => {
                 self.flash(
                     format!("Remote command failed: {error}"),
                     ToastSeverity::Error,
@@ -264,15 +174,11 @@ impl App {
                 mutation_id,
                 playlist_id,
                 queue_lineage,
-                source_playlist_id,
                 name,
                 result,
             } => {
                 match result {
                     Ok(id) if queue_lineage == self.remote_queue_lineage => {
-                        if self.remote_tracking_source_is(&source_playlist_id) {
-                            self.retire_remote_tracking(true);
-                        }
                         self.queue_source =
                             crate::config::QueueSource::Playlist { id: Some(id), name };
                         self.queue_dirty = false;

@@ -2,7 +2,6 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::mpsc;
 
@@ -199,11 +198,6 @@ pub(super) enum PendingQueueAction {
     ClearQueue,
 }
 
-pub(super) struct RemoteReanchorPopup {
-    pub(super) targets: Vec<(usize, String)>,
-    pub(super) cursor: usize,
-}
-
 #[derive(Clone, Debug)]
 pub(super) enum PlaylistMutation {
     Save {
@@ -223,7 +217,6 @@ pub(super) enum PlaylistMutation {
     Replace {
         mutation_id: u64,
         queue_lineage: u64,
-        source_playlist_id: String,
         name: String,
         item_ids: Option<Vec<String>>,
     },
@@ -243,13 +236,4 @@ impl PlaylistMutation {
 pub(super) struct PlaylistMutationState {
     pub(super) active: Option<PlaylistMutation>,
     pub(super) queued: VecDeque<PlaylistMutation>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct RemoteQueueProjection {
-    pub(super) session_id: String,
-    pub(super) epoch: u64,
-    pub(super) queue_lineage: u64,
-    pub(super) occurrence_slots: HashMap<u64, QueueSlotId>,
-    pub(super) slot_occurrences: HashMap<QueueSlotId, u64>,
 }

@@ -59,7 +59,7 @@ impl App {
                             if self.local_queue_metadata_applies(scope) {
                                 self.queue_dirty = true;
                             }
-                            self.retire_remote_tracking(true);
+                            self.advance_remote_queue_lineage();
                         }
                     }
                 }

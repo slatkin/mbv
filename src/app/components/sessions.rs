@@ -25,7 +25,6 @@ pub struct SessionsComponent {
     cursor: usize,
     scroll: usize,
     connected_session_id: Option<String>,
-    tracking: bool,
     cast_attachment_id: Option<String>,
     can_disconnect: bool,
     requested_panel_area: Option<Rect>,
@@ -45,7 +44,6 @@ impl SessionsComponent {
             cursor: 0,
             scroll: 0,
             connected_session_id: None,
-            tracking: false,
             cast_attachment_id: None,
             can_disconnect: false,
             requested_panel_area: None,
@@ -62,7 +60,6 @@ impl SessionsComponent {
         targets: &[PanelTarget],
         loading: bool,
         connected_session_id: Option<&str>,
-        tracking: bool,
         cast_attachment_id: Option<&str>,
         can_disconnect: bool,
         panel_area: Option<Rect>,
@@ -78,7 +75,6 @@ impl SessionsComponent {
             })
             .unwrap_or_else(|| self.cursor.min(self.targets.len().saturating_sub(1)));
         self.connected_session_id = connected_session_id.map(str::to_owned);
-        self.tracking = tracking;
         self.cast_attachment_id = cast_attachment_id.map(str::to_owned);
         self.can_disconnect = can_disconnect;
         self.requested_panel_area = panel_area;
@@ -189,7 +185,6 @@ impl Component for SessionsComponent {
             &mut self.cursor,
             &mut self.scroll,
             self.connected_session_id.as_deref(),
-            self.tracking,
             self.cast_attachment_id.as_deref(),
             self.can_disconnect,
         );
@@ -289,7 +284,6 @@ mod tests {
             &targets,
             false,
             None,
-            false,
             None,
             false,
             Some(Rect::new(0, 0, 40, 12)),

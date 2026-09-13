@@ -7,8 +7,8 @@ so a Direct remote control hand-off never leaves the user looking at a stale Loc
 ### Requirement: Playing the queue cursor switches to the destination queue scope
 
 When the user plays the item under the queue cursor (`QueuePlayCursor`) and that action hands
-playback off to a remote session — whether via tracked-occurrence reconciliation or a plain
-attached-sequence hand-off — the client SHALL set the visible queue scope to
+playback off to a remote session — via Direct remote control or a plain attached-sequence
+hand-off — the client SHALL set the visible queue scope to
 `playback_target_queue_scope()` before sending the hand-off, so the panel already shows the
 destination queue once the item lands there.
 

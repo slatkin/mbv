@@ -147,15 +147,15 @@ use self::types_context_menu::{
     ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage, MultiSelectKind,
 };
 use self::types_daemon_lost::DaemonLostModal;
-use self::types_events::{LibEvent, ReconciliationCommand, SessionEvent};
+use self::types_events::{LibEvent, SessionEvent};
 use self::types_feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };
 use self::types_library_tab::LibraryTab;
 use self::types_playback::{
     CastPlaybackTarget, HomeLatestSource, LocalPlaybackTarget, PendingQueueAction, PlaybackState,
-    PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteReanchorPopup,
-    RemoteSlotState, SuspendedLocalSession, UndoEntry,
+    PlaybackTarget, QueueScope, QueueScopeResolution, RemotePlaybackTarget, RemoteSlotState,
+    SuspendedLocalSession, UndoEntry,
 };
 use self::types_player_tab::PlayerTab;
 use self::types_selection_modal::{

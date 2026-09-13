@@ -179,27 +179,13 @@ pub(super) enum LibEvent {
     Error(String),
 }
 
-pub(super) struct ReconciliationCommand {
-    pub(super) session_id: String,
-    pub(super) tracking_id: u64,
-    pub(super) tracker_epoch: u64,
-    pub(super) generation: u64,
-}
-
 pub(super) enum SessionEvent {
     Loaded {
         sessions: Vec<mbv_core::api::SessionInfo>,
-        generation: u64,
     },
-    ItemRefreshed(String, Box<mbv_core::api::EmbyItem>), // (item_id, fresh)
     CommandError {
         error: String,
-        reconciliation: Option<ReconciliationCommand>,
     },
-    /// A tracked remote command succeeded on the Emby server, correlated
-    /// separately from the follow-up session poll. Emitted even when that
-    /// immediate poll fails, so command acknowledgment never freezes tracking.
-    CommandAcknowledged(ReconciliationCommand),
     PlaylistMutationComplete {
         mutation_id: u64,
         playlist_id: String,
@@ -211,7 +197,6 @@ pub(super) enum SessionEvent {
         mutation_id: u64,
         playlist_id: String,
         queue_lineage: u64,
-        source_playlist_id: String,
         name: String,
         result: Result<String, String>,
     },

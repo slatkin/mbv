@@ -106,7 +106,6 @@ pub(in crate::app) use components::playlists::{
 pub(in crate::app) use components::queue::{
     render_queue_title_content, QueueRenderGeometry, QueueTitleModel,
 };
-pub(in crate::app) use components::remote_reanchor::render_remote_reanchor_popup_content;
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
 pub(in crate::app) use components::selection_modal::{
     render_selection_modal_content, SelectionModalRenderModel,
@@ -233,8 +232,6 @@ mod playlists_tests;
 #[path = "tests_queue.rs"]
 mod queue_tests;
 #[cfg(test)]
-#[path = "tests_remote_reanchor.rs"]
-mod remote_reanchor_tests;
 #[cfg(test)]
 #[path = "tests_scroll_pills.rs"]
 mod scroll_pills_tests;

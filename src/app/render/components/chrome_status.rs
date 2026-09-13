@@ -151,9 +151,8 @@ impl App {
     /// row already resolves it (design D10; folded change D2/D3): the
     /// connected session's device name (falling back to its host), the
     /// direct-remote route/label, or this machine's device name when playback
-    /// is local. No tracking suffix, no uppercasing — callers style and
-    /// extend it themselves (the queue title appends its own tracking
-    /// suffix; the header row shows it verbatim).
+    /// is local. Callers style the returned label and the header row shows it
+    /// verbatim.
     pub(in crate::app) fn playback_host_label(&self) -> String {
         let remote_state = self.remote_slot_state();
         let daemon_endpoint = self.config.lock().unwrap().daemon_client_endpoint.clone();
@@ -532,17 +531,14 @@ pub(in crate::app) struct StatusBarModel {
 }
 
 /// The status row's pointer regions, retained by the mounted
-/// `StatusBarPanel` after painting (the deleted
-/// the deleted indicator side channel side channel, task 2.2).
+/// `StatusBarPanel` after painting.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub(in crate::app) struct StatusBarRegions {
     /// Volume pill: scroll-wheel adjusts the volume.
     pub volume: Option<Rect>,
     /// Mute pill: click toggles mute.
     pub mute: Option<Rect>,
-    /// Remote/session pill region (retained verbatim; the production
-    /// projection always passes `show_session_pill: false`, so the pill
-    /// never paints and there is no click dispatch behind the region).
+    /// Remote/session pill region, when the session pill is enabled.
     pub remote: Option<Rect>,
 }
 
@@ -698,11 +694,9 @@ mod playback_host_label_tests {
     use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub, make_session};
     use crate::app::QueueScope;
 
-    /// The playback target's host label (task 3.3): the same value the queue
-    /// title row resolves — the attached session's device name, with no
-    /// tracking suffix and no uppercasing.
+    /// The playback target's host label preserves the attached session's device name.
     #[test]
-    fn attached_session_label_has_no_tracking_suffix_or_uppercasing() {
+    fn attached_session_label_preserves_device_name() {
         let mut app = make_app_stub();
         app.connected_session_id = Some("sess-1".into());
         app.connected_session_state = Some(make_session("living-room", "Emby"));
@@ -710,8 +704,6 @@ mod playback_host_label_tests {
         let label = app.playback_host_label();
 
         assert_eq!(label, "living-room");
-        assert!(!label.contains(" · TRACKING"));
-        assert!(!label.contains("TRACKING"));
     }
 
     /// Local playback (no session, no direct remote) resolves to this
@@ -722,9 +714,7 @@ mod playback_host_label_tests {
         assert_eq!(app.playback_host_label(), mbv_core::api::device_name());
     }
 
-    /// A direct-remote connection resolves the direct-remote label, and the
-    /// queue title still builds its own tracking suffix on top (the
-    /// characterization tests pin that unchanged).
+    /// A direct-remote connection resolves the direct-remote label.
     #[test]
     fn direct_remote_resolves_the_direct_label() {
         let mut app = make_remote_app_stub(
@@ -735,6 +725,5 @@ mod playback_host_label_tests {
         app.queue_scope = QueueScope::Local;
 
         assert_eq!(app.playback_host_label(), "direct-device");
-        assert!(!app.playback_host_label().contains(" · TRACKING"));
     }
 }

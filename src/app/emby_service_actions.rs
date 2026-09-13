@@ -63,8 +63,6 @@ impl App {
         self.remote_queue_undo_stack.clear();
         self.pending_delete_slot = None;
         self.pending_queue_edit_cursor = None;
-        self.remote_tracker = None;
-        self.remote_queue_projection = None;
         self.next_up_item = None;
         self.last_played_item_id = None;
         self.last_played_completed = false;

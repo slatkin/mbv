@@ -5,7 +5,6 @@
 use crate::app::tests::*;
 use crate::app::*;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 // ── playlist identity + save coordination (isolate-remote-tracking-client-behavior) ──
 
@@ -22,19 +21,33 @@ fn saved_playlist_app() -> App {
     app
 }
 
-fn track_source(app: &mut App, playlist_id: &str) {
-    let items = app.player_tab.emby_items();
-    app.remote_tracker =
-        App::build_remote_tracker_with_source("session", &items, 0, 5, Some(playlist_id.into()));
-    assert!(app.remote_tracker.is_some(), "test tracker must build");
-}
-
 fn consume_occurrence(app: &mut App, slot_index: usize) {
     let slot = app.player_tab.queue.slots()[slot_index].slot_id;
     assert!(matches!(
         app.player_tab.queue.consume_slot(slot),
         mbv_core::playback_queue::QueueMutationResult::Applied(_)
     ));
+}
+
+#[test]
+fn stale_playlist_mutation_completion_is_rejected_after_queue_change() {
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = saved_playlist_app();
+    app.save_playlist_to_emby();
+    let stale_lineage = app.remote_queue_lineage;
+    app.remove_from_queue(0);
+    assert!(app.remote_queue_lineage > stale_lineage);
+    app.queue_dirty = true;
+
+    app.handle_session_event(SessionEvent::PlaylistMutationComplete {
+        mutation_id: 1,
+        playlist_id: "pl-1".into(),
+        queue_lineage: stale_lineage,
+        source_playlist_id: "pl-1".into(),
+        result: Ok(()),
+    });
+
+    assert!(app.queue_dirty, "stale completion must not clear current queue edits");
 }
 
 #[test]
@@ -58,115 +71,6 @@ fn untracked_save_invalidates_and_persists_entry_identities() {
         .emby_items()
         .iter()
         .all(|item| item.playlist_item_id.is_empty()));
-}
-
-#[test]
-fn save_of_tracked_playlist_retires_eligibility_but_preserves_lineage() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = saved_playlist_app();
-    let lineage = app.remote_queue_lineage;
-    track_source(&mut app, "pl-1");
-
-    app.save_playlist_to_emby();
-
-    assert!(
-        app.remote_tracker.is_none(),
-        "a full save recreates entry IDs and must retire tracked consume eligibility"
-    );
-    assert_eq!(
-        app.remote_queue_lineage, lineage,
-        "a save does not change queue slots/content/source and must preserve request lineage"
-    );
-    assert!(app
-        .player_tab
-        .emby_items()
-        .iter()
-        .all(|item| item.playlist_item_id.is_empty()));
-}
-
-#[test]
-fn overwrite_of_tracked_playlist_advances_lineage_and_clears_entry_ids() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = saved_playlist_app();
-    let lineage = app.remote_queue_lineage;
-    track_source(&mut app, "pl-1");
-
-    app.do_overwrite_playlist("pl-1", "A");
-
-    assert!(app.remote_tracker.is_none());
-    assert!(
-        app.remote_queue_lineage > lineage,
-        "a real content replacement advances visible-queue lineage"
-    );
-    assert!(app
-        .player_tab
-        .emby_items()
-        .iter()
-        .all(|item| item.playlist_item_id.is_empty()));
-}
-
-#[test]
-fn overwriting_unrelated_playlist_leaves_tracked_source_identity_intact() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = saved_playlist_app();
-    let lineage = app.remote_queue_lineage;
-    track_source(&mut app, "pl-1");
-
-    app.do_overwrite_playlist("pl-2", "B");
-
-    assert!(
-        app.remote_tracker.is_some(),
-        "an unrelated playlist overwrite must not retire the tracked source"
-    );
-    assert!(app.remote_tracking_source_is("pl-1"));
-    assert_eq!(app.remote_queue_lineage, lineage);
-    assert_eq!(
-        app.player_tab.emby_items()[0].playlist_item_id,
-        "entry-0",
-        "the current source's identities are not recreated by an unrelated overwrite"
-    );
-}
-
-#[test]
-fn save_before_replace_executes_pending_action_after_tracked_save() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = saved_playlist_app();
-    app.queue_dirty = true;
-    let lineage = app.remote_queue_lineage;
-    track_source(&mut app, "pl-1");
-
-    app.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-    assert!(app.pending_queue_action.is_some());
-    let action = match app.pending_overlay.as_ref() {
-        Some(super::types_overlay::OverlayRequest::Confirm(modal)) => modal.on_confirm.clone(),
-        _ => panic!("confirmation request missing"),
-    };
-    app.apply_confirm_action(
-        action,
-        KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE),
-    );
-    assert!(
-        app.pending_queue_action.is_some(),
-        "the replacement stays queued until the save crosses its boundary"
-    );
-
-    assert!(app.remote_tracker.is_none());
-    assert_eq!(app.remote_queue_lineage, lineage);
-
-    app.handle_session_event(SessionEvent::PlaylistMutationComplete {
-        mutation_id: 1,
-        playlist_id: "pl-1".into(),
-        queue_lineage: lineage,
-        source_playlist_id: "pl-1".into(),
-        result: Ok(()),
-    });
-
-    assert!(
-        app.pending_queue_action.is_none(),
-        "a successful save on the original lineage must run the save-before-replace continuation"
-    );
-    assert!(!app.queue_dirty);
-    assert!(app.player_tab.emby_items().is_empty());
 }
 
 #[test]
@@ -274,7 +178,6 @@ fn replace_completion_persists_new_source_and_cleared_entry_ids() {
         mutation_id: 1,
         playlist_id: "pl-2".into(),
         queue_lineage: lineage,
-        source_playlist_id: "pl-2".into(),
         name: "B".into(),
         result: Ok("pl-2".into()),
     });

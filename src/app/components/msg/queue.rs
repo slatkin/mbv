@@ -57,8 +57,6 @@ pub enum QueueIntent {
     PlayNow,
     SavePlaylist,
     ResizeColumn(QueueColumnResize),
-    StopRemoteTracking,
-    ReanchorRemoteTracking,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

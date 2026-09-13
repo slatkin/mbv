@@ -20,7 +20,6 @@ pub(in crate::app) fn render_sessions_overlay_content(
     cursor: &mut usize,
     scroll: &mut usize,
     connected_session_id: Option<&str>,
-    tracking: bool,
     cast_attachment_id: Option<&str>,
     can_disconnect: bool,
 ) -> (Rect, Vec<(Rect, usize)>) {
@@ -110,15 +109,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
         match target {
             PanelTarget::Emby(s) => {
                 let is_connected = connected_session_id == Some(s.id.as_str());
-                let badge = if is_connected {
-                    if tracking {
-                        " ✚ TRACKING"
-                    } else {
-                        " ✚"
-                    }
-                } else {
-                    ""
-                };
+                let badge = if is_connected { " ✚" } else { "" };
                 render_kind_labelled_line(
                     f,
                     "EMBY",

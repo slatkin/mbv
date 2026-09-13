@@ -51,7 +51,7 @@ active and paused, and `IDLE` while it is inactive.
 
 The target SHALL be the same value the queue title row already resolves: this machine's device name
 when playback is local, and the connected session's device name (then its host) or the direct-remote
-label when it is remote. The header SHALL NOT append the queue title's tracking suffix. The header
+label when it is remote. The header
 SHALL follow the effective playback target — cast, then connected session, then local — and SHALL NOT
 follow the queue scope being viewed.
 
