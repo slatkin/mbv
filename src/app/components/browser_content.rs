@@ -309,7 +309,9 @@ impl BrowserContent {
     /// painted result row are.
     fn handle_search_pointer(&mut self, input: RowLocalInput) -> Option<Msg> {
         match input {
-            RowLocalInput::Click(at) => {
+            RowLocalInput::Click(at)
+            | RowLocalInput::ToggleClick(at)
+            | RowLocalInput::RangeClick(at) => {
                 self.inline_search.select_row_at_point(at);
                 None
             }
@@ -532,6 +534,8 @@ impl LibraryContentOwner for BrowserContent {
                 // space claims nothing.
                 let target = match input {
                     RowLocalInput::Click(at)
+                    | RowLocalInput::ToggleClick(at)
+                    | RowLocalInput::RangeClick(at)
                     | RowLocalInput::DoubleClick(at)
                     | RowLocalInput::ContextClick(at) => {
                         self.carrier.resolve_current_point(at).cloned()
@@ -549,10 +553,11 @@ impl LibraryContentOwner for BrowserContent {
                             index: self.cursor(),
                         }))
                     }
-                    RowLocalInput::Click(at) => {
+                    RowLocalInput::Click(_at)
+                    | RowLocalInput::ToggleClick(_at)
+                    | RowLocalInput::RangeClick(_at) => {
                         let target = target?;
-                        self.carrier
-                            .delegate(RowLocalInput::Click(at), Some(target.clone()));
+                        self.carrier.delegate(input, Some(target.clone()));
                         Some(Msg::Shell(ShellRequest::BrowserRowClick {
                             target: Some(target),
                         }))

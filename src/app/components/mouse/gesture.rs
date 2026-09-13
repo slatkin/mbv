@@ -38,8 +38,18 @@ const WHEEL_THROTTLE: Duration = Duration::from_millis(30);
 
 /// A recognized pointer gesture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClickModifier {
+    None,
+    Ctrl,
+    Shift,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MouseGesture {
-    Click(Position),
+    Click {
+        at: Position,
+        modifier: ClickModifier,
+    },
     DoubleClick(Position),
     RightClick(Position),
     /// Vertical wheel step: `delta` is `-1` up, `1` down.
@@ -83,15 +93,29 @@ impl MouseGestureState {
         };
         match event.kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                let is_double = self
-                    .last_click
-                    .is_some_and(|(t, p)| now.duration_since(t) < DOUBLE_CLICK_WINDOW && p == at);
-                self.last_click = Some((now, at));
-                self.drag_anchor = Some(at);
+                let modifier = if event
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::CONTROL)
+                {
+                    ClickModifier::Ctrl
+                } else if event
+                    .modifiers
+                    .contains(tuirealm::event::KeyModifiers::SHIFT)
+                {
+                    ClickModifier::Shift
+                } else {
+                    ClickModifier::None
+                };
+                let is_double = modifier == ClickModifier::None
+                    && self.last_click.is_some_and(|(t, p)| {
+                        now.duration_since(t) < DOUBLE_CLICK_WINDOW && p == at
+                    });
+                self.last_click = (modifier == ClickModifier::None).then_some((now, at));
+                self.drag_anchor = (modifier == ClickModifier::None).then_some(at);
                 Some(if is_double {
                     MouseGesture::DoubleClick(at)
                 } else {
-                    MouseGesture::Click(at)
+                    MouseGesture::Click { at, modifier }
                 })
             }
             MouseEventKind::Down(MouseButton::Right) => Some(MouseGesture::RightClick(at)),
@@ -149,7 +173,10 @@ mod tests {
         let t0 = Instant::now();
         assert_eq!(
             s.recognize_at(&ev(MouseEventKind::Down(MouseButton::Left), 3, 4), t0),
-            Some(MouseGesture::Click(Position { x: 3, y: 4 }))
+            Some(MouseGesture::Click {
+                at: Position { x: 3, y: 4 },
+                modifier: ClickModifier::None
+            })
         );
         assert_eq!(
             s.recognize_at(
@@ -157,6 +184,32 @@ mod tests {
                 t0 + Duration::from_millis(100)
             ),
             Some(MouseGesture::DoubleClick(Position { x: 3, y: 4 }))
+        );
+    }
+
+    #[test]
+    fn modified_click_is_never_double_or_drag() {
+        let mut s = MouseGestureState::new();
+        let t0 = Instant::now();
+        let mut event = ev(MouseEventKind::Down(MouseButton::Left), 3, 4);
+        event.modifiers = tuirealm::event::KeyModifiers::CONTROL;
+        assert_eq!(
+            s.recognize_at(&event, t0),
+            Some(MouseGesture::Click {
+                at: Position { x: 3, y: 4 },
+                modifier: ClickModifier::Ctrl,
+            })
+        );
+        assert_eq!(
+            s.recognize_at(&event, t0 + Duration::from_millis(10)),
+            Some(MouseGesture::Click {
+                at: Position { x: 3, y: 4 },
+                modifier: ClickModifier::Ctrl,
+            })
+        );
+        assert_eq!(
+            s.recognize(&ev(MouseEventKind::Drag(MouseButton::Left), 4, 5)),
+            None
         );
     }
 
@@ -170,7 +223,10 @@ mod tests {
                 &ev(MouseEventKind::Down(MouseButton::Left), 3, 4),
                 t0 + Duration::from_millis(500)
             ),
-            Some(MouseGesture::Click(Position { x: 3, y: 4 }))
+            Some(MouseGesture::Click {
+                at: Position { x: 3, y: 4 },
+                modifier: ClickModifier::None
+            })
         );
     }
 
@@ -184,7 +240,10 @@ mod tests {
                 &ev(MouseEventKind::Down(MouseButton::Left), 3, 5),
                 t0 + Duration::from_millis(100)
             ),
-            Some(MouseGesture::Click(Position { x: 3, y: 5 }))
+            Some(MouseGesture::Click {
+                at: Position { x: 3, y: 5 },
+                modifier: ClickModifier::None
+            })
         );
     }
 
@@ -232,7 +291,10 @@ mod tests {
         let mut s = MouseGestureState::new();
         assert_eq!(
             s.recognize(&ev(MouseEventKind::Down(MouseButton::Left), 1, 2)),
-            Some(MouseGesture::Click(Position { x: 1, y: 2 }))
+            Some(MouseGesture::Click {
+                at: Position { x: 1, y: 2 },
+                modifier: ClickModifier::None
+            })
         );
         assert_eq!(
             s.recognize(&ev(MouseEventKind::Drag(MouseButton::Left), 4, 5)),
@@ -252,7 +314,7 @@ mod tests {
         let mut s = MouseGestureState::new();
         assert!(matches!(
             s.recognize(&ev(MouseEventKind::Down(MouseButton::Left), 1, 2)),
-            Some(MouseGesture::Click(_))
+            Some(MouseGesture::Click { .. })
         ));
         assert_eq!(
             s.recognize(&ev(MouseEventKind::Up(MouseButton::Left), 1, 2)),

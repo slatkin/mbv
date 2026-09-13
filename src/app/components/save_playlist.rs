@@ -95,7 +95,7 @@ impl SavePlaylistComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) if !self.frame.contains(at) => Some(Msg::Shell(
+            MouseGesture::Click { at, .. } if !self.frame.contains(at) => Some(Msg::Shell(
                 ShellRequest::SavePlaylistIntent(SavePlaylistIntent::Dismiss),
             )),
             _ => None,

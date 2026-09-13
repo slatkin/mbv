@@ -13,7 +13,7 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
     RowLocalInput, RowLocalOutcome,
 };
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
     Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
     TerminalObserverEvent,
@@ -397,15 +397,24 @@ impl QueueComponent {
                 // discarded by the mouse fold.
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            MouseGesture::Click(at) => {
+            MouseGesture::Click { at, modifier } => {
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
                 let target = self.carrier.resolve_current_point(at).copied();
                 if let Some(target) = target {
-                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                    let input = match modifier {
+                        ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
+                        ClickModifier::Shift => RowLocalInput::RangeClick(at),
+                        ClickModifier::None => RowLocalInput::Click(at),
+                    };
+                    self.delegate_row_local_input(input, Some(target));
                 }
-                self.drag_grab = target;
+                self.drag_grab = if modifier == ClickModifier::None {
+                    target
+                } else {
+                    None
+                };
                 Some(Msg::Shell(ShellRequest::QueueRowClick {
                     slot_id: self.carrier.selected_target().copied(),
                 }))

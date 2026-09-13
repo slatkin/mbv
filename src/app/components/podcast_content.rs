@@ -355,6 +355,8 @@ impl LibraryContentOwner for PodcastContent {
             LibrarySlotEvent::HeroPane(input) => {
                 let point = match input {
                     RowLocalInput::Click(p)
+                    | RowLocalInput::ToggleClick(p)
+                    | RowLocalInput::RangeClick(p)
                     | RowLocalInput::DoubleClick(p)
                     | RowLocalInput::ContextClick(p) => p,
                     RowLocalInput::Wheel { at, .. } => at,
@@ -363,7 +365,10 @@ impl LibraryContentOwner for PodcastContent {
                 if let Some(target) = self.episode_list.resolve_current_point(point).cloned() {
                     if matches!(
                         input,
-                        RowLocalInput::Click(_) | RowLocalInput::DoubleClick(_)
+                        RowLocalInput::Click(_)
+                            | RowLocalInput::ToggleClick(_)
+                            | RowLocalInput::RangeClick(_)
+                            | RowLocalInput::DoubleClick(_)
                     ) {
                         self.episode_focused = true;
                     }

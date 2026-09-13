@@ -268,7 +268,7 @@ impl PlaylistsComponent {
                 self.open_items.clear();
                 Some(Msg::Shell(ShellRequest::PlaylistsBack))
             }
-            gesture @ (MouseGesture::Click(at) | MouseGesture::DoubleClick(at)) => {
+            gesture @ (MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at)) => {
                 if self.panel_area.is_some_and(|area| !area.contains(at)) {
                     return Some(Msg::Shell(ShellRequest::DismissPlaylists));
                 }

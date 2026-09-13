@@ -504,9 +504,11 @@ impl LibraryContentOwner for FeedsContent {
                     self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
                     Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                 }
-                RowLocalInput::Click(at) => {
+                RowLocalInput::Click(at)
+                | RowLocalInput::ToggleClick(at)
+                | RowLocalInput::RangeClick(at) => {
                     let target = self.resolve_row_id(at)?;
-                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                    self.delegate_row_local_input(input, Some(target));
                     Some(Msg::Shell(ShellRequest::FeedsRowClick))
                 }
                 RowLocalInput::ContextClick(at) => {

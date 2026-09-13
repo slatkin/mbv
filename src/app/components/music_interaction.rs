@@ -27,7 +27,7 @@ impl MusicContent {
                                 Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), None))
                             })
                         }
-                        RowLocalInput::Click(at) => {
+                        RowLocalInput::Click(at) | RowLocalInput::ToggleClick(at) | RowLocalInput::RangeClick(at) => {
                             self.inline_search.select_row_at_point(at);
                             None
                         }
@@ -53,10 +53,9 @@ impl MusicContent {
                                 None
                             }
                         }
-                        RowLocalInput::Click(at) => {
+                        RowLocalInput::Click(at) | RowLocalInput::ToggleClick(at) | RowLocalInput::RangeClick(at) => {
                             let target = self.carrier.resolve_current_point(at)?.clone();
-                            self.carrier
-                                .delegate(RowLocalInput::Click(at), Some(target));
+                            self.carrier.delegate(input, Some(target));
                             Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                                 target: self.selected_album_index(),
                                 kind: AlbumCursorKind::Move,
@@ -87,11 +86,13 @@ impl MusicContent {
                     }
                     None
                 }
-                RowLocalInput::Click(at) | RowLocalInput::DoubleClick(at) => {
+                RowLocalInput::Click(at)
+                | RowLocalInput::ToggleClick(at)
+                | RowLocalInput::RangeClick(at)
+                | RowLocalInput::DoubleClick(at) => {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     self.track_focused = true;
-                    self.track_list
-                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.track_list.delegate(input, Some(target));
                     (matches!(input, RowLocalInput::DoubleClick(_))).then(|| {
                         let track_target = self.track_list.selected_target()?;
                         let track = self

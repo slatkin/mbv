@@ -458,6 +458,8 @@ impl LibraryContentOwner for HomeContent {
             LibrarySlotEvent::List(input) => {
                 let at = match input {
                     RowLocalInput::Click(at)
+                    | RowLocalInput::ToggleClick(at)
+                    | RowLocalInput::RangeClick(at)
                     | RowLocalInput::DoubleClick(at)
                     | RowLocalInput::ContextClick(at) => Some(at),
                     _ => None,
@@ -466,8 +468,8 @@ impl LibraryContentOwner for HomeContent {
                 // `claim_row` contract (a blank/gap click leaves the
                 // selection unchanged).
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if let Some(at) = at {
-                    self.carrier.delegate(RowLocalInput::Click(at), target);
+                if at.is_some() {
+                    self.carrier.delegate(input, target);
                 }
                 match input {
                     RowLocalInput::Wheel { .. } => {
@@ -487,9 +489,13 @@ impl LibraryContentOwner for HomeContent {
                             Some((at.x, at.y)),
                         )))
                     }
-                    RowLocalInput::Click(_) => Some(Msg::Shell(ShellRequest::HomeRowClick {
-                        target: self.row_target(),
-                    })),
+                    RowLocalInput::Click(_)
+                    | RowLocalInput::ToggleClick(_)
+                    | RowLocalInput::RangeClick(_) => {
+                        Some(Msg::Shell(ShellRequest::HomeRowClick {
+                            target: self.row_target(),
+                        }))
+                    }
                     _ => None,
                 }
             }

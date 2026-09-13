@@ -319,6 +319,7 @@ fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>, quit_t
 }
 
 use ratatui::{backend::CrosstermBackend, Terminal};
+use std::io::Write;
 
 #[cfg(test)]
 use mbv_core::api::EmbyItem;
@@ -351,6 +352,7 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dy
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
     crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    set_shift_escape_mode(&mut stdout, true)?;
     crossterm::execute!(stdout, crossterm::event::EnableFocusChange)?;
     let _ = crossterm::execute!(
         stdout,
@@ -361,6 +363,10 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dy
     Ok(Terminal::new(CrosstermBackend::new(stdout))?)
 }
 
+fn set_shift_escape_mode<W: Write>(writer: &mut W, enabled: bool) -> std::io::Result<()> {
+    writer.write_all(if enabled { b"\x1b[>1s" } else { b"\x1b[>0s" })
+}
+
 fn restore_terminal(
     mut terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -369,6 +375,7 @@ fn restore_terminal(
         terminal.backend_mut(),
         crossterm::event::PopKeyboardEnhancementFlags
     );
+    set_shift_escape_mode(terminal.backend_mut(), false)?;
     crossterm::execute!(
         terminal.backend_mut(),
         crossterm::event::DisableMouseCapture
@@ -380,6 +387,21 @@ fn restore_terminal(
     )?;
     terminal.show_cursor()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod shift_escape_tests {
+    use super::set_shift_escape_mode;
+
+    #[test]
+    fn emits_xtshift_escape_mode_sequences() {
+        let mut output = Vec::new();
+        set_shift_escape_mode(&mut output, true).unwrap();
+        assert_eq!(output, b"\x1b[>1s");
+        output.clear();
+        set_shift_escape_mode(&mut output, false).unwrap();
+        assert_eq!(output, b"\x1b[>0s");
+    }
 }
 
 include!("app_test_modules.rs");

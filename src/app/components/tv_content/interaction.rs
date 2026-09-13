@@ -17,7 +17,11 @@ impl TvContent {
             // The season pills ride in the hero pane's Workspace Selector
             // row (Wide only).
             LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
-                self.apply_pane_click(TvHit::SeasonTab(index), Position::new(0, 0));
+                self.apply_pane_click(
+                    TvHit::SeasonTab(index),
+                    Position::new(0, 0),
+                    RowLocalInput::Click(Position::new(0, 0)),
+                );
                 Some(Msg::Shell(ShellRequest::TvHitClick {
                     hit: TvHit::SeasonTab(index),
                 }))
@@ -47,14 +51,14 @@ impl TvContent {
                 // mutation be discarded by the mouse fold.
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            RowLocalInput::Click(at) => {
+            RowLocalInput::Click(at) | RowLocalInput::ToggleClick(at) | RowLocalInput::RangeClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
-                self.apply_pane_click(hit.clone(), at);
+                self.apply_pane_click(hit.clone(), at, input);
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             RowLocalInput::DoubleClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
-                self.apply_pane_click(hit.clone(), at);
+                self.apply_pane_click(hit.clone(), at, RowLocalInput::Click(at));
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
             RowLocalInput::ContextClick(at) => {
@@ -75,6 +79,8 @@ impl TvContent {
     fn hero_pane_event(&mut self, input: RowLocalInput) -> Option<Msg> {
         let at = match input {
             RowLocalInput::Click(at)
+            | RowLocalInput::ToggleClick(at)
+            | RowLocalInput::RangeClick(at)
             | RowLocalInput::DoubleClick(at)
             | RowLocalInput::ContextClick(at) => at,
             // The series rail is the only scrollable TV surface; a wheel
@@ -91,12 +97,12 @@ impl TvContent {
             TvHit::EpisodesPane
         };
         match input {
-            RowLocalInput::Click(_) => {
-                self.apply_pane_click(hit.clone(), at);
+            RowLocalInput::Click(_) | RowLocalInput::ToggleClick(_) | RowLocalInput::RangeClick(_) => {
+                self.apply_pane_click(hit.clone(), at, input);
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             RowLocalInput::DoubleClick(_) => {
-                self.apply_pane_click(hit.clone(), at);
+                self.apply_pane_click(hit.clone(), at, RowLocalInput::Click(at));
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
             RowLocalInput::ContextClick(_) => {
@@ -164,7 +170,7 @@ impl TvContent {
     /// in the already-focused pane keeps it. Clicking a season pill also
     /// selects that season; blank Episodes-pane space is consumed without
     /// changing the pane. Right-clicks never call this.
-    fn apply_pane_click(&mut self, hit: TvHit, at: Position) {
+    fn apply_pane_click(&mut self, hit: TvHit, _at: Position, input: RowLocalInput) {
         match hit {
             TvHit::SeasonTab(index) => {
                 self.pane = Pane::Episodes;
@@ -174,13 +180,11 @@ impl TvContent {
             }
             TvHit::EpisodeRow(target) => {
                 self.pane = Pane::Episodes;
-                self.episodes
-                    .delegate(RowLocalInput::Click(at), Some(target));
+                self.episodes.delegate(input, Some(target));
             }
             TvHit::SeriesRow(target) => {
                 self.pane = Pane::Series;
-                self.carrier
-                    .delegate(RowLocalInput::Click(at), Some(target));
+                self.carrier.delegate(input, Some(target));
             }
             TvHit::EpisodesPane | TvHit::LetterPill(_) => {}
         }

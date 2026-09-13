@@ -282,6 +282,8 @@ pub enum RowLocalInput {
     Activate,
     Context,
     Click(Position),
+    ToggleClick(Position),
+    RangeClick(Position),
     DoubleClick(Position),
     ContextClick(Position),
     Wheel { at: Position, delta: i64 },
@@ -534,7 +536,24 @@ impl<Target> MediaList<Target> {
                     RowLocalOutcome::External(RowIntent::Context(target))
                 });
             }
+            RowLocalInput::ToggleClick(_) => {
+                if let Some(target) = pointer_target {
+                    self.toggle_selection(&target);
+                    self.select_target(&target);
+                    return RowLocalOutcome::Consumed;
+                }
+                return RowLocalOutcome::Unhandled;
+            }
+            RowLocalInput::RangeClick(_) => {
+                if let Some(target) = pointer_target {
+                    self.extend_selection_to(&target);
+                    self.select_target(&target);
+                    return RowLocalOutcome::Consumed;
+                }
+                return RowLocalOutcome::Unhandled;
+            }
             RowLocalInput::Click(_) => {
+                self.clear_selection();
                 if let Some(target) = pointer_target {
                     if self.select_target(&target) {
                         return if before.as_ref() == Some(&target) {

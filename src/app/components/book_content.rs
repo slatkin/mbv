@@ -464,10 +464,11 @@ impl BookContent {
                         None
                     }
                 }
-                RowLocalInput::Click(at) => {
+                RowLocalInput::Click(at)
+                | RowLocalInput::ToggleClick(at)
+                | RowLocalInput::RangeClick(at) => {
                     let target = self.carrier.resolve_current_point(at)?.clone();
-                    self.carrier
-                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.carrier.delegate(input, Some(target));
                     self.sync_book_from_owner();
                     self.book_request()
                 }
@@ -493,11 +494,12 @@ impl BookContent {
                     }
                     None
                 }
-                RowLocalInput::Click(at) => {
+                RowLocalInput::Click(at)
+                | RowLocalInput::ToggleClick(at)
+                | RowLocalInput::RangeClick(at) => {
                     let target = self.chapter_list.resolve_current_point(at).copied()?;
                     self.enter_chapter_focus();
-                    self.chapter_list
-                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.chapter_list.delegate(input, Some(target));
                     self.chapter_focus_request()
                 }
                 RowLocalInput::DoubleClick(at) | RowLocalInput::ContextClick(at) => {

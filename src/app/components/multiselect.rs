@@ -104,7 +104,7 @@ impl MultiselectComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) => {
+            MouseGesture::Click { at, .. } => {
                 if let Some(&index) = self.hit_rows.resolve(at) {
                     if let Some(item) = self.items.get_mut(index) {
                         item.2 = !item.2;

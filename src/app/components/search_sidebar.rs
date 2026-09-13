@@ -238,7 +238,7 @@ impl SearchSidebarComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) => {
+            MouseGesture::Click { at, .. } => {
                 if let Some(&chip) = self.hit_chips.resolve(at) {
                     if chip < self.sidebar.available_types().len() + 1
                         && chip != self.sidebar.type_filter
