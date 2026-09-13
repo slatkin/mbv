@@ -41,9 +41,11 @@ const TRANSPORT_SURFACE: palette::Surface = palette::Surface::QueueOnlyPlaybackP
 
 pub struct QueuePlaybackPanel {
     /// The header's projected facts: status word left, playback target
-    /// right (`App::playback_host_label`, no tracking suffix).
+    /// right (`App::playback_host_label_and_remote`, no tracking suffix)
+    /// with its remote flag for the hostname colour.
     status: NowPlayingStatus,
     host: String,
+    host_is_remote: bool,
     /// The transport's projected facts (the shared transport projection).
     transport: PlaybackProjection,
     /// The transport rect the shell computes in the sync pass from the
@@ -69,6 +71,7 @@ impl QueuePlaybackPanel {
         Self {
             status: NowPlayingStatus::Idle,
             host: String::new(),
+            host_is_remote: false,
             transport: PlaybackProjection {
                 state: crate::app::types_playback::PlaybackState::default(),
                 show_controls: false,
@@ -94,10 +97,17 @@ impl QueuePlaybackPanel {
         }
     }
 
-    /// Project the header row's facts (status word and playback target).
-    pub(in crate::app) fn set_header(&mut self, status: NowPlayingStatus, host: String) {
+    /// Project the header row's facts (status word, playback target and
+    /// its remote flag for the hostname colour).
+    pub(in crate::app) fn set_header(
+        &mut self,
+        status: NowPlayingStatus,
+        host: String,
+        host_is_remote: bool,
+    ) {
         self.status = status;
         self.host = host;
+        self.host_is_remote = host_is_remote;
     }
 
     /// Project the transport's facts (the shared transport projection, with
@@ -179,7 +189,7 @@ impl Component for QueuePlaybackPanel {
             height: 1,
             ..queue_panel_inset(area)
         };
-        render_playback_header(frame, header, self.status, &self.host);
+        render_playback_header(frame, header, self.status, &self.host, self.host_is_remote);
         // While idle — or whenever the shell hands no transport rect — the
         // slot and transport rows are already collapsed (task 3.6); the
         // panel paints nothing else and its hit geometry stays cleared.
@@ -272,6 +282,7 @@ mod tests {
                 NowPlayingStatus::Playing
             },
             "music-box".into(),
+            false,
         );
         panel.transport.show_controls = !idle;
         // The shell hands the transport band the rows below the header's
@@ -295,7 +306,7 @@ mod tests {
 
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Idle, "music-box".into());
+        panel.set_header(NowPlayingStatus::Idle, "music-box".into(), false);
         panel.set_transport_area(None);
         terminal
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
@@ -320,7 +331,7 @@ mod tests {
     #[test]
     fn active_panel_paints_the_transport_its_shell_rect_names() {
         let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into());
+        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.show_controls = true;
         panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
@@ -346,7 +357,7 @@ mod tests {
     #[test]
     fn transport_clicks_resolve_against_retained_geometry() {
         let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into());
+        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.show_controls = true;
         panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
@@ -382,7 +393,7 @@ mod tests {
     #[test]
     fn transport_band_uses_the_queue_column_chrome_surface() {
         let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into());
+        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
@@ -403,7 +414,7 @@ mod tests {
     fn header_paints_inset_one_row_down_and_two_columns_in() {
         let band = palette::surface_colors(Surface::QueueOnlyPlaybackPanel, false).fill;
         let mut panel = QueuePlaybackPanel::new();
-        panel.set_header(NowPlayingStatus::Playing, "music-box".into());
+        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.set_transport_area(None);
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
@@ -445,6 +456,34 @@ mod tests {
             buf[(39, 1)].style().bg,
             Some(band),
             "no paint right of the inset"
+        );
+    }
+
+    /// The header carries no progress while playing: the transport's
+    /// throbber and percent stay out of the header row even when the
+    /// projected transport state has position and runtime to state.
+    #[test]
+    fn header_shows_no_progress_while_playing() {
+        let mut panel = QueuePlaybackPanel::new();
+        panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
+        panel.transport.state.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
+        panel.transport.state.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
+        panel.transport.throbber = ratatui::text::Span::raw("~");
+        panel.set_transport_area(None);
+        let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+        terminal
+            .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let header: String = (0..40).map(|x| buf[(x, 1)].symbol().to_owned()).collect();
+        assert!(
+            !header.contains('~') && !header.contains('%'),
+            "no throbber or percent in the header: {header:?}"
+        );
+        assert!(header.contains(" PLAYING"), "status still left: {header:?}");
+        assert!(
+            header.trim_end().ends_with("on music-box"),
+            "target still right: {header:?}"
         );
     }
 }

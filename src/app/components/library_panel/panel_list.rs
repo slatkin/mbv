@@ -25,9 +25,9 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
-            PanelListPaintPolicy::Wide { focused, throbber } => {
+            PanelListPaintPolicy::Wide { focused } => {
                 self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::new(focused, throbber));
+                    .set_paint_policy(WideMediaListPaintPolicy::new(focused));
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
                 self.wide_mut()
@@ -107,10 +107,7 @@ mod panel_list_tests {
             .draw(|f| {
                 PanelList::set_paint_policy(
                     &mut carrier,
-                    PanelListPaintPolicy::Wide {
-                        focused: true,
-                        throbber: None,
-                    },
+                    PanelListPaintPolicy::Wide { focused: true },
                 );
                 PanelList::view(&mut carrier, f, area);
             })
@@ -156,10 +153,7 @@ mod panel_list_tests {
             .draw(|f| {
                 PanelList::set_paint_policy(
                     &mut carrier,
-                    PanelListPaintPolicy::Wide {
-                        focused: true,
-                        throbber: None,
-                    },
+                    PanelListPaintPolicy::Wide { focused: true },
                 );
                 PanelList::view(&mut carrier, f, list_rect);
             })

@@ -119,7 +119,7 @@ mod resolve_point {
     /// frame's geometry (design.md D6).
     fn paint_wide(list: &mut WideMediaList<String>, area: Rect) {
         list.set_geometry(area, area);
-        list.set_paint_policy(WideMediaListPaintPolicy::new(false, None));
+        list.set_paint_policy(WideMediaListPaintPolicy::new(false));
         let mut terminal =
             Terminal::new(TestBackend::new(area.right().max(1), area.bottom().max(1))).unwrap();
         terminal.draw(|f| list.view(f, area)).unwrap();
@@ -449,7 +449,7 @@ fn wide_component_retains_only_completed_current_frame_facts() {
     let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
     terminal
         .draw(|frame| {
-            list.set_paint_policy(WideMediaListPaintPolicy::new(true, None));
+            list.set_paint_policy(WideMediaListPaintPolicy::new(true));
             Component::view(&mut list, frame, area);
         })
         .unwrap();

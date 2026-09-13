@@ -197,17 +197,13 @@ pub(in crate::app) struct LibraryPanelContent<'a> {
 }
 
 /// The closed paint policy the panel sets on its lists (design D3/D6): the
-/// focus bit and presentation-specific inputs — the Wide throbber and the
-/// Inline detail height the panel computes from the hero content. Selected-row
-/// surfaces are fixed by the owning presentation policy; destinations pass none.
+/// focus bit and presentation-specific inputs — the Inline detail height
+/// the panel computes from the hero content. Selected-row surfaces are fixed
+/// by the owning presentation policy; destinations pass none.
 pub(in crate::app) enum PanelListPaintPolicy {
-    /// The Wide browser presentation's policy: focus and the now-playing
-    /// throbber glyph (library lists carry none today). Selected rows use the
-    /// list backdrop surface.
-    Wide {
-        focused: bool,
-        throbber: Option<char>,
-    },
+    /// The Wide browser presentation's policy: focus only. Selected rows use
+    /// the list backdrop surface.
+    Wide { focused: bool },
     /// The Wide library Workspace presentation. Its selected row belongs to
     /// the owning library pane surface rather than the list backdrop.
     WideWorkspace { focused: bool },

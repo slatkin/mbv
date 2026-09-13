@@ -27,10 +27,6 @@ pub(super) const SOFT_CONTENT_BODY_BG: Color = Color::Rgb(72, 88, 78); // soft c
 pub(super) const BG_GREEN_SOFT: Color = Color::Rgb(72, 88, 78); // softer green-grey (#48584e)
 pub(super) const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub(super) const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
-/// Liveness green; shares `AQUA`'s value today, kept separate so a throbber
-/// edit cannot move the `ACCENT` surface fill (the queue's selected scope
-/// pill resolves the `QueueScopePillSelected` row through it).
-pub(super) const PLAYBACK_THROBBER_FG: Color = Color::Rgb(53, 167, 124); // now-playing liveness (#35a77c)
 pub(super) const AMBER: Color = Color::Rgb(199, 152, 71); // audiobookshelf gold (#c79847)
 pub(super) const FOAM: Color = Color::Rgb(58, 148, 197); // project blue (#3a94c5)
 /// Selected pill surface; shares `FOAM`'s value today, kept separate so a

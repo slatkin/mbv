@@ -44,7 +44,9 @@ column's recessed inset: one row of column surface above it and two columns of c
 each side, with no padding below it, so it is not flush with the column's top, left, or right edge
 and its text aligns with the slot and transport below. The header SHALL always be painted, including
 while playback is idle. Its left side SHALL state the playback status and its right side SHALL state
-the playback target as `on <host>`.
+the playback target as `on <host>`, with the `on ` prefix muted and the hostname green when local
+and aqua when remote. While playing, the throbber and percent SHALL paint one space right of the
+status word; they SHALL NOT show while idle or paused.
 
 The status word SHALL be `PLAYING` while playback is active and not paused, `PAUSED` while it is
 active and paused, and `IDLE` while it is inactive.
@@ -91,7 +93,10 @@ follow the queue scope being viewed.
 
 In every queue-visible layout the playback panel (seekbar, title row, controls) SHALL render inside
 the queue column, using the same content as the Library playback panel. The panel SHALL NOT
-render in the right column of a queue-visible layout.
+render in the right column of a queue-visible layout. The queue column splits the title band
+across two rows: the upper row keeps the transport controls and the status pills, while the
+title and the `pos / dur` time render one row below — the title left with one
+space of indent, the time right with one space of indent, with the title's marquee window kept.
 
 When the terminal is narrower than 100 columns the visual slot and the playback panel SHALL stack
 vertically: the visual slot at full column width, the panel directly below it, and the queue list

@@ -46,7 +46,6 @@ pub(super) fn render_wide_media_list<Target: Clone>(
     list: &mut WideMediaList<Target>,
     focused: bool,
     selected_bg: Color,
-    throbber: Option<char>,
 ) -> MediaListPaint<Target> {
     #[cfg(test)]
     super::WIDE_MEDIA_LIST_PAINTS.with(|count| count.set(count.get() + 1));
@@ -72,7 +71,6 @@ pub(super) fn render_wide_media_list<Target: Clone>(
                 selected_bg,
                 inner_width,
                 scrollbar,
-                throbber,
             )
         })
         .collect();
@@ -166,7 +164,6 @@ fn render_inline_media_browser_with_geometry<Target: Clone>(
                         selected_bg,
                         inner_width,
                         focused && overflows,
-                        None,
                     )
                 })
                 .unwrap_or_else(|| ListItem::new(Line::default()))
@@ -239,7 +236,6 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
         list,
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
-        policy.throbber(),
     );
     list.finish_view(
         claim_rect,

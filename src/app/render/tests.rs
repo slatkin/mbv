@@ -311,6 +311,173 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
     assert_ne!(first, later, "title window should have scrolled");
 }
 
+/// The queue column's split title band: the upper row keeps the transport
+/// controls, while the title and the `pos / dur` time move one row down —
+/// the title left with one space of indent, the time right with one space
+/// of indent. The header carries no throbber or percent; neither does
+/// this row.
+#[test]
+fn queue_panel_moves_title_progress_and_time_to_the_lower_row() {
+    use crate::app::types_settings::PanelMode;
+    let mut app = make_app_stub();
+    app.panel_mode = PanelMode::QueueOnly;
+    app.use_nerd_fonts = false;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.paused = false;
+        st.position_ticks = 45 * TICKS_PER_SECOND;
+        st.runtime_ticks = 90 * TICKS_PER_SECOND;
+    }
+    let mut layout = PlaybackStripAreas::default();
+    let backend = TestBackend::new(60, 3);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        let title = Some(("Title".to_string(), palette::TEXT_STRONG));
+        let context = app.playback_panel_context(
+            Rect::new(0, 0, 60, 3),
+            &mut layout,
+            3,
+            true,
+            &title,
+            palette::SURFACE_CHROME,
+        );
+        render_player_panel(f, context);
+    })
+    .unwrap();
+    let lines: Vec<String> = buffer_to_string(&term)
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert!(
+        lines[1].contains("||"),
+        "upper row keeps the controls:\n{}",
+        lines[1]
+    );
+    assert!(
+        !lines[1].contains("Title"),
+        "title moves down:\n{}",
+        lines[1]
+    );
+    assert!(
+        lines[2].starts_with(" Title"),
+        "one space of left indent:\n{}",
+        lines[2]
+    );
+    assert!(
+        !lines[2].contains('%'),
+        "no percent on the lower row:\n{}",
+        lines[2]
+    );
+    assert!(
+        lines[2].ends_with("0:45 / 1:30 "),
+        "time right with one space of indent:\n{}",
+        lines[2]
+    );
+    assert_eq!(
+        layout.play_pause_area.y, 1,
+        "transport hits stay on the upper row"
+    );
+}
+
+/// The Library strip keeps the single title row: the queue column's split
+/// never leaks into the right-column presentation.
+#[test]
+fn library_strip_keeps_the_single_title_row() {
+    let mut app = make_app_stub();
+    app.use_nerd_fonts = false;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.paused = false;
+        st.position_ticks = 45 * TICKS_PER_SECOND;
+        st.runtime_ticks = 90 * TICKS_PER_SECOND;
+    }
+    let mut layout = PlaybackStripAreas::default();
+    let backend = TestBackend::new(60, 3);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        let title = Some(("Title".to_string(), palette::TEXT_STRONG));
+        let context = app.playback_panel_context(
+            Rect::new(0, 0, 60, 3),
+            &mut layout,
+            3,
+            true,
+            &title,
+            palette::SURFACE_CHROME,
+        );
+        render_player_panel(f, context);
+    })
+    .unwrap();
+    let lines: Vec<String> = buffer_to_string(&term)
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert!(
+        lines[1].contains("Title"),
+        "strip keeps the title up top:\n{}",
+        lines[1]
+    );
+    assert!(
+        lines[2].trim().is_empty(),
+        "indicator row stays blank:\n{}",
+        lines[2]
+    );
+}
+
+/// The moved title keeps the shared marquee window on its wider lower row:
+/// a title that still does not fit scrolls instead of overlapping the time.
+#[test]
+fn queue_lower_row_marquees_a_title_that_does_not_fit() {
+    use crate::app::types_settings::PanelMode;
+    let mut app = make_app_stub();
+    app.panel_mode = PanelMode::QueueOnly;
+    app.use_nerd_fonts = false;
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+        st.paused = false;
+        st.position_ticks = 45 * TICKS_PER_SECOND;
+        st.runtime_ticks = 90 * TICKS_PER_SECOND;
+    }
+    let long_title = "A Very Long Album Title That Cannot Possibly Fit In This Row";
+    let mut layout = PlaybackStripAreas::default();
+    let backend = TestBackend::new(60, 3);
+    let mut term = Terminal::new(backend).unwrap();
+    term.draw(|f| {
+        let title = Some((long_title.to_string(), palette::TEXT_STRONG));
+        let context = app.playback_panel_context(
+            Rect::new(0, 0, 60, 3),
+            &mut layout,
+            3,
+            true,
+            &title,
+            palette::SURFACE_CHROME,
+        );
+        render_player_panel(f, context);
+    })
+    .unwrap();
+    let lines: Vec<String> = buffer_to_string(&term)
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert!(
+        lines[2].starts_with(" A Very Long"),
+        "marquee rests at the head:\n{}",
+        lines[2]
+    );
+    assert!(
+        !lines[2].contains(long_title),
+        "overlong title windows instead of overflowing:\n{}",
+        lines[2]
+    );
+    assert!(
+        lines[2].ends_with("0:45 / 1:30 "),
+        "time stays intact at the right:\n{}",
+        lines[2]
+    );
+}
+
 #[test]
 fn idle_feed_title_marquees_instead_of_truncating() {
     use crate::app::types_feed::{IdleFeed, IdleFeedItem};

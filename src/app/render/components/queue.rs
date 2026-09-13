@@ -2,7 +2,7 @@ use crate::app::components::media_list::{WideMediaList, WideMediaListPaintPolicy
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
@@ -25,11 +25,10 @@ pub(in crate::app) fn render_queue_body(
     area: Rect,
     presentation: QueuePresentation<'_>,
     focused: bool,
-    throbber: Option<char>,
 ) {
     match presentation {
         QueuePresentation::Wide(list) => {
-            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused, throbber));
+            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused));
             Component::view(list, frame, area);
         }
     }
@@ -46,7 +45,6 @@ pub(in crate::app) struct QueueTitleModel {
     pub local_icon: String,
     pub local_label: String,
     pub remote_icon: String,
-    pub remote_label: String,
     pub local_selected: bool,
     pub show_split: bool,
     pub is_mbv_session: bool,
@@ -67,18 +65,6 @@ impl App {
                     .as_ref()
                     .is_some_and(|session| session.client.eq_ignore_ascii_case("mbv")));
         let mut local_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
-        if show_split {
-            if let Some(trailing) = local_spans.get_mut(3) {
-                trailing.content = "".into();
-            }
-            if let Some(label) = local_spans.get_mut(2) {
-                label.content = if is_mbv_session {
-                    " Connected: ".into()
-                } else {
-                    " Connected:".into()
-                };
-            }
-        }
         if self.use_nerd_fonts {
             if let Some(icon) = local_spans.get_mut(1) {
                 icon.content = "\u{F0AFE}".into();
@@ -93,8 +79,11 @@ impl App {
             icon.style = icon.style.fg(palette::TEXT_METADATA);
         }
         Self::uppercase_status_label(&mut local_spans);
-        let (remote_icon, _remote_label) =
-            self.remote_icon_and_label(remote_state, &daemon_endpoint);
+        // The column header already names the playback target (`on <host>`),
+        // so the title drops the host label and keeps only the scope-toggle
+        // icon; attached generic Sessions remain ordinary observed playback
+        // targets without an additional status marker.
+        let remote_icon = self.remote_icon_and_label(remote_state, &daemon_endpoint).0;
         QueueTitleModel {
             local_icon: local_spans
                 .get(1)
@@ -105,10 +94,6 @@ impl App {
                 .map(|span| span.content.to_string())
                 .unwrap_or_default(),
             remote_icon: remote_icon.to_string(),
-            // The host label comes from the one shared playback-target
-            // resolution; attached generic Sessions remain ordinary observed
-            // playback targets without an additional status marker.
-            remote_label: self.playback_host_label(),
             local_selected: self.viewed_queue_scope() == QueueScope::Local,
             show_split,
             is_mbv_session,
@@ -134,10 +119,17 @@ pub(in crate::app) fn render_queue_title_content(
         ),
         Rect { height: 1, ..area },
     );
+    // While connected the column header already names the playback target
+    // (`on <host>`), so the split title drops the `CONNECTED: <host>` text
+    // and keeps only the icon plus the scope toggle.
     let mut local_spans = vec![
         Span::raw(" "),
         Span::raw(model.local_icon.clone()),
-        Span::raw(model.local_label.clone()),
+        Span::raw(if model.show_split {
+            String::new()
+        } else {
+            model.local_label.clone()
+        }),
         Span::raw(" "),
     ];
     let local_bg = palette::surface_colors(palette::Surface::QueuePanelBand, false).fill;
@@ -188,20 +180,6 @@ pub(in crate::app) fn render_queue_title_content(
             Style::default()
                 .bg(palette::surface_colors(palette::Surface::QueuePanelBand, false).fill),
         ),
-        target_area,
-    );
-    frame.render_widget(
-        Paragraph::new(Line::from(vec![Span::styled(
-            model.remote_label.clone(),
-            Style::default()
-                .fg(if model.is_mbv_session {
-                    palette::ACCENT
-                } else {
-                    palette::TEXT_FOCUS_ACCENT
-                })
-                .bg(palette::surface_colors(palette::Surface::QueuePanelBand, false).fill)
-                .add_modifier(Modifier::BOLD),
-        )])),
         target_area,
     );
     if !model.is_mbv_session {
