@@ -43,7 +43,7 @@
 
 ## 2. Remove the shared-data capability
 
-- [ ] 2.1 Delete the TUI client surface: the remainder of `src/app/shared_sync.rs`, every
+- [x] 2.1 Delete the TUI client surface: the remainder of `src/app/shared_sync.rs`, every
   `persist_shared_document` call site (`queue_actions_playlist_mutation.rs`,
   `library_position_state.rs`, `run_loop_events_teardown.rs`), `App.shared_client` /
   `shared_reconnect_rx` (`app_struct.rs`), startup initialization (`construct.rs`),
