@@ -329,11 +329,13 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
 
     // Root panel placements (D1, task 1.3): which panels the current Panel
     // mode mounts, and where. The queue column splits into the Queue playback
-    // panel's region (header row + visual slot/transport rows plus the
-    // separating gap row) and the Queue panel below it. Both placements come
-    // from the shared `queue_panel_geometry` (task 3.2: the header row is one
-    // input alongside the visual-slot and transport heights, single source),
-    // so they tile the queue column's content exactly.
+    // panel's region (header row plus the visual slot/transport rows and the
+    // separator row between the slot/transport band and the Queue panel) and
+    // the Queue panel below it; while idle only the header row is reserved,
+    // the panel's recessed inset being the single space row. Both placements
+    // come from the shared `queue_panel_geometry` (task 3.2: the header row is
+    // one input alongside the visual-slot and transport heights, single
+    // source), so they tile the queue column's content exactly.
     let queue_col_visible = input.panel_mode != PanelMode::LibraryOnly;
     let playback_rows = queue_playback_rows(
         queue_playback_column_wide(left_area.width),
@@ -607,20 +609,19 @@ mod root_frame_tests {
         assert!(f.queue_boundary.is_none());
     }
 
-    /// Idle playback collapses the visual slot/transport rows to zero, so the
-    /// Queue playback placement is its header row plus the single separator
-    /// row above the Queue panel (D10: the header is painted in every
+    /// Idle playback collapses the visual slot/transport rows — and with them
+    /// the separator row — so the Queue playback placement is exactly its
+    /// always-painted header row (D10: the header is painted in every
     /// queue-visible layout, idle included); the Queue panel starts directly
-    /// below it.
+    /// below it, its recessed inset providing the single space row.
     #[test]
     fn idle_queue_playback_placement_is_the_header_row() {
         let f = frame(PanelMode::Both, false);
         let queue_playback = f.queue_playback.expect("queue playback placed");
         let queue = f.queue.expect("queue placed");
         assert_eq!(
-            queue_playback.height,
-            QUEUE_PLAYBACK_HEADER_ROWS + 1,
-            "idle placement is the always-painted header row plus the separator row"
+            queue_playback.height, QUEUE_PLAYBACK_HEADER_ROWS,
+            "idle placement is exactly the always-painted header row"
         );
         assert_eq!(queue_playback.bottom(), queue.y);
         assert_eq!(queue_playback.height + queue.height, area().height);

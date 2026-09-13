@@ -14,9 +14,9 @@ pub(in crate::app) struct QueuePanelInputs {
     pub left_content: Rect,
     /// Rows the Queue playback panel's header row always spends above the
     /// Queue panel in every queue-visible layout, idle included (design D10;
-    /// task 3.2). The Queue panel starts below the header row plus the single
-    /// separator row it places above itself, alongside the visual-slot and
-    /// transport heights.
+    /// task 3.2). While idle the header row is the only space above the
+    /// Queue panel besides the panel's own recessed inset; the separator row
+    /// is reserved only alongside the visual-slot and transport heights.
     pub header_height: u16,
     pub card_height: u16,
 }
@@ -57,10 +57,12 @@ pub(in crate::app) fn queue_panel_subareas(
 /// Places the complete queue panel and its framed sub-areas.
 pub(in crate::app) fn queue_panel_geometry(input: QueuePanelInputs) -> QueuePanelGeometry {
     // The header row (always present, idle included) plus the visual-slot and
-    // transport rows sit above the panel, separated from it by one gap row;
-    // the separator hides only when the whole playback region above is empty.
+    // transport rows sit above the panel, separated from it by one gap row.
+    // The gap belongs to the slot/transport band: while idle nothing renders
+    // between the header and the panel, and the panel's recessed top inset is
+    // the single space row below the header.
     let playback_rows = input.header_height + input.card_height;
-    let gap = u16::from(playback_rows > 0);
+    let gap = u16::from(input.card_height > 0);
     let panel_area = Rect {
         y: input.left_content.y + playback_rows + gap,
         height: input
@@ -89,20 +91,24 @@ mod tests {
     }
 
     /// Task 3.2: the Queue panel always starts below the Queue playback
-    /// panel's placement (header row + visual slot/transport rows) plus the
-    /// single separator row, in idle, paused and playing states alike.
+    /// panel's placement (header row + visual slot/transport rows), with one
+    /// separator row whenever slot/transport rows exist. While idle only the
+    /// header row is reserved above the panel (the panel's recessed inset is
+    /// the single space row).
     #[test]
     fn queue_panel_starts_below_header_and_separator_in_every_playback_state() {
         let header = 1u16;
-        let cases: [(u16, &str); 3] = [
-            (0, "idle: no visual slot, no transport"),
+        // (card_rows, separator_rows, label)
+        let cases: [(u16, u16, &str); 3] = [
+            (0, 0, "idle: no visual slot, no transport, no separator"),
             (
                 2,
+                1,
                 "paused: visual slot only (transport rows collapse into the slot height)",
             ),
-            (6, "playing: visual slot + transport rows"),
+            (6, 1, "playing: visual slot + transport rows"),
         ];
-        for (card_rows, label) in cases {
+        for (card_rows, gap, label) in cases {
             let geometry = queue_panel_geometry(QueuePanelInputs {
                 left_content: left_content(30),
                 header_height: header,
@@ -111,12 +117,12 @@ mod tests {
             // Header row (always) + card/transport rows + the separator row.
             assert_eq!(
                 geometry.panel_area.y,
-                header + card_rows + 1,
+                header + card_rows + gap,
                 "{label}: the queue panel must start below the header row and its separator"
             );
             assert_eq!(
                 geometry.panel_area.height,
-                30 - header - card_rows - 1,
+                30 - header - card_rows - gap,
                 "{label}: the queue panel takes the remaining rows"
             );
             assert_eq!(
@@ -155,11 +161,12 @@ mod tests {
 
     /// The idle queue-only pane-geometry chain (review of tasks 3.1-3.4,
     /// moved from the queue render test): with no visual slot or transport
-    /// rows, the list content starts below the header row, its separator
-    /// gap and the panel's reserved title band — all from the arrangement's
-    /// own inputs, not pulled from a render-test buffer.
+    /// rows, the list content starts below the header row and the panel's
+    /// reserved title band — the panel's recessed inset is the single space
+    /// row below the header — all from the arrangement's own inputs, not
+    /// pulled from a render-test buffer.
     #[test]
-    fn idle_pane_starts_below_header_separator_and_title_band() {
+    fn idle_pane_starts_below_header_and_title_band() {
         let header = 1u16;
         let left = left_content(30);
         let geometry = queue_panel_geometry(QueuePanelInputs {
@@ -167,8 +174,9 @@ mod tests {
             header_height: header,
             card_height: 0,
         });
-        // Header row + separator gap + the panel's 3-row title band.
-        assert_eq!(geometry.content_area.y, left.y + header + 1 + 3);
+        // Header row (the panel's own inset is the one space row) + the
+        // panel's 3-row title band.
+        assert_eq!(geometry.content_area.y, left.y + header + 3);
         assert_eq!(geometry.panel_area.bottom(), 30);
     }
 }

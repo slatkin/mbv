@@ -325,8 +325,8 @@ fn idle_queue_only_hides_card_and_panel_at_both_widths() {
             .join("\n");
 
         // No card surface is published, so the queue takes the whole column
-        // below the header row, its separator, and the panel's title band;
-        // no card/panel/track content paints above it.
+        // below the header row and the panel's title band; no card/panel/track
+        // content paints above it.
         assert!(!before_queue.contains('\u{2594}'));
         assert!(!before_queue.contains("On Now:"));
         assert!(layout.content_area.height > 0);
@@ -381,8 +381,9 @@ fn idle_queue_only_reclaims_card_and_panel_rows_until_playback_starts() {
     let idle_queue_area = idle_layout.content_area;
     let _ = &idle_queue_area;
     // Idle queue-only hides the separator row along with the card/panel and
-    // hands every reclaimed row to the queue; only the header row (and the
-    // separator above the panel) stays reserved (task 3.2).
+    // hands every reclaimed row to the queue; only the header row stays
+    // reserved above the panel (task 3.2; the panel's recessed inset is the
+    // single space row below the header).
     assert_eq!(app.layout.card.height, 0);
     let idle_screen = buffer_to_string(&idle_term);
     assert!(!idle_screen.contains("On Now:"));

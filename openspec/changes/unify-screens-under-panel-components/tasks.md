@@ -73,9 +73,11 @@ one paint-free placement.
   context-menu keyboard anchor for a queue row still opens at the selected row (existing test).
 - [x] 3.2 Add `header_height` (always 1 in queue-visible layouts, idle included) to `QueuePanelInputs`
   and offset `queue_panel_geometry` by it alongside the visual-slot and transport heights, so the Queue
-  panel always starts below the Queue playback panel's placement plus its separator row. Until 3.5 lands,
+  panel always starts below the Queue playback panel's placement, with its separator row reserved only
+  alongside the slot/transport rows (idle reserves only the header row; the panel's recessed inset is
+  the single space row). Until 3.5 lands,
   `render_main` leaves that header row blank. Verify: unit test in `arrangements/queue.rs` that the queue
-  panel starts below the header row and its separator in idle, paused and playing states; at 24 rows
+  panel starts below the header row and its separator whenever slot/transport rows render; at 24 rows
   `short_window_keeps_queue_in_left_column` and `short_queue_panel_drops_padding_before_rows` pass with
   re-derived (not loosened) thresholds.
 - [x] 3.3 Derive `NowPlayingStatus { Playing, Paused, Idle }` once per frame next to

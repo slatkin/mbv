@@ -22,8 +22,8 @@ the Queue playback panel's transport (seekbar, title row, controls), not its hea
 #### Scenario: Idle queue-visible layout keeps only the header
 - **WHEN** the queue column is visible and no transport is active
 - **THEN** the Queue playback panel paints its header row and nothing else
-- **AND** the Queue panel begins below the header row and the single separator row it places above
-  itself
+- **AND** the Queue panel begins directly below the header row, its recessed
+  top inset being the single space row between them
 
 #### Scenario: Two-panel layout with active playback
 - **WHEN** both columns are visible and playback is active
@@ -118,8 +118,10 @@ background filling the rows below it.
 
 When the queue column is visible and no transport is active, the visual slot (artwork, placeholder,
 loading reservation, or empty visualizer box) and the playback panel SHALL NOT be rendered and SHALL
-reserve zero rows; the queue panel SHALL occupy those rows and keep the single separator row it
-places above itself. Paused playback counts as active and SHALL keep both. The artwork/visualizer
+reserve zero rows; the queue panel SHALL occupy those rows and begin directly below the header row,
+its recessed top inset being the single space row between the header and the panel. The separator
+row between the slot/transport band and the panel exists only while that band renders. Paused
+playback counts as active and SHALL keep both. The artwork/visualizer
 selection SHALL persist while idle and take effect on the next playback; pressing the artwork key
 while idle SHALL NOT create a visual slot rectangle. A connected transport that is not playing SHALL
 NOT keep the panel: the header row's `IDLE` wording and target are the only idle-state indicator.

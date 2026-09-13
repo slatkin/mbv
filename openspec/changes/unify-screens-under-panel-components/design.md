@@ -269,7 +269,9 @@ layout and owns the always-painted header row, the visual slot (artwork/visualiz
 `render_card`) and the queue-column transport presentation; while idle it paints only the header row
 and its visual slot and transport take zero rows (resolves the header-vs-idle contradiction: the
 header's owner is never unmounted). `RootFrame` sizes its placement from header + slot + transport
-heights, and `QueuePanel` starts below it plus its separator row. It lands with the
+heights, and `QueuePanel` starts below it, with one separator row reserved only alongside the
+slot/transport rows (while idle the panel's recessed inset is the single space row below the
+header). It lands with the
 folded change's placement rules (below 100 columns stacked; 100+ side by side, visual slot left, 2-cell
 gap, panel height = max). `LibraryPlaybackPanel` (today's `PlaybackComponent`) is the strip, mounted
 only when the queue column is hidden. Both call **one** width-driven transport arrangement (which rows
