@@ -81,18 +81,18 @@
   tests. Verify `cargo nextest run -p mbvd` is green and the documented usage line lists no
   export action.
 
-- [ ] 2.6 Update the durable docs: delete the six "Shared data and roaming" terms from
+- [x] 2.6 Update the durable docs: delete the six "Shared data and roaming" terms from
   `CONTEXT.md`, rewrite `FeedEntry`'s roaming sentence, and clear the three shared-data
   mentions in `docs/architecture/interactive-tui-component-map.md`. Verify
   `rg -n "shared-mbv-state|shared data|shared-data|roaming" CONTEXT.md docs/` returns nothing
   that describes a live facility.
 
-- [ ] 2.7 Final gates on the whole change: `cargo fmt --all -- --check`, `cargo clippy
+- [x] 2.7 Final gates on the whole change: `cargo fmt --all -- --check`, `cargo clippy
   --workspace --all-targets`, the full `cargo nextest run`, and
   `openspec validate remove-shared-central-storage --strict`. All green with no
   `#[allow(dead_code)]` added to silence removal fallout.
 
-- [ ] 2.8 Update #687 with this change's outcome: the store's `redb` harness — the issue's
+- [x] 2.8 Update #687 with this change's outcome: the store's `redb` harness — the issue's
   byte-weight site, already fixed in 47926ae0 — is deleted outright, and the remaining sweep
   of `temp_dir()` sites stays open. Verify with the posted comment, or record why none is
   needed if the issue was closed by 47926ae0.
