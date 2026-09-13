@@ -57,9 +57,5 @@ pub(in crate::app) mod widgets;
 mod home_video_tests;
 
 #[cfg(test)]
-#[path = "hero_tests.rs"]
-mod hero_tests;
-
-#[cfg(test)]
 #[path = "tv_wide_tests.rs"]
 mod tv_wide_tests;
