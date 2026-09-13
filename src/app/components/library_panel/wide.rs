@@ -34,6 +34,17 @@ use crate::app::render::place_media_list_below;
 /// the Workspace box (design D3: the Workspace sits below the overview).
 const WORKSPACE_GAP_ROWS: u16 = 1;
 
+/// A full-width claim rect over `content`'s rows, reaching `panel`'s left/
+/// right edges: the canonical rail's selected-row background extends to the
+/// panel border while row flow/hit geometry stays on the inset `content`.
+fn full_width_claim(panel: Rect, content: Rect) -> Rect {
+    Rect {
+        x: panel.x,
+        width: panel.width,
+        ..content
+    }
+}
+
 /// The Workspace selector's leading label (TV's season pills, the only
 /// current Workspace selector): the pre-migration wide rail's own prefix
 /// (`tv_wide.rs`), distinct from the Selector row's universal `⌘` glyph.
@@ -206,12 +217,7 @@ pub(in crate::app) fn render_wide_skeleton(
             // the inset `list_area`, so `wide_media_row`'s own 2-column text
             // indent is the row's only indent instead of stacking atop
             // `list_area`'s inset.
-            let claim_area = Rect {
-                x: list_panel.x,
-                width: list_panel.width,
-                ..list_area
-            };
-            list.set_geometry(claim_area, list_area);
+            list.set_geometry(full_width_claim(list_panel, list_area), list_area);
             list.view(f, list_area);
         }
         ListSlot::Empty { loading, text } => {
@@ -353,12 +359,9 @@ fn paint_workspace_box(
         });
     // Full-width claim so the selected row's background reaches the box's
     // own border, matching the Browser pane's list (see above).
-    let claim_area = Rect {
-        x: panel.x,
-        width: panel.width,
-        ..content
-    };
-    workspace.list.set_geometry(claim_area, content);
+    workspace
+        .list
+        .set_geometry(full_width_claim(panel, content), content);
     workspace.list.view(f, content);
     (panel, content)
 }

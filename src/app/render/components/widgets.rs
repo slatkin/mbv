@@ -33,14 +33,16 @@ pub(in crate::app) const COLUMN_GAP: u16 = 0;
 /// indentation relative to this padded edge.
 pub(in crate::app) const TAB_LEFT_PAD: u16 = 2;
 
+/// Rows of top padding between the right panel's content and whatever sits
+/// above it (tab bar, or the top of the terminal in mini view): previously
+/// supplied incidentally by the wide playback strip's reserved band, which
+/// now mounts only in LibraryOnly and no longer covers Both.
+pub(in crate::app) const RIGHT_PANEL_TOP_PAD: u16 = 1;
+
 pub(in crate::app) fn right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
-    // One row of top padding between the right panel's content and whatever
-    // sits above it (tab bar, or the top of the terminal in mini view):
-    // previously supplied incidentally by the wide playback strip's reserved
-    // band, which now mounts only in LibraryOnly and no longer covers Both.
     let area = Rect {
-        y: area.y + 1,
-        height: area.height.saturating_sub(1),
+        y: area.y + RIGHT_PANEL_TOP_PAD,
+        height: area.height.saturating_sub(RIGHT_PANEL_TOP_PAD),
         ..area
     };
     if left_collapsed {
