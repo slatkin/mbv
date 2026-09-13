@@ -614,11 +614,10 @@ fn queue_media_row_at(
         target: slot.slot_id,
         primary: title,
         trailing,
-        duration: if is_pending {
-            // The pending row is not playing yet; the active row paints its
-            // total duration like every other row.
-            None
-        } else {
+        // The now-playing row shows its total duration in every state: a
+        // pending selection is not playing yet, but it still has a known
+        // runtime, and blanking the slot reads as a glitch.
+        duration: {
             let time_text = queue_row_time_text(pos_ticks, duration_ticks, false);
             (!time_text.is_empty()).then_some(time_text)
         },

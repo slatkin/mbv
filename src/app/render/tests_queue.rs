@@ -785,4 +785,17 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
         text.contains("Selected Film") && text.contains("0:00 / 10:00"),
         "the panel predicts the selection at a fresh start: {text}"
     );
+    // The predicted row keeps its total duration: only live progress is
+    // withheld until the owner confirms.
+    let row_y = now_playing_cells(buf, "Selected Film")
+        .first()
+        .map(|(_, y)| *y)
+        .expect("the selected row paints as now-playing");
+    let row_line: String = (0..buf.area().width)
+        .map(|x| buf[(x, row_y)].symbol().to_string())
+        .collect();
+    assert!(
+        row_line.contains("10:00"),
+        "the predicted row keeps its duration: {row_line:?}"
+    );
 }

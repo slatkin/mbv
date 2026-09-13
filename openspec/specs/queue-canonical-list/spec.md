@@ -110,7 +110,8 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 #### Scenario: Predicted selection shows no progress
 
 - **WHEN** a prediction says a different item was selected and the owner has not yet confirmed it
-- **THEN** the newly selected slot renders as now-playing with no percentage and no duration
+- **THEN** the newly selected slot renders as now-playing with no percentage
+- **AND** its duration slot shows that item's own total duration, like every other row
 - **AND** it never carries the previously playing item's position or runtime
 
 #### Scenario: Collection rows never show now-playing
