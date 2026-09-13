@@ -80,6 +80,13 @@ fn read_http_request(stream: &std::net::TcpStream) -> String {
     request
 }
 
+fn assert_post(request: &str, endpoint: &str) {
+    assert!(
+        request.starts_with(&format!("POST {endpoint} HTTP/1.1")),
+        "unexpected request: {request}"
+    );
+}
+
 fn respond(stream: std::net::TcpStream, status: u16, body: &str) {
     let mut writer = stream.try_clone().unwrap();
     write!(
@@ -119,43 +126,58 @@ fn multi_item_play_dispatches_and_reports_errors_without_tracking() {
     let request = capture_error(&listener, &mut app, move |app| {
         app.submit_attached_sequence("session", &items, 1);
     });
-    assert!(request.contains("/Sessions/session/Playing"));
+    assert_post(&request, "/Sessions/session/Playing");
+    assert!(request.contains("PlayCommand"));
+    assert!(request.contains("PlayNow"));
+    assert!(request.contains("ItemIds"));
+    assert!(request.contains("StartIndex"));
+    assert!(request.contains("StartPositionTicks"));
 }
 
 #[test]
 fn pause_play_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, |app| {
         app.dispatch(action::Command::TogglePlayPause);
     });
+    assert_post(&request, "/Sessions/session/Playing/PlayPause");
 }
 
 #[test]
 fn seek_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, |app| {
         app.dispatch(action::Command::SeekRelative(5.0));
     });
+    assert_post(
+        &request,
+        "/Sessions/session/Playing/Seek?SeekPositionTicks=650000000",
+    );
 }
 
 #[test]
 fn stop_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, |app| {
         app.dispatch(action::Command::Stop);
     });
+    assert_post(&request, "/Sessions/session/Playing/Stop");
 }
 
 #[test]
 fn next_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, |app| {
         app.dispatch(action::Command::NextTrack);
     });
+    assert_post(&request, "/Sessions/session/Playing");
+    assert!(request.contains("ItemIds"));
+    assert!(request.contains("StartIndex"));
+    assert!(request.contains("StartPositionTicks"));
 }
 
 #[test]
@@ -163,16 +185,24 @@ fn previous_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
     app.connected_session_state.as_mut().unwrap().now_playing_item_id = Some("b".into());
-    capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, |app| {
         app.dispatch(action::Command::PreviousTrack);
     });
+    assert_post(&request, "/Sessions/session/Playing");
+    assert!(request.contains("ItemIds"));
+    assert!(request.contains("StartIndex"));
+    assert!(request.contains("StartPositionTicks"));
 }
 
 #[test]
 fn direct_selection_dispatches_and_reports_errors_without_tracking() {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let mut app = remote_command_app(&listener);
-    capture_error(&listener, &mut app, |app| {
+    let request = capture_error(&listener, &mut app, |app| {
         app.dispatch(action::Command::QueuePlayCursor(1));
     });
+    assert_post(&request, "/Sessions/session/Playing");
+    assert!(request.contains("ItemIds"));
+    assert!(request.contains("StartIndex"));
+    assert!(request.contains("StartPositionTicks"));
 }

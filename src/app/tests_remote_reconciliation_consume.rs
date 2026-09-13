@@ -6,76 +6,8 @@ use super::{attached_app, projection, tracker};
 use crate::app::tests::{make_item, make_session};
 use crate::app::*;
 use mbv_core::remote_reconciliation::{
-    ReconciliationTracker, RemoteIntent, RemoteObservation, SubmittedOccurrence, TrackingState,
+    ReconciliationTracker, RemoteIntent, RemoteObservation, SubmittedOccurrence,
 };
-
-#[test]
-fn successful_remote_command_acknowledgment_unfreezes_tracking_after_failed_poll() {
-    let mut app = attached_app();
-    app.player_tab.emby_items()[0].id = "a".into();
-    app.player_tab.emby_items()[1].id = "b".into();
-    app.connected_session_state = Some({
-        let mut state = make_session("Client", "Emby");
-        state.id = "session".into();
-        state.now_playing_item_id = Some("a".into());
-        state.position_ticks = 1;
-        state.runtime_ticks = 100;
-        state
-    });
-    let mut tracking = tracker(&["a", "b"]);
-    tracking.observe(RemoteObservation::playing(1, "session", "a", 1, 100, 1));
-    tracking.issue_intent(RemoteIntent::Next { target: 2 }, 2);
-    tracking.track_command_generation(5);
-    let tracking_id = tracking.tracking_id();
-    app.remote_tracker = Some(tracking);
-
-    // The command succeeded, so a correlated acknowledgment arrives even
-    // though the immediate post-command session poll failed (only Error
-    // follows). Tracking must not freeze on the lost follow-up poll.
-    app.handle_session_event(SessionEvent::CommandAcknowledged(ReconciliationCommand {
-        session_id: "session".into(),
-        tracking_id,
-        tracker_epoch: 0,
-        generation: 5,
-    }));
-
-    // A later ordinary poll issued after the acknowledgment boundary is
-    // eligible to confirm/reconcile.
-    let mut later = make_session("Client", "Emby");
-    later.id = "session".into();
-    later.now_playing_item_id = Some("b".into());
-    later.position_ticks = 1;
-    later.runtime_ticks = 100;
-    app.handle_session_event(SessionEvent::Loaded {
-        sessions: vec![later],
-        generation: 6,
-    });
-
-    let tracker = app.remote_tracker.as_ref().unwrap();
-    assert_eq!(tracker.state(), TrackingState::Tracking);
-    assert_eq!(tracker.current_occurrence().unwrap().occurrence_id, 2);
-}
-
-#[test]
-fn stale_acknowledgment_for_replaced_tracker_is_inert() {
-    let mut app = attached_app();
-    let mut original = tracker(&["a", "b"]);
-    original.track_command_generation(4);
-    let original_id = original.tracking_id();
-    app.remote_tracker = Some(original);
-
-    let replacement = tracker(&["a", "b"]);
-    app.remote_tracker = Some(replacement);
-
-    app.handle_session_event(SessionEvent::CommandAcknowledged(ReconciliationCommand {
-        session_id: "session".into(),
-        tracking_id: original_id,
-        tracker_epoch: 0,
-        generation: 4,
-    }));
-
-    assert!(app.remote_tracker.as_ref().unwrap().is_active());
-}
 
 #[test]
 fn tracked_command_failure_retires_tracking_and_preserves_error_message() {

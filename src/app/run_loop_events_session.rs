@@ -194,16 +194,6 @@ impl App {
                     );
                 }
             }
-            SessionEvent::CommandAcknowledged(command) => {
-                if let Some(tracker) = self.remote_tracker.as_mut() {
-                    if tracker.session_id() == command.session_id
-                        && tracker.tracking_id() == command.tracking_id
-                        && tracker.epoch() == command.tracker_epoch
-                    {
-                        tracker.acknowledge_command(command.generation);
-                    }
-                }
-            }
             SessionEvent::CommandError {
                 error,
                 reconciliation,

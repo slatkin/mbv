@@ -147,7 +147,9 @@ use self::types_context_menu::{
     ContextAction, ContextMenuAnchor, ContextMenuEntry, LibraryRouteStage, MultiSelectKind,
 };
 use self::types_daemon_lost::DaemonLostModal;
-use self::types_events::{LibEvent, ReconciliationCommand, SessionEvent};
+#[cfg(test)]
+use self::types_events::ReconciliationCommand;
+use self::types_events::{LibEvent, SessionEvent};
 use self::types_feed::{
     FeedHomeVideoGroup, FeedHomeVideoState, IdleFeed, SavePlaylistDialog, SavePlaylistStage,
 };

@@ -484,17 +484,14 @@ impl App {
                             let item_ids: Vec<String> =
                                 emby_items.iter().map(|e| e.id.clone()).collect();
                             let start_ticks = item.playback_position_ticks();
-                            self.do_reconciliation_session_command(
-                                &conn_id.clone(),
-                                move |client| {
-                                    client.session_play_items(
-                                        &conn_id,
-                                        &item_ids,
-                                        emby_start,
-                                        start_ticks,
-                                    )
-                                },
-                            );
+                            self.do_session_command(move |client| {
+                                client.session_play_items(
+                                    &conn_id,
+                                    &item_ids,
+                                    emby_start,
+                                    start_ticks,
+                                )
+                            });
                             return false;
                         }
                         self.submit_attached_sequence(&conn_id, &emby_items, emby_start);

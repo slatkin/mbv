@@ -1,9 +1,9 @@
 use super::notify_actions::ToastSeverity;
 use super::{App, SessionEvent};
 use mbv_core::api::{EmbyClient, TICKS_PER_SECOND};
-use mbv_core::remote_reconciliation::{
-    ReconciliationTracker, RemoteIntent, SequenceSource, SubmittedOccurrence,
-};
+use mbv_core::remote_reconciliation::RemoteIntent;
+#[cfg(test)]
+use mbv_core::remote_reconciliation::{ReconciliationTracker, SequenceSource, SubmittedOccurrence};
 use std::time::SystemTime;
 
 impl App {
@@ -36,6 +36,7 @@ impl App {
         });
     }
 
+    #[cfg(test)]
     pub(super) fn build_remote_tracker_with_source(
         conn_id: &str,
         items: &[mbv_core::api::EmbyItem],
@@ -208,11 +209,9 @@ impl App {
             .connected_session_state
             .as_ref()
             .and_then(|s| s.now_playing_item_id.as_deref());
-        // Choose the destination and payload through the established untracked
-        // path first: resolve the connected session's now-playing item against
-        // the visible queue and apply the delta. Tracking only observes the
-        // already-selected slot afterward and must never choose a different
-        // target_idx or payload.
+        // This path is untracked: the destination and payload come only from
+        // `remote_jump_target` and `submit_attached_sequence`, with no tracking
+        // on this path.
         let Some((target_idx, _)) = remote_jump_target(&self.player_tab, current_remote_id, delta)
         else {
             self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
@@ -256,15 +255,6 @@ impl App {
 
     pub(super) fn do_session_command(
         &mut self,
-        f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
-    ) {
-        let generation = self.next_session_poll_generation();
-        self.dispatch_session_command(generation, f);
-    }
-
-    pub(super) fn do_reconciliation_session_command(
-        &mut self,
-        _session_id: &str,
         f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static,
     ) {
         let generation = self.next_session_poll_generation();

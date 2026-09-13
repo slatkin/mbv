@@ -196,10 +196,6 @@ pub(super) enum SessionEvent {
         error: String,
         reconciliation: Option<ReconciliationCommand>,
     },
-    /// A tracked remote command succeeded on the Emby server, correlated
-    /// separately from the follow-up session poll. Emitted even when that
-    /// immediate poll fails, so command acknowledgment never freezes tracking.
-    CommandAcknowledged(ReconciliationCommand),
     PlaylistMutationComplete {
         mutation_id: u64,
         playlist_id: String,
