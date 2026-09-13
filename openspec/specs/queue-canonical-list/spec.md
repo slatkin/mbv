@@ -27,7 +27,7 @@ The Queue Interactive Component SHALL embed `WideMediaList<QueueSlotId>` directl
 
 Queue SHALL project selectable rows with stable opaque `QueueSlotId` targets and presentation metadata, semantic state distinguishing the now-playing row from resume-progress rows, and optional integer `progress_percent` clamped to `0..=100`. The projection SHALL NOT carry ticks, runtime, source preparation, credentials, callbacks, or provider effects.
 
-The now-playing row SHALL show no elapsed time: its duration slot is empty. It SHALL project the `NowPlaying` semantic state with live progress following the playback position; the live percentage renders in the right-aligned slot, replacing the duration entirely, preceded by the current block-ramp throbber glyph. When runtime is unknown the row SHALL project no `progress_percent` and show the throbber alone. Non-active rows SHALL keep progress where it is today (inline trailing badge) with the duration slot unchanged.
+The now-playing row SHALL show its total duration like every other row. It SHALL project the `NowPlaying` semantic state with live progress following the playback position; the live percentage renders inline as trailing metadata, exactly as resume progress does. No throbber glyph SHALL appear in the row. When runtime is unknown the row SHALL project no `progress_percent` and show no duration. Non-active rows SHALL keep progress where it is today (inline trailing badge) with the duration slot unchanged.
 
 The projection's semantic active state — which queue scope is playing, which slot within it, and whether that slot is confirmed by the playback owner or is an optimistic prediction awaiting confirmation — SHALL be one owned value, reconciled against playback-owner status in one place outside the render path. An optimistic prediction SHALL record why it is optimistic: a queue edit relocated the still-playing item, or a different item was selected to play. Reconciliation SHALL clear a prediction once the owner's reported slot and queue length match it.
 
@@ -43,18 +43,18 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 - **THEN** Queue clamps the projected percentage to `0..=100`
 - **AND** the child paints only the bounded presentation value
 
-#### Scenario: Now-playing row drops elapsed
+#### Scenario: Now-playing row keeps total duration
 
 - **WHEN** a Queue slot is the now-playing row
-- **THEN** the row shows no elapsed time and an empty duration slot
-- **AND** live progress renders right-aligned with the throbber glyph, replacing the duration
-- **AND** every other row keeps its existing progress placement and duration
+- **THEN** the row shows its total duration in the duration slot
+- **AND** live progress renders inline as trailing metadata, as on other rows
+- **AND** no throbber glyph appears
 
-#### Scenario: Unknown runtime shows throbber only
+#### Scenario: Unknown runtime shows neither progress nor duration
 
 - **WHEN** the now-playing item has unknown runtime
 - **THEN** the row projects no `progress_percent`
-- **AND** the right-aligned slot shows the throbber glyph alone
+- **AND** the duration slot stays empty
 
 #### Scenario: Refresh preserves target identity
 
@@ -67,7 +67,7 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 
 - **WHEN** a shell tick finds the viewed scope, queue revision, playback-active flag, projected active target, and progress bucket all unchanged
 - **THEN** no slot list is cloned, no rows are projected, and no rows are pushed to the child
-- **AND** projected row data is unchanged (the painted frame may still differ via paint-time throbber animation or other non-row state)
+- **AND** projected row data is unchanged (the painted frame may still differ via header throbber animation or other non-row state)
 - **AND** any pending cursor push and the current scope/chrome/title are still delivered
 
 #### Scenario: Progress-bucket change patches one row
@@ -89,17 +89,17 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 - **THEN** the projection reports the item's new index as now-playing
 - **AND** it keeps that item's existing progress unchanged
 
-#### Scenario: Paused playback freezes the throbber
+#### Scenario: Paused playback keeps state without animation
 
 - **WHEN** playback is paused while a slot is now-playing
 - **THEN** the row keeps its `NowPlaying` state and progress
-- **AND** the paint-time glyph holds a static frame (no animation) without touching projected rows
+- **AND** projected rows carry no animation state
 
 #### Scenario: Playback stopping clears now-playing
 
 - **WHEN** playback becomes inactive (stop, queue exhausted, or scope switch away from the playing scope)
 - **THEN** no row carries the `NowPlaying` state
-- **AND** the throbber glyph is not painted
+- **AND** the former row loses all now-playing decoration
 
 #### Scenario: Empty queue or invalid active index never patches
 
@@ -107,17 +107,17 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 - **THEN** no row is patched or projected as now-playing
 - **AND** the fingerprint treats the projected active target as absent
 
-#### Scenario: Predicted selection shows throbber without progress
+#### Scenario: Predicted selection shows no progress
 
 - **WHEN** a prediction says a different item was selected and the owner has not yet confirmed it
-- **THEN** the newly selected slot renders as now-playing with the throbber glyph and no percentage
+- **THEN** the newly selected slot renders as now-playing with no percentage and no duration
 - **AND** it never carries the previously playing item's position or runtime
 
 #### Scenario: Collection rows never show now-playing
 
 - **WHEN** a row is a navigable container
 - **THEN** it never carries the `NowPlaying` state
-- **AND** the painter suppresses the throbber/progress slot even if one were projected
+- **AND** the painter suppresses the duration slot for containers even if one is projected
 
 #### Scenario: A push targets a scope the user is not viewing
 

@@ -47,7 +47,7 @@ impl<Target> WideMediaList<Target> {
     pub fn from_media_list(core: MediaList<Target>) -> Self {
         Self {
             core,
-            policy: WideMediaListPaintPolicy::new(false, None),
+            policy: WideMediaListPaintPolicy::new(false),
             configured_geometry: None,
             paint: None,
         }

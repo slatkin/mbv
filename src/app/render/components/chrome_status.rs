@@ -160,6 +160,20 @@ impl App {
         label.trim_start().to_string()
     }
 
+    /// Whether `playback_host_label` names a remote target: a cast
+    /// attachment, an attached session, or a direct-remote route/label.
+    /// Mirrors the label's own resolution so the header's hostname colour
+    /// cannot drift from the name it paints.
+    pub(in crate::app) fn playback_host_is_remote(&self) -> bool {
+        if self.cast_attachment.is_some() {
+            return true;
+        }
+        matches!(
+            self.remote_slot_state(),
+            RemoteSlotState::AttachedSession | RemoteSlotState::DirectRemote
+        )
+    }
+
     pub(in crate::app) fn playlist_status_spans(&self) -> Vec<Span<'static>> {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let (label, on) = match &self.queue_source {

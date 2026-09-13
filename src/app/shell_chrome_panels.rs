@@ -237,6 +237,7 @@ impl Model {
         transport.panel_focused = false;
         let status = self.app.now_playing_status();
         let host = self.app.playback_host_label();
+        let host_is_remote = self.app.playback_host_is_remote();
         let transport_area = if status != NowPlayingStatus::Idle {
             placement.map(|placement| {
                 let inset = queue_panel_inset(placement);
@@ -254,7 +255,7 @@ impl Model {
         };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<QueuePlaybackPanel>() {
-                panel.set_header(status, host);
+                panel.set_header(status, host, host_is_remote);
                 panel.set_transport(transport);
                 panel.set_transport_area(transport_area);
             }

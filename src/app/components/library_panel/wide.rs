@@ -209,7 +209,6 @@ pub(in crate::app) fn render_wide_skeleton(
             );
             list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
                 focused: browser_focused,
-                throbber: None,
             });
             // The canonical rail owns the full panel row (matching the
             // pre-migration wide rail): the selected background reaches

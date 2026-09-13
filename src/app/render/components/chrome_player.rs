@@ -56,6 +56,12 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
     // right-column strip's own fill (`PlaybackPanel`), whose recess rects
     // share the value through this context.
     let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
+    // The queue column splits its title band across two rows (controls +
+    // pills up top, title + progress + time on the indicator row); the
+    // Library strip keeps the single title row. Derived from the context's
+    // panel surface so neither panel can point at the other's layout.
+    let split = split_title_rows(ctx.panel);
+    let mut indicator_painted = false;
     match rows.seekbar {
         Some(seek_area) if ctx.show_controls => {
             render_seekbar(frame, seek_area, ctx.playback, ctx.progress, panel_bg);
@@ -90,7 +96,26 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             height: 1,
         };
         if let Some((title, color)) = ctx.now_playing_title.clone() {
-            render_title_row(frame, title_area, title.as_str(), color, &mut ctx);
+            if split {
+                match rows.indicator_row {
+                    Some(indicator_area) => {
+                        render_queue_title_rows(
+                            frame,
+                            title_area,
+                            indicator_area,
+                            title.as_str(),
+                            color,
+                            &mut ctx,
+                        );
+                        indicator_painted = true;
+                    }
+                    // No indicator row to spill onto: fall back to the
+                    // single title row rather than drop the title.
+                    None => render_title_row(frame, title_area, title.as_str(), color, &mut ctx),
+                }
+            } else {
+                render_title_row(frame, title_area, title.as_str(), color, &mut ctx);
+            }
         } else if !ctx.show_controls {
             if let Some((title, _has_link)) = ctx.idle_feed_title.clone() {
                 let spans = marquee_spans(
@@ -109,6 +134,9 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
     }
 
     if let Some(blank_area) = rows.indicator_row {
+        if indicator_painted {
+            return;
+        }
         frame.render_widget(
             Paragraph::new(Span::raw(" ".repeat(blank_area.width as usize)))
                 .style(Style::default().bg(panel_bg)),
@@ -152,23 +180,29 @@ fn render_seekbar(
     );
 }
 
-pub(in crate::app) fn render_title_row(
-    frame: &mut Frame,
-    area: Rect,
-    title: &str,
-    title_color: Color,
-    ctx: &mut PlaybackRenderContext<'_>,
-) {
-    if area.height == 0 || area.width == 0 {
-        ctx.playback.play_pause_area = Rect::default();
-        ctx.playback.stop_area = Rect::default();
-        ctx.playback.next_area = Rect::default();
-        return;
-    }
+/// Whether the panel behind `surface` splits its title band across two rows:
+/// the queue column's transport moves the title, throbber/percent and time
+/// onto the blank indicator row, while the Library strip keeps the single
+/// title row.
+fn split_title_rows(surface: palette::Surface) -> bool {
+    surface == palette::Surface::QueueOnlyPlaybackPanel
+}
 
-    let (pos_ticks, rt_ticks, paused) = ctx.progress;
-    let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
-    let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
+/// The transport control glyphs and their colours for one render context:
+/// play/pause glyph + colour, stop glyph + colour, next glyph + colour.
+/// Shared by the single title row and the queue column's split rows so the
+/// glyphs cannot drift between the two presentations.
+fn control_glyphs(
+    ctx: &PlaybackRenderContext<'_>,
+    paused: bool,
+) -> (
+    &'static str,
+    Color,
+    &'static str,
+    Color,
+    &'static str,
+    Color,
+) {
     let (glyph, gcolor): (&str, Color) = if paused {
         (play_icon(ctx.use_nerd_fonts), palette::ACCENT)
     } else {
@@ -189,6 +223,15 @@ pub(in crate::app) fn render_title_row(
     } else {
         palette::TEXT_MUTED
     };
+    (
+        glyph, gcolor, stop_glyph, stop_color, next_glyph, next_color,
+    )
+}
+
+/// The status-indicator pills (codec/res/aud/sub, uppercased on the pill
+/// surface): the right side of the single title row and of the queue
+/// column's upper split row. No trailing space; callers pad after merging.
+fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
     let mut codec_value_next = false;
     let mut right = ctx
@@ -225,6 +268,142 @@ pub(in crate::app) fn render_title_row(
     for span in &mut right {
         *span = Span::styled(span.content.to_string(), span.style.bg(pill_bg));
     }
+    right
+}
+
+/// The queue column's split title band: the upper row keeps the transport
+/// controls and the status pills, while the title and the `pos / dur` time
+/// move one row down onto the indicator row — the title left with one space
+/// of indent, the time right with one space of indent. The throbber and
+/// percent live up in the header while playing, never here. The title keeps
+/// the shared marquee window, sized to the wider lower row. Hit geometry
+/// stays on the upper row, where the glyphs paint.
+fn render_queue_title_rows(
+    frame: &mut Frame,
+    upper: Rect,
+    lower: Rect,
+    title: &str,
+    title_color: Color,
+    ctx: &mut PlaybackRenderContext<'_>,
+) {
+    if upper.height == 0 || upper.width == 0 || lower.height == 0 || lower.width == 0 {
+        ctx.playback.play_pause_area = Rect::default();
+        ctx.playback.stop_area = Rect::default();
+        ctx.playback.next_area = Rect::default();
+        return;
+    }
+    let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
+    let (pos_ticks, rt_ticks, paused) = ctx.progress;
+    let (glyph, gcolor, stop_glyph, stop_color, next_glyph, next_color) =
+        control_glyphs(ctx, paused);
+    let pills = status_pill_spans(ctx);
+    let pills_w: u16 = pills.iter().map(|span| span.content.width() as u16).sum();
+    let glyph_text = format!("{glyph} ");
+    let glyph_w = glyph_text.width() as u16;
+    let stop_w = stop_glyph.width() as u16;
+    let next_w = next_glyph.width() as u16;
+    let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
+    // No title competes on the upper row, so the buttons show whenever the
+    // glyphs, buttons and pills fit.
+    let show_buttons = upper.width as usize >= glyph_w as usize + buttons_w + pills_w as usize;
+    let mut left = vec![Span::styled(
+        glyph_text,
+        Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
+    )];
+    let mut x = upper.x;
+    ctx.playback.play_pause_area = Rect {
+        x,
+        y: upper.y,
+        width: glyph_w,
+        height: 1,
+    };
+    x += glyph_w;
+    if show_buttons {
+        ctx.playback.stop_area = Rect {
+            x,
+            y: upper.y,
+            width: stop_w,
+            height: 1,
+        };
+        x += stop_w;
+        left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
+        left.push(Span::raw(" "));
+        x += 1;
+        ctx.playback.next_area = Rect {
+            x,
+            y: upper.y,
+            width: next_w,
+            height: 1,
+        };
+        left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
+        left.push(Span::raw(" "));
+    } else {
+        ctx.playback.stop_area = Rect::default();
+        ctx.playback.next_area = Rect::default();
+    }
+    let mut upper_spans = left;
+    let upper_left_w: u16 = upper_spans
+        .iter()
+        .map(|span| span.content.width() as u16)
+        .sum();
+    let upper_gap = (upper.width as usize).saturating_sub(upper_left_w as usize + pills_w as usize);
+    upper_spans.push(Span::raw(" ".repeat(upper_gap)));
+    upper_spans.extend(pills);
+    frame.render_widget(
+        Paragraph::new(Line::from(upper_spans)).style(Style::default().bg(panel_bg)),
+        upper,
+    );
+    // The lower row: ` <title> ... <pos / dur> `. The throbber and percent
+    // ride in the header while playing, never here.
+    let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let time_text = format!("{pos_str} / {dur_str}");
+    let time_w = time_text.width() as u16;
+    // One left indent, at least one gap cell before the time, one right
+    // indent.
+    let title_max = lower.width.saturating_sub(1 + 1 + time_w + 1) as usize;
+    let title_parts = if ctx.title_parts.is_empty() {
+        vec![(title.to_string(), title_color)]
+    } else {
+        ctx.title_parts.clone()
+    };
+    let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
+    row.extend(marquee_spans(ctx, &title_parts, title_max));
+    let row_w: u16 = row.iter().map(|span| span.content.width() as u16).sum();
+    let gap = (lower.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
+    row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
+    row.push(Span::styled(
+        time_text,
+        Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+    ));
+    row.push(Span::styled(" ", Style::default().bg(panel_bg)));
+    frame.render_widget(
+        Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
+        lower,
+    );
+}
+
+pub(in crate::app) fn render_title_row(
+    frame: &mut Frame,
+    area: Rect,
+    title: &str,
+    title_color: Color,
+    ctx: &mut PlaybackRenderContext<'_>,
+) {
+    if area.height == 0 || area.width == 0 {
+        ctx.playback.play_pause_area = Rect::default();
+        ctx.playback.stop_area = Rect::default();
+        ctx.playback.next_area = Rect::default();
+        return;
+    }
+
+    let (pos_ticks, rt_ticks, paused) = ctx.progress;
+    let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
+    let (glyph, gcolor, stop_glyph, stop_color, next_glyph, next_color) =
+        control_glyphs(ctx, paused);
+    let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
+    let mut right = status_pill_spans(ctx);
     let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
     let mut progress_spans = vec![
         Span::styled(

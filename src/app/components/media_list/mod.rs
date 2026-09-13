@@ -207,23 +207,20 @@ pub enum SelectedRowSurface {
 pub struct WideMediaListPaintPolicy {
     focused: bool,
     selected_surface: SelectedRowSurface,
-    throbber: Option<char>,
 }
 
 impl WideMediaListPaintPolicy {
-    pub const fn new(focused: bool, throbber: Option<char>) -> Self {
+    pub const fn new(focused: bool) -> Self {
         Self {
             focused,
             selected_surface: SelectedRowSurface::ListBackdrop,
-            throbber,
         }
     }
 
-    pub const fn for_queue(focused: bool, throbber: Option<char>) -> Self {
+    pub const fn for_queue(focused: bool) -> Self {
         Self {
             focused,
             selected_surface: SelectedRowSurface::OwningQueueColumn,
-            throbber,
         }
     }
 
@@ -231,7 +228,6 @@ impl WideMediaListPaintPolicy {
         Self {
             focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
-            throbber: None,
         }
     }
 
@@ -241,10 +237,6 @@ impl WideMediaListPaintPolicy {
 
     pub(crate) const fn selected_surface(self) -> SelectedRowSurface {
         self.selected_surface
-    }
-
-    pub(crate) const fn throbber(self) -> Option<char> {
-        self.throbber
     }
 }
 

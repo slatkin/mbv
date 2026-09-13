@@ -25,11 +25,10 @@ pub(in crate::app) fn render_queue_body(
     area: Rect,
     presentation: QueuePresentation<'_>,
     focused: bool,
-    throbber: Option<char>,
 ) {
     match presentation {
         QueuePresentation::Wide(list) => {
-            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused, throbber));
+            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused));
             Component::view(list, frame, area);
         }
     }

@@ -144,10 +144,6 @@ impl Model {
         if rows_changed {
             self.last_queue_projection = Some(fingerprint);
         }
-        let throbber = playback.active.then(|| {
-            NOW_PLAYING_THROBBER_FRAMES
-                [self.app.now_playing_throbber_index % NOW_PLAYING_THROBBER_FRAMES.len()]
-        });
         // The visual slot's image projection (task 3.4, D9): the queue
         // projection — not the painter — issues every fetch for the now-playing
         // item and projects the slot's image state. The slot only paints while
@@ -164,7 +160,6 @@ impl Model {
                 } else if let Some((target, row)) = patch {
                     queue.set_row_patch(&target, row);
                 }
-                queue.set_throbber(throbber);
                 queue.set_cursor(cursor);
                 queue.set_scope_chrome(scope, title);
                 queue.set_status_pills(

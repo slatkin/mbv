@@ -71,7 +71,6 @@ pub struct QueueComponent {
     geometry: QueueRenderGeometry,
     pending_slot: Option<QueueSlotId>,
     drag_grab: Option<QueueSlotId>,
-    throbber: Option<char>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
     /// the double-click window and wheel throttle.
     mouse_gestures: MouseGestureState,
@@ -101,7 +100,6 @@ impl QueueComponent {
             geometry: QueueRenderGeometry::default(),
             pending_slot: None,
             drag_grab: None,
-            throbber: None,
             mouse_gestures: MouseGestureState::new(),
             scope_regions: HitRegions::new(),
         }
@@ -172,10 +170,6 @@ impl QueueComponent {
 
     pub(in crate::app) fn set_pending_slot(&mut self, slot: Option<QueueSlotId>) {
         self.pending_slot = slot;
-    }
-
-    pub(in crate::app) fn set_throbber(&mut self, throbber: Option<char>) {
-        self.throbber = throbber;
     }
 
     pub(in crate::app) fn set_area(&mut self, area: Rect) {
@@ -572,7 +566,6 @@ impl Component for QueueComponent {
             content_area,
             QueuePresentation::Wide(self.carrier.wide_mut()),
             self.focused,
-            self.throbber,
         );
         if content_area.height < 1 {
             return;
@@ -677,7 +670,9 @@ fn queue_media_row_at(
         target: slot.slot_id,
         primary: title,
         trailing,
-        duration: if is_active || is_pending {
+        duration: if is_pending {
+            // The pending row is not playing yet; the active row paints its
+            // total duration like every other row.
             None
         } else {
             let time_text = queue_row_time_text(pos_ticks, duration_ticks, false);
