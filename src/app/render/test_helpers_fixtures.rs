@@ -1,7 +1,6 @@
 #![allow(dead_code, unused_imports)]
 
 use super::super::*;
-use crate::app::components::{BrowserComponent, MusicWorkspaceComponent};
 use crate::app::layout::AppLayout;
 use crate::app::shell::Model;
 use crate::app::tests::{make_app_stub, make_item};

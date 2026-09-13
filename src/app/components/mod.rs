@@ -9,9 +9,7 @@
 #![allow(dead_code)]
 
 pub mod book_content;
-pub mod browser;
 pub mod browser_content;
-pub mod browser_narrow;
 pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
@@ -29,8 +27,6 @@ pub mod mouse;
 pub mod msg;
 pub mod multiselect;
 pub mod music_content;
-pub mod music_workspace;
-mod music_workspace_keys;
 pub mod playlists;
 pub mod podcast_content;
 pub mod queue;
@@ -48,7 +44,6 @@ pub mod tab_panel;
 pub mod tv_content;
 pub mod user_event;
 
-pub use self::browser::BrowserComponent;
 pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
@@ -64,13 +59,8 @@ pub use self::msg::{
     SettingsIntent, ShellRequest, TerminalObserverEvent,
 };
 pub use self::multiselect::MultiselectComponent;
-// `MusicContent`/`MusicWorkspaceComponent` are no longer mounted in
-// production (task 9.4 registered Music as a `LibraryPanel`-embedded owner);
-// these re-exports now serve test-only callers.
 #[cfg(test)]
 pub(in crate::app) use self::music_content::MusicContent;
-#[cfg(test)]
-pub use self::music_workspace::MusicWorkspaceComponent;
 pub use self::playlists::PlaylistsComponent;
 pub(in crate::app) use self::playlists::PlaylistsContent;
 pub use self::queue::QueueComponent;
@@ -91,8 +81,8 @@ pub use self::tab_panel::TabPanel;
 pub use self::user_event::UserEvent;
 
 #[cfg(test)]
-#[path = "browser_component_tests.rs"]
-mod browser_component_tests;
+#[path = "browser_inline_search_tests.rs"]
+mod browser_inline_search_tests;
 #[cfg(test)]
 #[path = "feeds_component_tests.rs"]
 mod feeds_component_tests;
@@ -105,14 +95,6 @@ mod library_routes_component_tests;
 #[cfg(test)]
 #[path = "multiselect_component_tests.rs"]
 mod multiselect_component_tests;
-#[cfg(test)]
-#[path = "music_workspace_actions_tests.rs"]
-mod music_workspace_actions_tests;
-#[cfg(test)]
-#[path = "music_workspace_cursor_tests.rs"]
-mod music_workspace_cursor_tests;
-#[cfg(test)]
-mod music_workspace_test_support;
 #[cfg(test)]
 #[path = "playlists_component_tests.rs"]
 mod playlists_component_tests;

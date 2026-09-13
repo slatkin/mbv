@@ -74,7 +74,6 @@ pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
-pub(in crate::app) use components::list_narrow::render_narrow_browse_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use screens::feeds_model::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
@@ -224,14 +223,8 @@ mod music_characterization_tests;
 #[path = "tests_music_groups.rs"]
 mod music_group_tests;
 #[cfg(test)]
-#[path = "tests_music_narrow.rs"]
-mod music_narrow_tests;
-#[cfg(test)]
 #[path = "tests_music_wide_reanchor_characterization.rs"]
 mod music_wide_reanchor_characterization_tests;
-#[cfg(test)]
-#[path = "tests_music_wide.rs"]
-mod music_wide_tests;
 #[cfg(test)]
 #[path = "tests_non_music.rs"]
 mod non_music_tests;

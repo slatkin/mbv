@@ -1,31 +1,16 @@
 use super::components::inline_search::InlineSearchHost;
-use super::components::{BrowserComponent, ComponentId, SearchPool};
+use super::components::{ComponentId, SearchPool};
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
 
 impl Model {
     pub(crate) fn active_inline_search_is_open(&self) -> bool {
-        let Some(id) = self.active_inline_search_host() else {
-            return false;
-        };
-        self.application
-            .get_component(&id)
-            .is_some_and(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<BrowserComponent>()
-                    .is_some_and(|host| host.inline_search().is_active())
-                    || self
-                        .music_owner()
-                        .is_some_and(|host| host.inline_search().is_active())
-            })
+        self.music_owner()
+            .is_some_and(|host| host.inline_search().is_active())
     }
 
     fn active_inline_search_host(&self) -> Option<ComponentId> {
-        // Resolve through the same active-destination pointer used for focus.
-        self.library_child_id()
-            .filter(|id| self.application.mounted(id))
-            .or_else(|| self.music_owner().map(|_| ComponentId::Library))
+        self.music_owner().map(|_| ComponentId::Library)
     }
 
     fn with_active_inline_search_host(
@@ -35,13 +20,6 @@ impl Model {
         let Some(id) = self.active_inline_search_host() else {
             return false;
         };
-        let Some(component) = self.application.get_component_mut(&id) else {
-            return false;
-        };
-        if let Some(host) = component.as_any_mut().downcast_mut::<BrowserComponent>() {
-            f(host);
-            return true;
-        }
         if id == ComponentId::Library {
             if let Some(host) = self.music_owner_mut() {
                 f(host);
@@ -65,13 +43,9 @@ impl Model {
     }
 
     pub(super) fn close_inline_search_host(&mut self, id: &ComponentId) {
-        if let Some(component) = self.application.get_component_mut(id) {
-            if let Some(host) = component.as_any_mut().downcast_mut::<BrowserComponent>() {
+        if id == &ComponentId::Library {
+            if let Some(host) = self.music_owner_mut() {
                 host.close_inline_search();
-            } else if id == &ComponentId::Library {
-                if let Some(host) = self.music_owner_mut() {
-                    host.close_inline_search();
-                }
             }
         }
     }
@@ -151,18 +125,8 @@ impl Model {
             return;
         };
         let selected = self
-            .active_inline_search_host()
-            .and_then(|id| self.application.get_component(&id))
-            .and_then(|component| {
-                component
-                    .as_any()
-                    .downcast_ref::<BrowserComponent>()
-                    .and_then(|h| h.selected_inline_search_item())
-                    .or_else(|| {
-                        self.music_owner()
-                            .and_then(|h| h.selected_inline_search_item())
-                    })
-            });
+            .music_owner()
+            .and_then(|host| host.selected_inline_search_item());
         if self.app.recursive_album_search_enabled(lib_idx) {
             let library_id = self.app.libs[lib_idx].library.id.clone();
             let entry = match self.app.album_indexes.get(&library_id) {

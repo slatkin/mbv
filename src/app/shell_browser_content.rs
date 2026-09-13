@@ -14,7 +14,7 @@
 //! `shell_messages.rs`'s dispatch are keyed only by the active tab, not by
 //! which component or owner sent the message.
 
-use super::components::browser::BrowserIdentity;
+use super::components::browser_content::BrowserIdentity;
 use super::components::browser_content::{BrowserContent, BrowserOwnerPush};
 use super::components::library_panel::{LibraryKey, LibraryPanel};
 use super::components::{BrowserKey, BrowserKind, ComponentId};
@@ -157,7 +157,6 @@ impl Model {
             .map(|s| s.groups.iter().map(|g| g.folder.name.clone()).collect())
             .unwrap_or_default();
         let feed_group_cursor = self.app.feed_home_video_selected_group_index(index);
-        let poster_window = items.clone();
         let push = BrowserOwnerPush {
             items,
             total_count,
@@ -178,9 +177,7 @@ impl Model {
             }
             owner.cursor()
         });
-        if let Some(cursor) = landed_cursor {
-            self.app.fetch_nearby_movie_posters(&poster_window, cursor);
-        }
+        let _ = landed_cursor;
     }
 
     pub(super) fn push_active_browser_owner_content(&mut self) {

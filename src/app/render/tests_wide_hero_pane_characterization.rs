@@ -7,11 +7,11 @@
 //! correct behaviour. Must land in its own commit before any Wide hero paint
 //! or primitive change (ledger migration flow).
 
-use super::test_helpers::{buffer_to_string, make_music_group_app};
+use super::test_helpers::buffer_to_string;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{BrowserKey, BrowserKind, MusicWorkspaceComponent};
+use crate::app::components::{BrowserKey, BrowserKind};
 use crate::app::palette;
 use crate::app::render::arrangements::library::wide_library_panes;
 use crate::app::render::arrangements::wide_hero::{PANE_PAD_X, PANE_PAD_Y};
@@ -67,32 +67,6 @@ fn tv_wide_left_pane_unconditional_fill_shared_inset() {
     let buffer = terminal.backend().buffer();
 
     let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide fits");
-    let hero_panel = panes.hero_panel;
-
-    assert_eq!(
-        buffer[(hero_panel.x, hero_panel.y)].bg,
-        palette::resolve_surface_focus(false)
-    );
-    assert_eq!(
-        buffer[(hero_panel.x, hero_panel.bottom() - 1)].bg,
-        palette::resolve_surface_focus(false)
-    );
-}
-
-/// Music routes through `wide_library_panes(area, 0, PANE_PAD_Y)` --
-/// no horizontal inset on the panel/pane split itself (task 3.3).
-#[test]
-fn music_wide_left_pane_unconditional_fill_no_horizontal_pad() {
-    let app = make_music_group_app();
-    let lib_idx = app.tab.emby_library_index().unwrap();
-    let context = app.wide_music_render_ctx(lib_idx, None);
-    let mut component = MusicWorkspaceComponent::new();
-    component.set_content(context);
-    let area = wide_area();
-    let terminal = direct_terminal(|f| component.view(f, area));
-    let buffer = terminal.backend().buffer();
-
-    let panes = wide_library_panes(area, 0, PANE_PAD_Y, None).expect("wide fits");
     let hero_panel = panes.hero_panel;
 
     assert_eq!(

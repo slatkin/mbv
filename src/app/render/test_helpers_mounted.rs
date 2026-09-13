@@ -5,7 +5,7 @@ use super::buffer_to_string;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::music_content::MusicContent;
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{BrowserComponent, ComponentId};
+use crate::app::components::ComponentId;
 use crate::app::layout::PaintedRowGeometry;
 use crate::app::shell::Model;
 use crate::app::{App, PanelFocus};
@@ -56,41 +56,6 @@ pub fn draw_mounted_terminal(model: &mut Model, width: u16, height: u16) -> Term
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| model.draw_frame(f, false, false)).unwrap();
     term
-}
-
-/// The mounted Emby `BrowserComponent`'s own painted geometry (task 3.8: the
-/// legacy Emby library dispatch no longer publishes it).
-pub fn mounted_browser_layout(model: &Model) -> &ratatui::layout::Rect {
-    let id = model
-        .emby_browser_id
-        .as_ref()
-        .expect("emby browser component mounted");
-    model
-        .application
-        .get_component(id)
-        .expect("emby browser mounted")
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .expect("BrowserComponent")
-        .test_layout()
-}
-
-/// The scroll offset the mounted Emby `BrowserComponent` settled on this frame
-/// (task 3.8: the browser owns the persisted flow offset the legacy renderer
-/// used to write back into the `BrowseLevel`).
-pub fn mounted_browser_scroll(model: &Model) -> usize {
-    let id = model
-        .emby_browser_id
-        .as_ref()
-        .expect("emby browser component mounted");
-    model
-        .application
-        .get_component(id)
-        .expect("emby browser mounted")
-        .as_any()
-        .downcast_ref::<BrowserComponent>()
-        .expect("BrowserComponent")
-        .scroll()
 }
 
 /// The mounted `MusicWorkspaceComponent`'s own painted geometry.

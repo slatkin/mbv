@@ -4,10 +4,8 @@ use super::*;
 use crate::app::components::library_panel::LibraryKey;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{
-    BrowserComponent, ComponentId, MusicWorkspaceComponent, QueueComponent,
-};
 use crate::app::components::{BrowserKey, BrowserKind};
+use crate::app::components::{ComponentId, QueueComponent};
 use crate::app::layout::AppLayout;
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use crate::app::shell::Model;
@@ -32,19 +30,6 @@ pub use mounted::*;
 #[path = "test_helpers_fixtures.rs"]
 mod fixtures;
 pub use fixtures::*;
-
-pub fn set_browser_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
-    model.sync_mounted_surfaces();
-    let id = model.emby_browser_id.clone().expect("browser mounted");
-    model
-        .application
-        .get_component_mut(&id)
-        .expect("browser component")
-        .as_any_mut()
-        .downcast_mut::<BrowserComponent>()
-        .expect("browser component type")
-        .set_cursor_for_test(cursor);
-}
 
 /// The active TV library's owner key, derived exactly as production does
 /// (task 8.4: one `Service` key for a `tvshows` library; the owner lives

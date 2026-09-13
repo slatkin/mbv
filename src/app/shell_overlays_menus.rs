@@ -1,9 +1,8 @@
 use super::super::components::library_panel::LibraryPanel;
 use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
-    BrowserComponent, ComponentId, ContextMenuComponent, LibraryRoutesComponent,
-    MultiselectComponent, OverlayId, PopupId, QueueComponent, SelectionModalComponent,
-    ShellRequest,
+    ComponentId, ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, OverlayId,
+    PopupId, QueueComponent, SelectionModalComponent, ShellRequest,
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{
@@ -37,23 +36,6 @@ impl Model {
             .get_component(&ComponentId::Library)
             .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
             .and_then(LibraryPanel::menu_geometry)
-    }
-
-    /// The active Emby Browser's painted panel and selected-row anchor. The
-    /// Browser delegates this to its persistent media-list control, so context
-    /// menus follow the same flow geometry as the painted rows.
-    fn browser_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
-        if !matches!(self.app.tab, TabSelection::EmbyLibrary(_)) {
-            return None;
-        }
-        let id = self.emby_browser_id.as_ref()?;
-        if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
-            return None;
-        }
-        self.application
-            .get_component(id)
-            .and_then(|component| component.as_any().downcast_ref::<BrowserComponent>())
-            .and_then(BrowserComponent::menu_placement_geometry)
     }
 
     /// Context-menu geometry for a migrated Audiobookshelf Books owner.
@@ -90,11 +72,10 @@ impl Model {
         // active control (or the existing Home/ABS book component seam). Other
         // destinations and Queue focus keep using `AppLayout` as before.
         let home = self.home_menu_geometry();
-        let browser = self.browser_menu_geometry();
         let (panel_rect, anchor_rect): (Rect, Option<Rect>) = match &anchor {
             ContextMenuAnchor::SelectedItem(focus) => {
                 let (panel, selected) = match focus {
-                    PanelFocus::Library => match home.or(browser) {
+                    PanelFocus::Library => match home {
                         Some((panel, selected)) => (panel, selected),
                         None => match self.book_menu_geometry() {
                             Some((panel, selected)) => (panel, selected),

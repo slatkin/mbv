@@ -134,11 +134,11 @@ pub(in crate::app) fn render_search_box(f: &mut Frame, area: Rect, query: &str, 
     let input = if loading {
         format!("{query}█ [loading…]")
     } else {
-        query.to_string()
+        format!("{query}█")
     };
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            format!(" ⌘ {input}"),
+            format!(" SEARCH: {input}"),
             Style::default().fg(palette::TEXT_PRIMARY),
         ))),
         area,

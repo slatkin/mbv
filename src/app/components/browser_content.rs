@@ -22,7 +22,6 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use mbv_core::api::EmbyItem;
 
-use super::browser::BrowserIdentity;
 use super::component_id::BrowserKind;
 use super::inline_search::{InlineSearch, InlineSearchAction, InlineSearchHost};
 use super::library_panel::content::{
@@ -37,6 +36,18 @@ use super::media_list::{
 };
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
+
+/// Browse identity used to decide when a projected position should be applied.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub(in crate::app) struct BrowserIdentity {
+    pub(in crate::app) depth: usize,
+    pub(in crate::app) parent_id: String,
+    pub(in crate::app) letter_filter: Option<usize>,
+    pub(in crate::app) sort_by: String,
+    pub(in crate::app) sort_order: String,
+    pub(in crate::app) unplayed_only: bool,
+    pub(in crate::app) feed_group: Option<usize>,
+}
 
 /// Derives the Emby-specific semantic state for a browse row (mirrors
 /// `browser::emby_semantic_state`; the provider-neutral `media_list` layer

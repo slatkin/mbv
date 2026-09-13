@@ -1,49 +1,13 @@
-use super::*;
-
-/// `/` opens the embedded Inline Search control locally (design.md D1/D4)
-/// and still emits `OpenInlineSearch` for the shell-side full-library-load
-/// work the control has no authority over.
-#[test]
-fn emby_browser_slash_opens_inline_search() {
-    let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(3)));
-    browser.set_focused(true);
-    assert!(!browser.inline_search().is_active());
-
-    let message = browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Char('/'),
-        modifiers: KeyModifiers::NONE,
-    });
-
-    assert!(browser.inline_search().is_active());
-    assert_eq!(message, Some(Msg::Shell(ShellRequest::OpenInlineSearch)));
-}
-
-/// While search is open, a character that is otherwise a list shortcut (`r`
-/// -> `BrowserRefresh`) is appended to the query instead of running the
-/// shortcut, and the component returns immediately without an ordinary
-/// `Msg` (design.md D4).
-#[test]
-fn emby_browser_search_open_shortcut_letter_becomes_query_text() {
-    let mut browser = BrowserComponent::new();
-    browser.set_content(BrowserContent::from_items(make_items(3)));
-    browser.set_focused(true);
-    browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Char('/'),
-        modifiers: KeyModifiers::NONE,
-    });
-
-    let message = browser.handle_tui_key(TuiKeyEvent {
-        code: Key::Char('r'),
-        modifiers: KeyModifiers::NONE,
-    });
-
-    assert_eq!(browser.inline_search().query(), "r");
-    assert_eq!(
-        message, None,
-        "shortcut letter must not reach the ordinary handler while search is open"
-    );
-}
+use crate::app::components::browser_content::{BrowserContent as BrowserOwner, BrowserOwnerPush};
+use crate::app::components::component_id::BrowserKind;
+use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
+use crate::app::components::library_panel::content::ListSlot;
+use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+use crate::app::components::media_list::RowLocalInput;
+use crate::app::components::msg::{Msg, ShellRequest};
+use crate::app::tests::{make_item, make_items};
+use ratatui::layout::{Position, Rect};
+use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers};
 
 // The wide-Movies right-rail Inline Search painting this file used to cover
 // through `BrowserComponent` moved with Movies/HomeVideos/Generic to the
@@ -51,12 +15,6 @@ fn emby_browser_search_open_shortcut_letter_becomes_query_text() {
 // skeletons already prove `ListSlot::Search` painting generically
 // (`library_panel::wide`/`narrow` tests), so the owner-level tests below
 // prove only this owner's translation of the slot/key events into `Msg`s.
-
-use crate::app::components::browser_content::{BrowserContent as BrowserOwner, BrowserOwnerPush};
-use crate::app::components::library_panel::content::ListSlot;
-use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use crate::app::components::media_list::RowLocalInput;
-use ratatui::layout::{Position, Rect};
 
 fn owner_push(items: Vec<mbv_core::api::EmbyItem>) -> BrowserOwnerPush {
     let total_count = items.len();

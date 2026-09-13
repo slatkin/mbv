@@ -108,13 +108,11 @@ fn mouse_eligibility_follows_breakpoint_and_overlay_lifecycle() {
     // Task 8.4 (design D2): the TV surface is the mounted `LibraryPanel`
     // under `ComponentId::Library` at every breakpoint; no `Browser` id is
     // ever mounted for TV.
-    let (wide, wide_eligible) = tv_child(true);
+    let (_wide, wide_eligible) = tv_child(true);
     assert!(wide_eligible.contains(&ComponentId::Library));
-    assert!(wide.emby_browser_id.is_none());
 
-    let (narrow, narrow_eligible) = tv_child(false);
+    let (_narrow, narrow_eligible) = tv_child(false);
     assert!(narrow_eligible.contains(&ComponentId::Library));
-    assert!(narrow.emby_browser_id.is_none());
 
     let mut model = eligibility_model();
     // Task 6.1: the migrated Movies surface is the mounted `LibraryPanel`.
@@ -276,7 +274,6 @@ fn narrow_and_wide_tv_library_both_route_to_the_library_panel() {
 
     for wide in [false, true] {
         let model = build(wide);
-        assert_eq!(model.emby_browser_id, None);
         assert_eq!(model.application.focus(), Some(&ComponentId::Library));
         assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     }
@@ -392,7 +389,6 @@ fn tv_library_wide_narrow_wide_transition_routes_and_focuses_correctly() {
     };
 
     let assert_tv_focused = |model: &Model| {
-        assert_eq!(model.emby_browser_id, None);
         assert_eq!(model.application.focus(), Some(&ComponentId::Library));
         assert!(model.library_panel_has_owner(&model.test_tv_owner_key()));
     };

@@ -4,7 +4,7 @@ use super::test_helpers::{
 use super::*;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
-use crate::app::components::{BrowserComponent, ComponentId, MusicWorkspaceComponent};
+use crate::app::components::ComponentId;
 use crate::app::layout::PaintedRowGeometry;
 use crate::app::tests::make_item;
 use crate::app::{PanelFocus, SeriesDetail, TabSelection};
@@ -74,7 +74,6 @@ fn render_browse_component(
     terminal
         .draw(|frame| model.draw_frame(frame, false, false))
         .unwrap();
-    let list_area = model.app.layout.left_area;
     let layout = panel_browse_layout(&model);
     (terminal, layout)
 }
@@ -111,30 +110,19 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> PaintedRowGeometry {
     }
 }
 
-/// Render the wide grouped Music workspace through its mounted
-/// `MusicWorkspaceComponent` (the sole wide-music painter, #613) instead of
-/// the legacy `render_library`, surfacing the component's own painted pill
-/// geometry as a `PaintedRowGeometry` so the shared conformance assertions
-/// still hold.
+/// Render grouped Music through its LibraryPanel owner and shared skeleton.
 fn render_music_component(
-    app: &App,
+    app: App,
     width: u16,
     height: u16,
 ) -> (Terminal<TestBackend>, PaintedRowGeometry) {
+    let mut model = crate::app::shell::Model::new(app);
+    model.sync_mounted_surfaces();
     let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let area = Rect::new(0, 0, width, height);
-    let lib_idx = app.tab.emby_library_index().unwrap();
-    let context = app.wide_music_render_ctx(lib_idx, None);
-    let mut component = MusicWorkspaceComponent::new();
-    component.set_content(context);
-    terminal.draw(|frame| component.view(frame, area)).unwrap();
-    let layout = PaintedRowGeometry {
-        left_area: area,
-        hero_area: component.test_hero_area(),
-        selected_item_rect: component.test_selected_item_rect(),
-        selector_tabs: component.test_pill_regions().to_vec(),
-        ..Default::default()
-    };
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
+    let layout = panel_browse_layout(&model);
     (terminal, layout)
 }
 
@@ -509,7 +497,7 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
 
     for (surface, app, width) in cases {
         let (terminal, layout) = if surface == "Music" {
-            render_music_component(&app, width, 30)
+            render_music_component(app, width, 30)
         } else {
             render_browse_component(app, width, 30)
         };

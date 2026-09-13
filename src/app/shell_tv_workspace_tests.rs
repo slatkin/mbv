@@ -430,10 +430,6 @@ fn entering_wide_tv_library_does_not_flash_the_narrow_browser() {
         model.library_panel_has_owner(&model.test_tv_owner_key()),
         "the wide TV owner installs on the first sync after entry"
     );
-    assert_eq!(
-        model.emby_browser_id, None,
-        "no narrow browser flash for the wide TV library"
-    );
     assert_eq!(model.application.focus(), Some(&ComponentId::Library));
 }
 

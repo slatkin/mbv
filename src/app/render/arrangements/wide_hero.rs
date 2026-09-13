@@ -62,7 +62,7 @@ pub(in crate::app) fn wide_hero_fits(content_area: Rect) -> bool {
         && content_area.height.saturating_sub(1) >= WIDE_HERO_MIN_AREA_HEIGHT
 }
 
-pub(in crate::app) fn wide_hero_presentation(
+pub(in crate::app::render) fn wide_hero_presentation(
     content_area: Rect,
     override_width: Option<u16>,
 ) -> Option<WideHeroPanes> {

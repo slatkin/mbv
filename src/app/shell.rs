@@ -53,8 +53,6 @@ pub(super) enum MusicTrackFocusRequest {
 pub struct Model {
     pub app: App,
     pub(super) application: Application<ComponentId, Msg, UserEvent>,
-    pub(super) emby_browser_id: Option<ComponentId>,
-    pub(super) music_workspace_id: Option<ComponentId>,
     /// Components currently carrying the `mouse_sub()` subscription. Owned
     /// solely by `sync_mouse_subscriptions` (ADR 0024 D2): it is the mouse
     /// arbitration table. `tuirealm` 4.1's `Application::unsubscribe` removes
@@ -381,8 +379,6 @@ impl Model {
         let mut model = Self {
             app,
             application,
-            emby_browser_id: None,
-            music_workspace_id: None,
             mouse_subscribed: std::collections::HashSet::new(),
             music_track_focus_request: None,
             music_workspace_reanchor: false,
