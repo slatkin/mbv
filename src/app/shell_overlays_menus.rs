@@ -684,8 +684,6 @@ impl Model {
         if !self.finish_route_config_save(save_result) {
             return;
         }
-        self.app.persist_roaming_settings();
-
         let Some(client) = self.app.emby_client() else {
             return;
         };

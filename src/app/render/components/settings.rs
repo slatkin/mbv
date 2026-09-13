@@ -132,7 +132,6 @@ impl App {
             }
         }
         if key == SettingKey::AutoReconnect {
-            self.persist_roaming_settings();
             if self.config.lock().unwrap().auto_reconnect {
                 self.persist_current_auto_reconnect_target();
             }

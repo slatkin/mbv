@@ -47,12 +47,6 @@ impl App {
         if let Err(e) = mbv_core::config::save_last_remote_connection(Some(&last)) {
             log::warn!(target: "auto_reconnect", "current target persistence failed: {e}");
         }
-        if let Ok(value) = serde_json::to_value(&last) {
-            let _ = self.persist_shared_document(
-                mbv_core::shared_state::SharedDocumentKind::LastRemoteConnection,
-                value,
-            );
-        }
     }
 
     pub(in crate::app) fn teardown(&mut self, quit_timeout: Duration) {
@@ -107,12 +101,6 @@ impl App {
             match mbv_core::config::save_last_remote_connection(last.as_ref()) {
                 Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
                 Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),
-            }
-            if let Ok(value) = serde_json::to_value(last.as_ref()) {
-                let _ = self.persist_shared_document(
-                    mbv_core::shared_state::SharedDocumentKind::LastRemoteConnection,
-                    value,
-                );
             }
         }
         // 7.1/7.2: leave an attached receiver playing (no stop, no
