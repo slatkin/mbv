@@ -18,11 +18,6 @@ fn service_administration_selectors_are_parsed_and_validated() {
         vec!["--disconnect".into()],
         vec!["--disconnect".into(), "emby".into()],
         vec!["--connect".into(), "emby".into(), "--quit".into()],
-        vec![
-            "--connect".into(),
-            "emby".into(),
-            "--export-shared-data".into(),
-        ],
         vec!["--connect".into(), "emby".into(), "--audio-only".into()],
         vec!["--connect".into(), "abs".into(), "--audio-only".into()],
         vec!["--disconnect".into(), "abs".into(), "--quit".into()],
