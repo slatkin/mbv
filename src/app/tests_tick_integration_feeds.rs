@@ -254,15 +254,15 @@ fn feeds_tick_focus_and_mouse_eligibility_follow_the_panel() {
     );
 }
 
-/// A Watched pill click resolves through the panel's List-controls slot into
-/// the owner's filter — no destination-side offset mirror.
+/// A Watched pill click resolves through the panel's Selector slot into the
+/// owner's filter — no destination-side offset mirror.
 #[test]
 fn feeds_tick_watched_pill_click_changes_the_filter_through_the_panel() {
-    let mut harness = harness(crate::app::TWO_COLUMN_THRESHOLD);
-    draw(&mut harness, crate::app::TWO_COLUMN_THRESHOLD);
+    let mut harness = harness(240);
+    draw(&mut harness, 240);
     assert_eq!(feeds_owner(&harness).watched_filter(), WatchedFilter::All);
     let watched = panel(&harness)
-        .test_control_hits()
+        .test_selector_hits()
         .regions()
         .iter()
         .find(|(_, id)| *id == WatchedFilter::Watched.position())

@@ -183,8 +183,7 @@ fn list_controls_row_moves_the_list_box_down_one_row() {
     let mut content = LibraryPanelContent {
         selector: None,
         controls: Some(ListControls {
-            pills: None,
-            label: Some("17 items".into()),
+            label: "17 items".into(),
         }),
         list: ListSlot::Media(&mut list),
         hero: None,

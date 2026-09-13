@@ -325,8 +325,7 @@ fn narrow_skeleton_places_selector_controls_and_list() {
             active: Some(0),
         }),
         controls: Some(ListControls {
-            pills: None,
-            label: Some("12 items".into()),
+            label: "12 items".into(),
         }),
         list: ListSlot::Media(&mut carrier),
         hero: None,

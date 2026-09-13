@@ -140,15 +140,12 @@ pub(in crate::app) struct SelectorRow {
     pub active: Option<usize>,
 }
 
-/// One List controls row (design D8): optional secondary pills plus an
-/// optional plain-text label (the Feeds Watched filter, the home-video item
-/// count). No per-destination arm; absent content renders the row absent.
+/// One List controls row (design D8): a plain-text label, such as the
+/// home-video item count. Selectable pills belong only in the Selector row.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) struct ListControls {
-    /// Secondary pill bar: labels plus the active pill's index.
-    pub pills: Option<(Vec<String>, usize)>,
     /// Plain-text label, right-aligned in the row.
-    pub label: Option<String>,
+    pub label: String,
 }
 
 /// The list box's content for one frame (design D3).

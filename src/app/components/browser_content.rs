@@ -486,8 +486,7 @@ impl LibraryContentOwner for BrowserContent {
             None
         };
         let controls = self.home_video.then(|| ListControls {
-            pills: None,
-            label: Some(format!("{} items", self.total_count)),
+            label: format!("{} items", self.total_count),
         });
         let list = if self.inline_search.is_active() {
             ListSlot::Search(&mut self.inline_search)

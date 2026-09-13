@@ -1,7 +1,7 @@
 //! Feeds panel-output tests (tasks 7.2/7.3). Feeds paints through the shared
 //! Wide/Narrow Library panel skeleton over `FeedsContent::content()`, so these
 //! assertions target the mounted `LibraryPanel`'s own output — one Selector
-//! pill bar, one List controls row, and the policy hero header — instead of
+//! pill bar and the policy hero header — instead of
 //! the deleted `render_feeds_content` chrome or the deleted mounted Feeds
 //! destination component.
 
@@ -88,13 +88,12 @@ fn area_contains(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> boo
     })
 }
 
-/// The panel paints the Selector row (feed groups), the List controls row
-/// (Watched filter) and the policy hero header — one pill bar per row, no
-/// destination chrome.
+/// The panel paints one Selector row containing watched-filter and feed-group
+/// pills, plus the policy hero header — no destination chrome.
 #[test]
-fn feeds_paints_one_pill_bar_one_controls_row_and_the_policy_header() {
+fn feeds_paints_one_pill_bar_and_the_policy_header() {
     let mut panel = panel_with(feed_owner(), true);
-    let terminal = terminal_for(&mut panel, 120, 30);
+    let terminal = terminal_for(&mut panel, 240, 30);
     let wide = panel
         .test_wide_geometry()
         .expect("the panel painted a Wide skeleton");
@@ -109,12 +108,7 @@ fn feeds_paints_one_pill_bar_one_controls_row_and_the_policy_header() {
         group_hits.iter().all(|(rect, _)| rect.height == 1),
         "the Selector row is one pill bar"
     );
-    let controls = wide.controls.expect("the List controls row must paint");
-    assert_eq!(controls.height, 1);
-    assert!(
-        group_hits.iter().all(|(rect, _)| rect.y < controls.y),
-        "the Selector row sits above the controls row"
-    );
+    assert!(wide.controls.is_none(), "Feeds has no List controls row");
 
     // The policy hero header paints the selected entry's title in the hero
     // pane (the artwork policy arm itself is covered by `feeds_content`).
@@ -122,28 +116,24 @@ fn feeds_paints_one_pill_bar_one_controls_row_and_the_policy_header() {
         area_contains(terminal.backend().buffer(), wide.hero_area, "Entry One"),
         "the policy hero header must paint the selected entry title"
     );
-    assert!(output.contains("Test Feed"), "missing feed-group pill");
     assert!(
         output.contains("Played") && output.contains("Unplayed"),
-        "missing Watched filter pills: {output:?}"
+        "missing leading Watched filter pills: {output:?}"
     );
 }
 
 /// Clicking the painted Watched pill changes the filter through the panel's
-/// slot-event resolution.
+/// Selector slot-event resolution.
 #[test]
 fn watched_pill_click_changes_the_filter() {
     let mut panel = panel_with(feed_owner(), true);
-    let terminal = terminal_for(&mut panel, 120, 30);
-    let controls = panel
-        .test_wide_geometry()
-        .expect("Wide skeleton")
-        .controls
-        .expect("controls row");
-    let buf = terminal.backend().buffer();
-    let watched_x = (controls.left()..controls.right())
-        .find(|&x| buf[(x, controls.y)].symbol() == "P")
+    let _terminal = terminal_for(&mut panel, 240, 30);
+    let selector = panel.test_selector_hits().regions();
+    let (watched, _) = selector
+        .iter()
+        .find(|(_, id)| *id == WatchedFilter::Watched.position())
         .expect("the Watched pill is painted");
+    let watched_x = watched.x;
     let filter = |panel: &LibraryPanel| {
         panel
             .owner(&LibraryKey::Feeds)
@@ -155,7 +145,7 @@ fn watched_pill_click_changes_the_filter() {
     let msg = panel.on(&Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: watched_x + 1,
-        row: controls.y,
+        row: watched.y,
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(msg, None);

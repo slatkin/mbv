@@ -92,32 +92,22 @@ pub(in crate::app) fn paint_pill_row_gap(f: &mut Frame, area: Rect) {
     );
 }
 
-/// Paints one List controls row: optional secondary pills (hitboxes pushed
-/// into `hits`) and an optional right-aligned plain-text label, so the two
-/// can never collide.
+/// Paints one List controls row as a right-aligned plain-text label.
 pub(in crate::app) fn paint_list_controls_row(
     f: &mut Frame,
     area: Rect,
     controls: &ListControls,
-    hits: &mut HitRegions<usize>,
+    _hits: &mut HitRegions<usize>,
 ) {
     if area.height == 0 || area.width == 0 {
         return;
     }
-    let area = Rect { height: 1, ..area };
-    if let Some((pills, active)) = &controls.pills {
-        if !pills.is_empty() {
-            paint_pill_bar_row(f, area, pills, Some(*active), None, hits);
-        }
-    }
-    if let Some(label) = &controls.label {
-        f.render_widget(
-            Paragraph::new(label.clone())
-                .style(Style::default().fg(palette::TEXT_SECONDARY))
-                .alignment(Alignment::Right),
-            area,
-        );
-    }
+    f.render_widget(
+        Paragraph::new(controls.label.clone())
+            .style(Style::default().fg(palette::TEXT_SECONDARY))
+            .alignment(Alignment::Right),
+        Rect { height: 1, ..area },
+    );
 }
 
 #[cfg(test)]
@@ -241,8 +231,7 @@ mod tests {
     fn list_controls_row_paints_its_label() {
         let area = Rect::new(2, 3, 24, 1);
         let controls = ListControls {
-            pills: None,
-            label: Some("17 items".into()),
+            label: "17 items".into(),
         };
         let mut hits = HitRegions::new();
         let terminal = draw(28, 5, |f| {
@@ -250,47 +239,5 @@ mod tests {
         });
         assert!(text_in(terminal.backend().buffer(), area, "17 items"));
         assert!(hits.regions().is_empty());
-    }
-
-    #[test]
-    fn list_controls_row_paints_pills_and_resolves_them() {
-        let area = Rect::new(2, 3, 24, 1);
-        let controls = ListControls {
-            pills: Some((vec!["All".into(), "Watched".into()], 0)),
-            label: None,
-        };
-        let mut hits = HitRegions::new();
-        let terminal = draw(28, 5, |f| {
-            paint_list_controls_row(f, area, &controls, &mut hits);
-        });
-        let buf = terminal.backend().buffer();
-        assert!(text_in(buf, area, "All") && text_in(buf, area, "Watched"));
-        let (rect, id) = hits.regions()[1];
-        assert_eq!(id, 1);
-        let point = ratatui::layout::Position {
-            x: rect.x + 1,
-            y: rect.y,
-        };
-        assert_eq!(hits.resolve(point), Some(&1));
-    }
-
-    #[test]
-    fn empty_list_controls_row_is_absent() {
-        let area = Rect::new(2, 3, 24, 1);
-        let controls = ListControls {
-            pills: None,
-            label: None,
-        };
-        let mut hits = HitRegions::new();
-        let terminal = draw(28, 5, |f| {
-            paint_list_controls_row(f, area, &controls, &mut hits);
-        });
-        let buf = terminal.backend().buffer();
-        assert!(hits.regions().is_empty());
-        for y in area.top()..area.bottom() {
-            for x in area.left()..area.right() {
-                assert_eq!(buf[(x, y)].symbol(), " ");
-            }
-        }
     }
 }

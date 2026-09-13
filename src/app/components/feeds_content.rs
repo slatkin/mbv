@@ -25,7 +25,7 @@ use mbv_core::playback_queue::FeedEntry;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListControls, ListSlot, SelectorRow,
+    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::library_panel::hero::hero_content_feed;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
@@ -414,33 +414,28 @@ impl LibraryContentOwner for FeedsContent {
             }
         });
         let has_subs = !self.subscriptions.is_empty();
-        // Feed groups are the one Selector row; the Watched filter is the one
-        // List controls row (design D8/D14). Both are absent without
-        // subscriptions — the legacy chrome painted neither.
+        // One Selector bar carries the watched filter first, followed by the
+        // existing feed-group pills. Both selections remain owner-local.
         let selector = has_subs.then(|| SelectorRow {
-            pills: std::iter::once("All".to_string())
-                .chain(
-                    self.subscriptions
-                        .iter()
-                        .map(|subscription| trunc_str(&subscription.name, MAX_GROUP_LABEL)),
-                )
-                .collect(),
-            active: Some(self.selected_group),
+            pills: [
+                WatchedFilter::All,
+                WatchedFilter::Watched,
+                WatchedFilter::Unwatched,
+            ]
+            .iter()
+            .map(|filter| filter.label().to_string())
+            .chain(std::iter::once("All".to_string()))
+            .chain(
+                self.subscriptions
+                    .iter()
+                    .map(|subscription| trunc_str(&subscription.name, MAX_GROUP_LABEL)),
+            )
+            .collect(),
+            // `[`/`]` move the feed-group selection, so the active pill and
+            // overflow window follow that group within the combined row.
+            active: Some(3 + self.selected_group),
         });
-        let controls = has_subs.then(|| ListControls {
-            pills: Some((
-                [
-                    WatchedFilter::All,
-                    WatchedFilter::Watched,
-                    WatchedFilter::Unwatched,
-                ]
-                .iter()
-                .map(|filter| filter.label().to_string())
-                .collect(),
-                self.watched_filter.position(),
-            )),
-            label: None,
-        });
+        let controls = None;
         let list = if !has_subs {
             ListSlot::Empty {
                 loading: false,
@@ -469,13 +464,14 @@ impl LibraryContentOwner for FeedsContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
-                self.select_group(index);
+                if index < 3 {
+                    self.select_watched_filter(index);
+                } else {
+                    self.select_group(index - 3);
+                }
                 None
             }
-            LibrarySlotEvent::ControlPicked(index) => {
-                self.select_watched_filter(index);
-                None
-            }
+            LibrarySlotEvent::ControlPicked(_) => None,
             LibrarySlotEvent::List(input) => match input {
                 RowLocalInput::Wheel { at, delta } => {
                     // The claim gate mirrors the mounted component: a wheel
@@ -570,31 +566,25 @@ mod tests {
         owner
     }
 
-    /// One Selector row carries the feed-group pills and the Watched filter is
-    /// the one List controls row (design D8/D14: no second pill bar).
+    /// One Selector row carries watched-filter pills followed by feed groups.
     #[test]
-    fn content_has_one_selector_row_and_the_watched_filter_in_controls() {
+    fn content_has_one_selector_row_for_filter_and_groups() {
         let mut owner = owner(
             &[subscription("A"), subscription("B")],
             vec![entry("one", FeedKind::Audio, false)],
         );
         let content = owner.content();
-        let selector = content.selector.expect("feed-group pills");
-        assert_eq!(selector.pills, ["All", "A", "B"]);
-        assert_eq!(selector.active, Some(0));
-        let controls = content.controls.expect("watched filter pills");
+        let selector = content.selector.as_ref().expect("feed-group pills");
         assert_eq!(
-            controls.pills,
-            Some((
-                vec![
-                    "All".to_string(),
-                    "Played".to_string(),
-                    "Unplayed".to_string()
-                ],
-                0
-            ))
+            selector.pills,
+            ["All", "Played", "Unplayed", "All", "A", "B"]
         );
-        assert_eq!(controls.label, None);
+        assert_eq!(selector.active, Some(3));
+        assert!(content.controls.is_none());
+        drop(content);
+
+        owner.cycle_group(1);
+        assert_eq!(owner.content().selector.unwrap().active, Some(4));
     }
 
     /// Without subscriptions the legacy chrome painted no pill bar at all:
@@ -620,10 +610,10 @@ mod tests {
         }
     }
 
-    /// The controls pill reflects the active filter, and an empty filtered
-    /// list still renders the filter controls plus the reload placeholder.
+    /// The watched pill state remains owner-local, and an empty filtered list
+    /// still renders the selector plus the reload placeholder.
     #[test]
-    fn content_controls_follow_the_active_watched_filter() {
+    fn content_selector_follows_the_active_watched_filter() {
         let mut owner = owner(
             &[subscription("A")],
             vec![entry("unplayed", FeedKind::Audio, false)],
@@ -631,7 +621,7 @@ mod tests {
         owner.cycle_watched_filter();
         assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
         let content = owner.content();
-        assert_eq!(content.controls.unwrap().pills.unwrap().1, 1);
+        assert_eq!(content.selector.unwrap().active, Some(3));
         match content.list {
             ListSlot::Empty { loading, text } => {
                 assert!(!loading);
