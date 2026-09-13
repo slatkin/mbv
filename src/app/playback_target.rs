@@ -206,6 +206,19 @@ impl App {
     pub(super) fn pending_playback_slot(&self) -> Option<mbv_core::playback_queue::QueueSlotId> {
         self.queue_for_scope(self.playing_queue_scope())
             .pending_playback_slot
+            .or_else(|| self.bare_in_flight_slot())
+    }
+
+    /// The Bare owner's desired-transition slot. The shell owns the local
+    /// transition it just dispatched, exactly as the daemon owner owns the
+    /// in-flight transition it publishes, so a locally selected slot projects
+    /// as now-playing before the Playback run reports the change
+    /// (queue-canonical-list, "Selecting a different item to play").
+    fn bare_in_flight_slot(&self) -> Option<mbv_core::playback_queue::QueueSlotId> {
+        if self.player.is_remote() {
+            return None;
+        }
+        self.bare_owner.in_flight_transition_slot()
     }
 
     pub(super) fn displayed_queue_playback_state(&self) -> super::PlaybackState {

@@ -130,6 +130,16 @@ impl PlayerOwnerState {
     pub fn reset_local_transitions(&mut self) {
         self.transitions.reset();
     }
+
+    /// The slot of the owner's in-flight desired transition, if any: the local
+    /// owner's equivalent of the daemon's published in-flight transition, so a
+    /// Bare-mode shell can paint the selected slot as now-playing before the
+    /// Playback run confirms it (design D3/D4).
+    pub fn in_flight_transition_slot(&self) -> Option<QueueSlotId> {
+        self.transitions
+            .in_flight()
+            .map(|transition| transition.target)
+    }
 }
 
 #[cfg(test)]

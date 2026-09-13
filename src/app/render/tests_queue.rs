@@ -690,3 +690,54 @@ fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
         "the selected visualizer must render inside the queue card slot"
     );
 }
+
+/// A locally selected row paints as now-playing in the same frame, without
+/// waiting for the playback owner to report the track change
+/// (queue-canonical-list, "Selecting a different item to play"). The
+/// regression this guards is the projection gate: while something is already
+/// playing, an optimistic selection changes no observed active slot, so a
+/// fingerprint that ignores it rebuilds no rows and the highlight stays on the
+/// outgoing row until the owner confirms.
+#[test]
+fn local_play_selection_paints_the_selected_row_as_now_playing_immediately() {
+    /// Screen positions of `title` painted in the now-playing title role.
+    fn now_playing_cells(buf: &ratatui::buffer::Buffer, title: &str) -> Vec<(u16, u16)> {
+        let mut hits = Vec::new();
+        for y in 0..buf.area().height {
+            let text: String = (0..buf.area().width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect();
+            let Some(x) = text.find(title) else { continue };
+            if buf[(x as u16, y)].style().fg == Some(palette::TEXT_FOCUS_ACCENT) {
+                hits.push((x as u16, y));
+            }
+        }
+        hits
+    }
+
+    let mut app = make_queue_app(3);
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.queue_len = 3;
+        status.current_idx = 0;
+        status.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
+        status.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
+    }
+    // Warm-up frame: the queue panel settles its placement before the
+    // assertion frame.
+    render_queue_view_to_terminal(&mut app, 100, 40);
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    assert!(
+        !now_playing_cells(term.backend().buffer(), "Queue Item 0").is_empty(),
+        "the playing row starts as now-playing"
+    );
+
+    app.dispatch(crate::app::action::Command::QueuePlayCursor(1));
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+
+    assert!(
+        !now_playing_cells(term.backend().buffer(), "Queue Item 1").is_empty(),
+        "the selected row paints as now-playing before the owner confirms it"
+    );
+}

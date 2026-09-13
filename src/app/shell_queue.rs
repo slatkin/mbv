@@ -15,6 +15,10 @@ pub(in crate::app) struct QueueProjectionFingerprint {
     scope: QueueScope,
     active: bool,
     active_target: Option<QueueSlotId>,
+    /// The optimistic selection awaiting playback-owner confirmation. It moves
+    /// the now-playing row before the owner reports anything, so it has to be
+    /// part of the fingerprint even while `active_target` is unchanged.
+    pending_target: Option<QueueSlotId>,
     progress_bucket: u16,
 }
 
@@ -84,11 +88,14 @@ impl Model {
             .flatten();
         let fingerprint = {
             let queue = self.app.queue_for_scope(scope);
+            let in_queue =
+                |target: &QueueSlotId| queue.slots().iter().any(|s| s.slot_id == *target);
             QueueProjectionFingerprint {
                 revision: queue.revision().raw(),
                 scope,
                 active: playback.active,
                 active_target: projected_active_target(queue, playback, pending_slot),
+                pending_target: pending_slot.filter(in_queue),
                 progress_bucket: progress_bucket(playback),
             }
         };
@@ -103,6 +110,7 @@ impl Model {
                 && old.scope == fingerprint.scope
                 && old.active == fingerprint.active
                 && old.active_target == fingerprint.active_target
+                && old.pending_target == fingerprint.pending_target
                 && old.progress_bucket != fingerprint.progress_bucket
         });
 
