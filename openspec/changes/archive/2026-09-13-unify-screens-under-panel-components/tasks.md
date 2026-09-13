@@ -424,7 +424,7 @@ conforms to Emby.
   governed file over 800 lines. Verify: all clean. _All clean; `cargo clippy --workspace --all-targets
   -- -D warnings` (main's CI gate) also clean. The 800-line clause is a pre-push check, not an acceptance
   gate (`openspec/specs/canonical-media-lists/spec.md`); the over-cap files are tracked in #696._
-- [ ] 14.3 At archive, sync the deltas and confirm `openspec/specs/queue-only-playback/` and
+- [x] 14.3 At archive, sync the deltas and confirm `openspec/specs/queue-only-playback/` and
   `openspec/specs/hero-big-text-title/` are deleted and
-  `openspec/specs/library-panel/` and `queue-playback-panel/` exist. Verify: `openspec validate --strict`
-  clean after sync.
+  `openspec/specs/library-panel/` and `queue-playback-panel/` exist. Verify: `openspec validate unify-screens-under-panel-components --strict`
+  and `openspec validate --specs` are clean after sync.

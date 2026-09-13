@@ -223,9 +223,14 @@ completed or mergeable endpoint. Completion requires that every row in
 independently interactive surface is a TuiRealm `AppComponent`; component-local
 state, handlers, and render adapters are removed from `App` rather than mirrored;
 `CONTEXT_STACK` interaction dispatch, the global mouse router and hit map, and
-duplicated mouse paths are removed; render-only layout state MAY remain; all
-temporary interaction adapters and state mirrors are removed; and no parallel
-legacy interaction framework remains.
+duplicated mouse paths are removed; all temporary interaction adapters and
+state mirrors are removed; no parallel legacy interaction framework remains;
+and composition is owned by components: the root composes every visible
+surface from panel components (see "The root composes every visible surface
+from panel components"), no legacy base frame paints beneath them, and no
+shell-wide struct carries painted geometry from paint to input. A ledger row
+that records only where interaction state lives SHALL NOT be read as
+completion; the ledger SHALL also record each surface's composing panel.
 
 A `migrated` surface SHALL have exactly one painter for each frame at its
 active layout breakpoint. The shell SHALL NOT run a legacy surface painter for
@@ -233,27 +238,25 @@ a surface body that a mounted component paints in the same frame. Verification
 is execution ownership — the legacy painter is demonstrably not reached for
 that surface at that breakpoint — not final-buffer similarity.
 
-The per-frame geometry computation that components read (the `AppLayout` and
-equivalent facts) MAY be shared shell code and is not a "parallel legacy
-framework"; it paints nothing that a component owns.
+The per-frame placement computation the root reads (which panel occupies which
+rect in the current Panel mode) MAY be shared shell code; it is paint-free and
+carries no painted geometry back to input.
 
-Where a surface has a component variant at one breakpoint and only a legacy
-renderer at another (for example a wide workspace component and a narrow
-legacy body), the legacy renderer at the breakpoint with no component is the
-**sole** painter for that breakpoint. The ledger row SHALL state this
-explicitly so it is not mistaken for an underpaint.
+A legacy renderer SHALL NOT be the painter for any surface at any breakpoint at
+completion. During the migration a legacy renderer MAY remain the sole painter
+for a not-yet-migrated surface; the ledger row SHALL state this explicitly so
+it is not mistaken for an underpaint, and completion requires none remain.
 
-A `migrated` destination surface with a stable identity SHALL retain its
-component-private interaction state (cursor, scroll, local focus, drafts)
-across destination switches and layout-breakpoint changes. Leaving a
-destination and returning to it SHALL restore the state it had on exit. A
-destination component SHALL be torn down only when its backing Service library
-is no longer in the live catalog (Service disconnect, catalog refresh, library
-hidden or removed).
+A `migrated` destination with a stable identity SHALL retain its private
+interaction state (cursor, scroll, local focus, drafts) across destination
+switches and layout-breakpoint changes. Leaving a destination and returning to
+it SHALL restore the state it had on exit. A destination's content owner SHALL
+be discarded only when its backing Service library is no longer in the live
+catalog (Service disconnect, catalog refresh, library hidden or removed).
 
-Whether a destination component is the active, focused, and rendered target is
-a per-frame decision driven by the current tab, panel focus, and layout
-breakpoint; it SHALL be independent of whether the component is mounted.
+Whether a destination is the active, focused, and rendered content is a
+per-frame decision driven by the current tab, panel focus, and layout
+breakpoint; it SHALL be independent of whether its content owner exists.
 
 The ledger, ADR 0022, and the source SHALL NOT contradict one another. A
 `ComponentId` variant, ledger row, or documented owner that names a component
@@ -372,9 +375,9 @@ in the loop body.
 
 #### Scenario: Geometry is computed without painting owned surfaces
 
-- **WHEN** the shell computes the per-frame layout that components read
-- **THEN** that computation produces the `AppLayout` and equivalent facts
-- **AND** it paints no surface body that a component owns this frame
+- **WHEN** the shell computes the per-frame panel placement the root reads
+- **THEN** that computation produces only paint-free placement facts
+- **AND** it paints nothing and records no painted geometry for input
 
 #### Scenario: Startup and steady-state frames paint identically
 
@@ -385,12 +388,11 @@ in the loop body.
 
 #### Scenario: A breakpoint with no component keeps a sole legacy painter
 
-- **WHEN** a surface is shown at a layout breakpoint for which no component
-  variant exists (for example narrow TV or narrow Music)
+- **WHEN** during the migration a surface is shown at a layout breakpoint for
+  which it is not yet composed by a panel component
 - **THEN** the legacy renderer is the only painter for that surface at that
-  breakpoint
-- **AND** the ledger row records "wide: component; narrow: sole legacy
-  renderer" so the endpoint is unambiguous
+  breakpoint and the ledger row records it
+- **AND** the migration is not complete while any such row remains
 
 #### Scenario: Destination state survives a switch away and back
 
@@ -410,16 +412,16 @@ in the loop body.
 #### Scenario: A destination component is torn down when its library is gone
 
 - **WHEN** a Service disconnects or its library catalog is refreshed such that
-  a library backing a mounted destination component is no longer present
-- **THEN** that destination component is unmounted
-- **AND** components for libraries still in the catalog remain mounted
+  a library backing a destination content owner is no longer present
+- **THEN** the Library panel discards that content owner
+- **AND** content owners for libraries still in the catalog are retained
 
 #### Scenario: A mounted but inactive destination is inert
 
-- **WHEN** a destination component is mounted but is not the active target for
-  the current tab and layout
-- **THEN** it receives no input events and paints nothing
-- **AND** it does not take focus away from the active destination, Queue, or an
+- **WHEN** a destination content owner is retained but is not the active
+  destination for the current tab and layout
+- **THEN** it receives no input events and supplies no content to paint
+- **AND** it cannot take focus away from the Library panel, Queue, or an
   overlay
 
 #### Scenario: A ledger row and ComponentId agree with the code
@@ -679,3 +681,54 @@ A plain embedded Component SHALL share the mounted parent's focus boundary rathe
 - **WHEN** a mounted destination composes a plain embedded list, browser, or text-entry control
 - **THEN** the embedded control is treated as focused only when its mounted parent and the applicable component-private pane are focused
 - **AND** the embedded control is not mounted or focused independently
+
+### Requirement: The root composes every visible surface from panel components
+
+Every visible cell of a frame SHALL be painted by a mounted component composed by the root: the Tab
+panel, the Library panel, the Library playback panel, the Queue panel, the Queue playback panel, the
+Status bar panel, the pane boundaries, and the overlay stack. The root SHALL own the frame's split
+into panels. There SHALL be no legacy base frame painted beneath the components, no shell-painted
+backdrop or chrome, and no hand-ordered list of per-destination render calls in the draw path.
+
+A panel that has no content to paint in a Panel mode SHALL be unmounted in that mode, never mounted
+with an empty rect: the Library playback panel exists only while the queue column is hidden; the
+Queue panel, Queue playback panel and Queue boundary only while the queue column is visible (the Queue
+boundary only in the two-panel layout); the Tab, Library and Status bar panels only while the library
+column is visible.
+
+#### Scenario: A frame is drawn
+- **WHEN** any frame is drawn in any Panel mode
+- **THEN** every cell belongs to exactly one mounted panel component's placement or to an overlay,
+  and each panel paints its own surface fill across its whole placement
+- **AND** no cell is first painted by a shell base frame and then overpainted by a component
+
+#### Scenario: A panel with no content in a Panel mode
+- **WHEN** the layout is queue-only
+- **THEN** the Tab, Library, Library playback and Status bar panels are not mounted
+- **AND** no mounted panel has an empty placement
+
+#### Scenario: A destination changes
+- **WHEN** the selected library tab changes
+- **THEN** the same Library panel component paints the frame's library area with the new
+  destination's content
+- **AND** the draw path does not select a different per-destination render call
+
+### Requirement: Panels own layout and destinations supply only typed slot content
+
+A panel component SHALL own the geometry of everything inside it. A destination component SHALL
+contribute to a panel only by producing the typed content the panel's slots define, and SHALL keep its
+interaction state (cursor, scroll, focus, drafts) and its embedded media lists as today. A component's
+`view()` SHALL NOT construct shell-wide geometry, SHALL NOT call a per-destination free painter that
+lays out a pane, and SHALL NOT paint outside the rect its parent gives it. Hit geometry SHALL be
+retained by the component that painted it; no shell-wide struct SHALL carry painted rects from paint to
+input.
+
+#### Scenario: A destination needs a new visual element
+- **WHEN** a destination's content has no slot in its panel's content type
+- **THEN** the destination cannot render it
+- **AND** adding it requires adding the slot to the panel for every destination
+
+#### Scenario: A click lands on a painted element
+- **WHEN** the user clicks a pill, row, tab, control or boundary
+- **THEN** the component that painted that element in the latest frame resolves the click from its own
+  retained geometry

@@ -54,14 +54,23 @@ Activating a podcast show SHALL only enter the selection modal for episode brows
 
 ### Requirement: Podcast libraries use responsive hero presentations
 
-An Audiobookshelf podcast library SHALL use the shared Wide hero presentation when it meets the wide geometry conditions and selected-row replacement otherwise. In Wide hero, the selected podcast's cover, metadata, filter pills, and downloaded-episode workspace SHALL occupy the right pane while the single-column podcast-show browser occupies the left rail. In the replacement presentation, the same selected-show detail, including title, author, description, cover, filter pills, and downloaded episode rows, SHALL replace the active podcast-show row in list flow. The podcast tab SHALL obtain placement from the shared arrangement and SHALL NOT define a separate fallback.
+An Audiobookshelf podcast library SHALL render through the Library panel like every Emby library. At
+Wide geometry, the selected podcast's Square Hero header, overview box, and a Workspace (the
+`All` / `Played` / `Unplayed` filter pills in the Workspace Selector row over the downloaded-episode
+list) SHALL occupy the Hero pane while the single-column podcast-show browser occupies the left rail.
+Otherwise the selected show's inline hero (title, author, description and cover only) SHALL replace
+the active podcast-show row in list flow, and its filter pills and episodes SHALL NOT render inside it.
+The podcast tab SHALL obtain placement from the shared Library panel and SHALL NOT define a separate
+fallback or any podcast-specific presentation declaration.
 
-The podcast tab SHALL supply podcast-native data without changing the shared placement rule: Podcast show for Series, Audiobookshelf cover for Series Primary image, and matching downloaded episodes for the detail workspace and selection modal. Image shape, metadata lines and order, colour variant, element presence, and image source MAY remain podcast-specific declarations.
+The podcast tab SHALL supply podcast-native data without changing the shared presentation: Podcast
+show for Series, Audiobookshelf cover for the Square header artwork, and matching downloaded episodes
+for the Workspace and selection modal.
 
 #### Scenario: Podcast library is displayed wide
 
 - **WHEN** an Audiobookshelf podcast library meets the shared wide geometry conditions
-- **THEN** selected-show detail and downloaded episodes render in the right pane
+- **THEN** selected-show detail and downloaded episodes render in the Hero pane
 - **AND** podcast shows render in the single-column left rail
 
 #### Scenario: Podcast library is displayed narrow
@@ -69,13 +78,13 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 - **WHEN** an Audiobookshelf podcast library does not meet the shared wide geometry conditions
 - **THEN** podcast shows render in one scrolling column with alphabetical panel pills
 - **AND** selected-show detail (title, author, description, cover) replaces the active show row
-- **AND** the `All`, `Played`, and `Unplayed` filter pills and matching downloaded episode rows render inside that inline detail using the TV reference presentation
+- **AND** no filter pills and no episode rows render inside that inline detail
 - **AND** no separate hero area is reserved above the show browser
 
 #### Scenario: Podcast selection changes
 
 - **WHEN** the user moves selection between podcast shows
-- **THEN** the hero or detail workspace updates to the newly selected podcast
+- **THEN** the Hero header or Workspace updates to the newly selected podcast
 - **AND** the show list retains provider-native selection identity across loaded-page changes
 
 #### Scenario: Selected show scrolls in the inline presentation
@@ -92,13 +101,13 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 
 #### Scenario: Shared placement changes
 
-- **WHEN** the shared Wide hero or inline presentation changes
-- **THEN** the podcast tab renders the placement change without an individual geometry edit
+- **WHEN** the shared Wide or Narrow library panel presentation changes
+- **THEN** the podcast tab renders the change without an individual geometry edit
 
 #### Scenario: Podcast library is displayed
 
 - **WHEN** an Audiobookshelf podcast library is displayed
-- **THEN** it uses Wide hero when wide geometry fits and inline selected-show detail otherwise
+- **THEN** it uses the Wide library panel when wide geometry fits and the Narrow library panel otherwise
 
 #### Scenario: Selected show scrolls outside the visible list rows
 
@@ -108,7 +117,7 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 #### Scenario: Terminal width crosses the TV list column breakpoint
 
 - **WHEN** the podcast tab crosses the shared width breakpoint
-- **THEN** it recomputes Wide hero versus selected-row replacement rather than changing a detail layout column count
+- **THEN** it recomputes Wide versus Narrow library panel rather than changing a detail layout column count
 
 #### Scenario: Terminal height cannot fit the hero
 
@@ -118,7 +127,7 @@ The podcast tab SHALL supply podcast-native data without changing the shared pla
 #### Scenario: The retired separate placement changes
 
 - **WHEN** the obsolete separate placement is removed
-- **THEN** Audiobookshelf podcasts continue through only Wide hero and selected-row replacement
+- **THEN** Audiobookshelf podcasts continue through only the Wide and Narrow library panels
 
 ### Requirement: Podcast libraries use alphabetical panel pills
 
@@ -140,7 +149,7 @@ The Audiobookshelf podcast tab SHALL render one alphabetical browsing pill for e
 
 ### Requirement: Downloaded episodes use the selection modal
 
-Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `inline-hero-selection-modal`) when the user presses Enter on a selected podcast show. The modal SHALL render one selectable row per matching episode with the episode title and duration. The same matching episodes SHALL also render in Wide and inline selected-show detail using the TV episode-list presentation; rendering them inline SHALL NOT replace or alter the modal's activation behavior.
+Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `inline-hero-selection-modal`) when the user presses Enter on a selected podcast show in the inline presentation. The modal SHALL render one selectable row per matching episode with the episode title and duration. At Wide geometry the same matching episodes SHALL render in the Hero pane's Workspace using the TV episode-list presentation; they SHALL NOT render inside the inline selected-show detail.
 
 #### Scenario: User opens the episode modal
 
@@ -157,5 +166,5 @@ Downloaded podcast episodes SHALL be listed in the constituent-list modal (see `
 #### Scenario: Podcast detail is empty or loading
 
 - **WHEN** matching episodes are empty or detail is loading
-- **THEN** the modal and selected-show episode area each show their scoped empty or loading state when visible
+- **THEN** the modal and the Wide Workspace each show their scoped empty or loading state when visible
 - **AND** the surrounding selected-show detail remains available
