@@ -123,34 +123,6 @@ fn ensure_feed_library_preserves_saved_feed_position() {
 }
 
 #[test]
-fn ensure_podcast_library_preserves_saved_feed_position() {
-    let mut app = crate::app::tests::make_app_stub();
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    let mut library = crate::app::tests::make_item("Podcasts", "CollectionFolder");
-    library.id = "lib-podcasts".into();
-    library.is_folder = true;
-    library.collection_type = "podcasts".into();
-    app.libs.push(LibraryTab {
-        feed_home_video: Some(FeedHomeVideoState {
-            selected_group: 1,
-            video_cursor: 5,
-            video_scroll: 6,
-            ..Default::default()
-        }),
-        ..LibraryTab::new(library)
-    });
-
-    app.ensure_lib_loaded_for(0);
-
-    let state = app.libs[0].feed_home_video.as_ref().unwrap();
-    assert!(state.loading);
-    assert_eq!(state.selected_group, 1);
-    assert_eq!(state.video_cursor, 5);
-    assert_eq!(state.video_scroll, 6);
-}
-
-#[test]
 fn queue_enriched_prunes_items_the_server_no_longer_returns() {
     let mut app = crate::app::tests::make_app_stub();
     app.player_tab.set_items(

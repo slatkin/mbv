@@ -86,13 +86,7 @@ impl App {
             }
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
             Some(ContextAction::MarkPlayed(id)) => self.context_set_played(&id, true, lib_idx),
-            Some(ContextAction::MarkItemsPlayed(ids)) => {
-                self.context_set_many_played(&ids, lib_idx)
-            }
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false, lib_idx),
-            Some(ContextAction::MarkItemsUnplayed(ids)) => {
-                self.context_set_many_unplayed(&ids, lib_idx)
-            }
             Some(ContextAction::RemoveFromContinueWatching) => {
                 if let Some(item) = cw_item {
                     self.remove_from_continue_watching(item);
@@ -115,52 +109,6 @@ impl App {
                 self.spawn_navigate_to_item(item_id, item_type, libs);
             }
             None => {}
-        }
-    }
-
-    fn context_set_many_played(&mut self, item_ids: &[String], lib_idx: Option<usize>) {
-        let Some(client) = self.emby_client() else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
-        let client = client.lock().unwrap();
-        let result = item_ids
-            .iter()
-            .try_for_each(|item_id| client.mark_played(item_id));
-        drop(client);
-        match result {
-            Ok(()) => {
-                if let Some(lib_idx) = lib_idx {
-                    self.refresh_lib(lib_idx);
-                }
-            }
-            Err(e) => self.flash(
-                format!("Couldn't mark items as played: {e}"),
-                ToastSeverity::Error,
-            ),
-        }
-    }
-
-    fn context_set_many_unplayed(&mut self, item_ids: &[String], lib_idx: Option<usize>) {
-        let Some(client) = self.emby_client() else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
-        let client = client.lock().unwrap();
-        let result = item_ids
-            .iter()
-            .try_for_each(|item_id| client.mark_unplayed(item_id));
-        drop(client);
-        match result {
-            Ok(()) => {
-                if let Some(lib_idx) = lib_idx {
-                    self.refresh_lib(lib_idx);
-                }
-            }
-            Err(e) => self.flash(
-                format!("Couldn't mark items as unplayed: {e}"),
-                ToastSeverity::Error,
-            ),
         }
     }
 
@@ -370,13 +318,6 @@ impl App {
         });
     }
 
-    fn push_context_separator(entries: &mut Vec<ContextMenuEntry>) {
-        entries.push(ContextMenuEntry {
-            label: "────────",
-            action: None,
-        });
-    }
-
     /// Build the context menu for the current panel/destination, or `None`
     /// when no menu applies or it would be empty.
     ///
@@ -418,18 +359,6 @@ impl App {
             crate::app::PanelFocus::Library
         ) && self.tab.is_home();
         let lib_idx = self.context_menu_lib_idx();
-        let in_podcast =
-            lib_idx.is_some_and(|idx| self.is_podcast_library(idx)) || self.is_in_podcast_library();
-        let podcast_bulk_ids = lib_idx.and_then(|idx| {
-            if in_podcast && self.is_feed_home_video_group_view(idx) {
-                Some((
-                    self.podcast_mark_all_ids(idx),
-                    self.podcast_mark_all_unplayed_ids(idx),
-                ))
-            } else {
-                None
-            }
-        });
         // Exhaustive dispatch by panel and destination (design §5): a context
         // menu opens only for Home (library focus), an explicitly selected
         // Emby library, or an Emby queue item. Audiobookshelf and Feeds browse
@@ -485,21 +414,16 @@ impl App {
                     "Add to Queue",
                     ContextAction::EnqueueFolder(Box::new(item.clone())),
                 );
-                let (played_label, unplayed_label) = if in_podcast {
-                    ("Mark Played", "Mark Unplayed")
-                } else {
-                    ("Mark Watched", "Mark Unwatched")
-                };
                 if self.context_menu_play_state(item) {
                     Self::push_context_action(
                         &mut entries,
-                        unplayed_label,
+                        "Mark Unwatched",
                         ContextAction::MarkUnplayed(item.id.clone()),
                     );
                 } else {
                     Self::push_context_action(
                         &mut entries,
-                        played_label,
+                        "Mark Watched",
                         ContextAction::MarkPlayed(item.id.clone()),
                     );
                 }
@@ -522,26 +446,19 @@ impl App {
                 {
                     Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
                 }
-                // Audio items (music tracks) don't get mark-played, but podcast
-                // episodes (Audio inside a Channel library) do.
-                let is_music_audio =
-                    (item.media_type == "Audio" || item.item_type == "Audio") && !in_podcast;
+                // Audio items (music tracks) don't get mark-played.
+                let is_music_audio = item.media_type == "Audio" || item.item_type == "Audio";
                 if !is_music_audio {
-                    let (played_label, unplayed_label) = if in_podcast {
-                        ("Mark Played", "Mark Unplayed")
-                    } else {
-                        ("Mark Watched", "Mark Unwatched")
-                    };
                     if self.context_menu_play_state(item) {
                         Self::push_context_action(
                             &mut entries,
-                            unplayed_label,
+                            "Mark Unwatched",
                             ContextAction::MarkUnplayed(item.id.clone()),
                         );
                     } else {
                         Self::push_context_action(
                             &mut entries,
-                            played_label,
+                            "Mark Watched",
                             ContextAction::MarkPlayed(item.id.clone()),
                         );
                     }
@@ -579,22 +496,6 @@ impl App {
                         ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
                     );
                 }
-            }
-        }
-
-        if let Some((played_ids, unplayed_ids)) = podcast_bulk_ids {
-            if !played_ids.is_empty() || !unplayed_ids.is_empty() {
-                Self::push_context_separator(&mut entries);
-                Self::push_context_action(
-                    &mut entries,
-                    "Mark All Played",
-                    ContextAction::MarkItemsPlayed(played_ids),
-                );
-                Self::push_context_action(
-                    &mut entries,
-                    "Mark All Unplayed",
-                    ContextAction::MarkItemsUnplayed(unplayed_ids),
-                );
             }
         }
 

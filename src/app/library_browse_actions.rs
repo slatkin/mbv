@@ -127,10 +127,6 @@ impl App {
             self.ensure_feed_home_video_root_loaded(idx);
             return;
         }
-        if self.tab.emby_library_index() == Some(idx) && self.is_podcast_library(idx) {
-            self.ensure_podcast_root_loaded(idx);
-            return;
-        }
         if self.libs[idx].nav_stack.is_empty() {
             if let Some(saved) = self.saved_library_position(idx) {
                 if let Some(root) = saved.levels.first() {

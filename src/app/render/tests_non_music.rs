@@ -120,36 +120,6 @@ fn wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows() {
     }
 }
 
-/// `remove-migrated-surface-underpaint` 3.8 (D4): while the mounted
-/// must not underpaint the ordinary browse list. The shell projects
-/// returns after publishing `left_area` (`src/app/render/components/list.rs`,
-/// just before the `n == 0` branch) without painting a row or hero. Mirrors
-/// `wide_movies_legacy_base_frame_publishes_geometry_but_paints_no_rows`.
-#[test]
-fn wide_emby_podcast_does_not_publish_tv_geometry() {
-    let mut app = make_movie_app();
-    app.libs[0].library.collection_type = "podcasts".into();
-    for item in &mut app.libs[0].nav_stack[0].items {
-        item.item_type = "Series".into();
-        item.is_folder = true;
-    }
-
-    let layout = render_view(&mut app, 200, 40);
-
-    assert!(layout.width > 0, "podcast destination remains reserved");
-}
-
-#[test]
-fn podcast_uses_inline_when_wide_height_is_unavailable() {
-    let mut podcast = make_movie_app();
-    podcast.libs[0].library.collection_type = "podcasts".into();
-    let podcast_layout = render_view(&mut podcast, 200, 8);
-    assert!(
-        podcast_layout.width > 0,
-        "podcast destination remains reserved"
-    );
-}
-
 #[test]
 fn letter_filter_buckets_match_emby_name_range_bounds() {
     let ac = LetterFilter::for_index(0).unwrap();

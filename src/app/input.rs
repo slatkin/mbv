@@ -27,34 +27,6 @@ impl App {
         }
     }
 
-    pub(super) fn podcast_mark_all_ids(&self, lib_idx: usize) -> Vec<String> {
-        let mut ids = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for item in self.feed_home_video_selected_items(lib_idx) {
-            if item.is_folder || item.played {
-                continue;
-            }
-            if seen.insert(item.id.clone()) {
-                ids.push(item.id);
-            }
-        }
-        ids
-    }
-
-    pub(super) fn podcast_mark_all_unplayed_ids(&self, lib_idx: usize) -> Vec<String> {
-        let mut ids = Vec::new();
-        let mut seen = std::collections::HashSet::new();
-        for item in self.feed_home_video_selected_items(lib_idx) {
-            if item.is_folder || !item.played {
-                continue;
-            }
-            if seen.insert(item.id.clone()) {
-                ids.push(item.id);
-            }
-        }
-        ids
-    }
-
     /// Home + one tab per library (no Queue tab -- the queue is the
     /// always-visible left column, not a tab).
     pub(super) fn tab_count(&self) -> usize {

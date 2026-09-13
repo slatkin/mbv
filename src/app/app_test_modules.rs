@@ -96,10 +96,6 @@ mod tests_podcast_playback;
 mod audiobookshelf_browse_actions_sibling_tests;
 
 #[cfg(test)]
-#[path = "tests_podcast_context_menu.rs"]
-mod tests_podcast_context_menu;
-
-#[cfg(test)]
 #[path = "tests_queue_scope.rs"]
 mod tests_queue_scope;
 

@@ -30,9 +30,7 @@ pub(super) enum ContextAction {
     Enqueue,
     EnqueueFolder(Box<EmbyItem>),
     MarkPlayed(String),
-    MarkItemsPlayed(Vec<String>),
     MarkUnplayed(String),
-    MarkItemsUnplayed(Vec<String>),
     RemoveFromContinueWatching,
     RemoveFromQueue(usize),
     GoToLibrary(String, String), // (item_id, item_type)

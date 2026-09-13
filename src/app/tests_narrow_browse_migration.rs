@@ -341,67 +341,6 @@ fn narrow_tv_paints_each_browse_row_once() {
     }
 }
 
-fn podcast_app() -> App {
-    let mut app = make_app_stub();
-    app.terminal_width = 60;
-    app.terminal_height = 20;
-    app.mini_view_focus = PanelFocus::Library;
-    app.tab = TabSelection::EmbyLibrary(0);
-
-    let mut library = make_item("Podcasts", "CollectionFolder");
-    library.id = "lib-podcasts".into();
-    library.collection_type = "podcasts".into();
-    library.is_folder = true;
-
-    app.libs.push(LibraryTab {
-        nav_stack: vec![BrowseLevel {
-            parent_id: "lib-podcasts".into(),
-            title: "Podcasts".into(),
-            items: folder_items("Show", "Series", 5),
-            total_count: 5,
-            resting: crate::app::types_browse::BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: None,
-            letter_filter: None,
-            music_grouping: None,
-        }],
-        ..LibraryTab::new(library)
-    });
-    app
-}
-
-/// Regression (task 3.5a template step d): narrow Emby podcast paints each
-/// visible show row exactly once — the mounted `BrowserComponent` is the sole
-/// painter now that the legacy `render_list` narrow branch early-returns for
-/// podcast libraries too.
-#[test]
-fn narrow_podcast_paints_each_browse_row_once() {
-    let mut model = Model::new(podcast_app());
-    model.sync_mounted_surfaces();
-    let mut term = narrow_backend();
-
-    let output = draw(&mut model, &mut term);
-
-    for row in ["Show 0", "Show 1", "Show 2", "Show 3", "Show 4"] {
-        assert_eq!(
-            output.matches(row).count(),
-            1,
-            "narrow podcast browse row {row:?} must be painted exactly once:\n{output}"
-        );
-    }
-}
-
-fn wide_podcast_app() -> App {
-    let mut app = podcast_app();
-    app.terminal_width = 140;
-    app.terminal_height = 40;
-    app
-}
-
 fn wide_backend() -> Terminal<TestBackend> {
     Terminal::new(TestBackend::new(140, 40)).unwrap()
 }
@@ -477,7 +416,6 @@ fn selected_feed_row_region(output: &str, title: &str) -> String {
     lines[row..row + 1].join("\n")
 }
 
-
 #[test]
 fn feed_home_video_group_narrow_uses_shared_inline_hero() {
     // Task 6.1 (design D7): the migrated feed-group picker paints through
@@ -545,7 +483,10 @@ fn feed_home_video_group_wide_uses_wide_hero() {
     // Video Two is only ever a rail row (never the selected hero), so it
     // pins single-paint of the rail without the hero-echo of Video One.
     assert_eq!(
-        output.lines().filter(|line| line.contains("Video Two")).count(),
+        output
+            .lines()
+            .filter(|line| line.contains("Video Two"))
+            .count(),
         1,
         "Video Two paints once in the rail:\n{output}"
     );
@@ -745,32 +686,6 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
         "ordinary selected row keeps the 2-col selected inset"
     );
     assert!(!region.contains('▁') && !region.contains('▔'));
-}
-
-/// Regression (task 3.5b template step d): the WIDE Emby podcast browse surface
-/// paints the generic browse body (mounted `BrowserComponent`, kind `Generic`)
-/// across the wide area — it is no longer blank. The shared narrow composer
-/// runs wide here (no podcast wide-specific layout, per the task): it reserves
-/// a placeholder hero block and lays the show rows out in a multi-column grid,
-/// so the earliest rows sit under the hero reservation and `Show 2`..`Show 4`
-/// are the visible browse body. Matching the wide generic-collection case
-/// (task 3.3 scope note), this shared-composer wide behavior is task 3.8
-/// territory, not a 3.5b regression.
-#[test]
-fn wide_podcast_paints_browse_body() {
-    let mut model = Model::new(wide_podcast_app());
-    model.sync_mounted_surfaces();
-    let mut term = wide_backend();
-
-    let output = draw(&mut model, &mut term);
-
-    for row in ["Show 2", "Show 3", "Show 4"] {
-        assert_eq!(
-            output.matches(row).count(),
-            1,
-            "wide podcast browse row {row:?} must be painted exactly once:\n{output}"
-        );
-    }
 }
 
 /// Regression 5: narrow Movies paints each browse row exactly once (currently

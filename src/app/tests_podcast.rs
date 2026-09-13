@@ -255,3 +255,35 @@ fn audiobookshelf_episode_seams_noop_on_absent_index() {
     assert_eq!(app.audiobookshelf_browse.len(), 1);
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
 }
+
+/// F5 on the Audiobookshelf destination clears the current catalog and then
+/// restarts the catalog request from the first page: shows/total/episodes are
+/// reset, page 0 is marked pending, and neither the Emby library nor the
+/// queue is touched.
+#[test]
+fn audiobookshelf_f5_restarts_catalog_after_clear() {
+    let mut app = audiobookshelf_app();
+    add_emby_movie_library(&mut app);
+    app.panel_focus = PanelFocus::Library;
+    app.tab = TabSelection::AudiobookshelfLibrary(0);
+
+    app.refresh_current_view();
+
+    let state = &app.audiobookshelf_browse[0];
+    assert!(state.shows.is_empty(), "catalog must be cleared on refresh");
+    assert_eq!(state.total, 0);
+    assert!(state.episodes.is_none());
+    assert!(
+        state.loading_pages.contains(&0),
+        "page 0 must be marked pending so the catalog request restarts"
+    );
+    assert!(
+        !app.libs[0].nav_stack[0].loading,
+        "Audiobookshelf refresh must not reload the Emby library"
+    );
+    assert_eq!(
+        app.player_tab.total_queue_len(),
+        0,
+        "Audiobookshelf refresh must not touch the queue"
+    );
+}

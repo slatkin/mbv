@@ -155,26 +155,25 @@ impl App {
             .feed_home_video
             .as_ref()
             .is_some_and(|state| !state.loading);
-        if !ready || !(self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
-        {
+        if !ready || !self.is_feed_home_video_library(lib_idx) {
             return;
         }
         self.clamp_feed_home_video_state(lib_idx);
     }
 
-    /// Common guard for kicking off `spawn_feed_home_video_aggregate` (or the
-    /// podcast equivalent) once a grouped library's root folder listing has
-    /// fully paginated: mbv is showing this library's tab, it's a
-    /// feed-home-video or podcast library, and its root nav level has loaded
-    /// every item. `extra_ok` carries the caller-specific condition (e.g.
-    /// which event/level this check is reacting to).
+    /// Common guard for kicking off `spawn_feed_home_video_aggregate` once a
+    /// grouped library's root folder listing has fully paginated: mbv is
+    /// showing this library's tab, it's a feed-home-video library, and its
+    /// root nav level has loaded every item. `extra_ok` carries the
+    /// caller-specific condition (e.g. which event/level this check is
+    /// reacting to).
     fn should_aggregate_feed(
         &self,
         lib_idx: usize,
         extra_ok: impl FnOnce(&BrowseLevel) -> bool,
     ) -> bool {
         self.tab.emby_library_index() == Some(lib_idx)
-            && (self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
+            && self.is_feed_home_video_library(lib_idx)
             && self
                 .libs
                 .get(lib_idx)
@@ -294,10 +293,6 @@ impl App {
         if !has_state {
             return false;
         }
-        // Podcast channels always use the group view.
-        if self.is_podcast_library(lib_idx) {
-            return true;
-        }
         // Feed home-video libraries use the group view when configured.
         if lib.library.collection_type != "homevideos" {
             return false;
@@ -383,138 +378,6 @@ impl App {
             .contains(&lib.library.name.to_lowercase())
     }
 
-    pub(crate) fn is_podcast_library(&self, lib_idx: usize) -> bool {
-        let lib = &self.libs[lib_idx];
-        lib.library.item_type == "Channel"
-            || lib.library.collection_type == "podcasts"
-            || lib.library.name.to_lowercase().contains("podcast")
-    }
-
-    /// Whether the currently focused library tab is a podcast channel.
-    pub(super) fn is_in_podcast_library(&self) -> bool {
-        let Some(lib_idx) = self.tab.emby_library_index() else {
-            return false;
-        };
-        lib_idx < self.libs.len() && self.is_podcast_library(lib_idx)
-    }
-
-    pub(super) fn ensure_podcast_root_loaded(&mut self, lib_idx: usize) {
-        if !self.is_podcast_library(lib_idx) {
-            return;
-        }
-        let needs_reload = self
-            .libs
-            .get(lib_idx)
-            .map(|lib| {
-                lib.nav_stack.is_empty()
-                    || (!lib.nav_stack[0].loading
-                        && lib.nav_stack[0]
-                            .items
-                            .first()
-                            .map(|item| !item.is_folder)
-                            .unwrap_or(true))
-            })
-            .unwrap_or(false);
-        if !needs_reload {
-            return;
-        }
-        let lib_id = self.libs[lib_idx].library.id.clone();
-        let lib_name = self.libs[lib_idx].library.name.clone();
-        self.libs[lib_idx].nav_stack.clear();
-        self.libs[lib_idx].feed_home_video = Some(FeedHomeVideoState {
-            loading: true,
-            ..self.libs[lib_idx]
-                .feed_home_video
-                .take()
-                .unwrap_or_default()
-        });
-        self.libs[lib_idx].nav_stack.push(BrowseLevel {
-            parent_id: lib_id.clone(),
-            title: lib_name.clone(),
-            items: vec![],
-            total_count: 0,
-            resting: BrowseResting::new(0, 0),
-            item_types: None,
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: true,
-
-            all_items: None,
-            letter_filter: None,
-            music_grouping: None,
-        });
-        self.spawn_browse(
-            lib_idx,
-            lib_id,
-            lib_name,
-            None,
-            false,
-            "SortName".into(),
-            "Ascending".into(),
-        );
-    }
-
-    /// Fetch episodes for each podcast show folder, sorted newest-first.
-    /// Much simpler than feed-home-video aggregation: episodes are direct
-    /// children of each show folder, no ancestor lookups needed.
-    fn spawn_podcast_aggregate(&self, lib_idx: usize) {
-        if !self.is_podcast_library(lib_idx) {
-            return;
-        }
-        let Some(lib) = self.libs.get(lib_idx) else {
-            return;
-        };
-        let Some(root) = lib.nav_stack.first() else {
-            return;
-        };
-        if root.loading {
-            return;
-        }
-        let parent_id = root.parent_id.clone();
-        let show_folders = root.items.clone();
-        let Some(client) = self.emby_snapshot() else {
-            return;
-        };
-        let tx = self.lib_tx.clone();
-        std::thread::spawn(move || {
-            let mut all_items: Vec<EmbyItem> = Vec::new();
-            let mut groups: Vec<FeedHomeVideoGroup> = Vec::new();
-            for folder in show_folders {
-                let episodes = match client.get_items_sorted(
-                    &folder.id,
-                    None,
-                    false,
-                    0,
-                    10000, // fetch all episodes
-                    "PremiereDate",
-                    "Descending",
-                ) {
-                    Ok((items, _)) => items,
-                    Err(e) => {
-                        let _ = tx.send(LibEvent::Error(e));
-                        return;
-                    }
-                };
-                all_items.extend(episodes.clone());
-                if !episodes.is_empty() {
-                    groups.push(FeedHomeVideoGroup {
-                        folder,
-                        items: episodes,
-                    });
-                }
-            }
-            // Sort the combined "All" list newest-first by premiere_date.
-            all_items.sort_by(|a, b| b.premiere_date.cmp(&a.premiere_date));
-            let _ = tx.send(LibEvent::FeedHomeVideoAggregated {
-                lib_idx,
-                parent_id,
-                all_items,
-                groups,
-            });
-        });
-    }
-
     pub(super) fn select_feed_folder_group(&mut self, lib_idx: usize, group_idx: usize) {
         if self.libs[lib_idx].nav_stack.is_empty() {
             return;
@@ -549,7 +412,6 @@ impl App {
         if should_aggregate_feed {
             self.log_feed_home_video_state(lib_idx, "loaded_before_aggregate");
             self.spawn_feed_home_video_aggregate(lib_idx);
-            self.spawn_podcast_aggregate(lib_idx);
         }
     }
 
@@ -559,7 +421,6 @@ impl App {
         if should_aggregate_feed {
             self.log_feed_home_video_state(lib_idx, "page_appended_before_aggregate");
             self.spawn_feed_home_video_aggregate(lib_idx);
-            self.spawn_podcast_aggregate(lib_idx);
         }
     }
 
@@ -569,8 +430,7 @@ impl App {
             .get(lib_idx)
             .map(|lib| {
                 self.tab.emby_library_index() == Some(lib_idx)
-                    && (self.is_feed_home_video_library(lib_idx)
-                        || self.is_podcast_library(lib_idx))
+                    && self.is_feed_home_video_library(lib_idx)
                     && lib
                         .nav_stack
                         .first()
@@ -586,7 +446,6 @@ impl App {
             }
             self.log_feed_home_video_state(lib_idx, "refreshed_before_aggregate");
             self.spawn_feed_home_video_aggregate(lib_idx);
-            self.spawn_podcast_aggregate(lib_idx);
         }
     }
 

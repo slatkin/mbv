@@ -280,23 +280,18 @@ fn narrow_and_wide_tv_library_both_route_to_the_library_panel() {
 }
 
 /// migrate-narrow-browse-to-components task 2.2, converted by task 6.1
-/// (design D2): every `is_feed_home_video_group_view` Emby library —
-/// podcast channels and configured home-video feed-view libraries alike —
-/// is a migrated kind whose surface routes through the mounted
-/// `LibraryPanel` at every width. Both take TuiRealm focus on
-/// `ComponentId::Library`, narrow and wide, with the embedded
-/// `BrowserContent` owner installed.
+/// (design D2): every `is_feed_home_video_group_view` Emby library — a
+/// configured home-video feed-view library — is a migrated kind whose
+/// surface routes through the mounted `LibraryPanel` at every width. Both
+/// take TuiRealm focus on `ComponentId::Library`, narrow and wide, with the
+/// embedded `BrowserContent` owner installed.
 #[test]
 fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
-    let build = |podcast: bool, wide: bool| {
+    let build = |wide: bool| {
         let mut app = make_movie_app();
         let lib = &mut app.libs[0];
         lib.library.name = "Feed".into();
-        if podcast {
-            lib.library.item_type = "Channel".into();
-        } else {
-            lib.library.collection_type = "homevideos".into();
-        }
+        lib.library.collection_type = "homevideos".into();
         let mut folder = make_item("Channel A", "Folder");
         folder.id = "folder-a".into();
         folder.is_folder = true;
@@ -340,26 +335,24 @@ fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
         model
     };
 
-    for podcast in [false, true] {
-        for wide in [false, true] {
-            let model = build(podcast, wide);
-            assert!(
-                model.active_migrated_browser_owner().is_some(),
-                "podcast={podcast} wide={wide}: the feed-group library is a migrated kind"
-            );
-            assert_eq!(
-                model.application.focus(),
-                Some(&ComponentId::Library),
-                "podcast={podcast} wide={wide}: focus lands on the mounted Library panel"
-            );
-            assert!(model
-                .application
-                .get_component(&ComponentId::Library)
-                .unwrap()
-                .as_any()
-                .downcast_ref::<LibraryPanel>()
-                .is_some());
-        }
+    for wide in [false, true] {
+        let model = build(wide);
+        assert!(
+            model.active_migrated_browser_owner().is_some(),
+            "wide={wide}: the feed-group library is a migrated kind"
+        );
+        assert_eq!(
+            model.application.focus(),
+            Some(&ComponentId::Library),
+            "wide={wide}: focus lands on the mounted Library panel"
+        );
+        assert!(model
+            .application
+            .get_component(&ComponentId::Library)
+            .unwrap()
+            .as_any()
+            .downcast_ref::<LibraryPanel>()
+            .is_some());
     }
 }
 

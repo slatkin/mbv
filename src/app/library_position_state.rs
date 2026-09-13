@@ -127,7 +127,7 @@ impl App {
         if current.as_ref() == saved.as_ref() {
             if current.is_none() {
                 self.ensure_lib_loaded_for(lib_idx);
-            } else if self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx) {
+            } else if self.is_feed_home_video_library(lib_idx) {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if lib.feed_home_video.is_none() {
                         lib.feed_home_video = Some(FeedHomeVideoState {
@@ -143,8 +143,7 @@ impl App {
         match saved {
             Some(position) if !position.levels.is_empty() => {
                 let root = &position.levels[0];
-                let restore_feed_view =
-                    self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx);
+                let restore_feed_view = self.is_feed_home_video_library(lib_idx);
                 let placeholder = BrowseLevel {
                     parent_id: root.parent_id.clone(),
                     title: root.title.clone(),
