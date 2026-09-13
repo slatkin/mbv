@@ -97,6 +97,6 @@
   of `temp_dir()` sites stays open. Verify with the posted comment, or record why none is
   needed if the issue was closed by 47926ae0.
 
-- [ ] 2.9 Archive the change, syncing the five capability deltas into `openspec/specs/`
+- [x] 2.9 Archive the change, syncing the five capability deltas into `openspec/specs/`
   without asking (project archive guidance). Verify `openspec validate --specs` after archive
   and that `openspec/specs/shared-mbv-state/` no longer exists.
