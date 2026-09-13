@@ -118,6 +118,12 @@ fn painted(term: &Terminal<TestBackend>) -> Painted {
     Painted { buffer }
 }
 
+/// The status row's probe cell: inset two columns inside its band, so the
+/// band's gutters and the padding row below keep the column backdrop.
+fn status_bar_probe(status_area: Rect) -> Rect {
+    Rect::new(status_area.x + 3, status_area.y, 1, 1)
+}
+
 /// The mounted queue panel's retained selected-row rect (task 3.1): the
 /// component answers the context-menu keyboard anchor from its own geometry,
 /// not a legacy chrome geometry mirror.
@@ -283,9 +289,7 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             &format!("{label}/status bar"),
             palette::Surface::StatusBar,
             queue_bit,
-            // The status row is inset two columns inside its band; the band's
-            // gutters and the padding row below keep the column backdrop.
-            Rect::new(chrome.status_area.x + 3, chrome.status_area.y, 1, 1),
+            status_bar_probe(chrome.status_area),
         );
 
         // Selected rows are probed in the bool state their column holds.
@@ -369,9 +373,7 @@ fn wide_library_only_hero_and_rail_follow_the_table() {
         "LibraryOnly/status bar",
         palette::Surface::StatusBar,
         false,
-        // The status row is inset two columns inside its band; the band's
-        // gutters and the padding row below keep the column backdrop.
-        Rect::new(chrome.status_area.x + 3, chrome.status_area.y, 1, 1),
+        status_bar_probe(chrome.status_area),
     );
 }
 
@@ -505,9 +507,7 @@ fn mini_view_halves_follow_the_table() {
         "mini library/status bar",
         palette::Surface::StatusBar,
         false,
-        // The status row is inset two columns inside its band; the band's
-        // gutters and the padding row below keep the column backdrop.
-        Rect::new(chrome.status_area.x + 3, chrome.status_area.y, 1, 1),
+        status_bar_probe(chrome.status_area),
     );
 
     // Queue half: the queue-only strip paints its fixed chrome band.

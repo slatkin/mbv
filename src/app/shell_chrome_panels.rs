@@ -17,7 +17,7 @@ use super::components::{
 use super::*;
 use crate::app::layout::CardGeometry;
 use crate::app::render::arrangements::chrome::{
-    queue_playback_column_wide, queue_playback_transport_area, RootFrame,
+    queue_playback_column_wide, queue_playback_transport_area, status_bar_row, RootFrame,
     QUEUE_PLAYBACK_HEADER_ROWS,
 };
 use crate::app::render::components::card::queue_card_reserved_rect;
@@ -374,7 +374,7 @@ impl Model {
             crate::app::palette::Surface::LibraryColumn,
             false,
         );
-        let row = crate::app::render::arrangements::chrome::status_bar_row(area);
+        let row = status_bar_row(area);
         self.application.view(&id, frame, row);
     }
 }

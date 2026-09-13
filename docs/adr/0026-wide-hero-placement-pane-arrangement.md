@@ -5,6 +5,10 @@ supersedes: 0021-hero-placement-is-left-or-inline.md
 
 # Wide Hero Placement And Pane Arrangement
 
+> **Superseded by [ADR 0027](0027-wide-hero-mirrored-to-left.md).** The pane
+> order is mirrored again: hero (left) / browser (right). The accepted
+> decision below stands as history.
+
 Supersedes [ADR 0021](0021-hero-placement-is-left-or-inline.md). The accepted
 history of ADR 0021 remains intact; this ADR only renames the responsive
 presentation and fixes its pane order.

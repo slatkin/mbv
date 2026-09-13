@@ -811,12 +811,11 @@ fn queue_status_bar_paints_as_a_column_footer_below_the_panel() {
     let buf = term.backend().buffer();
     let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 80, 30));
     let queue = chrome.root.queue.expect("queue panel placement");
-    let bit = chrome.queue_focused;
     let footer_y = queue.bottom() - 2;
     // As wide as the QueueColumn header (the column's canonical inset).
     assert!(queue.width.saturating_sub(4) > 0);
     let band = palette::surface_colors(palette::Surface::QueuePanelBand, false).fill;
-    let column = palette::surface_colors(palette::Surface::QueueColumn, bit).fill;
+    let column = palette::surface_colors(palette::Surface::QueueColumn, chrome.queue_focused).fill;
     // The footer row carries the status band across the header width.
     for x in [queue.x + 2, queue.right() - 3] {
         assert_eq!(
