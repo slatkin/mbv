@@ -19,5 +19,5 @@
 
 ## 5. Align Documentation and Verify the Deletion
 
-- [ ] 5.1 Update `CONTEXT.md` to remove Tracking-specific terms, make Session watch explicitly read-only with respect to mbv queue state, and limit Consume to authoritative Player-owner lifecycle; verify exact references to removed Tracking and re-anchor concepts remain only in archived history and this change.
+- [x] 5.1 Update `CONTEXT.md` to remove Tracking-specific terms, make Session watch explicitly read-only with respect to mbv queue state, and limit Consume to authoritative Player-owner lifecycle; verify exact references to removed Tracking and re-anchor concepts remain only in archived history and this change.
 - [ ] 5.2 Run `cargo fmt`, `cargo nextest run -p mbv`, `cargo nextest run -p mbv-core`, `cargo clippy --workspace --all-targets -- -D warnings`, and `openspec validate remove-remote-session-tracking --strict`; confirm local and Player-owner progress/consume code was not changed and the worktree contains only the planned deletion and documentation/spec updates.
