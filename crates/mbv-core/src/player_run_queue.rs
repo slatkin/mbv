@@ -147,34 +147,57 @@ impl PlaybackRun {
     /// only evidence that mpv navigated itself, since nothing asked it to.
     /// `None` for an `active_file` run: that projection keeps one entry in
     /// mpv's playlist, so `playlist-pos` never names the run's ordinal.
-    fn mpv_divergent_entry(&self, mpv: &Mpv) -> Option<usize> {
-        if self.active_file {
-            return None;
-        }
+    /// mpv's raw `playlist-pos`, alongside the entry it names when that is
+    /// not the run's active one — see `divergent_entry`. Returning the raw
+    /// position too lets a caller log it without a second IPC round-trip.
+    fn mpv_divergent_entry(&self, mpv: &Mpv) -> (i64, Option<usize>) {
         let pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);
-        divergent_entry(pos, self.current_idx, self.queue_len())
+        if self.active_file {
+            return (pos, None);
+        }
+        (pos, divergent_entry(pos, self.current_idx, self.queue_len()))
+    }
+
+    /// Report the outgoing item stopped, then adopt the entry mpv moved to on
+    /// its own — folded into one step so a caller can't tell Emby "stopped"
+    /// without a completed adoption to back it up. Announces the observation
+    /// only when adoption succeeds.
+    fn report_stopped_and_adopt_mpv_entry(
+        &mut self,
+        abandoned_slot: Option<QueueSlotId>,
+        abandoned_pos: i64,
+        index: usize,
+        mpv_pos_ticks: i64,
+    ) -> bool {
+        self.stop_report = StopReport::mark_sent(self.reporter.report_stopped(abandoned_pos));
+        if !self.adopt_mpv_entry(index, mpv_pos_ticks) {
+            return false;
+        }
+        let stop_accepted = self.stop_report.is_accepted();
+        self.announce_adopted_entry(abandoned_slot, abandoned_pos, stop_accepted);
+        true
     }
 
     /// Adopt an entry mpv moved to on its own as the active one, bringing the
     /// run's per-item state with it and re-pointing Emby reporting at the item
     /// actually playing, so the reported identity follows playback rather than
-    /// the ordinal the run asked for. `mpv_position_ticks` is mpv's position in
-    /// the adopted entry (it is already playing, so the item's stored resume
-    /// would misreport progress). Callers announce the observation.
-    fn adopt_mpv_entry(&mut self, index: usize, mpv_position_ticks: i64) -> bool {
+    /// the ordinal the run asked for. `mpv_pos_ticks` is mpv's position in the
+    /// adopted entry (it is already playing, so the item's stored resume
+    /// would misreport progress).
+    fn adopt_mpv_entry(&mut self, index: usize, mpv_pos_ticks: i64) -> bool {
         if !self.set_active_index(index) {
             return false;
         }
         self.load_active_item_state();
-        if mpv_position_ticks > 0 {
-            self.last_valid_pos = mpv_position_ticks;
+        if mpv_pos_ticks > 0 {
+            self.last_valid_pos = mpv_pos_ticks;
         }
         let Some(item) = self.active_item().cloned() else {
             return true;
         };
         {
             let mut s = self.status.lock().unwrap();
-            s.position_ticks = mpv_position_ticks.max(0);
+            s.position_ticks = mpv_pos_ticks.max(0);
             s.runtime_ticks = item.runtime_ticks();
             s.current_idx = self.current_idx;
             s.queue_len = self.queue_len();

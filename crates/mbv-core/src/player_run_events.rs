@@ -114,14 +114,10 @@ impl PlaybackRun {
         );
     }
 
-    fn on_playlist_pos_changed(&mut self, pos: i64, mpv_position_ticks: i64) {
+    fn on_playlist_pos_changed(&mut self, pos: i64, mpv_pos_ticks: i64) {
         if self.active_file {
             return;
         }
-        if pos < 0 {
-            return;
-        }
-        let pos = pos as usize;
         if self.pending_initial_playlist_layout
             || !self.load_state.is_ready()
             || self.forced_slot_id.is_some()
@@ -132,17 +128,16 @@ impl PlaybackRun {
             );
             return;
         }
-        if pos >= self.queue_len() {
-            log::warn!(
-                target: "player",
-                "ignoring out-of-range playlist-pos={pos} for queue len {}",
-                self.queue_len()
-            );
+        let queue_len = self.queue_len();
+        let Some(index) = divergent_entry(pos, self.current_idx, queue_len) else {
+            if pos >= 0 && pos as usize >= queue_len {
+                log::warn!(
+                    target: "player",
+                    "ignoring out-of-range playlist-pos={pos} for queue len {queue_len}"
+                );
+            }
             return;
-        }
-        if pos == self.current_idx {
-            return;
-        }
+        };
         // Nothing in flight, so mpv navigated itself: it is authoritative for
         // what is playing now. Report the outgoing item stopped, adopt mpv's
         // entry, re-point reporting at it, and announce the observation (no
@@ -151,17 +146,11 @@ impl PlaybackRun {
         let previous = self.current_idx;
         let previous_slot = self.slot_id_at(previous);
         let previous_pos = self.last_valid_pos;
-        self.stop_report =
-            StopReport::mark_sent(self.reporter.report_stopped(previous_pos));
-        if !self.adopt_mpv_entry(pos, mpv_position_ticks) {
-            return;
-        }
         log::warn!(
             target: "player",
-            "playlist-pos={pos}: mpv moved off the active entry (was {previous}); reporting now follows it"
+            "playlist-pos={index}: mpv moved off the active entry (was {previous}); reporting now follows it"
         );
-        let stop_accepted = self.stop_report.is_accepted();
-        self.announce_adopted_entry(previous_slot, previous_pos, stop_accepted);
+        self.report_stopped_and_adopt_mpv_entry(previous_slot, previous_pos, index, mpv_pos_ticks);
     }
 
     fn on_playlist_count_changed(&mut self, count: usize) {
@@ -477,7 +466,8 @@ impl PlaybackRun {
             // looks like: mpv left the entry by itself. mpv's current entry is
             // the only thing that tells them apart, and dropping the real one
             // leaves the run reporting an item mpv is not playing.
-            let Some(index) = self.mpv_divergent_entry(mpv) else {
+            let (mpv_pos, divergent) = self.mpv_divergent_entry(mpv);
+            let Some(index) = divergent else {
                 // mpv is still on the entry the run believes in — the debris
                 // this guard was written for — or it has no entry at all. The
                 // idle case is left as-is deliberately: a transient idle is
@@ -487,8 +477,7 @@ impl PlaybackRun {
                 log::info!(
                     target: "player",
                     "on_end_file: dropping superseded-jump EndFile (reason={reason:?}); \
-                     mpv drives the next start-file (mpv_pos={:?})",
-                    mpv.get_property::<i64>("playlist-pos"),
+                     mpv drives the next start-file (mpv_pos={mpv_pos})",
                 );
                 return true;
             };
@@ -498,13 +487,13 @@ impl PlaybackRun {
                  (was {}) — adopting it",
                 self.current_idx,
             );
-            self.stop_report =
-                StopReport::mark_sent(self.reporter.report_stopped(self.last_valid_pos));
             let abandoned_pos = self.last_valid_pos;
-            let stop_accepted = self.stop_report.is_accepted();
-            if self.adopt_mpv_entry(index, mpv_position_ticks(mpv)) {
-                self.announce_adopted_entry(completed_slot_id, abandoned_pos, stop_accepted);
-            }
+            self.report_stopped_and_adopt_mpv_entry(
+                completed_slot_id,
+                abandoned_pos,
+                index,
+                mpv_position_ticks(mpv),
+            );
             return true;
         }
         // played_out drives mark-played/Emby watched-status and stays video-only;
