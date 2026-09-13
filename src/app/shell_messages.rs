@@ -70,20 +70,6 @@ impl Model {
                     }
                     self.push_music_workspace_content();
                 }
-                ShellRequest::MusicTrackContextMenu { track } => {
-                    self.app.open_context_menu_for(track);
-                    self.push_music_workspace_content();
-                }
-                ShellRequest::MusicTrackContextMenuAt { track, anchor } => {
-                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    self.app.open_context_menu_for_at(track, anchor.0, anchor.1);
-                    self.push_music_workspace_content();
-                }
-                ShellRequest::MusicAlbumContextMenu { item, anchor } => {
-                    self.app.set_panel_focus(crate::app::PanelFocus::Library);
-                    self.app.open_context_menu_for_at(item, anchor.0, anchor.1);
-                    self.push_music_workspace_content();
-                }
                 ShellRequest::MusicGroupSwitch { delta } => {
                     if let Some(lib_idx) = self.app.tab.emby_library_index() {
                         self.app.switch_music_group(lib_idx, delta);
@@ -199,12 +185,13 @@ impl Model {
                 ShellRequest::RefreshFeeds => {
                     self.app.refresh_feeds();
                 }
-                ShellRequest::FeedsPlay(entry) => {
-                    if let Some(entry) = entry {
-                        self.app.play_feed_entry(entry);
-                    } else {
+                ShellRequest::FeedsPlay(entries) => {
+                    if entries.is_empty() {
                         self.app
                             .flash("No feed entry selected".into(), ToastSeverity::Neutral);
+                    }
+                    for entry in entries {
+                        self.app.play_feed_entry(entry);
                     }
                 }
                 ShellRequest::FeedsRowClick => {
@@ -214,12 +201,13 @@ impl Model {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.sync_feeds();
                 }
-                ShellRequest::FeedsEnqueue(entry) => {
-                    if let Some(entry) = entry {
-                        self.app.enqueue_feed_entry(entry);
-                    } else {
+                ShellRequest::FeedsEnqueue(entries) => {
+                    if entries.is_empty() {
                         self.app
                             .flash("No feed entry selected".into(), ToastSeverity::Neutral);
+                    }
+                    for entry in entries {
+                        self.app.enqueue_feed_entry(entry);
                     }
                 }
                 request @ ShellRequest::DismissSelectionModal
@@ -291,8 +279,6 @@ impl Model {
                 | ShellRequest::BrowserPlay { .. }
                 | ShellRequest::BrowserEnqueue { .. }
                 | ShellRequest::BrowserToggleWatched { .. }
-                | ShellRequest::BrowserContextMenu { .. }
-                | ShellRequest::EmbyLibraryContextMenu { .. }
                 | ShellRequest::BrowserShuffle { .. }
                 | ShellRequest::BrowserRefresh
                 | ShellRequest::BrowserRescan
@@ -396,15 +382,6 @@ impl Model {
                     }
                     self.push_active_browser_owner_content();
                 }
-                ShellRequest::BrowserRowContextMenu { target, anchor } => {
-                    if let (Some(lib_idx), Some(target)) =
-                        (self.app.tab.emby_library_index(), target)
-                    {
-                        self.app
-                            .handle_mouse_right_click_emby(lib_idx, target, anchor.0, anchor.1);
-                    }
-                    self.push_active_browser_owner_content();
-                }
                 ShellRequest::HomeRowClick { .. } => {
                     self.app.set_panel_focus(crate::app::PanelFocus::Library);
                     self.push_home_content();
@@ -461,12 +438,49 @@ impl Model {
                     self.queue_click_reproject();
                 }
                 // Other destination payloads are converted in later slices.
-                ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Browser(_)
-                    | crate::app::types_context_menu::ContextMenuTargets::Emby(_)
-                    | crate::app::types_context_menu::ContextMenuTargets::Feeds(_),
-                    _,
-                ) => {}
+                ShellRequest::RowContextMenu(targets, anchor) => {
+                    match targets {
+                        crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {
+                            if let Some(item) = items.pop() {
+                                if let Some((x, y)) = anchor {
+                                    self.app.open_context_menu_for_at(item, x, y);
+                                } else {
+                                    self.app.open_context_menu_for(item);
+                                }
+                            }
+                        }
+                        crate::app::types_context_menu::ContextMenuTargets::Browser(targets) => {
+                            if let (Some(lib_idx), Some(target)) = (
+                                self.app.tab.emby_library_index(),
+                                targets.into_iter().next(),
+                            ) {
+                                if let Some(item) = self
+                                    .app
+                                    .libs
+                                    .get(lib_idx)
+                                    .and_then(|lib| lib.nav_stack.last())
+                                    .and_then(|level| {
+                                        level.items.iter().find(|item| item.id == target)
+                                    })
+                                    .cloned()
+                                {
+                                    if let Some((x, y)) = anchor {
+                                        self.app.open_context_menu_for_at(item, x, y);
+                                    } else {
+                                        self.app.open_context_menu_for(item);
+                                    }
+                                }
+                            }
+                        }
+                        crate::app::types_context_menu::ContextMenuTargets::Feeds(entries) => {
+                            self.app.open_feeds_context_menu(entries, anchor);
+                        }
+                        _ => {}
+                    }
+                    self.push_active_browser_owner_content();
+                    self.push_music_workspace_content();
+                    self.push_tv_workspace_content();
+                }
                 // TV keyboard requests are resolved by the mounted
                 // workspace component. Cursor and pane movement remain
                 // component-local; the shell handles only cross-boundary
@@ -491,14 +505,6 @@ impl Model {
                     }
                     self.push_tv_workspace_content();
                 }
-                ShellRequest::TvHitContextMenu { hit, anchor } => {
-                    if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                        self.app
-                            .handle_mouse_right_click_tv(lib_idx, hit, anchor.0, anchor.1);
-                    }
-                    self.push_tv_workspace_content();
-                }
-
                 request @ (ShellRequest::PlaylistsBack
                 | ShellRequest::PlaylistsOpen(_)
                 | ShellRequest::PlaylistsActivate { .. }

@@ -48,6 +48,10 @@ pub(super) enum ContextAction {
     RemoveFromContinueWatching,
     RemoveFromQueue(usize),
     GoToLibrary(String, String), // (item_id, item_type)
+    FeedsPlay(Vec<FeedEntry>),
+    FeedsEnqueue(Vec<FeedEntry>),
+    FeedsMarkPlayed(Vec<FeedEntry>),
+    FeedsMarkUnplayed(Vec<FeedEntry>),
 }
 
 #[derive(Clone)]

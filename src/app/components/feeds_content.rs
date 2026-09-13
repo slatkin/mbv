@@ -290,16 +290,34 @@ impl FeedsContent {
                 None
             }
             Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
-                    ShellRequest::FeedsPlay(self.entry_for_target(&target).cloned()),
-                )),
-                _ => Some(Msg::Shell(ShellRequest::FeedsPlay(None))),
+                RowLocalOutcome::External(RowIntent::Activate(target)) => {
+                    Some(Msg::Shell(ShellRequest::FeedsPlay(
+                        self.entry_for_target(&target)
+                            .cloned()
+                            .into_iter()
+                            .collect(),
+                    )))
+                }
+                _ => Some(Msg::Shell(ShellRequest::FeedsPlay(Vec::new()))),
             },
+            Key::Char('.') => {
+                let target = self.carrier.selected_target()?.clone();
+                let entry = self.entry_for_target(&target)?.clone();
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Feeds(vec![entry]),
+                    None,
+                )))
+            }
             Key::Char('e') => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
-                    ShellRequest::FeedsEnqueue(self.entry_for_target(&target).cloned()),
-                )),
-                _ => Some(Msg::Shell(ShellRequest::FeedsEnqueue(None))),
+                RowLocalOutcome::External(RowIntent::Activate(target)) => {
+                    Some(Msg::Shell(ShellRequest::FeedsEnqueue(
+                        self.entry_for_target(&target)
+                            .cloned()
+                            .into_iter()
+                            .collect(),
+                    )))
+                }
+                _ => Some(Msg::Shell(ShellRequest::FeedsEnqueue(Vec::new()))),
             },
             _ => None,
         }
@@ -487,13 +505,21 @@ impl LibraryContentOwner for FeedsContent {
                     self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
                     Some(Msg::Shell(ShellRequest::FeedsRowClick))
                 }
+                RowLocalInput::ContextClick(at) => {
+                    let target = self.resolve_row_id(at)?;
+                    let entry = self.entry_for_target(&target)?.clone();
+                    Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Feeds(vec![entry]),
+                        Some((at.x, at.y)),
+                    )))
+                }
                 RowLocalInput::DoubleClick(at) => {
                     // Select the painted row through the same delegation seam
                     // the first click uses, then play the resolved entry.
                     let target = self.resolve_row_id(at)?;
                     self.delegate_row_local_input(RowLocalInput::Click(at), Some(target.clone()));
                     let entry = self.entry_for_target(&target)?.clone();
-                    Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry))))
+                    Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry])))
                 }
                 _ => None,
             },

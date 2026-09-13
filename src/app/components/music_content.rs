@@ -472,12 +472,18 @@ impl LibraryContentOwner for MusicContent {
             // pane holds local focus, otherwise the selected album's
             // generic library context menu (mirrors the retired
             // `MusicWorkspaceComponent`'s '.' handling).
-            Key::Char('.') if self.track_focused => self
-                .selected_track_item()
-                .map(|track| Msg::Shell(ShellRequest::MusicTrackContextMenu { track })),
-            Key::Char('.') => self
-                .selected_item()
-                .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })),
+            Key::Char('.') if self.track_focused => self.selected_track_item().map(|track| {
+                Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![track]),
+                    None,
+                ))
+            }),
+            Key::Char('.') => self.selected_item().map(|item| {
+                Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                    None,
+                ))
+            }),
             Key::Char('r')
                 if !self.track_focused
                     && !key.modifiers.contains(KeyModifiers::CONTROL)

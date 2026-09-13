@@ -151,9 +151,12 @@ impl TvContent {
             {
                 Some(ShellRequest::EmbyLibraryRefresh)
             }
-            Key::Char('.') => Some(ShellRequest::EmbyLibraryContextMenu {
-                item: self.selected_item()?,
-            }),
+            Key::Char('.') => Some(ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Emby(vec![
+                    self.selected_item()?
+                ]),
+                None,
+            )),
             Key::Char('/') => {
                 self.inline_search.open();
                 Some(ShellRequest::OpenInlineSearch)
@@ -236,9 +239,12 @@ impl TvContent {
             {
                 Some(ShellRequest::EmbyLibraryRefresh)
             }
-            Key::Char('.') => Some(ShellRequest::EmbyLibraryContextMenu {
-                item: self.selected_item()?,
-            }),
+            Key::Char('.') => Some(ShellRequest::RowContextMenu(
+                crate::app::types_context_menu::ContextMenuTargets::Emby(vec![
+                    self.selected_item()?
+                ]),
+                None,
+            )),
             Key::Char('/') => {
                 self.inline_search.open();
                 Some(ShellRequest::OpenInlineSearch)

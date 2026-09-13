@@ -324,9 +324,12 @@ impl BrowserContent {
             }
             RowLocalInput::ContextClick(at) => {
                 self.inline_search.select_row_at_point(at);
-                self.inline_search
-                    .selected_item()
-                    .map(|item| Msg::Shell(ShellRequest::BrowserContextMenu { item }))
+                self.inline_search.selected_item().map(|item| {
+                    Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Browser(vec![item.id]),
+                        None,
+                    ))
+                })
             }
             RowLocalInput::Wheel { delta, .. } => {
                 self.inline_search.move_cursor_by(delta);
@@ -418,9 +421,12 @@ impl BrowserContent {
             Key::Char('w') if ctrl => {
                 selected.map(|item| ShellRequest::BrowserToggleWatched { item })
             }
-            Key::Char('.') if key.modifiers.is_empty() => {
-                selected.map(|item| ShellRequest::BrowserContextMenu { item })
-            }
+            Key::Char('.') if key.modifiers.is_empty() => selected.map(|item| {
+                ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Browser(vec![item.id]),
+                    None,
+                )
+            }),
             Key::Char('s') if ctrl => selected.map(|item| ShellRequest::BrowserShuffle { item }),
             Key::Char('r') if ctrl => Some(ShellRequest::BrowserRescan),
             Key::Char('r') => Some(ShellRequest::BrowserRefresh),
@@ -559,10 +565,12 @@ impl LibraryContentOwner for BrowserContent {
                         let target = target?;
                         self.carrier
                             .delegate(RowLocalInput::ContextClick(at), Some(target.clone()));
-                        Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
-                            target: Some(target),
-                            anchor: (at.x, at.y),
-                        }))
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            crate::app::types_context_menu::ContextMenuTargets::Browser(vec![
+                                target,
+                            ]),
+                            Some((at.x, at.y)),
+                        )))
                     }
                     _ => None,
                 }

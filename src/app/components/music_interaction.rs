@@ -24,7 +24,7 @@ impl MusicContent {
                         RowLocalInput::ContextClick(at) => {
                             self.inline_search.select_row_at_point(at);
                             self.inline_search.selected_item().map(|item| {
-                                Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item })
+                                Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), None))
                             })
                         }
                         RowLocalInput::Click(at) => {
@@ -66,10 +66,7 @@ impl MusicContent {
                             .selected_item()
                             .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
                         RowLocalInput::ContextClick(at) => self.selected_item().map(|item| {
-                            Msg::Shell(ShellRequest::MusicAlbumContextMenu {
-                                item,
-                                anchor: (at.x, at.y),
-                            })
+                            Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), Some((at.x, at.y))))
                         }),
                         _ => None,
                     }
@@ -130,10 +127,7 @@ impl MusicContent {
                             .find(|track| track.id == *target)
                             .cloned()
                             .map(|track| {
-                                Msg::Shell(ShellRequest::MusicTrackContextMenuAt {
-                                    track,
-                                    anchor: (at.x, at.y),
-                                })
+                                Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(vec![track]), Some((at.x, at.y))))
                             })
                     }),
                 _ => None,

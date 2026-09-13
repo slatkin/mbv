@@ -93,6 +93,22 @@ impl App {
                 }
             }
             Some(ContextAction::RemoveFromQueue(pos)) => self.remove_from_queue(pos),
+            Some(ContextAction::FeedsPlay(entries)) => {
+                for entry in entries {
+                    self.play_feed_entry(entry);
+                }
+            }
+            Some(ContextAction::FeedsEnqueue(entries)) => {
+                for entry in entries {
+                    self.enqueue_feed_entry(entry);
+                }
+            }
+            Some(ContextAction::FeedsMarkPlayed(entries)) => {
+                self.set_feed_entries_played(entries, true)
+            }
+            Some(ContextAction::FeedsMarkUnplayed(entries)) => {
+                self.set_feed_entries_played(entries, false)
+            }
             Some(ContextAction::GoToLibrary(item_id, item_type)) => {
                 let libs: Vec<(usize, String, String)> = self
                     .libs
@@ -516,6 +532,67 @@ impl App {
             cursor: ContextMenu::first_selectable(&entries),
             entries,
         })
+    }
+
+    fn set_feed_entries_played(
+        &mut self,
+        entries: Vec<mbv_core::playback_queue::FeedEntry>,
+        played: bool,
+    ) {
+        let user_id = self
+            .config
+            .lock()
+            .unwrap()
+            .emby_setup
+            .as_ref()
+            .map_or_else(String::new, |setup| setup.user_id.clone());
+        for entry in entries {
+            if let Some(feed_id) = entry.feed_id.as_deref() {
+                self.feed_entry_state
+                    .set_played(&user_id, feed_id, &entry.guid, played);
+            }
+        }
+        let _ = self.feed_entry_state.save();
+    }
+
+    pub(super) fn open_feeds_context_menu(
+        &mut self,
+        entries: Vec<mbv_core::playback_queue::FeedEntry>,
+        anchor: Option<(u16, u16)>,
+    ) {
+        if entries.is_empty() {
+            return;
+        }
+        let mut menu_entries = Vec::new();
+        Self::push_context_action(
+            &mut menu_entries,
+            "Play",
+            ContextAction::FeedsPlay(entries.clone()),
+        );
+        Self::push_context_action(
+            &mut menu_entries,
+            "Add to Queue",
+            ContextAction::FeedsEnqueue(entries.clone()),
+        );
+        Self::push_context_action(
+            &mut menu_entries,
+            "Mark Played",
+            ContextAction::FeedsMarkPlayed(entries.clone()),
+        );
+        Self::push_context_action(
+            &mut menu_entries,
+            "Mark Unplayed",
+            ContextAction::FeedsMarkUnplayed(entries),
+        );
+        let menu = ContextMenu {
+            anchor: anchor.map_or(
+                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+                |(x, y)| ContextMenuAnchor::Pointer { x, y },
+            ),
+            cursor: 0,
+            entries: menu_entries,
+        };
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
     }
 
     /// Keyboard '.' entry (the shared `handle_global_view_key` front door

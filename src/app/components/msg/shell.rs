@@ -50,30 +50,11 @@ pub enum ShellRequest {
     MusicTrackEnqueue {
         track: EmbyItem,
     },
-    /// Open the context menu targeted at the focused inline album track
-    /// ('.' while a track is focused): carries the owner-resolved track item
-    /// and raises the menu through `App`.
-    MusicTrackContextMenu {
-        track: EmbyItem,
-    },
-    /// Right-click on a focused Wide track row: carries the owner-resolved
-    /// track item and preserves the component-provided pointer anchor for menu
-    /// placement.
-    MusicTrackContextMenuAt {
-        track: EmbyItem,
-        anchor: (u16, u16),
-    },
+
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
     MusicGroupSwitch {
         delta: i64,
-    },
-    /// Right-click on a narrow grouped-Music album row: carries the
-    /// component-resolved album item and opens its context menu anchored at the
-    /// click (mirrors the `.` keyboard action, which has no anchor).
-    MusicAlbumContextMenu {
-        item: EmbyItem,
-        anchor: (u16, u16),
     },
     /// Live Wide hero split resize (add-mouse-wide-split-resize). The gap
     /// boundary component owns the gesture and the resolved list-pane width;
@@ -136,10 +117,10 @@ pub enum ShellRequest {
     RefreshFeeds,
     /// Play the exact entry selected by the Feeds component; `None` reports
     /// that there is no visible selection so the shell can provide feedback.
-    FeedsPlay(Option<FeedEntry>),
+    FeedsPlay(Vec<FeedEntry>),
     /// Enqueue the exact entry selected by the Feeds component; `None` reports
     /// that there is no visible selection so the shell can provide feedback.
-    FeedsEnqueue(Option<FeedEntry>),
+    FeedsEnqueue(Vec<FeedEntry>),
     /// A row the user single-clicked in the Feeds list. The component has
     /// already moved its own selection to the resolved row; the shell only
     /// pulls panel focus to the Library (design.md D4/D5). Mirrors
@@ -293,15 +274,7 @@ pub enum ShellRequest {
     TvHitDoubleClick {
         hit: TvHit,
     },
-    /// A right-click in the TV workspace; `hit` is the component-resolved
-    /// pane + hit and `anchor` is the click position the component forwards
-    /// as the context-menu anchor — the one legitimate forwarded coordinate
-    /// (design.md D4). The component never moves its pane/cursor on a
-    /// right-click.
-    TvHitContextMenu {
-        hit: TvHit,
-        anchor: (u16, u16),
-    },
+
     /// Series-list row movement from the TV workspace. The component applies
     /// the same local cursor delta before handing the App-side mirror update
     /// to the shell; episodes use `TvEpisodeMove` instead.
@@ -352,14 +325,7 @@ pub enum ShellRequest {
     BrowserRowActivate {
         target: Option<String>,
     },
-    /// A row the user right-clicked; `target` is the resolved item index and
-    /// `anchor` is the click position the component forwards as the
-    /// context-menu anchor — the one legitimate forwarded coordinate
-    /// (design.md D4).
-    BrowserRowContextMenu {
-        target: Option<String>,
-        anchor: (u16, u16),
-    },
+
     /// A selector pill (letter filter / feed-folder / music group) the user
     /// clicked; `target` is the pill index the component resolved from its
     /// `HitRegions` (design.md D4/D6).
@@ -442,13 +408,6 @@ pub enum ShellRequest {
     /// and re-reading it. The library/podcast menu content (mark-watched vs
     /// mark-played labels, bulk actions) derives from the shell's own tab
     /// state (the browser is mounted only for that tab).
-    BrowserContextMenu {
-        item: EmbyItem,
-    },
-    /// Mirror of [`BrowserContextMenu`] for Emby library workspaces.
-    EmbyLibraryContextMenu {
-        item: EmbyItem,
-    },
     /// Ctrl+S on the mounted generic/Movies/home-video `BrowserComponent`
     /// (task 5.3d, Emby browser shuffle decoupling): the component resolves
     /// its own selected `EmbyItem` from its component-local cursor/content,

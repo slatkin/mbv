@@ -58,11 +58,12 @@ impl TvContent {
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
             RowLocalInput::ContextClick(at) => {
-                let hit = self.resolve_series_hit(at)?;
-                Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-                    hit,
-                    anchor: (at.x, at.y),
-                }))
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                let item = self.context.list.items.iter().find(|item| item.id == target)?.clone();
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                    Some((at.x, at.y)),
+                )))
             }
             _ => None,
         }
@@ -98,10 +99,17 @@ impl TvContent {
                 self.apply_pane_click(hit.clone(), at);
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
-            RowLocalInput::ContextClick(_) => Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-                hit,
-                anchor: (at.x, at.y),
-            })),
+            RowLocalInput::ContextClick(_) => {
+                let item = match &hit {
+                    TvHit::EpisodeRow(target) => self.current_season_episodes().iter().find(|item| item.id == *target).cloned(),
+                    TvHit::SeriesRow(target) => self.context.list.items.iter().find(|item| item.id == *target).cloned(),
+                    _ => None,
+                }?;
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                    Some((at.x, at.y)),
+                )))
+            },
             _ => None,
         }
     }
@@ -130,7 +138,9 @@ impl TvContent {
                 self.inline_search.select_row_at_point(at);
                 self.inline_search
                     .selected_item()
-                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
+                    .map(|item| Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), None,
+                    )))
             }
             RowLocalInput::Wheel { delta, .. } => {
                 self.inline_search.move_cursor_by(delta);

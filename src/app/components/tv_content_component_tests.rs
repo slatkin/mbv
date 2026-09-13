@@ -165,10 +165,7 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     let right = panel.on(&mouse(MouseEventKind::Down(MouseButton::Right), col, row));
     assert!(matches!(
         right,
-        Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-            hit: TvHit::SeriesRow(ref target),
-            ..
-        })) if target == "id"
+        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(ref items), _))) if items.len() == 1 && items[0].id == "id"
     ));
 }
 
