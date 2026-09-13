@@ -163,24 +163,10 @@ pub(in crate::app) fn feed_artwork_policy(entry: &FeedEntry) -> HeroArtwork {
     }
 }
 
-/// The album art fetch chain (design D5): the album's own `Primary` image
-/// first (Emby metadata art), then the shared `AudioChild` child probe (first
-/// track's embedded art) for albums without album-level art. One constructor
-/// for every fetcher (hero projection, neighbour pre-warm) so the chain and
-/// the `{id}:P` cache key cannot drift apart.
-pub(in crate::app) fn music_album_image_chain() -> Vec<String> {
-    let mut types = Vec::with_capacity(MUSIC_ALBUM_IMAGE_TYPES.len() + 1);
-    types.push("Primary".to_string());
-    types.extend(MUSIC_ALBUM_IMAGE_TYPES.iter().map(|s| s.to_string()));
-    types
-}
-
-/// Music's image chain and cache key (design D5): albums try the album's own
-/// `Primary` image first (Emby metadata art) and fall back to the shared
-/// `AudioChild` child probe (first track's embedded art), all under the
-/// album's `{id}:P` key; tracks the `Primary` chain under the album's key
-/// when the album id is known (the queue-card convention), else the item's
-/// own.
+/// Music's image chain and cache key (design D5): albums use the shared
+/// `AudioChild` album chain under the album's `{id}:P` key; tracks the
+/// `Primary` chain under the album's key when the album id is known (the
+/// queue-card convention), else the item's own.
 fn music_source(item: &EmbyItem) -> Option<ArtworkSource> {
     if item.id.is_empty() && item.album_id.is_empty() {
         return None;
@@ -189,7 +175,10 @@ fn music_source(item: &EmbyItem) -> Option<ArtworkSource> {
         return Some(ArtworkSource::Emby {
             item_id: item.id.clone(),
             series_id: String::new(),
-            image_types: music_album_image_chain(),
+            image_types: MUSIC_ALBUM_IMAGE_TYPES
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             cache_key: format!("{}:P", item.id),
         });
     }
@@ -453,7 +442,7 @@ mod tests {
                 cache_key,
                 ..
             } => {
-                assert_eq!(image_types, &["Primary", "AudioChild"]);
+                assert_eq!(image_types, &["AudioChild"]);
                 assert_eq!(cache_key, "al1:P");
             }
             _ => panic!("expected Emby source"),

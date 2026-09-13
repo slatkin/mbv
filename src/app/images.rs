@@ -472,7 +472,7 @@ impl App {
     /// repeat the grouping/sorting work used to build the render context.
     /// The keys are the shared `{album_id}:P` art keys the hero projection
     /// consumes, so a warmed neighbour's art shows instantly when the cursor
-    /// reaches it instead of waiting on the album art chain.
+    /// reaches it instead of waiting on the two-request `AudioChild` chain.
     pub(in crate::app) fn prewarm_grouped_music_album_images(
         &mut self,
         albums: &[mbv_core::api::EmbyItem],
@@ -498,10 +498,7 @@ impl App {
                 format!("{}:P", album.id),
                 album.id.clone(),
                 album.series_id.clone(),
-                &crate::app::components::library_panel::hero::music_album_image_chain()
-                    .iter()
-                    .map(String::as_str)
-                    .collect::<Vec<_>>(),
+                crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES,
             );
         }
     }
@@ -747,7 +744,7 @@ impl App {
                     let fetched = types.iter().find_map(|t| {
                         if t == "AudioChild" {
                             let child_url = format!(
-                                "{}/Items?ParentId={}&IncludeItemTypes=Audio&Recursive=true&Limit=1&api_key={}",
+                                "{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=1&api_key={}",
                                 server_url, item_id, token
                             );
                             let child_id: Option<String> = fetch_url(&child_url)
