@@ -86,6 +86,9 @@ pub(super) fn resolve_router_outcome_with_focused(
                 return RouterOutcome::FallThrough;
             }
             match command_for_policy(entry.binding, chord, snapshot) {
+                Some(cmd @ (Command::TogglePlayPause | Command::Stop)) => {
+                    RouterOutcome::Deferred(cmd)
+                }
                 Some(cmd) => RouterOutcome::Command(cmd),
                 None => {
                     if snapshot.blocking_overlay_open {

@@ -82,19 +82,19 @@ fn live_tick_characterizes_space_double_tap_lifecycle() {
 
     harness.inject(key(Key::Char(' ')));
     let first = harness.step();
-    assert!(matches!(first.router, RouterOutcome::FallThrough));
+    assert!(matches!(first.router, RouterOutcome::Deferred(_)));
     assert!(harness.model().app.last_space_press.is_some());
 
     harness.model_mut().app.last_space_press = Some(Instant::now());
     harness.inject(key(Key::Char(' ')));
     let second = harness.step();
-    assert_eq!(second.router, RouterOutcome::Command(crate::app::action::Command::TogglePlayPause));
+    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::TogglePlayPause));
     assert!(harness.model().app.last_space_press.is_none());
 
     harness.model_mut().app.last_space_press = Some(Instant::now() - Duration::from_secs(1));
     harness.inject(key(Key::Char(' ')));
     let expired = harness.step();
-    assert!(matches!(expired.router, RouterOutcome::FallThrough));
+    assert!(matches!(expired.router, RouterOutcome::Deferred(_)));
     assert!(harness.model().app.last_space_press.is_some());
 }
 
@@ -104,19 +104,19 @@ fn live_tick_characterizes_escape_double_tap_lifecycle() {
 
     harness.inject(key(Key::Esc));
     let first = harness.step();
-    assert!(matches!(first.router, RouterOutcome::FallThrough));
+    assert!(matches!(first.router, RouterOutcome::Deferred(_)));
     assert!(harness.model().app.last_esc_press.is_some());
 
     harness.model_mut().app.last_esc_press = Some(Instant::now());
     harness.inject(key(Key::Esc));
     let second = harness.step();
-    assert_eq!(second.router, RouterOutcome::Command(crate::app::action::Command::Stop));
+    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::Stop));
     assert!(harness.model().app.last_esc_press.is_none());
 
     harness.model_mut().app.last_esc_press = Some(Instant::now() - Duration::from_secs(1));
     harness.inject(key(Key::Esc));
     let expired = harness.step();
-    assert!(matches!(expired.router, RouterOutcome::FallThrough));
+    assert!(matches!(expired.router, RouterOutcome::Deferred(_)));
     assert!(harness.model().app.last_esc_press.is_some());
 }
 

@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::action::{playback_command_for_key, Command};
+use super::action::Command;
 use super::components::msg::AlbumCursorKind;
 use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
@@ -14,7 +14,6 @@ use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
 use super::{App, IdleFeed, ToastSeverity};
-use crossterm::event::KeyCode;
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -136,6 +135,7 @@ pub(super) struct ArbitrationDiagnostic {
     pub dispatch_kind: &'static str,
 }
 
+#[allow(dead_code)]
 pub(super) fn fold_keyboard_messages(
     messages: Vec<Msg>,
     focused: Option<&ComponentId>,
@@ -354,12 +354,6 @@ impl Model {
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
             idle_feed_link_available: self.app.idle_feed_link_available(),
-            // A selection belongs to the panel that created it. Keep the
-            // shell-owned count for projection, but do not let it suppress
-            // playback chords after focus moves to another panel.
-            visual_mode_active: self.visual_selection.is_some_and(|(focus, count)| {
-                count > 0 && focus == self.app.effective_panel_focus()
-            }),
             text_entry_focused: matches!(
                 self.application.focus(),
                 Some(
@@ -367,62 +361,35 @@ impl Model {
                         | ComponentId::Overlay(OverlayId::Settings)
                 )
             ) || self.active_inline_search_is_open(),
-            space_double_tap: self
-                .app
-                .last_space_press
-                .is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300)),
-            esc_double_tap: self
-                .app
-                .last_esc_press
-                .is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300)),
         };
 
-        let outcome = resolve_router_outcome_with_focused(key, &snapshot, self.application.focus());
-        // The router arms the double-tap timer on the first eligible Space/Esc
-        // press regardless of focus; the second press within the window is
-        // claimed by `command_for_policy` when the double-tap snapshot flag is
-        // set.
-        self.update_double_tap_state(key, &snapshot, &outcome);
-        outcome
+        resolve_router_outcome_with_focused(key, &snapshot, self.application.focus())
     }
 
-    /// Keep the existing App-owned double-tap timestamps in sync while the
-    /// router owns playback resolution. A first eligible press falls through
-    /// to the focused leaf and starts its timer; a second press is claimed by
-    /// the router and clears the timer after dispatch is selected.
-    fn update_double_tap_state(
+    /// Apply a deferred candidate after the focused leaf has been arbitrated.
+    pub(super) fn apply_deferred_candidate(
         &mut self,
-        key: crossterm::event::KeyEvent,
-        snapshot: &RouterSnapshot,
-        outcome: &RouterOutcome,
-    ) {
-        let playback = playback_command_for_key(
-            super::input_resolver::KeyChord::from_key(key),
-            snapshot.player_active,
-            snapshot.has_remote_session,
-        );
-        match (key.code, playback, outcome) {
-            (KeyCode::Char(' '), Some(Command::TogglePlayPause), RouterOutcome::FallThrough)
-                if !snapshot.space_double_tap && !snapshot.visual_mode_active =>
-            {
-                self.app.last_space_press = Some(Instant::now());
-            }
-            (
-                KeyCode::Char(' '),
-                Some(Command::TogglePlayPause),
-                RouterOutcome::Command(Command::TogglePlayPause),
-            ) => self.app.last_space_press = None,
-            (KeyCode::Esc, Some(Command::Stop), RouterOutcome::FallThrough)
-                if !snapshot.esc_double_tap && !snapshot.visual_mode_active =>
-            {
-                self.app.last_esc_press = Some(Instant::now());
-            }
-            (KeyCode::Esc, Some(Command::Stop), RouterOutcome::Command(Command::Stop)) => {
-                self.app.last_esc_press = None;
-            }
-            // any other (key, playback command, router outcome) triple: no
-            // double-tap timer to arm or clear.
-            _ => {}
+        router: &RouterOutcome,
+        leaf_consumed: bool,
+    ) -> bool {
+        let RouterOutcome::Deferred(command) = router else {
+            return false;
+        };
+        let slot = match command {
+            Command::TogglePlayPause => &mut self.app.last_space_press,
+            Command::Stop => &mut self.app.last_esc_press,
+            _ => return false,
+        };
+        let completed = slot.is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300));
+        if leaf_consumed {
+            *slot = None;
+            false
+        } else if completed {
+            *slot = None;
+            self.dispatch_router_command(command.clone())
+        } else {
+            *slot = Some(Instant::now());
+            false
         }
     }
 
