@@ -32,19 +32,19 @@
 
 ## 3. Wide Hero box, credits table and clickable links
 
-- [ ] 3.1 Extract the overview Main content box painting and its tests out of `hero_header.rs` into a
+- [x] 3.1 Extract the overview Main content box painting and its tests out of `hero_header.rs` into a
   sibling module in `components/library_panel/` with no behavior change. Verify: `hero_header.rs` and
   the new module are both under the 800-line cap, the moved tests pass unchanged, and a Wide library
   panel render is byte-identical before and after (existing buffer tests green).
-- [ ] 3.2 Render the box when the item has overview text or credits, and paint the credits table one
+- [x] 3.2 Render the box when the item has overview text or credits, and paint the credits table one
   blank row under the overview text — or at the box's first content row when there is no overview.
   Verify: buffer tests for the box surface present/absent, the blank gap row, the no-overview case, and
   a Movie with neither overview nor credits showing no box.
-- [ ] 3.3 Layout the table: name column sized from the longest rendered name, one shared second column,
+- [x] 3.3 Layout the table: name column sized from the longest rendered name, one shared second column,
   role truncated with an ellipsis at the box's edge, rows clipped at the box's bottom edge. Verify:
   buffer tests for column alignment across rows with different name lengths, a truncated role, and a
   short pane that clips the table without overflowing the pane.
-- [ ] 3.4 Paint clickable link labels: sanitize (`http`/`https`, no control bytes), gate on declared
+- [x] 3.4 Paint clickable link labels: sanitize (`http`/`https`, no control bytes), gate on declared
   terminal hyperlink support, and overlay one forced-width escape cell per label wholly inside the box
   and on a single painted row, after the row's text. Verify: unit tests for the sanitizer (non-http
   scheme, embedded control byte, empty URL) and the capability gate (supported/unsupported), plus a
