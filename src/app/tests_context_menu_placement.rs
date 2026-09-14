@@ -430,3 +430,85 @@ fn pointer_anchor_selects_wide_tv_branch_on_resize_tick_before_repaint() {
         "after resize, before any TV-workspace repaint, the pointer anchor must already select the wide-TV branch: {wide_rect:?}"
     );
 }
+
+/// Wide hero-left regression (2026-09-14): the hero pane moved to the left
+/// and the list pane to the right, but the pointer-anchor fallback in
+/// `context_menu_rect` still clamped non-Home/non-Books migrated destinations
+/// (Music, Browser, Feeds, ...) inside the legacy `AppLayout.left_area` —
+/// the queue column on the far left. A right-click on a list album therefore
+/// opened at the right height but on the left. The shell must clamp to the
+/// panel's own painted list geometry (tab-agnostic `library_menu_geometry`),
+/// so the menu stays at the click point inside the right-hand list pane.
+#[test]
+fn migrated_music_pointer_menu_stays_in_painted_list_pane_not_queue_column() {
+    use crate::app::render::make_music_group_app;
+    use crate::app::types_context_menu::ContextMenu;
+
+    let mut app = make_music_group_app();
+    app.panel_focus = PanelFocus::Library;
+    let mut model = Model::new(app);
+    // Wide terminal so the panel paints the Wide skeleton (hero left, list
+    // right) and `effective_panel_focus` reads `panel_focus`.
+    model.app.terminal_width = 150;
+    model.app.terminal_height = 40;
+    model.app.layout.root_frame.library = Some(Rect::new(0, 0, 150, 40));
+    model.sync_library_panel();
+
+    let backend = TestBackend::new(150, 40);
+    let mut term = Terminal::new(backend).unwrap();
+    let area = model.app.layout.root_frame.library.unwrap();
+    term.draw(|f| model.render_library_panel_at(f, area)).unwrap();
+
+    let (list_panel, _) = model
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
+        .expect("Library panel mounted")
+        .menu_geometry()
+        .expect("panel painted geometry");
+    // Click inside the painted list pane (the right-hand pane after the
+    // hero-left swap); the menu is small enough to fit without clamping.
+    let click = (list_panel.x + 4, list_panel.y + 4);
+    assert!(
+        click.0 < list_panel.right() && click.1 < list_panel.bottom(),
+        "click {click:?} must sit inside the painted list pane {list_panel:?}"
+    );
+
+    model.app.open_context_menu_at(click.0, click.1, false, None);
+    model.sync_modal_requests();
+    // Poison the legacy queue-column copy far from the list pane: the stale
+    // fallback would clamp the right-hand click to this left-hand column.
+    let stale_queue_column = Rect::new(0, 0, 30, 40);
+    model.app.layout.left_area = stale_queue_column;
+
+    term.draw(|f| model.render_context_menu_overlay(f)).unwrap();
+    let rect = mounted_context_menu_rect(&model);
+
+    let id = ComponentId::Overlay(OverlayId::ContextMenu);
+    let (size, anchor) = {
+        let comp = model
+            .application
+            .get_component(&id)
+            .expect("context menu mounted")
+            .as_any()
+            .downcast_ref::<ContextMenuComponent>()
+            .expect("context menu type");
+        (ContextMenu::rendered_size(comp.entries()), comp.anchor())
+    };
+    assert!(matches!(
+        anchor,
+        ContextMenuAnchor::Pointer { x, y } if (x, y) == click
+    ));
+    let (ex, ey) = ContextMenu::place(list_panel, size, None, Some(click));
+    assert_eq!(
+        (rect.x, rect.y),
+        (ex, ey),
+        "pointer menu must stay at the click inside the painted list pane, got {rect:?}"
+    );
+    let stale = ContextMenu::place(stale_queue_column, size, None, Some(click));
+    assert_ne!(
+        (rect.x, rect.y),
+        stale,
+        "menu must not fall back to the stale queue-column clamp"
+    );
+}

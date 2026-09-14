@@ -51,6 +51,24 @@ impl Model {
             .and_then(LibraryPanel::menu_geometry)
     }
 
+    /// Context-menu geometry for any migrated LibraryPanel owner,
+    /// regardless of tab (task 5.11 generalized): the panel's own
+    /// last-painted list geometry. `home_menu_geometry`/`book_menu_geometry`
+    /// are tab-gated subsets; this is the fallback for every other migrated
+    /// destination (Music, Browser, Feeds, TV, ...), so a pointer-anchored
+    /// menu clamps inside the painted list pane instead of the legacy
+    /// `AppLayout.left_area` (the queue column). Returns `None` when the
+    /// panel never painted, preserving the legacy fallback.
+    fn library_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
+        if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
+            return None;
+        }
+        self.application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(LibraryPanel::menu_geometry)
+    }
+
     /// Like `home_menu_geometry`, but for the mounted `QueueComponent` (task
     /// 3.1, design D11): the queue panel answers the context-menu keyboard
     /// anchor from its own retained geometry, not a shell mirror.
@@ -79,12 +97,15 @@ impl Model {
                         Some((panel, selected)) => (panel, selected),
                         None => match self.book_menu_geometry() {
                             Some((panel, selected)) => (panel, selected),
-                            // No owning component publishes a selected-row
-                            // anchor for this destination yet; the panel
-                            // still places the menu, just without a row
-                            // anchor (matches the legacy `AppLayout` mirror's
-                            // behaviour, which never populated this field).
-                            None => (layout.left_area, None),
+                            None => match self.library_menu_geometry() {
+                                Some((panel, selected)) => (panel, selected),
+                                // No owning component publishes a selected-row
+                                // anchor for this destination yet; the panel
+                                // still places the menu, just without a row
+                                // anchor (matches the legacy `AppLayout` mirror's
+                                // behaviour, which never populated this field).
+                                None => (layout.left_area, None),
+                            },
                         },
                     },
                     PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),
@@ -110,7 +131,10 @@ impl Model {
                             .and_then(|lib_idx| self.app.wide_tv_library_area(lib_idx))
                             .unwrap_or_default()
                     }
-                    PanelFocus::Library => layout.left_area,
+                    PanelFocus::Library => self
+                        .library_menu_geometry()
+                        .map(|(panel, _)| panel)
+                        .unwrap_or(layout.left_area),
                     PanelFocus::Queue => self
                         .queue_menu_geometry()
                         .map(|(panel, _)| panel)
