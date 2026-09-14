@@ -303,6 +303,7 @@ pub enum RowIntent<Target> {
     Activate(Target),
     Context(Target),
     ContextSelection(Vec<Target>),
+    SelectionChanged(usize),
 }
 
 /// A closed, provider-neutral row vocabulary for embedded media lists.
@@ -506,10 +507,36 @@ impl<Target> MediaList<Target> {
         match input {
             RowLocalInput::Move(delta) | RowLocalInput::Wheel { delta, .. } => {
                 self.move_selection(delta);
+                if self.is_visual_mode() {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
             }
-            RowLocalInput::Page(delta) => self.move_selection(delta.saturating_mul(5)),
-            RowLocalInput::First => self.select_first(),
-            RowLocalInput::Last => self.select_last(),
+            RowLocalInput::Page(delta) => {
+                self.move_selection(delta.saturating_mul(5));
+                if self.is_visual_mode() {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
+            }
+            RowLocalInput::First => {
+                self.select_first();
+                if self.is_visual_mode() {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
+            }
+            RowLocalInput::Last => {
+                self.select_last();
+                if self.is_visual_mode() {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
+            }
             RowLocalInput::Activate => {
                 return self
                     .selected_target()
@@ -598,6 +625,14 @@ impl<Target: PartialEq> MediaList<Target> {
 }
 
 impl<Target: Clone + PartialEq> MediaList<Target> {
+    /// Begin keyboard Visual mode, anchored at the current cursor target.
+    pub fn enter_visual_mode(&mut self) {
+        if let Some(target) = self.selected_target().cloned() {
+            self.multi_selection = vec![target.clone()];
+            self.selection_anchor = Some(target);
+        }
+    }
+
     /// Replace one existing row by stable target without rebuilding indexes or
     /// disturbing selection/scroll. This is for live presentation patches.
     fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {

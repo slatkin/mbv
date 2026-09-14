@@ -62,6 +62,10 @@ pub enum ShellRequest {
     /// stores the session override. Live-only: there is no end/persist
     /// variant, because nothing is persisted.
     ResizeListPaneLive(u16),
+    /// The focused list changed its Visual selection. The shell records the
+    /// count once; components never expose their local selection state for
+    /// router queries.
+    SelectionChanged(usize),
     /// Select the left-panel tab at the position the mounted `TabPanel`
     /// resolved from its own painted hit regions (task 2.1). The shell owns
     /// the tab switch and its side effects; the panel only reports which tab

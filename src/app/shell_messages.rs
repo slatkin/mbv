@@ -15,6 +15,10 @@ impl Model {
                 apply_terminal_observer(self, event, music_resize, tv_resize)
             }
             Msg::Shell(request) => match request {
+                ShellRequest::SelectionChanged(count) => {
+                    self.visual_selection =
+                        (count > 0).then_some((self.app.effective_panel_focus(), count));
+                }
                 ShellRequest::MusicAlbumActivate { item } => {
                     if self.app.tab.emby_library_index().is_some()
                         && !self.app.is_right_panel_wide()

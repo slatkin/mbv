@@ -268,6 +268,10 @@ impl<Target: Clone> WideMediaList<Target> {
 }
 
 impl<Target: Clone + PartialEq> WideMediaList<Target> {
+    pub fn enter_visual_mode(&mut self) {
+        self.invalidate_paint();
+        self.core.enter_visual_mode();
+    }
     /// Replace the display rows, preserving the selected target where possible
     /// and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {

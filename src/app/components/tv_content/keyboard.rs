@@ -25,6 +25,29 @@ impl TvContent {
     }
 
     pub(super) fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if key.code == Key::Char('v') && key.modifiers == KeyModifiers::SHIFT {
+            self.carrier.enter_visual_mode();
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(
+                self.carrier.multi_selection().len(),
+            )));
+        }
+        if self.carrier.is_visual_mode() && key.modifiers.is_empty() {
+            match key.code {
+                Key::Esc => {
+                    self.carrier.clear_selection();
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(0)));
+                }
+                Key::Char(' ') => {
+                    if let Some(target) = self.carrier.selected_target().cloned() {
+                        self.carrier.toggle_selection(&target);
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(
+                            self.carrier.multi_selection().len(),
+                        )));
+                    }
+                }
+                _ => {}
+            }
+        }
         // Inline Search gets first refusal while active (design.md D4): the
         // component returns immediately after delegating, even when search
         // consumes the key without producing a message.

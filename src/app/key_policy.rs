@@ -31,6 +31,8 @@ pub(super) struct RouterSnapshot {
     /// inline library search, or the settings form's text inputs). Global
     /// bindings do not fire while a text entry owns focus.
     pub text_entry_focused: bool,
+    /// Whether the focused media list is in keyboard Visual mode.
+    pub visual_mode_active: bool,
     /// Whether the previous eligible Space press is within the double-tap
     /// window. The timer remains App-owned; this is the router's plain-data
     /// view of it.
@@ -168,7 +170,11 @@ impl KeyPolicyGate {
             Self::Playback => {
                 // Playback shortcuts are single letters (space, o, m, z, a, …);
                 // a focused text entry must keep them as typed characters.
-                if snapshot.blocking_overlay_open || snapshot.text_entry_focused {
+                if snapshot.blocking_overlay_open
+                    || snapshot.text_entry_focused
+                    || (snapshot.visual_mode_active
+                        && matches!(chord.code, KeyCode::Char(' ') | KeyCode::Esc))
+                {
                     return false;
                 }
                 let input = InputSnapshot {

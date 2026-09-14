@@ -246,6 +246,13 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         }
     }
 
+    pub fn enter_visual_mode(&mut self) {
+        match self.active {
+            Presentation::Wide => self.wide.enter_visual_mode(),
+            Presentation::Inline => self.inline.enter_visual_mode(),
+        }
+    }
+
     pub fn toggle_selection(&mut self, target: &Target) {
         match self.active {
             Presentation::Wide => self.wide.toggle_selection(target),

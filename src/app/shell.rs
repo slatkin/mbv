@@ -106,6 +106,8 @@ pub struct Model {
     /// gates the rebuild: queue revision + viewed scope + active slot + a
     /// progress-% bucket + paused + the title model.
     pub(super) last_queue_projection: Option<super::shell_queue::QueueProjectionFingerprint>,
+    /// Shell-owned projection of the focused list's Visual selection.
+    pub(super) visual_selection: Option<(super::types_settings::PanelFocus, usize)>,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -281,6 +283,7 @@ impl Model {
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
             idle_feed_link_available: self.app.idle_feed_link_available(),
+            visual_mode_active: self.visual_selection.is_some(),
             text_entry_focused: matches!(
                 self.application.focus(),
                 Some(
@@ -324,7 +327,7 @@ impl Model {
         );
         match (key.code, playback, outcome) {
             (KeyCode::Char(' '), Some(Command::TogglePlayPause), RouterOutcome::FallThrough)
-                if !snapshot.space_double_tap =>
+                if !snapshot.space_double_tap && !snapshot.visual_mode_active =>
             {
                 self.app.last_space_press = Some(Instant::now());
             }
@@ -334,7 +337,7 @@ impl Model {
                 RouterOutcome::Command(Command::TogglePlayPause),
             ) => self.app.last_space_press = None,
             (KeyCode::Esc, Some(Command::Stop), RouterOutcome::FallThrough)
-                if !snapshot.esc_double_tap =>
+                if !snapshot.esc_double_tap && !snapshot.visual_mode_active =>
             {
                 self.app.last_esc_press = Some(Instant::now());
             }
@@ -390,6 +393,7 @@ impl Model {
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,
             last_queue_projection: None,
+            visual_selection: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
