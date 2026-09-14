@@ -176,9 +176,9 @@ NOT keep the panel: the header row's `IDLE` wording and target are the only idle
 
 - **WHEN** the queue column is visible and the connected remote Session reports a now-playing
   item, whether or not the local queue holds it
-- **THEN** the visual slot and the panel SHALL render, the panel's title and `pos / dur` SHALL
-  describe the Session's observed playback, and its transport SHALL dispatch the Session's
-  supported remote commands
+- **THEN** the visual slot and the panel SHALL render, the slot SHALL show the artwork of the
+  item the Session names, the panel's title and `pos / dur` SHALL describe the Session's observed
+  playback, and its transport SHALL dispatch the Session's supported remote commands
 
 #### Scenario: Connected but idle does not keep the panel
 

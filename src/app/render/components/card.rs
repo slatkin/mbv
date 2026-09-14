@@ -43,8 +43,14 @@ fn card_cache_key(item: &EmbyItem) -> String {
     if item.item_type == "Audio" && !item.album_id.is_empty() {
         format!("{}:P", item.album_id)
     } else {
-        format!("{}:P", item.id)
+        card_cache_key_for_id(&item.id)
     }
+}
+
+/// The artwork cache key for an Emby item id held without an `EmbyItem` (a
+/// watched remote Session's now-playing item).
+fn card_cache_key_for_id(item_id: &str) -> String {
+    format!("{item_id}:P")
 }
 
 /// The rectangle the queue card reserves for artwork: the last rendered
@@ -318,8 +324,8 @@ impl App {
         //
         // Active-first, then the viewed queue's selection. The exception is a
         // watched remote Session playing foreign content: the transport is
-        // active with no local slot, so the slot paints the placeholder rather
-        // than borrowing the selected row's artwork.
+        // active with no local slot, so the slot uses the item the Session
+        // names, and the selected row's artwork is never borrowed.
         let playback = self.displayed_playback_state();
         let slotless_active = playback.active && playback.active_idx.is_none();
         let active_source = if playback.active {
@@ -340,6 +346,23 @@ impl App {
                 .map(|item| (queue.queue_cursor, item))
         };
         let Some((cursor, item)) = active_source.or_else(selected_source) else {
+            // A watched remote Session names the item it is playing even when
+            // that item is not in the local queue: project that item's own
+            // artwork by id (its Primary image -- an episode's still lives
+            // there) instead of the placeholder.
+            if slotless_active {
+                if let Some(item_id) = self
+                    .connected_session_state
+                    .as_ref()
+                    .and_then(|session| session.now_playing_item_id.clone())
+                {
+                    let cache_key = card_cache_key_for_id(&item_id);
+                    self.fetch_card_image(cache_key.clone(), item_id, String::new(), &["Primary"]);
+                    projection.cache_key = Some(cache_key);
+                }
+                self.queue_card_projection = projection;
+                return;
+            }
             // The active/selected slot holds a non-Emby item (or the queue is
             // empty) -- resolve the raw `QueueItem` the same active-first,
             // then-selected way so Audiobookshelf artwork still renders here.

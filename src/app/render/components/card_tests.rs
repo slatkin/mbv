@@ -442,7 +442,6 @@ fn active_foreign_remote_session_uses_the_card_placeholder() {
     app.connected_session_state = Some({
         let mut s = make_session("remote-host", "Emby");
         s.now_playing = Some("Foreign Movie".into());
-        s.now_playing_item_id = Some("not-in-local-queue".into());
         s.runtime_s = 600;
         s
     });
@@ -451,7 +450,39 @@ fn active_foreign_remote_session_uses_the_card_placeholder() {
 
     assert!(
         app.queue_card_projection.cache_key.is_none(),
-        "the placeholder stands in for an unresolvable active item"
+        "the placeholder stands in for an active item with no id to resolve"
+    );
+    assert!(
+        !fetch_triggered(&app, "id1:P"),
+        "the selected row's artwork must not back the active slot"
+    );
+}
+
+/// The session names the item it is playing, so the slot fetches *its* Primary
+/// image (an episode's still lives there) rather than the placeholder or the
+/// selected row's artwork.
+#[test]
+fn active_foreign_remote_session_fetches_the_playing_items_artwork() {
+    let mut app = make_queue_app(3, 1);
+    app.image_protocol_enabled = true;
+    app.connected_session_id = Some("sess-1".into());
+    app.connected_session_state = Some({
+        let mut s = make_session("remote-host", "Emby");
+        s.now_playing = Some("Foreign Episode".into());
+        s.now_playing_item_id = Some("remote-episode".into());
+        s.runtime_s = 600;
+        s
+    });
+
+    render_card(&mut app);
+
+    assert_eq!(
+        app.queue_card_projection.cache_key.as_deref(),
+        Some("remote-episode:P")
+    );
+    assert!(
+        fetch_triggered(&app, "remote-episode:P"),
+        "the playing item's own artwork is fetched"
     );
     assert!(
         !fetch_triggered(&app, "id1:P"),
