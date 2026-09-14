@@ -156,9 +156,9 @@ coverage.
   directly, a zeroed timeout, a seam that observes attempts instead of sleeping
   through them). A slow test that cannot be made fast without changing prod timing
   is either asserting the wrong thing or needs deleting, not keeping.
-* Fixture-varying test families use named `#[case]` tables; `#[case]` is never a
-  mechanism for generating many thin tests, and conversions are opportunistic and
-  file-by-file.
+* Fixture-varying test families use named `#[case]` tables (via the `rstest`
+  dev-dependency); `#[case]` is never a mechanism for generating many thin tests,
+  and conversions are opportunistic and file-by-file.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
 * format: `cargo fmt`
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
