@@ -1,6 +1,15 @@
 ## 1. Audit Live and Smoke Tests Across the Workspace
 
 - [ ] 1.1 Search every workspace test and test-support target for real mpv initialization, TCP/Unix listeners or streams, loopback HTTP servers, product-process or binary spawning, writable config/state/temp directories, symlink/filesystem preparation, and live Service clients; record each candidate and its delete/convert/retain disposition in this task's completion note, and verify every retained candidate explains why it constructs no prohibited external.
+  - note: `src/app/input_music_track_test_support.rs:RecursiveFetchServer` — delete; unused loopback HTTP harness with no callers.
+  - note: `crates/mbv-core/src/cast_client.rs:connect_failure_returns_error_not_panic` — delete; assertion only probes an OS TCP refusal.
+  - note: `crates/mbv-core/src/applog.rs:push_entry_writes_to_file` — delete; assertion only probes filesystem logging, not mbv-owned bookkeeping.
+  - note: `crates/mbv-core/src/api_tests_client.rs:device_id_*` — delete; tests construct writable temporary state and assert filesystem migration.
+  - note: `crates/mbv-core/src/audiobookshelf_playback_tests.rs` and `api_failure_tests.rs` — retain; loopback-looking URLs are passed through `MockHttp`/in-memory ureq transport, no socket or live Service is constructed.
+  - note: `crates/mbv-core/src/daemon_tests_ctrl_auth.rs` — retain; `UnixStream::pair` is an in-memory synchronization primitive, not a listener or filesystem socket.
+  - note: `crates/mbv-core/src/remote_player_tests.rs`, `src/app/**` URL/endpoint tests — retain; endpoint strings are parsed/formatted only and no connection is made.
+  - note: `crates/mbv-core/src/*config_tests*`, app `TestStateDirGuard` users — retain for this bounded audit; guarded filesystem writes exercise mbv persistence/bookkeeping and are isolated by the existing test seam.
+  - note: `crates/mbv-core/examples/audiobookshelf_contract_probe.rs` — retain; explicit controlled manual probe example, not a test target.
 - [ ] 1.2 Delete candidates whose assertions test an external, operating-system facility, smoke path, or harness behavior rather than mbv-owned logic; remove helpers used only by those tests, and verify each affected package's `cargo nextest run -p <package>` invocation passes.
 - [ ] 1.3 Convert live-harness tests that protect mbv-owned request formation, error classification, lifecycle decisions, or bookkeeping to an existing in-memory/mock boundary; add only the narrowest `cfg(test)` injection seam if no existing boundary can drive the claim, and verify the converted tests reproduce the original mbv-owned assertions without sockets, processes, writable filesystem state, live Services, or real mpv handles.
 - [ ] 1.4 Repeat the workspace structural searches from 1.1 after cleanup, reconcile every remaining hit against the recorded inventory, and verify that only read-only static fixtures, pure path/string logic, in-memory synchronization, or other documented hermetic uses remain.
