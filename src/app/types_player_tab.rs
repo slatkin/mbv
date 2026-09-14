@@ -158,15 +158,18 @@ impl PlayerTab {
         self.queue_cursor = index.min(self.total_queue_len().saturating_sub(1));
     }
 
-    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<QueueSlotId> {
-        items
-            .into_iter()
-            .map(|item| self.queue.append(QueueItem::Emby(Box::new(item))))
-            .collect()
+    /// Append one item to the canonical queue and return the slot identity the
+    /// owner must see alongside it, so callers never re-derive the pair.
+    pub(super) fn append_item(&mut self, item: QueueItem) -> (QueueSlotId, QueueItem) {
+        let slot_id = self.queue.append(item.clone());
+        (slot_id, item)
     }
 
-    pub(super) fn append_item(&mut self, item: QueueItem) -> QueueSlotId {
-        self.queue.append(item)
+    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<(QueueSlotId, QueueItem)> {
+        items
+            .into_iter()
+            .map(|item| self.append_item(QueueItem::Emby(Box::new(item))))
+            .collect()
     }
 
     pub(super) fn move_slot(&mut self, slot_id: QueueSlotId, to: usize) -> bool {

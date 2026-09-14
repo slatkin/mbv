@@ -401,10 +401,9 @@ impl App {
         let scope = self.viewed_queue_scope();
         let previous_dirty = self.queue_dirty;
         let previous_queue = self.queue_for_scope(scope).clone();
-        let queued_item = QueueItem::Emby(Box::new(item));
-        let slot_id = self
+        let (slot_id, queued_item) = self
             .queue_for_scope_mut(scope)
-            .append_item(queued_item.clone());
+            .append_item(QueueItem::Emby(Box::new(item)));
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }

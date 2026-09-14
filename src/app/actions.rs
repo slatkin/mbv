@@ -304,16 +304,7 @@ impl App {
                 let scope = self.viewed_queue_scope();
                 let previous_dirty = self.queue_dirty;
                 let previous_queue = self.queue_for_scope(scope).clone();
-                let appended_ids = {
-                    let queue = self.queue_for_scope_mut(scope);
-                    queue.append_items(items)
-                };
-                let appended_slots = self
-                    .queue_for_scope(scope)
-                    .all_queue_slots()
-                    .into_iter()
-                    .filter(|(slot_id, _)| appended_ids.contains(slot_id))
-                    .collect();
+                let appended_slots = self.queue_for_scope_mut(scope).append_items(items);
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
@@ -349,11 +340,11 @@ impl App {
         if !start_playback {
             let previous_dirty = self.queue_dirty;
             let previous_queue = self.queue_for_scope(scope).clone();
-            let slot_id = self.queue_for_scope_mut(scope).queue.append(item.clone());
+            let (slot_id, queued_item) = self.queue_for_scope_mut(scope).append_item(item);
             if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
             }
-            if self.sync_playback_queue_items_after_append(scope, vec![(slot_id, item)]) {
+            if self.sync_playback_queue_items_after_append(scope, vec![(slot_id, queued_item)]) {
                 self.persist_local_queue_state_if_needed(scope);
                 self.advance_remote_queue_lineage();
                 return true;
