@@ -180,6 +180,10 @@ mod tests {
         })
     }
 
+    // The guard is a `debug_assert!`, so it is compiled out of a release build.
+    // CI runs `cargo test --release`, where these cases would fail for the wrong
+    // reason; they describe debug behaviour only.
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "execution sequence slot identities must be unique")]
     fn rejects_duplicate_slot_ids_on_submission() {
@@ -187,6 +191,7 @@ mod tests {
         ExecutionSequence::from_slot_items(vec![(id, item()), (id, item())], Some(id));
     }
 
+    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "execution sequence slot identities must be unique")]
     fn rejects_appended_slot_id_collision() {

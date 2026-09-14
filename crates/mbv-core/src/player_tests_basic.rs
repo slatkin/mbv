@@ -64,14 +64,28 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
 }
 
 /// Pair queue items with owner-assigned slot ids for the run's queue
-/// submission/append helpers. Ids start high so they never collide with a
-/// pre-seeded session's slots.
+/// submission/append helpers.
+///
+/// Ids come from one monotonic counter per thread rather than a fixed base, so
+/// a test that seeds a run and *then* appends cannot hand the run an identity it
+/// already holds — the execution sequence asserts slot uniqueness on adoption.
 fn owner_paired(items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
     items
         .into_iter()
-        .enumerate()
-        .map(|(i, item)| (QueueSlotId::from_raw(1_000 + i as u64), item))
+        .map(|item| (owner_slot_id(), item))
         .collect()
+}
+
+/// A fresh owner-assigned slot identity for fixture queues.
+fn owner_slot_id() -> QueueSlotId {
+    thread_local! {
+        static NEXT_FIXTURE_SLOT_ID: std::cell::Cell<u64> = const { std::cell::Cell::new(1_000) };
+    }
+    NEXT_FIXTURE_SLOT_ID.with(|next| {
+        let raw = next.get();
+        next.set(raw + 1);
+        QueueSlotId::from_raw(raw)
+    })
 }
 
 fn make_queue_session_for_pos_tests(start_idx: usize) -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {

@@ -151,7 +151,7 @@ fn feed_append_to_existing_queue_preserves_original_items() {
     let new_idx = session.queue_len();
     session
         .queue
-        .append_with_id(QueueSlotId::from_raw(1_000), queue_item);
+        .append_with_id(owner_slot_id(), queue_item);
     session.current_idx = new_idx;
 
     // Original items preserved, feed appended at end.
@@ -187,7 +187,7 @@ fn feed_append_to_existing_queue_does_not_change_origin() {
     let feed = make_feed_entry("feed-1", "Feed 1");
     session
         .queue
-        .append_with_id(QueueSlotId::from_raw(1_000), QueueItem::Feed(feed));
+        .append_with_id(owner_slot_id(), QueueItem::Feed(feed));
     session.current_idx = session.queue_len() - 1;
 
     assert_eq!(
@@ -300,11 +300,11 @@ fn mixed_queue_feed_advances_to_next_emby_item() {
     let feed = make_feed_entry("f1", "Feed 1");
     session
         .queue
-        .append_with_id(QueueSlotId::from_raw(1_000), QueueItem::Feed(feed));
+        .append_with_id(owner_slot_id(), QueueItem::Feed(feed));
     let ep3 = make_media_item("ep3");
     session
         .queue
-        .append_with_id(QueueSlotId::from_raw(1_001), QueueItem::Emby(Box::new(ep3)));
+        .append_with_id(owner_slot_id(), QueueItem::Emby(Box::new(ep3)));
     assert_eq!(session.queue_len(), 5);
 
     // Simulate being on the Feed item at index 2 with cleared IDs.
@@ -338,7 +338,7 @@ fn feed_queue_quit_path_does_not_mark_played_with_empty_id() {
     let feed = make_feed_entry("f-quit", "Quit Feed");
     session
         .queue
-        .append_with_id(QueueSlotId::from_raw(1_000), QueueItem::Feed(feed));
+        .append_with_id(owner_slot_id(), QueueItem::Feed(feed));
     session.current_idx = session.queue_len() - 1;
     // Clear IDs as cmd_load_feed does.
     session.reporter.clear_session();
