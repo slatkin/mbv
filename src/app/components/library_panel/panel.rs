@@ -13,7 +13,9 @@
 use ratatui::layout::Position;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::media_list::MediaListSurfaceInput;
+use crate::app::components::media_list::{
+    LibrarySelectionOrigin, MediaListSurfaceInput, SelectionOrigin, SelectionSummary,
+};
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::list_pane_width::normalize_list_pane_width;
@@ -80,6 +82,7 @@ pub struct LibraryPanel {
     /// A wheel also needs to persist the owner's resolved scroll. Queue that
     /// secondary shell intent while returning the owner's cursor echo.
     deferred_msg: Option<Msg>,
+    focused_summary: Option<SelectionSummary>,
 }
 
 impl LibraryPanel {
@@ -99,6 +102,7 @@ impl LibraryPanel {
             gestures: MouseGestureState::new(),
             image_paint: None,
             deferred_msg: None,
+            focused_summary: None,
         }
     }
 
@@ -136,14 +140,21 @@ impl LibraryPanel {
     /// Point the panel at the active library's owner (the shell drives this
     /// from its tab resolution each sync pass).
     pub(in crate::app) fn set_active(&mut self, key: Option<LibraryKey>) {
-        if self.owners.active_key() != key.as_ref() {
-            if let Some(previous) = self.owners.active_key().cloned() {
-                if let Some(owner) = self.owners.get_mut(&previous) {
-                    owner.clear_selection();
-                }
+        self.owners.set_active(key.clone());
+        if let Some(key) = key {
+            let origin = match key {
+                LibraryKey::Home => LibrarySelectionOrigin::Home,
+                LibraryKey::Feeds => LibrarySelectionOrigin::Feeds,
+                LibraryKey::Service(key) => LibrarySelectionOrigin::Service(key),
+            };
+            if let Some(owner) = self.owners.active_mut() {
+                owner.set_selection_origin(SelectionOrigin::Library(origin));
             }
         }
-        self.owners.set_active(key);
+        self.focused_summary = self
+            .owners
+            .active_mut()
+            .and_then(|owner| owner.selection_summary());
     }
 
     /// Record the session-only Wide split width override for the next `view`.
@@ -285,7 +296,16 @@ impl LibraryPanel {
     pub(in crate::app) fn clear_active_selection(&mut self) {
         if let Some(owner) = self.owners.active_mut() {
             owner.clear_selection();
+            self.focused_summary = owner.selection_summary();
         }
+    }
+
+    pub(in crate::app) fn focused_summary(&mut self) -> Option<SelectionSummary> {
+        self.focused_summary = self
+            .owners
+            .active_mut()
+            .and_then(|owner| owner.selection_summary());
+        self.focused_summary.clone()
     }
 
     pub(in crate::app) fn owner_mut(

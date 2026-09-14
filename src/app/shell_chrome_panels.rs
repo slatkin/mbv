@@ -12,9 +12,11 @@ use ratatui::Frame;
 use tuirealm::component::AppComponent;
 
 use super::components::{
-    ComponentId, LibraryPlaybackPanel, Msg, QueuePlaybackPanel, StatusBarPanel, TabPanel, UserEvent,
+    ComponentId, LibraryPlaybackPanel, Msg, QueueComponent, QueuePlaybackPanel, StatusBarPanel,
+    TabPanel, UserEvent,
 };
 use super::*;
+use crate::app::components::library_panel::LibraryPanel;
 use crate::app::layout::CardGeometry;
 use crate::app::render::arrangements::chrome::{
     queue_playback_column_wide, queue_playback_transport_area, status_bar_row, RootFrame,
@@ -210,7 +212,22 @@ impl Model {
         };
         // Queue-scope pills are queue concern (projected into the
         // `QueueComponent` footer in `sync_queue`); the status row carries
-        // only the library column's own pills.
+        // only the focused list's count-only summary.
+        let focused_summary = if self.app.effective_panel_focus() == PanelFocus::Queue {
+            self.application
+                .get_component(&ComponentId::Queue)
+                .and_then(|component| component.as_any().downcast_ref::<QueueComponent>())
+                .map(|queue| queue.selection_summary())
+        } else {
+            self.application
+                .get_component_mut(&ComponentId::Library)
+                .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+                .and_then(|panel| panel.focused_summary())
+        };
+        self.visual_selection = focused_summary
+            .as_ref()
+            .filter(|summary| summary.count > 0)
+            .map(|summary| (self.app.effective_panel_focus(), summary.count));
         let model = StatusBarModel {
             show_session_pill,
             remote: remote_status,

@@ -23,8 +23,8 @@ impl Model {
                     ShellRequest::SelectionChanged(count) => {
                         self.set_visual_selection_count(count);
                     }
-                    ShellRequest::ClearMultiSelection(_origin) => {
-                        self.clear_multi_selection();
+                    ShellRequest::ClearMultiSelection(origin) => {
+                        self.clear_multi_selection_from_origin(origin);
                     }
                     ShellRequest::MusicAlbumActivate { item } => {
                         if self.app.tab.emby_library_index().is_some()

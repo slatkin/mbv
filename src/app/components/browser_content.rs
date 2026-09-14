@@ -476,6 +476,17 @@ impl LibraryContentOwner for BrowserContent {
         self.carrier.clear_selection();
     }
 
+    fn set_selection_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.carrier.set_selection_origin(origin);
+    }
+
+    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+        Some(self.carrier.selection_summary())
+    }
+
     fn scroll_position(&self) -> Option<(usize, usize)> {
         Some((self.cursor(), self.scroll()))
     }

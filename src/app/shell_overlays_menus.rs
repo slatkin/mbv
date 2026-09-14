@@ -194,6 +194,29 @@ impl Model {
         }
     }
 
+    pub(crate) fn clear_multi_selection_from_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.visual_selection = None;
+        match origin {
+            crate::app::components::media_list::SelectionOrigin::Queue => {
+                if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue) {
+                    if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
+                        queue.clear_selection();
+                    }
+                }
+            }
+            crate::app::components::media_list::SelectionOrigin::Library(_) => {
+                if let Some(comp) = self.application.get_component_mut(&ComponentId::Library) {
+                    if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>() {
+                        panel.clear_active_selection();
+                    }
+                }
+            }
+        }
+    }
+
     pub(crate) fn clear_multi_selection(&mut self) {
         self.visual_selection = None;
         if self.app.effective_panel_focus() == PanelFocus::Queue {

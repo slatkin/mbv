@@ -405,6 +405,17 @@ impl LibraryContentOwner for HomeContent {
         self.carrier.clear_selection();
     }
 
+    fn set_selection_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.carrier.set_selection_origin(origin);
+    }
+
+    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+        Some(self.carrier.selection_summary())
+    }
+
     /// This frame's panel content (design D3): the section pills as the
     /// Selector row, the shared carrier in the list slot, and the selected
     /// item's hero from the shared producer with the projected image state.

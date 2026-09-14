@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use tuirealm::event::KeyEvent;
 
 use crate::app::components::component_id::BrowserKey;
-use crate::app::components::media_list::MediaListSurfaceInput;
+use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::msg::{LeafKeyResult, Msg};
 
 use super::content::{HeroImageState, LibraryPanelContent};
@@ -97,6 +97,18 @@ pub(in crate::app) trait LibraryContentOwner {
     /// Clear local multi-selection when the panel activates a different
     /// destination identity. Overlay activation never calls this.
     fn clear_selection(&mut self) {}
+
+    /// Read-only focused-list projection for the Status bar. The owner never
+    /// exposes membership; the panel caches only this summary.
+    fn selection_summary(&self) -> Option<SelectionSummary> {
+        None
+    }
+
+    fn set_selection_origin(
+        &mut self,
+        _origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+    }
 
     /// The owner-resolved cursor and resting scroll after local movement.
     /// `None` is used by owners whose position is not persisted by App.

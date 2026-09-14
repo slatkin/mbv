@@ -580,6 +580,12 @@ impl QueueComponent {
         self.carrier.multi_selection()
     }
 
+    pub(in crate::app) fn selection_summary(
+        &self,
+    ) -> crate::app::components::media_list::SelectionSummary {
+        self.carrier.selection_summary()
+    }
+
     #[cfg(test)]
     pub(crate) fn test_cursor(&self) -> usize {
         self.carrier.cursor()
