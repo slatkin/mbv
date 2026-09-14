@@ -1,7 +1,7 @@
 ## 1. Characterize Current Arbitration
 
-- [ ] 1.1 Extend the shared routing-matrix/live-tick coverage with representative immediate `Command`, `Swallow`, and `FallThrough` rows plus first/second/expired Space and Escape presses; verify with `cargo nextest run -p mbv` filtered to the routing matrix and tick integration tests.
-- [ ] 1.2 Add one live `Application::tick()` characterization showing a focused component that mutates local state without emitting an effect request while `UiRoot` observes the same key; verify the existing mutation and message order before changing the contract.
+- [x] 1.1 Extend the shared routing-matrix/live-tick coverage with representative immediate `Command`, `Swallow`, and `FallThrough` rows plus first/second/expired Space and Escape presses; verify with `cargo nextest run -p mbv` filtered to the routing matrix and tick integration tests.
+- [x] 1.2 Add one live `Application::tick()` characterization showing a focused component that mutates local state without emitting an effect request while `UiRoot` observes the same key; verify the existing mutation and message order before changing the contract.
 
 ## 2. Introduce Explicit Leaf Disposition
 
