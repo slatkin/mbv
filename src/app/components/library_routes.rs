@@ -101,7 +101,7 @@ impl LibraryRoutesComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) => {
+            MouseGesture::Click { at, .. } => {
                 if let Some(&index) = self.hit_rows.resolve(at) {
                     self.cursor = index;
                     return None;

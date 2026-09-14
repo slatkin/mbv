@@ -47,6 +47,9 @@ impl TvContent {
                 None => self.inline_search_result_action(key),
             };
         }
+        if let Some(count) = self.carrier.handle_visual_key(key) {
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        }
         if !self.context.focused {
             return None;
         }
@@ -151,9 +154,7 @@ impl TvContent {
             {
                 Some(ShellRequest::EmbyLibraryRefresh)
             }
-            Key::Char('.') => Some(ShellRequest::EmbyLibraryContextMenu {
-                item: self.selected_item()?,
-            }),
+            Key::Char('.') => self.context_menu_request(),
             Key::Char('/') => {
                 self.inline_search.open();
                 Some(ShellRequest::OpenInlineSearch)
@@ -236,9 +237,7 @@ impl TvContent {
             {
                 Some(ShellRequest::EmbyLibraryRefresh)
             }
-            Key::Char('.') => Some(ShellRequest::EmbyLibraryContextMenu {
-                item: self.selected_item()?,
-            }),
+            Key::Char('.') => self.context_menu_request(),
             Key::Char('/') => {
                 self.inline_search.open();
                 Some(ShellRequest::OpenInlineSearch)

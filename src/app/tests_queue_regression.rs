@@ -102,10 +102,10 @@ fn shell_frame_uses_queue_component_geometry_for_keyboard_context_menu_anchor() 
 
     let queue_selected = mounted_queue_selected_row(&model);
     assert!(queue_selected.y > queue_panel_content_area(&model).y);
-    let message = Msg::Shell(ShellRequest::HomeContextMenu {
-        home_cw_selected: false,
-        target: crate::app::components::msg::HomeRowTarget { item_id: None, source: None, from_continue_watching: true },
-    });
+    let message = Msg::Shell(ShellRequest::RowContextMenu(
+        crate::app::types_context_menu::ContextMenuTargets::Queue(vec![]),
+        None,
+    ));
     model.handle_terminal_message(message, &mut resize_music, &mut resize_tv);
     model.sync_mounted_surfaces();
     terminal

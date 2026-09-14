@@ -149,7 +149,7 @@ fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
 
 #[test]
 fn context_menu_for_focused_track_offers_track_scoped_actions_not_folder_actions() {
-    // '.' in track mode reaches the shell as `MusicTrackContextMenu`, which
+    // '.' in track mode reaches the shell as the unified row context-menu request, which
     // resolves the focused track and raises the menu for that item -- the
     // generic per-item actions, never album-folder scoped ones.
     let (mut model, id) = wide_track_focus_model(3);

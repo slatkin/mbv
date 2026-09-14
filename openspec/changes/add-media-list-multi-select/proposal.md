@@ -50,9 +50,12 @@ exists; the new capability layers on top of `canonical-media-lists`,
 
 - `src/app/components/media_list/` — selection set + anchor on the shared
   owner; new row-local inputs/intents carrying the resolved target list.
-- Slice 1: `src/app/components/msg/shell.rs` context-menu request variants,
-  `browser/`, `music_workspace*.rs`, `tv_workspace/`, `feeds.rs`,
-  `audiobookshelf_*.rs` menu entry points.
+- Slice 1: `src/app/components/msg/shell.rs` context-menu request variants;
+  `home_content.rs`, `queue.rs`, `browser_content.rs`, `tv_content/`,
+  `music_interaction.rs`/`music_content.rs`, `feeds_content.rs` menu entry
+  points. Audiobookshelf's `podcast_content.rs`/`book_content.rs` have no
+  context menu today and gain none in this change — out of scope, not a
+  Slice 1 conversion target.
 - `src/app/components/mouse/gesture.rs` — click gestures carry modifiers.
 - `src/app/key_policy.rs` / router — `V`, and `Space`/`Esc` precedence while a
   selection is active.

@@ -107,6 +107,23 @@ impl FeedEntryStore {
         }
     }
 
+    /// Force the played flag for one entry while retaining its resume position.
+    /// A missing row is created with a zero resume position.
+    pub fn set_played(&mut self, user_id: &str, feed_id: &str, entry_guid: &str, played: bool) {
+        let position_ticks = self
+            .get(user_id, feed_id, entry_guid)
+            .map_or(0, |state| state.position_ticks);
+        self.put(
+            user_id,
+            feed_id,
+            entry_guid,
+            FeedEntryState {
+                position_ticks,
+                played,
+            },
+        );
+    }
+
     /// The stored state for one key, if that entry has any.
     pub fn get(&self, user_id: &str, feed_id: &str, entry_guid: &str) -> Option<FeedEntryState> {
         self.rows
@@ -191,6 +208,15 @@ mod tests {
             store.get("user-1", "feed-1", "guid-1"),
             Some(state(900, true))
         );
+    }
+
+    #[test]
+    fn set_played_forces_state_without_playback_history() {
+        let mut store = FeedEntryStore::default();
+        store.set_played("user", "feed", "entry", true);
+        assert_eq!(store.get("user", "feed", "entry"), Some(state(0, true)));
+        store.set_played("user", "feed", "entry", false);
+        assert_eq!(store.get("user", "feed", "entry"), Some(state(0, false)));
     }
 
     #[test]

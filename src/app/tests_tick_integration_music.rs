@@ -433,7 +433,7 @@ fn playlist_enter_replaces_queue_dismisses_sidebar_and_focuses_queue() {
 }
 
 /// Finding 1: `.` is a selection-dependent chord, so the central router falls
-/// it through to the focused `QueueComponent`; the emitted `QueueContextMenu`
+/// it through to the focused `QueueComponent`; the emitted `RowContextMenu`
 /// request is dispatched by the shell into a pending context-menu overlay.
 #[test]
 fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
@@ -461,7 +461,7 @@ fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
         outcome
             .messages
             .iter()
-            .any(|m| matches!(m, Msg::Shell(ShellRequest::QueueContextMenu { .. }))),
+            .any(|m| matches!(m, Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Queue(_), _)))),
         "`.` falls through to the focused Queue component"
     );
 
@@ -476,6 +476,6 @@ fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
             harness.model().app.pending_overlay,
             Some(OverlayRequest::ContextMenu(_))
         ),
-        "dispatching QueueContextMenu opens a context-menu overlay"
+        "dispatching RowContextMenu opens a context-menu overlay"
     );
 }

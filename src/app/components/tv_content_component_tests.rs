@@ -165,11 +165,67 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
     let right = panel.on(&mouse(MouseEventKind::Down(MouseButton::Right), col, row));
     assert!(matches!(
         right,
-        Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-            hit: TvHit::SeriesRow(ref target),
-            ..
-        })) if target == "id"
+        Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(ref items), _))) if items.len() == 1 && items[0].id == "id"
     ));
+}
+
+#[test]
+fn tv_keyboard_context_menu_uses_all_selected_rows_and_single_row_without_selection() {
+    let mut first = make_item("Series A", "Series");
+    first.id = "series-a".into();
+    let mut second = make_item("Series B", "Series");
+    second.id = "series-b".into();
+    let content = TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first, second], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        false,
+    );
+
+    let mut selected = TvContent::new();
+    selected.set_content(content.clone());
+    selected.select_targets_for_test(&["series-a".into(), "series-b".into()]);
+    assert!(matches!(
+        down(&mut selected, Key::Char('.')),
+        Some(Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            None
+        ))) if items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>() == vec!["series-a", "series-b"]
+    ));
+
+    let mut single = TvContent::new();
+    single.set_content(content);
+    assert!(matches!(
+        down(&mut single, Key::Char('.')),
+        Some(Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            None
+        ))) if items.len() == 1 && items[0].id == "series-a"
+    ));
+}
+
+#[test]
+fn tv_context_click_outside_selection_forwards_cleared_selection() {
+    let mut first = make_item("Series A", "Series");
+    first.id = "series-a".into();
+    let mut second = make_item("Series B", "Series");
+    second.id = "series-b".into();
+    let mut owner = TvContent::new();
+    owner.set_content(TvWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first, second], 0, 0),
+        None,
+        None,
+        0,
+        None,
+        false,
+    ));
+    let mut panel = panel_with(owner, true);
+    paint(&mut panel, 100, 20);
+    tv_mut(&mut panel).select_targets_for_test(&["series-b".into()]);
+    let count = tv_mut(&mut panel).context_click_for_test("series-a".into());
+    assert_eq!(count, Some(0));
 }
 
 #[test]

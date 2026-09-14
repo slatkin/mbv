@@ -22,7 +22,7 @@ menus. Feeds lists SHALL offer a row context menu.
 
 ### Requirement: Multi-selection is uniform across canonical lists
 Multi-selection SHALL behave identically in every canonical media list and
-at every breakpoint variant (Wide, Inline, Grid). A multi-selection SHALL be scoped to
+at every breakpoint variant (Wide, Inline). A multi-selection SHALL be scoped to
 one list and identified by stable item identity, not row position.
 
 #### Scenario: Same gestures everywhere
@@ -74,6 +74,14 @@ SHALL behave exactly as before this change.
 #### Scenario: Visual range by keyboard
 - **WHEN** the user presses `V` on row 3 and then moves down twice
 - **THEN** rows 3 through 5 are in the multi-selection
+
+#### Scenario: Space freezes a Visual selection
+- **WHEN** Visual mode is active and the user presses `Space`
+- **THEN** the focused row toggles and the resulting selection is frozen while subsequent movement only moves the cursor
+
+#### Scenario: Keyboard disjoint selection
+- **WHEN** the user presses `V` on row 3, moves to row 4, presses `Space`, moves to row 6, presses `V`, and moves at row 6
+- **THEN** row 4 is removed, movement while frozen does not change the selection, and the re-anchored range unions row 6 with row 3 so exactly rows 3 and 6 are selected
 
 #### Scenario: Space only toggles in Visual mode
 - **WHEN** Visual mode is active and the user presses `Space` twice quickly
@@ -144,5 +152,10 @@ There SHALL be no per-item toggle action for a multi-selection.
 - **THEN** all five items are played
 
 #### Scenario: Queue omits self-referential actions
-- **WHEN** rows in the Queue are selected
+- **WHEN** rows containing only Emby-backed items in the Queue are selected
 - **THEN** the menu offers Remove, Mark Played and Mark Unplayed but not Play, Shuffle or Add to Queue
+
+#### Scenario: Mixed-kind Queue selection drops unsupported actions
+- **WHEN** a Queue selection contains at least one non-Emby item (a Feed or Audiobookshelf queue entry)
+- **THEN** Mark Played and Mark Unplayed are not offered, consistent with every other list's per-item capability intersection
+- **AND** Remove remains offered

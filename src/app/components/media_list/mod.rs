@@ -12,6 +12,7 @@ mod anchor;
 mod carrier;
 mod grouping;
 mod inline;
+mod selection;
 #[cfg(test)]
 mod tests;
 mod wide;
@@ -281,6 +282,8 @@ pub enum RowLocalInput {
     Activate,
     Context,
     Click(Position),
+    ToggleClick(Position),
+    RangeClick(Position),
     DoubleClick(Position),
     ContextClick(Position),
     Wheel { at: Position, delta: i64 },
@@ -299,6 +302,8 @@ pub enum RowLocalOutcome<Target> {
 pub enum RowIntent<Target> {
     Activate(Target),
     Context(Target),
+    ContextSelection(Vec<Target>),
+    SelectionChanged(usize),
 }
 
 /// A closed, provider-neutral row vocabulary for embedded media lists.
@@ -370,6 +375,14 @@ pub struct MediaList<Target> {
     /// Display-row index parked at the viewport top. Height-aware clamping
     /// happens in `resolve_viewport` at paint time.
     scroll: usize,
+    /// Stable targets selected for a bulk action, in selection order.
+    multi_selection: Vec<Target>,
+    /// The stable target from which range selection is extended.
+    selection_anchor: Option<Target>,
+    /// Selection retained when a live range is re-anchored or extended.
+    frozen_selection: Vec<Target>,
+    /// Whether cursor movement currently recomputes the anchored range.
+    live_range: bool,
 }
 
 impl<Target> MediaList<Target> {
@@ -380,6 +393,10 @@ impl<Target> MediaList<Target> {
             selectable: Vec::new(),
             cursor: 0,
             scroll: 0,
+            multi_selection: Vec::new(),
+            selection_anchor: None,
+            frozen_selection: Vec::new(),
+            live_range: false,
         }
     }
 
@@ -422,6 +439,16 @@ impl<Target> MediaList<Target> {
     /// Store the offset a painter resolved, so the next frame resumes from it.
     fn set_scroll(&mut self, offset: usize) {
         self.scroll = offset.min(self.rows.len().saturating_sub(1));
+    }
+
+    /// Stable targets currently selected for a bulk action.
+    pub fn multi_selection(&self) -> &[Target] {
+        &self.multi_selection
+    }
+
+    /// A non-empty multi-selection is Visual mode.
+    pub fn is_visual_mode(&self) -> bool {
+        !self.multi_selection.is_empty()
     }
 
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
@@ -486,10 +513,36 @@ impl<Target> MediaList<Target> {
         match input {
             RowLocalInput::Move(delta) | RowLocalInput::Wheel { delta, .. } => {
                 self.move_selection(delta);
+                if self.live_range {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
             }
-            RowLocalInput::Page(delta) => self.move_selection(delta.saturating_mul(5)),
-            RowLocalInput::First => self.select_first(),
-            RowLocalInput::Last => self.select_last(),
+            RowLocalInput::Page(delta) => {
+                self.move_selection(delta.saturating_mul(5));
+                if self.live_range {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
+            }
+            RowLocalInput::First => {
+                self.select_first();
+                if self.live_range {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
+            }
+            RowLocalInput::Last => {
+                self.select_last();
+                if self.live_range {
+                    if let Some(target) = self.selected_target().cloned() {
+                        self.extend_selection_to(&target);
+                    }
+                }
+            }
             RowLocalInput::Activate => {
                 return self
                     .selected_target()
@@ -508,15 +561,32 @@ impl<Target> MediaList<Target> {
                     .selected_target()
                     .cloned()
                     .map_or(RowLocalOutcome::Unhandled, |target| {
-                        RowLocalOutcome::External(RowIntent::Context(target))
+                        RowLocalOutcome::External(self.context_intent(target))
                     });
             }
             RowLocalInput::ContextClick(_) => {
                 return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
-                    RowLocalOutcome::External(RowIntent::Context(target))
+                    RowLocalOutcome::External(self.context_intent(target))
                 });
             }
+            RowLocalInput::ToggleClick(_) => {
+                if let Some(target) = pointer_target {
+                    self.toggle_selection(&target);
+                    self.select_target(&target);
+                    return RowLocalOutcome::Consumed;
+                }
+                return RowLocalOutcome::Unhandled;
+            }
+            RowLocalInput::RangeClick(_) => {
+                if let Some(target) = pointer_target {
+                    self.extend_selection_to(&target);
+                    self.select_target(&target);
+                    return RowLocalOutcome::Consumed;
+                }
+                return RowLocalOutcome::Unhandled;
+            }
             RowLocalInput::Click(_) => {
+                self.clear_selection();
                 if let Some(target) = pointer_target {
                     if self.select_target(&target) {
                         return if before.as_ref() == Some(&target) {
@@ -561,6 +631,48 @@ impl<Target: PartialEq> MediaList<Target> {
 }
 
 impl<Target: Clone + PartialEq> MediaList<Target> {
+    fn context_intent(&mut self, target: Target) -> RowIntent<Target> {
+        if self.is_visual_mode() {
+            if self
+                .multi_selection
+                .iter()
+                .any(|selected| selected == &target)
+            {
+                let targets = self
+                    .selectable
+                    .iter()
+                    .filter_map(|&row| self.rows[row].selectable_target())
+                    .filter(|candidate| {
+                        self.multi_selection
+                            .iter()
+                            .any(|selected| selected == *candidate)
+                    })
+                    .cloned()
+                    .collect();
+                RowIntent::ContextSelection(targets)
+            } else {
+                self.clear_selection();
+                RowIntent::Context(target)
+            }
+        } else {
+            RowIntent::Context(target)
+        }
+    }
+
+    /// Begin keyboard Visual mode, anchored at the current cursor target.
+    pub fn enter_visual_mode(&mut self) {
+        if let Some(target) = self.selected_target().cloned() {
+            if self.multi_selection.is_empty() {
+                self.multi_selection = vec![target.clone()];
+                self.frozen_selection.clear();
+            } else {
+                self.frozen_selection = self.multi_selection.clone();
+            }
+            self.selection_anchor = Some(target);
+            self.live_range = true;
+        }
+    }
+
     /// Replace one existing row by stable target without rebuilding indexes or
     /// disturbing selection/scroll. This is for live presentation patches.
     fn patch_row(&mut self, target: &Target, row: MediaListRow<Target>) -> bool {
@@ -596,11 +708,32 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .unwrap_or_else(|| self.cursor.min(selectable.len().saturating_sub(1)));
         self.rows = rows;
         self.selectable = selectable;
+        let present: Vec<Target> = self
+            .selectable
+            .iter()
+            .filter_map(|&row| self.rows[row].selectable_target().cloned())
+            .collect();
+        self.multi_selection
+            .retain(|target| present.contains(target));
+        self.frozen_selection
+            .retain(|target| present.contains(target));
         self.cursor = if self.selectable.is_empty() {
             0
         } else {
             cursor.min(self.selectable.len() - 1)
         };
+        if self
+            .selection_anchor
+            .as_ref()
+            .is_some_and(|target| !present.contains(target))
+        {
+            self.selection_anchor = self.selected_target().cloned();
+        }
+        if self.multi_selection.is_empty() {
+            self.frozen_selection.clear();
+            self.selection_anchor = None;
+            self.live_range = false;
+        }
         self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
     }
 }

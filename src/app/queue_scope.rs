@@ -23,6 +23,14 @@ impl App {
         }
     }
 
+    /// Position of `slot_id` in `scope`'s queue, if present.
+    pub(super) fn slot_index(&self, scope: QueueScope, slot_id: QueueSlotId) -> Option<usize> {
+        self.queue_for_scope(scope)
+            .slots()
+            .iter()
+            .position(|slot| slot.slot_id == slot_id)
+    }
+
     pub(super) fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut PlayerTab {
         match scope {
             QueueScope::Local => &mut self.player_tab,

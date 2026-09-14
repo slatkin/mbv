@@ -60,6 +60,35 @@ fn row_point(component: &QueueComponent, row_offset: u16) -> (u16, u16) {
 }
 
 #[test]
+fn queue_modified_click_does_not_arm_drag() {
+    let (mut component, slots, _terminal) = drawn_component();
+    let first = slots[0].slot_id;
+    let third = slots[2].slot_id;
+    let (row0_x, row0_y) = row_point(&component, 0);
+    let (row2_x, row2_y) = row_point(&component, 2);
+
+    assert!(component
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: row0_x,
+            row: row0_y,
+            modifiers: KeyModifiers::CONTROL,
+        }))
+        .is_some());
+    assert_eq!(component.test_selected_target(), Some(first));
+    assert!(component
+        .on(&Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: row2_x,
+            row: row2_y,
+            modifiers: KeyModifiers::NONE,
+        }))
+        .is_none());
+    assert_eq!(component.test_selected_target(), Some(first));
+    assert_ne!(first, third);
+}
+
+#[test]
 fn queue_drag_moves_grabbed_row_onto_target() {
     let (mut component, slots, _terminal) = drawn_component();
     let first = slots[0].slot_id;

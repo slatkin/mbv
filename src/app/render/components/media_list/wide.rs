@@ -39,7 +39,7 @@ pub(super) struct MediaListPaint<Target> {
 /// The painter resolves the scroll offset and stores it back into `list` via
 /// [`WideMediaList::set_scroll`] before returning, so the offset persists across
 /// frames without the caller threading a `usize` back.
-pub(super) fn render_wide_media_list<Target: Clone>(
+pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
@@ -64,10 +64,12 @@ pub(super) fn render_wide_media_list<Target: Clone>(
             let source_row = geometry
                 .source_row(row)
                 .expect("wide geometry contains a source row");
+            let row_target = rows[source_row].selectable_target();
+            let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
             wide_media_row(
                 &rows[source_row],
-                Some(row) == selected_row,
-                focused,
+                Some(row) == selected_row || multi_selected,
+                focused || multi_selected,
                 selected_bg,
                 inner_width,
                 scrollbar,
@@ -128,7 +130,7 @@ pub(super) struct InlinePaintResult<Target> {
 /// ordinary rows around the reserved detail block, reusing the shared
 /// `wide_media_row` primitive and `hero::inline_display_row` mapping.
 ///
-fn render_inline_media_browser_with_geometry<Target: Clone>(
+fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
@@ -157,10 +159,14 @@ fn render_inline_media_browser_with_geometry<Target: Clone>(
             geometry
                 .source_row(display_row)
                 .map(|source_row| {
+                    let row_target = rows[source_row].selectable_target();
+                    let multi_selected =
+                        row_target.is_some_and(|target| list.is_selected_target(target));
                     wide_media_row(
                         &rows[source_row],
-                        Some(display_row) == selected_row && layout.detail_rows == 0,
-                        focused,
+                        (Some(display_row) == selected_row && layout.detail_rows == 0) && focused
+                            || multi_selected,
+                        focused || multi_selected,
                         selected_bg,
                         inner_width,
                         focused && overflows,
@@ -218,7 +224,7 @@ fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Col
 /// Component-view adapter for the retained-result seam. The compatibility
 /// painter above remains available to destinations that still own its legacy
 /// geometry contract.
-pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
+pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq>(
     f: &mut Frame,
     area: Rect,
     list: &mut WideMediaList<Target>,
@@ -246,7 +252,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone>(
 }
 
 /// Component-view adapter for the Inline retained-result seam.
-pub(in crate::app) fn render_inline_media_browser_component<Target: Clone>(
+pub(in crate::app) fn render_inline_media_browser_component<Target: Clone + PartialEq>(
     f: &mut Frame,
     area: Rect,
     list: &mut InlineMediaBrowser<Target>,

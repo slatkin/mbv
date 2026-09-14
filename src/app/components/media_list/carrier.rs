@@ -19,6 +19,7 @@
 //! un-migrated destinations call the same method from theirs.
 
 use ratatui::layout::{Position, Rect};
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
     InlineMediaBrowser, MediaListRow, RowLocalInput, RowLocalOutcome, ViewportAnchor, WideMediaList,
@@ -46,6 +47,7 @@ pub struct MediaListCarrier<Target> {
     active: Presentation,
     wide: WideMediaList<Target>,
     inline: InlineMediaBrowser<Target>,
+    selection_changed: bool,
 }
 
 impl<Target> MediaListCarrier<Target> {
@@ -55,6 +57,7 @@ impl<Target> MediaListCarrier<Target> {
             active,
             wide: WideMediaList::new(),
             inline: InlineMediaBrowser::new(),
+            selection_changed: false,
         }
     }
 
@@ -93,6 +96,17 @@ impl<Target> MediaListCarrier<Target> {
             Presentation::Wide => self.wide.selected_target(),
             Presentation::Inline => self.inline.selected_target(),
         }
+    }
+
+    pub fn multi_selection(&self) -> &[Target] {
+        match self.active {
+            Presentation::Wide => self.wide.multi_selection(),
+            Presentation::Inline => self.inline.multi_selection(),
+        }
+    }
+
+    pub fn is_visual_mode(&self) -> bool {
+        !self.multi_selection().is_empty()
     }
 
     /// The active owner's cursor as an index into its selectable rows.
@@ -218,13 +232,22 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         }
     }
 
+    /// Run `f`, marking the selection dirty if it changed the active owner's
+    /// multi-selection length.
+    fn track_selection_change<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let before = self.multi_selection().len();
+        let result = f(self);
+        self.selection_changed |= before != self.multi_selection().len();
+        result
+    }
+
     /// Replace the active owner's display rows, preserving the selected
     /// target where possible and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
-        match self.active {
-            Presentation::Wide => self.wide.set_content(rows),
-            Presentation::Inline => self.inline.set_content(rows),
-        }
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.set_content(rows),
+            Presentation::Inline => this.inline.set_content(rows),
+        });
     }
 
     /// Move the active owner's selection to `target` when it is present.
@@ -233,6 +256,78 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
             Presentation::Wide => self.wide.select_target(target),
             Presentation::Inline => self.inline.select_target(target),
         }
+    }
+
+    pub fn enter_visual_mode(&mut self) {
+        match self.active {
+            Presentation::Wide => self.wide.enter_visual_mode(),
+            Presentation::Inline => self.inline.enter_visual_mode(),
+        }
+        self.selection_changed = true;
+    }
+
+    /// Handle the shared Visual-mode chords after destination-local
+    /// preemption (notably Inline Search) has had first refusal.
+    pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
+        if matches!(key.code, Key::Char('v') | Key::Char('V'))
+            && key.modifiers == KeyModifiers::SHIFT
+        {
+            self.enter_visual_mode();
+            self.selection_changed = false;
+            return Some(self.multi_selection().len());
+        }
+        if !self.is_visual_mode() || !key.modifiers.is_empty() {
+            return None;
+        }
+        match key.code {
+            Key::Esc => {
+                self.clear_selection();
+                self.selection_changed = false;
+                Some(0)
+            }
+            Key::Char(' ') => {
+                let target = self.selected_target()?.clone();
+                self.toggle_selection(&target);
+                self.selection_changed = false;
+                Some(self.multi_selection().len())
+            }
+            _ => None,
+        }
+    }
+
+    pub fn toggle_selection(&mut self, target: &Target) {
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.toggle_selection(target),
+            Presentation::Inline => this.inline.toggle_selection(target),
+        });
+    }
+
+    pub fn extend_selection_to(&mut self, target: &Target) {
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.extend_selection_to(target),
+            Presentation::Inline => this.inline.extend_selection_to(target),
+        });
+    }
+
+    pub fn clear_selection(&mut self) {
+        if !self.multi_selection().is_empty() {
+            self.selection_changed = true;
+        }
+        match self.active {
+            Presentation::Wide => self.wide.clear_selection(),
+            Presentation::Inline => self.inline.clear_selection(),
+        }
+    }
+
+    /// Return the count from the most recent selection mutation, once. This
+    /// keeps pointer selection forwarding at the component boundary without
+    /// making the shell inspect the carrier's local state.
+    pub fn selection_changed_msg(&mut self) -> Option<usize> {
+        if !self.selection_changed {
+            return None;
+        }
+        self.selection_changed = false;
+        Some(self.multi_selection().len())
     }
 
     /// Replace one existing active-owner row by stable target without
@@ -304,10 +399,10 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         input: RowLocalInput,
         target: Option<Target>,
     ) -> RowLocalOutcome<Target> {
-        match self.active {
-            Presentation::Wide => self.wide.delegate(input, target),
-            Presentation::Inline => self.inline.delegate(input, target),
-        }
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.delegate(input, target),
+            Presentation::Inline => this.inline.delegate(input, target),
+        })
     }
 
     /// Whether the active presentation's retained current frame claims

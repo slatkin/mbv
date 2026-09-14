@@ -505,9 +505,14 @@ impl App {
     }
 }
 
-/// Plain-data paint model for one status row (task 2.2). The shell projects
-/// the pill/right-segment spans; the mounted `StatusBarPanel` owns the
-/// overflow drop-order, the pill hit regions and pointer resolution.
+/// Plain-data indicator for active Visual mode.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(in crate::app) struct VisualModeIndicator {
+    /// Number of selected items.
+    pub count: usize,
+}
+/// Plain-data paint model for one status row. The shell projects spans; the
+/// mounted `StatusBarPanel` owns overflow, hit regions and Visual-mode clearing.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(in crate::app) struct StatusBarModel {
     /// Whether the remote/session pill participates (the base frame has
@@ -522,13 +527,11 @@ pub(in crate::app) struct StatusBarModel {
     pub volume: Vec<Span<'static>>,
     /// Fully built right segment (scope label, username, service glyphs).
     pub right: Vec<Span<'static>>,
-    /// Queue-scope pills (moved from the queue column's removed title band):
-    /// `Some` only while connected to an mbv-based session (`show_split`
-    /// and `is_mbv_session`). The painter keeps only those two flags plus
-    /// `local_selected` and `remote_icon`.
+    /// Queue-scope pills, present only for an mbv-based session.
     pub queue_scope: Option<QueueTitleModel>,
+    /// Visual-mode count indicator, when selected items exist.
+    pub visual_mode: Option<VisualModeIndicator>,
 }
-
 /// The status row's pointer regions, retained by the mounted
 /// `StatusBarPanel` after painting.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -543,6 +546,8 @@ pub(in crate::app) struct StatusBarRegions {
     pub scope_local: Option<Rect>,
     /// Queue-scope Remote pill, when the scope pills are shown.
     pub scope_remote: Option<Rect>,
+    /// Visual-mode region; clicking it clears selection.
+    pub visual_clear: Option<Rect>,
 }
 
 /// Paint the one-row status bar within `area` (the `RootFrame.status_bar`
@@ -582,6 +587,18 @@ pub(in crate::app) fn render_status_bar(
     // first, then the volume pill, then remote. (The service-state
     // glyphs now live in the right segment.)
     let remote_w = App::status_width(&remote_status);
+    let visual_status = model.visual_mode.as_ref().map(|indicator| {
+        vec![Span::styled(
+            format!("-- VISUAL ({}) --", indicator.count),
+            Style::default()
+                .fg(palette::TEXT_FOCUS_ACCENT)
+                .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
+        )]
+    });
+    let visual_w = visual_status
+        .as_ref()
+        .map(|spans| App::status_width(spans))
+        .unwrap_or(0);
     let mute_w: u16 = mute_status
         .as_ref()
         .map(|spans| App::status_width(spans))
@@ -598,19 +615,31 @@ pub(in crate::app) fn render_status_bar(
         }
         total
     };
-    let fits_all = joined_width(&[remote_w, mute_w, vol_w]) <= available;
-    let fits_without_mute = !fits_all && joined_width(&[remote_w, vol_w]) <= available;
+    let fits_all = joined_width(&[visual_w, remote_w, mute_w, vol_w]) <= available;
+    let fits_without_mute = !fits_all && joined_width(&[visual_w, remote_w, vol_w]) <= available;
     let fits_without_volume =
-        !fits_all && !fits_without_mute && joined_width(&[remote_w, mute_w]) <= available;
+        !fits_all && !fits_without_mute && joined_width(&[visual_w, remote_w, mute_w]) <= available;
     let fits_without_remote = !fits_all
         && !fits_without_mute
         && !fits_without_volume
-        && joined_width(&[mute_w, vol_w]) <= available;
+        && joined_width(&[visual_w, mute_w, vol_w]) <= available;
 
+    let show_visual = visual_w > 0
+        && (fits_all || fits_without_mute || fits_without_volume || fits_without_remote);
     let show_remote = remote_w > 0 && (fits_all || fits_without_mute || fits_without_volume);
     let show_volume = fits_all || fits_without_mute || fits_without_remote;
 
     let mut spans: Vec<Span> = Vec::new();
+    if show_visual {
+        let visual_x = area.x + App::status_width(&spans);
+        App::append_status(&mut spans, visual_status.unwrap_or_default());
+        regions.visual_clear = Some(Rect {
+            x: visual_x,
+            y: area.y,
+            width: visual_w,
+            height: 1,
+        });
+    }
     if show_volume {
         let vol_x = area.x + App::status_width(&spans);
         App::append_status(&mut spans, vol_status);
@@ -767,43 +796,5 @@ pub(in crate::app) fn render_status_bar(
 }
 
 #[cfg(test)]
-mod playback_host_label_tests {
-    use crate::app::tests::{make_app_stub, make_item, make_remote_app_stub, make_session};
-    use crate::app::QueueScope;
-
-    /// The playback target's host label preserves the attached session's device name.
-    #[test]
-    fn attached_session_label_preserves_device_name() {
-        let mut app = make_app_stub();
-        app.connected_session_id = Some("sess-1".into());
-        app.connected_session_state = Some(make_session("living-room", "Emby"));
-
-        let (label, _) = app.playback_host_label_and_remote();
-
-        assert_eq!(label, "living-room");
-    }
-
-    /// Local playback (no session, no direct remote) resolves to this
-    /// machine's device name, verbatim.
-    #[test]
-    fn local_playback_resolves_this_machine_device_name() {
-        let app = make_app_stub();
-        assert_eq!(
-            app.playback_host_label_and_remote().0,
-            mbv_core::api::device_name()
-        );
-    }
-
-    /// A direct-remote connection resolves the direct-remote label.
-    #[test]
-    fn direct_remote_resolves_the_direct_label() {
-        let mut app = make_remote_app_stub(
-            vec![make_item("local", "Movie")],
-            vec![make_item("remote", "Movie")],
-        );
-        app.direct_remote_label = Some("direct-device".into());
-        app.queue_scope = QueueScope::Local;
-
-        assert_eq!(app.playback_host_label_and_remote().0, "direct-device");
-    }
-}
+#[path = "chrome_status_tests.rs"]
+mod chrome_status_tests;

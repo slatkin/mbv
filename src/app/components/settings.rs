@@ -328,7 +328,7 @@ impl SettingsComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
+            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
                 if !self.geometry.panel_area.contains(at) {
                     return Some(Msg::Shell(ShellRequest::DismissSettings));
                 }

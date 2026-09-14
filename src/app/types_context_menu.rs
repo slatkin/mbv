@@ -1,5 +1,25 @@
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::{FeedEntry, QueueSlotId};
+
+#[derive(Clone, Debug)]
+pub(super) enum BulkRemoveTarget {
+    ContinueWatching(Box<EmbyItem>),
+    Queue(QueueSlotId),
+}
 use ratatui::layout::Rect;
+
+use crate::app::components::msg::HomeRowTarget;
+
+/// Destination-qualified targets supplied by row context-menu requests.
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum ContextMenuTargets {
+    Home(Vec<HomeRowTarget>),
+    Browser(Vec<String>),
+    Emby(Vec<EmbyItem>),
+    Queue(Vec<QueueSlotId>),
+    Feeds(Vec<FeedEntry>),
+}
 use unicode_width::UnicodeWidthStr;
 
 use super::PanelFocus;
@@ -20,6 +40,12 @@ pub(super) enum ContextMenuAnchor {
 #[derive(Clone, Debug)]
 pub(super) enum ContextAction {
     Play,
+    PlaySelection(Vec<EmbyItem>),
+    ShuffleSelection(Vec<EmbyItem>),
+    EnqueueSelection(Vec<EmbyItem>),
+    RemoveSelection(Vec<BulkRemoveTarget>),
+    MarkPlayedSelection(Vec<String>),
+    MarkUnplayedSelection(Vec<String>),
     /// Play the queue item at this explicit index (split-queue-cursor-
     /// ownership D2): the queue menu retains the index resolved when the
     /// menu opened (the right-clicked slot), so a follow update to
@@ -34,12 +60,30 @@ pub(super) enum ContextAction {
     RemoveFromContinueWatching,
     RemoveFromQueue(usize),
     GoToLibrary(String, String), // (item_id, item_type)
+    FeedsPlay(Vec<FeedEntry>),
+    FeedsEnqueue(Vec<FeedEntry>),
+    FeedsMarkPlayed(Vec<FeedEntry>),
+    FeedsMarkUnplayed(Vec<FeedEntry>),
 }
 
 #[derive(Clone)]
 pub(super) struct ContextMenuEntry {
     pub(super) label: &'static str,
     pub(super) action: Option<ContextAction>,
+}
+
+pub(super) fn is_bulk_action(action: &Option<ContextAction>) -> bool {
+    matches!(
+        action,
+        Some(
+            ContextAction::PlaySelection(_)
+                | ContextAction::ShuffleSelection(_)
+                | ContextAction::EnqueueSelection(_)
+                | ContextAction::RemoveSelection(_)
+                | ContextAction::MarkPlayedSelection(_)
+                | ContextAction::MarkUnplayedSelection(_)
+        )
+    )
 }
 
 /// One multiselect row: `(name_lower, display_name, is_hidden)`.

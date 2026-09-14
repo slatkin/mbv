@@ -24,6 +24,8 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
     RowLocalInput, RowLocalOutcome,
 };
+use crate::app::types_context_menu::ContextMenuTargets;
+
 use super::msg::{Msg, ShellRequest};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::{fmt_duration_short, trunc_str};
@@ -292,6 +294,9 @@ impl HomeContent {
     /// owns every global chord and keeps precedence).
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        if let Some(count) = self.carrier.handle_visual_key(key) {
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        }
         if key.modifiers.contains(KeyModifiers::ALT)
             && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
         {
@@ -331,16 +336,20 @@ impl HomeContent {
                 None
             }
             Key::Char('.') if self.section == 0 => {
-                let target = match self.delegate_row_local_input(RowLocalInput::Context, None) {
+                let targets = match self.delegate_row_local_input(RowLocalInput::Context, None) {
                     RowLocalOutcome::External(RowIntent::Context(target)) => {
-                        self.home_row_target(Some(target))
+                        vec![self.home_row_target(Some(target))]
                     }
-                    _ => self.row_target(),
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .map(|target| self.home_row_target(Some(target)))
+                        .collect(),
+                    _ => vec![self.row_target()],
                 };
-                Some(Msg::Shell(ShellRequest::HomeContextMenu {
-                    home_cw_selected: true,
-                    target,
-                }))
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    ContextMenuTargets::Home(targets),
+                    None,
+                )))
             }
             Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
@@ -374,9 +383,18 @@ impl HomeContent {
     pub(in crate::app) fn test_active_scroll(&self) -> usize {
         self.carrier.scroll()
     }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_multi_selection_len(&self) -> usize {
+        self.carrier.multi_selection().len()
+    }
 }
 
 impl LibraryContentOwner for HomeContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     /// This frame's panel content (design D3): the section pills as the
     /// Selector row, the shared carrier in the list slot, and the selected
     /// item's hero from the shared producer with the projected image state.
@@ -452,6 +470,8 @@ impl LibraryContentOwner for HomeContent {
             LibrarySlotEvent::List(input) => {
                 let at = match input {
                     RowLocalInput::Click(at)
+                    | RowLocalInput::ToggleClick(at)
+                    | RowLocalInput::RangeClick(at)
                     | RowLocalInput::DoubleClick(at)
                     | RowLocalInput::ContextClick(at) => Some(at),
                     _ => None,
@@ -460,8 +480,11 @@ impl LibraryContentOwner for HomeContent {
                 // `claim_row` contract (a blank/gap click leaves the
                 // selection unchanged).
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if let Some(at) = at {
-                    self.carrier.delegate(RowLocalInput::Click(at), target);
+                if at.is_some() {
+                    self.carrier.delegate(input, target.clone());
+                    if let Some(count) = self.carrier.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                 }
                 match input {
                     RowLocalInput::Wheel { .. } => {
@@ -476,14 +499,34 @@ impl LibraryContentOwner for HomeContent {
                         }))
                     }
                     RowLocalInput::ContextClick(at) => {
-                        Some(Msg::Shell(ShellRequest::HomeRowContextMenu {
+                        let outcome = self.carrier.delegate(input, target);
+                        if let Some(count) = self.carrier.selection_changed_msg() {
+                            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                        }
+                        let targets = match outcome {
+                            RowLocalOutcome::External(RowIntent::Context(target)) => {
+                                vec![self.home_row_target(Some(target))]
+                            }
+                            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                                targets
+                                    .into_iter()
+                                    .map(|target| self.home_row_target(Some(target)))
+                                    .collect()
+                            }
+                            _ => vec![self.row_target()],
+                        };
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            ContextMenuTargets::Home(targets),
+                            Some((at.x, at.y)),
+                        )))
+                    }
+                    RowLocalInput::Click(_)
+                    | RowLocalInput::ToggleClick(_)
+                    | RowLocalInput::RangeClick(_) => {
+                        Some(Msg::Shell(ShellRequest::HomeRowClick {
                             target: self.row_target(),
-                            anchor: (at.x, at.y),
                         }))
                     }
-                    RowLocalInput::Click(_) => Some(Msg::Shell(ShellRequest::HomeRowClick {
-                        target: self.row_target(),
-                    })),
                     _ => None,
                 }
             }

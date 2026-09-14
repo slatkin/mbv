@@ -270,7 +270,7 @@ fn unfocused_component_handles_mouse_input() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == 1)
+        .find(|(_, id)| *id == WatchedFilter::COUNT + 1)
         .map(|(rect, _)| *rect)
         .expect("the second feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {
@@ -304,7 +304,7 @@ fn mouse_owns_feed_selector_and_row_geometry() {
         .test_selector_hits()
         .regions()
         .iter()
-        .find(|(_, id)| *id == 1)
+        .find(|(_, id)| *id == WatchedFilter::COUNT + 1)
         .map(|(rect, _)| *rect)
         .expect("the second feed-group pill is painted");
     panel.on(&Event::Mouse(MouseEvent {
@@ -347,15 +347,15 @@ fn playback_requests_use_the_selected_entry_guid() {
 
     assert_eq!(
         down(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry(
+        Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry(
             "Third", true
-        )))))
+        )])))
     );
     assert_eq!(
         down(&mut owner, Key::Char('e')),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue(Some(entry(
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue(vec![entry(
             "Third", true
-        )))))
+        )])))
     );
 }
 
@@ -377,11 +377,11 @@ fn feed_actions_preserve_the_selected_entry_when_guids_collide() {
 
     assert_eq!(
         down(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::FeedsPlay(Some(second.clone()))))
+        Some(Msg::Shell(ShellRequest::FeedsPlay(vec![second.clone()])))
     );
     assert_eq!(
         down(&mut owner, Key::Char('e')),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue(Some(second))))
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue(vec![second])))
     );
 }
 
@@ -397,11 +397,11 @@ fn empty_feed_actions_request_shell_feedback() {
 
     assert_eq!(
         down(&mut owner, Key::Enter),
-        Some(Msg::Shell(ShellRequest::FeedsPlay(None)))
+        Some(Msg::Shell(ShellRequest::FeedsPlay(Vec::new())))
     );
     assert_eq!(
         down(&mut owner, Key::Char('e')),
-        Some(Msg::Shell(ShellRequest::FeedsEnqueue(None)))
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue(Vec::new())))
     );
 }
 
@@ -569,7 +569,7 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
 /// resolution into the owner's typed `FeedsRowClick`; a right-click is
 /// ignored (task 4.6: no keyboard context-menu equivalent on this surface).
 #[test]
-fn feeds_mouse_click_resolves_row_and_right_click_is_ignored() {
+fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
     let mut panel = panel_with(component(), true);
     let _ = paint(&mut panel, 60, 20);
     let list = panel
@@ -603,16 +603,13 @@ fn feeds_mouse_click_resolves_row_and_right_click_is_ignored() {
         feeds(&panel).cursor() > 0 || row < list.y + 4,
         "click must select the resolved row on both controls"
     );
-    assert_eq!(
-        click(
-            &mut panel,
-            list.x,
-            row,
-            MouseEventKind::Down(MouseButton::Right)
-        ),
-        None,
-        "task 4.6: right-click must be ignored on this surface"
-    );
+    assert!(matches!(
+        click(&mut panel, list.x, row, MouseEventKind::Down(MouseButton::Right)),
+        Some(Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Feeds(entries),
+            Some(_),
+        ))) if entries.len() == 1
+    ));
 }
 
 /// Task 4.1: a double-click on a list row plays the resolved entry through
@@ -644,7 +641,8 @@ fn feeds_mouse_double_click_plays_the_resolved_entry() {
             row,
             modifiers: KeyModifiers::NONE,
         }));
-        if let Some(Msg::Shell(ShellRequest::FeedsPlay(Some(entry)))) = msg {
+        if let Some(Msg::Shell(ShellRequest::FeedsPlay(entries))) = msg {
+            let entry = entries.into_iter().next().expect("entry");
             played = Some(entry);
         }
         if let Some(entry) = played {

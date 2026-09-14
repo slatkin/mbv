@@ -72,6 +72,11 @@ impl StatusBarPanel {
             // Queue-scope pills (moved from the queue column's removed title
             // band): the same `QueueScopeClick` the title pills emitted.
             MouseEventKind::Down(MouseButton::Left)
+                if self.regions.visual_clear.is_some_and(|r| r.contains(at)) =>
+            {
+                Some(Msg::Shell(ShellRequest::ClearMultiSelection))
+            }
+            MouseEventKind::Down(MouseButton::Left)
                 if self.regions.scope_local.is_some_and(|r| r.contains(at)) =>
             {
                 Some(Msg::Shell(ShellRequest::QueueScopeClick {
@@ -161,6 +166,7 @@ mod tests {
             volume,
             right: pill("R", Color::White),
             queue_scope: None,
+            visual_mode: None,
         }
     }
 

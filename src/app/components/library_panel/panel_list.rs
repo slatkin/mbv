@@ -23,6 +23,10 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
         MediaListCarrier::set_presentation(self, presentation, viewport_height);
     }
 
+    fn clear_selection(&mut self) {
+        MediaListCarrier::clear_selection(self);
+    }
+
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
             PanelListPaintPolicy::Wide { focused } => {

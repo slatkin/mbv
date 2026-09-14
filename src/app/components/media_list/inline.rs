@@ -219,6 +219,24 @@ impl<Target> InlineMediaBrowser<Target> {
         self.core.selected_target()
     }
 
+    pub fn multi_selection(&self) -> &[Target] {
+        self.core.multi_selection()
+    }
+
+    pub fn is_visual_mode(&self) -> bool {
+        self.core.is_visual_mode()
+    }
+
+    pub fn is_selected_target(&self, target: &Target) -> bool
+    where
+        Target: PartialEq,
+    {
+        self.core
+            .multi_selection()
+            .iter()
+            .any(|selected| selected == target)
+    }
+
     /// The resting scroll offset (pre height-aware clamp).
     pub fn scroll(&self) -> usize {
         self.core.scroll()
@@ -340,6 +358,10 @@ impl<Target> InlineMediaBrowser<Target> {
 }
 
 impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
+    pub fn enter_visual_mode(&mut self) {
+        self.invalidate_paint();
+        self.core.enter_visual_mode();
+    }
     /// Replace the display rows, preserving the selected target where possible
     /// and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
@@ -357,6 +379,18 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
     pub fn select_target(&mut self, target: &Target) -> bool {
         self.invalidate_paint();
         self.core.select_target(target)
+    }
+
+    pub fn toggle_selection(&mut self, target: &Target) {
+        self.core.toggle_selection(target);
+    }
+
+    pub fn extend_selection_to(&mut self, target: &Target) {
+        self.core.extend_selection_to(target);
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.core.clear_selection();
     }
 
     /// Produce a [`ViewportAnchor`] from the current selection for a painted
@@ -391,7 +425,7 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
     }
 }
 
-impl<Target: Clone> Component for InlineMediaBrowser<Target> {
+impl<Target: Clone + PartialEq> Component for InlineMediaBrowser<Target> {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         crate::app::render::render_inline_media_browser_component(frame, area, self, self.policy);
     }

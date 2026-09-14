@@ -72,7 +72,7 @@ impl QueueBoundaryComponent {
         }
         let gesture = self.gestures.recognize(event)?;
         match gesture {
-            MouseGesture::Click(_) if self.inside(at) => {
+            MouseGesture::Click { .. } if self.inside(at) => {
                 self.changed = false;
                 None
             }

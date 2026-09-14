@@ -13,7 +13,7 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
     RowLocalInput, RowLocalOutcome,
 };
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
+use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
     Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
     TerminalObserverEvent,
@@ -26,6 +26,7 @@ use crate::app::render::arrangements::queue::{
 use crate::app::render::components::queue::render_queue_status;
 use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};
+use crate::app::types_context_menu::ContextMenuTargets;
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -72,6 +73,10 @@ pub struct QueueComponent {
 }
 
 impl QueueComponent {
+    pub(crate) fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     pub(crate) fn selected_row_rect(&self) -> Option<Rect> {
         self.carrier.wide().current_selected_row_rect()
     }
@@ -231,6 +236,9 @@ impl QueueComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if let Some(count) = self.carrier.handle_visual_key(key) {
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        }
         match key.code {
             Key::Char('[')
                 if !key
@@ -300,6 +308,14 @@ impl QueueComponent {
                 };
             }
             Key::Delete => {
+                if !self.carrier.multi_selection().is_empty() {
+                    let slot_ids = self.carrier.multi_selection().to_vec();
+                    self.carrier.clear_selection();
+                    return Some(Msg::Queue(QueueRequest::RemoveSelection {
+                        scope: self.scope,
+                        slot_ids,
+                    }));
+                }
                 return self
                     .selected_slot()
                     .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Remove { scope, slot_id }));
@@ -335,11 +351,21 @@ impl QueueComponent {
                 // request for the currently selected row.
                 return match self.delegate_row_local_input(RowLocalInput::Context, None) {
                     RowLocalOutcome::External(RowIntent::Context(slot_id)) => {
-                        Some(Msg::Shell(ShellRequest::QueueContextMenu {
-                            slot_id: Some(slot_id),
-                        }))
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            ContextMenuTargets::Queue(vec![slot_id]),
+                            None,
+                        )))
                     }
-                    _ => Some(Msg::Shell(ShellRequest::QueueContextMenu { slot_id: None })),
+                    RowLocalOutcome::External(RowIntent::ContextSelection(slot_ids)) => {
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            ContextMenuTargets::Queue(slot_ids),
+                            None,
+                        )))
+                    }
+                    _ => Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        ContextMenuTargets::Queue(vec![]),
+                        None,
+                    ))),
                 };
             }
             Key::Char('i') => {
@@ -392,15 +418,27 @@ impl QueueComponent {
                 // discarded by the mouse fold.
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            MouseGesture::Click(at) => {
+            MouseGesture::Click { at, modifier } => {
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
                 let target = self.carrier.resolve_current_point(at).copied();
                 if let Some(target) = target {
-                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                    let input = match modifier {
+                        ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
+                        ClickModifier::Shift => RowLocalInput::RangeClick(at),
+                        ClickModifier::None => RowLocalInput::Click(at),
+                    };
+                    self.delegate_row_local_input(input, Some(target));
+                    if let Some(count) = self.carrier.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                 }
-                self.drag_grab = target;
+                self.drag_grab = if modifier == ClickModifier::None {
+                    target
+                } else {
+                    None
+                };
                 Some(Msg::Shell(ShellRequest::QueueRowClick {
                     slot_id: self.carrier.selected_target().copied(),
                 }))
@@ -422,11 +460,20 @@ impl QueueComponent {
                 // menu. Only resolve a menu when the click lands on a row —
                 // never fall back to the prior selection (design.md D4).
                 let slot_id = self.carrier.resolve_current_point(at).copied()?;
-                self.delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id));
-                Some(Msg::Shell(ShellRequest::QueueRowContextMenu {
-                    slot_id: Some(slot_id),
-                    anchor: (mouse.column, mouse.row),
-                }))
+                let outcome =
+                    self.delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id));
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
+                let targets = match outcome {
+                    RowLocalOutcome::External(RowIntent::Context(target)) => vec![target],
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets,
+                    _ => vec![slot_id],
+                };
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    ContextMenuTargets::Queue(targets),
+                    Some((mouse.column, mouse.row)),
+                )))
             }
             MouseGesture::Drag { to, .. } => {
                 let grabbed = self.drag_grab?;
@@ -451,6 +498,16 @@ impl QueueComponent {
     #[cfg(test)]
     pub(crate) fn test_selected_target(&self) -> Option<QueueSlotId> {
         self.carrier.selected_target().copied()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_toggle_selection(&mut self, target: QueueSlotId) {
+        self.carrier.toggle_selection(&target);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_multi_selection(&self) -> &[QueueSlotId] {
+        self.carrier.multi_selection()
     }
 
     #[cfg(test)]

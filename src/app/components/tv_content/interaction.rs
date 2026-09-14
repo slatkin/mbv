@@ -1,4 +1,28 @@
 impl TvContent {
+    pub(super) fn context_menu_request(&mut self) -> Option<ShellRequest> {
+        let outcome = self.carrier.delegate(RowLocalInput::Context, None);
+        let items = match outcome {
+            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                .into_iter()
+                .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
+                .collect(),
+            RowLocalOutcome::External(RowIntent::Context(target)) => self
+                .context
+                .list
+                .items
+                .iter()
+                .find(|item| item.id == target)
+                .cloned()
+                .into_iter()
+                .collect(),
+            _ => return None,
+        };
+        Some(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            None,
+        ))
+    }
+
     fn handle_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         // Inline Search gets first refusal while active (design.md D6): the
         // panel paints the box in the Selector row's rect and the results in
@@ -17,7 +41,11 @@ impl TvContent {
             // The season pills ride in the hero pane's Workspace Selector
             // row (Wide only).
             LibrarySlotEvent::WorkspaceSelectorPicked(index) => {
-                self.apply_pane_click(TvHit::SeasonTab(index), Position::new(0, 0));
+                self.apply_pane_click(
+                    TvHit::SeasonTab(index),
+                    Position::new(0, 0),
+                    RowLocalInput::Click(Position::new(0, 0)),
+                );
                 Some(Msg::Shell(ShellRequest::TvHitClick {
                     hit: TvHit::SeasonTab(index),
                 }))
@@ -47,22 +75,37 @@ impl TvContent {
                 // mutation be discarded by the mouse fold.
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            RowLocalInput::Click(at) => {
+            RowLocalInput::Click(at) | RowLocalInput::ToggleClick(at) | RowLocalInput::RangeClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
-                self.apply_pane_click(hit.clone(), at);
+                self.apply_pane_click(hit.clone(), at, input);
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             RowLocalInput::DoubleClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
-                self.apply_pane_click(hit.clone(), at);
+                self.apply_pane_click(hit.clone(), at, RowLocalInput::Click(at));
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
             RowLocalInput::ContextClick(at) => {
-                let hit = self.resolve_series_hit(at)?;
-                Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-                    hit,
-                    anchor: (at.x, at.y),
-                }))
+                let target = self.carrier.resolve_current_point(at)?.clone();
+                let item = self.context.list.items.iter().find(|item| item.id == target)?.clone();
+                let outcome = self.carrier.delegate(input, Some(target));
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
+                let items = match outcome {
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
+                        .collect(),
+                    _ => vec![item],
+                };
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                    Some((at.x, at.y)),
+                )))
             }
             _ => None,
         }
@@ -74,6 +117,8 @@ impl TvContent {
     fn hero_pane_event(&mut self, input: RowLocalInput) -> Option<Msg> {
         let at = match input {
             RowLocalInput::Click(at)
+            | RowLocalInput::ToggleClick(at)
+            | RowLocalInput::RangeClick(at)
             | RowLocalInput::DoubleClick(at)
             | RowLocalInput::ContextClick(at) => at,
             // The series rail is the only scrollable TV surface; a wheel
@@ -90,18 +135,42 @@ impl TvContent {
             TvHit::EpisodesPane
         };
         match input {
-            RowLocalInput::Click(_) => {
-                self.apply_pane_click(hit.clone(), at);
+            RowLocalInput::Click(_) | RowLocalInput::ToggleClick(_) | RowLocalInput::RangeClick(_) => {
+                self.apply_pane_click(hit.clone(), at, input);
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             RowLocalInput::DoubleClick(_) => {
-                self.apply_pane_click(hit.clone(), at);
+                self.apply_pane_click(hit.clone(), at, RowLocalInput::Click(at));
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
-            RowLocalInput::ContextClick(_) => Some(Msg::Shell(ShellRequest::TvHitContextMenu {
-                hit,
-                anchor: (at.x, at.y),
-            })),
+            RowLocalInput::ContextClick(_) => {
+                let item = match &hit {
+                    TvHit::EpisodeRow(target) => self.current_season_episodes().iter().find(|item| item.id == *target).cloned(),
+                    TvHit::SeriesRow(target) => self.context.list.items.iter().find(|item| item.id == *target).cloned(),
+                    _ => None,
+                }?;
+                let outcome = self.episodes.delegate(input, Some(match &hit {
+                    TvHit::EpisodeRow(target) => target.clone(),
+                    _ => return None,
+                }));
+                if let Some(count) = self.episodes.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
+                let items = match outcome {
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .filter_map(|target| self.current_season_episodes().iter().find(|item| item.id == target).cloned())
+                        .collect(),
+                    _ => vec![item],
+                };
+                Some(Msg::Shell(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                    Some((at.x, at.y)),
+                )))
+            },
             _ => None,
         }
     }
@@ -130,7 +199,9 @@ impl TvContent {
                 self.inline_search.select_row_at_point(at);
                 self.inline_search
                     .selected_item()
-                    .map(|item| Msg::Shell(ShellRequest::EmbyLibraryContextMenu { item }))
+                    .map(|item| Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), None,
+                    )))
             }
             RowLocalInput::Wheel { delta, .. } => {
                 self.inline_search.move_cursor_by(delta);
@@ -154,7 +225,7 @@ impl TvContent {
     /// in the already-focused pane keeps it. Clicking a season pill also
     /// selects that season; blank Episodes-pane space is consumed without
     /// changing the pane. Right-clicks never call this.
-    fn apply_pane_click(&mut self, hit: TvHit, at: Position) {
+    fn apply_pane_click(&mut self, hit: TvHit, _at: Position, input: RowLocalInput) {
         match hit {
             TvHit::SeasonTab(index) => {
                 self.pane = Pane::Episodes;
@@ -164,13 +235,11 @@ impl TvContent {
             }
             TvHit::EpisodeRow(target) => {
                 self.pane = Pane::Episodes;
-                self.episodes
-                    .delegate(RowLocalInput::Click(at), Some(target));
+                self.episodes.delegate(input, Some(target));
             }
             TvHit::SeriesRow(target) => {
                 self.pane = Pane::Series;
-                self.carrier
-                    .delegate(RowLocalInput::Click(at), Some(target));
+                self.carrier.delegate(input, Some(target));
             }
             TvHit::EpisodesPane | TvHit::LetterPill(_) => {}
         }
@@ -216,6 +285,24 @@ impl TvContent {
             let target = item.id.clone();
             self.carrier.select_target(&target);
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn select_targets_for_test(&mut self, targets: &[String]) {
+        let Some(first) = targets.first() else { return };
+        self.carrier.select_target(first);
+        self.carrier.enter_visual_mode();
+        for target in targets.iter().skip(1) {
+            self.carrier.select_target(target);
+            self.carrier.extend_selection_to(target);
+        }
+        self.carrier.selection_changed_msg();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn context_click_for_test(&mut self, target: String) -> Option<usize> {
+        self.carrier.delegate(RowLocalInput::ContextClick(Position::new(0, 0)), Some(target));
+        self.carrier.selection_changed_msg()
     }
 
     /// Test-only: the shared owner's current rows' semantic states, in

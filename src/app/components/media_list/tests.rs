@@ -237,6 +237,86 @@ mod resolve_point {
 }
 
 #[test]
+fn delegate_first_toggle_includes_prior_cursor_target() {
+    use super::{RowLocalInput, RowLocalOutcome};
+
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=5)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
+            Some("4".to_string()),
+        ),
+        RowLocalOutcome::Consumed
+    );
+    assert_eq!(list.multi_selection(), &["1".to_string(), "4".to_string()]);
+}
+
+#[test]
+fn delegate_modifier_clicks_manage_multi_selection_and_plain_click_clears() {
+    use super::{RowLocalInput, RowLocalOutcome};
+
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=5)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    list.select_target(&"2".to_string());
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
+            Some("4".to_string()),
+        ),
+        RowLocalOutcome::Consumed
+    );
+    assert_eq!(list.multi_selection(), &["2".to_string(), "4".to_string()]);
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
+            Some("4".to_string()),
+        ),
+        RowLocalOutcome::Consumed
+    );
+    assert_eq!(list.multi_selection(), &["2".to_string()]);
+
+    list.delegate(
+        RowLocalInput::RangeClick(Position { x: 0, y: 0 }),
+        Some("5".to_string()),
+    );
+    assert_eq!(
+        list.multi_selection(),
+        &[
+            "2".to_string(),
+            "3".to_string(),
+            "4".to_string(),
+            "5".to_string()
+        ]
+    );
+    list.delegate(
+        RowLocalInput::RangeClick(Position { x: 0, y: 0 }),
+        Some("3".to_string()),
+    );
+    assert_eq!(list.multi_selection(), &["2".to_string(), "3".to_string()]);
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::Click(Position { x: 0, y: 0 }),
+            Some("5".to_string()),
+        ),
+        RowLocalOutcome::SelectedTargetChanged("5".to_string())
+    );
+    assert!(list.multi_selection().is_empty());
+    assert_eq!(list.selected_target(), Some(&"5".to_string()));
+}
+
+#[test]
 fn row_local_delegation_covers_movement_selection_and_external_intents() {
     use super::{RowIntent, RowLocalInput, RowLocalOutcome};
     let mut list = super::MediaList::new();
@@ -309,6 +389,52 @@ fn row_local_delegation_covers_movement_selection_and_external_intents() {
         ),
         RowLocalOutcome::External(RowIntent::Context("a".into()))
     );
+}
+
+#[test]
+fn context_on_selection_uses_selectable_list_order() {
+    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=5)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    list.select_target(&"2".to_string());
+    list.toggle_selection(&"5".to_string());
+    list.extend_selection_to(&"4".to_string());
+
+    assert_eq!(
+        list.delegate(RowLocalInput::Context, None),
+        RowLocalOutcome::External(RowIntent::ContextSelection(vec![
+            "2".into(),
+            "3".into(),
+            "4".into(),
+            "5".into()
+        ],))
+    );
+}
+
+#[test]
+fn context_click_outside_selection_clears_and_is_single_item() {
+    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=8)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    list.select_target(&"2".to_string());
+    list.extend_selection_to(&"4".to_string());
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ContextClick(Position::new(0, 0)),
+            Some("8".into()),
+        ),
+        RowLocalOutcome::External(RowIntent::Context("8".into()))
+    );
+    assert!(list.multi_selection().is_empty());
 }
 
 fn lifecycle_item(target: &str) -> MediaListRow<String> {
@@ -403,6 +529,24 @@ fn responsive_presentations_reuse_one_media_list_owner() {
     assert_eq!(wide_again.rows(), rows_before.as_slice());
     assert_eq!(wide_again.selected_target(), selected_before.as_ref());
     assert_eq!(wide_again.scroll(), scroll_before);
+}
+
+#[test]
+fn carrier_presentation_switch_preserves_multi_selection() {
+    let mut carrier = super::MediaListCarrier::new(super::Presentation::Wide);
+    carrier.set_content(vec![
+        lifecycle_item("one"),
+        lifecycle_item("two"),
+        lifecycle_item("three"),
+    ]);
+    carrier.toggle_selection(&"one".to_string());
+    carrier.toggle_selection(&"three".to_string());
+    assert_eq!(carrier.multi_selection(), &["one", "three"]);
+
+    carrier.set_presentation(super::Presentation::Inline, 3);
+    assert_eq!(carrier.multi_selection(), &["one", "three"]);
+    carrier.set_presentation(super::Presentation::Wide, 3);
+    assert_eq!(carrier.multi_selection(), &["one", "three"]);
 }
 
 #[test]

@@ -393,7 +393,7 @@ impl InlineSearch {
         }
         let gesture = self.mouse_gestures.recognize(mouse)?;
         match gesture {
-            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
+            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
                 self.select_row_at(at);
             }
             MouseGesture::RightClick(at) => {

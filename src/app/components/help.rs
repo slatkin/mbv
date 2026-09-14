@@ -117,7 +117,7 @@ impl HelpComponent {
             return None;
         }
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
+            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
                 if self.panel_area.is_some_and(|r| r.contains(at)) {
                     // Click inside: swallow.
                     None

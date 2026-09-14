@@ -14,7 +14,7 @@ use ratatui::layout::Position;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::media_list::RowLocalInput;
-use crate::app::components::mouse::gesture::{MouseGesture, MouseGestureState};
+use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::list_pane_width::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
@@ -127,6 +127,13 @@ impl LibraryPanel {
     /// Point the panel at the active library's owner (the shell drives this
     /// from its tab resolution each sync pass).
     pub(in crate::app) fn set_active(&mut self, key: Option<LibraryKey>) {
+        if self.owners.active_key() != key.as_ref() {
+            if let Some(previous) = self.owners.active_key().cloned() {
+                if let Some(owner) = self.owners.get_mut(&previous) {
+                    owner.clear_selection();
+                }
+            }
+        }
         self.owners.set_active(key);
     }
 
@@ -261,6 +268,12 @@ impl LibraryPanel {
     /// Mutably borrow the owner installed for `key` (the shell's
     /// destination-specific content pushes reach a typed owner through its
     /// `as_any_mut`).
+    pub(in crate::app) fn clear_active_selection(&mut self) {
+        if let Some(owner) = self.owners.active_mut() {
+            owner.clear_selection();
+        }
+    }
+
     pub(in crate::app) fn owner_mut(
         &mut self,
         key: &LibraryKey,
@@ -359,7 +372,7 @@ impl LibraryPanel {
         let split = self.split.as_ref()?;
         match gesture {
             // Press-and-release without motion changes nothing.
-            MouseGesture::Click(_) if split.gap.contains(at) => None,
+            MouseGesture::Click { .. } if split.gap.contains(at) => None,
             // A recognized `Drag` implies an armed press inside the gap, so
             // every drag resolves -- tracking necessarily continues outside
             // the gap once the pointer leaves it.
@@ -386,7 +399,7 @@ impl LibraryPanel {
     fn surface_gesture(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         let gesture = self.gestures.recognize(mouse)?;
         let at = match gesture {
-            MouseGesture::Click(at)
+            MouseGesture::Click { at, .. }
             | MouseGesture::DoubleClick(at)
             | MouseGesture::RightClick(at)
             | MouseGesture::Scroll { at, .. } => at,
@@ -409,8 +422,13 @@ impl LibraryPanel {
         let inside_hero = self.hero_pane_rect().is_some_and(|rect| rect.contains(at));
         if inside_hero {
             return match gesture {
-                MouseGesture::Click(at) => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::Click(at)))
+                MouseGesture::Click { at, modifier } => {
+                    let input = match modifier {
+                        ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
+                        ClickModifier::Shift => RowLocalInput::RangeClick(at),
+                        ClickModifier::None => RowLocalInput::Click(at),
+                    };
+                    self.slot_event(LibrarySlotEvent::HeroPane(input))
                 }
                 MouseGesture::DoubleClick(at) => {
                     self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::DoubleClick(at)))
@@ -429,8 +447,13 @@ impl LibraryPanel {
         }
         let inside_list = self.list_rect().is_some_and(|rect| rect.contains(at));
         match gesture {
-            MouseGesture::Click(at) if inside_list => {
-                self.slot_event(LibrarySlotEvent::List(RowLocalInput::Click(at)))
+            MouseGesture::Click { at, modifier } if inside_list => {
+                let input = match modifier {
+                    ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
+                    ClickModifier::Shift => RowLocalInput::RangeClick(at),
+                    ClickModifier::None => RowLocalInput::Click(at),
+                };
+                self.slot_event(LibrarySlotEvent::List(input))
             }
             MouseGesture::DoubleClick(at) if inside_list => {
                 self.slot_event(LibrarySlotEvent::List(RowLocalInput::DoubleClick(at)))

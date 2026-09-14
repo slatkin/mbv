@@ -132,20 +132,6 @@ impl App {
         }
     }
 
-    pub(super) fn handle_mouse_right_click_emby(
-        &mut self,
-        lib_idx: usize,
-        target: String,
-        col: u16,
-        row: u16,
-    ) {
-        self.handle_mouse_single_click_emby(lib_idx, target);
-        // Emby-library right-click is never a Home-tab menu, so the
-        // Continue-Watching-selected fact and the CW item are harmless
-        // `false`/`None` (the `self.tab.is_home()` guard short-circuits them).
-        self.open_context_menu_at(col, row, false, None);
-    }
-
     pub(super) fn handle_mouse_right_click_queue(
         &mut self,
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
@@ -231,25 +217,5 @@ impl App {
         } else if matches!(hit, TvHit::EpisodeRow(_)) {
             self.activate_selected_series(lib_idx);
         }
-    }
-
-    pub(super) fn handle_mouse_right_click_tv(
-        &mut self,
-        lib_idx: usize,
-        hit: TvHit,
-        col: u16,
-        row: u16,
-    ) {
-        let tracked_item = if let TvHit::SeriesRow(target) = &hit {
-            self.resolve_tv_series_target(lib_idx, target)
-                .map(|(_, item)| item)
-        } else {
-            None
-        };
-        self.handle_mouse_single_click_tv(lib_idx, hit);
-        // TV-workspace right-click is never a Home-tab menu, so the
-        // Continue-Watching-selected fact and the CW item are harmless
-        // `false`/`None`.
-        self.open_context_menu_at_for_item(col, row, false, None, tracked_item);
     }
 }

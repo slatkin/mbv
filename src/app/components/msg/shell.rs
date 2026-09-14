@@ -17,6 +17,7 @@ use super::intents::{
     PodcastEpisodeTransition, SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
+use crate::app::types_context_menu::ContextMenuTargets;
 use crate::app::types_playback::QueueScope;
 
 // TODO(migrate-tui-to-tuirealm): flesh out (mount/dismiss overlay, change
@@ -49,30 +50,11 @@ pub enum ShellRequest {
     MusicTrackEnqueue {
         track: EmbyItem,
     },
-    /// Open the context menu targeted at the focused inline album track
-    /// ('.' while a track is focused): carries the owner-resolved track item
-    /// and raises the menu through `App`.
-    MusicTrackContextMenu {
-        track: EmbyItem,
-    },
-    /// Right-click on a focused Wide track row: carries the owner-resolved
-    /// track item and preserves the component-provided pointer anchor for menu
-    /// placement.
-    MusicTrackContextMenuAt {
-        track: EmbyItem,
-        anchor: (u16, u16),
-    },
+
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
     MusicGroupSwitch {
         delta: i64,
-    },
-    /// Right-click on a narrow grouped-Music album row: carries the
-    /// component-resolved album item and opens its context menu anchored at the
-    /// click (mirrors the `.` keyboard action, which has no anchor).
-    MusicAlbumContextMenu {
-        item: EmbyItem,
-        anchor: (u16, u16),
     },
     /// Live Wide hero split resize (add-mouse-wide-split-resize). The gap
     /// boundary component owns the gesture and the resolved list-pane width;
@@ -80,6 +62,12 @@ pub enum ShellRequest {
     /// stores the session override. Live-only: there is no end/persist
     /// variant, because nothing is persisted.
     ResizeListPaneLive(u16),
+    /// The focused list changed its Visual selection. The shell records the
+    /// count once; components never expose their local selection state for
+    /// router queries.
+    SelectionChanged(usize),
+    /// Clear the active list's Visual selection from the status indicator.
+    ClearMultiSelection,
     /// Select the left-panel tab at the position the mounted `TabPanel`
     /// resolved from its own painted hit regions (task 2.1). The shell owns
     /// the tab switch and its side effects; the panel only reports which tab
@@ -135,10 +123,10 @@ pub enum ShellRequest {
     RefreshFeeds,
     /// Play the exact entry selected by the Feeds component; `None` reports
     /// that there is no visible selection so the shell can provide feedback.
-    FeedsPlay(Option<FeedEntry>),
+    FeedsPlay(Vec<FeedEntry>),
     /// Enqueue the exact entry selected by the Feeds component; `None` reports
     /// that there is no visible selection so the shell can provide feedback.
-    FeedsEnqueue(Option<FeedEntry>),
+    FeedsEnqueue(Vec<FeedEntry>),
     /// A row the user single-clicked in the Feeds list. The component has
     /// already moved its own selection to the resolved row; the shell only
     /// pulls panel focus to the Library (design.md D4/D5). Mirrors
@@ -168,12 +156,13 @@ pub enum ShellRequest {
     HomePlay(super::intents::HomeRowTarget),
     /// Enqueue the Home item at the component-owned flat cursor.
     HomeEnqueue(super::intents::HomeRowTarget),
-    /// Open Home's context menu for the Continue Watching target resolved by
-    /// the mounted component.
-    HomeContextMenu {
-        home_cw_selected: bool,
-        target: super::intents::HomeRowTarget,
-    },
+    /// Open a destination row context menu at an optional pointer anchor.
+    ///
+    /// The anchor remains a raw pointer-coordinate tuple because the shell
+    /// must preserve the click position across the component-to-shell
+    /// boundary; keyboard requests use `None` and resolve placement from the
+    /// freshly painted selection geometry.
+    RowContextMenu(ContextMenuTargets, Option<(u16, u16)>),
     /// Remove the Home item at the component-owned flat cursor from
     /// Continue Watching (Delete), keeping the cw-range guard the legacy
     /// Delete arm applied.
@@ -196,14 +185,7 @@ pub enum ShellRequest {
     HomeRowActivate {
         target: super::intents::HomeRowTarget,
     },
-    /// A right-click in the Home list; `anchor` is the click position the
-    /// component forwards as the context-menu anchor — the one legitimate
-    /// forwarded coordinate (design.md D4). The component has already moved
-    /// its selection to the row under the click.
-    HomeRowContextMenu {
-        target: super::intents::HomeRowTarget,
-        anchor: (u16, u16),
-    },
+
     /// A Home section pill the user clicked; `target` is the section index the
     /// component resolved from its `HitRegions` and already applied locally
     /// (design.md D4/D6). The shell persists the selected source.
@@ -277,19 +259,7 @@ pub enum ShellRequest {
     QueueRowActivate {
         slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
     },
-    /// A right-click in the Queue list; `slot_id` is the component-resolved
-    /// row and `anchor` the forwarded context-menu position (design.md D4).
-    QueueRowContextMenu {
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
-        anchor: (u16, u16),
-    },
-    /// Keyboard `.` in the Queue panel: open the queue context menu for the
-    /// component's currently selected row (`None` when the queue is empty).
-    /// `.` is selection-dependent, so the focused `QueueComponent` owns it
-    /// rather than the central router.
-    QueueContextMenu {
-        slot_id: Option<mbv_core::playback_queue::QueueSlotId>,
-    },
+
     /// A Queue scope pill the user clicked; the component has already switched
     /// its own scope and reset its scroll (design.md D3).
     QueueScopeClick {
@@ -310,15 +280,7 @@ pub enum ShellRequest {
     TvHitDoubleClick {
         hit: TvHit,
     },
-    /// A right-click in the TV workspace; `hit` is the component-resolved
-    /// pane + hit and `anchor` is the click position the component forwards
-    /// as the context-menu anchor — the one legitimate forwarded coordinate
-    /// (design.md D4). The component never moves its pane/cursor on a
-    /// right-click.
-    TvHitContextMenu {
-        hit: TvHit,
-        anchor: (u16, u16),
-    },
+
     /// Series-list row movement from the TV workspace. The component applies
     /// the same local cursor delta before handing the App-side mirror update
     /// to the shell; episodes use `TvEpisodeMove` instead.
@@ -369,14 +331,7 @@ pub enum ShellRequest {
     BrowserRowActivate {
         target: Option<String>,
     },
-    /// A row the user right-clicked; `target` is the resolved item index and
-    /// `anchor` is the click position the component forwards as the
-    /// context-menu anchor — the one legitimate forwarded coordinate
-    /// (design.md D4).
-    BrowserRowContextMenu {
-        target: Option<String>,
-        anchor: (u16, u16),
-    },
+
     /// A selector pill (letter filter / feed-folder / music group) the user
     /// clicked; `target` is the pill index the component resolved from its
     /// `HitRegions` (design.md D4/D6).
@@ -459,13 +414,6 @@ pub enum ShellRequest {
     /// and re-reading it. The library/podcast menu content (mark-watched vs
     /// mark-played labels, bulk actions) derives from the shell's own tab
     /// state (the browser is mounted only for that tab).
-    BrowserContextMenu {
-        item: EmbyItem,
-    },
-    /// Mirror of [`BrowserContextMenu`] for Emby library workspaces.
-    EmbyLibraryContextMenu {
-        item: EmbyItem,
-    },
     /// Ctrl+S on the mounted generic/Movies/home-video `BrowserComponent`
     /// (task 5.3d, Emby browser shuffle decoupling): the component resolves
     /// its own selected `EmbyItem` from its component-local cursor/content,

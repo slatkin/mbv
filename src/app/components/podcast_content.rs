@@ -326,6 +326,10 @@ impl Default for PodcastContent {
 }
 
 impl LibraryContentOwner for PodcastContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.content()
     }
@@ -345,12 +349,17 @@ impl LibraryContentOwner for PodcastContent {
             LibrarySlotEvent::List(input) => {
                 self.episode_focused = false;
                 self.carrier.delegate(input, None);
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 self.sync_show_selection();
                 self.show_move()
             }
             LibrarySlotEvent::HeroPane(input) => {
                 let point = match input {
                     RowLocalInput::Click(p)
+                    | RowLocalInput::ToggleClick(p)
+                    | RowLocalInput::RangeClick(p)
                     | RowLocalInput::DoubleClick(p)
                     | RowLocalInput::ContextClick(p) => p,
                     RowLocalInput::Wheel { at, .. } => at,
@@ -359,7 +368,10 @@ impl LibraryContentOwner for PodcastContent {
                 if let Some(target) = self.episode_list.resolve_current_point(point).cloned() {
                     if matches!(
                         input,
-                        RowLocalInput::Click(_) | RowLocalInput::DoubleClick(_)
+                        RowLocalInput::Click(_)
+                            | RowLocalInput::ToggleClick(_)
+                            | RowLocalInput::RangeClick(_)
+                            | RowLocalInput::DoubleClick(_)
                     ) {
                         self.episode_focused = true;
                     }
@@ -381,6 +393,9 @@ impl LibraryContentOwner for PodcastContent {
     }
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if let Some(count) = self.carrier.handle_visual_key(key) {
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        }
         if !self.focused {
             return None;
         }

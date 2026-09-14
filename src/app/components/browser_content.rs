@@ -32,7 +32,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
-    Presentation, RowLocalInput,
+    Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
 };
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -309,7 +309,9 @@ impl BrowserContent {
     /// painted result row are.
     fn handle_search_pointer(&mut self, input: RowLocalInput) -> Option<Msg> {
         match input {
-            RowLocalInput::Click(at) => {
+            RowLocalInput::Click(at)
+            | RowLocalInput::ToggleClick(at)
+            | RowLocalInput::RangeClick(at) => {
                 self.inline_search.select_row_at_point(at);
                 None
             }
@@ -324,9 +326,12 @@ impl BrowserContent {
             }
             RowLocalInput::ContextClick(at) => {
                 self.inline_search.select_row_at_point(at);
-                self.inline_search
-                    .selected_item()
-                    .map(|item| Msg::Shell(ShellRequest::BrowserContextMenu { item }))
+                self.inline_search.selected_item().map(|item| {
+                    Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Browser(vec![item.id]),
+                        None,
+                    ))
+                })
             }
             RowLocalInput::Wheel { delta, .. } => {
                 self.inline_search.move_cursor_by(delta);
@@ -361,6 +366,9 @@ impl BrowserContent {
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
+        if let Some(count) = self.carrier.handle_visual_key(key) {
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        }
         if alt && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down) {
             return None;
         }
@@ -418,9 +426,24 @@ impl BrowserContent {
             Key::Char('w') if ctrl => {
                 selected.map(|item| ShellRequest::BrowserToggleWatched { item })
             }
-            Key::Char('.') if key.modifiers.is_empty() => {
-                selected.map(|item| ShellRequest::BrowserContextMenu { item })
-            }
+            Key::Char('.') if key.modifiers.is_empty() => match self
+                .carrier
+                .delegate(RowLocalInput::Context, None)
+            {
+                RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                    Some(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                        None,
+                    ))
+                }
+                RowLocalOutcome::External(RowIntent::Context(target)) => {
+                    Some(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Browser(vec![target]),
+                        None,
+                    ))
+                }
+                _ => None,
+            },
             Key::Char('s') if ctrl => selected.map(|item| ShellRequest::BrowserShuffle { item }),
             Key::Char('r') if ctrl => Some(ShellRequest::BrowserRescan),
             Key::Char('r') => Some(ShellRequest::BrowserRefresh),
@@ -450,6 +473,10 @@ impl InlineSearchHost for BrowserContent {
 }
 
 impl LibraryContentOwner for BrowserContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     fn scroll_position(&self) -> Option<(usize, usize)> {
         Some((self.cursor(), self.scroll()))
     }
@@ -522,6 +549,8 @@ impl LibraryContentOwner for BrowserContent {
                 // space claims nothing.
                 let target = match input {
                     RowLocalInput::Click(at)
+                    | RowLocalInput::ToggleClick(at)
+                    | RowLocalInput::RangeClick(at)
                     | RowLocalInput::DoubleClick(at)
                     | RowLocalInput::ContextClick(at) => {
                         self.carrier.resolve_current_point(at).cloned()
@@ -539,10 +568,14 @@ impl LibraryContentOwner for BrowserContent {
                             index: self.cursor(),
                         }))
                     }
-                    RowLocalInput::Click(at) => {
+                    RowLocalInput::Click(_at)
+                    | RowLocalInput::ToggleClick(_at)
+                    | RowLocalInput::RangeClick(_at) => {
                         let target = target?;
-                        self.carrier
-                            .delegate(RowLocalInput::Click(at), Some(target.clone()));
+                        self.carrier.delegate(input, Some(target.clone()));
+                        if let Some(count) = self.carrier.selection_changed_msg() {
+                            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                        }
                         Some(Msg::Shell(ShellRequest::BrowserRowClick {
                             target: Some(target),
                         }))
@@ -557,12 +590,20 @@ impl LibraryContentOwner for BrowserContent {
                     }
                     RowLocalInput::ContextClick(at) => {
                         let target = target?;
-                        self.carrier
+                        let outcome = self
+                            .carrier
                             .delegate(RowLocalInput::ContextClick(at), Some(target.clone()));
-                        Some(Msg::Shell(ShellRequest::BrowserRowContextMenu {
-                            target: Some(target),
-                            anchor: (at.x, at.y),
-                        }))
+                        let targets = match outcome {
+                            RowLocalOutcome::External(RowIntent::Context(target)) => vec![target],
+                            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                                targets
+                            }
+                            _ => vec![target],
+                        };
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                            Some((at.x, at.y)),
+                        )))
                     }
                     _ => None,
                 }

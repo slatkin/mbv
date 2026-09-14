@@ -464,10 +464,14 @@ impl BookContent {
                         None
                     }
                 }
-                RowLocalInput::Click(at) => {
+                RowLocalInput::Click(at)
+                | RowLocalInput::ToggleClick(at)
+                | RowLocalInput::RangeClick(at) => {
                     let target = self.carrier.resolve_current_point(at)?.clone();
-                    self.carrier
-                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.carrier.delegate(input, Some(target));
+                    if let Some(count) = self.carrier.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                     self.sync_book_from_owner();
                     self.book_request()
                 }
@@ -493,11 +497,12 @@ impl BookContent {
                     }
                     None
                 }
-                RowLocalInput::Click(at) => {
+                RowLocalInput::Click(at)
+                | RowLocalInput::ToggleClick(at)
+                | RowLocalInput::RangeClick(at) => {
                     let target = self.chapter_list.resolve_current_point(at).copied()?;
                     self.enter_chapter_focus();
-                    self.chapter_list
-                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.chapter_list.delegate(input, Some(target));
                     self.chapter_focus_request()
                 }
                 RowLocalInput::DoubleClick(at) | RowLocalInput::ContextClick(at) => {
@@ -522,6 +527,11 @@ impl Default for BookContent {
 }
 
 impl LibraryContentOwner for BookContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+        self.chapter_list.clear_selection();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }
@@ -531,6 +541,9 @@ impl LibraryContentOwner for BookContent {
     }
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if let Some(count) = self.carrier.handle_visual_key(key) {
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Books is focused.
         match key.code {

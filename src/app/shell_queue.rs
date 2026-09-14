@@ -253,6 +253,20 @@ impl Model {
                     self.app.remove_from_queue(index);
                 }
             }
+            QueueRequest::RemoveSelection { scope, slot_ids } => {
+                // Resolve each stable slot identity at execution time, as the
+                // context-menu RemoveSelection path does. Removing in queue
+                // order is safe because every lookup uses the current queue.
+                for slot_id in slot_ids {
+                    if let Some(index) = self.slot_index(scope, slot_id) {
+                        self.app.remove_from_queue(index);
+                    }
+                }
+                // The component cleared its local selection before emitting
+                // this request; reset the shell-owned badge in the same way
+                // as the established SelectionChanged(0) path.
+                self.set_visual_selection_count(0);
+            }
             QueueRequest::Move {
                 scope,
                 slot_id,
@@ -398,16 +412,12 @@ impl Model {
 
     /// Position of `slot_id` in `scope`'s queue, if present. Pure lookup with
     /// none of `select_queue_slot`'s scope/focus/hold-window side effects.
-    fn slot_index(
+    pub(crate) fn slot_index(
         &self,
         scope: QueueScope,
         slot_id: mbv_core::playback_queue::QueueSlotId,
     ) -> Option<usize> {
-        self.app
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)
+        self.app.slot_index(scope, slot_id)
     }
 }
 

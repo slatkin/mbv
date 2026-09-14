@@ -16,7 +16,7 @@ pub(in crate::app) use components::chrome_player::{
     render_player_panel, render_title_row, PlaybackRenderContext, PlaybackStripAreas,
 };
 pub(in crate::app) use components::chrome_status::{
-    render_status_bar, StatusBarModel, StatusBarRegions,
+    render_status_bar, StatusBarModel, StatusBarRegions, VisualModeIndicator,
 };
 pub(in crate::app) use components::chrome_tabs::{render_tab_bar, TabBarModel};
 pub(in crate::app) use components::confirm_modal::render_confirm_modal_content;

@@ -1,0 +1,222 @@
+use super::MediaList;
+
+impl<Target: Clone + PartialEq> MediaList<Target> {
+    /// Toggle a target and freeze the resulting explicit set. The first toggle
+    /// includes the row that was under the cursor, matching Ctrl+Click.
+    pub fn toggle_selection(&mut self, target: &Target) {
+        let was_empty = self.multi_selection.is_empty();
+        if was_empty {
+            let cursor = self.selected_target().cloned();
+            if let Some(cursor) = cursor {
+                self.multi_selection.push(cursor.clone());
+                self.selection_anchor = Some(cursor);
+            }
+        }
+        if let Some(index) = self.multi_selection.iter().position(|item| item == target) {
+            if !was_empty {
+                self.multi_selection.remove(index);
+            }
+        } else if self.position_of(target).is_some() {
+            self.multi_selection.push(target.clone());
+        }
+        if self.multi_selection.is_empty() {
+            self.clear_selection();
+        } else if self.selection_anchor.is_none() {
+            self.selection_anchor = Some(target.clone());
+        }
+        self.frozen_selection = self.multi_selection.clone();
+        self.live_range = false;
+    }
+
+    /// Extend the anchored range, unioning it with the frozen selection.
+    pub fn extend_selection_to(&mut self, target: &Target) {
+        let Some(end) = self.position_of(target) else {
+            return;
+        };
+        let anchor = self
+            .selection_anchor
+            .clone()
+            .or_else(|| self.selected_target().cloned())
+            .unwrap_or_else(|| target.clone());
+        let Some(start) = self.position_of(&anchor) else {
+            self.selection_anchor = Some(target.clone());
+            self.multi_selection = vec![target.clone()];
+            return;
+        };
+        let (lo, hi) = if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
+        self.multi_selection = self
+            .selectable
+            .iter()
+            .enumerate()
+            .filter_map(|(index, &row)| {
+                let candidate = self.rows[row].selectable_target()?;
+                (self.frozen_selection.iter().any(|item| item == candidate)
+                    || (lo..=hi).contains(&index))
+                .then(|| candidate.clone())
+            })
+            .collect();
+        self.selection_anchor = Some(anchor);
+    }
+
+    /// Exit Visual mode and discard all selected targets.
+    pub fn clear_selection(&mut self) {
+        self.multi_selection.clear();
+        self.frozen_selection.clear();
+        self.selection_anchor = None;
+        self.live_range = false;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{MediaList, MediaListRow};
+
+    fn list() -> MediaList<u8> {
+        let mut list = MediaList::new();
+        list.set_content((1..=8).map(item).collect());
+        list
+    }
+
+    fn item(target: u8) -> MediaListRow<u8> {
+        MediaListRow::Item {
+            target,
+            primary: target.to_string(),
+            trailing: None,
+            duration: None,
+            kind: super::super::MediaKind::Media,
+            semantic_state: super::super::MediaSemanticState::Ordinary,
+        }
+    }
+
+    #[test]
+    fn toggle_adds_and_removes() {
+        let mut list = list();
+        list.delegate(
+            super::super::RowLocalInput::Click(ratatui::layout::Position { x: 0, y: 0 }),
+            Some(2),
+        );
+        list.toggle_selection(&2);
+        assert_eq!(list.multi_selection(), &[2]);
+        list.toggle_selection(&2);
+        assert!(list.multi_selection().is_empty());
+    }
+
+    #[test]
+    fn first_toggle_includes_prior_cursor() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&6);
+        assert_eq!(list.multi_selection(), &[3, 6]);
+    }
+
+    #[test]
+    fn range_recomputes_from_anchor() {
+        let mut list = list();
+        list.select_target(&2);
+        list.toggle_selection(&5);
+        list.extend_selection_to(&7);
+        assert_eq!(list.multi_selection(), &[2, 3, 4, 5, 6, 7]);
+        list.extend_selection_to(&4);
+        assert_eq!(list.multi_selection(), &[2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn refresh_keeps_surviving_multi_selection_and_reanchors_vanished_anchor() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&5);
+        list.toggle_selection(&7);
+        assert_eq!(list.multi_selection(), &[3, 5, 7]);
+
+        list.set_content(vec![item(2), item(5), item(7), item(8)]);
+        assert_eq!(list.multi_selection(), &[5, 7]);
+        assert_eq!(list.selected_target(), Some(&7));
+        assert_eq!(list.selection_anchor.as_ref(), Some(&7));
+    }
+
+    #[test]
+    fn visual_mode_starts_at_cursor_and_movement_extends_from_anchor() {
+        let mut list = list();
+        list.select_target(&3);
+        list.enter_visual_mode();
+        assert_eq!(list.multi_selection(), &[3]);
+        list.delegate(super::super::RowLocalInput::Move(2), None);
+        assert_eq!(list.multi_selection(), &[3, 4, 5]);
+        list.delegate(super::super::RowLocalInput::Move(-1), None);
+        assert_eq!(list.multi_selection(), &[3, 4]);
+    }
+
+    #[test]
+    fn visual_selection_change_is_consumed_by_the_carrier_helper() {
+        let mut carrier = super::super::MediaListCarrier::new(super::super::Presentation::Wide);
+        carrier.wide_mut().set_content((1..=3).map(item).collect());
+        carrier.wide_mut().select_target(&2);
+        let key = tuirealm::event::KeyEvent::new(
+            tuirealm::event::Key::Char('v'),
+            tuirealm::event::KeyModifiers::SHIFT,
+        );
+        assert_eq!(carrier.handle_visual_key(&key), Some(1));
+        assert_eq!(carrier.multi_selection(), &[2]);
+    }
+
+    #[test]
+    fn uppercase_visual_key_starts_visual_mode_at_cursor() {
+        let mut carrier = super::super::MediaListCarrier::new(super::super::Presentation::Wide);
+        carrier.wide_mut().set_content((1..=3).map(item).collect());
+        carrier.wide_mut().select_target(&2);
+        let key = tuirealm::event::KeyEvent::new(
+            tuirealm::event::Key::Char('V'),
+            tuirealm::event::KeyModifiers::SHIFT,
+        );
+        assert_eq!(carrier.handle_visual_key(&key), Some(1));
+        assert_eq!(carrier.multi_selection(), &[2]);
+    }
+
+    #[test]
+    fn refresh_reanchors_after_rows_above_cursor_are_removed() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&6);
+        list.set_content(vec![item(2), item(4), item(6), item(7)]);
+        assert_eq!(list.multi_selection(), &[6]);
+        assert_eq!(list.selected_target(), Some(&6));
+        assert_eq!(list.selection_anchor.as_ref(), Some(&6));
+    }
+
+    #[test]
+    fn keyboard_disjoint_selection_freezes_and_reanchors() {
+        let mut list = list();
+        list.select_target(&3);
+        list.enter_visual_mode();
+        list.delegate(super::super::RowLocalInput::Move(1), None);
+        list.toggle_selection(&4);
+        list.delegate(super::super::RowLocalInput::Move(2), None);
+        assert_eq!(list.multi_selection(), &[3]);
+        list.enter_visual_mode();
+        list.delegate(super::super::RowLocalInput::Move(0), None);
+        assert_eq!(list.multi_selection(), &[3, 6]);
+    }
+
+    #[test]
+    fn shift_range_unions_frozen_selection() {
+        let mut list = list();
+        list.select_target(&2);
+        list.toggle_selection(&5);
+        list.extend_selection_to(&4);
+        assert_eq!(list.multi_selection(), &[2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn esc_after_freeze_clears_everything() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&4);
+        list.clear_selection();
+        assert!(list.multi_selection().is_empty());
+        assert!(!list.is_visual_mode());
+    }
+}

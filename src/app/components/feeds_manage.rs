@@ -158,7 +158,7 @@ impl FeedsManageComponent {
         }
         let stage = self.stage.clone()?;
         match self.mouse_gestures.recognize(mouse)? {
-            MouseGesture::Click(at) => match &stage {
+            MouseGesture::Click { at, .. } => match &stage {
                 FeedsManageStage::List => {
                     if let Some(&index) = self.hit_rows.resolve(at) {
                         self.cursor = index;

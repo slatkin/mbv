@@ -124,7 +124,7 @@ impl SessionsComponent {
                 }
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            MouseGesture::Click(at) | MouseGesture::DoubleClick(at) => {
+            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
                 if !self
                     .painted_panel_area
                     .is_some_and(|area| area.contains(at))

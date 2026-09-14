@@ -21,8 +21,8 @@ use super::library_panel::{
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
-    ViewportAnchor,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
+    RowLocalInput, RowLocalOutcome, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
@@ -534,6 +534,10 @@ impl Default for TvContent {
     }
 }
 impl LibraryContentOwner for TvContent {
+    fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }

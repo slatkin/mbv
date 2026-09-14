@@ -196,6 +196,27 @@ fn feed_tab_play_entry_no_source_does_not_dispatch() {
 }
 
 #[test]
+fn feed_selection_play_preserves_supplied_order() {
+    let mut app = make_app_stub();
+    app.play_feed_entries(vec![
+        playable_feed_entry("feed-first"),
+        playable_feed_entry("feed-second"),
+    ]);
+
+    let guids: Vec<_> = app
+        .playback_queue()
+        .queue
+        .slots()
+        .iter()
+        .filter_map(|slot| match &slot.item {
+            mbv_core::playback_queue::QueueItem::Feed(entry) => Some(entry.guid.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(guids, vec!["feed-first", "feed-second"]);
+}
+
+#[test]
 fn direct_remote_feed_play_submits_the_selected_entry() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(1));
@@ -216,6 +237,28 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
         )),
         _ => panic!("expected unified Feed submission"),
     }
+}
+
+#[test]
+fn feed_selection_enqueue_preserves_supplied_order() {
+    let mut app = make_app_stub();
+    app.enqueue_feed_entries(vec![
+        playable_feed_entry("feed-first"),
+        playable_feed_entry("feed-second"),
+        playable_feed_entry("feed-third"),
+    ]);
+
+    let guids: Vec<_> = app
+        .playback_queue()
+        .queue
+        .slots()
+        .iter()
+        .filter_map(|slot| match &slot.item {
+            mbv_core::playback_queue::QueueItem::Feed(entry) => Some(entry.guid.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(guids, vec!["feed-first", "feed-second", "feed-third"]);
 }
 
 #[test]
