@@ -505,12 +505,14 @@ impl App {
     }
 }
 
-/// Plain-data paint model for one status row. The shell projects spans;
-/// `StatusBarPanel` owns overflow, hit regions and pointer resolution.
+/// Plain-data indicator for active Visual mode.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(in crate::app) struct VisualModeIndicator {
+    /// Number of selected items.
     pub count: usize,
 }
+/// Plain-data paint model for one status row. The shell projects spans; the
+/// mounted `StatusBarPanel` owns overflow, hit regions and Visual-mode clearing.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(in crate::app) struct StatusBarModel {
     /// Whether the remote/session pill participates (the base frame has
@@ -525,14 +527,11 @@ pub(in crate::app) struct StatusBarModel {
     pub volume: Vec<Span<'static>>,
     /// Fully built right segment (scope label, username, service glyphs).
     pub right: Vec<Span<'static>>,
-    /// Queue-scope pills (moved from the queue column's removed title band):
-    /// `Some` only while connected to an mbv-based session (`show_split`
-    /// and `is_mbv_session`). The painter keeps only those two flags plus
-    /// `local_selected` and `remote_icon`.
+    /// Queue-scope pills, present only for an mbv-based session.
     pub queue_scope: Option<QueueTitleModel>,
+    /// Visual-mode count indicator, when selected items exist.
     pub visual_mode: Option<VisualModeIndicator>,
 }
-
 /// The status row's pointer regions, retained by the mounted
 /// `StatusBarPanel` after painting.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -547,6 +546,7 @@ pub(in crate::app) struct StatusBarRegions {
     pub scope_local: Option<Rect>,
     /// Queue-scope Remote pill, when the scope pills are shown.
     pub scope_remote: Option<Rect>,
+    /// Visual-mode region; clicking it clears selection.
     pub visual_clear: Option<Rect>,
 }
 

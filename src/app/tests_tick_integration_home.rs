@@ -174,6 +174,51 @@ fn visual_mode_space_toggles_selection_without_playback() {
 }
 
 #[test]
+fn visual_mode_status_bar_click_clears_selection_through_tick() {
+    let mut harness = home_harness(160, 30, 2);
+    let _ = draw(&mut harness, 160, 30);
+
+    harness.inject(key_with_modifiers(Key::Char('v'), KeyModifiers::SHIFT));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert!(harness.model().visual_selection.is_some());
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 1);
+
+    harness.inject(key(Key::Down));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 2);
+
+    let _ = draw(&mut harness, 160, 30);
+    let clear = harness
+        .model()
+        .application
+        .get_component(&ComponentId::StatusBarPanel)
+        .expect("status bar mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::StatusBarPanel>()
+        .expect("status bar component")
+        .regions()
+        .visual_clear
+        .expect("visual clear region painted");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: clear.x,
+        row: clear.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection)),
+        "clear request must reach the shell: {:?}",
+        outcome.messages
+    );
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert!(harness.model().visual_selection.is_none());
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 0);
+}
+
+#[test]
 fn visual_mode_escape_clears_without_arming_playback_stop() {
     let mut harness = home_harness(160, 30, 2);
     let _ = draw(&mut harness, 160, 30);

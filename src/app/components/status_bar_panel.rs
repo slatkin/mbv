@@ -184,27 +184,6 @@ mod tests {
         (panel, terminal.backend().buffer().clone())
     }
 
-    #[test]
-    fn visual_indicator_paints_count_and_retains_clear_region() {
-        let mut panel = StatusBarPanel::new();
-        let mut model = model(Vec::new(), None);
-        model.visual_mode = Some(crate::app::render::VisualModeIndicator { count: 4 });
-        panel.set_model(model);
-        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
-        terminal
-            .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
-            .unwrap();
-        let text: String = terminal
-            .backend()
-            .buffer()
-            .content
-            .iter()
-            .map(|cell| cell.symbol().to_string())
-            .collect();
-        assert!(text.contains("-- VISUAL (4) --"));
-        assert!(panel.regions().visual_clear.is_some());
-    }
-
     /// The moved painter's characterization: volume and mute pills paint on
     /// the left, the right segment on the right, each region matching the
     /// painted pill.
