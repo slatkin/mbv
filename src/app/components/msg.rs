@@ -35,6 +35,8 @@ pub use self::shell::ShellRequest;
 /// Result of handling a key at a leaf component.  The disposition is
 /// independent from an optional cross-authority request: local mutations can
 /// consume a key without emitting a request.
+// Msg is the large arm; boxing would wrap every request.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LeafKeyResult {
     Unhandled,
@@ -69,7 +71,7 @@ impl LeafKeyResult {
         match self {
             Self::Unhandled => None,
             Self::Consumed(message) => {
-                message.or_else(|| Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
+                message.or(Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
             }
         }
     }
