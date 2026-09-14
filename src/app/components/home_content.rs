@@ -478,6 +478,9 @@ impl LibraryContentOwner for HomeContent {
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
                 if at.is_some() {
                     self.carrier.delegate(input, target);
+                    if let Some(count) = self.carrier.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                 }
                 match input {
                     RowLocalInput::Wheel { .. } => {

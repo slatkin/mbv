@@ -47,6 +47,7 @@ pub struct MediaListCarrier<Target> {
     active: Presentation,
     wide: WideMediaList<Target>,
     inline: InlineMediaBrowser<Target>,
+    selection_changed: bool,
 }
 
 impl<Target> MediaListCarrier<Target> {
@@ -56,6 +57,7 @@ impl<Target> MediaListCarrier<Target> {
             active,
             wide: WideMediaList::new(),
             inline: InlineMediaBrowser::new(),
+            selection_changed: false,
         }
     }
 
@@ -233,10 +235,12 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     /// Replace the active owner's display rows, preserving the selected
     /// target where possible and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
+        let before = self.multi_selection().len();
         match self.active {
             Presentation::Wide => self.wide.set_content(rows),
             Presentation::Inline => self.inline.set_content(rows),
         }
+        self.selection_changed |= before != self.multi_selection().len();
     }
 
     /// Move the active owner's selection to `target` when it is present.
@@ -252,6 +256,7 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
             Presentation::Wide => self.wide.enter_visual_mode(),
             Presentation::Inline => self.inline.enter_visual_mode(),
         }
+        self.selection_changed = true;
     }
 
     /// Handle the shared Visual-mode chords after destination-local
@@ -259,6 +264,7 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
         if key.code == Key::Char('v') && key.modifiers == KeyModifiers::SHIFT {
             self.enter_visual_mode();
+            self.selection_changed = false;
             return Some(self.multi_selection().len());
         }
         if !self.is_visual_mode() || !key.modifiers.is_empty() {
@@ -267,11 +273,13 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match key.code {
             Key::Esc => {
                 self.clear_selection();
+                self.selection_changed = false;
                 Some(0)
             }
             Key::Char(' ') => {
                 let target = self.selected_target()?.clone();
                 self.toggle_selection(&target);
+                self.selection_changed = false;
                 Some(self.multi_selection().len())
             }
             _ => None,
@@ -279,24 +287,42 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     }
 
     pub fn toggle_selection(&mut self, target: &Target) {
+        let before = self.multi_selection().len();
         match self.active {
             Presentation::Wide => self.wide.toggle_selection(target),
             Presentation::Inline => self.inline.toggle_selection(target),
         }
+        self.selection_changed |= before != self.multi_selection().len();
     }
 
     pub fn extend_selection_to(&mut self, target: &Target) {
+        let before = self.multi_selection().len();
         match self.active {
             Presentation::Wide => self.wide.extend_selection_to(target),
             Presentation::Inline => self.inline.extend_selection_to(target),
         }
+        self.selection_changed |= before != self.multi_selection().len();
     }
 
     pub fn clear_selection(&mut self) {
+        if !self.multi_selection().is_empty() {
+            self.selection_changed = true;
+        }
         match self.active {
             Presentation::Wide => self.wide.clear_selection(),
             Presentation::Inline => self.inline.clear_selection(),
         }
+    }
+
+    /// Return the count from the most recent selection mutation, once. This
+    /// keeps pointer selection forwarding at the component boundary without
+    /// making the shell inspect the carrier's local state.
+    pub fn selection_changed_msg(&mut self) -> Option<usize> {
+        if !self.selection_changed {
+            return None;
+        }
+        self.selection_changed = false;
+        Some(self.multi_selection().len())
     }
 
     /// Replace one existing active-owner row by stable target without

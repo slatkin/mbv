@@ -512,6 +512,9 @@ impl LibraryContentOwner for FeedsContent {
                 | RowLocalInput::RangeClick(at) => {
                     let target = self.resolve_row_id(at)?;
                     self.delegate_row_local_input(input, Some(target));
+                    if let Some(count) = self.carrier.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                     Some(Msg::Shell(ShellRequest::FeedsRowClick))
                 }
                 RowLocalInput::ContextClick(at) => {

@@ -412,6 +412,9 @@ impl QueueComponent {
                         ClickModifier::None => RowLocalInput::Click(at),
                     };
                     self.delegate_row_local_input(input, Some(target));
+                    if let Some(count) = self.carrier.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                 }
                 self.drag_grab = if modifier == ClickModifier::None {
                     target

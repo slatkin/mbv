@@ -469,6 +469,9 @@ impl BookContent {
                 | RowLocalInput::RangeClick(at) => {
                     let target = self.carrier.resolve_current_point(at)?.clone();
                     self.carrier.delegate(input, Some(target));
+                    if let Some(count) = self.carrier.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                     self.sync_book_from_owner();
                     self.book_request()
                 }

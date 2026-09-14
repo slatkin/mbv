@@ -561,6 +561,9 @@ impl LibraryContentOwner for BrowserContent {
                     | RowLocalInput::RangeClick(_at) => {
                         let target = target?;
                         self.carrier.delegate(input, Some(target.clone()));
+                        if let Some(count) = self.carrier.selection_changed_msg() {
+                            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                        }
                         Some(Msg::Shell(ShellRequest::BrowserRowClick {
                             target: Some(target),
                         }))

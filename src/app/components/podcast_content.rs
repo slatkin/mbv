@@ -349,6 +349,9 @@ impl LibraryContentOwner for PodcastContent {
             LibrarySlotEvent::List(input) => {
                 self.episode_focused = false;
                 self.carrier.delegate(input, None);
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 self.sync_show_selection();
                 self.show_move()
             }

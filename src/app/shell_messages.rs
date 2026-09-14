@@ -91,6 +91,7 @@ impl Model {
                 // same tab-switch entry point the keyboard path uses.
                 ShellRequest::TabSelect(tab_pos) => {
                     self.dismiss_active_inline_search();
+                    self.visual_selection = None;
                     self.app.set_library_tab(tab_pos);
                 }
                 ShellRequest::DismissHelp => self.umount_help(),

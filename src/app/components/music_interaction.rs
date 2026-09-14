@@ -56,6 +56,9 @@ impl MusicContent {
                         RowLocalInput::Click(at) | RowLocalInput::ToggleClick(at) | RowLocalInput::RangeClick(at) => {
                             let target = self.carrier.resolve_current_point(at)?.clone();
                             self.carrier.delegate(input, Some(target));
+                            if let Some(count) = self.carrier.selection_changed_msg() {
+                                return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                            }
                             Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                                 target: self.selected_album_index(),
                                 kind: AlbumCursorKind::Move,

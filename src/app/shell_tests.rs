@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::images::CachedImage;
 use crate::app::tests::make_app_stub;
+use crate::app::PanelFocus;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
@@ -37,6 +38,19 @@ fn router_records_first_space_for_second_claim() {
         model.router_outcome(&messages),
         RouterOutcome::Command(Command::TogglePlayPause)
     );
+    assert!(model.app.last_space_press.is_none());
+}
+
+#[test]
+fn visual_mode_does_not_arm_double_tap_timers() {
+    let mut model = Model::new(make_app_stub());
+    model.app.player.status.lock().unwrap().active = true;
+    model.visual_selection = Some((PanelFocus::Library, 2));
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
+        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE).into(),
+    ))];
+
+    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
     assert!(model.app.last_space_press.is_none());
 }
 

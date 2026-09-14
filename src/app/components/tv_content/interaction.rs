@@ -54,6 +54,9 @@ impl TvContent {
             RowLocalInput::Click(at) | RowLocalInput::ToggleClick(at) | RowLocalInput::RangeClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
                 self.apply_pane_click(hit.clone(), at, input);
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             RowLocalInput::DoubleClick(at) => {
@@ -99,6 +102,9 @@ impl TvContent {
         match input {
             RowLocalInput::Click(_) | RowLocalInput::ToggleClick(_) | RowLocalInput::RangeClick(_) => {
                 self.apply_pane_click(hit.clone(), at, input);
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             RowLocalInput::DoubleClick(_) => {

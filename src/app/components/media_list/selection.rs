@@ -129,6 +129,31 @@ mod tests {
     }
 
     #[test]
+    fn visual_mode_starts_at_cursor_and_movement_extends_from_anchor() {
+        let mut list = list();
+        list.select_target(&3);
+        list.enter_visual_mode();
+        assert_eq!(list.multi_selection(), &[3]);
+        list.delegate(super::super::RowLocalInput::Move(2), None);
+        assert_eq!(list.multi_selection(), &[3, 4, 5]);
+        list.delegate(super::super::RowLocalInput::Move(-1), None);
+        assert_eq!(list.multi_selection(), &[3, 4]);
+    }
+
+    #[test]
+    fn visual_selection_change_is_consumed_by_the_carrier_helper() {
+        let mut carrier = super::super::MediaListCarrier::new(super::super::Presentation::Wide);
+        carrier.wide_mut().set_content((1..=3).map(item).collect());
+        carrier.wide_mut().select_target(&2);
+        let key = tuirealm::event::KeyEvent::new(
+            tuirealm::event::Key::Char('v'),
+            tuirealm::event::KeyModifiers::SHIFT,
+        );
+        assert_eq!(carrier.handle_visual_key(&key), Some(1));
+        assert_eq!(carrier.multi_selection(), &[2]);
+    }
+
+    #[test]
     fn refresh_reanchors_after_rows_above_cursor_are_removed() {
         let mut list = list();
         list.select_target(&3);

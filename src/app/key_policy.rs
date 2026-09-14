@@ -559,6 +559,15 @@ mod tests {
     }
 
     #[test]
+    fn visual_mode_leaves_space_and_escape_to_the_focused_list() {
+        let mut visual = snapshot();
+        visual.player_active = true;
+        visual.visual_mode_active = true;
+        assert!(resolve_policy(chord(KeyCode::Char(' '), KeyModifiers::NONE), &visual).is_none());
+        assert!(resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &visual).is_none());
+    }
+
+    #[test]
     fn sessions_sidebar_escape_precedes_double_escape_playback_stop() {
         let mut armed = snapshot();
         armed.player_active = true;
