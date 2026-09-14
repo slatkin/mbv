@@ -13,4 +13,4 @@
 
 ## 3. Final gate
 
-- [ ] 3.1 Full workspace check: `cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all -- --check && cargo nextest run --workspace`
+- [x] 3.1 Full workspace check: `cargo clippy --workspace --all-targets -- -D warnings && cargo fmt --all -- --check && cargo nextest run --workspace`
