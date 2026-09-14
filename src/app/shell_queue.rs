@@ -258,13 +258,7 @@ impl Model {
                 // context-menu RemoveSelection path does. Removing in queue
                 // order is safe because every lookup uses the current queue.
                 for slot_id in slot_ids {
-                    if let Some(index) = self
-                        .app
-                        .queue_for_scope(scope)
-                        .slots()
-                        .iter()
-                        .position(|slot| slot.slot_id == slot_id)
-                    {
+                    if let Some(index) = self.slot_index(scope, slot_id) {
                         self.app.remove_from_queue(index);
                     }
                 }
@@ -418,16 +412,12 @@ impl Model {
 
     /// Position of `slot_id` in `scope`'s queue, if present. Pure lookup with
     /// none of `select_queue_slot`'s scope/focus/hold-window side effects.
-    fn slot_index(
+    pub(crate) fn slot_index(
         &self,
         scope: QueueScope,
         slot_id: mbv_core::playback_queue::QueueSlotId,
     ) -> Option<usize> {
-        self.app
-            .queue_for_scope(scope)
-            .slots()
-            .iter()
-            .position(|slot| slot.slot_id == slot_id)
+        self.app.slot_index(scope, slot_id)
     }
 }
 

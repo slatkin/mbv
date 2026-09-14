@@ -438,7 +438,7 @@ impl Model {
                     ) => {
                         if slot_ids.len() > 1 {
                             let scope = self.app.viewed_queue_scope();
-                            let (items, remove_targets) = slot_ids
+                            let (items, remove_targets, capabilities) = slot_ids
                                 .iter()
                                 .filter_map(|sid| {
                                     let slot = self
@@ -448,38 +448,24 @@ impl Model {
                                         .iter()
                                         .find(|s| s.slot_id == *sid)?;
                                     let item = slot.item.as_emby().cloned();
-                                    Some((
-                                        item,
-                                        crate::app::types_context_menu::BulkRemoveTarget::Queue(
-                                            *sid,
-                                        ),
-                                    ))
+                                    let remove = crate::app::types_context_menu::BulkRemoveTarget::Queue(*sid);
+                                    let capability =
+                                        crate::app::context_menu_capabilities::queue_item_capabilities(
+                                            &slot.item,
+                                        );
+                                    Some((item, remove, capability))
                                 })
                                 .fold(
-                                    (Vec::new(), Vec::new()),
-                                    |(mut items, mut removes), (item, remove)| {
+                                    (Vec::new(), Vec::new(), Vec::new()),
+                                    |(mut items, mut removes, mut capabilities), (item, remove, capability)| {
                                         if let Some(item) = item {
                                             items.push(item);
                                         }
                                         removes.push(remove);
-                                        (items, removes)
+                                        capabilities.push(capability);
+                                        (items, removes, capabilities)
                                     },
                                 );
-                            let capabilities = slot_ids
-                                .iter()
-                                .filter_map(|sid| {
-                                    self.app
-                                        .queue_for_scope(scope)
-                                        .slots()
-                                        .iter()
-                                        .find(|slot| slot.slot_id == *sid)
-                                        .map(|slot| {
-                                            crate::app::context_menu_capabilities::queue_item_capabilities(
-                                                &slot.item,
-                                            )
-                                        })
-                                })
-                                .collect();
                             self.app.open_context_menu_for_selection(
                                 items,
                                 anchor,

@@ -80,12 +80,7 @@ impl App {
                         }
                         BulkRemoveTarget::Queue(slot_id) => {
                             let scope = self.viewed_queue_scope();
-                            if let Some(pos) = self
-                                .queue_for_scope(scope)
-                                .slots()
-                                .iter()
-                                .position(|slot| slot.slot_id == slot_id)
-                            {
+                            if let Some(pos) = self.slot_index(scope, slot_id) {
                                 self.remove_from_queue(pos);
                             }
                         }

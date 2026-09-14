@@ -232,15 +232,22 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         }
     }
 
+    /// Run `f`, marking the selection dirty if it changed the active owner's
+    /// multi-selection length.
+    fn track_selection_change<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let before = self.multi_selection().len();
+        let result = f(self);
+        self.selection_changed |= before != self.multi_selection().len();
+        result
+    }
+
     /// Replace the active owner's display rows, preserving the selected
     /// target where possible and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
-        let before = self.multi_selection().len();
-        match self.active {
-            Presentation::Wide => self.wide.set_content(rows),
-            Presentation::Inline => self.inline.set_content(rows),
-        }
-        self.selection_changed |= before != self.multi_selection().len();
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.set_content(rows),
+            Presentation::Inline => this.inline.set_content(rows),
+        });
     }
 
     /// Move the active owner's selection to `target` when it is present.
@@ -289,21 +296,17 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     }
 
     pub fn toggle_selection(&mut self, target: &Target) {
-        let before = self.multi_selection().len();
-        match self.active {
-            Presentation::Wide => self.wide.toggle_selection(target),
-            Presentation::Inline => self.inline.toggle_selection(target),
-        }
-        self.selection_changed |= before != self.multi_selection().len();
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.toggle_selection(target),
+            Presentation::Inline => this.inline.toggle_selection(target),
+        });
     }
 
     pub fn extend_selection_to(&mut self, target: &Target) {
-        let before = self.multi_selection().len();
-        match self.active {
-            Presentation::Wide => self.wide.extend_selection_to(target),
-            Presentation::Inline => self.inline.extend_selection_to(target),
-        }
-        self.selection_changed |= before != self.multi_selection().len();
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.extend_selection_to(target),
+            Presentation::Inline => this.inline.extend_selection_to(target),
+        });
     }
 
     pub fn clear_selection(&mut self) {
@@ -396,13 +399,10 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         input: RowLocalInput,
         target: Option<Target>,
     ) -> RowLocalOutcome<Target> {
-        let before = self.multi_selection().len();
-        let outcome = match self.active {
-            Presentation::Wide => self.wide.delegate(input, target),
-            Presentation::Inline => self.inline.delegate(input, target),
-        };
-        self.selection_changed |= before != self.multi_selection().len();
-        outcome
+        self.track_selection_change(|this| match this.active {
+            Presentation::Wide => this.wide.delegate(input, target),
+            Presentation::Inline => this.inline.delegate(input, target),
+        })
     }
 
     /// Whether the active presentation's retained current frame claims
