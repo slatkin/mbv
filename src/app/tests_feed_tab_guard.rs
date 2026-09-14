@@ -240,6 +240,28 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
 }
 
 #[test]
+fn feed_selection_enqueue_preserves_supplied_order() {
+    let mut app = make_app_stub();
+    app.enqueue_feed_entries(vec![
+        playable_feed_entry("feed-first"),
+        playable_feed_entry("feed-second"),
+        playable_feed_entry("feed-third"),
+    ]);
+
+    let guids: Vec<_> = app
+        .playback_queue()
+        .queue
+        .slots()
+        .iter()
+        .filter_map(|slot| match &slot.item {
+            mbv_core::playback_queue::QueueItem::Feed(entry) => Some(entry.guid.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(guids, vec!["feed-first", "feed-second", "feed-third"]);
+}
+
+#[test]
 fn direct_remote_feed_enqueue_uses_unified_append() {
     let _guard = crate::config::TestStateDirGuard::new();
     let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(make_items(1), make_items(1));
