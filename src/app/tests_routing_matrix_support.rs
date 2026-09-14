@@ -93,3 +93,34 @@ pub(crate) fn text_entry_snapshot() -> RouterSnapshot {
     }
 }
 
+#[test]
+fn immediate_router_outcomes_have_distinct_fold_behavior() {
+    let leaf = Some(Msg::Shell(crate::app::components::ShellRequest::Quit));
+    let focused = Some(ComponentId::Library);
+
+    let command = fold_tick_with_outcome(
+        leaf.clone(),
+        key(KeyCode::Char('q')),
+        focused.clone(),
+        RouterOutcome::Command(crate::app::action::Command::Quit),
+    );
+    assert!(command.is_empty(), "Command replaces the focused leaf request");
+
+    let swallow = fold_tick_with_outcome(
+        leaf.clone(),
+        key(KeyCode::Char('q')),
+        focused.clone(),
+        RouterOutcome::Swallow,
+    );
+    assert!(swallow.is_empty(), "Swallow discards the focused leaf request");
+
+    let fall_through = fold_tick_with_outcome(
+        leaf,
+        key(KeyCode::Char('z')),
+        focused,
+        RouterOutcome::FallThrough,
+    );
+    assert_eq!(fall_through.len(), 1, "FallThrough keeps the leaf request");
+    assert!(matches!(fall_through[0], Msg::Shell(_)));
+}
+

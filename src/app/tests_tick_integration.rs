@@ -69,6 +69,80 @@ fn queue_focused_harness() -> TickHarness {
     TickHarness::new(app)
 }
 
+fn active_queue_harness() -> TickHarness {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.player.status.lock().unwrap().active = true;
+    TickHarness::new(app)
+}
+
+#[test]
+fn live_tick_characterizes_space_double_tap_lifecycle() {
+    let mut harness = active_queue_harness();
+
+    harness.inject(key(Key::Char(' ')));
+    let first = harness.step();
+    assert!(matches!(first.router, RouterOutcome::FallThrough));
+    assert!(harness.model().app.last_space_press.is_some());
+
+    harness.inject(key(Key::Char(' ')));
+    let second = harness.step();
+    assert_eq!(second.router, RouterOutcome::Command(crate::app::action::Command::TogglePlayPause));
+    assert!(harness.model().app.last_space_press.is_none());
+
+    harness.model_mut().app.last_space_press = Some(Instant::now() - Duration::from_secs(1));
+    harness.inject(key(Key::Char(' ')));
+    let expired = harness.step();
+    assert!(matches!(expired.router, RouterOutcome::FallThrough));
+    assert!(harness.model().app.last_space_press.is_some());
+}
+
+#[test]
+fn live_tick_characterizes_escape_double_tap_lifecycle() {
+    let mut harness = active_queue_harness();
+
+    harness.inject(key(Key::Esc));
+    let first = harness.step();
+    assert!(matches!(first.router, RouterOutcome::FallThrough));
+    assert!(harness.model().app.last_esc_press.is_some());
+
+    harness.inject(key(Key::Esc));
+    let second = harness.step();
+    assert_eq!(second.router, RouterOutcome::Command(crate::app::action::Command::Stop));
+    assert!(harness.model().app.last_esc_press.is_none());
+
+    harness.model_mut().app.last_esc_press = Some(Instant::now() - Duration::from_secs(1));
+    harness.inject(key(Key::Esc));
+    let expired = harness.step();
+    assert!(matches!(expired.router, RouterOutcome::FallThrough));
+    assert!(harness.model().app.last_esc_press.is_some());
+}
+
+#[test]
+fn live_tick_local_mutation_precedes_root_observation() {
+    let mut harness = TickHarness::new(make_app_stub());
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(key(Key::Char('a')));
+    let first = harness.step();
+    harness.inject(key(Key::Char('b')));
+    let second = harness.step();
+
+    assert!(matches!(second.router, RouterOutcome::FallThrough));
+    assert!(second.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::Key(_))
+    )));
+    assert!(second.messages.is_empty(), "local mutation emits no shell request");
+    assert_eq!(second.raw_messages.len(), 1, "only the root observes this local key");
+    assert_eq!(
+        search_component_mut(&mut harness).debounce_pending.as_deref(),
+        Some("ab"),
+        "the focused search component mutated its local query before root observation"
+    );
+    assert_eq!(first.raw_messages.len(), 1);
+}
+
 pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSidebarComponent {
     harness
         .model_mut()
