@@ -20,9 +20,9 @@
 
 ## 4. Defer Context-Sensitive Double Taps
 
-- [ ] 4.1 Change Space and Escape policy resolution to return deferred candidates without mutating candidate clocks; verify existing immediate global commands and blocking-overlay swallows remain unchanged in the routing matrix.
-- [ ] 4.2 Move candidate clock advance/fire/reset into final arbitration so consumed presses reset and never arm a candidate; verify live ticks cover Visual-like consumed Space/Escape, subsequent unhandled presses, timeout, and ordinary double taps.
-- [ ] 4.3 Remove pre-arbitration Space/Escape double-tap facts and any component-local-state facts from `RouterSnapshot`; verify exact source search and router tests show no selection or Visual-state mirror feeds keyboard policy.
+- [x] 4.1 Change Space and Escape policy resolution to return deferred candidates without mutating candidate clocks; verify existing immediate global commands and blocking-overlay swallows remain unchanged in the routing matrix.
+- [x] 4.2 Move candidate clock advance/fire/reset into final arbitration so consumed presses reset and never arm a candidate; verify live ticks cover Visual-like consumed Space/Escape, subsequent unhandled presses, timeout, and ordinary double taps.
+- [x] 4.3 Remove pre-arbitration Space/Escape double-tap facts and any component-local-state facts from `RouterSnapshot`; verify exact source search and router tests show no selection or Visual-state mirror feeds keyboard policy.
 
 ## 5. Normalize Canonical Media-List Operations
 
