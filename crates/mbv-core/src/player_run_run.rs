@@ -94,7 +94,7 @@ impl PlaybackRun {
 
                 if self
                     .quit_at
-                    .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
+                    .is_some_and(|t| t.elapsed() > Duration::from_millis(200))
                 {
                     if !self.stop_report.is_sent() {
                         self.report_stop_now_or_background(&mut progress);

@@ -284,11 +284,6 @@ impl SessionReporter {
         let Some(d) = self.stopped_report_data(last_valid_pos) else {
             return false;
         };
-        if let Some(ref tx) = self.ws_tx {
-            if tx.is_connected() {
-                let _ = tx.flush(timeout.min(Duration::from_secs(1)));
-            }
-        }
         log::info!(target: "player", "report_stopped shutdown: item={} is_audio={} last_valid_pos={}s sending pos={}s timeout={}ms",
             d.id, d.is_audio, d.last_valid_pos / TICKS_PER_SECOND, d.pos / TICKS_PER_SECOND, timeout.as_millis());
         self.client

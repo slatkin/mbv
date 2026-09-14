@@ -45,7 +45,7 @@ impl PlaybackRun {
     /// `self.stop_report` before calling this.
     fn report_stop_now_or_background(&mut self, progress: &mut ProgressGuard) {
         if self.is_quit_shutdown() {
-            progress.stop_and_join(self.progress_join_budget());
+            let _ = progress.stop_tx.send(());
             self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
         } else {
             let _ = progress.stop_tx.send(());
