@@ -13,10 +13,10 @@
 
 ## 3. Centralize Semantic Arbitration
 
-- [ ] 3.1 Introduce the pure central arbitration fold over captured focus, one router observation, and the focused leaf result; verify one table-driven unit test covers every row of design D3's truth table and malformed combinations trigger debug assertions.
-- [ ] 3.2 Route the production tick and shared tick-test harness through the new fold while preserving immediate router outcomes; verify the routing matrix and all `Application::tick()` integration tests pass.
-- [ ] 3.3 Add the compact diagnostic record for chord, focus, router result, leaf disposition, final disposition, and dispatch kind without payload data; verify focused assertions/log output identify a deliberately malformed arbitration input.
-- [ ] 3.4 Remove the superseded router-outcome application path and framework-local marker fall-through; verify exhaustive message dispatch remains wildcard-free and `cargo check -p mbv` passes.
+- [x] 3.1 Introduce the pure central arbitration fold over captured focus, one router observation, and the focused leaf result; verify one table-driven unit test covers every row of design D3's truth table and malformed combinations trigger debug assertions.
+- [x] 3.2 Route the production tick and shared tick-test harness through the new fold while preserving immediate router outcomes; verify the routing matrix and all `Application::tick()` integration tests pass.
+- [x] 3.3 Add the compact diagnostic record for chord, focus, router result, leaf disposition, final disposition, and dispatch kind without payload data; verify focused assertions/log output identify a deliberately malformed arbitration input.
+- [x] 3.4 Remove the superseded router-outcome application path and framework-local marker fall-through; verify exhaustive message dispatch remains wildcard-free and `cargo check -p mbv` passes.
 
 ## 4. Defer Context-Sensitive Double Taps
 
