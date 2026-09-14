@@ -1,8 +1,8 @@
 ## 1. Tab hover ownership and painting
 
-- [ ] 1.1 Add `TabPanel` component tests for pointer movement over an unselected retained tab target, movement into a gap, and movement over the selected tab; verify hover changes no selection/focus state and returns no `Msg` with `cargo nextest run -p mbv tab_panel`.
-- [ ] 1.2 Add the private hovered-tab identity to `TabPanel`, resolve `MouseEventKind::Moved` through its existing latest-frame tab hits, and pass the identity into the tab paint model; verify the task 1.1 tests pass.
-- [ ] 1.3 Add resting/hovered/selected precedence to the central tab painter using existing semantic theme roles, and add buffer assertions that unselected hover strengthens the label while selected hover preserves selected styling; verify with `cargo nextest run -p mbv tab_panel`.
+- [x] 1.1 Add `TabPanel` component tests for pointer movement over an unselected retained tab target, movement into a gap, and movement over the selected tab; verify hover changes no selection/focus state and returns no `Msg` with `cargo nextest run -p mbv tab_panel`.
+- [x] 1.2 Add the private hovered-tab identity to `TabPanel`, resolve `MouseEventKind::Moved` through its existing latest-frame tab hits, and pass the identity into the tab paint model; verify the task 1.1 tests pass.
+- [x] 1.3 Add resting/hovered/selected precedence to the central tab painter using existing semantic theme roles, and add buffer assertions that unselected hover strengthens the label while selected hover preserves selected styling; verify with `cargo nextest run -p mbv tab_panel`.
 
 ## 2. Main Library Selector-row hover
 
