@@ -67,11 +67,11 @@
 
 ## 9. Final verification
 
-- [ ] 9.1 Spec-to-scenario traceability check: for every `#### Scenario:` in `openspec/changes/add-media-list-multi-select/specs/media-list-multi-select/spec.md`, confirm a corresponding test exists (list the test file/name next to each scenario in the PR description). Any scenario without a test is a gap to close before merge, not a note-and-ship item.
-- [ ] 9.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and fix any new lints introduced by this change.
-- [ ] 9.3 Run `cargo fmt --all -- --check` and run plain `cargo fmt --all` if it reports diffs, accepting the reflow verbatim (never hand-revert rustfmt output, per AGENTS.md).
-- [ ] 9.4 Check every file touched by this change against the repo's 800-line cap (`wc -l` each; pay particular attention to `src/app/components/msg/shell.rs` at 553 lines pre-change, `src/app/context_menu_actions.rs` at 591 lines pre-change, and `src/app/key_policy.rs` at 600 lines pre-change — all three gain code in this campaign). Split any file that crosses 800 lines before opening a PR (per AGENTS.md, this is a pre-PR gate, not a mid-project one).
-- [ ] 9.5 Run the full suite once: `cargo nextest run --workspace` (or per-package as each task already verified) and `cargo test --release -- --test-threads=4` to match CI's fd-budget-throttled invocation.
+- [x] 9.1 Spec-to-scenario traceability check: for every `#### Scenario:` in `openspec/changes/add-media-list-multi-select/specs/media-list-multi-select/spec.md`, confirm a corresponding test exists (list the test file/name next to each scenario in the PR description). Any scenario without a test is a gap to close before merge, not a note-and-ship item.
+- [x] 9.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and fix any new lints introduced by this change.
+- [x] 9.3 Run `cargo fmt --all -- --check` and run plain `cargo fmt --all` if it reports diffs, accepting the reflow verbatim (never hand-revert rustfmt output, per AGENTS.md).
+- [x] 9.4 Check every file touched by this change against the repo's 800-line cap (`wc -l` each; pay particular attention to `src/app/components/msg/shell.rs` at 553 lines pre-change, `src/app/context_menu_actions.rs` at 591 lines pre-change, and `src/app/key_policy.rs` at 600 lines pre-change — all three gain code in this campaign). Split any file that crosses 800 lines before opening a PR (per AGENTS.md, this is a pre-PR gate, not a mid-project one).
+- [x] 9.5 Run the full suite once: `cargo nextest run --workspace` (or per-package as each task already verified) and `cargo test --release -- --test-threads=4` to match CI's fd-budget-throttled invocation.
 
 ## 10. Design/spec drift to reconcile (RECONCILED — kept as historical record)
 
