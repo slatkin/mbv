@@ -7,9 +7,9 @@
 
 - [x] 2.1 Add the internal `Unhandled`/`Consumed` leaf-key result and framework-local consumed marker in the component message boundary; verify unit coverage distinguishes consumed-without-request, consumed-with-request, and unhandled conversion.
 - [x] 2.2 Convert Library panel and its destination key-handler families to return explicit leaf results without changing their typed requests; verify the relevant component tests and live Library tick tests pass.
-- [ ] 2.3 Convert Queue, playback Panels, Status bar, Tab panel, and pane-boundary key handlers to explicit leaf results; verify their component tests and live panel-focus tick tests pass.
-- [ ] 2.4 Convert sidebars, popups, modals, and remaining overlays to explicit leaf results; verify blocking-overlay, text-entry, focus-restoration, and overlay tick integration tests pass.
-- [ ] 2.5 Remove compatibility inference inside converted key handlers and verify an exact source search finds no local-only recognized key path represented by an ambiguous bare `None`.
+- [x] 2.3 Convert Queue, playback Panels, Status bar, Tab panel, and pane-boundary key handlers to explicit leaf results; verify their component tests and live panel-focus tick tests pass.
+- [x] 2.4 Convert sidebars, popups, modals, and remaining overlays to explicit leaf results; verify blocking-overlay, text-entry, focus-restoration, and overlay tick integration tests pass.
+- [x] 2.5 Remove compatibility inference inside converted key handlers and verify an exact source search finds no local-only recognized key path represented by an ambiguous bare `None`.
 
 ## 3. Centralize Semantic Arbitration
 
