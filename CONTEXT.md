@@ -524,10 +524,30 @@ _Avoid_: recessed box, hero panel, detail panel
 
 **Main content box**:
 The `#2d353b` `SURFACE_BACKDROP` inset within a Hero pane (or an inline hero's
-equivalent area), holding one kind-dependent payload at one shared padding
-value. Distinct from the Hero pane it sits inside: the pane is the outer
-container fill, the box is the inner content inset.
+equivalent area), holding kind-dependent body content at one shared padding
+value. It holds overview text and, for a Movie in the Wide Hero pane, the
+Cast and crew table in the same box. Distinct from the Hero pane it sits
+inside: the pane is the outer container fill, the box is the inner content
+inset.
 _Avoid_: overview box, recessed box
+
+**Provider-link row**:
+The Movie metadata row that joins the names of its declared provider links,
+rendered after the release-date, runtime, and genre rows. Each name is plain
+text unless the terminal declares hyperlink support and its URL is an `http` or
+`https` URL with no control bytes; eligible names use an OSC 8 hyperlink while
+remaining in the same row. The Narrow inline hero keeps this row plain text.
+_Avoid_: external-links row, link list, clickable links
+
+**Cast and crew table**:
+The Wide Hero pane's table of Movie people inside the Main content box, with
+one name column and one shared role column and no header or separator. It lists
+every Director in provider order, followed by at most nine Actors in provider
+order; directors do not consume cast places. An empty role falls back to the
+person's provider type. The table follows overview text after one blank row, or
+starts at the box's first content row when there is no overview, and clips at
+the box's bottom edge. The Narrow inline hero does not render it.
+_Avoid_: credits list, cast list, detail table
 
 **Render Component**:
 A `src/app/render/components/` unit that takes a typed content model plus a
