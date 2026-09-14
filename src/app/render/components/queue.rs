@@ -100,7 +100,7 @@ pub(in crate::app) fn render_queue_status(
     area: Rect,
     playlist: Vec<Span<'static>>,
     autosave: Option<Vec<Span<'static>>>,
-    scope: Option<QueueTitleModel>,
+    scope: Option<&QueueTitleModel>,
 ) -> (Option<Rect>, Option<Rect>) {
     frame.render_widget(
         Block::default().style(
@@ -178,8 +178,8 @@ pub(in crate::app) fn render_queue_status(
             .map(|span| span.content.width() as u16)
             .sum::<u16>();
         // Autosave yields the far right to the scope pills when shown.
-        let scope_w = scope_remote.map(|r| r.right() - r.x).unwrap_or(0)
-            + scope_local.map(|r| r.right() - r.x).unwrap_or(0);
+        let scope_w =
+            scope_remote.map(|r| r.width).unwrap_or(0) + scope_local.map(|r| r.width).unwrap_or(0);
         let x = area.x + area.width.saturating_sub(scope_w).saturating_sub(width);
         if x > area.x {
             frame.render_widget(

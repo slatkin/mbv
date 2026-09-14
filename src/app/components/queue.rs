@@ -593,7 +593,7 @@ impl Component for QueueComponent {
                 footer_row,
                 self.status_playlist.clone(),
                 self.status_autosave.clone(),
-                self.status_scope.clone(),
+                self.status_scope.as_ref(),
             );
         }
         self.ensure_carrier();

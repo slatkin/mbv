@@ -9,7 +9,7 @@ use crate::app::types_context_menu::{
     is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
-use crate::app::{PanelFocus, TabSelection};
+use crate::app::PanelFocus;
 use ratatui::layout::Rect;
 
 impl Model {
@@ -19,46 +19,12 @@ impl Model {
         ComponentId::Overlay(OverlayId::ContextMenu)
     }
 
-    /// The Library panel's painted panel rect (list slot) and selected-row
-    /// rect, when the Home owner is the migrated active destination with the
-    /// Library panel focused (task 5.11). Returns `None` otherwise, so the
-    /// caller falls back to the legacy `AppLayout` geometry. The panel gains
-    /// this geometry from its own `view()` paint, so the menu placement
-    /// tracks the panel's real paint rather than any copied-back legacy
-    /// geometry.
-    fn home_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
-        if !matches!(self.app.tab, TabSelection::Home)
-            || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
-        {
-            return None;
-        }
-        self.application
-            .get_component(&ComponentId::Library)
-            .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(LibraryPanel::menu_geometry)
-    }
-
-    /// Context-menu geometry for a migrated Audiobookshelf Books owner.
-    fn book_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
-        if !matches!(self.app.tab, TabSelection::AudiobookshelfLibrary(_))
-            || !matches!(self.app.effective_panel_focus(), PanelFocus::Library)
-        {
-            return None;
-        }
-        self.application
-            .get_component(&ComponentId::Library)
-            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-            .and_then(LibraryPanel::menu_geometry)
-    }
-
-    /// Context-menu geometry for any migrated LibraryPanel owner,
-    /// regardless of tab (task 5.11 generalized): the panel's own
-    /// last-painted list geometry. `home_menu_geometry`/`book_menu_geometry`
-    /// are tab-gated subsets; this is the fallback for every other migrated
-    /// destination (Music, Browser, Feeds, TV, ...), so a pointer-anchored
-    /// menu clamps inside the painted list pane instead of the legacy
-    /// `AppLayout.left_area` (the queue column). Returns `None` when the
-    /// panel never painted, preserving the legacy fallback.
+    /// Context-menu geometry for any migrated LibraryPanel owner, regardless
+    /// of tab (task 5.11 generalized): the panel's own last-painted list
+    /// geometry. The panel gains this geometry from its own `view()` paint,
+    /// so the menu placement tracks the panel's real paint rather than any
+    /// copied-back legacy geometry. Returns `None` when the panel never
+    /// painted, preserving the legacy `AppLayout` fallback.
     fn library_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
         if !matches!(self.app.effective_panel_focus(), PanelFocus::Library) {
             return None;
@@ -69,9 +35,9 @@ impl Model {
             .and_then(LibraryPanel::menu_geometry)
     }
 
-    /// Like `home_menu_geometry`, but for the mounted `QueueComponent` (task
-    /// 3.1, design D11): the queue panel answers the context-menu keyboard
-    /// anchor from its own retained geometry, not a shell mirror.
+    /// Like `library_menu_geometry`, but for the mounted `QueueComponent`
+    /// (task 3.1, design D11): the queue panel answers the context-menu
+    /// keyboard anchor from its own retained geometry, not a shell mirror.
     fn queue_menu_geometry(&self) -> Option<(Rect, Option<Rect>)> {
         self.application
             .get_component(&ComponentId::Queue)
@@ -87,26 +53,19 @@ impl Model {
         let layout = &self.app.layout;
         let size = ContextMenu::rendered_size(entries);
         // For component-owned destinations, use the geometry exported by the
-        // active control (or the existing Home/ABS book component seam). Other
-        // destinations and Queue focus keep using `AppLayout` as before.
-        let home = self.home_menu_geometry();
+        // active control. Other destinations and Queue focus keep using
+        // `AppLayout` as before.
         let (panel_rect, anchor_rect): (Rect, Option<Rect>) = match &anchor {
             ContextMenuAnchor::SelectedItem(focus) => {
                 let (panel, selected) = match focus {
-                    PanelFocus::Library => match home {
+                    PanelFocus::Library => match self.library_menu_geometry() {
                         Some((panel, selected)) => (panel, selected),
-                        None => match self.book_menu_geometry() {
-                            Some((panel, selected)) => (panel, selected),
-                            None => match self.library_menu_geometry() {
-                                Some((panel, selected)) => (panel, selected),
-                                // No owning component publishes a selected-row
-                                // anchor for this destination yet; the panel
-                                // still places the menu, just without a row
-                                // anchor (matches the legacy `AppLayout` mirror's
-                                // behaviour, which never populated this field).
-                                None => (layout.left_area, None),
-                            },
-                        },
+                        // No owning component publishes a selected-row
+                        // anchor for this destination yet; the panel
+                        // still places the menu, just without a row
+                        // anchor (matches the legacy `AppLayout` mirror's
+                        // behaviour, which never populated this field).
+                        None => (layout.left_area, None),
                     },
                     PanelFocus::Queue => self.queue_menu_geometry().unwrap_or_default(),
                 };
@@ -114,9 +73,6 @@ impl Model {
             }
             ContextMenuAnchor::Pointer { .. } => {
                 let panel = match self.app.effective_panel_focus() {
-                    // Home is not a wide-TV destination; when it is active the
-                    // pointer panel is the component's own list-area claim rect.
-                    PanelFocus::Library if home.is_some() => home.unwrap().0,
                     PanelFocus::Library
                         if self.app.tab.emby_library_index().is_some_and(|lib_idx| {
                             self.app.wide_tv_library_area(lib_idx).is_some()
