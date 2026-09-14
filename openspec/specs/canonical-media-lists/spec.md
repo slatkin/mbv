@@ -43,6 +43,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 - **WHEN** a row is a navigable container (movie/series folder, album, show, book title)
 - **THEN** it carries no duration string
 - **AND** the painter suppresses the duration slot even if one is projected
+
 ### Requirement: WideMediaList owns fixed-row mechanics
 
 `WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
@@ -84,6 +85,7 @@ It SHALL support Wide hero rails, provider workspace rows, and Queue fixed rows,
 - **WHEN** a Wide presentation is configured for a new frame or receives an empty or zero-area view
 - **THEN** its prior point claim and selected-row geometry are unavailable
 - **AND** a parent treats the presentation as having no list target until the current view finishes.
+
 ### Requirement: InlineMediaBrowser owns selected-row replacement
 
 `InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, semantic painting delegation, and internal current-frame row and replacement geometry. Cursor, scroll, selected target, and other row-local state SHALL remain in the same logical owner used by the corresponding Wide presentation.
@@ -119,6 +121,7 @@ It SHALL remain distinct from Inline Search and SHALL NOT become a second mounte
 - **WHEN** an Inline presentation is configured for a new frame or receives an empty or zero-area view
 - **THEN** its prior point claim and admitted-detail rectangle are unavailable
 - **AND** a parent treats the presentation as having no list target or detail region until the current view finishes.
+
 ### Requirement: Responsive handoff preserves an explicit anchor
 
 A Wide or Inline presentation change for one logical list SHALL reuse its shared canonical owner. The outgoing presentation SHALL record the selected ordinary row's viewport offset, and the receiving presentation SHALL preserve that offset when possible and clamp it to its viewport otherwise. It SHALL NOT copy cursor, selected target, scroll, or other row-local state between presentation-specific controls. Ordinary refresh SHALL preserve the stable target and locally clamp. Only a discrete navigation or restoration boundary MAY explicitly re-anchor the shared owner from a shell-owned stable target and row offset.
@@ -129,6 +132,7 @@ A Wide or Inline presentation change for one logical list SHALL reuse its shared
 - **THEN** the same logical series owner preserves the selected stable target and row-local state
 - **AND** the presentation handoff preserves or clamps only its viewport offset
 - **AND** no shell cursor/scroll mirror is adopted.
+
 ### Requirement: Named destinations compose without changing provider authority
 
 The slice SHALL compose the shared canonical media-list owner with applicable Wide and Inline presentations for generic Emby catalogs, Movies, the Emby homevideos feed view, and TV Series browsing. Every generic Emby catalog is hero-bearing; there is no non-hero two-column catalog presentation. Provider workspaces, images, effects, persistence, Service and Player authority, and typed message translation SHALL remain in their existing parents/shell; media-row interaction state and behavior SHALL remain in the shared owner.
@@ -144,6 +148,7 @@ The slice SHALL compose the shared canonical media-list owner with applicable Wi
 - **WHEN** a generic Emby catalog renders at any width
 - **THEN** it renders through the Wide or Narrow library panel with a Wide or Inline presentation
 - **AND** no two-column grid presentation renders.
+
 ### Requirement: Migration is accepted as one verified slice
 The implementation, representative stateful and rendered tests, automated gates, review, and acceptance SHALL form one uninterrupted slice. There SHALL be no pre-test visual-approval checkpoint. Affected surfaces SHALL provide metadata/state/image-bearing rendered evidence, stateful target-and-anchor evidence, source-level one-painter evidence, manual/live Wide/Narrow evidence before acceptance. The 800-line file-size gate SHALL be enforced as a pre-push check only and SHALL NOT gate acceptance of individual changes. A visual defect found during review or acceptance SHALL be treated as a bug, fixed, and followed by rerunning the affected tests and gates.
 
@@ -152,6 +157,7 @@ The implementation, representative stateful and rendered tests, automated gates,
 - **THEN** representative tests and automated gates run before review and acceptance
 - **AND** live Wide/Narrow review remains part of acceptance
 - **AND** any defect found there is fixed before the slice is accepted
+
 ### Requirement: Home composes canonical list controls
 
 Home SHALL compose one shared canonical owner for the active section's flat media rows and use Inline or Wide presentation where the approved arrangement requires it. Section identity SHALL remain keyed by `pref_key` and restored through `restore_section`. Home SHALL keep exactly one active section; only that section's rows SHALL be projected into the shared owner. Ordinary refresh SHALL preserve its stable target and locally clamp. A presentation transition SHALL preserve the selected row's viewport offset without a second cursor, per-section cursor cache, or App-wide interaction mirror.
@@ -168,18 +174,21 @@ Home SHALL compose one shared canonical owner for the active section's flat medi
 - **WHEN** a Home row requests play, enqueue, delete, watched-toggle, or context intent
 - **THEN** the typed request carries the component-resolved stable target
 - **AND** the shell does not query Home's cursor or resolve the effect from a flat numeric row index.
+
 ### Requirement: Feeds projects structural rows
 The Feeds Service/tab SHALL project FeedAgeGroup/date labels as non-selectable `Heading` rows and separators as non-selectable `Spacer` rows as canonical-list content. Only media `Item` rows SHALL enter selectable indexing. The subscription/group selector pills and the watched selector SHALL remain parent-owned chrome outside the canonical control and SHALL NOT be projected as canonical rows.
 
 #### Scenario: Structural rows do not capture selection
 - **WHEN** a user moves through a grouped Feeds list
 - **THEN** cursor movement skips headings and spacers and activation resolves the selected FeedEntry target.
+
 ### Requirement: Canonical source of truth owns row presentation
 Migrated Home and Feeds rows SHALL use the canonical row model and painter. The deferred two-space row-indent correction from `restore-feeds-service-wide-list` (umbrella task 1.3a) SHALL be implemented at that source of truth, not by destination-specific offsets.
 
 #### Scenario: Wide Feeds remains one column
 - **WHEN** the Feeds Service/tab is rendered at an accepted Wide breakpoint
 - **THEN** it uses one column with the accepted `restore-feeds-service-wide-list` (umbrella task 1.3a) framing/background and selected-row semantics.
+
 ### Requirement: Provider destinations compose canonical media controls
 
 Grouped Music album and track browsing, Audiobookshelf Podcast show and episode browsing, and Audiobookshelf Book and chapter/audio-part browsing SHALL prepare provider-owned content as canonical selectable `Item`, non-selectable `Heading`, and `Spacer` rows and compose shared Wide or Inline presentations where their arrangements require them. The controls SHALL remain embedded beneath the mounted destination component. Provider detail workspaces, images, selectors, surname buckets, filters, effects, and typed intent translation SHALL remain parent-owned; every media-row flow's cursor, scroll, authoritative selected target, row-local behavior, and retained row geometry SHALL remain in its shared canonical owner.
@@ -204,6 +213,7 @@ Grouped Music album and track browsing, Audiobookshelf Podcast show and episode 
 - **THEN** book and chapter/audio-part rows use shared canonical ownership and delegation
 - **AND** surname buckets, active-pane focus, images, content lookup, and absolute chapter-seek intents remain Book-owned
 - **AND** chapter/audio-part rows are not reseeded or reselected during painting.
+
 ### Requirement: Audiobookshelf geometry has complete breakpoint fallbacks
 
 Audiobookshelf Podcast and Book surfaces SHALL use the shared Wide hero or Inline arrangement at the established Wide/Normal breakpoints, preserve the short-height fallback, and hand off stable selected target and viewport anchor across breakpoint changes. Non-list repairs required to make the composition correct SHALL live in shared arrangements or the owning destination component, not a bespoke exception.
@@ -212,6 +222,7 @@ Audiobookshelf Podcast and Book surfaces SHALL use the shared Wide hero or Inlin
 - **WHEN** terminal width/height crosses the Wide threshold or the short-height guard
 - **THEN** the surface selects the defined Wide, Normal, or short fallback arrangement
 - **AND** the selected target, row offset, images, framing, and focus remain stable.
+
 ### Requirement: TV and Movies establish the Wide composition precedent
 
 When grouped Music or an Audiobookshelf Podcast or Book destination meets the shared Wide width and minimum-height predicate, it SHALL follow the TV/Movies composition: its provider-owned detail/workspace SHALL occupy the right pane, and its parent-owned browser-level pills, followed by ordinary one-column canonical rows, SHALL occupy the left rail. The arrangement SHALL use the same shared predicate, pane framing, content spacing, and short-height fallback as TV/Movies. The Wide presentation SHALL NOT use an Inline hero or selected-row replacement in the left rail; when the shared predicate is not met, the destination SHALL use the shared Inline fallback (or suppress detail when the shared minimum cannot fit), not a bespoke arrangement. The arrangement mechanics of this precedent — shared predicate, pane framing, content spacing, and short-height fallback — are specified by the `right-panel-arrangements` spec; this requirement governs only how the canonical controls compose into that arrangement.
@@ -226,6 +237,7 @@ When grouped Music or an Audiobookshelf Podcast or Book destination meets the sh
 - **WHEN** the destination crosses the shared width or minimum-height guard
 - **THEN** it uses the same predicate, pane framing, content spacing, and short-height fallback as TV/Movies
 - **AND** it does not introduce a destination-specific arrangement or breakpoint.
+
 ### Requirement: One shared owner supports list-local extension
 
 Every in-scope logical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its Wide and Inline presentations SHALL operate on that same owner rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
@@ -253,6 +265,7 @@ Parent destinations SHALL retain Service content, stable-target-to-domain lookup
 - **THEN** the destination remains authoritative for that chrome or workspace state
 - **AND** it projects the resulting media rows into the shared owner
 - **AND** provider-specific effects remain typed destination intents.
+
 ### Requirement: Row-local input uses one delegation contract
 
 After the mounted destination resolves overlay, chrome, and active-pane precedence, it SHALL offer every remaining eligible row-local key and normalized pointer gesture to one provider-neutral media-list delegation contract. The shared owner SHALL apply local state transitions and SHALL return only whether input was unhandled, consumed locally, changed the selected stable target, or requested a provider-neutral external row intent. A newly added purely local behavior SHALL use the existing consumed outcome and SHALL NOT require a new destination dispatch arm.
@@ -270,6 +283,7 @@ The mounted destination SHALL remain the sole TuiRealm event boundary and SHALL 
 - **WHEN** shared row handling resolves activation or context intent for a stable target
 - **THEN** the parent translates that provider-neutral result into its existing typed destination intent
 - **AND** Service, Player, persistence, and effect authority do not enter the shared list.
+
 ### Requirement: Stable targets cross every canonical boundary
 
 Every selectable media row SHALL use a stable opaque target whose identity survives reorder and ordinary refresh. A destination request caused by a row SHALL carry the component-resolved stable target rather than a cursor, display-row index, or provider-relative index for shell re-resolution. Targets that are only unique within a parent SHALL include that parent identity.
@@ -285,6 +299,7 @@ Every selectable media row SHALL use a stable opaque target whose identity survi
 - **WHEN** an episode, chapter, audio part, track, or Home row requests an external effect
 - **THEN** the typed request carries its stable opaque target
 - **AND** the shell does not query component cursor state or recompute the target from a row index.
+
 ### Requirement: Canonical geometry has no compatibility path
 
 Every in-scope media-row presentation SHALL paint through its shared presentation adapter once and retain the completed current frame's read-only claim, content, selected-row, and point-resolution facts. Configuring content or geometry, beginning view, or viewing an empty or zero-area region SHALL invalidate prior facts. Destination parents SHALL NOT receive or reconstruct mutable row maps, selectable maps, row rectangles, or caller-supplied point-resolution geometry.
@@ -301,3 +316,35 @@ Every in-scope media-row presentation SHALL paint through its shared presentatio
 - **WHEN** a presentation is configured for a new frame but has not completed its current view
 - **THEN** it claims no row point
 - **AND** the parent has no compatibility fallback using prior or reconstructed geometry.
+
+### Requirement: Selected row marquees an overflowing title instead of truncating
+
+When the shared row painter renders the row that is both the list's current selection and on a focused list, and that row's primary text does not fit its title slot, the painter SHALL animate the title through a bounded back-and-forth marquee (hold at the start, scroll to reveal the tail, hold at the end, scroll back) rather than ellipsis-truncating it. Every other row — unselected rows, the selected row on an unfocused list, and any row whose title already fits its slot — SHALL continue to render with ellipsis truncation exactly as before this change. The marquee's timing SHALL match the existing player-strip title marquee's cadence (used for the Now Playing and idle-feed titles), so the two forms of marqueeing feel identical to the user.
+
+Each list owns an independent marquee clock (mirroring its ownership of cursor and scroll). The clock SHALL restart from the beginning whenever the marqueed text changes — a new row becomes selected, or the selected row's own title text changes — so a freshly-marqueed title never opens mid-scroll.
+
+#### Scenario: Focused selected row with an overflowing title marquees
+
+- **WHEN** the row under the cursor on a focused list has a title wider than its available slot
+- **THEN** the row's title animates through the hold/scroll/hold/scroll-back marquee cycle
+- **AND** no ellipsis appears in the row while it is marqueeing
+
+#### Scenario: Unfocused selection keeps truncating
+
+- **WHEN** the row under the cursor has an overflowing title but its list is not focused
+- **THEN** the row's title is ellipsis-truncated exactly as an ordinary row
+
+#### Scenario: Non-selected rows keep truncating
+
+- **WHEN** a row is not the list's current selection
+- **THEN** its overflowing title is ellipsis-truncated regardless of focus
+
+#### Scenario: Fitting title never marquees
+
+- **WHEN** the selected, focused row's title already fits its slot
+- **THEN** it renders in full, static, with no marquee and no ellipsis
+
+#### Scenario: Marquee restarts on a new selection
+
+- **WHEN** the cursor moves to a different row, or the selected row's title text itself changes
+- **THEN** that row's marquee begins again from its held starting position rather than resuming mid-cycle
