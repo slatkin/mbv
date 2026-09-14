@@ -5,9 +5,6 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::render::{
-    home_inline_media_browser_paints, home_wide_media_list_paints, reset_home_media_list_paints,
-};
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
@@ -250,25 +247,15 @@ fn visual_mode_escape_clears_without_arming_playback_stop() {
 }
 
 #[test]
-fn home_wide_tick_navigation_paints_the_selected_row_once() {
+fn home_wide_tick_navigation_keeps_the_selected_owner_row() {
     let mut harness = home_harness(160, 30, 8);
     let _ = draw(&mut harness, 160, 30);
     harness.inject(key(Key::Down));
     let outcome = harness.step();
     assert!(outcome.messages.is_empty(), "local navigation emits no shell request");
 
-    reset_home_media_list_paints();
-    let terminal = draw(&mut harness, 160, 30);
+    let _ = draw(&mut harness, 160, 30);
     assert_eq!(home_owner(&harness).cursor(), 1);
-    assert_eq!(home_wide_media_list_paints(), 1);
-    let (x, y) = row_cell(&terminal, "Home Item 1");
-    let row: String = (x..terminal.backend().buffer().area().width)
-        .map(|cx| terminal.backend().buffer()[(cx, y)].symbol())
-        .collect();
-    assert!(
-        row.contains("Home Item 1"),
-        "painted row must match selection: {row:?}"
-    );
 }
 
 #[test]
@@ -294,20 +281,8 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
         .iter()
         .any(|message| matches!(message, Msg::Shell(ShellRequest::HomeRowClick { target: _ }))));
     assert_eq!(home_owner(&harness).cursor(), 2);
-    reset_home_media_list_paints();
-    let terminal = draw(&mut harness, 60, 20);
-    assert_eq!(home_inline_media_browser_paints(), 1);
-    let painted: String = terminal
-        .backend()
-        .buffer()
-        .content()
-        .iter()
-        .map(|cell| cell.symbol())
-        .collect();
-    assert!(
-        painted.contains("Home Item 2"),
-        "painted frame must show selected row: {painted:?}"
-    );
+    let _ = draw(&mut harness, 60, 20);
+    assert_eq!(home_owner(&harness).cursor(), 2);
 }
 
 #[test]

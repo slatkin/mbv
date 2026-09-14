@@ -19,8 +19,6 @@ use unicode_width::UnicodeWidthStr;
 /// non-album music levels, all of which render identically without letter
 /// grouping. Returns the scroll offset to persist.
 pub(in crate::app) fn render_plain_rows(f: &mut Frame, ctx: ListRenderCtx) -> usize {
-    #[cfg(test)]
-    super::PLAIN_ROWS_PAINTS.with(|count| count.set(count.get() + 1));
     let ListRenderCtx {
         content_area,
         items,

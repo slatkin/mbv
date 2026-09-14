@@ -47,8 +47,6 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     focused: bool,
     selected_bg: Color,
 ) -> MediaListPaint<Target> {
-    #[cfg(test)]
-    super::WIDE_MEDIA_LIST_PAINTS.with(|count| count.set(count.get() + 1));
     let geometry = list.row_geometry(content_area.height as usize);
     let rows = list.rows();
     let selected_row = geometry.selected_row();
@@ -139,8 +137,6 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
     focused: bool,
     selected_bg: Color,
 ) -> InlinePaintResult<Target> {
-    #[cfg(test)]
-    super::INLINE_MEDIA_BROWSER_PAINTS.with(|count| count.set(count.get() + 1));
     let layout: InlineLayout<Target> =
         list.resolve_inline_layout(content_area.height as usize, desired_detail_rows);
     let geometry = layout.row_geometry;

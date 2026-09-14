@@ -7,19 +7,6 @@ pub(in crate::app) use wide::{
     render_inline_media_browser_component, render_wide_media_list_component,
 };
 
-// §3.2 one-painter instrumentation: per-frame execution counters for the two
-// canonical wide list paint entry points. Tests reset these, render one
-// frame, and assert exactly one wide list painter ran for a destination.
-#[cfg(test)]
-thread_local! {
-    pub(in crate::app) static WIDE_MEDIA_LIST_PAINTS: std::cell::Cell<usize> =
-        const { std::cell::Cell::new(0) };
-    pub(in crate::app) static PLAIN_ROWS_PAINTS: std::cell::Cell<usize> =
-        const { std::cell::Cell::new(0) };
-    pub(in crate::app) static INLINE_MEDIA_BROWSER_PAINTS: std::cell::Cell<usize> =
-        const { std::cell::Cell::new(0) };
-}
-
 #[cfg(test)]
 mod wide_row_regression_tests {
     use super::wide::render_wide_media_list;

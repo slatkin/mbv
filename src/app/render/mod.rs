@@ -31,43 +31,6 @@ pub(in crate::app) use components::help::{
 pub(in crate::app) use components::queue::{render_queue_body, QueuePresentation};
 pub(in crate::app) use components::queue_playback::render_playback_header;
 
-#[cfg(test)]
-pub(crate) fn reset_home_media_list_paints() {
-    components::media_list::WIDE_MEDIA_LIST_PAINTS.with(|count| count.set(0));
-    components::media_list::INLINE_MEDIA_BROWSER_PAINTS.with(|count| count.set(0));
-    components::media_list::PLAIN_ROWS_PAINTS.with(|count| count.set(0));
-}
-
-#[cfg(test)]
-pub(crate) fn home_wide_media_list_paints() -> usize {
-    components::media_list::WIDE_MEDIA_LIST_PAINTS.with(std::cell::Cell::get)
-}
-
-#[cfg(test)]
-pub(crate) fn home_inline_media_browser_paints() -> usize {
-    components::media_list::INLINE_MEDIA_BROWSER_PAINTS.with(std::cell::Cell::get)
-}
-
-#[cfg(test)]
-pub(crate) fn reset_browser_media_list_paints() {
-    reset_home_media_list_paints();
-}
-
-#[cfg(test)]
-pub(crate) fn browser_wide_media_list_paints() -> usize {
-    home_wide_media_list_paints()
-}
-
-#[cfg(test)]
-pub(crate) fn browser_inline_media_browser_paints() -> usize {
-    home_inline_media_browser_paints()
-}
-
-#[cfg(test)]
-pub(crate) fn browser_legacy_plain_rows_paints() -> usize {
-    components::media_list::PLAIN_ROWS_PAINTS.with(std::cell::Cell::get)
-}
-
 pub(in crate::app) use arrangements::wide_hero::{
     paint_wide_hero_text, place_media_list_below, wide_hero_browser_pane, wide_hero_fits,
     wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
