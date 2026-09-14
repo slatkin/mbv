@@ -24,7 +24,7 @@
 
 ## 5. Whole-change verification
 
-- [ ] 5.1 Run `cargo fmt` and verify `cargo fmt --all -- --check` plus `cargo check -p mbv` pass.
-- [ ] 5.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and fix findings introduced by this change.
-- [ ] 5.3 Run `cargo nextest run -p mbv` and confirm the hover, exclusion, breakpoint, and existing mouse behavior remain green.
-- [ ] 5.4 Sync the applied `mouse-input` delta into `openspec/specs/mouse-input/spec.md`, validate the change strictly, and verify the change is ready to archive without implementing hover on any excluded target.
+- [x] 5.1 Run `cargo fmt` and verify `cargo fmt --all -- --check` plus `cargo check -p mbv` pass.
+- [x] 5.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and fix findings introduced by this change.
+- [x] 5.3 Run `cargo nextest run -p mbv` and confirm the hover, exclusion, breakpoint, and existing mouse behavior remain green.
+- [x] 5.4 Sync the applied `mouse-input` delta into `openspec/specs/mouse-input/spec.md`, validate the change strictly, and verify the change is ready to archive without implementing hover on any excluded target.
