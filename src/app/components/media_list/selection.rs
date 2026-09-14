@@ -1,8 +1,8 @@
 use super::MediaList;
 
 impl<Target: Clone + PartialEq> MediaList<Target> {
-    /// Toggle a target, selecting the cursor and clicked target on the first
-    /// toggle so Ctrl+Click behaves naturally when starting from one cursor.
+    /// Toggle a target and freeze the resulting explicit set. The first toggle
+    /// includes the row that was under the cursor, matching Ctrl+Click.
     pub fn toggle_selection(&mut self, target: &Target) {
         let was_empty = self.multi_selection.is_empty();
         if was_empty {
@@ -20,14 +20,15 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             self.multi_selection.push(target.clone());
         }
         if self.multi_selection.is_empty() {
-            self.selection_anchor = None;
+            self.clear_selection();
         } else if self.selection_anchor.is_none() {
             self.selection_anchor = Some(target.clone());
         }
+        self.frozen_selection = self.multi_selection.clone();
+        self.live_range = false;
     }
 
-    /// Select the contiguous range from the stable anchor to `target`.
-    /// Rebuilding from the anchor makes repeated Shift clicks deterministic.
+    /// Extend the anchored range, unioning it with the frozen selection.
     pub fn extend_selection_to(&mut self, target: &Target) {
         let Some(end) = self.position_of(target) else {
             return;
@@ -47,9 +48,16 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         } else {
             (end, start)
         };
-        self.multi_selection = self.selectable[lo..=hi]
+        self.multi_selection = self
+            .selectable
             .iter()
-            .filter_map(|&row| self.rows[row].selectable_target().cloned())
+            .enumerate()
+            .filter_map(|(index, &row)| {
+                let candidate = self.rows[row].selectable_target()?;
+                (self.frozen_selection.iter().any(|item| item == candidate)
+                    || (lo..=hi).contains(&index))
+                .then(|| candidate.clone())
+            })
             .collect();
         self.selection_anchor = Some(anchor);
     }
@@ -57,7 +65,9 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
     /// Exit Visual mode and discard all selected targets.
     pub fn clear_selection(&mut self) {
         self.multi_selection.clear();
+        self.frozen_selection.clear();
         self.selection_anchor = None;
+        self.live_range = false;
     }
 }
 
@@ -111,7 +121,7 @@ mod tests {
         list.extend_selection_to(&7);
         assert_eq!(list.multi_selection(), &[2, 3, 4, 5, 6, 7]);
         list.extend_selection_to(&4);
-        assert_eq!(list.multi_selection(), &[2, 3, 4]);
+        assert_eq!(list.multi_selection(), &[2, 3, 4, 5]);
     }
 
     #[test]
@@ -175,5 +185,38 @@ mod tests {
         assert_eq!(list.multi_selection(), &[6]);
         assert_eq!(list.selected_target(), Some(&6));
         assert_eq!(list.selection_anchor.as_ref(), Some(&6));
+    }
+
+    #[test]
+    fn keyboard_disjoint_selection_freezes_and_reanchors() {
+        let mut list = list();
+        list.select_target(&3);
+        list.enter_visual_mode();
+        list.delegate(super::super::RowLocalInput::Move(1), None);
+        list.toggle_selection(&4);
+        list.delegate(super::super::RowLocalInput::Move(2), None);
+        assert_eq!(list.multi_selection(), &[3]);
+        list.enter_visual_mode();
+        list.delegate(super::super::RowLocalInput::Move(0), None);
+        assert_eq!(list.multi_selection(), &[3, 6]);
+    }
+
+    #[test]
+    fn shift_range_unions_frozen_selection() {
+        let mut list = list();
+        list.select_target(&2);
+        list.toggle_selection(&5);
+        list.extend_selection_to(&4);
+        assert_eq!(list.multi_selection(), &[2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn esc_after_freeze_clears_everything() {
+        let mut list = list();
+        list.select_target(&3);
+        list.toggle_selection(&4);
+        list.clear_selection();
+        assert!(list.multi_selection().is_empty());
+        assert!(!list.is_visual_mode());
     }
 }

@@ -75,6 +75,14 @@ SHALL behave exactly as before this change.
 - **WHEN** the user presses `V` on row 3 and then moves down twice
 - **THEN** rows 3 through 5 are in the multi-selection
 
+#### Scenario: Space freezes a Visual selection
+- **WHEN** Visual mode is active and the user presses `Space`
+- **THEN** the focused row toggles and the resulting selection is frozen while subsequent movement only moves the cursor
+
+#### Scenario: Keyboard disjoint selection
+- **WHEN** the user presses `V` on row 3, moves to row 4, presses `Space`, moves to row 6, presses `V`, and moves at row 6
+- **THEN** row 4 is removed, movement while frozen does not change the selection, and the re-anchored range unions row 6 with row 3 so exactly rows 3 and 6 are selected
+
 #### Scenario: Space only toggles in Visual mode
 - **WHEN** Visual mode is active and the user presses `Space` twice quickly
 - **THEN** the focused row toggles twice and playback state is unchanged

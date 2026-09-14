@@ -112,8 +112,10 @@ terminal-detected hyperlink stays the terminal's; accepted (one link).
 
 **D6 — Keyboard: `V` enters Visual mode.** `v` is taken by the visualizer
 toggle; `V` matches vim's linewise visual mode. In Visual mode the focused
-list consumes `Space` (toggle row) and `Esc` (exit Visual mode) outright:
-they neither fire nor arm the shell's double-tap play/pause/stop, and they
+list consumes `Space` (toggle row) and freezes the resulting explicit set;
+movement then moves only the cursor until `V` re-anchors a live range. The
+live range is unioned with that frozen set, while `Esc` clears both; these
+keys neither fire nor arm the shell's double-tap play/pause/stop, and they
 override list-local Space meanings (e.g. ABS FocusOrPlay). Once Visual mode
 exits, every key behaves as before.
 

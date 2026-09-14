@@ -379,6 +379,10 @@ pub struct MediaList<Target> {
     multi_selection: Vec<Target>,
     /// The stable target from which range selection is extended.
     selection_anchor: Option<Target>,
+    /// Selection retained when a live range is re-anchored or extended.
+    frozen_selection: Vec<Target>,
+    /// Whether cursor movement currently recomputes the anchored range.
+    live_range: bool,
 }
 
 impl<Target> MediaList<Target> {
@@ -391,6 +395,8 @@ impl<Target> MediaList<Target> {
             scroll: 0,
             multi_selection: Vec::new(),
             selection_anchor: None,
+            frozen_selection: Vec::new(),
+            live_range: false,
         }
     }
 
@@ -507,7 +513,7 @@ impl<Target> MediaList<Target> {
         match input {
             RowLocalInput::Move(delta) | RowLocalInput::Wheel { delta, .. } => {
                 self.move_selection(delta);
-                if self.is_visual_mode() {
+                if self.live_range {
                     if let Some(target) = self.selected_target().cloned() {
                         self.extend_selection_to(&target);
                     }
@@ -515,7 +521,7 @@ impl<Target> MediaList<Target> {
             }
             RowLocalInput::Page(delta) => {
                 self.move_selection(delta.saturating_mul(5));
-                if self.is_visual_mode() {
+                if self.live_range {
                     if let Some(target) = self.selected_target().cloned() {
                         self.extend_selection_to(&target);
                     }
@@ -523,7 +529,7 @@ impl<Target> MediaList<Target> {
             }
             RowLocalInput::First => {
                 self.select_first();
-                if self.is_visual_mode() {
+                if self.live_range {
                     if let Some(target) = self.selected_target().cloned() {
                         self.extend_selection_to(&target);
                     }
@@ -531,7 +537,7 @@ impl<Target> MediaList<Target> {
             }
             RowLocalInput::Last => {
                 self.select_last();
-                if self.is_visual_mode() {
+                if self.live_range {
                     if let Some(target) = self.selected_target().cloned() {
                         self.extend_selection_to(&target);
                     }
@@ -656,8 +662,14 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
     /// Begin keyboard Visual mode, anchored at the current cursor target.
     pub fn enter_visual_mode(&mut self) {
         if let Some(target) = self.selected_target().cloned() {
-            self.multi_selection = vec![target.clone()];
+            if self.multi_selection.is_empty() {
+                self.multi_selection = vec![target.clone()];
+                self.frozen_selection.clear();
+            } else {
+                self.frozen_selection = self.multi_selection.clone();
+            }
             self.selection_anchor = Some(target);
+            self.live_range = true;
         }
     }
 
@@ -703,6 +715,8 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .collect();
         self.multi_selection
             .retain(|target| present.contains(target));
+        self.frozen_selection
+            .retain(|target| present.contains(target));
         self.cursor = if self.selectable.is_empty() {
             0
         } else {
@@ -714,6 +728,11 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             .is_some_and(|target| !present.contains(target))
         {
             self.selection_anchor = self.selected_target().cloned();
+        }
+        if self.multi_selection.is_empty() {
+            self.frozen_selection.clear();
+            self.selection_anchor = None;
+            self.live_range = false;
         }
         self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
     }

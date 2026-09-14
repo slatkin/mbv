@@ -409,7 +409,8 @@ fn context_on_selection_uses_selectable_list_order() {
         RowLocalOutcome::External(RowIntent::ContextSelection(vec![
             "2".into(),
             "3".into(),
-            "4".into()
+            "4".into(),
+            "5".into()
         ],))
     );
 }
