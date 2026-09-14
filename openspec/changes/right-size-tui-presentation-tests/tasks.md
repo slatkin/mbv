@@ -32,8 +32,8 @@
 
 ## 3. Remove Inert Presentation Debt
 
-- [ ] 3.1 Delete the ten named ignored legacy render tests from 2.1, remove only imports and local helpers made unused by those deletions, and verify those ten function names and their legacy ignore reason are absent while the affected render test modules compile and pass.
-- [ ] 3.2 Delete the named ignored obsolete boundary test from 2.1, remove only scaffolding made unused by that test, and verify the remaining mouse-panel tick integration tests pass through `Application::tick()`.
+- [x] 3.1 Delete the ten named ignored legacy render tests from 2.1, remove only imports and local helpers made unused by those deletions, and verify those ten function names and their legacy ignore reason are absent while the affected render test modules compile and pass.
+- [x] 3.2 Delete the named ignored obsolete boundary test from 2.1, remove only scaffolding made unused by that test, and verify the remaining mouse-panel tick integration tests pass through `Application::tick()`.
 
 ## 4. Right-size Arrangement and Render Component Tests
 
