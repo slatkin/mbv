@@ -32,6 +32,7 @@ pub(super) mod list;
 pub(super) mod list_context;
 pub(super) mod list_letter_groups;
 pub(super) mod list_rows;
+pub(super) mod marquee;
 pub(super) mod media_list;
 pub(super) mod modal_frame;
 pub(super) mod multiselect;
