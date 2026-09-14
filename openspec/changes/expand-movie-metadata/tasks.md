@@ -17,15 +17,15 @@
 
 ## 2. Movie hero content (producer)
 
-- [ ] 2.1 Emit the Movie genre row (every genre, joined) and the provider-link row, and carry the links
+- [x] 2.1 Emit the Movie genre row (every genre, joined) and the provider-link row, and carry the links
   as typed `HeroFacts.links` so the painter has labels to overlay. Keep the row order release date,
   runtime, genres, links, and omit an empty row. Verify: unit tests for row order and for the absent
   genre/link rows, plus a Series and a Music album test proving their rows are unchanged.
-- [ ] 2.2 Select the credits in the Movie branch of `hero_content_emby`: every `Director` in provider
+- [x] 2.2 Select the credits in the Movie branch of `hero_content_emby`: every `Director` in provider
   order, then at most 9 `Actor`s in provider order, other person types omitted, role falling back to the
   person's `kind` when empty. Verify: an `rstest` `#[case]` table over one director with 14 cast, two
   directors, no director, one director with 2 cast, no people, and a person with no role text.
-- [ ] 2.3 Carry `credits` on `HeroContent` through the owner's content building and confirm the Narrow
+- [x] 2.3 Carry `credits` on `HeroContent` through the owner's content building and confirm the Narrow
   inline hero's plan ignores it. Verify: a content test asserting a Movie's credits reach
   `LibraryPanelContent` and that `inline_hero_plan` returns the same rows for the same content with and
   without credits.
