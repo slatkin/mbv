@@ -1,7 +1,7 @@
 ## 1. Extract the shared marquee primitive
 
-- [ ] 1.1 Move `marquee_col` and the width-windowing function out of `src/app/render/components/chrome_player.rs` into a new small module (e.g. `src/app/render/components/marquee.rs`), generalized to take `&mut String` + `&mut Instant` directly (no `PlaybackRenderContext` dependency). Keep `marquee_col`'s existing unit test (`marquee_advances_five_columns_per_second`) passing unchanged after the move. Verify: `cargo check -p mbv` and `cargo nextest run -p mbv chrome_player` (or the moved test's new path) both pass.
-- [ ] 1.2 Update `chrome_player.rs::marquee_spans` to call the extracted primitive with its own `ctx.marquee_text`/`ctx.marquee_started_at`, with no behavior change. Verify: the existing `standard_title_row_showcases_instead_of_truncating_a_long_title` and `idle_feed_title_marquees_instead_of_truncating` tests in `src/app/render/tests.rs` still pass unmodified.
+- [x] 1.1 Move `marquee_col` and the width-windowing function out of `src/app/render/components/chrome_player.rs` into a new small module (e.g. `src/app/render/components/marquee.rs`), generalized to take `&mut String` + `&mut Instant` directly (no `PlaybackRenderContext` dependency). Keep `marquee_col`'s existing unit test (`marquee_advances_five_columns_per_second`) passing unchanged after the move. Verify: `cargo check -p mbv` and `cargo nextest run -p mbv chrome_player` (or the moved test's new path) both pass.
+- [x] 1.2 Update `chrome_player.rs::marquee_spans` to call the extracted primitive with its own `ctx.marquee_text`/`ctx.marquee_started_at`, with no behavior change. Verify: the existing `standard_title_row_showcases_instead_of_truncating_a_long_title` and `idle_feed_title_marquees_instead_of_truncating` tests in `src/app/render/tests.rs` still pass unmodified.
 
 ## 2. Give `MediaList<Target>` its own marquee clock
 
