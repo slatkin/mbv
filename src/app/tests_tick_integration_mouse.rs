@@ -187,6 +187,125 @@ fn tab_panel_component(harness: &TickHarness) -> &crate::app::components::TabPan
         .expect("TabPanel component")
 }
 
+fn library_panel_component(harness: &TickHarness) -> &LibraryPanel {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("LibraryPanel mounted when the library column is visible")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("LibraryPanel component")
+}
+
+fn paint_style_cells(
+    terminal: &Terminal<TestBackend>,
+    rect: Rect,
+) -> Vec<ratatui::style::Style> {
+    let buffer = terminal.backend().buffer();
+    (rect.y..rect.bottom())
+        .flat_map(|y| (rect.x..rect.right()).map(move |x| buffer[(x, y)].style()))
+        .collect()
+}
+
+#[test]
+fn tick_mouse_hover_delivery_repaints_only_the_pointed_surface_in_narrow_and_wide_modes() {
+    for (terminal_width, terminal_height) in [(80, 24), (120, 30)] {
+        let mut app = crate::app::render::make_music_group_app();
+        app.panel_mode = PanelMode::LibraryOnly;
+        app.panel_focus = PanelFocus::Library;
+        app.terminal_width = terminal_width;
+        app.terminal_height = terminal_height;
+        let mut harness = TickHarness::new(app);
+        harness.model_mut().sync_mounted_surfaces();
+
+        let mut terminal = Terminal::new(TestBackend::new(terminal_width, terminal_height)).unwrap();
+        terminal
+            .draw(|f| harness.model_mut().draw_frame(f, false, false))
+            .unwrap();
+        harness.model_mut().sync_mounted_surfaces();
+        let tab = tab_panel_component(&harness)
+            .hit_regions()
+            .iter()
+            .find(|(_, position)| *position == 0)
+            .map(|(rect, _)| *rect)
+            .expect("an unselected painted tab");
+        let selector = library_panel_component(&harness)
+            .test_selector_hits()
+            .regions()
+            .get(1)
+            .map(|(rect, _)| *rect)
+            .expect("an unselected main Selector-row pill");
+        let tab_resting = paint_style_cells(&terminal, tab);
+        let selector_resting = paint_style_cells(&terminal, selector);
+
+        // A move over the tab is delivered through Application::tick(), and
+        // the following draw repaints only that component's hovered surface.
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: tab.x,
+            row: tab.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .all(|message| !matches!(message, Msg::Shell(_))),
+            "hover emits no shell action: {outcome:?}"
+        );
+        terminal
+            .draw(|f| harness.model_mut().draw_frame(f, false, false))
+            .unwrap();
+        assert_ne!(paint_style_cells(&terminal, tab), tab_resting);
+        assert_eq!(paint_style_cells(&terminal, selector), selector_resting);
+
+        // Move to the main Selector row through the same live path.
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: selector.x,
+            row: selector.y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .all(|message| !matches!(message, Msg::Shell(_))),
+            "hover emits no shell action: {outcome:?}"
+        );
+        terminal
+            .draw(|f| harness.model_mut().draw_frame(f, false, false))
+            .unwrap();
+        assert_eq!(paint_style_cells(&terminal, tab), tab_resting);
+        assert_ne!(paint_style_cells(&terminal, selector), selector_resting);
+
+        // The top-left gap is outside both retained role geometries. It
+        // clears both local identities without invoking any shell action.
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        assert!(
+            outcome
+                .messages
+                .iter()
+                .all(|message| !matches!(message, Msg::Shell(_))),
+            "gap hover emits no shell action: {outcome:?}"
+        );
+        terminal
+            .draw(|f| harness.model_mut().draw_frame(f, false, false))
+            .unwrap();
+        assert_eq!(paint_style_cells(&terminal, tab), tab_resting);
+        assert_eq!(paint_style_cells(&terminal, selector), selector_resting);
+    }
+}
+
 #[test]
 fn tab_bar_click_switches_active_tab() {
     let mut harness = drawn_tab_harness();
