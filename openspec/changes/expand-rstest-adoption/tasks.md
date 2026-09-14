@@ -7,9 +7,9 @@
 
 ## 2. mbv-core feed and persistence batch
 
-- [ ] 2.1 Convert `feed_queue_item_*` (3 tests) plus the three eligible same-file helpers in `player_tests_session_feed.rs` to named cases/`#[fixture]`s, keeping consumer-specific state and assertions explicit; verify the 3→3 table mapping and all fixture consumer names in `baseline.md`, run mbv-core per-file gates, and commit only that file.
-- [ ] 2.2 Convert the two feed families in `playback_queue_tests_feed.rs` (6 tests) to named case tables, preserving the primary-source and full media-kind assertion sets; verify six named generated cases, run mbv-core per-file gates, and commit only that file.
-- [ ] 2.3 Convert the three selected queue-item deserialization tests in `playback_queue_tests_persistence.rs` to a named table without weakening the variant and ID assertions; verify 3→3 named case parity, run mbv-core per-file gates, and commit only that file.
+- [x] 2.1 Convert `feed_queue_item_*` (3 tests) plus the three eligible same-file helpers in `player_tests_session_feed.rs` to named cases/`#[fixture]`s, keeping consumer-specific state and assertions explicit; verify the 3→3 table mapping and all fixture consumer names in `baseline.md`, run mbv-core per-file gates, and commit only that file.
+- [x] 2.2 Convert the two feed families in `playback_queue_tests_feed.rs` (6 tests) to named case tables, preserving the primary-source and full media-kind assertion sets; verify six named generated cases, run mbv-core per-file gates, and commit only that file.
+- [x] 2.3 Convert the three selected queue-item deserialization tests in `playback_queue_tests_persistence.rs` to a named table without weakening the variant and ID assertions; verify 3→3 named case parity, run mbv-core per-file gates, and commit only that file.
 
 ## 3. Root-package interaction and state batch
 
