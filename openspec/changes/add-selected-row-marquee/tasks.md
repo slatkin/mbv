@@ -24,4 +24,5 @@
 
 - [x] 5.1 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`, fix any findings introduced by this change. Verify: both commands exit clean.
 - [x] 5.2 Run `cargo nextest run -p mbv` for the full crate and confirm no regressions outside the tests touched above. Verify: full run is green.
+- [x] 5.4 Shorten the shared marquee cadence in `src/app/render/components/marquee.rs` (user-approved 2026-09-14): `STEP_MS` 200→150, `HOLD_MS` 1200→600, applying to every marquee call site (media-list rows and the chrome player strip, which share the primitive). Update `marquee_advances_five_columns_per_second` to the new constants. Verify: `cargo nextest run -p mbv marquee` passes and `cargo check --workspace --all-targets` is clean.
 - [ ] 5.3 Manually exercise a list with a title long enough to overflow (e.g. a long album/series title) in the running app: confirm the selected+focused row marquees, moving selection away truncates it normally, and an unfocused list's selection does not marquee. Verify: observed directly in the terminal.
