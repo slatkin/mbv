@@ -48,8 +48,18 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     selected_bg: Color,
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
-    let rows = list.rows();
+    let rows = list.rows().to_vec();
     let selected_row = geometry.selected_row();
+    let selected_targets = list.multi_selection().to_vec();
+    let mut marquee = focused
+        .then_some(selected_row)
+        .flatten()
+        .and_then(|row| match &rows[row] {
+            crate::app::components::media_list::MediaListRow::Item { primary, .. } => {
+                Some(list.marquee_state(primary))
+            }
+            _ => None,
+        });
     let offset = geometry.offset();
     let total_rows = geometry.len();
 
@@ -63,7 +73,8 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
                 .source_row(row)
                 .expect("wide geometry contains a source row");
             let row_target = rows[source_row].selectable_target();
-            let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
+            let multi_selected = row_target
+                .is_some_and(|target| selected_targets.iter().any(|selected| selected == target));
             media_list_row(
                 &rows[source_row],
                 Some(row) == selected_row || multi_selected,
@@ -71,6 +82,9 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
                 selected_bg,
                 inner_width,
                 scrollbar,
+                marquee
+                    .as_mut()
+                    .map(|(text, started_at)| (&mut **text, &mut **started_at)),
             )
         })
         .collect();
@@ -132,7 +146,7 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
-    list: &InlineMediaBrowser<Target>,
+    list: &mut InlineMediaBrowser<Target>,
     desired_detail_rows: usize,
     focused: bool,
     selected_bg: Color,
@@ -140,10 +154,21 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
     let layout: InlineLayout<Target> =
         list.resolve_inline_layout(content_area.height as usize, desired_detail_rows);
     let geometry = layout.row_geometry;
-    let rows = list.rows();
+    let rows = list.rows().to_vec();
     let offset = geometry.offset();
     let total_rows = geometry.len();
     let selected_row = geometry.selected_row();
+    let selected_targets = list.multi_selection().to_vec();
+    let mut marquee = (focused && layout.detail_rows == 0)
+        .then_some(selected_row)
+        .flatten()
+        .and_then(|row| geometry.source_row(row))
+        .and_then(|row| match &rows[row] {
+            crate::app::components::media_list::MediaListRow::Item { primary, .. } => {
+                Some(list.marquee_state(primary))
+            }
+            _ => None,
+        });
 
     let overflows = total_rows > content_area.height as usize;
     let inner_width = paint_area
@@ -156,8 +181,9 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
                 .source_row(display_row)
                 .map(|source_row| {
                     let row_target = rows[source_row].selectable_target();
-                    let multi_selected =
-                        row_target.is_some_and(|target| list.is_selected_target(target));
+                    let multi_selected = row_target.is_some_and(|target| {
+                        selected_targets.iter().any(|selected| selected == target)
+                    });
                     media_list_row(
                         &rows[source_row],
                         (Some(display_row) == selected_row && layout.detail_rows == 0) && focused
@@ -166,6 +192,9 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
                         selected_bg,
                         inner_width,
                         focused && overflows,
+                        marquee
+                            .as_mut()
+                            .map(|(text, started_at)| (&mut **text, &mut **started_at)),
                     )
                 })
                 .unwrap_or_else(|| ListItem::new(Line::default()))

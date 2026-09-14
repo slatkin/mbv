@@ -7,6 +7,7 @@
 
 use crate::app::ui_util::move_cursor;
 use ratatui::layout::{Position, Rect};
+use std::time::Instant;
 
 mod anchor;
 mod carrier;
@@ -383,6 +384,8 @@ pub struct MediaList<Target> {
     frozen_selection: Vec<Target>,
     /// Whether cursor movement currently recomputes the anchored range.
     live_range: bool,
+    marquee_text: String,
+    marquee_started_at: Instant,
 }
 
 impl<Target> MediaList<Target> {
@@ -397,7 +400,18 @@ impl<Target> MediaList<Target> {
             selection_anchor: None,
             frozen_selection: Vec::new(),
             live_range: false,
+            marquee_text: String::new(),
+            marquee_started_at: Instant::now(),
         }
+    }
+
+    pub(crate) fn marquee_state(&mut self, text: &str) -> (&mut String, &mut Instant) {
+        if self.marquee_text != text {
+            self.marquee_text.clear();
+            self.marquee_text.push_str(text);
+            self.marquee_started_at = Instant::now();
+        }
+        (&mut self.marquee_text, &mut self.marquee_started_at)
     }
 
     fn rows(&self) -> &[MediaListRow<Target>] {

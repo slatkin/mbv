@@ -248,6 +248,10 @@ impl<Target> InlineMediaBrowser<Target> {
         self.core.set_scroll(offset);
     }
 
+    pub(crate) fn marquee_state(&mut self, text: &str) -> (&mut String, &mut std::time::Instant) {
+        self.core.marquee_state(text)
+    }
+
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
     pub fn move_selection(&mut self, delta: i64) {
         self.invalidate_paint();

@@ -1,5 +1,6 @@
 use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
 use crate::app::palette;
+use crate::app::render::components::marquee::marquee_spans;
 use crate::app::ui_util::trunc_str;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -34,6 +35,7 @@ pub(in crate::app) fn media_list_row<Target>(
     selected_bg: Color,
     inner_width: usize,
     has_scrollbar: bool,
+    mut marquee: Option<(&mut String, &mut std::time::Instant)>,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::default()),
@@ -101,29 +103,37 @@ pub(in crate::app) fn media_list_row<Target>(
                 1 + trailing.width()
             };
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
-            let title = trunc_str(
-                primary,
-                content_w.saturating_sub(LEFT_INSET + trailing_w + slot_reserve),
-            );
-
             let selected = selected && focused;
+            let title_width = content_w.saturating_sub(LEFT_INSET + trailing_w + slot_reserve);
+            let title_color = if selected
+                && !matches!(
+                    semantic_state,
+                    MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
+                ) {
+                palette::TEXT_EMPHASIS
+            } else {
+                fg
+            };
+            let title_spans = marquee
+                .take()
+                .filter(|_| primary.width() > title_width)
+                .map(|(text, started_at)| {
+                    marquee_spans(
+                        &[(primary.clone(), title_color)],
+                        title_width,
+                        text,
+                        started_at,
+                    )
+                })
+                .unwrap_or_else(|| {
+                    vec![Span::styled(
+                        trunc_str(primary, title_width),
+                        Style::default().fg(title_color),
+                    )]
+                });
+
             let mut spans = vec![Span::raw("  ")];
-            spans.push(Span::styled(
-                title,
-                Style::default().fg(
-                    if selected
-                        && !matches!(
-                            semantic_state,
-                            MediaSemanticState::Active { .. }
-                                | MediaSemanticState::NowPlaying { .. }
-                        )
-                    {
-                        palette::TEXT_EMPHASIS
-                    } else {
-                        fg
-                    },
-                ),
-            ));
+            spans.extend(title_spans);
             if !trailing.is_empty() {
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled(
