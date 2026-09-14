@@ -23,7 +23,7 @@ use super::content::{HeroImageState, PanelHeroImagePaint};
 use super::hero::HeroContentData;
 use super::narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
 use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
-use super::wide::{render_wide_skeleton, SkeletonHits, WideSkeletonGeometry};
+use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry};
 
 /// The painted split's pointer→width resolution inputs, shared by the drag
 /// gesture's arming and resolution (the same facts the old
@@ -55,6 +55,10 @@ pub struct LibraryPanel {
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).
     hits: SkeletonHits,
+    /// The pill rows' sticky overflow windows: session state (unlike the
+    /// per-frame `hits`), revalidated by the painter against each frame's
+    /// pills, so a pointer selection of a painted pill never slides its bar.
+    pill_windows: SkeletonPillWindows,
     wide_geometry: Option<WideSkeletonGeometry>,
     narrow_geometry: Option<NarrowSkeletonGeometry>,
     painted_area: Option<ratatui::layout::Rect>,
@@ -82,6 +86,7 @@ impl LibraryPanel {
             focused: false,
             list_pane_width: None,
             hits: SkeletonHits::default(),
+            pill_windows: SkeletonPillWindows::default(),
             wide_geometry: None,
             narrow_geometry: None,
             painted_area: None,

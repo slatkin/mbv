@@ -28,6 +28,7 @@ impl Component for LibraryPanel {
         };
         let mut content = owner.content();
         let mut hits = std::mem::take(&mut self.hits);
+        let mut windows = self.pill_windows;
         // One breakpoint predicate (design D4): `wide_hero_fits` stays the
         // single Wide/Narrow choice; the panel drives the presentation
         // transition through the list's `set_presentation` inside each
@@ -40,6 +41,7 @@ impl Component for LibraryPanel {
                 self.focused,
                 self.list_pane_width,
                 &mut hits,
+                &mut windows,
             ) {
                 // The split gesture owns the gap columns it painted: the
                 // gutter between the hero and browser panes, resolved
@@ -59,8 +61,14 @@ impl Component for LibraryPanel {
                 self.wide_geometry = Some(geometry);
             }
         } else {
-            let geometry =
-                render_narrow_skeleton(frame, area, &mut content, self.focused, &mut hits);
+            let geometry = render_narrow_skeleton(
+                frame,
+                area,
+                &mut content,
+                self.focused,
+                &mut hits,
+                &mut windows,
+            );
             self.narrow_geometry = Some(geometry.clone());
         }
         // The projected hero image's reserved box (task 5.10, design D9): the
@@ -75,6 +83,7 @@ impl Component for LibraryPanel {
                     .and_then(|geometry| geometry.inline_hero_image.clone())
             });
         self.hits = hits;
+        self.pill_windows = windows;
         self.painted_area = Some(area);
     }
 

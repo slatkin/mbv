@@ -24,6 +24,14 @@ The TUI SHALL preserve each pill selector's existing selected value, keyboard co
 - **WHEN** a pill selector's choices exceed the available row width
 - **THEN** the visible window includes the selected choice and indicates hidden choices
 
+#### Scenario: User clicks an already-visible pill in an overflowed bar
+- **WHEN** the user selects a pill that the current overflow window already paints
+- **THEN** the window does not move: only the selection highlight changes
+
+#### Scenario: Selection moves outside the overflow window
+- **WHEN** the selection moves outside the pill selector's current overflow window (e.g. by keyboard)
+- **THEN** the window scrolls the fewest pills that reveal the selection, landing it on the leading edge moving left and minimally past the trailing edge moving right, and the first paint of an overflowed bar centers on the selection
+
 #### Scenario: User selects a visible pill with the mouse
 - **WHEN** the user clicks a visible selectable pill
 - **THEN** the existing target represented by that pill is selected

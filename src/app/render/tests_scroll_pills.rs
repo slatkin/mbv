@@ -1,4 +1,4 @@
-use super::components::widgets::{render_pill_bar, PillBar};
+use super::components::widgets::{render_pill_bar, PillBar, PillBarWindow};
 use super::test_helpers::*;
 use crate::app::palette;
 use ratatui::backend::TestBackend;
@@ -28,6 +28,7 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
                     ids: &ids,
                     selected_pos: 0,
                     prefix: None,
+                    window: PillBarWindow::default(),
                 },
             );
         })
@@ -110,5 +111,90 @@ fn pill_bar_does_not_pin_a_backwards_selection_to_the_trailing_edge() {
     assert!(
         selected + 1 < tabs.len(),
         "selected pill should have a visible successor"
+    );
+}
+
+fn pill_ids(tabs: &[(ratatui::layout::Rect, usize)]) -> Vec<usize> {
+    tabs.iter().map(|(_, id)| *id).collect()
+}
+
+#[test]
+fn pill_bar_keeps_its_window_when_the_selection_is_already_painted() {
+    let labels: Vec<String> = (0..10).map(|i| format!("Group{i}")).collect();
+    let ids: Vec<usize> = (0..10).collect();
+
+    // First paint: no retention, the window centers on the selection.
+    let (tabs, window) =
+        render_pill_bar_hitboxes_with_window(&labels, &ids, 5, 30, PillBarWindow::default());
+    let first_ids = pill_ids(&tabs);
+    assert!(
+        first_ids.contains(&5),
+        "selected pill painted: {first_ids:?}"
+    );
+
+    // A pointer click on an already-painted, non-centered pill must not
+    // slide the bar: the same window repaints, only the highlight moves.
+    let clicked = *first_ids.last().unwrap();
+    let (tabs2, window2) = render_pill_bar_hitboxes_with_window(&labels, &ids, clicked, 30, window);
+    assert_eq!(pill_ids(&tabs2), first_ids, "window must not move");
+    assert_eq!(window2.start, window.start, "retained window unchanged");
+}
+
+#[test]
+fn pill_bar_scrolls_minimally_right_when_the_selection_leaves_the_window() {
+    let labels: Vec<String> = (0..10).map(|i| format!("Group{i}")).collect();
+    let ids: Vec<usize> = (0..10).collect();
+
+    let (tabs, window) =
+        render_pill_bar_hitboxes_with_window(&labels, &ids, 2, 30, PillBarWindow::default());
+    let kept_first = *pill_ids(&tabs).first().unwrap();
+    let hidden = 9; // past the window's trailing edge
+
+    let (tabs2, _) = render_pill_bar_hitboxes_with_window(&labels, &ids, hidden, 30, window);
+    let ids2 = pill_ids(&tabs2);
+    assert!(ids2.contains(&hidden), "selection painted: {ids2:?}");
+    // Minimal slide: the window moved forward from its retained start and
+    // the selection is its trailing pill, not re-centered mid-row.
+    let new_first = ids2.first().unwrap();
+    assert!(
+        *new_first > kept_first,
+        "window moved right: {kept_first} -> {new_first}"
+    );
+    assert_eq!(
+        *ids2.last().unwrap(),
+        hidden,
+        "selection landed at the trailing edge"
+    );
+}
+
+#[test]
+fn pill_bar_scrolls_left_to_put_a_leading_selection_on_the_leading_edge() {
+    let labels: Vec<String> = (0..10).map(|i| format!("Group{i}")).collect();
+    let ids: Vec<usize> = (0..10).collect();
+
+    let (_, window) =
+        render_pill_bar_hitboxes_with_window(&labels, &ids, 7, 30, PillBarWindow::default());
+    let hidden = 1; // before the window's leading edge
+
+    let (tabs2, _) = render_pill_bar_hitboxes_with_window(&labels, &ids, hidden, 30, window);
+    assert_eq!(
+        pill_ids(&tabs2).first().copied(),
+        Some(hidden),
+        "moving left lands the selection on the leading edge"
+    );
+}
+
+#[test]
+fn pill_bar_recenters_when_the_retained_window_start_is_stale() {
+    let labels: Vec<String> = (0..10).map(|i| format!("Group{i}")).collect();
+    let ids: Vec<usize> = (0..10).collect();
+
+    // A stale retention (pill list shrank below the window start) must not
+    // strand the bar: the row repaints with the selection visible.
+    let stale = PillBarWindow { start: Some(8) };
+    let (tabs, _) = render_pill_bar_hitboxes_with_window(&labels, &ids, 1, 30, stale);
+    assert!(
+        pill_ids(&tabs).contains(&1),
+        "selection painted after stale retention"
     );
 }

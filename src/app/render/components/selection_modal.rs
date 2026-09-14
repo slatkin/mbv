@@ -3,7 +3,7 @@ use super::super::super::types_selection_modal::{
     SelectionModalFilter, SelectionModalListState, SelectionModalRow,
 };
 use crate::app::render::components::modal_frame::render_modal_frame;
-use crate::app::render::components::widgets::{render_pill_bar, PillBar};
+use crate::app::render::components::widgets::{render_pill_bar, PillBar, PillBarWindow};
 use crate::app::ui_util::trunc_str;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -73,7 +73,10 @@ pub(in crate::app) fn render_selection_modal_content(
     };
     let selector_tabs = model.filter.map_or_else(Vec::new, |filter| {
         let ids: Vec<usize> = (0..filter.labels.len()).collect();
-        render_pill_bar(
+        // The modal's filter row is short by construction; it paints with no
+        // retained window, so its overflow (if a terminal ever makes one)
+        // re-centers on the selection as before the sticky window.
+        let (tabs, _) = render_pill_bar(
             f,
             filter_area,
             PillBar {
@@ -81,8 +84,10 @@ pub(in crate::app) fn render_selection_modal_content(
                 ids: &ids,
                 selected_pos: filter.selected,
                 prefix: None,
+                window: PillBarWindow::default(),
             },
-        )
+        );
+        tabs
     });
 
     let spacer_area = Rect {

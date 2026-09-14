@@ -63,6 +63,7 @@ fn draw_narrow(
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
     let area = Rect::new(0, 0, WIDTH, HEIGHT);
     let mut hits = super::super::wide::SkeletonHits::default();
+    let mut windows = super::super::wide::SkeletonPillWindows::default();
     let mut geometry = None;
     terminal
         .draw(|f| {
@@ -72,6 +73,7 @@ fn draw_narrow(
                 &mut content,
                 false,
                 &mut hits,
+                &mut windows,
             ));
         })
         .unwrap();
@@ -349,6 +351,7 @@ fn narrow_skeleton_places_selector_controls_and_list() {
     let mut terminal = Terminal::new(TestBackend::new(WIDTH, HEIGHT)).unwrap();
     let area = Rect::new(0, 0, WIDTH, HEIGHT);
     let mut hits = super::super::wide::SkeletonHits::default();
+    let mut windows = super::super::wide::SkeletonPillWindows::default();
     let mut geometry = None;
     terminal
         .draw(|f| {
@@ -358,6 +361,7 @@ fn narrow_skeleton_places_selector_controls_and_list() {
                 &mut content,
                 false,
                 &mut hits,
+                &mut windows,
             ));
         })
         .unwrap();

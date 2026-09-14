@@ -20,7 +20,7 @@ use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryP
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::{
     render_inline_search, render_placeholder, wide_hero_browser_pane, wide_hero_hero_pane,
-    PANE_PAD_X, PANE_PAD_Y,
+    PillBarWindow, PANE_PAD_X, PANE_PAD_Y,
 };
 
 use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroImagePaint};
@@ -60,6 +60,18 @@ pub(in crate::app) struct SkeletonHits {
     pub selector: HitRegions<usize>,
     pub controls: HitRegions<usize>,
     pub workspace_selector: HitRegions<usize>,
+}
+
+/// The pill rows' sticky overflow windows (ADR 0024 retained paint-local
+/// geometry): the painted window's first pill index per pill row, kept by
+/// the panel across frames so selecting an already-painted pill never
+/// slides the bar. Unlike the per-frame [`SkeletonHits`], these survive
+/// `reset_frame` — they are session state, revalidated by the painter
+/// against each frame's pills.
+#[derive(Clone, Copy, Debug, Default)]
+pub(in crate::app) struct SkeletonPillWindows {
+    pub selector: PillBarWindow,
+    pub workspace_selector: PillBarWindow,
 }
 
 /// Everything the Wide skeleton placed this frame, in role-rect form. The
@@ -110,6 +122,7 @@ pub(in crate::app) fn render_wide_skeleton(
     browser_focused: bool,
     override_width: Option<u16>,
     hits: &mut SkeletonHits,
+    windows: &mut SkeletonPillWindows,
 ) -> Option<WideSkeletonGeometry> {
     let WideLibraryPanes {
         hero_panel,
@@ -132,6 +145,7 @@ pub(in crate::app) fn render_wide_skeleton(
                 pane.spacer_area,
                 selector,
                 &mut hits.selector,
+                &mut windows.selector,
             );
         }
         (None, false) => {
@@ -147,6 +161,7 @@ pub(in crate::app) fn render_wide_skeleton(
                 None,
                 Some(SELECTOR_ROW_PREFIX),
                 &mut hits.selector,
+                &mut windows.selector,
             );
             paint_pill_row_gap(f, pane.spacer_area);
         }
@@ -303,6 +318,7 @@ pub(in crate::app) fn render_wide_skeleton(
                     workspace_rect,
                     workspace,
                     &mut hits.workspace_selector,
+                    &mut windows.workspace_selector,
                 ));
             }
         }
@@ -321,6 +337,7 @@ fn paint_workspace_box(
     workspace_rect: Rect,
     workspace: &mut super::content::Workspace<'_>,
     hits: &mut HitRegions<usize>,
+    window: &mut PillBarWindow,
 ) -> (Rect, Rect) {
     let mut box_area = workspace_rect;
     if let Some(selector) = &workspace.selector {
@@ -342,6 +359,7 @@ fn paint_workspace_box(
                 selector.active,
                 Some(WORKSPACE_SELECTOR_PREFIX),
                 hits,
+                window,
             );
         }
         box_area = Rect {

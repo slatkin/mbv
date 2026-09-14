@@ -12,16 +12,19 @@ use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
-use crate::app::render::{render_pill_bar, PillBar};
+use crate::app::render::{render_pill_bar, PillBar, PillBarWindow};
 
 use super::content::{ListControls, SelectorRow};
 
 /// Paints one pill-bar row from `labels` plus the active pill's index into
-/// `area`, pushing the painted pills' hitboxes into `hits` — the one shared
-/// pill-row painter for every panel site (Selector row, List controls row,
+/// `area`, pushing the painted pills' hitboxes into `hits` and refreshing
+/// `window` — the row's sticky overflow window the caller retains across
+/// frames — with this frame's painted window. The one shared pill-row
+/// painter for every panel site (Selector row, List controls row,
 /// pre-5.6 Workspace selector). `active: None` paints NO active pill (the
 /// `SelectorRow` contract in `content.rs`); an empty label list or a zero
-/// area paints nothing. The caller keeps its own `HitRegions` registry.
+/// area paints nothing. The caller keeps its own `HitRegions` registry and
+/// window.
 pub(in crate::app) fn paint_pill_bar_row(
     f: &mut Frame,
     area: Rect,
@@ -29,12 +32,13 @@ pub(in crate::app) fn paint_pill_bar_row(
     active: Option<usize>,
     prefix: Option<&str>,
     hits: &mut HitRegions<usize>,
+    window: &mut PillBarWindow,
 ) {
     let ids: Vec<usize> = (0..labels.len()).collect();
     // No active pill: a position past the end selects nothing, so every
     // painted pill renders unselected.
     let selected_pos = active.unwrap_or(labels.len());
-    for (rect, id) in render_pill_bar(
+    let (tabs, painted_window) = render_pill_bar(
         f,
         area,
         PillBar {
@@ -42,8 +46,11 @@ pub(in crate::app) fn paint_pill_bar_row(
             ids: &ids,
             selected_pos,
             prefix,
+            window: *window,
         },
-    ) {
+    );
+    *window = painted_window;
+    for (rect, id) in tabs {
         hits.push(rect, id);
     }
 }
@@ -64,6 +71,7 @@ pub(in crate::app) fn paint_selector_row(
     spacer_area: Rect,
     row: &SelectorRow,
     hits: &mut HitRegions<usize>,
+    window: &mut PillBarWindow,
 ) {
     if !row.pills.is_empty() && bar_area.height > 0 && bar_area.width > 0 {
         paint_pill_bar_row(
@@ -73,6 +81,7 @@ pub(in crate::app) fn paint_selector_row(
             row.active,
             Some(SELECTOR_ROW_PREFIX),
             hits,
+            window,
         );
     }
     paint_pill_row_gap(f, spacer_area);
@@ -144,8 +153,9 @@ mod tests {
             active: Some(1),
         };
         let mut hits = HitRegions::new();
+        let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, &mut hits);
+            paint_selector_row(f, bar, spacer, &row, &mut hits, &mut window);
         });
         let buf = terminal.backend().buffer();
         assert!(text_in(buf, bar, "Movies") && text_in(buf, bar, "TV"));
@@ -181,8 +191,9 @@ mod tests {
             active: None,
         };
         let mut hits = HitRegions::new();
+        let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, &mut hits);
+            paint_selector_row(f, bar, spacer, &row, &mut hits, &mut window);
         });
         let buf = terminal.backend().buffer();
         // Both pills paint (unselected); no cell anywhere in the bar carries
@@ -214,8 +225,9 @@ mod tests {
             active: None,
         };
         let mut hits = HitRegions::new();
+        let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, &mut hits);
+            paint_selector_row(f, bar, spacer, &row, &mut hits, &mut window);
         });
         let buf = terminal.backend().buffer();
         assert!(hits.regions().is_empty(), "no pill painted, no hit kept");

@@ -30,7 +30,7 @@ use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
     SELECTOR_ROW_PREFIX,
 };
-use super::wide::SkeletonHits;
+use super::wide::{SkeletonHits, SkeletonPillWindows};
 
 /// Columns the inline hero's wrapping text keeps beside a right-aligned
 /// artwork box (the Wide header's rule, applied to the Narrow form).
@@ -315,6 +315,7 @@ pub(in crate::app) fn render_narrow_skeleton(
     content: &mut LibraryPanelContent<'_>,
     browser_focused: bool,
     hits: &mut SkeletonHits,
+    windows: &mut SkeletonPillWindows,
 ) -> NarrowSkeletonGeometry {
     // Selector row: one pill bar + the panel's spacer, reserved even without
     // a SelectorRow — while a search is active the box takes the bar's rect
@@ -330,6 +331,7 @@ pub(in crate::app) fn render_narrow_skeleton(
                 areas.spacer_area,
                 selector,
                 &mut hits.selector,
+                &mut windows.selector,
             );
         }
         (None, false) => {
@@ -345,6 +347,7 @@ pub(in crate::app) fn render_narrow_skeleton(
                 None,
                 Some(SELECTOR_ROW_PREFIX),
                 &mut hits.selector,
+                &mut windows.selector,
             );
             paint_pill_row_gap(f, areas.spacer_area);
         }

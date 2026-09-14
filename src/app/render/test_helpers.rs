@@ -140,11 +140,26 @@ pub fn render_pill_bar_hitboxes(
     selected_pos: usize,
     width: u16,
 ) -> Vec<(Rect, usize)> {
+    render_pill_bar_hitboxes_with_window(labels, ids, selected_pos, width, PillBarWindow::default())
+        .0
+}
+
+/// The hitbox helper with the bar's retained overflow window: returns the
+/// painted hitboxes plus the window to pass back on the next frame, so the
+/// sticky-window tests can drive two-frame sequences.
+pub fn render_pill_bar_hitboxes_with_window(
+    labels: &[String],
+    ids: &[usize],
+    selected_pos: usize,
+    width: u16,
+    window: PillBarWindow,
+) -> (Vec<(Rect, usize)>, PillBarWindow) {
     let backend = TestBackend::new(width, 1);
     let mut term = Terminal::new(backend).unwrap();
     let mut tabs = Vec::new();
+    let mut painted_window = window;
     term.draw(|f| {
-        tabs = render_pill_bar(
+        (tabs, painted_window) = render_pill_bar(
             f,
             Rect::new(0, 0, width, 1),
             PillBar {
@@ -152,11 +167,12 @@ pub fn render_pill_bar_hitboxes(
                 ids,
                 selected_pos,
                 prefix: None,
+                window,
             },
         );
     })
     .unwrap();
-    tabs
+    (tabs, painted_window)
 }
 
 pub fn render_library_to_terminal(app: &mut App, layout: &mut Rect) -> Terminal<TestBackend> {

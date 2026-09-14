@@ -82,10 +82,19 @@ fn draw_skeleton(
 ) -> (ratatui::buffer::Buffer, WideSkeletonGeometry, SkeletonHits) {
     let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
     let mut hits = SkeletonHits::default();
+    let mut windows = SkeletonPillWindows::default();
     let mut geometry = None;
     terminal
         .draw(|f| {
-            geometry = render_wide_skeleton(f, AREA, content, browser_focused, None, &mut hits);
+            geometry = render_wide_skeleton(
+                f,
+                AREA,
+                content,
+                browser_focused,
+                None,
+                &mut hits,
+                &mut windows,
+            );
         })
         .unwrap();
     (
@@ -545,6 +554,7 @@ fn sub_breakpoint_area_paints_nothing() {
     };
     let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
     let mut hits = SkeletonHits::default();
+    let mut windows = SkeletonPillWindows::default();
     let narrow = Rect {
         width: crate::app::TWO_COLUMN_THRESHOLD - 1,
         ..AREA
@@ -552,7 +562,15 @@ fn sub_breakpoint_area_paints_nothing() {
     let mut geometry = None;
     terminal
         .draw(|f| {
-            geometry = render_wide_skeleton(f, narrow, &mut content, false, None, &mut hits);
+            geometry = render_wide_skeleton(
+                f,
+                narrow,
+                &mut content,
+                false,
+                None,
+                &mut hits,
+                &mut windows,
+            );
         })
         .unwrap();
     assert!(geometry.is_none());
