@@ -53,4 +53,4 @@ Verification evidence:
 - `cargo clippy --workspace --all-targets -- -D warnings`: passed.
 - `cargo nextest run --release --test-threads=4`: 1960 passed, 0 skipped.
 - `cargo tree -p rstest --target all`: `rstest v0.27.0` has only `rstest_macros` and its proc-macro dependencies; no async runtime or timeout path.
-- `git diff --name-only 34b7561e..HEAD`: only the 16 converted test-bearing source files plus `baseline.md` and `tasks.md`; no unrelated files. (The proposal/design/candidate artifacts are unchanged from the propose commit where applicable.)
+- `git diff --name-only 34b7561e..HEAD`: only the 16 converted test-bearing source files, the change artifacts (`README.md`, `baseline.md`, `candidates.md`, `tasks.md`), and the requested `AGENTS.md` guidance edit; no unrelated files. The proposal/design artifacts and `.openspec.yaml` are unchanged from the propose commit.
