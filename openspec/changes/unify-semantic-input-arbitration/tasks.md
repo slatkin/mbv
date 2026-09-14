@@ -26,10 +26,10 @@
 
 ## 5. Normalize Canonical Media-List Operations
 
-- [ ] 5.1 Add the target-resolved provider-neutral media-list operation vocabulary while retaining coordinate-bearing input only above presentation point resolution; verify compile-time/type-focused unit cases make invalid coordinate-plus-missing-target delegation unrepresentable.
-- [ ] 5.2 Replace exclusive `RowLocalOutcome` with one orthogonal transition carrying disposition, optional selected-target change, optional selection-summary change, and optional external intent; verify one table-driven MediaList test covers single- and multi-fact transitions.
-- [ ] 5.3 Convert Wide and Inline presentation adapters and `MediaListCarrier` to resolve pointer points before creating target-bearing operations; verify current-frame geometry and pointer-continuity MediaList tests pass unchanged in behavior.
-- [ ] 5.4 Convert Home, generic Emby Browser, and Feeds destination translation to one delegation per operation; verify their component and Library panel integration tests pass and exact source search finds no synthetic Click before DoubleClick/Context handling.
+- [x] 5.1 Add the target-resolved provider-neutral media-list operation vocabulary while retaining coordinate-bearing input only above presentation point resolution; verify compile-time/type-focused unit cases make invalid coordinate-plus-missing-target delegation unrepresentable.
+- [x] 5.2 Replace exclusive `RowLocalOutcome` with one orthogonal transition carrying disposition, optional selected-target change, optional selection-summary change, and optional external intent; verify one table-driven MediaList test covers single- and multi-fact transitions.
+- [x] 5.3 Convert Wide and Inline presentation adapters and `MediaListCarrier` to resolve pointer points before creating target-bearing operations; verify current-frame geometry and pointer-continuity MediaList tests pass unchanged in behavior.
+- [x] 5.4 Convert Home, generic Emby Browser, and Feeds destination translation to one delegation per operation; verify their component and Library panel integration tests pass and exact source search finds no synthetic Click before DoubleClick/Context handling.
 - [ ] 5.5 Convert Music and TV list/workspace translation to one delegation per operation; verify Wide and Narrow component tests plus relevant tick integration tests pass.
 - [ ] 5.6 Convert Audiobookshelf podcast/book and Queue translation to one delegation per operation; verify provider workspace, Queue slot-identity, pointer, and tick integration tests pass.
 - [ ] 5.7 Remove `RowLocalInput`/`pointer_target` compatibility delegation and `RowLocalOutcome`; verify exact source search finds neither old API and `cargo check -p mbv` passes.
