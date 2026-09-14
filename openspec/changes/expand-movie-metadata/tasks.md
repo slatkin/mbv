@@ -64,7 +64,7 @@
 
 ## 5. Documentation and archive
 
-- [ ] 5.1 Record the new concepts in `CONTEXT.md` (the provider-link row and the credits table) and
+- [x] 5.1 Record the new concepts in `CONTEXT.md` (the provider-link row and the credits table) and
   reconcile the *Main content box* entry, which describes the box as holding one kind-dependent payload,
   with a Movie box now holding the overview text plus the credits table. Verify: the glossary format is
   followed, no existing entry is left contradicting the new behavior, and
