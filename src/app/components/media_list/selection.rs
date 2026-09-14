@@ -154,6 +154,19 @@ mod tests {
     }
 
     #[test]
+    fn uppercase_visual_key_starts_visual_mode_at_cursor() {
+        let mut carrier = super::super::MediaListCarrier::new(super::super::Presentation::Wide);
+        carrier.wide_mut().set_content((1..=3).map(item).collect());
+        carrier.wide_mut().select_target(&2);
+        let key = tuirealm::event::KeyEvent::new(
+            tuirealm::event::Key::Char('V'),
+            tuirealm::event::KeyModifiers::SHIFT,
+        );
+        assert_eq!(carrier.handle_visual_key(&key), Some(1));
+        assert_eq!(carrier.multi_selection(), &[2]);
+    }
+
+    #[test]
     fn refresh_reanchors_after_rows_above_cursor_are_removed() {
         let mut list = list();
         list.select_target(&3);

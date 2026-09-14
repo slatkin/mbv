@@ -262,7 +262,9 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     /// Handle the shared Visual-mode chords after destination-local
     /// preemption (notably Inline Search) has had first refusal.
     pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
-        if key.code == Key::Char('v') && key.modifiers == KeyModifiers::SHIFT {
+        if matches!(key.code, Key::Char('v') | Key::Char('V'))
+            && key.modifiers == KeyModifiers::SHIFT
+        {
             self.enter_visual_mode();
             self.selection_changed = false;
             return Some(self.multi_selection().len());
