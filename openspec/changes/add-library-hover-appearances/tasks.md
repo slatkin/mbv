@@ -13,9 +13,9 @@
 
 ## 3. Live delivery and architecture records
 
-- [ ] 3.1 Add a real `Application::tick()` integration test through the shell synchronization pass that moves the pointer between a tab target, a main Selector-row pill, and a gap, proving only the pointed in-scope surface repaints hovered and no shell action occurs; verify with the matching `tests_tick_integration_mouse` nextest filter.
-- [ ] 3.2 Extend the integration coverage to both Narrow and Wide Panel modes using each component's retained role geometry rather than fixed coordinates; verify both cases pass under the same nextest filter.
-- [ ] 3.3 Update `docs/architecture/interactive-surface-ledger.md` mouse ownership/verification entries for the Tab panel and Library panel main Selector row, and verify the entries name local hover ownership plus their focused and live-tick tests.
+- [x] 3.1 Add a real `Application::tick()` integration test through the shell synchronization pass that moves the pointer between a tab target, a main Selector-row pill, and a gap, proving only the pointed in-scope surface repaints hovered and no shell action occurs; verify with the matching `tests_tick_integration_mouse` nextest filter.
+- [x] 3.2 Extend the integration coverage to both Narrow and Wide Panel modes using each component's retained role geometry rather than fixed coordinates; verify both cases pass under the same nextest filter.
+- [x] 3.3 Update `docs/architecture/interactive-surface-ledger.md` mouse ownership/verification entries for the Tab panel and Library panel main Selector row, and verify the entries name local hover ownership plus their focused and live-tick tests.
 
 ## 4. Visual evaluation and tuning
 
