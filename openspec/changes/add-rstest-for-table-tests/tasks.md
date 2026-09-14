@@ -30,7 +30,7 @@
 
 ## 6. Workspace verification
 
-- [ ] 6.1 Verify the full gates pass on the whole workspace with the dependency in place: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --release --test-threads=4`. Verify all three succeed and the total test count equals the pre-change count (the four families' 24 tests are now 24 cases, so the total must be unchanged).
-- [ ] 6.2 Verify no production code changed: `git diff --stat` across the change's commits lists only `Cargo.toml`, `Cargo.lock`, the two manifests, the three test-bearing files and `AGENTS.md`. Fail the check if any other file appears.
-- [ ] 6.3 Verify the dependency earned its place by comparing test-build wall time before and after (`cargo nextest run --release --test-threads=4` cold and warm). Record the delta in the change notes so a future reviewer can judge the cost.
-- [ ] 6.4 Comment on #710 with the conversion outcome and the families left opportunistic (the other 13 measured families), so the follow-up is tracked rather than implied by the Open Question.
+- [x] 6.1 Verify the full gates pass on the whole workspace with the dependency in place: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run --release --test-threads=4`. Verify all three succeed and the total test count equals the pre-change count (the four families' 24 tests are now 24 cases, so the total must be unchanged).
+- [x] 6.2 Verify no production code changed: `git diff --stat` across the change's commits lists only `Cargo.toml`, `Cargo.lock`, the two manifests, the three test-bearing files and `AGENTS.md`. Fail the check if any other file appears.
+- [x] 6.3 Verify the dependency earned its place by comparing test-build wall time before and after (`cargo nextest run --release --test-threads=4` cold and warm). Record the delta in the change notes so a future reviewer can judge the cost.
+- [x] 6.4 Comment on #710 with the conversion outcome and the families left opportunistic (the other 13 measured families), so the follow-up is tracked rather than implied by the Open Question.
