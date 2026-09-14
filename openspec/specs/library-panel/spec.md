@@ -155,8 +155,9 @@ vertical space is constrained, the artwork SHALL shrink before a Workspace list 
 
 ### Requirement: Wide Hero artwork height is capped
 
-The Wide Hero header's artwork box SHALL be at most 25 rows tall for all three header types: Landscape,
-Portrait and Square. The cap applies to the artwork box, not to the pane.
+The Wide Hero header's artwork box SHALL be at most 25 rows tall for the Landscape header type and at
+most 20 rows tall for the non-landscape types, Portrait and Square. The cap applies to the artwork box,
+not to the pane.
 
 The cap SHALL be one rule: painting the artwork, sizing the shared placeholder, the shell's image
 projection and its cover-fit encoding SHALL all use the same capped box, so a tall pane never fetches or
@@ -169,20 +170,20 @@ that smaller height.
 The Narrow inline hero SHALL be unaffected by this cap.
 
 #### Scenario: A tall Wide pane with a Portrait header
-- **WHEN** a Portrait header renders in a Wide Hero pane with more than 25 rows available for artwork
-- **THEN** the artwork box is 25 rows tall and the encoded image matches that box
+- **WHEN** a Portrait header renders in a Wide Hero pane with more than 20 rows available for artwork
+- **THEN** the artwork box is 20 rows tall and the encoded image matches that box
 
 #### Scenario: A tall Wide pane with a Square header
-- **WHEN** a Square header renders in a Wide Hero pane with more than 25 rows available for artwork
-- **THEN** the artwork box is 25 rows tall and the encoded image matches that box
+- **WHEN** a Square header renders in a Wide Hero pane with more than 20 rows available for artwork
+- **THEN** the artwork box is 20 rows tall and the encoded image matches that box
 
 #### Scenario: A tall Wide pane with a Landscape header
 - **WHEN** a Landscape header's 16:9 artwork box would be taller than 25 rows at the pane's width
 - **THEN** the artwork box is capped at 25 rows
 
 #### Scenario: A constrained pane
-- **WHEN** a Wide Hero pane offers fewer than 25 rows for artwork, or a present Workspace or starved
-  text block shrinks the box below the cap
+- **WHEN** a Wide Hero pane offers fewer rows for artwork than the header type's cap, or a present
+  Workspace or starved text block shrinks the box below the cap
 - **THEN** the artwork box uses the smaller height
 
 #### Scenario: Artwork has not loaded in a capped box

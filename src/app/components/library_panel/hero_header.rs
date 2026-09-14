@@ -37,6 +37,11 @@ const WORKSPACE_MIN_ROWS: u16 = 6;
 /// and Square artwork.
 const HERO_ARTWORK_MAX_ROWS: u16 = 25;
 
+/// Maximum artwork height for the non-landscape (Portrait/Square) arms. Their
+/// boxes are sized from the available height, so they reach the cap directly
+/// and a taller block reads as oversized beside the title/meta text.
+const HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS: u16 = 20;
+
 /// Minimum columns the title/meta block keeps beside a right-aligned artwork
 /// box (Portrait/Square arms).
 const HERO_MIN_TEXT_COLS: u16 = 16;
@@ -81,8 +86,12 @@ pub(in crate::app) fn hero_artwork_box(
                 .saturating_sub(ARTWORK_TEXT_GAP_ROWS);
             (area.width, h.min(max_h).min(room_for_text))
         }
-        super::content::HeroHeaderArm::Portrait => box_from_height(max_h, 4, 3, area),
-        super::content::HeroHeaderArm::Square => box_from_height(max_h, 2, 1, area),
+        super::content::HeroHeaderArm::Portrait => {
+            box_from_height(max_h.min(HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS), 4, 3, area)
+        }
+        super::content::HeroHeaderArm::Square => {
+            box_from_height(max_h.min(HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS), 2, 1, area)
+        }
     };
     Rect {
         x: area.right().saturating_sub(width).max(area.x),
@@ -420,7 +429,7 @@ mod hero_header_tests {
         // the binding constraint.
         let tall = Rect::new(0, 0, 100, 60);
         let capped = hero_artwork_box(tall, &pane.facts, false);
-        assert_eq!(capped.height, HERO_ARTWORK_MAX_ROWS);
+        assert_eq!(capped.height, HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS);
         let tall_buf = draw_pane(tall.width, tall.height, &pane);
         assert_eq!(
             tall_buf[(capped.right() - 1, capped.bottom() - 1)].bg,
@@ -454,7 +463,7 @@ mod hero_header_tests {
         let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
         let tall = Rect::new(0, 0, 60, 60);
         let capped = hero_artwork_box(tall, &pane.facts, false);
-        assert_eq!(capped.height, HERO_ARTWORK_MAX_ROWS);
+        assert_eq!(capped.height, HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS);
         let tall_buf = draw_pane(tall.width, tall.height, &pane);
         assert_eq!(
             tall_buf[(capped.right() - 1, capped.bottom() - 1)].bg,
