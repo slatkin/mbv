@@ -24,9 +24,9 @@
 
 ## 4. Root-package fixture batch
 
-- [ ] 4.1 Convert `make_queue_items(3)` in `actions_tests_queue_state.rs` to a same-file `#[fixture]` used by its five recorded cursor tests; retain each test’s assertion and explicit scenario data, run root-package per-file gates, and commit only that file.
-- [ ] 4.2 Convert `make_socket_merge_ready_app()` in `tests_podcast_playback.rs` to a same-file fixture used by its four recorded socket-progress tests; verify exactly those consumers remain, run root-package per-file gates, and commit only that file.
-- [ ] 4.3 Convert `make_home_video_app()` in `tests_feed_group_loading.rs` to a same-file fixture used by its three recorded feed-home-video tests; verify exactly those consumers remain, run root-package per-file gates, and commit only that file.
+- [x] 4.1 Convert `make_queue_items(3)` in `actions_tests_queue_state.rs` to a same-file `#[fixture]` used by its five recorded cursor tests; retain each test’s assertion and explicit scenario data, run root-package per-file gates, and commit only that file.
+- [x] 4.2 Convert `make_socket_merge_ready_app()` in `tests_podcast_playback.rs` to a same-file fixture used by its four recorded socket-progress tests; verify exactly those consumers remain, run root-package per-file gates, and commit only that file.
+- [x] 4.3 Convert `make_home_video_app()` in `tests_feed_group_loading.rs` to a same-file fixture used by its three recorded feed-home-video tests; verify exactly those consumers remain, run root-package per-file gates, and commit only that file.
 
 ## 5. Whole-change verification and disposition
 
