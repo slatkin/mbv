@@ -330,7 +330,17 @@ pub(crate) fn connect_endpoint(
 ) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
     let stream = endpoint.connect_stream()?;
     log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
+    connect_stream(stream)
+}
 
+/// Builds a `RemotePlayer` over an already-connected control stream.
+///
+/// Split out of `connect_endpoint` so tests can drive the swap/disconnect
+/// bookkeeping over an in-memory `UnixStream` pair (`connect_stub_daemon_pair`)
+/// instead of a real listener.
+fn connect_stream(
+    stream: SocketStream,
+) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String> {
     // Kept aside for `disconnect()` (#233) -- taken before `stream` is
     // moved into the writer thread below.
     let disconnect_stream = stream.try_clone().map_err(|e| e.to_string())?;
@@ -512,4 +522,50 @@ pub(crate) fn connect_endpoint(
         },
         event_rx,
     ))
+}
+
+/// Test-support: connects a `RemotePlayer` over an in-memory `UnixStream`
+/// pair whose peer completes the control handshake and then holds the socket
+/// open. The returned join handle completes only once the peer observes EOF,
+/// i.e. once `RemotePlayer::disconnect()` (or dropping the owner) shuts the
+/// client end down -- the hermetic oracle for "the previous remote was
+/// disconnected" without a listener or spawned product process.
+#[cfg(any(test, feature = "test-support"))]
+pub fn connect_stub_daemon_pair() -> Result<
+    (
+        RemotePlayer,
+        mpsc::Receiver<PlayerEvent>,
+        std::thread::JoinHandle<()>,
+    ),
+    String,
+> {
+    use std::io::Read;
+    let (client, daemon) = UnixStream::pair().map_err(|e| e.to_string())?;
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
+        writeln!(writer, "{hello}").unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        let state = serde_json::to_string(&CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            status: PlayerStatus::default(),
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
+            source: crate::config::QueueSource::Unknown,
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        }))
+        .unwrap();
+        writeln!(writer, "{state}").unwrap();
+        let mut buf = [0u8; 256];
+        while let Ok(n) = reader.get_mut().read(&mut buf) {
+            if n == 0 {
+                break;
+            }
+        }
+    });
+    let (player, rx) = connect_stream(SocketStream::Unix(client))?;
+    Ok((player, rx, peer))
 }

@@ -15,12 +15,12 @@ mod tests_library_position;
 mod tests_library_position_refresh;
 
 #[cfg(test)]
-#[path = "tests_library_position_activation.rs"]
-mod tests_library_position_activation;
-
-#[cfg(test)]
 #[path = "tests_library_position_restore.rs"]
 mod tests_library_position_restore;
+
+#[cfg(test)]
+#[path = "tests_library_position_activation.rs"]
+mod tests_library_position_activation;
 
 #[cfg(test)]
 #[path = "split_browse_state_browse_level_tests.rs"]

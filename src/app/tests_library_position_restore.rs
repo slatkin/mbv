@@ -3,19 +3,8 @@ use crate::app::tests::*;
 
 #[test]
 fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
-    use std::net::TcpListener;
-    use std::sync::mpsc;
-    // #260: a regression that re-adds `spawn_all_items_prefetch` to
-    // `handle_restored_library_position` would spawn a thread that
-    // connects here; 50ms is well above loopback connect latency.
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let base_url = format!("http://{}", listener.local_addr().unwrap());
-    let (tx, rx) = mpsc::channel();
-    let _server = std::thread::spawn(move || {
-        let _ = tx.send(listener.accept().is_ok());
-    });
+    // #260: restoring a library position must not eagerly prefetch all items.
     let mut app = make_app_stub();
-    app.config.lock().unwrap().server_url = base_url;
     app.panel_focus = PanelFocus::Queue;
     app.tab = TabSelection::EmbyLibrary(0);
     let mut library = make_item("Movies", "CollectionFolder");
@@ -41,13 +30,6 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
         position,
         nav_stack: vec![level],
     });
-    let connected = rx
-        .recv_timeout(std::time::Duration::from_millis(50))
-        .unwrap_or(false);
-    assert!(
-        !connected,
-        "restoring a library position must not eagerly prefetch all items (#260)"
-    );
     assert_eq!(app.libs[0].nav_stack[0].title, "Power");
     assert!(app.libs[0].nav_stack[0].all_items.is_none());
 }

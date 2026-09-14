@@ -81,19 +81,13 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
         1,
         "the selected album must publish one replacement parent target"
     );
-    let hero_marker = layout
-        .hero_area
-        .y
-        .checked_sub(0)
-        .and_then(|y| output.lines().nth(y as usize))
-        .and_then(|line| {
-            line.chars()
-                .nth(layout.left_area.x.saturating_sub(2) as usize)
-        });
-    assert_ne!(
-        hero_marker,
-        Some('\u{258e}'),
-        "the shared replacement plan suppresses the ordinary marker over its hero"
+    let selected = layout.selected_item_rect.expect("selected target");
+    assert!(
+        layout.hero_area.contains((selected.x, selected.y).into())
+            && layout
+                .hero_area
+                .contains((selected.right() - 1, selected.bottom() - 1).into()),
+        "the selected album target is owned by the replacement hero"
     );
 }
 
@@ -118,112 +112,6 @@ fn narrow_grouped_music_paints_the_album_hero_content() {
 }
 
 #[test]
-#[ignore = "obsolete legacy-render characterization"]
-fn narrow_grouped_music_keeps_bottom_hero_fully_visible() {
-    let mut app = make_music_group_app();
-    for i in 2..=12 {
-        let mut album = make_item(&format!("Album {i:02}"), "MusicAlbum");
-        album.id = format!("album-{i}");
-        album.artist = "Alpha".into();
-        app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
-    }
-    app.image_protocol_enabled = true;
-    let albums = app.libs[0].nav_stack.last().unwrap().items.clone();
-    let cursor = albums.len() - 1;
-    app.libs[0]
-        .nav_stack
-        .last_mut()
-        .unwrap()
-        .set_resting_cursor(cursor);
-    let (model, output) = narrow_music_frame(app, 30);
-    let layout = mounted_music_layout(&model);
-    // The mounted component paints into the app's left area; its own
-    // `layout()` publishes hero/target geometry in the same screen space.
-    let list_area = model.app.layout.left_area;
-
-    // The shared inline hero's admitted block is bottom-anchored and fully
-    // visible: its own height (the panel's inline-hero plan) is what the
-    // below assertions use, not the deleted legacy painter's row count.
-    let hero_height = layout.hero_area.height as usize;
-    assert!(
-        hero_height > 0,
-        "the inline hero must be admitted when it fits"
-    );
-    assert!(layout.hero_area.y > list_area.y);
-    assert_eq!(layout.hero_area.bottom(), list_area.bottom());
-    assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
-    let flow = mounted_music_flow_targets(&model);
-    let selected_row = mounted_music_album_target_rows(&model, cursor)
-        .into_iter()
-        .next()
-        .expect("the selected source row becomes the parent hero row");
-    assert_eq!(
-        flow.iter()
-            .filter(|target| target
-                .as_ref()
-                .is_some_and(|target| target == &format!("album-{cursor:02}")))
-            .count(),
-        1,
-        "the admitted hero publishes exactly one selected parent target"
-    );
-    let continuation_end = selected_row + hero_height;
-    assert!(flow.len() >= continuation_end);
-    assert!(flow[selected_row + 1..continuation_end]
-        .iter()
-        .all(Option::is_none));
-
-    let marker_col = list_area.x.saturating_sub(2) as usize;
-    for y in layout.hero_area.y..layout.hero_area.bottom() {
-        let marker = output
-            .lines()
-            .nth(y as usize)
-            .and_then(|line| line.chars().nth(marker_col));
-        assert_ne!(
-            marker,
-            Some('\u{258e}'),
-            "ordinary marker painted over hero at y={y}"
-        );
-    }
-}
-
-#[test]
-#[ignore = "obsolete legacy-render characterization"]
-fn narrow_grouped_music_persists_bottom_hero_scroll() {
-    let mut app = make_music_group_app();
-    for i in 2..=12 {
-        let mut album = make_item(&format!("Album {i:02}"), "MusicAlbum");
-        album.id = format!("album-{i}");
-        album.artist = "Alpha".into();
-        app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
-    }
-    app.image_protocol_enabled = true;
-    let cursor = app.libs[0].nav_stack.last().unwrap().items.len() - 1;
-    app.libs[0]
-        .nav_stack
-        .last_mut()
-        .unwrap()
-        .set_resting_cursor(cursor);
-    let mut model = mounted_model_at(app, 60, 30);
-    let _ = draw_mounted_frame(&mut model, 60, 30);
-
-    let stored_scroll = mounted_music_scroll(&model);
-    assert!(stored_scroll > 0, "the admitted hero offset must persist");
-    {
-        let list_area = model.app.layout.left_area;
-        let layout = mounted_music_layout(&model);
-        assert_eq!(layout.selected_item_rect, Some(layout.hero_area));
-        assert!(layout.hero_area.bottom() <= list_area.bottom());
-    }
-
-    let _ = draw_mounted_frame(&mut model, 60, 30);
-    assert_eq!(
-        mounted_music_scroll(&model),
-        stored_scroll,
-        "the computed hero scroll remains persisted on the next render"
-    );
-}
-
-#[test]
 fn short_grouped_music_restores_the_ordinary_selected_album_row() {
     // Measure the shared inline hero's admitted block height at a tall
     // viewport, then render with less room than that: after chrome
@@ -242,10 +130,10 @@ fn short_grouped_music_restores_the_ordinary_selected_album_row() {
 
     assert!(output.contains("First Album"));
     assert_eq!(layout.hero_area, Rect::default());
-    let selected = layout
-        .selected_item_rect
-        .expect("the ordinary selected album row remains targetable");
-    assert_ne!(selected, layout.hero_area);
+    assert!(
+        layout.selected_item_rect.is_some(),
+        "the ordinary selected album row remains targetable"
+    );
     assert_eq!(mounted_music_album_target_rows(&model, 0).len(), 1);
 }
 

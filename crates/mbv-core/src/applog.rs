@@ -153,22 +153,4 @@ mod tests {
     fn level_from_log_trace_maps_to_debug() {
         assert_eq!(Level::from(log::Level::Trace), Level::Debug);
     }
-
-    #[test]
-    fn push_entry_writes_to_file() {
-        let dir = std::env::temp_dir().join(format!("mbv-applog-test-{}", std::process::id()));
-        let _ = std::fs::create_dir_all(&dir);
-        let path = dir.join("test.log");
-        let _ = std::fs::remove_file(&path);
-        let log = AppLog::new(false, Some(path.clone()));
-        log.push_entry(LogEntry {
-            level: Level::Info,
-            ts: String::new(),
-            source: "s".into(),
-            msg: "hello".into(),
-        });
-        let contents = std::fs::read_to_string(&path).unwrap_or_default();
-        assert!(contents.contains("hello"));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
 }

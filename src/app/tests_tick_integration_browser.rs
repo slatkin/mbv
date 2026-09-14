@@ -6,10 +6,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use crate::app::components::browser_content::BrowserContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::render::{
-    browser_inline_media_browser_paints, browser_legacy_plain_rows_paints,
-    browser_wide_media_list_paints, make_movie_app, reset_browser_media_list_paints,
-};
+use crate::app::render::make_movie_app;
 
 use crate::app::tests_tick_harness::TickHarness;
 
@@ -48,7 +45,7 @@ fn draw(harness: &mut TickHarness, width: u16, height: u16) -> Terminal<TestBack
 }
 
 #[test]
-fn browser_wide_tick_moves_control_without_recomputing_app_cursor_and_paints_once() {
+fn browser_wide_tick_moves_control_without_recomputing_app_cursor() {
     let mut app = make_movie_app();
     app.tab = crate::app::TabSelection::EmbyLibrary(0);
     app.panel_focus = crate::app::PanelFocus::Library;
@@ -56,12 +53,7 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor_and_paints_onc
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
 
-    reset_browser_media_list_paints();
-    let terminal = draw(&mut harness, 100, 30);
-    assert_eq!(browser_wide_media_list_paints(), 1);
-    assert_eq!(browser_inline_media_browser_paints(), 0);
-    assert_eq!(browser_legacy_plain_rows_paints(), 0);
-    assert!(terminal.backend().buffer().content().iter().any(|cell| cell.symbol() == "F"));
+    let _terminal = draw(&mut harness, 100, 30);
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Down,
@@ -74,14 +66,11 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor_and_paints_onc
     assert_eq!(browser_owner(&harness).cursor(), 1);
     assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
 
-    reset_browser_media_list_paints();
     let _ = draw(&mut harness, 100, 30);
-    assert_eq!(browser_wide_media_list_paints(), 1);
-    assert_eq!(browser_legacy_plain_rows_paints(), 0);
 }
 
 #[test]
-fn browser_narrow_tick_click_uses_retained_geometry_and_the_inline_painter_once() {
+fn browser_narrow_tick_click_uses_retained_geometry() {
     let mut app = make_movie_app();
     app.panel_focus = crate::app::PanelFocus::Library;
     app.panel_mode = crate::app::PanelMode::LibraryOnly;
@@ -91,11 +80,7 @@ fn browser_narrow_tick_click_uses_retained_geometry_and_the_inline_painter_once(
     app.mini_view_focus = crate::app::PanelFocus::Library;
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    reset_browser_media_list_paints();
-    let terminal = draw(&mut harness, 60, 30);
-    assert_eq!(browser_inline_media_browser_paints(), 1);
-    assert_eq!(browser_wide_media_list_paints(), 0);
-    assert_eq!(browser_legacy_plain_rows_paints(), 0);
+    let _terminal = draw(&mut harness, 60, 30);
 
     // The panel's own retained Narrow geometry is the painted truth: the
     // admitted inline hero block is the Inline presentation's detail rect,
@@ -133,17 +118,10 @@ fn browser_narrow_tick_click_uses_retained_geometry_and_the_inline_painter_once(
     );
     assert_eq!(browser_owner(&harness).cursor(), 0);
     assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
-    let _ = terminal;
-
-    reset_browser_media_list_paints();
     let _ = draw(&mut harness, 60, 30);
-    assert_eq!(browser_inline_media_browser_paints(), 1);
-    assert_eq!(browser_legacy_plain_rows_paints(), 0);
 }
 
-/// Task 6.1: the generic catalog's narrow surface paints through the Inline
-/// presentation over the shared owner — exactly one Inline painter runs, and
-/// no legacy plain-row painter or Wide presentation paints beside it. (The
+/// The generic catalog's narrow surface routes through the shared owner. (The
 /// test previously pinned the Grid presentation for this surface; Grid was
 /// deleted as unreachable by design D13 — no library in use lacks a hero.)
 #[test]
@@ -152,11 +130,7 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     app.libs[0].library.collection_type = "other".into();
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
-    reset_browser_media_list_paints();
     let _ = draw(&mut harness, 100, 30);
-    assert_eq!(browser_inline_media_browser_paints(), 1);
-    assert_eq!(browser_wide_media_list_paints(), 0);
-    assert_eq!(browser_legacy_plain_rows_paints(), 0);
     assert_eq!(browser_owner(&harness).cursor(), 0);
 
     // Tick navigation moves the shared owner and echoes the resolved index.
@@ -170,11 +144,7 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
 
-    // The next frame repaints through the Inline presentation only, with the
-    // selection retained by the shared owner.
-    reset_browser_media_list_paints();
+    // The next frame retains the selection in the shared owner.
     let _ = draw(&mut harness, 100, 30);
-    assert_eq!(browser_inline_media_browser_paints(), 1);
-    assert_eq!(browser_legacy_plain_rows_paints(), 0);
     assert_eq!(browser_owner(&harness).cursor(), 1);
 }

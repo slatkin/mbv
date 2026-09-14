@@ -254,14 +254,37 @@ is not evidence about any of them:
 
 ## Tests
 
-**Never assert raw UI geometry.** Pane order and pane size are an arrangement's
-contract — assert them **once**, in that arrangement's own unit test, and
-**relationally** (`hero.x == browser.right() + gap`), never as absolute
-coordinates. Every other test asserts **containment in a role rect**
-(`panes.browser.contains(rect)`) or **rendered content** (buffer cells), never a
-coordinate, width, or left/right ordering pulled from an arrangement's return
-value. A test that can only break on a deliberate layout change is churn, not
-coverage — delete it rather than update it.
+Presentation tests are owned by the narrowest layer that can regress the fact.
+Use this four-layer matrix when adding, narrowing, or deleting assertions:
+
+| Layer | Owned proof | Claims removed from this layer |
+|---|---|---|
+| Arrangement | Relational placement and breakpoint decisions | Painted glyphs, shell state, absolute coordinates |
+| Render Component | Focused buffer content and paint-local geometry | Whole application frames and parent placement |
+| Interactive Component | Local state transitions, semantic requests, viewport, retained hit resolution | Root placement and shell effects |
+| Shell tick integration | Mount/focus/subscription/routing, latest-frame delivery, projection, cross-boundary effects | Glyph choice, spacing, repeated row arithmetic |
+
+Pane order and pane size are an arrangement contract: assert them once in the
+arrangement test and relationally (`hero.x == browser.right() + gap`), never as
+absolute coordinates. Other tests assert containment in a role rect or focused
+rendered content. A removed assertion must name its surviving owner test or
+assertion, or explicitly record that the detail is no longer a contract; a
+one-test-per-deletion replacement is not required.
+
+Terminal dimensions communicate intent. Use literal dimensions when terminal
+size is the input under test (including breakpoint and undersized-area
+boundaries). Otherwise derive sufficient fixture capacity from named
+requirements or constants plus explicit slack; do not add a general size
+abstraction. Semantic glyph assertions remain only in the owning painter test
+when the glyph is that painter's own semantic output; remove glyphs used as
+locators. Do not use whole-frame equality or snapshots: use focused
+buffer/content checks, with `buffer_to_string` only for focused checks.
+
+Mounted tick and mouse tests use the real composition path, but assert only
+mounting, focus, subscriptions, routing, gesture/latest-frame delivery,
+stable-target resolution, projection, and cross-boundary effects—not painter
+appearance. Do not add a checker, snapshot system, live fixture, or smoke test
+to enforce these rules.
 
 ## Completion checklist
 
@@ -281,9 +304,25 @@ Before reporting a TUI change complete:
 - [ ] **One router** — no chord is resolved outside `router.rs`/`key_policy.rs`,
   and no new caller of `GlobalViewKey`, a raw `*Key` request, `CONTEXT_STACK`, or
   `handle_legacy_key` was added.
+- [ ] **Presentation-test ownership** — each assertion belongs to the Arrangement,
+  Render Component, Interactive Component, or shell tick integration layer; the
+  other layers do not repeat its placement, spacing, glyph, or row-arithmetic
+  claim.
+- [ ] **Deletion evidence** — every removed presentation assertion names its
+  surviving owner proof or records deliberate de-contracting; no one-test-
+  per-deletion replacement is required.
+- [ ] **Test intent** — terminal dimensions are literal only when size is the
+  input under test; otherwise fixture capacity derives from named requirements
+  or constants plus slack. Semantic glyphs remain only in their owning painter
+  test, and whole-frame equality/snapshots are not used.
+- [ ] **Mounted boundary** — mounted tick/mouse tests cover composition,
+  routing, gesture, focus, subscriptions, latest-frame delivery, and
+  cross-boundary effects, never painter appearance.
 - [ ] **No geometry assertions** — no new test asserts absolute pane
   coordinates/widths or left/right ordering from an arrangement's return value;
-  layout claims are buffer-content or role-rect containment assertions.
-- [ ] **Buffer tests** — a characterization test exists (or was added first,
-  in its own commit, per the ledger migration flow) and passes unchanged
-  where the change is not expected to alter output.
+  layout claims are relational arrangement facts, buffer content, or role-rect
+  containment assertions.
+- [ ] **Buffer tests** — a focused characterization test exists (or was added
+  first, in its own commit, per the ledger migration flow) and passes unchanged
+  where the change is not expected to alter output; no checker, snapshot
+  system, live fixture, or coverage-only replacement was added.
