@@ -1,0 +1,95 @@
+use ratatui::style::{Color, Style};
+use ratatui::text::Span;
+use unicode_width::UnicodeWidthStr;
+
+pub(super) fn marquee_spans(
+    parts: &[(String, Color)],
+    max_width: usize,
+    marquee_text: &mut String,
+    marquee_started_at: &mut std::time::Instant,
+) -> Vec<Span<'static>> {
+    let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
+    if max_width == 0 || total_width <= max_width {
+        return parts
+            .iter()
+            .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))
+            .collect();
+    }
+    let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+    if *marquee_text != key {
+        *marquee_text = key;
+        *marquee_started_at = std::time::Instant::now();
+    }
+    let overflow = total_width - max_width;
+    colored_width_window(
+        parts,
+        marquee_col(overflow, marquee_started_at.elapsed().as_millis()),
+        max_width,
+    )
+}
+
+fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
+    if overflow == 0 {
+        return 0;
+    }
+    const STEP_MS: u128 = 150;
+    const HOLD_MS: u128 = 600;
+    let scroll_ms = overflow as u128 * STEP_MS;
+    let cycle = 2 * HOLD_MS + 2 * scroll_ms;
+    let t = elapsed_ms % cycle;
+    if t < HOLD_MS {
+        0
+    } else if t < HOLD_MS + scroll_ms {
+        ((t - HOLD_MS) / STEP_MS) as usize
+    } else if t < 2 * HOLD_MS + scroll_ms {
+        overflow
+    } else {
+        overflow - ((t - (2 * HOLD_MS + scroll_ms)) / STEP_MS) as usize
+    }
+}
+
+fn colored_width_window(
+    parts: &[(String, Color)],
+    start_col: usize,
+    width: usize,
+) -> Vec<Span<'static>> {
+    let mut spans = Vec::new();
+    let mut col = 0usize;
+    let mut taken = 0usize;
+    let mut current: Option<(String, Color)> = None;
+    'parts: for (text, color) in parts {
+        for c in text.chars() {
+            let char_width = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+            if col + char_width <= start_col {
+                col += char_width;
+                continue;
+            }
+            if taken + char_width > width {
+                break 'parts;
+            }
+            match &mut current {
+                Some((value, current_color)) if current_color == color => value.push(c),
+                _ => {
+                    if let Some((value, current_color)) = current.take() {
+                        spans.push(Span::styled(value, Style::default().fg(current_color)));
+                    }
+                    current = Some((c.to_string(), *color));
+                }
+            }
+            taken += char_width;
+            col += char_width;
+        }
+    }
+    if let Some((value, color)) = current {
+        spans.push(Span::styled(value, Style::default().fg(color)));
+    }
+    spans
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn marquee_advances_five_columns_per_second() {
+        assert_eq!(super::marquee_col(10, 600 + 150 * 5), 5);
+    }
+}

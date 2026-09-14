@@ -7,6 +7,7 @@
 
 use crate::app::ui_util::move_cursor;
 use ratatui::layout::{Position, Rect};
+use std::time::Instant;
 
 mod anchor;
 mod carrier;
@@ -383,6 +384,8 @@ pub struct MediaList<Target> {
     frozen_selection: Vec<Target>,
     /// Whether cursor movement currently recomputes the anchored range.
     live_range: bool,
+    marquee_text: String,
+    marquee_started_at: Instant,
 }
 
 impl<Target> MediaList<Target> {
@@ -397,7 +400,28 @@ impl<Target> MediaList<Target> {
             selection_anchor: None,
             frozen_selection: Vec::new(),
             live_range: false,
+            marquee_text: String::new(),
+            marquee_started_at: Instant::now(),
         }
+    }
+
+    pub(crate) fn marquee_state(&mut self, text: &str) -> (String, Instant) {
+        if self.marquee_text != text {
+            self.marquee_text.clear();
+            self.marquee_text.push_str(text);
+            self.marquee_started_at = Instant::now();
+        }
+        (self.marquee_text.clone(), self.marquee_started_at)
+    }
+
+    /// Test-only clock injection: advances the marquee clock without a real
+    /// sleep. `text` must match the currently marqueed title so the injected
+    /// time isn't immediately reset by the next `marquee_state` call.
+    #[cfg(test)]
+    pub(crate) fn set_marquee_started_at(&mut self, text: &str, at: Instant) {
+        self.marquee_text.clear();
+        self.marquee_text.push_str(text);
+        self.marquee_started_at = at;
     }
 
     fn rows(&self) -> &[MediaListRow<Target>] {
