@@ -248,7 +248,7 @@ impl<Target> InlineMediaBrowser<Target> {
         self.core.set_scroll(offset);
     }
 
-    pub(crate) fn marquee_state(&mut self, text: &str) -> (&mut String, &mut std::time::Instant) {
+    pub(crate) fn marquee_state(&mut self, text: &str) -> (String, std::time::Instant) {
         self.core.marquee_state(text)
     }
 

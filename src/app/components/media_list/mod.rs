@@ -405,13 +405,23 @@ impl<Target> MediaList<Target> {
         }
     }
 
-    pub(crate) fn marquee_state(&mut self, text: &str) -> (&mut String, &mut Instant) {
+    pub(crate) fn marquee_state(&mut self, text: &str) -> (String, Instant) {
         if self.marquee_text != text {
             self.marquee_text.clear();
             self.marquee_text.push_str(text);
             self.marquee_started_at = Instant::now();
         }
-        (&mut self.marquee_text, &mut self.marquee_started_at)
+        (self.marquee_text.clone(), self.marquee_started_at)
+    }
+
+    /// Test-only clock injection: advances the marquee clock without a real
+    /// sleep. `text` must match the currently marqueed title so the injected
+    /// time isn't immediately reset by the next `marquee_state` call.
+    #[cfg(test)]
+    pub(crate) fn set_marquee_started_at(&mut self, text: &str, at: Instant) {
+        self.marquee_text.clear();
+        self.marquee_text.push_str(text);
+        self.marquee_started_at = at;
     }
 
     fn rows(&self) -> &[MediaListRow<Target>] {

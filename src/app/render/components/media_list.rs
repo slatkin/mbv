@@ -56,8 +56,10 @@ mod wide_row_regression_tests {
             None,
         )]);
         let at_rest = title_row(&mut list, true);
-        let (_, started_at) = list.marquee_state("A very long selected title that overflows");
-        *started_at = Instant::now() - Duration::from_millis(1_401);
+        list.set_marquee_started_at(
+            "A very long selected title that overflows",
+            Instant::now() - Duration::from_millis(1_401),
+        );
         let advanced = title_row(&mut list, true);
         assert_ne!(at_rest, advanced);
         assert!(!at_rest.contains('…'));
@@ -95,8 +97,10 @@ mod wide_row_regression_tests {
             ),
         ]);
         let selected_at_rest = title_row_at(&mut list, true, 0);
-        let (_, started_at) = list.marquee_state("A very long selected title that overflows");
-        *started_at = Instant::now() - Duration::from_millis(1_401);
+        list.set_marquee_started_at(
+            "A very long selected title that overflows",
+            Instant::now() - Duration::from_millis(1_401),
+        );
         let selected_advanced = title_row_at(&mut list, true, 0);
         let other = title_row_at(&mut list, true, 1);
         assert!(
