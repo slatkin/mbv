@@ -92,6 +92,11 @@ impl MockHttp {
         self.shared.requests.lock().unwrap().clone()
     }
 
+    /// Number of requests transmitted so far, without cloning them.
+    pub(crate) fn request_count(&self) -> usize {
+        self.shared.requests.lock().unwrap().len()
+    }
+
     fn push(&self, scripted: Scripted) {
         self.shared.script.lock().unwrap().push_back(scripted);
     }
@@ -194,19 +199,13 @@ impl Transport for MockTransport {
         match self.shared.next_response() {
             Scripted::Respond(raw) => {
                 self.response_served = true;
-                let bytes = raw.as_bytes();
-                let input = self.buffers.input_append_buf();
-                input[..bytes.len()].copy_from_slice(bytes);
-                self.buffers.input_appended(bytes.len());
+                self.serve(&raw);
                 Ok(true)
             }
             Scripted::Delayed(duration, raw) => {
                 self.response_served = true;
                 std::thread::sleep(duration);
-                let bytes = raw.as_bytes();
-                let input = self.buffers.input_append_buf();
-                input[..bytes.len()].copy_from_slice(bytes);
-                self.buffers.input_appended(bytes.len());
+                self.serve(&raw);
                 Ok(true)
             }
             Scripted::Fail(kind) => {
@@ -226,5 +225,14 @@ impl Transport for MockTransport {
 
     fn is_open(&mut self) -> bool {
         !self.response_served
+    }
+}
+
+impl MockTransport {
+    fn serve(&mut self, raw: &str) {
+        let bytes = raw.as_bytes();
+        let input = self.buffers.input_append_buf();
+        input[..bytes.len()].copy_from_slice(bytes);
+        self.buffers.input_appended(bytes.len());
     }
 }

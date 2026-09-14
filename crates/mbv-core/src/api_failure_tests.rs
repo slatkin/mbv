@@ -1,3 +1,11 @@
+fn emby_client(http: &MockHttp) -> super::EmbyClient {
+    let config = crate::config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..Default::default()
+    };
+    super::EmbyClient::new(config).with_test_agent(http.agent())
+}
+
 fn audiobookshelf_response(
     status: u16,
     body: &'static str,
@@ -81,14 +89,8 @@ fn dead_audiobookshelf_endpoint_is_connectivity() {
 fn persisted_token_http_401_and_403_are_authentication_rejections() {
     for status in [401, 403] {
         let http = MockHttp::new();
-        let agent = http.agent();
         http.respond(status, "");
-
-        let config = crate::config::Config {
-            server_url: "http://127.0.0.1:1".into(),
-            ..Default::default()
-        };
-        let client = super::EmbyClient::new(config).with_test_agent(agent);
+        let client = emby_client(&http);
         let failure = match client.authenticate_service_setup_bounded(
             "persisted-token".into(),
             &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
@@ -107,13 +109,8 @@ fn persisted_token_http_401_and_403_are_authentication_rejections() {
 #[test]
 fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() {
     let http = MockHttp::new();
-    let agent = http.agent();
     http.respond(500, "server failure");
-    let config = crate::config::Config {
-        server_url: "http://127.0.0.1:1".into(),
-        ..Default::default()
-    };
-    let client = super::EmbyClient::new(config).with_test_agent(agent);
+    let client = emby_client(&http);
     let failure = match client.authenticate_service_setup_bounded(
         "persisted-token".into(),
         &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
@@ -128,13 +125,8 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     );
 
     let http = MockHttp::new();
-    let agent = http.agent();
     http.respond(200, "not-json");
-    let config = crate::config::Config {
-        server_url: "http://127.0.0.1:1".into(),
-        ..Default::default()
-    };
-    let client = super::EmbyClient::new(config).with_test_agent(agent);
+    let client = emby_client(&http);
     let failure = match client.get_views_classified() {
         Ok(_) => panic!("malformed availability response unexpectedly succeeded"),
         Err(failure) => failure,
@@ -145,13 +137,8 @@ fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() 
     );
 
     let http = MockHttp::new();
-    let agent = http.agent();
     http.fail(std::io::ErrorKind::ConnectionRefused);
-    let config = crate::config::Config {
-        server_url: "http://127.0.0.1:1".into(),
-        ..Default::default()
-    };
-    let client = super::EmbyClient::new(config).with_test_agent(agent);
+    let client = emby_client(&http);
     let failure = match client.authenticate_service_setup_bounded(
         "persisted-token".into(),
         &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),

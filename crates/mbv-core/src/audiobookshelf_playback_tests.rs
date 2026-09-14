@@ -181,11 +181,7 @@ fn playback_failures_and_rest_only_hls_readiness_are_classified() {
         assert_eq!(error.class, class);
     }
 
-    let http = MockHttp::new();
-    http.respond(200, "#EXTM3U\n#EXT-X-VERSION:3\n");
-    let client = AudiobookshelfClient::new("http://127.0.0.1:1")
-        .unwrap()
-        .with_test_agent(http.agent());
+    let (client, http) = mock_client(vec![(200, "#EXTM3U\n#EXT-X-VERSION:3\n".to_string())]);
     let base = "http://127.0.0.1:1";
     client
         .wait_for_hls_ready_bounded(
@@ -219,9 +215,8 @@ fn late_success_after_create_bound_is_closed_on_loopback() {
     // bound was missed; poll for it rather than assuming it is already there.
     let deadline = Instant::now() + Duration::from_secs(1);
     let close = loop {
-        let mut requests = http.requests();
-        if requests.len() >= 2 {
-            break requests.remove(1);
+        if http.request_count() >= 2 {
+            break http.requests().remove(1);
         }
         assert!(Instant::now() < deadline, "cleanup close was never sent");
         std::thread::sleep(Duration::from_millis(5));
