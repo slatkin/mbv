@@ -6,7 +6,7 @@ use super::super::components::{
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{
-    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
+    is_bulk_action, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
     LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
 use crate::app::{PanelFocus, TabSelection};
@@ -182,17 +182,7 @@ impl Model {
                     .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
                     .and_then(|menu| menu.action_at(menu.cursor()));
                 self.dismiss_context_menu();
-                let is_bulk = matches!(
-                    action,
-                    Some(
-                        ContextAction::PlaySelection(_)
-                            | ContextAction::ShuffleSelection(_)
-                            | ContextAction::EnqueueSelection(_)
-                            | ContextAction::RemoveSelection(_)
-                            | ContextAction::MarkPlayedSelection(_)
-                            | ContextAction::MarkUnplayedSelection(_)
-                    )
-                );
+                let is_bulk = is_bulk_action(&action);
                 self.app
                     .execute_context_action(action, self.home_context_item.clone());
                 if is_bulk {
@@ -216,17 +206,7 @@ impl Model {
             .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
             .and_then(|menu| menu.action_at(idx));
         self.dismiss_context_menu();
-        let is_bulk = matches!(
-            action,
-            Some(
-                ContextAction::PlaySelection(_)
-                    | ContextAction::ShuffleSelection(_)
-                    | ContextAction::EnqueueSelection(_)
-                    | ContextAction::RemoveSelection(_)
-                    | ContextAction::MarkPlayedSelection(_)
-                    | ContextAction::MarkUnplayedSelection(_)
-            )
-        );
+        let is_bulk = is_bulk_action(&action);
         self.app
             .execute_context_action(action, self.home_context_item.clone());
         if is_bulk {

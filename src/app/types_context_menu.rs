@@ -72,6 +72,20 @@ pub(super) struct ContextMenuEntry {
     pub(super) action: Option<ContextAction>,
 }
 
+pub(super) fn is_bulk_action(action: &Option<ContextAction>) -> bool {
+    matches!(
+        action,
+        Some(
+            ContextAction::PlaySelection(_)
+                | ContextAction::ShuffleSelection(_)
+                | ContextAction::EnqueueSelection(_)
+                | ContextAction::RemoveSelection(_)
+                | ContextAction::MarkPlayedSelection(_)
+                | ContextAction::MarkUnplayedSelection(_)
+        )
+    )
+}
+
 /// One multiselect row: `(name_lower, display_name, is_hidden)`.
 pub(crate) type MultiSelectItem = (String, String, bool);
 

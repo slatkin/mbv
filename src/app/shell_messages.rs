@@ -459,12 +459,26 @@ impl Model {
                                         (items, removes)
                                     },
                                 );
-                            let played_state_capable = slot_ids.iter().all(|sid| self.app.queue_for_scope(scope).slots().iter().find(|slot| slot.slot_id == *sid).is_some_and(|slot| crate::app::context_menu_capabilities::queue_item_capabilities(&slot.item).played_state_capable));
+                            let capabilities = slot_ids
+                                .iter()
+                                .filter_map(|sid| {
+                                    self.app
+                                        .queue_for_scope(scope)
+                                        .slots()
+                                        .iter()
+                                        .find(|slot| slot.slot_id == *sid)
+                                        .map(|slot| {
+                                            crate::app::context_menu_capabilities::queue_item_capabilities(
+                                                &slot.item,
+                                            )
+                                        })
+                                })
+                                .collect();
                             self.app.open_context_menu_for_selection(
                                 items,
                                 anchor,
-                                true,
-                                played_state_capable,
+                                crate::app::PanelFocus::Queue,
+                                capabilities,
                                 remove_targets,
                             );
                         } else {
@@ -485,11 +499,15 @@ impl Model {
                         match targets {
                             crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {
                                 if items.len() > 1 {
+                                    let capabilities = items
+                                        .iter()
+                                        .map(crate::app::context_menu_capabilities::emby_item_capabilities)
+                                        .collect();
                                     self.app.open_context_menu_for_selection(
                                         items,
                                         anchor,
-                                        false,
-                                        true,
+                                        crate::app::PanelFocus::Library,
+                                        capabilities,
                                         Vec::new(),
                                     );
                                 } else if let Some(item) = items.pop() {
@@ -524,11 +542,15 @@ impl Model {
                                         })
                                         .unwrap_or_default();
                                     if items.len() > 1 {
+                                        let capabilities = items
+                                            .iter()
+                                            .map(crate::app::context_menu_capabilities::emby_item_capabilities)
+                                            .collect();
                                         self.app.open_context_menu_for_selection(
                                             items,
                                             anchor,
-                                            false,
-                                            true,
+                                            crate::app::PanelFocus::Library,
+                                            capabilities,
                                             Vec::new(),
                                         );
                                     } else if let Some(item) = items.into_iter().next() {

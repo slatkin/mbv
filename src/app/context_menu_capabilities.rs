@@ -29,6 +29,17 @@ pub(crate) fn queue_item_capabilities(item: &QueueItem) -> ItemCapabilities {
     }
 }
 
+pub(crate) fn emby_item_capabilities(item: &mbv_core::api::EmbyItem) -> ItemCapabilities {
+    let playable = crate::app::ui_util::is_playable(item) && !item.is_folder;
+    let played_state_capable = item.media_type != "Audio" && item.item_type != "Audio";
+    ItemCapabilities {
+        playable,
+        queue_admissible: playable,
+        removable: false,
+        played_state_capable,
+    }
+}
+
 pub(crate) fn intersect<I>(items: I) -> Option<ItemCapabilities>
 where
     I: IntoIterator<Item = ItemCapabilities>,
@@ -56,5 +67,34 @@ mod tests {
         let result = intersect([all, no_played]).unwrap();
         assert!(!result.played_state_capable);
         assert!(result.removable);
+    }
+
+    #[test]
+    fn folder_or_non_playable_selection_suppresses_playback_actions() {
+        let playable = ItemCapabilities {
+            playable: true,
+            queue_admissible: true,
+            ..Default::default()
+        };
+        let folder = ItemCapabilities::default();
+        let result = intersect([playable, folder]).unwrap();
+        assert!(!result.playable);
+        assert!(!result.queue_admissible);
+    }
+
+    #[test]
+    fn mixed_queue_selection_keeps_remove_but_drops_played_state() {
+        let emby = ItemCapabilities {
+            removable: true,
+            played_state_capable: true,
+            ..Default::default()
+        };
+        let feed = ItemCapabilities {
+            removable: true,
+            ..Default::default()
+        };
+        let result = intersect([emby, feed]).unwrap();
+        assert!(result.removable);
+        assert!(!result.played_state_capable);
     }
 }

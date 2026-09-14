@@ -43,8 +43,17 @@ impl Model {
                             items.push(*item);
                         }
                     }
-                    self.app
-                        .open_context_menu_for_selection(items, anchor, false, true, removes);
+                    let capabilities = items
+                        .iter()
+                        .map(crate::app::context_menu_capabilities::emby_item_capabilities)
+                        .collect();
+                    self.app.open_context_menu_for_selection(
+                        items,
+                        anchor,
+                        crate::app::PanelFocus::Library,
+                        capabilities,
+                        removes,
+                    );
                     return;
                 }
                 let target = targets.into_iter().next();
