@@ -15,7 +15,7 @@ use super::media_list::{
 };
 use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
-    Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
+    LeafKeyResult, Msg, QueueColumnResize, QueueIntent, QueueMove, QueueRequest, ShellRequest,
     TerminalObserverEvent,
 };
 use super::user_event::UserEvent;
@@ -244,6 +244,10 @@ impl QueueComponent {
             RowLocalOutcome::SelectedTargetChanged(_) => self.cursor_message(),
             _ => None,
         }
+    }
+
+    fn handle_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        LeafKeyResult::from_unhandled_option(self.handle_key(key))
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -639,7 +643,7 @@ impl AppComponent<Msg, UserEvent> for QueueComponent {
         // selects before any row-local input touches it (design.md D1).
         self.ensure_carrier();
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => self.handle_key_result(key).into_option(),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

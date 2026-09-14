@@ -22,7 +22,7 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 use tuirealm::props::{AttrValue, Attribute, Props, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, PlaybackRequest};
+use super::msg::{LeafKeyResult, Msg, PlaybackRequest};
 use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
@@ -108,6 +108,10 @@ impl LibraryPlaybackPanel {
             last.is_some_and(|previous| now.duration_since(previous) < Duration::from_millis(300));
         *last = (!result).then_some(now);
         result
+    }
+
+    fn key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        LeafKeyResult::from_unhandled_option(self.key(key))
     }
 
     fn key(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -224,7 +228,7 @@ impl Component for LibraryPlaybackPanel {
 impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => self.key(key),
+            Event::Keyboard(key) => self.key_result(key).into_option(),
             Event::Mouse(mouse) => self.mouse(mouse),
             _ => None,
         }
