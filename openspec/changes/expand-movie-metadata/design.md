@@ -15,11 +15,14 @@ See `proposal.md` for motivation. What shapes the approach:
   declared two directors and 2 declared none; 69 of 1126 people had no role text.
 - **`EmbyItem` carries none of it.** `genre` holds only the first genre and `director` holds one name
   that nothing in production reads.
-- **ratatui 0.30.2 already supports the hyperlink cell.** `ratatui-core 0.1.2` has
-  `CellDiffOption::ForcedWidth` (`buffer/cell.rs`) and `CellWidth` reads it back, and ratatui's own
-  tests (`buffer/buffer.rs::merge_diff_link`, `merge_diff_split_link`) build exactly the OSC 8 pattern
-  `\x1b]8;;url\x1b\\label\x1b]8;;\x1b\\` in a forced-width cell. mbv draws through `Terminal::draw`, so
-  the diff path applies.
+- **ratatui 0.30.2 already supports the hyperlink cell, end to end.** `ratatui-core 0.1.2` has
+  `CellDiffOption::ForcedWidth` (`buffer/cell.rs`) and `CellWidth` reads it back; its diff walk advances
+  past the forced span and emits the cell when it differs; and ratatui's own tests
+  (`buffer/buffer.rs::merge_diff_link`, `merge_diff_split_link`) build exactly the OSC 8 pattern
+  `\x1b]8;;url\x1b\\label\x1b]8;;\x1b\\` in a forced-width cell. The `ratatui-crossterm 0.1.2` backend
+  writes that cell with `Print(cell.symbol())` (`src/lib.rs:274`) — the escape bytes reach the terminal
+  unfiltered — and re-issues `MoveTo` unless the previous cell was at `x - 1` (`:244`), so the cursor
+  does not drift across the forced span. mbv draws through `Terminal::draw`, so this is the live path.
 - **Precedent, unimplemented.** `idle-feed-rotation` already specifies OSC 8 feed titles; there is no
   escape sequence anywhere in `src/` today, so this change ships mbv's first hyperlink.
 - **No second routing site.** ADR 0024 keeps component-surface pointer routing with the surface that
@@ -107,6 +110,11 @@ component-surface routing path under ADR 0024, a new `ShellRequest`, hoisting `f
 `open_url`, and a spawned process, all for one row); wrapping the escape inside a `Paragraph` span
 (impossible — `Paragraph` has no per-cell hook).
 
+This needs no prototype: the buffer, diff and backend behaviour above is read from the pinned sources
+and covered by ratatui's own tests, and the mbv side of it is a buffer assertion. Whether a given
+terminal acts on ctrl-click is a terminal fact with a graceful failure (plain text), checked in the
+manual sweep rather than prototyped in throwaway code.
+
 *Consequence of the diff model:* a forced-width cell makes the diff walk skip the cells it covers, so
 nothing else may claim the label's columns. The label is painted normally first and then covered, which
 keeps the read path (`Buffer` contents) honest.
@@ -161,6 +169,7 @@ for a movie with no links. Rollback is a revert of the change: nothing persisted
 
 ## Open Questions
 
-None. The one technical unknown — whether a forced-width escape cell survives mbv's draw path — is
-answered by ratatui's own link tests plus the pinned versions, and is verified end-to-end in a real
-terminal by the first task rather than left open.
+None. The escape-cell mechanism is settled by the pinned ratatui sources (buffer diff, `CellWidth`,
+and the crossterm backend's raw `Print`) plus ratatui's own link tests, and the mbv side is asserted by
+buffer tests; the only observation left is whether the user's terminal honors ctrl-click, which the
+manual sweep covers and which degrades to plain text.
