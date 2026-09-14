@@ -31,6 +31,12 @@ pub(super) struct RouterSnapshot {
     /// inline library search, or the settings form's text inputs). Global
     /// bindings do not fire while a text entry owns focus.
     pub text_entry_focused: bool,
+    /// Whether any overlay/sidebar/modal holds TuiRealm focus (the shell's
+    /// `overlay_holds_focus()` set). While one does, panel-focus switching is
+    /// gated off: the sidebar owns the keyboard, so plain arrows must reach
+    /// it (e.g. the Playlists sidebar's collapse/open) instead of moving
+    /// panel focus behind it.
+    pub overlay_holds_focus: bool,
     /// Whether the focused media list is in keyboard Visual mode.
     pub visual_mode_active: bool,
     /// Whether the previous eligible Space press is within the double-tap
@@ -67,8 +73,8 @@ pub(super) enum KeyPolicyBinding {
     NextLibraryTab,
     PreviousLibraryTab,
     LibraryTabJump,
-    AltPanelRight,
-    AltPanelLeft,
+    PanelRight,
+    PanelLeft,
     AltNextLibraryTab,
     AltPreviousLibraryTab,
     AltSwallow,
@@ -100,12 +106,8 @@ impl KeyPolicyBinding {
             Self::LibraryTabJump => {
                 matches!(chord.code, KeyCode::Char('1'..='9')) && chord.mods.is_empty()
             }
-            Self::AltPanelRight => {
-                chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Right
-            }
-            Self::AltPanelLeft => {
-                chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Left
-            }
+            Self::PanelRight => chord.mods.is_empty() && chord.code == KeyCode::Right,
+            Self::PanelLeft => chord.mods.is_empty() && chord.code == KeyCode::Left,
             Self::AltNextLibraryTab => {
                 chord.mods.contains(KeyModifiers::ALT) && chord.code == KeyCode::Down
             }
@@ -155,10 +157,13 @@ impl KeyPolicyGate {
                 !snapshot.blocking_overlay_open && !snapshot.help_overlay_open
             }
             Self::PanelFocusQueue => {
-                !snapshot.blocking_overlay_open && snapshot.panel_focus == PanelFocus::Queue
+                !snapshot.blocking_overlay_open
+                    && !snapshot.overlay_holds_focus
+                    && snapshot.panel_focus == PanelFocus::Queue
             }
             Self::PanelFocusLibraryBoth => {
                 !snapshot.blocking_overlay_open
+                    && !snapshot.overlay_holds_focus
                     && snapshot.panel_focus == PanelFocus::Library
                     && snapshot.panel_mode == PanelMode::Both
             }
@@ -319,16 +324,16 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "alt_panel_right",
+        name: "panel_right",
         global: true,
-        binding: KeyPolicyBinding::AltPanelRight,
+        binding: KeyPolicyBinding::PanelRight,
         gate: KeyPolicyGate::PanelFocusQueue,
         blocking: false,
     },
     KeyPolicyEntry {
-        name: "alt_panel_left",
+        name: "panel_left",
         global: true,
-        binding: KeyPolicyBinding::AltPanelLeft,
+        binding: KeyPolicyBinding::PanelLeft,
         gate: KeyPolicyGate::PanelFocusLibraryBoth,
         blocking: false,
     },
@@ -397,8 +402,8 @@ pub(super) fn command_for_policy(
             }
             _ => None,
         },
-        KeyPolicyBinding::AltPanelRight => Some(Command::FocusPanel(PanelFocus::Library)),
-        KeyPolicyBinding::AltPanelLeft => Some(Command::FocusPanel(PanelFocus::Queue)),
+        KeyPolicyBinding::PanelRight => Some(Command::FocusPanel(PanelFocus::Library)),
+        KeyPolicyBinding::PanelLeft => Some(Command::FocusPanel(PanelFocus::Queue)),
         KeyPolicyBinding::PanelModeCycle => Some(Command::CyclePanelMode),
         KeyPolicyBinding::CtrlL => Some(Command::ForceClear),
         KeyPolicyBinding::ClearQueue => Some(Command::RequestClearQueue),

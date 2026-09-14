@@ -149,7 +149,7 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         help_line(key_w, "Tab", "Cycle menu"),
         help_line(key_w, "1 – 9", "Jump to tab"),
         help_line(key_w, "↑ / ↓", "Move cursor"),
-        help_line(key_w, "Alt+← / →", "Switch panels"),
+        help_line(key_w, "← / →", "Switch panels"),
         help_line(key_w, "PgUp / PgDn", "Page scroll"),
         help_line(key_w, "Home / End", "First/last item"),
         help_line(key_w, "Enter", "Select/Play/Open"),

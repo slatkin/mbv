@@ -269,6 +269,7 @@ impl Model {
                 && !self.app.effective_playback_state().active,
             panel_mode: self.app.effective_panel_mode(),
             panel_focus: self.app.effective_panel_focus(),
+            overlay_holds_focus: self.overlay_holds_focus(),
             blocking_overlay_open: self.blocking_overlay_active(),
             help_overlay_open: self
                 .application
