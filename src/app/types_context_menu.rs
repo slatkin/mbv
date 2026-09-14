@@ -1,5 +1,11 @@
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{FeedEntry, QueueSlotId};
+
+#[derive(Clone, Debug)]
+pub(super) enum BulkRemoveTarget {
+    ContinueWatching(Box<EmbyItem>),
+    Queue(QueueSlotId),
+}
 use ratatui::layout::Rect;
 
 use crate::app::components::msg::HomeRowTarget;
@@ -34,6 +40,12 @@ pub(super) enum ContextMenuAnchor {
 #[derive(Clone, Debug)]
 pub(super) enum ContextAction {
     Play,
+    PlaySelection(Vec<EmbyItem>),
+    ShuffleSelection(Vec<EmbyItem>),
+    EnqueueSelection(Vec<EmbyItem>),
+    RemoveSelection(Vec<BulkRemoveTarget>),
+    MarkPlayedSelection(Vec<String>),
+    MarkUnplayedSelection(Vec<String>),
     /// Play the queue item at this explicit index (split-queue-cursor-
     /// ownership D2): the queue menu retains the index resolved when the
     /// menu opened (the right-clicked slot), so a follow update to

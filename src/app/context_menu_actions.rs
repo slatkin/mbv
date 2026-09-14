@@ -1,8 +1,10 @@
 use super::notify_actions::ToastSeverity;
+use super::types_context_menu::BulkRemoveTarget;
 use super::types_context_menu::ContextMenu;
 use super::types_overlay::OverlayRequest;
 use super::{App, ContextAction, ContextMenuAnchor, ContextMenuEntry, LibEvent, PanelFocus};
 use mbv_core::api::EmbyItem;
+use rand::seq::SliceRandom;
 
 impl App {
     pub(super) fn execute_context_action(
@@ -44,6 +46,59 @@ impl App {
                     if let Some(item) = self.current_lib_item(lib_idx, cursor) {
                         self.select_item(lib_idx, item);
                     }
+                }
+            }
+            Some(ContextAction::PlaySelection(items)) => {
+                self.play_items_routed(items, 0, crate::config::QueueSource::Unknown);
+            }
+            Some(ContextAction::ShuffleSelection(mut items)) => {
+                items.shuffle(&mut rand::rng());
+                self.play_items_routed(items, 0, crate::config::QueueSource::Shuffle);
+            }
+            Some(ContextAction::EnqueueSelection(items)) => {
+                if let Some(lib_idx) = lib_idx {
+                    for item in items {
+                        self.enqueue_lib_item(lib_idx, item);
+                    }
+                } else {
+                    for item in items {
+                        if !item.is_folder && crate::app::ui_util::is_playable(&item) {
+                            self.submit_queue_item(
+                                mbv_core::playback_queue::QueueItem::Emby(Box::new(item)),
+                                false,
+                            );
+                        }
+                    }
+                }
+            }
+            Some(ContextAction::RemoveSelection(targets)) => {
+                for target in targets {
+                    match target {
+                        BulkRemoveTarget::ContinueWatching(item) => {
+                            self.remove_from_continue_watching(*item)
+                        }
+                        BulkRemoveTarget::Queue(slot_id) => {
+                            let scope = self.viewed_queue_scope();
+                            if let Some(pos) = self
+                                .queue_for_scope(scope)
+                                .slots()
+                                .iter()
+                                .position(|slot| slot.slot_id == slot_id)
+                            {
+                                self.remove_from_queue(pos);
+                            }
+                        }
+                    }
+                }
+            }
+            Some(ContextAction::MarkPlayedSelection(ids)) => {
+                for id in ids {
+                    self.context_set_played(&id, true, lib_idx);
+                }
+            }
+            Some(ContextAction::MarkUnplayedSelection(ids)) => {
+                for id in ids {
+                    self.context_set_played(&id, false, lib_idx);
                 }
             }
             Some(ContextAction::PlayQueue(index)) => {
@@ -611,6 +666,80 @@ impl App {
         if let Some(menu) = self.build_context_menu_for(Some(item), false, None) {
             self.pending_overlay = Some(OverlayRequest::ContextMenu(menu));
         }
+    }
+
+    /// Build the common multi-selection menu. Capability derivation is an
+    /// intersection: an action is present only when every selected item has
+    /// the corresponding backend.
+    pub(super) fn open_context_menu_for_selection(
+        &mut self,
+        items: Vec<EmbyItem>,
+        anchor: Option<(u16, u16)>,
+        queue: bool,
+        played_state_capable: bool,
+        remove_targets: Vec<BulkRemoveTarget>,
+    ) {
+        if items.is_empty() && remove_targets.is_empty() {
+            return;
+        }
+        let _capabilities =
+            crate::app::context_menu_capabilities::intersect(items.iter().map(|item| {
+                crate::app::context_menu_capabilities::ItemCapabilities {
+                    playable: crate::app::ui_util::is_playable(item),
+                    queue_admissible: true,
+                    removable: !queue,
+                    played_state_capable,
+                }
+            }));
+        let mut entries = Vec::new();
+        if !queue {
+            Self::push_context_action(
+                &mut entries,
+                "Play",
+                ContextAction::PlaySelection(items.clone()),
+            );
+            Self::push_context_action(
+                &mut entries,
+                "Shuffle",
+                ContextAction::ShuffleSelection(items.clone()),
+            );
+            Self::push_context_action(
+                &mut entries,
+                "Add to Queue",
+                ContextAction::EnqueueSelection(items.clone()),
+            );
+        }
+        let ids = items.iter().map(|item| item.id.clone()).collect::<Vec<_>>();
+        if !ids.is_empty() && played_state_capable {
+            Self::push_context_action(
+                &mut entries,
+                "Mark Played",
+                ContextAction::MarkPlayedSelection(ids.clone()),
+            );
+            Self::push_context_action(
+                &mut entries,
+                "Mark Unplayed",
+                ContextAction::MarkUnplayedSelection(ids),
+            );
+        }
+        if !remove_targets.is_empty() {
+            Self::push_context_action(
+                &mut entries,
+                "Remove",
+                ContextAction::RemoveSelection(remove_targets),
+            );
+        }
+        if entries.is_empty() {
+            return;
+        }
+        self.pending_overlay = Some(OverlayRequest::ContextMenu(ContextMenu {
+            anchor: anchor.map_or(
+                ContextMenuAnchor::SelectedItem(PanelFocus::Library),
+                |(x, y)| ContextMenuAnchor::Pointer { x, y },
+            ),
+            cursor: 0,
+            entries,
+        }));
     }
 
     /// [`open_context_menu_for`](Self::open_context_menu_for) anchored at a

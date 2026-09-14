@@ -18,6 +18,7 @@ pub mod components;
 mod construct;
 mod consume_quit_actions;
 mod context_menu_actions;
+mod context_menu_capabilities;
 mod cw_library_tab_actions;
 mod daemon_restart;
 mod emby_service_actions;

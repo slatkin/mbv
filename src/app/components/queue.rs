@@ -73,6 +73,10 @@ pub struct QueueComponent {
 }
 
 impl QueueComponent {
+    pub(crate) fn clear_selection(&mut self) {
+        self.carrier.clear_selection();
+    }
+
     pub(crate) fn selected_row_rect(&self) -> Option<Rect> {
         self.carrier.wide().current_selected_row_rect()
     }

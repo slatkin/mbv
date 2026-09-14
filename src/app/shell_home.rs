@@ -30,6 +30,23 @@ impl Model {
                 crate::app::types_context_menu::ContextMenuTargets::Home(targets),
                 anchor,
             ) => {
+                if targets.len() > 1 {
+                    let mut items = Vec::new();
+                    let mut removes = Vec::new();
+                    for target in &targets {
+                        if let Some((QueueItem::Emby(item), from_cw)) =
+                            self.home_stable_target(target)
+                        {
+                            if from_cw {
+                                removes.push(crate::app::types_context_menu::BulkRemoveTarget::ContinueWatching(item.clone()));
+                            }
+                            items.push(*item);
+                        }
+                    }
+                    self.app
+                        .open_context_menu_for_selection(items, anchor, false, true, removes);
+                    return;
+                }
                 let target = targets.into_iter().next();
                 let cw_selected = target.as_ref().is_some_and(|t| t.from_continue_watching);
                 let cw_item = target

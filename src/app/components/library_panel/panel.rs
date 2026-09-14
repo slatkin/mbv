@@ -268,6 +268,12 @@ impl LibraryPanel {
     /// Mutably borrow the owner installed for `key` (the shell's
     /// destination-specific content pushes reach a typed owner through its
     /// `as_any_mut`).
+    pub(in crate::app) fn clear_active_selection(&mut self) {
+        if let Some(owner) = self.owners.active_mut() {
+            owner.clear_selection();
+        }
+    }
+
     pub(in crate::app) fn owner_mut(
         &mut self,
         key: &LibraryKey,

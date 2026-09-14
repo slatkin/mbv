@@ -6,8 +6,8 @@ use super::super::components::{
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{
-    ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup, LibraryRouteStage,
-    MultiSelectKind, MultiSelectPopup,
+    ContextAction, ContextMenu, ContextMenuAnchor, ContextMenuEntry, LibraryRoutePopup,
+    LibraryRouteStage, MultiSelectKind, MultiSelectPopup,
 };
 use crate::app::{PanelFocus, TabSelection};
 use ratatui::layout::Rect;
@@ -182,8 +182,22 @@ impl Model {
                     .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
                     .and_then(|menu| menu.action_at(menu.cursor()));
                 self.dismiss_context_menu();
+                let is_bulk = matches!(
+                    action,
+                    Some(
+                        ContextAction::PlaySelection(_)
+                            | ContextAction::ShuffleSelection(_)
+                            | ContextAction::EnqueueSelection(_)
+                            | ContextAction::RemoveSelection(_)
+                            | ContextAction::MarkPlayedSelection(_)
+                            | ContextAction::MarkUnplayedSelection(_)
+                    )
+                );
                 self.app
                     .execute_context_action(action, self.home_context_item.clone());
+                if is_bulk {
+                    self.clear_multi_selection();
+                }
             }
             ContextMenuIntent::Dismiss => self.dismiss_context_menu(),
         }
@@ -202,8 +216,37 @@ impl Model {
             .and_then(|component| component.as_any().downcast_ref::<ContextMenuComponent>())
             .and_then(|menu| menu.action_at(idx));
         self.dismiss_context_menu();
+        let is_bulk = matches!(
+            action,
+            Some(
+                ContextAction::PlaySelection(_)
+                    | ContextAction::ShuffleSelection(_)
+                    | ContextAction::EnqueueSelection(_)
+                    | ContextAction::RemoveSelection(_)
+                    | ContextAction::MarkPlayedSelection(_)
+                    | ContextAction::MarkUnplayedSelection(_)
+            )
+        );
         self.app
             .execute_context_action(action, self.home_context_item.clone());
+        if is_bulk {
+            self.clear_multi_selection();
+        }
+    }
+
+    fn clear_multi_selection(&mut self) {
+        self.visual_selection = None;
+        if self.app.effective_panel_focus() == PanelFocus::Queue {
+            if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue) {
+                if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
+                    queue.clear_selection();
+                }
+            }
+        } else if let Some(comp) = self.application.get_component_mut(&ComponentId::Library) {
+            if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>() {
+                panel.clear_active_selection();
+            }
+        }
     }
 
     fn dismiss_context_menu(&mut self) {
