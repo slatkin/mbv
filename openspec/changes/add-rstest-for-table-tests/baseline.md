@@ -82,3 +82,11 @@ mbv::bin/mbv app::render::components::backdrop::tests::dim_white_becomes_half_br
 The adjacent socket `non_array_event_payload_returns_none` and parsing
 `parse_video_info_empty_when_no_video_stream` tests are not part of the measured
 families above.
+
+## Build-time note
+
+No pre-change wall-time baseline was recorded. Post-change-only measurements
+using `cargo nextest run --release --test-threads=4`:
+
+- Cold (after `cargo clean -p mbv -p mbv-core -p mbvd`): 19 seconds; 1960 tests passed.
+- Warm: 19 seconds; 1960 tests passed.
