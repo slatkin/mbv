@@ -283,7 +283,12 @@ impl Model {
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
             idle_feed_link_available: self.app.idle_feed_link_available(),
-            visual_mode_active: self.visual_selection.is_some(),
+            // A selection belongs to the panel that created it. Keep the
+            // shell-owned count for projection, but do not let it suppress
+            // playback chords after focus moves to another panel.
+            visual_mode_active: self.visual_selection.is_some_and(|(focus, count)| {
+                count > 0 && focus == self.app.effective_panel_focus()
+            }),
             text_entry_focused: matches!(
                 self.application.focus(),
                 Some(

@@ -19,6 +19,7 @@
 //! un-migrated destinations call the same method from theirs.
 
 use ratatui::layout::{Position, Rect};
+use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
     InlineMediaBrowser, MediaListRow, RowLocalInput, RowLocalOutcome, ViewportAnchor, WideMediaList,
@@ -250,6 +251,30 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.enter_visual_mode(),
             Presentation::Inline => self.inline.enter_visual_mode(),
+        }
+    }
+
+    /// Handle the shared Visual-mode chords after destination-local
+    /// preemption (notably Inline Search) has had first refusal.
+    pub fn handle_visual_key(&mut self, key: &KeyEvent) -> Option<usize> {
+        if key.code == Key::Char('v') && key.modifiers == KeyModifiers::SHIFT {
+            self.enter_visual_mode();
+            return Some(self.multi_selection().len());
+        }
+        if !self.is_visual_mode() || !key.modifiers.is_empty() {
+            return None;
+        }
+        match key.code {
+            Key::Esc => {
+                self.clear_selection();
+                Some(0)
+            }
+            Key::Char(' ') => {
+                let target = self.selected_target()?.clone();
+                self.toggle_selection(&target);
+                Some(self.multi_selection().len())
+            }
+            _ => None,
         }
     }
 

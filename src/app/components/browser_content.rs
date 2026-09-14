@@ -366,28 +366,8 @@ impl BrowserContent {
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
-        if key.code == Key::Char('v') && key.modifiers == tuirealm::event::KeyModifiers::SHIFT {
-            self.carrier.enter_visual_mode();
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(
-                self.carrier.multi_selection().len(),
-            )));
-        }
-        if self.carrier.is_visual_mode() && key.modifiers.is_empty() {
-            match key.code {
-                Key::Esc => {
-                    self.carrier.clear_selection();
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(0)));
-                }
-                Key::Char(' ') => {
-                    if let Some(target) = self.carrier.selected_target().cloned() {
-                        self.carrier.toggle_selection(&target);
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(
-                            self.carrier.multi_selection().len(),
-                        )));
-                    }
-                }
-                _ => {}
-            }
+        if let Some(count) = self.carrier.handle_visual_key(key) {
+            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
         }
         if alt && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down) {
             return None;
