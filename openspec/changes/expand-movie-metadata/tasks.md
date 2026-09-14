@@ -1,18 +1,18 @@
 ## 1. Emby data model (mbv-core)
 
-- [ ] 1.1 Add `EmbyPerson { name, role, kind }` and `EmbyLink { name, url }`, replace `EmbyItem.genre`
+- [x] 1.1 Add `EmbyPerson { name, role, kind }` and `EmbyLink { name, url }`, replace `EmbyItem.genre`
   with `genres: Vec<String>`, delete `director`, and add `people`/`external_urls` (each
   `#[serde(default)]` so an older payload deserializes unchanged). Verify: `cargo check -p mbv-core`;
   `cargo check --workspace --all-targets` reports only the known `EmbyItem` literal sites.
-- [ ] 1.2 Parse the new fields in `parse_item` (`Genres`, `People` Name/Role/Type with `Role` optional,
+- [x] 1.2 Parse the new fields in `parse_item` (`Genres`, `People` Name/Role/Type with `Role` optional,
   `ExternalUrls` Name/Url). Verify: parser unit tests for a full payload, a payload missing all three
   keys, a person with no `Role`, and a blank `Url`.
-- [ ] 1.3 Add `ExternalUrls` to the `Fields` query string in `api_client_library.rs` and
+- [x] 1.3 Add `ExternalUrls` to the `Fields` query string in `api_client_library.rs` and
   `api_client_playlists.rs`. Verify: a mock-transport test asserting the recorded request's `Fields`
   parameter carries `ExternalUrls`.
-- [ ] 1.4 Update the `EmbyItem { .. }` literals in `crates/` test modules for the new fields. Verify:
+- [x] 1.4 Update the `EmbyItem { .. }` literals in `crates/` test modules for the new fields. Verify:
   `cargo nextest run -p mbv-core` green.
-- [ ] 1.5 Update the `EmbyItem { .. }` literals in `src/` test modules for the new fields. Verify:
+- [x] 1.5 Update the `EmbyItem { .. }` literals in `src/` test modules for the new fields. Verify:
   `cargo nextest run -p mbv` green with no behavior change.
 
 ## 2. Movie hero content (producer)
