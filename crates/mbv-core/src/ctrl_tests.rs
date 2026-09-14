@@ -229,6 +229,7 @@ fn stub_media_item() -> crate::api::EmbyItem {
         genre: String::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
+        primary_image_aspect: None,
     }
 }
 

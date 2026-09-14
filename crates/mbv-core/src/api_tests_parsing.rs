@@ -35,6 +35,7 @@ fn make_item(name: &str, item_type: &str) -> EmbyItem {
         genre: String::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
+        primary_image_aspect: None,
     }
 }
 
@@ -88,6 +89,19 @@ fn parse_item_missing_fields_use_defaults() {
 }
 
 // ── parse_item: declared image availability (task 5.3) ─────────────────
+
+#[test]
+fn parse_item_primary_image_aspect_accepts_number_or_string() {
+    assert_eq!(
+        parse_item(&json!({"PrimaryImageAspectRatio": 1.5})).primary_image_aspect,
+        Some(1.5)
+    );
+    assert_eq!(
+        parse_item(&json!({"PrimaryImageAspectRatio": "1.5"})).primary_image_aspect,
+        Some(1.5)
+    );
+    assert_eq!(parse_item(&json!({})).primary_image_aspect, None);
+}
 
 #[test]
 fn parse_item_image_tags_when_present() {

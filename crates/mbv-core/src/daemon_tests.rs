@@ -51,6 +51,7 @@ fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
         genre: String::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
+        primary_image_aspect: None,
     }
 }
 

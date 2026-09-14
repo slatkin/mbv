@@ -39,6 +39,8 @@ impl Model {
     pub(super) fn sync_queue_card_geometry(&mut self) {
         if self.app.now_playing_status() == NowPlayingStatus::Idle {
             self.app.layout.card = CardGeometry::default();
+            self.app.last_card_height = 0;
+            self.app.last_card_width = 0;
             return;
         }
         let chrome = self.app.compute_chrome_geometry(Rect::new(
@@ -62,6 +64,7 @@ impl Model {
             self.app.terminal_height,
             slot_region,
             wide,
+            self.app.queue_card_projection.primary_image_aspect,
         );
         self.app.layout.card = CardGeometry {
             height: rect.height,
