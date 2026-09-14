@@ -36,12 +36,12 @@
 
 ## 6. Add Selection Projection and Stable Origin
 
-- [ ] 6.1 Define stable Library-destination/list and Queue selection origins plus count-only summaries, keeping target membership private to each MediaList; verify type/unit tests show summaries cannot reconstruct or reseed membership.
-- [ ] 6.2 Handle generic Library transition disposition and focused-summary propagation once at the Library panel owner boundary; verify destination switches and Library/Queue panel-focus ticks select the correct summary without clearing retained list state.
-- [ ] 6.3 Add the equivalent Queue transition/summary boundary and project only the focused list's summary to the Status bar panel; verify a live tick/render-content test covers simultaneous Library and Queue selections across focus changes without brittle coordinate assertions.
-- [ ] 6.4 Carry selection origin and ordered resolved action values through context-menu open, overlay focus, action, and clear; verify one integration test opens from Queue while Library retains a selection, changes overlay focus, and clears Queue only.
-- [ ] 6.5 Route the Status bar clear intent to the origin captured when invoked rather than current focus at later dispatch; verify focus-changing coverage leaves the other Panel's selection unchanged.
-- [ ] 6.6 Remove router use of selection summaries and all repeated `SelectionChanged` routing plumbing; verify exact source search plus a stale-summary arbitration test show keyboard behavior depends only on the current leaf disposition.
+- [x] 6.1 Define stable Library-destination/list and Queue selection origins plus count-only summaries, keeping target membership private to each MediaList; verify type/unit tests show summaries cannot reconstruct or reseed membership.
+- [x] 6.2 Handle generic Library transition disposition and focused-summary propagation once at the Library panel owner boundary; verify destination switches and Library/Queue panel-focus ticks select the correct summary without clearing retained list state.
+- [x] 6.3 Add the equivalent Queue transition/summary boundary and project only the focused list's summary to the Status bar panel; verify a live tick/render-content test covers simultaneous Library and Queue selections across focus changes without brittle coordinate assertions.
+- [x] 6.4 Carry selection origin and ordered resolved action values through context-menu open, overlay focus, action, and clear; verify one integration test opens from Queue while Library retains a selection, changes overlay focus, and clears Queue only.
+- [x] 6.5 Route the Status bar clear intent to the origin captured when invoked rather than current focus at later dispatch; verify focus-changing coverage leaves the other Panel's selection unchanged.
+- [x] 6.6 Remove router use of selection summaries and all repeated `SelectionChanged` routing plumbing; verify exact source search plus a stale-summary arbitration test show keyboard behavior depends only on the current leaf disposition.
 
 ## 7. Reconcile Dependent Planning and Documentation
 
