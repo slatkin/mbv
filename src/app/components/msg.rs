@@ -32,6 +32,49 @@ pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};
 pub use self::service::ServiceRequest;
 pub use self::shell::ShellRequest;
 
+/// Result of handling a key at a leaf component.  The disposition is
+/// independent from an optional cross-authority request: local mutations can
+/// consume a key without emitting a request.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum LeafKeyResult {
+    Unhandled,
+    Consumed(Option<Msg>),
+}
+
+#[cfg(test)]
+mod leaf_key_tests {
+    use super::*;
+
+    #[test]
+    fn leaf_disposition_conversion_distinguishes_claims() {
+        assert_eq!(LeafKeyResult::Unhandled.into_option(), None);
+        assert!(matches!(
+            LeafKeyResult::Consumed(None).into_option(),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        let request = Msg::Shell(ShellRequest::LibraryRoutesEnter);
+        assert_eq!(
+            LeafKeyResult::Consumed(Some(request.clone())).into_option(),
+            Some(request)
+        );
+    }
+}
+
+impl LeafKeyResult {
+    pub(crate) fn from_option(message: Option<Msg>) -> Self {
+        Self::Consumed(message)
+    }
+
+    pub(crate) fn into_option(self) -> Option<Msg> {
+        match self {
+            Self::Unhandled => None,
+            Self::Consumed(message) => {
+                message.or_else(|| Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
+            }
+        }
+    }
+}
+
 /// The single TuiRealm outbound type, grouping surface output enums (design
 /// D4). `Application` requires `Msg: PartialEq`; convenience `Debug`/`Clone`
 /// derives aid diagnostics and follow-on message cascades.
@@ -75,6 +118,8 @@ pub enum TerminalObserverEvent {
     },
     /// Framework-local redraw marker emitted by the root observer.
     NoOp,
+    /// A mounted component consumed a key without emitting a request.
+    KeyClaimed,
     /// A mounted component consumed a mouse event after mutating local state.
     /// This is a claim marker, not a shell relay.
     MouseClaimed,

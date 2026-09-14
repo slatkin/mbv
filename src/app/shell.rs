@@ -212,6 +212,7 @@ pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
                         | TerminalObserverEvent::FocusLost
                         | TerminalObserverEvent::MouseClick { .. }
                         | TerminalObserverEvent::MouseClaimed
+                        | TerminalObserverEvent::KeyClaimed
                 )
             )
         })
@@ -485,7 +486,8 @@ fn apply_terminal_observer(
         TerminalObserverEvent::MouseClick { .. } => {}
         TerminalObserverEvent::Key(_)
         | TerminalObserverEvent::NoOp
-        | TerminalObserverEvent::MouseClaimed => {}
+        | TerminalObserverEvent::MouseClaimed
+        | TerminalObserverEvent::KeyClaimed => {}
     }
 }
 

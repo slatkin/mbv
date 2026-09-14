@@ -120,7 +120,10 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
             Event::Keyboard(key) if self.focused => {
                 // Focus is panel-owned; keep the embedded owner's derived
                 // focus bit aligned before translating its local chord.
-                self.owners.active_mut().and_then(|owner| owner.on_key(key))
+                self.owners
+                    .active_mut()
+                    .map(|owner| owner.on_key_result(key).into_option())
+                    .unwrap_or(None)
             }
             _ => None,
         }

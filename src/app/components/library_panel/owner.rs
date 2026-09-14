@@ -14,7 +14,7 @@ use tuirealm::event::KeyEvent;
 
 use crate::app::components::component_id::BrowserKey;
 use crate::app::components::media_list::RowLocalInput;
-use crate::app::components::msg::Msg;
+use crate::app::components::msg::{LeafKeyResult, Msg};
 
 use super::content::{HeroImageState, LibraryPanelContent};
 use super::hero::HeroContentData;
@@ -77,6 +77,14 @@ pub(in crate::app) trait LibraryContentOwner {
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let _ = key;
         None
+    }
+
+    /// Explicit leaf disposition used at the mounted component boundary.
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     /// The current hero's content data for the shell's image projection
