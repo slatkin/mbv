@@ -224,6 +224,9 @@ impl Model {
                 .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
                 .and_then(|panel| panel.focused_summary())
         };
+        let visual_origin = focused_summary
+            .as_ref()
+            .map(|summary| summary.origin.clone());
         self.visual_selection = focused_summary
             .as_ref()
             .filter(|summary| summary.count > 0)
@@ -240,6 +243,11 @@ impl Model {
         };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>() {
+                // The clear intent must carry the origin captured when this
+                // pill was projected (design D6), not the focus at dispatch.
+                if let Some(origin) = visual_origin {
+                    panel.set_visual_origin(origin);
+                }
                 panel.set_model(model);
             }
         }

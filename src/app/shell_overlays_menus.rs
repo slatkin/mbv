@@ -221,10 +221,10 @@ impl Model {
                     }
                 }
             }
-            crate::app::components::media_list::SelectionOrigin::Library(_) => {
+            crate::app::components::media_list::SelectionOrigin::Library(origin) => {
                 if let Some(comp) = self.application.get_component_mut(&ComponentId::Library) {
                     if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>() {
-                        panel.clear_active_selection();
+                        panel.clear_selection_for_origin(&origin);
                     }
                 }
             }

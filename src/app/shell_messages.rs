@@ -44,18 +44,9 @@ impl Model {
                             .then_some((self.app.effective_panel_focus(), summary.count));
                     }
                     ShellRequest::ClearMultiSelection(origin) => {
-                        // The status-bar request carries the legacy default
-                        // origin; prefer the origin captured in the focused
-                        // summary when it is still available.
-                        let origin = self
-                            .visual_selection
-                            .map(|(focus, _)| match focus {
-                                PanelFocus::Library => crate::app::components::media_list::SelectionOrigin::Library(
-                                    crate::app::components::media_list::LibrarySelectionOrigin::Home,
-                                ),
-                                PanelFocus::Queue => crate::app::components::media_list::SelectionOrigin::Queue,
-                            })
-                            .unwrap_or(origin);
+                        // Route by the origin captured when the pill was
+                        // projected, never a re-derivation from dispatch-time
+                        // focus (design D6).
                         self.clear_multi_selection_from_origin(origin);
                     }
                     ShellRequest::MusicAlbumActivate { item } => {
@@ -531,19 +522,17 @@ impl Model {
                     }
                     // Other destination payloads are converted in later slices.
                     ShellRequest::RowContextMenu(targets, anchor) => {
-                        self.context_menu_origin = Some(
-                            crate::app::components::media_list::SelectionOrigin::Library(
-                                crate::app::components::media_list::LibrarySelectionOrigin::Home,
-                            ),
-                        );
-                        self.context_action_snapshot = Some(
-                            crate::app::types_context_menu::ContextActionSnapshot {
-                                origin: crate::app::components::media_list::SelectionOrigin::Library(
-                                    crate::app::components::media_list::LibrarySelectionOrigin::Home,
-                                ),
-                                values: vec![targets.clone()],
-                            },
-                        );
+                        // The origin is the active library's stable identity
+                        // (design D6): a bulk clear routes to the list the menu
+                        // was opened from, not the dispatch-time focus.
+                        if let Some(origin) = self.active_library_selection_origin() {
+                            self.context_menu_origin = Some(origin.clone());
+                            self.context_action_snapshot =
+                                Some(crate::app::types_context_menu::ContextActionSnapshot {
+                                    origin,
+                                    values: vec![targets.clone()],
+                                });
+                        }
                         match targets {
                             crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {
                                 if items.len() > 1 {

@@ -30,6 +30,20 @@ impl Model {
                 crate::app::types_context_menu::ContextMenuTargets::Home(targets),
                 anchor,
             ) => {
+                // Capture the origin at menu-open (design D6): a bulk action
+                // that follows clears the Home list, even though the Home
+                // route never reaches the shell's generic RowContextMenu arm.
+                let origin = crate::app::components::media_list::SelectionOrigin::Library(
+                    crate::app::components::media_list::LibrarySelectionOrigin::Home,
+                );
+                self.context_menu_origin = Some(origin.clone());
+                self.context_action_snapshot =
+                    Some(crate::app::types_context_menu::ContextActionSnapshot {
+                        origin,
+                        values: vec![crate::app::types_context_menu::ContextMenuTargets::Home(
+                            targets.clone(),
+                        )],
+                    });
                 if targets.len() > 1 {
                     let mut items = Vec::new();
                     let mut removes = Vec::new();

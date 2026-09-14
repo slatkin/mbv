@@ -85,6 +85,26 @@ pub struct LibraryPanel {
     focused_summary: Option<SelectionSummary>,
 }
 
+impl From<LibraryKey> for LibrarySelectionOrigin {
+    fn from(key: LibraryKey) -> Self {
+        match key {
+            LibraryKey::Home => Self::Home,
+            LibraryKey::Feeds => Self::Feeds,
+            LibraryKey::Service(key) => Self::Service(key),
+        }
+    }
+}
+
+impl From<LibrarySelectionOrigin> for LibraryKey {
+    fn from(origin: LibrarySelectionOrigin) -> Self {
+        match origin {
+            LibrarySelectionOrigin::Home => Self::Home,
+            LibrarySelectionOrigin::Feeds => Self::Feeds,
+            LibrarySelectionOrigin::Service(key) => Self::Service(key),
+        }
+    }
+}
+
 impl LibraryPanel {
     pub fn new() -> Self {
         Self {
@@ -150,11 +170,7 @@ impl LibraryPanel {
         }
         self.owners.set_active(key.clone());
         if let Some(key) = key {
-            let origin = match key {
-                LibraryKey::Home => LibrarySelectionOrigin::Home,
-                LibraryKey::Feeds => LibrarySelectionOrigin::Feeds,
-                LibraryKey::Service(key) => LibrarySelectionOrigin::Service(key),
-            };
+            let origin = LibrarySelectionOrigin::from(key);
             if let Some(owner) = self.owners.active_mut() {
                 owner.set_selection_origin(SelectionOrigin::Library(origin));
             }
@@ -298,14 +314,24 @@ impl LibraryPanel {
         }
     }
 
-    /// Mutably borrow the owner installed for `key` (the shell's
-    /// destination-specific content pushes reach a typed owner through its
-    /// `as_any_mut`).
-    pub(in crate::app) fn clear_active_selection(&mut self) {
-        if let Some(owner) = self.owners.active_mut() {
-            owner.clear_selection();
+    /// Clear the multi-selection of the owner named by `origin`, whether or
+    /// not it is the active library (design D6: a clear intent carries the
+    /// origin captured at invocation, never the dispatch-time focus).
+    /// Returns whether an owner for `origin` is installed.
+    pub(in crate::app) fn clear_selection_for_origin(
+        &mut self,
+        origin: &LibrarySelectionOrigin,
+    ) -> bool {
+        let key = LibraryKey::from(origin.clone());
+        let was_active = self.owners.active_key() == Some(&key);
+        let Some(owner) = self.owners.get_mut(&key) else {
+            return false;
+        };
+        owner.clear_selection();
+        if was_active {
             self.focused_summary = owner.selection_summary();
         }
+        true
     }
 
     pub(in crate::app) fn focused_summary(&mut self) -> Option<SelectionSummary> {
@@ -316,6 +342,9 @@ impl LibraryPanel {
         self.focused_summary.clone()
     }
 
+    /// Mutably borrow the owner installed for `key` (the shell's
+    /// destination-specific content pushes reach a typed owner through its
+    /// `as_any_mut`).
     pub(in crate::app) fn owner_mut(
         &mut self,
         key: &LibraryKey,
