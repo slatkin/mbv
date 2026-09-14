@@ -60,13 +60,19 @@ pub(in crate::app) fn queue_card_reserved_rect(
     let (last_height, last_width) = last_card;
     let max_h = area.height.min(if terminal_height <= 30 { 12 } else { 24 });
     let height = if last_height == 0 {
-        // Keep the queue title separator and one queue row visible when
-        // the card area is shorter than its normal image cap.
-        if max_h == area.height {
+        // The fallback slot is two terminal cells wide per row, matching
+        // square artwork at the terminal's cell aspect. Constrain both axes:
+        // reserving max_h without its matching width makes a narrow column
+        // start tall and then shrink when the real image is measured.
+        let width_limited = area.width.div_ceil(2);
+        let height_limited = if max_h == area.height {
+            // Keep the queue title separator and one queue row visible when
+            // the card area is shorter than its normal image cap.
             max_h.saturating_sub(2)
         } else {
             max_h
-        }
+        };
+        height_limited.min(width_limited)
     } else {
         last_height
     };

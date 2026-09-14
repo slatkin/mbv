@@ -5,6 +5,20 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 #[test]
+fn initial_reservation_matches_square_artwork_in_a_width_limited_slot() {
+    let area = Rect::new(0, 0, 36, 30);
+    let reserved = queue_card_reserved_rect((0, 0), 40, area, false);
+    let image = image::DynamicImage::new_rgb8(400, 400);
+    let measured = ratatui_image::Resize::Scale(Some(RENDER_FILTER)).size_for(
+        &image,
+        ratatui_image::FontSize::new(10, 20),
+        area.as_size(),
+    );
+
+    assert_eq!(reserved.as_size(), measured);
+}
+
+#[test]
 fn card_painting_paints_from_projected_state_without_app_access() {
     let mut term = Terminal::new(TestBackend::new(20, 10)).unwrap();
     let area = Rect::new(0, 0, 20, 10);
