@@ -1,5 +1,5 @@
 impl TvContent {
-    fn context_menu_request(&mut self) -> Option<ShellRequest> {
+    pub(super) fn context_menu_request(&mut self) -> Option<ShellRequest> {
         let outcome = self.carrier.delegate(RowLocalInput::Context, None);
         let items = match outcome {
             RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
@@ -92,6 +92,9 @@ impl TvContent {
                 let target = self.carrier.resolve_current_point(at)?.clone();
                 let item = self.context.list.items.iter().find(|item| item.id == target)?.clone();
                 let outcome = self.carrier.delegate(input, Some(target));
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 let items = match outcome {
                     RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
@@ -153,6 +156,9 @@ impl TvContent {
                     TvHit::EpisodeRow(target) => target.clone(),
                     _ => return None,
                 }));
+                if let Some(count) = self.episodes.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
                 let items = match outcome {
                     RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()

@@ -448,9 +448,12 @@ impl QueueComponent {
                 // menu. Only resolve a menu when the click lands on a row —
                 // never fall back to the prior selection (design.md D4).
                 let slot_id = self.carrier.resolve_current_point(at).copied()?;
-                let targets = match self
-                    .delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id))
-                {
+                let outcome =
+                    self.delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id));
+                if let Some(count) = self.carrier.selection_changed_msg() {
+                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                }
+                let targets = match outcome {
                     RowLocalOutcome::External(RowIntent::Context(target)) => vec![target],
                     RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets,
                     _ => vec![slot_id],

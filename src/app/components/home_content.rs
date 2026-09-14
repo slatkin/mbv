@@ -480,7 +480,7 @@ impl LibraryContentOwner for HomeContent {
                 // `claim_row` contract (a blank/gap click leaves the
                 // selection unchanged).
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if at.is_some() && !matches!(input, RowLocalInput::ContextClick(_)) {
+                if at.is_some() {
                     self.carrier.delegate(input, target.clone());
                     if let Some(count) = self.carrier.selection_changed_msg() {
                         return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
@@ -500,6 +500,9 @@ impl LibraryContentOwner for HomeContent {
                     }
                     RowLocalInput::ContextClick(at) => {
                         let outcome = self.carrier.delegate(input, target);
+                        if let Some(count) = self.carrier.selection_changed_msg() {
+                            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                        }
                         let targets = match outcome {
                             RowLocalOutcome::External(RowIntent::Context(target)) => {
                                 vec![self.home_row_target(Some(target))]

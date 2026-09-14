@@ -70,6 +70,9 @@ impl MusicContent {
                         RowLocalInput::ContextClick(at) => {
                             let target = self.carrier.resolve_current_point(at)?.clone();
                             let outcome = self.carrier.delegate(input, Some(target.clone()));
+                            if let Some(count) = self.carrier.selection_changed_msg() {
+                                return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                            }
                             let items = match outcome {
                                 RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
                                     .into_iter()
@@ -132,6 +135,9 @@ impl MusicContent {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     let item = self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target)?.clone();
                     let outcome = self.track_list.delegate(input, Some(target));
+                    if let Some(count) = self.track_list.selection_changed_msg() {
+                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+                    }
                     let items = match outcome {
                         RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
                             .into_iter()
