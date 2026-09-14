@@ -1,36 +1,22 @@
-use std::io::{Read, Write};
-use std::net::TcpListener;
-
 fn audiobookshelf_response(
     status: u16,
     body: &'static str,
-) -> (std::net::SocketAddr, std::thread::JoinHandle<()>) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    let handle = std::thread::spawn(move || {
-        let (mut stream, _) = listener.accept().unwrap();
-        let mut request = [0; 2048];
-        let size = stream.read(&mut request).unwrap();
-        let request = String::from_utf8_lossy(&request[..size]);
-        assert!(request.contains("GET /api/me "));
-        // Header name casing is not significant per RFC 7230 3.2, and ureq
-        // 3.x lowercases header names on the wire (2.x sent them as-set).
-        assert!(request
-            .to_ascii_lowercase()
-            .contains("authorization: bearer test-api-key\r\n"));
-        write!(
-            stream,
-            "HTTP/1.1 {status} Response\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        )
-        .unwrap();
-    });
-    (address, handle)
+) -> (
+    MockHttp,
+    crate::audiobookshelf::AudiobookshelfClient,
+) {
+    let http = MockHttp::new();
+    let agent = http.agent();
+    http.respond(status, body);
+    let client = crate::audiobookshelf::AudiobookshelfClient::new("http://127.0.0.1:1")
+        .unwrap()
+        .with_test_agent(agent);
+    (http, client)
 }
 
 #[test]
 fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
-    use crate::audiobookshelf::{AudiobookshelfClient, AudiobookshelfFailureClass as Class};
+    use crate::audiobookshelf::AudiobookshelfFailureClass as Class;
 
     let cases = [
         (
@@ -44,8 +30,7 @@ fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
         (200, "not-json", Some(Class::MalformedResponse)),
     ];
     for (status, body, expected_class) in cases {
-        let (address, server) = audiobookshelf_response(status, body);
-        let client = AudiobookshelfClient::new(&format!("http://{address}")).unwrap();
+        let (http, client) = audiobookshelf_response(status, body);
         let result = client.me_bounded("test-api-key", std::time::Duration::from_secs(1));
         match expected_class {
             None => assert_eq!(
@@ -66,13 +51,23 @@ fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
                 assert!(std::error::Error::source(&error).is_none());
             }
         }
-        server.join().unwrap();
+        // The bearer header must reach the wire even for the failure cases.
+        assert!(http.requests()[0]
+            .to_ascii_lowercase()
+            .contains("authorization: bearer test-api-key\r\n"));
     }
+}
 
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    drop(listener);
-    let client = AudiobookshelfClient::new(&format!("http://{address}")).unwrap();
+#[test]
+fn dead_audiobookshelf_endpoint_is_connectivity() {
+    use crate::audiobookshelf::AudiobookshelfFailureClass as Class;
+
+    let http = MockHttp::new();
+    let agent = http.agent();
+    http.fail(std::io::ErrorKind::ConnectionRefused);
+    let client = crate::audiobookshelf::AudiobookshelfClient::new("http://127.0.0.1:1")
+        .unwrap()
+        .with_test_agent(agent);
     assert_eq!(
         client
             .me_bounded("test-api-key", std::time::Duration::from_secs(1))
@@ -85,27 +80,18 @@ fn audiobookshelf_me_http_boundary_uses_bearer_and_redacts_failures() {
 #[test]
 fn persisted_token_http_401_and_403_are_authentication_rejections() {
     for status in [401, 403] {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0; 1024];
-            let _ = stream.read(&mut request);
-            write!(
-                stream,
-                "HTTP/1.1 {status} Rejected\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-            )
-            .unwrap();
-        });
+        let http = MockHttp::new();
+        let agent = http.agent();
+        http.respond(status, "");
 
         let config = crate::config::Config {
-            server_url: format!("http://{address}"),
+            server_url: "http://127.0.0.1:1".into(),
             ..Default::default()
         };
-        let client = super::EmbyClient::new(config);
+        let client = super::EmbyClient::new(config).with_test_agent(agent);
         let failure = match client.authenticate_service_setup_bounded(
             "persisted-token".into(),
-            &crate::config::EmbySetup::new(format!("http://{address}"), "user-id"),
+            &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
             std::time::Duration::from_secs(1),
         ) {
             Ok(_) => panic!("rejected token unexpectedly authenticated"),
@@ -120,57 +106,55 @@ fn persisted_token_http_401_and_403_are_authentication_rejections() {
 
 #[test]
 fn persisted_token_http_5xx_transport_and_malformed_responses_are_unavailable() {
-    for (status, body) in [(500, "server failure"), (200, "not-json")] {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        std::thread::spawn(move || {
-            let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0; 1024];
-            let _ = stream.read(&mut request);
-            write!(
-                stream,
-                "HTTP/1.1 {status} Response\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-                body.len()
-            )
-            .unwrap();
-        });
-        let config = crate::config::Config {
-            server_url: format!("http://{address}"),
-            ..Default::default()
-        };
-        let client = super::EmbyClient::new(config);
-        let failure = if status == 200 {
-            match client.get_views_classified() {
-                Ok(_) => panic!("malformed availability response unexpectedly succeeded"),
-                Err(failure) => failure,
-            }
-        } else {
-            match client.authenticate_service_setup_bounded(
-                "persisted-token".into(),
-                &crate::config::EmbySetup::new(format!("http://{address}"), "user-id"),
-                std::time::Duration::from_secs(1),
-            ) {
-                Ok(_) => panic!("availability failure unexpectedly succeeded"),
-                Err(failure) => failure,
-            }
-        };
-        assert_eq!(
-            failure.class,
-            crate::service_runtime::EmbyFailureClass::Unavailable
-        );
-    }
-
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let address = listener.local_addr().unwrap();
-    drop(listener);
+    let http = MockHttp::new();
+    let agent = http.agent();
+    http.respond(500, "server failure");
     let config = crate::config::Config {
-        server_url: format!("http://{address}"),
+        server_url: "http://127.0.0.1:1".into(),
         ..Default::default()
     };
-    let client = super::EmbyClient::new(config);
+    let client = super::EmbyClient::new(config).with_test_agent(agent);
     let failure = match client.authenticate_service_setup_bounded(
         "persisted-token".into(),
-        &crate::config::EmbySetup::new(format!("http://{address}"), "user-id"),
+        &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
+        std::time::Duration::from_secs(1),
+    ) {
+        Ok(_) => panic!("availability failure unexpectedly succeeded"),
+        Err(failure) => failure,
+    };
+    assert_eq!(
+        failure.class,
+        crate::service_runtime::EmbyFailureClass::Unavailable
+    );
+
+    let http = MockHttp::new();
+    let agent = http.agent();
+    http.respond(200, "not-json");
+    let config = crate::config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..Default::default()
+    };
+    let client = super::EmbyClient::new(config).with_test_agent(agent);
+    let failure = match client.get_views_classified() {
+        Ok(_) => panic!("malformed availability response unexpectedly succeeded"),
+        Err(failure) => failure,
+    };
+    assert_eq!(
+        failure.class,
+        crate::service_runtime::EmbyFailureClass::Unavailable
+    );
+
+    let http = MockHttp::new();
+    let agent = http.agent();
+    http.fail(std::io::ErrorKind::ConnectionRefused);
+    let config = crate::config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..Default::default()
+    };
+    let client = super::EmbyClient::new(config).with_test_agent(agent);
+    let failure = match client.authenticate_service_setup_bounded(
+        "persisted-token".into(),
+        &crate::config::EmbySetup::new("http://127.0.0.1:1", "user-id"),
         std::time::Duration::from_secs(1),
     ) {
         Ok(_) => panic!("dead endpoint unexpectedly authenticated"),

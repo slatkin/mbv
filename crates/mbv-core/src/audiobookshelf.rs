@@ -154,6 +154,13 @@ impl AudiobookshelfClient {
         })
     }
 
+    /// Install an in-memory mock transport (see `mock_http`).
+    #[cfg(test)]
+    pub(crate) fn with_test_agent(mut self, agent: ureq::Agent) -> Self {
+        self.agent = agent;
+        self
+    }
+
     /// Validate a new or replacement candidate entirely in memory. No config,
     /// secret, runtime identity, or Service-owned state is touched here.
     pub fn validate_setup_bounded(

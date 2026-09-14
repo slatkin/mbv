@@ -33,6 +33,7 @@ impl EmbyClient {
             device_name: device_name(),
             device_id: device_id(),
             agent,
+            mock_agent: false,
         }
     }
 
@@ -73,8 +74,18 @@ impl EmbyClient {
 
     fn with_request_timeout(&self, timeout: std::time::Duration) -> Self {
         let mut client = self.clone();
-        client.agent = emby_agent(timeout, timeout);
+        if !client.mock_agent {
+            client.agent = emby_agent(timeout, timeout);
+        }
         client
+    }
+
+    /// Install an in-memory mock transport (see `mock_http`).
+    #[cfg(test)]
+    pub(crate) fn with_test_agent(mut self, agent: ureq::Agent) -> Self {
+        self.agent = agent;
+        self.mock_agent = true;
+        self
     }
 
     fn delete(&self, path: &str) -> ureq::RequestBuilder<ureq::typestate::WithoutBody> {

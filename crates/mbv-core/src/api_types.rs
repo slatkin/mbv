@@ -464,4 +464,7 @@ pub struct EmbyClient {
     pub device_name: String,
     pub device_id: String,
     agent: ureq::Agent,
+    /// True when tests installed an in-memory transport; never replaced by
+    /// `with_request_timeout`.
+    mock_agent: bool,
 }
