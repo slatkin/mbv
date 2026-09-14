@@ -1,10 +1,18 @@
-#[test]
-fn feed_entry_primary_source_returns_enclosure() {
+#[rstest::rstest]
+#[case::returns_enclosure("g1", Some("https://enc.mp3"), Some("https://link.html"), Some("https://enc.mp3"))]
+#[case::falls_back_to_link("g2", None, Some("https://link.html"), Some("https://link.html"))]
+#[case::none_when_empty("g3", None, None, None)]
+fn feed_entry_primary_source(
+    #[case] guid: &str,
+    #[case] enclosure_url: Option<&str>,
+    #[case] link: Option<&str>,
+    #[case] expected: Option<&str>,
+) {
     let entry = FeedEntry {
-        guid: "g1".into(),
+        guid: guid.into(),
         title: "T".into(),
-        enclosure_url: Some("https://enc.mp3".into()),
-        link: Some("https://link.html".into()),
+        enclosure_url: enclosure_url.map(str::to_owned),
+        link: link.map(str::to_owned),
         mime_type: None,
         duration_ticks: None,
         pub_date_secs: None,
@@ -13,110 +21,42 @@ fn feed_entry_primary_source_returns_enclosure() {
         position_ticks: 0,
         played: false,
     };
-    assert_eq!(entry.primary_source(), Some("https://enc.mp3"));
-}
-
-#[test]
-fn feed_entry_primary_source_falls_back_to_link() {
-    let entry = FeedEntry {
-        guid: "g2".into(),
-        title: "T".into(),
-        enclosure_url: None,
-        link: Some("https://link.html".into()),
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    };
-    assert_eq!(entry.primary_source(), Some("https://link.html"));
-}
-
-#[test]
-fn feed_entry_primary_source_none_when_empty() {
-    let entry = FeedEntry {
-        guid: "g3".into(),
-        title: "T".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    };
-    assert_eq!(entry.primary_source(), None);
+    assert_eq!(entry.primary_source(), expected);
 }
 
 // ---------------------------------------------------------------------------
 // Feed media-kind classification (task 1.1)
 // ---------------------------------------------------------------------------
 
-#[test]
-fn feed_media_kind_uses_mime_when_present() {
+#[rstest::rstest]
+#[case::uses_mime_when_present("g1", Some("audio/mpeg"), crate::config::FeedKind::Video, "Audio", true, false)]
+#[case::falls_back_to_feed_kind_when_mime_absent("g2", None, crate::config::FeedKind::Video, "video", false, true)]
+#[case::falls_back_to_feed_kind_for_unrecognized_mime("g3", Some("application/octet-stream"), crate::config::FeedKind::Audio, "audio", true, false)]
+fn feed_media_kind(
+    #[case] guid: &str,
+    #[case] mime_type: Option<&str>,
+    #[case] feed_kind: crate::config::FeedKind,
+    #[case] expected_kind: &str,
+    #[case] expected_audio: bool,
+    #[case] expected_video: bool,
+) {
     let entry = FeedEntry {
-        guid: "g1".into(),
+        guid: guid.into(),
         title: "T".into(),
         enclosure_url: None,
         link: None,
-        mime_type: Some("audio/mpeg".into()),
+        mime_type: mime_type.map(str::to_owned),
         duration_ticks: None,
         pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Video),
+        feed_kind: Some(feed_kind),
         feed_id: None,
         position_ticks: 0,
         played: false,
     };
     let qi = QueueItem::Feed(entry);
-    assert_eq!(qi.media_kind(), "Audio");
-    assert!(qi.is_audio());
-    assert!(!qi.is_video());
-}
-
-#[test]
-fn feed_media_kind_falls_back_to_feed_kind_when_mime_absent() {
-    let entry = FeedEntry {
-        guid: "g2".into(),
-        title: "T".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: None,
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Video),
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    };
-    let qi = QueueItem::Feed(entry);
-    assert_eq!(qi.media_kind(), "video");
-    assert!(!qi.is_audio());
-    assert!(qi.is_video());
-}
-
-#[test]
-fn feed_media_kind_falls_back_to_feed_kind_for_unrecognized_mime() {
-    let entry = FeedEntry {
-        guid: "g3".into(),
-        title: "T".into(),
-        enclosure_url: None,
-        link: None,
-        mime_type: Some("application/octet-stream".into()),
-        duration_ticks: None,
-        pub_date_secs: None,
-        feed_kind: Some(crate::config::FeedKind::Audio),
-        feed_id: None,
-        position_ticks: 0,
-        played: false,
-    };
-    let qi = QueueItem::Feed(entry);
-    assert_eq!(qi.media_kind(), "audio");
-    assert!(qi.is_audio());
-    assert!(!qi.is_video());
+    assert_eq!(qi.media_kind(), expected_kind);
+    assert_eq!(qi.is_audio(), expected_audio);
+    assert_eq!(qi.is_video(), expected_video);
 }
 
 #[test]
