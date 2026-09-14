@@ -50,5 +50,5 @@
 
 ## 8. Final Verification
 
-- [ ] 8.1 Run `cargo fmt`, `cargo nextest run -p mbv`, `cargo check -p mbv`, and `cargo clippy --workspace --all-targets -- -D warnings`; fix failures without weakening the arbitration, ownership, or live-tick assertions.
-- [ ] 8.2 Run `openspec validate unify-semantic-input-arbitration --strict` and verify the change contains no project-code edits outside the planned implementation scope, no writable selection mirror, no second keyboard resolution site, and no global mouse router.
+- [x] 8.1 Run `cargo fmt`, `cargo nextest run -p mbv`, `cargo check -p mbv`, and `cargo clippy --workspace --all-targets -- -D warnings`; fix failures without weakening the arbitration, ownership, or live-tick assertions.
+- [x] 8.2 Run `openspec validate unify-semantic-input-arbitration --strict` and verify the change contains no project-code edits outside the planned implementation scope, no writable selection mirror, no second keyboard resolution site, and no global mouse router.
