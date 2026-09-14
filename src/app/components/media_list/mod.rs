@@ -5,6 +5,7 @@
 //! transitions between genuinely different owners. Painting
 //! lives in `crate::app::render::components::media_list`.
 
+use crate::app::components::component_id::BrowserKey;
 use crate::app::ui_util::move_cursor;
 use ratatui::layout::{Position, Rect};
 
@@ -334,9 +335,28 @@ pub enum MediaListDisposition {
     Consumed,
 }
 
+/// Stable coordination identity for a MediaList selection. This identifies
+/// the list that produced a projection or delayed action; it never carries
+/// selection membership.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SelectionOrigin {
+    Library(LibrarySelectionOrigin),
+    Queue,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LibrarySelectionOrigin {
+    Home,
+    Feeds,
+    Service(BrowserKey),
+}
+
+/// Read-only presentation projection of a MediaList selection. Membership is
+/// deliberately private to the owner and cannot be reconstructed here.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectionSummary {
     pub count: usize,
+    pub origin: SelectionOrigin,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -363,7 +383,6 @@ pub enum RowIntent<Target> {
     Activate(Target),
     Context(Target),
     ContextSelection(Vec<Target>),
-    SelectionChanged(usize),
 }
 
 /// A closed, provider-neutral row vocabulary for embedded media lists.
@@ -642,6 +661,7 @@ impl<Target> MediaList<Target> {
             selection_summary: (before_count != self.multi_selection.len()).then_some(
                 SelectionSummary {
                     count: self.multi_selection.len(),
+                    origin: SelectionOrigin::Queue,
                 },
             ),
             external_intent,

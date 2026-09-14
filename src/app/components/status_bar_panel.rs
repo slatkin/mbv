@@ -75,7 +75,9 @@ impl StatusBarPanel {
             MouseEventKind::Down(MouseButton::Left)
                 if self.regions.visual_clear.is_some_and(|r| r.contains(at)) =>
             {
-                Some(Msg::Shell(ShellRequest::ClearMultiSelection))
+                Some(Msg::Shell(ShellRequest::ClearMultiSelection(
+                    crate::app::components::media_list::SelectionOrigin::Queue,
+                )))
             }
             _ => None,
         }

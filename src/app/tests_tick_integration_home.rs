@@ -206,7 +206,9 @@ fn visual_mode_status_bar_click_clears_selection_through_tick() {
     }));
     let outcome = harness.step();
     assert!(
-        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection)),
+        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
+            crate::app::components::media_list::SelectionOrigin::Queue,
+        ))),
         "clear request must reach the shell: {:?}",
         outcome.messages
     );

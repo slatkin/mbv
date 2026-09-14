@@ -23,7 +23,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
     InlineMediaBrowser, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, ViewportAnchor, WideMediaList,
+    MediaListTransition, SelectionOrigin, SelectionSummary, ViewportAnchor, WideMediaList,
 };
 
 /// The centrally-defined closed set of media-list presentations (CONTEXT.md
@@ -49,16 +49,22 @@ pub struct MediaListCarrier<Target> {
     wide: WideMediaList<Target>,
     inline: InlineMediaBrowser<Target>,
     selection_changed: bool,
+    selection_origin: SelectionOrigin,
 }
 
 impl<Target> MediaListCarrier<Target> {
     /// Create a carrier whose owner starts in `active`.
     pub fn new(active: Presentation) -> Self {
+        Self::new_with_origin(active, SelectionOrigin::Queue)
+    }
+
+    pub fn new_with_origin(active: Presentation, selection_origin: SelectionOrigin) -> Self {
         Self {
             active,
             wide: WideMediaList::new(),
             inline: InlineMediaBrowser::new(),
             selection_changed: false,
+            selection_origin,
         }
     }
 
@@ -103,6 +109,18 @@ impl<Target> MediaListCarrier<Target> {
         match self.active {
             Presentation::Wide => self.wide.multi_selection(),
             Presentation::Inline => self.inline.multi_selection(),
+        }
+    }
+
+    /// Assign the stable identity used by summaries and delayed actions.
+    pub fn set_selection_origin(&mut self, origin: SelectionOrigin) {
+        self.selection_origin = origin;
+    }
+
+    pub fn selection_summary(&self) -> SelectionSummary {
+        SelectionSummary {
+            count: self.multi_selection().len(),
+            origin: self.selection_origin.clone(),
         }
     }
 
@@ -399,10 +417,14 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         &mut self,
         operation: MediaListOperation<Target>,
     ) -> MediaListTransition<Target> {
-        self.track_selection_change(|this| match this.active {
+        let mut transition = self.track_selection_change(|this| match this.active {
             Presentation::Wide => this.wide.delegate_operation(operation),
             Presentation::Inline => this.inline.delegate_operation(operation),
-        })
+        });
+        if transition.selection_summary.is_some() {
+            transition.selection_summary = Some(self.selection_summary());
+        }
+        transition
     }
 
     pub fn delegate(
@@ -410,7 +432,7 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         input: MediaListSurfaceInput,
         target: Option<Target>,
     ) -> MediaListTransition<Target> {
-        self.track_selection_change(|this| match this.active {
+        let mut transition = self.track_selection_change(|this| match this.active {
             Presentation::Wide => this.wide.delegate_operation(
                 input
                     .into_operation(target)
@@ -421,7 +443,11 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
                     .into_operation(target)
                     .expect("resolved media-list pointer target"),
             ),
-        })
+        });
+        if transition.selection_summary.is_some() {
+            transition.selection_summary = Some(self.selection_summary());
+        }
+        transition
     }
 
     /// Whether the active presentation's retained current frame claims

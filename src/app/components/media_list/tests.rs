@@ -517,6 +517,21 @@ fn inline_delegate_keeps_the_completed_frame_for_pointer_continuity() {
 }
 
 #[test]
+fn selection_summary_is_count_and_origin_only() {
+    let summary = super::SelectionSummary {
+        count: 2,
+        origin: super::SelectionOrigin::Library(super::LibrarySelectionOrigin::Home),
+    };
+    assert_eq!(summary.count, 2);
+    assert_eq!(
+        summary.origin,
+        super::SelectionOrigin::Library(super::LibrarySelectionOrigin::Home)
+    );
+    // Membership remains owned by MediaList; the projection has no target
+    // collection and therefore cannot reseed a list.
+}
+
+#[test]
 fn target_resolved_transition_reports_orthogonal_facts() {
     let mut list = MediaList::new();
     list.set_content(vec![lifecycle_item("one"), lifecycle_item("two")]);
@@ -529,7 +544,10 @@ fn target_resolved_transition_reports_orthogonal_facts() {
     assert!(transition.external_intent.is_some());
     assert_eq!(
         transition.selection_summary,
-        Some(super::SelectionSummary { count: 0 })
+        Some(super::SelectionSummary {
+            count: 0,
+            origin: super::SelectionOrigin::Queue,
+        })
     );
 }
 

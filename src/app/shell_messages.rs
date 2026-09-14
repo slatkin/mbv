@@ -23,7 +23,7 @@ impl Model {
                     ShellRequest::SelectionChanged(count) => {
                         self.set_visual_selection_count(count);
                     }
-                    ShellRequest::ClearMultiSelection => {
+                    ShellRequest::ClearMultiSelection(_origin) => {
                         self.clear_multi_selection();
                     }
                     ShellRequest::MusicAlbumActivate { item } => {
