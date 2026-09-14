@@ -104,6 +104,52 @@ fn queue_set_content_follow_the_playhead_moves_cursor_when_slots_persist() {
 }
 
 #[test]
+fn queue_delete_removes_multi_selection_request_and_clears_selection() {
+    let slots = queue();
+    let first = slots[0].slot_id;
+    let second = slots[1].slot_id;
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots,
+        QueueCursorUpdate::Set(0),
+        QueueScope::Local,
+        PlaybackState::default(),
+    );
+    component.set_focused(true);
+    component.test_toggle_selection(first);
+    component.test_toggle_selection(second);
+
+    assert!(matches!(
+        component.on(&Event::Keyboard(key(Key::Delete))),
+        Some(Msg::Queue(QueueRequest::RemoveSelection {
+            scope: QueueScope::Local,
+            slot_ids,
+        })) if slot_ids == vec![first, second]
+    ));
+    assert!(component.test_multi_selection().is_empty());
+}
+
+#[test]
+fn queue_delete_without_multi_selection_removes_cursor_slot() {
+    let slots = queue();
+    let first = slots[0].slot_id;
+    let mut component = QueueComponent::new();
+    component.set_content(
+        slots,
+        QueueCursorUpdate::Set(0),
+        QueueScope::Local,
+        PlaybackState::default(),
+    );
+    component.set_focused(true);
+
+    assert!(matches!(
+        component.on(&Event::Keyboard(key(Key::Delete))),
+        Some(Msg::Queue(QueueRequest::Remove { scope: QueueScope::Local, slot_id }))
+            if slot_id == first
+    ));
+}
+
+#[test]
 fn queue_component_emits_typed_keyboard_intents() {
     let mut component = QueueComponent::new();
     component.set_content(

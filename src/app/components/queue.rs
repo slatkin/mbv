@@ -308,6 +308,14 @@ impl QueueComponent {
                 };
             }
             Key::Delete => {
+                if !self.carrier.multi_selection().is_empty() {
+                    let slot_ids = self.carrier.multi_selection().to_vec();
+                    self.carrier.clear_selection();
+                    return Some(Msg::Queue(QueueRequest::RemoveSelection {
+                        scope: self.scope,
+                        slot_ids,
+                    }));
+                }
                 return self
                     .selected_slot()
                     .map(|(scope, slot_id)| Msg::Queue(QueueRequest::Remove { scope, slot_id }));
@@ -490,6 +498,16 @@ impl QueueComponent {
     #[cfg(test)]
     pub(crate) fn test_selected_target(&self) -> Option<QueueSlotId> {
         self.carrier.selected_target().copied()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_toggle_selection(&mut self, target: QueueSlotId) {
+        self.carrier.toggle_selection(&target);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_multi_selection(&self) -> &[QueueSlotId] {
+        self.carrier.multi_selection()
     }
 
     #[cfg(test)]

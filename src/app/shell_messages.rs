@@ -3,6 +3,10 @@ use crate::app::components::library_panel::LibraryPanel;
 use std::time::Instant;
 
 impl Model {
+    pub(crate) fn set_visual_selection_count(&mut self, count: usize) {
+        self.visual_selection = (count > 0).then_some((self.app.effective_panel_focus(), count));
+    }
+
     pub(crate) fn handle_terminal_message(
         &mut self,
         msg: Msg,
@@ -17,8 +21,7 @@ impl Model {
             Msg::Shell(request) => {
                 match request {
                     ShellRequest::SelectionChanged(count) => {
-                        self.visual_selection =
-                            (count > 0).then_some((self.app.effective_panel_focus(), count));
+                        self.set_visual_selection_count(count);
                     }
                     ShellRequest::ClearMultiSelection => {
                         self.clear_multi_selection();

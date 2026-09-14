@@ -24,6 +24,13 @@ pub enum QueueRequest {
         scope: crate::app::types_playback::QueueScope,
         slot_id: QueueSlotId,
     },
+    /// Remove the selected queue slots, resolving each slot position when the
+    /// shell executes the request because the queue may have changed since it
+    /// was painted.
+    RemoveSelection {
+        scope: crate::app::types_playback::QueueScope,
+        slot_ids: Vec<QueueSlotId>,
+    },
     Move {
         scope: crate::app::types_playback::QueueScope,
         slot_id: QueueSlotId,
