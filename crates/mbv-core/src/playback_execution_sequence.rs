@@ -34,6 +34,8 @@ impl ExecutionSequence {
         slots: Vec<(QueueSlotId, QueueItem)>,
         active_slot_id: Option<QueueSlotId>,
     ) -> Self {
+        #[cfg(debug_assertions)]
+        debug_assert_unique_slot_ids(&slots, &[]);
         let slots: Vec<ExecSlot> = slots
             .into_iter()
             .map(|(slot_id, item)| ExecSlot { slot_id, item })
@@ -84,6 +86,15 @@ impl ExecutionSequence {
 
     /// Append a slot carrying an owner-assigned identity.
     pub fn append_with_id(&mut self, slot_id: QueueSlotId, item: QueueItem) {
+        #[cfg(debug_assertions)]
+        debug_assert_unique_slot_ids(
+            &[(slot_id, item.clone())],
+            self.slots
+                .iter()
+                .map(|slot| slot.slot_id)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        );
         self.slots.push(ExecSlot { slot_id, item });
     }
 
@@ -134,5 +145,53 @@ impl ExecutionSequence {
     pub fn clear(&mut self) {
         self.slots.clear();
         self.active_slot_id = None;
+    }
+}
+
+#[cfg(debug_assertions)]
+fn debug_assert_unique_slot_ids(incoming: &[(QueueSlotId, QueueItem)], existing: &[QueueSlotId]) {
+    debug_assert!(
+        incoming.iter().enumerate().all(|(index, (slot_id, _))| {
+            !incoming[..index].iter().any(|(other, _)| other == slot_id)
+                && !existing.iter().any(|other| other == slot_id)
+        }),
+        "execution sequence slot identities must be unique"
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::playback_queue::FeedEntry;
+
+    fn item() -> QueueItem {
+        QueueItem::Feed(FeedEntry {
+            guid: "guid".into(),
+            title: "title".into(),
+            enclosure_url: Some("https://example.test/audio".into()),
+            link: None,
+            mime_type: Some("audio/mpeg".into()),
+            duration_ticks: Some(100),
+            pub_date_secs: None,
+            feed_kind: None,
+            feed_id: None,
+            position_ticks: 0,
+            played: false,
+        })
+    }
+
+    #[test]
+    #[should_panic(expected = "execution sequence slot identities must be unique")]
+    fn rejects_duplicate_slot_ids_on_submission() {
+        let id = QueueSlotId::from_raw(7);
+        ExecutionSequence::from_slot_items(vec![(id, item()), (id, item())], Some(id));
+    }
+
+    #[test]
+    #[should_panic(expected = "execution sequence slot identities must be unique")]
+    fn rejects_appended_slot_id_collision() {
+        let id = QueueSlotId::from_raw(7);
+        let mut sequence = ExecutionSequence::from_slot_items(vec![(id, item())], Some(id));
+        sequence.append_with_id(id, item());
     }
 }

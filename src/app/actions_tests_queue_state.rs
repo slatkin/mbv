@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::tests::make_item;
+use crate::app::ContextAction;
 use mbv_core::playback_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem, QueueItemContentId,
 };
@@ -91,6 +92,53 @@ fn assert_audiobookshelf_queue_purged(items: &[QueueItem]) {
     assert!(matches!(&items[0], QueueItem::Emby(item) if item.name == "Emby"));
     assert!(matches!(&items[1], QueueItem::Feed(item) if item.guid == "feed-entry"));
     assert!(items.iter().all(|item| !item.is_audiobookshelf_any()));
+}
+
+fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) {
+    let mut app = crate::app::tests::make_app_stub();
+    app.player_tab.queue.append_with_id(
+        mbv_core::playback_queue::QueueSlotId::from_raw(700),
+        QueueItem::Emby(Box::new(make_item("stale", "Movie"))),
+    );
+    app.player_tab.queue.append_with_id(
+        mbv_core::playback_queue::QueueSlotId::from_raw(900),
+        QueueItem::Emby(Box::new(make_item("stale-2", "Movie"))),
+    );
+    app.execute_context_action(Some(action), None);
+
+    let slots = app.player_tab.queue.slots();
+    assert_eq!(slots.len(), 2);
+    assert_eq!(
+        slots
+            .iter()
+            .map(|slot| slot.slot_id.raw())
+            .collect::<Vec<_>>(),
+        vec![1, 2],
+        "context playback must give the run the replacement queue's slot identities"
+    );
+    assert!(slots.iter().all(|slot| {
+        matches!(&slot.item, QueueItem::Emby(item) if item.name == "selected" || item.name == "selected-2")
+    }));
+}
+
+#[test]
+fn context_play_selection_rebuilds_canonical_queue_before_submission() {
+    let selected = vec![
+        make_item("selected", "Movie"),
+        make_item("selected-2", "Movie"),
+    ];
+    assert_context_selection_replaces_nonsequential_queue(ContextAction::PlaySelection(selected));
+}
+
+#[test]
+fn context_shuffle_selection_rebuilds_canonical_queue_before_submission() {
+    let selected = vec![
+        make_item("selected", "Movie"),
+        make_item("selected-2", "Movie"),
+    ];
+    assert_context_selection_replaces_nonsequential_queue(ContextAction::ShuffleSelection(
+        selected,
+    ));
 }
 
 #[test]
