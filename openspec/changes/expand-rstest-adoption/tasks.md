@@ -1,9 +1,9 @@
 ## 1. Baseline and mbv-core parser/status batch
 
-- [ ] 1.1 Freeze a `baseline.md` from `candidates.md` before edits: record every selected old test name/count by file, package totals from `cargo nextest list -p mbv-core` and `-p mbv`, and all seven fixture-consumer mappings; verify the ledger names resolve in the live source and defer any drifted candidate rather than expanding scope.
-- [ ] 1.2 Convert the six `ws.rs` is-none tests from the ledger to one named `#[rstest]` case table, preserving each input and `parse_msg(..).is_none()` assertion; run `cargo fmt --all`, `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core ws`, and commit only `crates/mbv-core/src/ws.rs`.
-- [ ] 1.3 Convert the four selected `api_tests_parsing.rs` families (15 tests) to named case tables, retaining the existing `json!` input shape and every expectation; verify 15 generated named cases with `cargo nextest list -p mbv-core`, run the mbv-core per-file gates, and commit only that file.
-- [ ] 1.4 Convert `next_idx_*` and `previous_idx_*` in `player_tests_status.rs` (6 tests) to named case tables; verify six generated named cases, run the mbv-core per-file gates, and commit only that file.
+- [x] 1.1 Freeze a `baseline.md` from `candidates.md` before edits: record every selected old test name/count by file, package totals from `cargo nextest list -p mbv-core` and `-p mbv`, and all seven fixture-consumer mappings; verify the ledger names resolve in the live source and defer any drifted candidate rather than expanding scope.
+- [x] 1.2 Convert the six `ws.rs` is-none tests from the ledger to one named `#[rstest]` case table, preserving each input and `parse_msg(..).is_none()` assertion; run `cargo fmt --all`, `cargo clippy -p mbv-core --all-targets -- -D warnings`, `cargo nextest run -p mbv-core ws`, and commit only `crates/mbv-core/src/ws.rs`.
+- [x] 1.3 Convert the four selected `api_tests_parsing.rs` families (15 tests) to named case tables, retaining the existing `json!` input shape and every expectation; verify 15 generated named cases with `cargo nextest list -p mbv-core`, run the mbv-core per-file gates, and commit only that file.
+- [x] 1.4 Convert `next_idx_*` and `previous_idx_*` in `player_tests_status.rs` (6 tests) to named case tables; verify six generated named cases, run the mbv-core per-file gates, and commit only that file.
 
 ## 2. mbv-core feed and persistence batch
 
