@@ -119,8 +119,9 @@ fn tv_narrow_panel_characterization_keeps_content_and_viewport() {
 }
 
 /// The mounted Wide library rail leaves exactly one blank gap row above the
-/// status bar: the rail's row flow runs to its own bottom edge and the status
-/// band owns the single gap row between them.
+/// status bar: the rail's row flow keeps one spacer row above its own panel
+/// bottom edge, and the status band owns the single gap row between the
+/// panel and the status row.
 #[test]
 fn wide_library_rail_leaves_one_gap_row_above_the_status_bar() {
     let mut model = mounted_model_at(make_movie_app(), 160, 40);
@@ -135,8 +136,8 @@ fn wide_library_rail_leaves_one_gap_row_above_the_status_bar() {
 
     assert_eq!(
         rail.list_area.bottom(),
-        rail.list_panel.bottom(),
-        "the rail's row flow must reach its own bottom edge, with no pad row of its own"
+        rail.list_panel.bottom() - 1,
+        "the rail's row flow keeps one spacer row above its own bottom edge"
     );
     assert_eq!(
         rail.list_panel.bottom(),

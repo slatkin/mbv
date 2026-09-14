@@ -176,6 +176,9 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
     assert_eq!(list.painted, Some(geo.list_area));
     assert!(text_in(&buf, geo.list_area, "Alpha"));
     assert!(text_in(&buf, geo.list_area, "Beta"));
+    // The row flow keeps one spacer row above the list box's bottom edge,
+    // matching the Workspace box's own bottom padding.
+    assert_eq!(geo.list_area.bottom(), geo.list_panel.bottom() - 1);
 
     // No controls row content: the row is absent and the list box starts
     // exactly where the shared browser-pane primitive places it.

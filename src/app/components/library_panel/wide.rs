@@ -204,14 +204,14 @@ pub(in crate::app) fn render_wide_skeleton(
         palette::Surface::LibraryPanel,
         list_focused,
     );
-    // The rail's row flow keeps the side and top pads only: the status band
-    // owns the one gap row below the rail, so a bottom pad here would leave a
-    // second blank row above the status bar instead of one.
+    // The rail's row flow keeps the side pads and both vertical pads,
+    // matching the Workspace box's own `padded_rect` inset: one blank spacer
+    // row between the rail's last row and the panel's bottom edge.
     let list_area = Rect {
         x: list_panel.x.saturating_add(PANE_PAD_X),
         y: list_panel.y.saturating_add(PANE_PAD_Y),
         width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
-        height: list_panel.height.saturating_sub(PANE_PAD_Y),
+        height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
     };
     match &mut content.list {
         ListSlot::Search(search) => {
