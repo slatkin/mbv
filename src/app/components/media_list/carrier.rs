@@ -22,8 +22,8 @@ use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
-    InlineMediaBrowser, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, SelectionOrigin, SelectionSummary, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaListOperation, MediaListRow, MediaListTransition, SelectionOrigin,
+    SelectionSummary, ViewportAnchor, WideMediaList,
 };
 
 /// The centrally-defined closed set of media-list presentations (CONTEXT.md
@@ -249,19 +249,13 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         }
     }
 
-    /// Run `f`, marking the selection dirty if it changed the active owner's
-    /// multi-selection length.
-    fn track_selection_change<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
-        f(self)
-    }
-
     /// Replace the active owner's display rows, preserving the selected
     /// target where possible and locally clamping otherwise (design.md D3).
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
-        self.track_selection_change(|this| match this.active {
-            Presentation::Wide => this.wide.set_content(rows),
-            Presentation::Inline => this.inline.set_content(rows),
-        });
+        match self.active {
+            Presentation::Wide => self.wide.set_content(rows),
+            Presentation::Inline => self.inline.set_content(rows),
+        }
     }
 
     /// Move the active owner's selection to `target` when it is present.
@@ -306,17 +300,17 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     }
 
     pub fn toggle_selection(&mut self, target: &Target) {
-        self.track_selection_change(|this| match this.active {
-            Presentation::Wide => this.wide.toggle_selection(target),
-            Presentation::Inline => this.inline.toggle_selection(target),
-        });
+        match self.active {
+            Presentation::Wide => self.wide.toggle_selection(target),
+            Presentation::Inline => self.inline.toggle_selection(target),
+        }
     }
 
     pub fn extend_selection_to(&mut self, target: &Target) {
-        self.track_selection_change(|this| match this.active {
-            Presentation::Wide => this.wide.extend_selection_to(target),
-            Presentation::Inline => this.inline.extend_selection_to(target),
-        });
+        match self.active {
+            Presentation::Wide => self.wide.extend_selection_to(target),
+            Presentation::Inline => self.inline.extend_selection_to(target),
+        }
     }
 
     pub fn clear_selection(&mut self) {
@@ -394,33 +388,10 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         &mut self,
         operation: MediaListOperation<Target>,
     ) -> MediaListTransition<Target> {
-        let mut transition = self.track_selection_change(|this| match this.active {
-            Presentation::Wide => this.wide.delegate_operation(operation),
-            Presentation::Inline => this.inline.delegate_operation(operation),
-        });
-        if transition.selection_summary.is_some() {
-            transition.selection_summary = Some(self.selection_summary());
-        }
-        transition
-    }
-
-    pub fn delegate(
-        &mut self,
-        input: MediaListSurfaceInput,
-        target: Option<Target>,
-    ) -> MediaListTransition<Target> {
-        let mut transition = self.track_selection_change(|this| match this.active {
-            Presentation::Wide => this.wide.delegate_operation(
-                input
-                    .into_operation(target)
-                    .expect("resolved media-list pointer target"),
-            ),
-            Presentation::Inline => this.inline.delegate_operation(
-                input
-                    .into_operation(target)
-                    .expect("resolved media-list pointer target"),
-            ),
-        });
+        let mut transition = match self.active {
+            Presentation::Wide => self.wide.delegate_operation(operation),
+            Presentation::Inline => self.inline.delegate_operation(operation),
+        };
         if transition.selection_summary.is_some() {
             transition.selection_summary = Some(self.selection_summary());
         }
