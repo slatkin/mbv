@@ -676,8 +676,11 @@ mod tests {
             area: Rect::new(0, 0, 40, 12),
         });
         // Move the Services cursor off the top row (Down is a local cursor
-        // move; it emits no message).
-        assert!(component.on(&key(Key::Down)).is_none());
+        // move and emits the framework-local claim marker).
+        assert!(matches!(
+            component.on(&key(Key::Down)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
         // Leaving Services via Back zeroes the component's own cursor, so the
         // next Services entry starts back at the top instead of remembering
         // the old position.

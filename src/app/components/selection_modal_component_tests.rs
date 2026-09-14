@@ -1,4 +1,4 @@
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::selection_modal::SelectionModalComponent;
 use super::user_event::UserEvent;
 use crate::app::types_selection_modal::{
@@ -48,7 +48,10 @@ fn selection_modal_moves_local_cursor_without_cross_boundary_request() {
     let message = component.on(&key(Key::Down));
 
     assert_eq!(component.selected_id(), Some("track-b"));
-    assert_eq!(message, None);
+    assert_eq!(
+        message,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    );
 }
 
 #[test]

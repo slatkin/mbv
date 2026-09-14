@@ -3,7 +3,7 @@
 //! outside click commits exactly like Esc — this popup's only dismiss path
 //! *is* a commit.
 
-use super::msg::{Msg, ShellRequest};
+use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use super::multiselect::MultiselectComponent;
 use crate::app::types_context_menu::{MultiSelectKind, MultiSelectPopup};
 use ratatui::backend::TestBackend;
@@ -132,7 +132,10 @@ fn multiselect_inside_click_off_the_rows_is_a_noop() {
 fn multiselect_keyboard_paths_still_work_alongside_mouse() {
     let mut component = MultiselectComponent::new();
     component.set_content(&popup());
-    assert_eq!(component.on(&key(Key::Char(' '))), None);
+    assert_eq!(
+        component.on(&key(Key::Char(' '))),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    );
     assert!(component.test_items()[0].2);
     assert!(matches!(
         component.on(&key(Key::Esc)),

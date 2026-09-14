@@ -32,12 +32,18 @@ fn router_records_first_space_for_second_claim() {
     let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 
-    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
+    assert_eq!(
+        model.router_outcome(&messages),
+        RouterOutcome::Deferred(Command::TogglePlayPause)
+    );
+    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false);
     assert!(model.app.last_space_press.is_some());
     assert_eq!(
         model.router_outcome(&messages),
-        RouterOutcome::Command(Command::TogglePlayPause)
+        RouterOutcome::Deferred(Command::TogglePlayPause)
     );
+    model.app.last_space_press = Some(Instant::now());
+    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false);
     assert!(model.app.last_space_press.is_none());
 }
 
@@ -50,7 +56,10 @@ fn visual_mode_does_not_arm_double_tap_timers() {
         KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE).into(),
     ))];
 
-    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
+    assert_eq!(
+        model.router_outcome(&messages),
+        RouterOutcome::Deferred(Command::TogglePlayPause)
+    );
     assert!(model.app.last_space_press.is_none());
 }
 
@@ -61,12 +70,18 @@ fn router_records_first_esc_for_second_claim() {
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 
-    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
+    assert_eq!(
+        model.router_outcome(&messages),
+        RouterOutcome::Deferred(Command::Stop)
+    );
+    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false);
     assert!(model.app.last_esc_press.is_some());
     assert_eq!(
         model.router_outcome(&messages),
-        RouterOutcome::Command(Command::Stop)
+        RouterOutcome::Deferred(Command::Stop)
     );
+    model.app.last_esc_press = Some(Instant::now());
+    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false);
     assert!(model.app.last_esc_press.is_none());
 }
 

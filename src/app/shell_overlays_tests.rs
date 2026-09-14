@@ -288,8 +288,18 @@ mod tests {
                 .expect("search sidebar type")
                 .on(ev)
         };
-        assert!(dispatch(&mut model, &type_key('a')).is_none());
-        assert!(dispatch(&mut model, &type_key('b')).is_none());
+        assert!(matches!(
+            dispatch(&mut model, &type_key('a')),
+            Some(Msg::TerminalEvent(
+                crate::app::components::msg::TerminalObserverEvent::KeyClaimed
+            ))
+        ));
+        assert!(matches!(
+            dispatch(&mut model, &type_key('b')),
+            Some(Msg::TerminalEvent(
+                crate::app::components::msg::TerminalObserverEvent::KeyClaimed
+            ))
+        ));
 
         // Sweep before the 300 ms deadline: should not fire.
         assert!(model.tick_search_clock(Instant::now()).is_none());

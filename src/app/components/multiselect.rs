@@ -230,6 +230,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::msg::TerminalObserverEvent;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use tuirealm::event::{KeyEvent, KeyModifiers};
@@ -256,8 +257,14 @@ mod tests {
     fn settings_popup_multiselect_keeps_local_cursor_and_choice() {
         let mut component = MultiselectComponent::new();
         component.set_content(&popup());
-        assert_eq!(component.on(&key(Key::Down)), None);
-        assert_eq!(component.on(&key(Key::Char(' '))), None);
+        assert_eq!(
+            component.on(&key(Key::Down)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        );
+        assert_eq!(
+            component.on(&key(Key::Char(' '))),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        );
 
         assert_eq!(component.cursor, 1);
         assert!(!component.items[1].2);

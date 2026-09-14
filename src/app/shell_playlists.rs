@@ -157,7 +157,8 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::msg::SavePlaylistIntent;
-    use crate::app::components::{Msg, ShellRequest};
+    use crate::app::components::msg::{Msg, TerminalObserverEvent};
+    use crate::app::components::ShellRequest;
     use crate::app::tests::make_app_stub;
     use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers};
 
@@ -178,7 +179,10 @@ mod tests {
                 code: Key::Down,
                 modifiers: KeyModifiers::NONE,
             }));
-        assert!(message.is_none());
+        assert!(matches!(
+            message,
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
     }
 
     #[test]
