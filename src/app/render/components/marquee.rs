@@ -32,8 +32,8 @@ fn marquee_col(overflow: usize, elapsed_ms: u128) -> usize {
     if overflow == 0 {
         return 0;
     }
-    const STEP_MS: u128 = 200;
-    const HOLD_MS: u128 = 1200;
+    const STEP_MS: u128 = 150;
+    const HOLD_MS: u128 = 600;
     let scroll_ms = overflow as u128 * STEP_MS;
     let cycle = 2 * HOLD_MS + 2 * scroll_ms;
     let t = elapsed_ms % cycle;
@@ -90,6 +90,6 @@ fn colored_width_window(
 mod tests {
     #[test]
     fn marquee_advances_five_columns_per_second() {
-        assert_eq!(super::marquee_col(10, 1_200 + 200 * 5), 5);
+        assert_eq!(super::marquee_col(10, 600 + 150 * 5), 5);
     }
 }
