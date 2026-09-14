@@ -1,8 +1,8 @@
 ## 1. Dependency and baseline
 
-- [ ] 1.1 Add `rstest` to `[workspace.dependencies]` in the root `Cargo.toml` starting from `default-features = false` (design D3), and reference it as `rstest.workspace = true` under `[dev-dependencies]` in the root package and in `crates/mbv-core/Cargo.toml`. Verify with `cargo check -p mbv-core --all-targets` and `cargo check -p mbv --all-targets` succeeding, and `cargo tree -p rstest --edges normal` showing no async runtime or timeout path.
-- [ ] 1.2 Commit the dependency change alone (design D5) and verify `git show --stat` for that commit lists only the two manifests plus `Cargo.lock`.
-- [ ] 1.3 Record the conversion baseline per target family before touching any test: the test names and counts for the socket `*_returns_none` family, the two `api_tests_parsing` families, and the backdrop `dim_*` set. Verify by `cargo nextest list -p mbv-core | grep -c` and `cargo nextest list -p mbv | grep -c` producing 8, 5, 4 and 7 respectively — the numbers the post-conversion checks compare against.
+- [x] 1.1 Add `rstest` to `[workspace.dependencies]` in the root `Cargo.toml` starting from `default-features = false` (design D3), and reference it as `rstest.workspace = true` under `[dev-dependencies]` in the root package and in `crates/mbv-core/Cargo.toml`. Verify with `cargo check -p mbv-core --all-targets` and `cargo check -p mbv --all-targets` succeeding, and `cargo tree -p rstest --edges normal` showing no async runtime or timeout path.
+- [x] 1.2 Commit the dependency change alone (design D5) and verify `git show --stat` for that commit lists only the two manifests plus `Cargo.lock`.
+- [x] 1.3 Record the conversion baseline per target family before touching any test: the test names and counts for the socket `*_returns_none` family, the two `api_tests_parsing` families, and the backdrop `dim_*` set. Verify by `cargo nextest list -p mbv-core | grep -c` and `cargo nextest list -p mbv | grep -c` producing 8, 5, 4 and 7 respectively — the numbers the post-conversion checks compare against.
 
 ## 2. Socket decode family (`mbv-core`)
 
