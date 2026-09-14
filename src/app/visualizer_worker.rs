@@ -151,9 +151,13 @@ impl PipeWireWorker {
         }
     }
 
-    pub fn stop(&mut self) {
+    pub fn signal_stop(&mut self) -> Option<thread::JoinHandle<()>> {
         let _ = self.stop_tx.send(Control::Stop);
-        if let Some(handle) = self.handle.take() {
+        self.handle.take()
+    }
+
+    pub fn stop(&mut self) {
+        if let Some(handle) = self.signal_stop() {
             join_worker(handle);
         }
         if let Ok(mut buffer) = self.buffer.lock() {
