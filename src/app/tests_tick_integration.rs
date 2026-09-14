@@ -85,6 +85,7 @@ fn live_tick_characterizes_space_double_tap_lifecycle() {
     assert!(matches!(first.router, RouterOutcome::FallThrough));
     assert!(harness.model().app.last_space_press.is_some());
 
+    harness.model_mut().app.last_space_press = Some(Instant::now());
     harness.inject(key(Key::Char(' ')));
     let second = harness.step();
     assert_eq!(second.router, RouterOutcome::Command(crate::app::action::Command::TogglePlayPause));
@@ -106,6 +107,7 @@ fn live_tick_characterizes_escape_double_tap_lifecycle() {
     assert!(matches!(first.router, RouterOutcome::FallThrough));
     assert!(harness.model().app.last_esc_press.is_some());
 
+    harness.model_mut().app.last_esc_press = Some(Instant::now());
     harness.inject(key(Key::Esc));
     let second = harness.step();
     assert_eq!(second.router, RouterOutcome::Command(crate::app::action::Command::Stop));
