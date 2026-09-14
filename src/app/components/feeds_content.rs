@@ -305,9 +305,15 @@ impl FeedsContent {
             },
             Key::Char('.') => {
                 let target = self.carrier.selected_target()?.clone();
-                let entry = self.entry_for_target(&target)?.clone();
+                let entries = match self.delegate_row_local_input(RowLocalInput::Context, None) {
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .filter_map(|target| self.entry_for_target(&target).cloned())
+                        .collect(),
+                    _ => vec![self.entry_for_target(&target)?.clone()],
+                };
                 Some(Msg::Shell(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Feeds(vec![entry]),
+                    crate::app::types_context_menu::ContextMenuTargets::Feeds(entries),
                     None,
                 )))
             }
@@ -519,9 +525,16 @@ impl LibraryContentOwner for FeedsContent {
                 }
                 RowLocalInput::ContextClick(at) => {
                     let target = self.resolve_row_id(at)?;
-                    let entry = self.entry_for_target(&target)?.clone();
+                    let outcome = self.delegate_row_local_input(input, Some(target.clone()));
+                    let entries = match outcome {
+                        RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                            .into_iter()
+                            .filter_map(|target| self.entry_for_target(&target).cloned())
+                            .collect(),
+                        _ => vec![self.entry_for_target(&target)?.clone()],
+                    };
                     Some(Msg::Shell(ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Feeds(vec![entry]),
+                        crate::app::types_context_menu::ContextMenuTargets::Feeds(entries),
                         Some((at.x, at.y)),
                     )))
                 }

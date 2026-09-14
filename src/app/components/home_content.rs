@@ -336,14 +336,18 @@ impl HomeContent {
                 None
             }
             Key::Char('.') if self.section == 0 => {
-                let target = match self.delegate_row_local_input(RowLocalInput::Context, None) {
+                let targets = match self.delegate_row_local_input(RowLocalInput::Context, None) {
                     RowLocalOutcome::External(RowIntent::Context(target)) => {
-                        self.home_row_target(Some(target))
+                        vec![self.home_row_target(Some(target))]
                     }
-                    _ => self.row_target(),
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .map(|target| self.home_row_target(Some(target)))
+                        .collect(),
+                    _ => vec![self.row_target()],
                 };
                 Some(Msg::Shell(ShellRequest::RowContextMenu(
-                    ContextMenuTargets::Home(vec![target]),
+                    ContextMenuTargets::Home(targets),
                     None,
                 )))
             }
@@ -476,8 +480,8 @@ impl LibraryContentOwner for HomeContent {
                 // `claim_row` contract (a blank/gap click leaves the
                 // selection unchanged).
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if at.is_some() {
-                    self.carrier.delegate(input, target);
+                if at.is_some() && !matches!(input, RowLocalInput::ContextClick(_)) {
+                    self.carrier.delegate(input, target.clone());
                     if let Some(count) = self.carrier.selection_changed_msg() {
                         return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
                     }
@@ -495,8 +499,21 @@ impl LibraryContentOwner for HomeContent {
                         }))
                     }
                     RowLocalInput::ContextClick(at) => {
+                        let outcome = self.carrier.delegate(input, target);
+                        let targets = match outcome {
+                            RowLocalOutcome::External(RowIntent::Context(target)) => {
+                                vec![self.home_row_target(Some(target))]
+                            }
+                            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                                targets
+                                    .into_iter()
+                                    .map(|target| self.home_row_target(Some(target)))
+                                    .collect()
+                            }
+                            _ => vec![self.row_target()],
+                        };
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            ContextMenuTargets::Home(vec![self.row_target()]),
+                            ContextMenuTargets::Home(targets),
                             Some((at.x, at.y)),
                         )))
                     }

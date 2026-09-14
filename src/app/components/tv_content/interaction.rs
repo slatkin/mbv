@@ -1,4 +1,28 @@
 impl TvContent {
+    fn context_menu_request(&mut self) -> Option<ShellRequest> {
+        let outcome = self.carrier.delegate(RowLocalInput::Context, None);
+        let items = match outcome {
+            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                .into_iter()
+                .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
+                .collect(),
+            RowLocalOutcome::External(RowIntent::Context(target)) => self
+                .context
+                .list
+                .items
+                .iter()
+                .find(|item| item.id == target)
+                .cloned()
+                .into_iter()
+                .collect(),
+            _ => return None,
+        };
+        Some(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            None,
+        ))
+    }
+
     fn handle_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         // Inline Search gets first refusal while active (design.md D6): the
         // panel paints the box in the Selector row's rect and the results in
@@ -67,8 +91,16 @@ impl TvContent {
             RowLocalInput::ContextClick(at) => {
                 let target = self.carrier.resolve_current_point(at)?.clone();
                 let item = self.context.list.items.iter().find(|item| item.id == target)?.clone();
+                let outcome = self.carrier.delegate(input, Some(target));
+                let items = match outcome {
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
+                        .collect(),
+                    _ => vec![item],
+                };
                 Some(Msg::Shell(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                     Some((at.x, at.y)),
                 )))
             }
@@ -117,8 +149,19 @@ impl TvContent {
                     TvHit::SeriesRow(target) => self.context.list.items.iter().find(|item| item.id == *target).cloned(),
                     _ => None,
                 }?;
+                let outcome = self.episodes.delegate(input, Some(match &hit {
+                    TvHit::EpisodeRow(target) => target.clone(),
+                    _ => return None,
+                }));
+                let items = match outcome {
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                        .into_iter()
+                        .filter_map(|target| self.current_season_episodes().iter().find(|item| item.id == target).cloned())
+                        .collect(),
+                    _ => vec![item],
+                };
                 Some(Msg::Shell(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
                     Some((at.x, at.y)),
                 )))
             },

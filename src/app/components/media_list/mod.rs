@@ -555,12 +555,12 @@ impl<Target> MediaList<Target> {
                     .selected_target()
                     .cloned()
                     .map_or(RowLocalOutcome::Unhandled, |target| {
-                        RowLocalOutcome::External(RowIntent::Context(target))
+                        RowLocalOutcome::External(self.context_intent(target))
                     });
             }
             RowLocalInput::ContextClick(_) => {
                 return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
-                    RowLocalOutcome::External(RowIntent::Context(target))
+                    RowLocalOutcome::External(self.context_intent(target))
                 });
             }
             RowLocalInput::ToggleClick(_) => {
@@ -625,6 +625,34 @@ impl<Target: PartialEq> MediaList<Target> {
 }
 
 impl<Target: Clone + PartialEq> MediaList<Target> {
+    fn context_intent(&mut self, target: Target) -> RowIntent<Target> {
+        if self.is_visual_mode() {
+            if self
+                .multi_selection
+                .iter()
+                .any(|selected| selected == &target)
+            {
+                let targets = self
+                    .selectable
+                    .iter()
+                    .filter_map(|&row| self.rows[row].selectable_target())
+                    .filter(|candidate| {
+                        self.multi_selection
+                            .iter()
+                            .any(|selected| selected == *candidate)
+                    })
+                    .cloned()
+                    .collect();
+                RowIntent::ContextSelection(targets)
+            } else {
+                self.clear_selection();
+                RowIntent::Context(target)
+            }
+        } else {
+            RowIntent::Context(target)
+        }
+    }
+
     /// Begin keyboard Visual mode, anchored at the current cursor target.
     pub fn enter_visual_mode(&mut self) {
         if let Some(target) = self.selected_target().cloned() {

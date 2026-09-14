@@ -32,7 +32,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
-    Presentation, RowLocalInput,
+    Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
 };
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -426,12 +426,24 @@ impl BrowserContent {
             Key::Char('w') if ctrl => {
                 selected.map(|item| ShellRequest::BrowserToggleWatched { item })
             }
-            Key::Char('.') if key.modifiers.is_empty() => selected.map(|item| {
-                ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Browser(vec![item.id]),
-                    None,
-                )
-            }),
+            Key::Char('.') if key.modifiers.is_empty() => match self
+                .carrier
+                .delegate(RowLocalInput::Context, None)
+            {
+                RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                    Some(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                        None,
+                    ))
+                }
+                RowLocalOutcome::External(RowIntent::Context(target)) => {
+                    Some(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Browser(vec![target]),
+                        None,
+                    ))
+                }
+                _ => None,
+            },
             Key::Char('s') if ctrl => selected.map(|item| ShellRequest::BrowserShuffle { item }),
             Key::Char('r') if ctrl => Some(ShellRequest::BrowserRescan),
             Key::Char('r') => Some(ShellRequest::BrowserRefresh),
@@ -578,12 +590,18 @@ impl LibraryContentOwner for BrowserContent {
                     }
                     RowLocalInput::ContextClick(at) => {
                         let target = target?;
-                        self.carrier
+                        let outcome = self
+                            .carrier
                             .delegate(RowLocalInput::ContextClick(at), Some(target.clone()));
+                        let targets = match outcome {
+                            RowLocalOutcome::External(RowIntent::Context(target)) => vec![target],
+                            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                                targets
+                            }
+                            _ => vec![target],
+                        };
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Browser(vec![
-                                target,
-                            ]),
+                            crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
                             Some((at.x, at.y)),
                         )))
                     }

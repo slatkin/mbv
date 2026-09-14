@@ -391,6 +391,51 @@ fn row_local_delegation_covers_movement_selection_and_external_intents() {
     );
 }
 
+#[test]
+fn context_on_selection_uses_selectable_list_order() {
+    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=5)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    list.select_target(&"2".to_string());
+    list.toggle_selection(&"5".to_string());
+    list.extend_selection_to(&"4".to_string());
+
+    assert_eq!(
+        list.delegate(RowLocalInput::Context, None),
+        RowLocalOutcome::External(RowIntent::ContextSelection(vec![
+            "2".into(),
+            "3".into(),
+            "4".into()
+        ],))
+    );
+}
+
+#[test]
+fn context_click_outside_selection_clears_and_is_single_item() {
+    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
+    let mut list = super::MediaList::new();
+    list.set_content(
+        (1..=8)
+            .map(|target| lifecycle_item(&target.to_string()))
+            .collect(),
+    );
+    list.select_target(&"2".to_string());
+    list.extend_selection_to(&"4".to_string());
+
+    assert_eq!(
+        list.delegate(
+            RowLocalInput::ContextClick(Position::new(0, 0)),
+            Some("8".into()),
+        ),
+        RowLocalOutcome::External(RowIntent::Context("8".into()))
+    );
+    assert!(list.multi_selection().is_empty());
+}
+
 fn lifecycle_item(target: &str) -> MediaListRow<String> {
     MediaListRow::Item {
         target: target.into(),

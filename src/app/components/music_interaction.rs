@@ -67,9 +67,18 @@ impl MusicContent {
                         RowLocalInput::DoubleClick(_) => self
                             .selected_item()
                             .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
-                        RowLocalInput::ContextClick(at) => self.selected_item().map(|item| {
-                            Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), Some((at.x, at.y))))
-                        }),
+                        RowLocalInput::ContextClick(at) => {
+                            let target = self.carrier.resolve_current_point(at)?.clone();
+                            let outcome = self.carrier.delegate(input, Some(target.clone()));
+                            let items = match outcome {
+                                RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                                    .into_iter()
+                                    .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
+                                    .collect(),
+                                _ => vec![self.selected_item()?],
+                            };
+                            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), Some((at.x, at.y)))))
+                        },
                         _ => None,
                     }
                 }
@@ -119,21 +128,19 @@ impl MusicContent {
                         }))
                     })?
                 }
-                RowLocalInput::ContextClick(at) => self
-                    .track_list
-                    .resolve_current_point(at)
-                    .and_then(|target| {
-                        self.context
-                            .album_tracks
-                            .as_deref()
-                            .unwrap_or_default()
-                            .iter()
-                            .find(|track| track.id == *target)
-                            .cloned()
-                            .map(|track| {
-                                Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(vec![track]), Some((at.x, at.y))))
-                            })
-                    }),
+                RowLocalInput::ContextClick(at) => {
+                    let target = self.track_list.resolve_current_point(at)?.clone();
+                    let item = self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target)?.clone();
+                    let outcome = self.track_list.delegate(input, Some(target));
+                    let items = match outcome {
+                        RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                            .into_iter()
+                            .filter_map(|target| self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target).cloned())
+                            .collect(),
+                        _ => vec![item],
+                    };
+                    Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), Some((at.x, at.y)))))
+                },
                 _ => None,
             },
         }

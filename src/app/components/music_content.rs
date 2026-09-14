@@ -17,7 +17,8 @@ use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
+    RowLocalInput, RowLocalOutcome,
 };
 use super::msg::TerminalObserverEvent;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
@@ -479,18 +480,75 @@ impl LibraryContentOwner for MusicContent {
             // pane holds local focus, otherwise the selected album's
             // generic library context menu (mirrors the retired
             // `MusicWorkspaceComponent`'s '.' handling).
-            Key::Char('.') if self.track_focused => self.selected_track_item().map(|track| {
-                Msg::Shell(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![track]),
-                    None,
-                ))
-            }),
-            Key::Char('.') => self.selected_item().map(|item| {
-                Msg::Shell(ShellRequest::RowContextMenu(
-                    crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
-                    None,
-                ))
-            }),
+            Key::Char('.') if self.track_focused => {
+                match self.track_list.delegate(RowLocalInput::Context, None) {
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            crate::app::types_context_menu::ContextMenuTargets::Emby(
+                                targets
+                                    .into_iter()
+                                    .filter_map(|target| {
+                                        self.context
+                                            .album_tracks
+                                            .as_deref()
+                                            .unwrap_or_default()
+                                            .iter()
+                                            .find(|track| track.id == target)
+                                            .cloned()
+                                    })
+                                    .collect(),
+                            ),
+                            None,
+                        )))
+                    }
+                    RowLocalOutcome::External(RowIntent::Context(target)) => self
+                        .context
+                        .album_tracks
+                        .as_deref()
+                        .unwrap_or_default()
+                        .iter()
+                        .find(|track| track.id == target)
+                        .cloned()
+                        .map(|track| {
+                            Msg::Shell(ShellRequest::RowContextMenu(
+                                crate::app::types_context_menu::ContextMenuTargets::Emby(vec![
+                                    track,
+                                ]),
+                                None,
+                            ))
+                        }),
+                    _ => None,
+                }
+            }
+            Key::Char('.') => match self.carrier.delegate(RowLocalInput::Context, None) {
+                RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                    Some(Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Emby(
+                            targets
+                                .into_iter()
+                                .filter_map(|target| {
+                                    self.context
+                                        .list
+                                        .items
+                                        .iter()
+                                        .find(|item| item.id == target)
+                                        .cloned()
+                                })
+                                .collect(),
+                        ),
+                        None,
+                    )))
+                }
+                RowLocalOutcome::External(RowIntent::Context(_target)) => {
+                    self.selected_item().map(|item| {
+                        Msg::Shell(ShellRequest::RowContextMenu(
+                            crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                            None,
+                        ))
+                    })
+                }
+                _ => None,
+            },
             Key::Char('r')
                 if !self.track_focused
                     && !key.modifiers.contains(KeyModifiers::CONTROL)

@@ -344,6 +344,12 @@ impl QueueComponent {
                             None,
                         )))
                     }
+                    RowLocalOutcome::External(RowIntent::ContextSelection(slot_ids)) => {
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            ContextMenuTargets::Queue(slot_ids),
+                            None,
+                        )))
+                    }
                     _ => Some(Msg::Shell(ShellRequest::RowContextMenu(
                         ContextMenuTargets::Queue(vec![]),
                         None,
@@ -442,9 +448,15 @@ impl QueueComponent {
                 // menu. Only resolve a menu when the click lands on a row —
                 // never fall back to the prior selection (design.md D4).
                 let slot_id = self.carrier.resolve_current_point(at).copied()?;
-                self.delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id));
+                let targets = match self
+                    .delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id))
+                {
+                    RowLocalOutcome::External(RowIntent::Context(target)) => vec![target],
+                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets,
+                    _ => vec![slot_id],
+                };
                 Some(Msg::Shell(ShellRequest::RowContextMenu(
-                    ContextMenuTargets::Queue(vec![slot_id]),
+                    ContextMenuTargets::Queue(targets),
                     Some((mouse.column, mouse.row)),
                 )))
             }
