@@ -19,8 +19,8 @@
 
 ## 4. Visual evaluation and tuning
 
-- [ ] 4.1 Run mbv in a terminal that reports passive pointer movement and evaluate the initial tab and main Selector-row pill hover styles in Narrow and Wide Panel modes: move across adjacent targets, gaps, selected targets, and out to another visible surface; verify resting < hover < selected remains legible without flicker or accidental actions.
-- [ ] 4.2 Record the evaluation result in this task: if the initial composition of existing semantic roles has the desired feel, mark it accepted; otherwise tune only the central tab/pill style policies, adding a dedicated semantic hover role only if the existing vocabulary cannot express the chosen appearance, then repeat task 4.1 before proceeding.
+- [x] 4.1 Run mbv in a terminal that reports passive pointer movement and evaluate the initial tab and main Selector-row pill hover styles in Narrow and Wide Panel modes: move across adjacent targets, gaps, selected targets, and out to another visible surface; verify resting < hover < selected remains legible without flicker or accidental actions.
+- [x] 4.2 Record the evaluation result in this task: if the initial composition of existing semantic roles has the desired feel, mark it accepted; otherwise tune only the central tab/pill style policies, adding a dedicated semantic hover role only if the existing vocabulary cannot express the chosen appearance, then repeat task 4.1 before proceeding.
 
 ## 5. Whole-change verification
 
