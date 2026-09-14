@@ -4,7 +4,7 @@
 //! via `EventListenerCfg::add_port`; this matrix remains because the cheap
 //! table rows cover precedence combinations that would be wasteful to exercise
 //! through the live harness. It drives the exact seam where routing happens —
-//! the ADR 0023 fold (`apply_router_outcome`) — with the exact message ordering
+//! the ADR 0023 fold (`fold_keyboard_messages`) — with the exact message ordering
 //! `Application::tick` produces: the focused component's message first, then
 //! the UiRoot observer's `TerminalEvent`.
 //!
@@ -22,7 +22,7 @@
 
 use crate::app::components::{ComponentId, Msg, TerminalObserverEvent};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
-use crate::app::shell::apply_router_outcome;
+use crate::app::shell::fold_keyboard_messages;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 pub(crate) fn fold_tick(
@@ -37,7 +37,7 @@ pub(crate) fn fold_tick(
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
     let outcome = resolve_router_outcome_with_focused(key, &snapshot, None);
-    apply_router_outcome(messages, focused.as_ref(), &outcome)
+    fold_keyboard_messages(messages, focused.as_ref(), &outcome)
 }
 
 pub(crate) fn key(code: KeyCode) -> KeyEvent {
@@ -55,7 +55,7 @@ pub(crate) fn fold_tick_with_outcome(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    apply_router_outcome(messages, focused.as_ref(), &outcome)
+    fold_keyboard_messages(messages, focused.as_ref(), &outcome)
 }
 
 pub(crate) fn fold_tick_focused(
@@ -70,7 +70,7 @@ pub(crate) fn fold_tick_focused(
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
     let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref());
-    apply_router_outcome(messages, focused.as_ref(), &outcome)
+    fold_keyboard_messages(messages, focused.as_ref(), &outcome)
 }
 
 pub(crate) fn idle_snapshot() -> RouterSnapshot {

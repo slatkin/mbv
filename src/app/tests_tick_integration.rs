@@ -16,7 +16,7 @@ use crate::app::components::{
     SearchSidebarComponent, ShellRequest, TerminalObserverEvent, UserEvent,
 };
 use crate::app::router::RouterOutcome;
-use crate::app::shell::apply_router_outcome;
+use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
@@ -442,7 +442,7 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
         .tick(PollStrategy::Once(Duration::from_millis(500)))
         .expect("tick lower focused queue");
     let router = harness.model_mut().router_outcome(&raw_messages);
-    let messages = apply_router_outcome(raw_messages, pre_fold_focus.as_ref(), &router);
+    let messages = fold_keyboard_messages(raw_messages, pre_fold_focus.as_ref(), &router);
     assert_eq!(pre_fold_focus, Some(ComponentId::Queue));
     assert!(matches!(router, RouterOutcome::Swallow));
     assert!(messages.is_empty());

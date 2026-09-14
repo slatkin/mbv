@@ -126,46 +126,116 @@ pub struct Model {
 ///
 /// Non-key observer signals (`Resize`, `FocusGained/Lost`, `NoOp`) always pass
 /// through: they are redraw/layout signals, not chords.
-pub(super) fn apply_router_outcome(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ArbitrationDiagnostic {
+    pub chord: Option<String>,
+    pub captured_focus: Option<String>,
+    pub router_result: String,
+    pub leaf_disposition: &'static str,
+    pub final_disposition: &'static str,
+    pub dispatch_kind: &'static str,
+}
+
+pub(super) fn fold_keyboard_messages(
     messages: Vec<Msg>,
     focused: Option<&ComponentId>,
     router: &RouterOutcome,
 ) -> Vec<Msg> {
-    let observed_key = messages
+    arbitrate_key(messages, focused, router).0
+}
+
+/// Pure arbitration seam, returning both surviving messages and its compact
+/// diagnostic record (never containing request payloads).
+pub(super) fn arbitrate_key(
+    messages: Vec<Msg>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+) -> (Vec<Msg>, ArbitrationDiagnostic) {
+    let chord = messages.iter().find_map(|m| match m {
+        Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(format!("{key:?}")),
+        _ => None,
+    });
+    let key_count = messages
         .iter()
-        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))));
+        .filter(|m| matches!(m, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+        .count();
+    debug_assert!(
+        key_count <= 1,
+        "malformed arbitration: duplicate router observations"
+    );
+    let claims = messages
+        .iter()
+        .filter(|m| matches!(m, Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
+        .count();
+    debug_assert!(
+        claims <= 1,
+        "malformed arbitration: multiple focused key claims"
+    );
+    let observed_key = key_count == 1;
     let mut out = Vec::with_capacity(messages.len());
     for msg in messages {
         match msg {
             Msg::TerminalEvent(TerminalObserverEvent::Key(_)) => {
-                // The observed chord. When UiRoot itself is focused this is
-                // the leaf message (the active component's own request) and
-                // its survival is decided by the router like any leaf message.
-                if focused == Some(&ComponentId::UiRoot) {
-                    match router {
-                        RouterOutcome::FallThrough => out.push(msg),
-                        RouterOutcome::Command(_) | RouterOutcome::Swallow => {}
-                    }
+                if focused == Some(&ComponentId::UiRoot)
+                    && matches!(
+                        router,
+                        RouterOutcome::FallThrough | RouterOutcome::Deferred(_)
+                    )
+                {
+                    out.push(msg);
                 }
-                // When a leaf is focused the observer key is only the router's
-                // trigger; the fold already applied the outcome to the leaf's
-                // own message below.
+            }
+            Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed) => {
+                debug_assert!(
+                    observed_key,
+                    "malformed arbitration: key claim without observer event"
+                );
             }
             Msg::TerminalEvent(_) => out.push(msg),
             leaf => {
-                // The focused component's request (or a typed shell request
-                // from a subscription). `FallThrough` lets it stand; the
-                // router's `Command`/`Swallow` discards it for this tick.
-                // With no key observed, nothing was routed and every message
-                // stands.
-                match (router, observed_key) {
-                    (RouterOutcome::FallThrough, _) | (_, false) => out.push(leaf),
-                    (RouterOutcome::Command(_) | RouterOutcome::Swallow, true) => {}
+                if !observed_key
+                    || matches!(
+                        router,
+                        RouterOutcome::FallThrough | RouterOutcome::Deferred(_)
+                    )
+                {
+                    out.push(leaf);
                 }
             }
         }
     }
-    out
+    let leaf_disposition = if claims > 0 || out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_)))
+    {
+        "consumed"
+    } else {
+        "unhandled"
+    };
+    let final_disposition = match router {
+        RouterOutcome::Command(_) => "command",
+        RouterOutcome::Swallow => "swallow",
+        RouterOutcome::FallThrough => {
+            if leaf_disposition == "consumed" {
+                "fall-through-consumed"
+            } else {
+                "fall-through"
+            }
+        }
+        RouterOutcome::Deferred(_) => "deferred",
+    };
+    let dispatch_kind = match router {
+        RouterOutcome::Command(_) => "command",
+        _ if out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_))) => "request",
+        _ => "none",
+    };
+    let diagnostic = ArbitrationDiagnostic {
+        chord,
+        captured_focus: focused.map(|f| format!("{f:?}")),
+        router_result: format!("{router:?}"),
+        leaf_disposition,
+        final_disposition,
+        dispatch_kind,
+    };
+    (out, diagnostic)
 }
 
 /// ADR 0024: the mouse fold, applied to a `tick()` message list beside the

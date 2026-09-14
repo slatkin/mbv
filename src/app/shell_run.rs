@@ -586,7 +586,7 @@ impl Model {
                 if let RouterOutcome::Command(command) = &router {
                     quit |= self.dispatch_router_command(command.clone());
                 }
-                for msg in apply_router_outcome(messages, focused.as_ref(), &router) {
+                for msg in fold_keyboard_messages(messages, focused.as_ref(), &router) {
                     if self.handle_terminal_message(msg, &mut music_resize, &mut tv_resize) {
                         quit = true;
                     }

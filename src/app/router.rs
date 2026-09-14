@@ -26,6 +26,9 @@ pub(super) enum RouterOutcome {
     Swallow,
     /// The leaf's message stands (if it produced one).
     FallThrough,
+    /// A context-sensitive candidate resolved after leaf arbitration.
+    #[allow(dead_code)]
+    Deferred(Command),
 }
 
 /// Resolve a chord against the live ordered policy. A matched command is

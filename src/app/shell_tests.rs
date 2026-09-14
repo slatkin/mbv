@@ -13,7 +13,7 @@ fn ui_root_router_command_opens_help() {
         model.router_outcome(&messages),
         RouterOutcome::Command(Command::OpenHelp)
     );
-    assert!(apply_router_outcome(
+    assert!(fold_keyboard_messages(
         messages,
         Some(&ComponentId::UiRoot),
         &RouterOutcome::Command(Command::OpenHelp)
@@ -77,13 +77,13 @@ fn converted_surface_skips_observer_key_but_retains_redraw_signal() {
     // Leaf focused, empty policy: the fold drops the observer's Key trigger
     // (the leaf already got the event) but keeps non-key observer signals.
     let router = RouterOutcome::FallThrough;
-    let routed = apply_router_outcome(
+    let routed = fold_keyboard_messages(
         vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))],
         Some(&focused),
         &router,
     );
     assert!(routed.is_empty());
-    let routed = apply_router_outcome(
+    let routed = fold_keyboard_messages(
         vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)],
         Some(&focused),
         &router,
