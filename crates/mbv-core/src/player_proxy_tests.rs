@@ -1,5 +1,5 @@
 use crate::ctrl::{CtrlCmd, CtrlCompatibility};
-use crate::playback_queue::{AudiobookshelfQueueItem, QueueItem};
+use crate::playback_queue::{AudiobookshelfQueueItem, QueueItem, QueueSlotId};
 use crate::remote_player::RemotePlayer;
 
 fn proxy_audiobookshelf_item() -> QueueItem {
@@ -31,9 +31,10 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
     let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
     let proxy = PlayerProxy::remote(remote, false);
 
+    let paired = |item: QueueItem| (QueueSlotId::from_raw(900), item);
     assert!(proxy.can_admit_audiobookshelf());
-    assert!(proxy.submit_queue(vec![proxy_audiobookshelf_item()], 0, None, false, 100));
-    assert!(proxy.queue_append(vec![proxy_audiobookshelf_item()]));
+    assert!(proxy.submit_queue(vec![paired(proxy_audiobookshelf_item())], 0, None, false, 100));
+    assert!(proxy.queue_append(vec![paired(proxy_audiobookshelf_item())]));
     assert!(matches!(
         cmd_rx.recv().unwrap(),
         CtrlCmd::UnifiedQueueReplace { .. }
@@ -50,8 +51,15 @@ fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
     remote.ctrl_compatibility = capability_abs_disabled();
     let proxy = PlayerProxy::remote(remote, false);
 
+    let paired = |item: QueueItem| (QueueSlotId::from_raw(900), item);
     assert!(!proxy.can_admit_audiobookshelf());
-    assert!(!proxy.submit_queue(vec![proxy_audiobookshelf_item()], 0, None, false, 100));
-    assert!(!proxy.queue_append(vec![proxy_audiobookshelf_item()]));
+    assert!(!proxy.submit_queue(
+        vec![paired(proxy_audiobookshelf_item())],
+        0,
+        None,
+        false,
+        100
+    ));
+    assert!(!proxy.queue_append(vec![paired(proxy_audiobookshelf_item())]));
     assert!(cmd_rx.try_recv().is_err());
 }

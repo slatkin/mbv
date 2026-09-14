@@ -26,7 +26,10 @@ fn stop_old_emby_run(player: &Player) -> bool {
 
 /// Drop slots matching `drop` from the canonical queue, retaining the active
 /// slot only if it survived. Returns the retained items.
-fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> Vec<QueueItem> {
+fn purge_queue(
+    queue: &mut PlaybackQueue,
+    drop: impl Fn(&QueueItem) -> bool,
+) -> Vec<(QueueSlotId, QueueItem)> {
     let active = queue.active_slot_id();
     let retained: Vec<_> = queue
         .slots()
@@ -37,12 +40,12 @@ fn purge_queue(queue: &mut PlaybackQueue, drop: impl Fn(&QueueItem) -> bool) -> 
     let active = active.filter(|id| retained.iter().any(|(slot_id, _)| slot_id == id));
     let revision = queue.revision();
     *queue = PlaybackQueue::from_slot_items(retained.clone(), active, revision);
-    retained.into_iter().map(|(_, item)| item).collect()
+    retained
 }
 
 fn update_player_queue(
     player: &Player,
-    items: Vec<QueueItem>,
+    items: Vec<(QueueSlotId, QueueItem)>,
     active_index: Option<usize>,
     client: &Arc<Mutex<crate::api::EmbyClient>>,
 ) {
@@ -54,9 +57,9 @@ fn update_player_queue(
         return;
     }
     let client = Arc::new(client.lock().unwrap().clone());
-    let all_audio = items.iter().all(QueueItem::is_audio);
+    let all_audio = items.iter().all(|(_, item)| item.is_audio());
     let headless = player.headless_for(&client, all_audio);
-    let _ = player.submit_queue(items, active_index, Some(client), headless, 100);
+    let _ = player.submit_queue_slots(items, active_index, Some(client), headless, 100);
 }
 
 #[allow(clippy::too_many_arguments)]

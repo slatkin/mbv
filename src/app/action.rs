@@ -453,7 +453,12 @@ impl App {
                     .iter()
                     .filter_map(|slot| slot.item.as_emby().cloned())
                     .collect();
-                let all_items = queue.all_queue_items();
+                let all_slots: Vec<_> = queue
+                    .queue
+                    .slots()
+                    .iter()
+                    .map(|slot| (slot.slot_id, slot.item.clone()))
+                    .collect();
                 let slot_id = queue.slot_id_at(t);
                 // Pre-compute the Emby-only projection index for the cursor
                 // position, needed by the session API boundary.
@@ -527,10 +532,10 @@ impl App {
                     // variants) so the player's internal playlist matches
                     // the PlayerTab's queue exactly.
                     let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
-                    let eligible: Vec<_> = all_items
+                    let eligible: Vec<_> = all_slots
                         .into_iter()
-                        .filter(|i| {
-                            i.admissible_for_owner_with_audiobookshelf(
+                        .filter(|(_, item)| {
+                            item.admissible_for_owner_with_audiobookshelf(
                                 false,
                                 |service| {
                                     service != mbv_core::config::ServiceKind::Audiobookshelf
@@ -549,7 +554,7 @@ impl App {
                     }
                     let start_idx = eligible
                         .iter()
-                        .position(|i| i.content_id() == item.content_id())
+                        .position(|(_, queued)| queued.content_id() == item.content_id())
                         .unwrap_or_else(|| {
                             eligible
                                 .iter()
@@ -557,7 +562,7 @@ impl App {
                                 .count()
                                 .min(eligible.len().saturating_sub(1))
                         });
-                    let headless = eligible.iter().all(|item| item.is_audio());
+                    let headless = eligible.iter().all(|(_, item)| item.is_audio());
                     self.player.submit_queue(
                         eligible,
                         start_idx,

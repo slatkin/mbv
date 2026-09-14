@@ -158,10 +158,6 @@ impl PlayerTab {
         self.queue_cursor = index.min(self.total_queue_len().saturating_sub(1));
     }
 
-    pub(super) fn append_item(&mut self, item: EmbyItem) {
-        self.queue.append(QueueItem::Emby(Box::new(item)));
-    }
-
     pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) {
         for item in items {
             self.queue.append(QueueItem::Emby(Box::new(item)));

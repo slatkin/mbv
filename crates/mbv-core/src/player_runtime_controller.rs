@@ -324,10 +324,21 @@ impl Player {
         client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
     }
 
+    /// Play a freshly fetched Emby sequence with no canonical queue behind it.
+    /// Ids are pinned to 1..=len because the controlling app rebuilds its own
+    /// queue for these paths with exactly those ids (`replace_playback_queue`).
+    fn sequential_slot_ids(items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
+        items
+            .into_iter()
+            .enumerate()
+            .map(|(i, item)| (QueueSlotId::from_raw(i as u64 + 1), item))
+            .collect()
+    }
+
     pub fn play(&self, item: &EmbyItem, client: Arc<EmbyClient>, initial_volume: u8) {
         let headless = self.headless_for(&client, item.is_audio());
-        self.submit_queue(
-            vec![QueueItem::Emby(Box::new(item.clone()))],
+        self.submit_queue_slots(
+            Self::sequential_slot_ids(vec![QueueItem::Emby(Box::new(item.clone()))]),
             0,
             Some(client),
             headless,
@@ -353,8 +364,8 @@ impl Player {
             .into_iter()
             .map(|i| QueueItem::Emby(Box::new(i)))
             .collect();
-        self.submit_queue(
-            queue_items,
+        self.submit_queue_slots(
+            Self::sequential_slot_ids(queue_items),
             start_idx,
             Some(client),
             headless,
@@ -374,6 +385,7 @@ impl Player {
     ///
     /// `headless` is computed by the caller — the `play`/`play_queue`
     /// wrappers derive it from `headless_for`.
+    /// Submit a fresh sequence when no canonical queue has assigned slot identities.
     pub fn submit_queue(
         &self,
         items: Vec<QueueItem>,
@@ -382,8 +394,29 @@ impl Player {
         headless: bool,
         initial_volume: u8,
     ) -> bool {
+        self.submit_queue_slots(
+            self.assign_slot_ids(items),
+            start_idx,
+            client,
+            headless,
+            initial_volume,
+        )
+    }
+
+    /// Submit a canonical Bound queue. The Playback run must preserve these
+    /// identities because every later command and observation addresses slots,
+    /// not playlist positions.
+    pub fn submit_queue_slots(
+        &self,
+        items: Vec<(QueueSlotId, QueueItem)>,
+        start_idx: usize,
+        client: Option<Arc<EmbyClient>>,
+        headless: bool,
+        initial_volume: u8,
+    ) -> bool {
         if items.is_empty()
-            || (items.iter().any(QueueItem::is_audiobookshelf_any) && !self.can_admit_audiobookshelf())
+            || (items.iter().any(|(_, item)| item.is_audiobookshelf_any())
+                && !self.can_admit_audiobookshelf())
         {
             return false;
         }
@@ -393,27 +426,27 @@ impl Player {
         if self.status.lock().unwrap().active
             && (self.current_is_headless.load(Ordering::Relaxed) == headless)
         {
-            let start_item = &items[start_idx];
+            let start_item = &items[start_idx].1;
             {
                 let mut st = self.status.lock().unwrap();
                 st.seed_from_item(start_item, start_idx, items.len());
             }
-            return self.send_command(PlayerCommand::SubmitQueue {
-                items: self.assign_slot_ids(items),
-                start_idx,
-            });
+            return self.send_command(PlayerCommand::SubmitQueue { items, start_idx });
         }
 
         // Cold start: stop, join, spawn fresh player thread.
         self.stop();
         self.join();
 
-        // The fresh run's PlaybackQueue allocates slot ids 1..=items.len()
-        // from its own allocator (new_from_queue_items -> from_queue_items).
-        // Seed this owner counter past them so a later append fast-path never
-        // re-hands an id that is already a slot in the run's queue.
-        self.next_slot_id
-            .store(items.len() as u64 + 1, Ordering::Relaxed);
+        // Keep locally minted ids clear of the canonical identities adopted by
+        // this run, for legacy fresh submissions that do not have a queue yet.
+        if let Some(next_slot_id) = items
+            .iter()
+            .map(|(slot_id, _)| slot_id.raw().saturating_add(1))
+            .max()
+        {
+            self.next_slot_id.fetch_max(next_slot_id, Ordering::Relaxed);
+        }
 
         let (audio_pipe_path, audio_pipe_samplerate, audio_pipe_bitdepth, always_skip_intro) =
             if let Some(ref c) = client {
@@ -467,7 +500,7 @@ impl Player {
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
         // Set initial status for the start item.
-        let start_item = &items[start_idx];
+        let start_item = &items[start_idx].1;
         {
             let mut st = status.lock().unwrap();
             st.seed_from_item(start_item, start_idx, items.len());
@@ -507,7 +540,9 @@ impl Player {
             };
             init_volume(&mpv, &status, initial_volume);
 
-            let active_file_projection = items.iter().any(QueueItem::is_audiobookshelf_any);
+            let active_file_projection = items
+                .iter()
+                .any(|(_, item)| item.is_audiobookshelf_any());
             let load_indices: Vec<_> = if active_file_projection {
                 vec![start_idx]
             } else {
@@ -515,7 +550,7 @@ impl Player {
             };
             let mut active_prepared_source = None;
             for i in load_indices {
-                let item = &items[i];
+                let item = &items[i].1;
                 let prepared = match prepare_source(
                     item,
                     &server_url,
@@ -568,14 +603,20 @@ impl Player {
                 reassert_queue_layout(&mpv, start_idx, items.len());
             }
             // send_ep_info only for Emby items.
-            if let Some(emby) = items.get(start_idx).and_then(|i| i.as_emby()) {
+            if let Some(emby) = items
+                .get(start_idx)
+                .and_then(|(_, item)| item.as_emby())
+            {
                 send_ep_info(&mpv, emby);
             }
             observe_properties(&mpv, config.use_mpv_config);
 
             // Set up reporter based on client availability and item variant.
             let (reporter, progress) = if let Some(client) = client {
-                if let Some(emby) = items.get(start_idx).and_then(|i| i.as_emby()) {
+                if let Some(emby) = items
+                    .get(start_idx)
+                    .and_then(|(_, item)| item.as_emby())
+                {
                     let info = client.get_playback_info(&emby.id);
                     let reporter = SessionReporter::new(
                         client.clone(),
@@ -613,7 +654,7 @@ impl Player {
                         ItemId::empty(),
                         MediaSourceId::new(""),
                         EmbySessionId::new(""),
-                        items[start_idx].is_audio(),
+                        items[start_idx].1.is_audio(),
                         status.clone(),
                     );
                     reporter.clear_session();
@@ -633,7 +674,7 @@ impl Player {
                     ItemId::empty(),
                     MediaSourceId::new(""),
                     EmbySessionId::new(""),
-                    items[start_idx].is_audio(),
+                    items[start_idx].1.is_audio(),
                     status.clone(),
                 );
                 reporter.clear_session();
@@ -645,7 +686,7 @@ impl Player {
                 (reporter, progress)
             };
 
-            let session = PlaybackRun::new_from_queue_items(
+            let session = PlaybackRun::new_from_slot_items(
                 items,
                 start_idx,
                 origin,
@@ -674,15 +715,14 @@ impl Player {
         true
     }
 
-    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+    pub fn queue_append(&self, items: Vec<(QueueSlotId, QueueItem)>) -> bool {
         if items.is_empty()
-            || (items.iter().any(QueueItem::is_audiobookshelf_any) && !self.can_admit_audiobookshelf())
+            || (items.iter().any(|(_, item)| item.is_audiobookshelf_any())
+                && !self.can_admit_audiobookshelf())
         {
             return false;
         }
-        self.send_command(PlayerCommand::QueueAppend {
-            items: self.assign_slot_ids(items),
-        })
+        self.send_command(PlayerCommand::QueueAppend { items })
     }
 
     pub fn stop(&self) {

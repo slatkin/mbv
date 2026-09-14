@@ -302,17 +302,21 @@ impl App {
                     return;
                 }
                 let scope = self.viewed_queue_scope();
-                let appended = items.clone();
                 let previous_dirty = self.queue_dirty;
                 let previous_queue = self.queue_for_scope(scope).clone();
-                {
+                let appended_slots = {
                     let queue = self.queue_for_scope_mut(scope);
+                    let start = queue.total_queue_len();
                     queue.append_items(items);
-                }
+                    queue.queue.slots()[start..]
+                        .iter()
+                        .map(|slot| (slot.slot_id, slot.item.clone()))
+                        .collect()
+                };
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
-                if self.sync_playback_queue_after_append(scope, appended) {
+                if self.sync_playback_queue_items_after_append(scope, appended_slots) {
                     self.persist_local_queue_state_if_needed(scope);
                     self.advance_remote_queue_lineage();
                 } else {
@@ -344,11 +348,11 @@ impl App {
         if !start_playback {
             let previous_dirty = self.queue_dirty;
             let previous_queue = self.queue_for_scope(scope).clone();
-            self.queue_for_scope_mut(scope).queue.append(item.clone());
+            let slot_id = self.queue_for_scope_mut(scope).queue.append(item.clone());
             if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
             }
-            if self.sync_playback_queue_items_after_append(scope, vec![item]) {
+            if self.sync_playback_queue_items_after_append(scope, vec![(slot_id, item)]) {
                 self.persist_local_queue_state_if_needed(scope);
                 self.advance_remote_queue_lineage();
                 return true;
@@ -377,6 +381,13 @@ impl App {
             let _ = queue.queue.set_active_slot(selected_slot);
         }
         let all_items = self.queue_for_scope(scope).all_queue_items();
+        let all_slots: Vec<_> = self
+            .queue_for_scope(scope)
+            .queue
+            .slots()
+            .iter()
+            .map(|slot| (slot.slot_id, slot.item.clone()))
+            .collect();
         // While a cast target is attached, playing a selection dispatches it
         // to the receiver instead of the local player (cast-session-control
         // "Attaching to a cast target does not engage the local player").
@@ -390,10 +401,10 @@ impl App {
             }
             return true;
         }
-        let audio_only = all_items.iter().all(QueueItem::is_audio);
+        let audio_only = all_slots.iter().all(|(_, item)| item.is_audio());
         let submitted =
             self.player
-                .submit_queue(all_items, selected_index, None, audio_only, self.ui_volume);
+                .submit_queue(all_slots, selected_index, None, audio_only, self.ui_volume);
         if !submitted {
             *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(

@@ -399,14 +399,17 @@ impl App {
     /// emitted.
     pub(super) fn append_item_to_queue_and_sync(&mut self, item: EmbyItem) {
         let scope = self.viewed_queue_scope();
-        let appended = item.clone();
         let previous_dirty = self.queue_dirty;
         let previous_queue = self.queue_for_scope(scope).clone();
-        self.queue_for_scope_mut(scope).append_item(item);
+        let queued_item = QueueItem::Emby(Box::new(item));
+        let slot_id = self
+            .queue_for_scope_mut(scope)
+            .queue
+            .append(queued_item.clone());
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        if self.sync_playback_queue_after_append(scope, vec![appended]) {
+        if self.sync_playback_queue_items_after_append(scope, vec![(slot_id, queued_item)]) {
             self.persist_local_queue_state_if_needed(scope);
             self.advance_remote_queue_lineage();
         } else {

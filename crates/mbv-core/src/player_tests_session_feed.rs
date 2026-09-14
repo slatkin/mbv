@@ -38,8 +38,8 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
         status.clone(),
     );
     let (event_tx, _event_rx) = mpsc::channel();
-    let session = PlaybackRun::new_from_queue_items(
-        vec![QueueItem::Feed(entry)],
+    let session = PlaybackRun::new_from_slot_items(
+        vec![(QueueSlotId::from_raw(1), QueueItem::Feed(entry))],
         0,
         PlaybackOrigin::Standalone,
         reporter,

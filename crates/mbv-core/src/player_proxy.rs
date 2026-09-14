@@ -153,7 +153,7 @@ impl PlayerProxy {
     /// sends `UnifiedQueueReplace`.
     pub fn submit_queue(
         &self,
-        items: Vec<QueueItem>,
+        items: Vec<(QueueSlotId, QueueItem)>,
         start_idx: usize,
         client: Option<Arc<EmbyClient>>,
         headless: bool,
@@ -161,7 +161,7 @@ impl PlayerProxy {
     ) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => {
-                p.submit_queue(items, start_idx, client, headless, initial_volume)
+                p.submit_queue_slots(items, start_idx, client, headless, initial_volume)
             }
             PlayerProxyInner::Remote(r) => {
                 // Never strip an unsupported item and send the remainder: a
@@ -172,19 +172,21 @@ impl PlayerProxy {
                 if items.is_empty() {
                     return false;
                 }
-                if items.iter().any(QueueItem::is_audiobookshelf)
+                if items.iter().any(|(_, item)| item.is_audiobookshelf())
                     && !r.ctrl_compatibility.supports_abs_queue
                 {
                     return false;
                 }
-                if items.iter().any(QueueItem::is_audiobookshelf_book)
+                if items
+                    .iter()
+                    .any(|(_, item)| item.is_audiobookshelf_book())
                     && !r.ctrl_compatibility.supports_abs_book_queue
                 {
                     return false;
                 }
                 let start_idx = start_idx.min(items.len() - 1);
                 r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
-                    items,
+                    items: items.into_iter().map(|(_, item)| item).collect(),
                     start_idx: Some(start_idx),
                 })
             }
@@ -269,21 +271,23 @@ impl PlayerProxy {
         }
     }
 
-    pub fn queue_append(&self, items: Vec<QueueItem>) -> bool {
+    pub fn queue_append(&self, items: Vec<(QueueSlotId, QueueItem)>) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.queue_append(items),
             PlayerProxyInner::Remote(r) => {
-                if items.iter().any(QueueItem::is_audiobookshelf)
+                if items.iter().any(|(_, item)| item.is_audiobookshelf())
                     && !r.ctrl_compatibility.supports_abs_queue
                 {
                     return false;
                 }
-                if items.iter().any(QueueItem::is_audiobookshelf_book)
+                if items
+                    .iter()
+                    .any(|(_, item)| item.is_audiobookshelf_book())
                     && !r.ctrl_compatibility.supports_abs_book_queue
                 {
                     return false;
                 }
-                r.queue_append(items)
+                r.queue_append(items.into_iter().map(|(_, item)| item).collect())
             }
         }
     }

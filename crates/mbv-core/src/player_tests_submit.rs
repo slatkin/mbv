@@ -43,6 +43,50 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
 }
 
 #[test]
+fn submit_queue_slots_preserves_caller_slot_ids() {
+    // The app's canonical queue owns slot identity. The SubmitQueue command
+    // must carry those ids verbatim (not controller-minted ones), because the
+    // run's TrackChanged/JumpTo observations are resolved against the app's
+    // queue by identity — a minted id pointing at the wrong item desyncs the
+    // queue panel from what mpv is playing.
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    );
+    player.status.lock().unwrap().active = true;
+    player.current_is_headless.store(false, Ordering::Relaxed);
+    let cmd_rx = player.spy_on_commands();
+
+    let ids = [QueueSlotId::from_raw(7), QueueSlotId::from_raw(3)];
+    let items: Vec<_> = ids
+        .iter()
+        .zip(["feed-a", "feed-b"])
+        .map(|(id, guid)| (*id, QueueItem::Feed(make_feed_entry(guid, guid))))
+        .collect();
+    player.submit_queue_slots(items, 1, None, false, 100);
+
+    match cmd_rx.try_recv().expect("expected a command") {
+        PlayerCommand::SubmitQueue { items, start_idx } => {
+            assert_eq!(start_idx, 1);
+            assert_eq!(
+                items.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+                ids,
+                "caller slot identities must survive the submission boundary"
+            );
+        }
+        _ => panic!("expected SubmitQueue command"),
+    }
+}
+
+#[test]
 fn append_after_cold_start_does_not_reuse_cold_start_slot_ids() {
     // A cold-started run allocates queue slot ids 1..=N itself. The owner
     // seeds its counter to N+1 so the next append fast-path hands out ids

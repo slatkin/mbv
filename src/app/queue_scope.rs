@@ -83,24 +83,10 @@ impl App {
         }
     }
 
-    pub(super) fn sync_playback_queue_after_append(
-        &mut self,
-        scope: QueueScope,
-        items: Vec<EmbyItem>,
-    ) -> bool {
-        self.sync_playback_queue_items_after_append(
-            scope,
-            items
-                .into_iter()
-                .map(|item| QueueItem::Emby(Box::new(item)))
-                .collect(),
-        )
-    }
-
     pub(super) fn sync_playback_queue_items_after_append(
         &mut self,
         scope: QueueScope,
-        items: Vec<QueueItem>,
+        items: Vec<(mbv_core::playback_queue::QueueSlotId, QueueItem)>,
     ) -> bool {
         if items.is_empty() || scope != self.playing_queue_scope() {
             return true;

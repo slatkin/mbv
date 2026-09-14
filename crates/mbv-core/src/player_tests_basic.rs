@@ -150,8 +150,8 @@ fn queue_session_for_pos_tests_with_client(
         status.clone(),
     );
     let (event_tx, event_rx) = mpsc::channel();
-    let session = PlaybackRun::new_from_queue_items(
-        items,
+    let session = PlaybackRun::new_from_slot_items(
+        owner_paired(items),
         start_idx,
         PlaybackOrigin::Queue,
         reporter,
