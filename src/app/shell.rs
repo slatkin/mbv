@@ -98,6 +98,8 @@ pub struct Model {
     /// focus hand-off (task 1.2). Size normalization without a resize event
     /// (a direct frame, a fixture) never arms it.
     pub(super) pending_terminal_resize: bool,
+    /// Terminal hyperlink support resolved once during terminal initialization.
+    pub(super) hyperlink_capable: bool,
     /// Fingerprint of the inputs `sync_queue` last projected into the mounted
     /// `QueueComponent`. `sync_queue` runs every run-loop tick; rebuilding the
     /// row vec (slot clone + per-row `format!`) on a tick where nothing the
@@ -442,6 +444,7 @@ impl Model {
             home_context_item: None,
             handled_terminal_size: initial_terminal_size,
             pending_terminal_resize: false,
+            hyperlink_capable: false,
             last_queue_projection: None,
             visual_selection: None,
             context_menu_origin: None,

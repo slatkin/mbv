@@ -163,7 +163,8 @@ impl Model {
 
     /// The run loop — the moved body of the former `App::run`.
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut terminal = init_terminal()?;
+        let (mut terminal, hyperlink_capable) = init_terminal()?;
+        self.hyperlink_capable = hyperlink_capable;
         terminal.clear()?;
 
         // Image pickers are initialised in `main` before `Model::new` starts

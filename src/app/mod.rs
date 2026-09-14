@@ -347,8 +347,9 @@ impl App {
     }
 }
 
-fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>>
-{
+type AppTerminal = Terminal<CrosstermBackend<std::io::Stdout>>;
+
+fn init_terminal() -> Result<(AppTerminal, bool), Box<dyn std::error::Error>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
@@ -361,7 +362,14 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dy
             crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
         )
     );
-    Ok(Terminal::new(CrosstermBackend::new(stdout))?)
+    let hyperlink_capable = crate::app::components::library_panel::hyperlinks_supported(
+        std::env::var("TERM_PROGRAM").ok().as_deref(),
+        std::env::var("TERM").ok().as_deref(),
+    );
+    Ok((
+        Terminal::new(CrosstermBackend::new(stdout))?,
+        hyperlink_capable,
+    ))
 }
 
 fn set_shift_escape_mode<W: Write>(writer: &mut W, enabled: bool) -> std::io::Result<()> {

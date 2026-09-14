@@ -57,6 +57,7 @@ pub struct LibraryPanel {
     /// `None` = default ratio). Forwarded into the wide skeleton's shared
     /// split; never stored clamped.
     list_pane_width: Option<u16>,
+    hyperlink_capable: bool,
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).
     hits: SkeletonHits,
@@ -112,6 +113,7 @@ impl LibraryPanel {
             focused: false,
             hovered_selector: None,
             list_pane_width: None,
+            hyperlink_capable: false,
             hits: SkeletonHits::default(),
             pill_windows: SkeletonPillWindows::default(),
             wide_geometry: None,
@@ -185,6 +187,10 @@ impl LibraryPanel {
     /// Pushed each sync pass by the shell beside the other per-frame facts.
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
         self.list_pane_width = list_pane_width;
+    }
+
+    pub(in crate::app) fn set_hyperlink_capable(&mut self, capable: bool) {
+        self.hyperlink_capable = capable;
     }
 
     /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears

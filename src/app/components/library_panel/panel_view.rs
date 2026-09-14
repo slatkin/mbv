@@ -40,6 +40,7 @@ impl Component for LibraryPanel {
                 &mut content,
                 self.focused,
                 self.list_pane_width,
+                self.hyperlink_capable,
                 self.hovered_selector,
                 &mut hits,
                 &mut windows,
