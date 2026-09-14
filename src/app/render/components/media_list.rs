@@ -81,8 +81,30 @@ mod wide_row_regression_tests {
         )]);
         assert!(title_row(&mut list, false).contains('…'));
 
-        // A focused selected row is intentionally handled by the marquee test;
-        // the unfocused selected-row assertion above covers the truncation path.
+        let mut list = WideMediaList::new();
+        list.set_content(vec![
+            item(
+                "selected",
+                "A very long selected title that overflows",
+                None,
+            ),
+            item(
+                "other",
+                "A very long non-selected title that overflows",
+                None,
+            ),
+        ]);
+        let selected = title_row_at(&mut list, true, 0);
+        let other = title_row_at(&mut list, true, 1);
+        assert!(
+            !selected.contains('…'),
+            "selected row should marquee at rest: {selected:?}"
+        );
+        assert!(
+            other.contains('…')
+                || other.trim_end().len() < "A very long non-selected title that overflows".len(),
+            "non-selected row should remain truncated: {other:?}"
+        );
     }
 
     /// migrate-home-feeds 4.6: the selected row's highlight bar must span the
