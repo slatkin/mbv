@@ -33,7 +33,7 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
 
     let paired = |item: QueueItem| (QueueSlotId::from_raw(900), item);
     assert!(proxy.can_admit_audiobookshelf());
-    assert!(proxy.submit_queue(vec![paired(proxy_audiobookshelf_item())], 0, None, false, 100));
+    assert!(proxy.submit_queue_slots(vec![paired(proxy_audiobookshelf_item())], 0, None, false, 100));
     assert!(proxy.queue_append(vec![paired(proxy_audiobookshelf_item())]));
     assert!(matches!(
         cmd_rx.recv().unwrap(),
@@ -53,7 +53,7 @@ fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
 
     let paired = |item: QueueItem| (QueueSlotId::from_raw(900), item);
     assert!(!proxy.can_admit_audiobookshelf());
-    assert!(!proxy.submit_queue(
+    assert!(!proxy.submit_queue_slots(
         vec![paired(proxy_audiobookshelf_item())],
         0,
         None,

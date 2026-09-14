@@ -82,10 +82,6 @@ pub struct Player {
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
     ws_tx: Arc<Mutex<Option<crate::ws::WsSender>>>,
-    // ponytail: bare-mode owner has no canonical PlaybackQueue yet, so this
-    // monotonic counter is the smallest slot-id source until task 3.1 folds
-    // owner queue state into shell-owned state.
-    next_slot_id: Arc<AtomicU64>,
 }
 
 impl Player {
@@ -124,21 +120,7 @@ impl Player {
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
             ws_tx: Arc::new(Mutex::new(ws_tx)),
-            next_slot_id: Arc::new(AtomicU64::new(1)),
         }
-    }
-
-    /// Assign owner slot identity to each item immediately before a queue
-    /// command is sent to the Playback run, so the run adopts these ids
-    /// instead of minting its own.
-    fn assign_slot_ids(&self, items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
-        items
-            .into_iter()
-            .map(|item| {
-                let raw = self.next_slot_id.fetch_add(1, Ordering::Relaxed);
-                (QueueSlotId::from_raw(raw), item)
-            })
-            .collect()
     }
 
     /// Sets the video cache budgets projected on every run for this Player's lifetime.
@@ -373,36 +355,6 @@ impl Player {
         );
     }
 
-    /// Item-generic queue submission: replace the current queue with `items`
-    /// and start playback from `start_idx`.  When the player is already
-    /// active with a matching headless state the queue is replaced in place
-    /// via a `SubmitQueue` command; otherwise a fresh mpv process is
-    /// spawned.
-    ///
-    /// `client` provides the Emby session for reporting (and audio-pipe
-    /// config).  Pass `None` for feed-only playback where no Emby session
-    /// is established.
-    ///
-    /// `headless` is computed by the caller — the `play`/`play_queue`
-    /// wrappers derive it from `headless_for`.
-    /// Submit a fresh sequence when no canonical queue has assigned slot identities.
-    pub fn submit_queue(
-        &self,
-        items: Vec<QueueItem>,
-        start_idx: usize,
-        client: Option<Arc<EmbyClient>>,
-        headless: bool,
-        initial_volume: u8,
-    ) -> bool {
-        self.submit_queue_slots(
-            self.assign_slot_ids(items),
-            start_idx,
-            client,
-            headless,
-            initial_volume,
-        )
-    }
-
     /// Submit a canonical Bound queue. The Playback run must preserve these
     /// identities because every later command and observation addresses slots,
     /// not playlist positions.
@@ -437,16 +389,6 @@ impl Player {
         // Cold start: stop, join, spawn fresh player thread.
         self.stop();
         self.join();
-
-        // Keep locally minted ids clear of the canonical identities adopted by
-        // this run, for legacy fresh submissions that do not have a queue yet.
-        if let Some(next_slot_id) = items
-            .iter()
-            .map(|(slot_id, _)| slot_id.raw().saturating_add(1))
-            .max()
-        {
-            self.next_slot_id.fetch_max(next_slot_id, Ordering::Relaxed);
-        }
 
         let (audio_pipe_path, audio_pipe_samplerate, audio_pipe_bitdepth, always_skip_intro) =
             if let Some(ref c) = client {
@@ -715,14 +657,14 @@ impl Player {
         true
     }
 
-    pub fn queue_append(&self, items: Vec<(QueueSlotId, QueueItem)>) -> bool {
-        if items.is_empty()
-            || (items.iter().any(|(_, item)| item.is_audiobookshelf_any())
+    pub fn queue_append(&self, slots: Vec<(QueueSlotId, QueueItem)>) -> bool {
+        if slots.is_empty()
+            || (slots.iter().any(|(_, item)| item.is_audiobookshelf_any())
                 && !self.can_admit_audiobookshelf())
         {
             return false;
         }
-        self.send_command(PlayerCommand::QueueAppend { items })
+        self.send_command(PlayerCommand::QueueAppend { items: slots })
     }
 
     pub fn stop(&self) {

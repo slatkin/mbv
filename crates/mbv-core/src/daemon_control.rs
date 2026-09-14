@@ -348,13 +348,9 @@ fn handle_ctrl(
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
-            // route through `submit_queue`, which cold-starts one when
+            // route through `submit_queue_slots`, which cold-starts one when
             // needed (as `play_resolved_items` does).
-            let queue_slots: Vec<_> = queue
-                .slots()
-                .iter()
-                .map(|slot| (slot.slot_id, slot.item.clone()))
-                .collect();
+            let queue_slots = queue.slot_pairs();
             let all_audio = queue_slots.iter().all(|(_, item)| item.is_audio());
             let c = Arc::new(client.lock().unwrap().clone());
             let headless = player.headless_for(&c, all_audio);

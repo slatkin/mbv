@@ -453,12 +453,7 @@ impl App {
                     .iter()
                     .filter_map(|slot| slot.item.as_emby().cloned())
                     .collect();
-                let all_slots: Vec<_> = queue
-                    .queue
-                    .slots()
-                    .iter()
-                    .map(|slot| (slot.slot_id, slot.item.clone()))
-                    .collect();
+                let all_slots = queue.all_queue_slots();
                 let slot_id = queue.slot_id_at(t);
                 // Pre-compute the Emby-only projection index for the cursor
                 // position, needed by the session API boundary.
@@ -563,7 +558,7 @@ impl App {
                                 .min(eligible.len().saturating_sub(1))
                         });
                     let headless = eligible.iter().all(|(_, item)| item.is_audio());
-                    self.player.submit_queue(
+                    self.player.submit_queue_slots(
                         eligible,
                         start_idx,
                         self.emby_snapshot().map(Arc::new),

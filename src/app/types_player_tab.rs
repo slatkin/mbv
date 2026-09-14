@@ -158,10 +158,15 @@ impl PlayerTab {
         self.queue_cursor = index.min(self.total_queue_len().saturating_sub(1));
     }
 
-    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) {
-        for item in items {
-            self.queue.append(QueueItem::Emby(Box::new(item)));
-        }
+    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<QueueSlotId> {
+        items
+            .into_iter()
+            .map(|item| self.queue.append(QueueItem::Emby(Box::new(item))))
+            .collect()
+    }
+
+    pub(super) fn append_item(&mut self, item: QueueItem) -> QueueSlotId {
+        self.queue.append(item)
     }
 
     pub(super) fn move_slot(&mut self, slot_id: QueueSlotId, to: usize) -> bool {
@@ -226,6 +231,10 @@ impl PlayerTab {
             .iter()
             .map(|slot| slot.item.clone())
             .collect()
+    }
+
+    pub(super) fn all_queue_slots(&self) -> Vec<(QueueSlotId, QueueItem)> {
+        self.queue.slot_pairs()
     }
 
     /// Test helper: set the local progress state on a slot by index.

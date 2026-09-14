@@ -625,17 +625,15 @@ impl App {
             let _ = queue.queue.set_active_slot(selected_slot);
         }
 
-        let all_slots: Vec<_> = self
-            .queue_for_scope(scope)
-            .queue
-            .slots()
-            .iter()
-            .map(|slot| (slot.slot_id, slot.item.clone()))
-            .collect();
+        let all_slots = self.queue_for_scope(scope).all_queue_slots();
         let audio_only = all_slots.iter().all(|(_, item)| item.is_audio());
-        let submitted =
-            self.player
-                .submit_queue(all_slots, selected_index, None, audio_only, self.ui_volume);
+        let submitted = self.player.submit_queue_slots(
+            all_slots,
+            selected_index,
+            None,
+            audio_only,
+            self.ui_volume,
+        );
         if !submitted {
             *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(

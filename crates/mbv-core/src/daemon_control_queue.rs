@@ -88,7 +88,7 @@ fn unified_queue_state_for_peer(
         })
         .collect();
     // A Playback-run observation is the authority for the active slot (design
-    // D3), but a cold-started queue (`submit_queue` at an index) plays its
+    // D3), but a cold-started queue (`submit_queue_slots` at an index) plays its
     // first track without any track-to-track transition, so no observation is
     // ever emitted and `observed_active_slot` stays `None`. Fall back to the
     // canonical queue's own active slot when the daemon is actually playing,

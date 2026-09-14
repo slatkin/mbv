@@ -1,13 +1,13 @@
 // Task 2.3: shared-boundary routing and failure surfacing.
 // Verifies that bare-local and stay-alive-local playback routes through
-// `submit_queue`, that the fast path sends a SubmitQueue command, that
+// `submit_queue_slots`, that the fast path sends a SubmitQueue command, that
 // the cold path sets status.active before spawning, and that selecting
 // an existing Feed slot in a mixed queue preserves queue contents.
 
 #[test]
 fn submit_queue_fast_path_sends_command_for_feed_entry() {
     // When the player is already active with matching headless state,
-    // submit_queue must route through the SubmitQueue command (fast path)
+    // submit_queue_slots must route through the SubmitQueue command (fast path)
     // rather than spawning a new thread. This proves bare-local and
     // stay-alive-local playback share the same boundary.
     let (event_tx, _event_rx) = mpsc::channel();
@@ -27,11 +27,17 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
     let cmd_rx = player.spy_on_commands();
 
     let entry = make_feed_entry("feed-1", "Podcast Episode 1");
-    player.submit_queue(vec![QueueItem::Feed(entry)], 0, None, false, 100);
+    player.submit_queue_slots(
+        vec![(QueueSlotId::from_raw(1), QueueItem::Feed(entry))],
+        0,
+        None,
+        false,
+        100,
+    );
 
     let cmd = cmd_rx
         .try_recv()
-        .expect("expected a command from submit_queue");
+        .expect("expected a command from submit_queue_slots");
     match cmd {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(items.len(), 1);
@@ -39,6 +45,42 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
             assert!(matches!(&items[0].1, QueueItem::Feed(e) if e.guid == "feed-1"));
         }
         _ => panic!("expected SubmitQueue command"),
+    }
+}
+
+#[test]
+fn queue_append_forwards_caller_slot_ids() {
+    let (event_tx, _event_rx) = mpsc::channel();
+    let player = Player::new(
+        String::new(),
+        String::new(),
+        false,
+        false,
+        false,
+        false,
+        SubtitlePrefs::default(),
+        event_tx,
+        None,
+    );
+    let cmd_rx = player.spy_on_commands();
+    let slots = vec![
+        (
+            QueueSlotId::from_raw(17),
+            QueueItem::Feed(make_feed_entry("append-a", "Append A")),
+        ),
+        (
+            QueueSlotId::from_raw(4),
+            QueueItem::Feed(make_feed_entry("append-b", "Append B")),
+        ),
+    ];
+    assert!(player.queue_append(slots));
+
+    match cmd_rx.try_recv().expect("expected QueueAppend command") {
+        PlayerCommand::QueueAppend { items } => {
+            assert_eq!(items.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+                       vec![QueueSlotId::from_raw(17), QueueSlotId::from_raw(4)]);
+        }
+        _ => panic!("expected QueueAppend command"),
     }
 }
 
@@ -87,37 +129,6 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
 }
 
 #[test]
-fn append_after_cold_start_does_not_reuse_cold_start_slot_ids() {
-    // A cold-started run allocates queue slot ids 1..=N itself. The owner
-    // seeds its counter to N+1 so the next append fast-path hands out ids
-    // that are distinct from every cold-start slot.
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    );
-    // Simulate the cold-start seed for a 3-item queue (ids 1..=3 in the run).
-    player.next_slot_id.store(4, Ordering::Relaxed);
-
-    let appended = player.assign_slot_ids(vec![
-        QueueItem::Feed(make_feed_entry("x", "X")),
-        QueueItem::Feed(make_feed_entry("y", "Y")),
-    ]);
-
-    assert_eq!(
-        appended.iter().map(|(id, _)| id.raw()).collect::<Vec<_>>(),
-        vec![4, 5]
-    );
-}
-
-#[test]
 fn submit_queue_fast_path_updates_status_before_sending() {
     // The status must reflect the new queue items before the command is
     // sent, so any reader that sees status.active = true also sees
@@ -139,7 +150,13 @@ fn submit_queue_fast_path_updates_status_before_sending() {
     let _cmd_rx = player.spy_on_commands();
 
     let entry = make_feed_entry("feed-test", "Test Episode");
-    player.submit_queue(vec![QueueItem::Feed(entry)], 0, None, false, 100);
+    player.submit_queue_slots(
+        vec![(QueueSlotId::from_raw(1), QueueItem::Feed(entry))],
+        0,
+        None,
+        false,
+        100,
+    );
 
     let st = player.status.lock().unwrap();
     assert_eq!(st.queue_len, 1);
@@ -278,7 +295,13 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
     let commands = player.spy_on_commands();
 
     assert!(player.can_admit_audiobookshelf());
-    assert!(player.submit_queue(vec![audiobookshelf_item()], 0, None, false, 100));
+    assert!(player.submit_queue_slots(
+        vec![(QueueSlotId::from_raw(1), audiobookshelf_item())],
+        0,
+        None,
+        false,
+        100,
+    ));
     assert!(matches!(
         commands.try_recv().unwrap(),
         PlayerCommand::SubmitQueue { items, start_idx }
@@ -344,8 +367,20 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     player.update_audiobookshelf_context(None);
 
     assert!(!player.can_admit_audiobookshelf());
-    assert!(!player.submit_queue(vec![audiobookshelf_item()], 0, None, false, 100));
+    assert!(!player.submit_queue_slots(
+        vec![(QueueSlotId::from_raw(1), audiobookshelf_item())],
+        0,
+        None,
+        false,
+        100,
+    ));
     // Book-shaped items hit the same combined-classification refusal.
-    assert!(!player.submit_queue(vec![audiobookshelf_book_item()], 0, None, false, 100));
+    assert!(!player.submit_queue_slots(
+        vec![(QueueSlotId::from_raw(2), audiobookshelf_book_item())],
+        0,
+        None,
+        false,
+        100,
+    ));
     assert!(commands.try_recv().is_err());
 }

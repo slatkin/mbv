@@ -276,6 +276,14 @@ impl PlaybackQueue {
         &self.slots
     }
 
+    /// Clone the canonical queue entries together with their stable slot identities.
+    pub fn slot_pairs(&self) -> Vec<(QueueSlotId, QueueItem)> {
+        self.slots
+            .iter()
+            .map(|slot| (slot.slot_id, slot.item.clone()))
+            .collect()
+    }
+
     /// Consume the queue and return its slots. Used by tests and callers
     /// that need owned slot data.
     pub fn into_slots(self) -> Vec<QueueSlot> {

@@ -304,15 +304,16 @@ impl App {
                 let scope = self.viewed_queue_scope();
                 let previous_dirty = self.queue_dirty;
                 let previous_queue = self.queue_for_scope(scope).clone();
-                let appended_slots = {
+                let appended_ids = {
                     let queue = self.queue_for_scope_mut(scope);
-                    let start = queue.total_queue_len();
-                    queue.append_items(items);
-                    queue.queue.slots()[start..]
-                        .iter()
-                        .map(|slot| (slot.slot_id, slot.item.clone()))
-                        .collect()
+                    queue.append_items(items)
                 };
+                let appended_slots = self
+                    .queue_for_scope(scope)
+                    .all_queue_slots()
+                    .into_iter()
+                    .filter(|(slot_id, _)| appended_ids.contains(slot_id))
+                    .collect();
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
@@ -380,20 +381,14 @@ impl App {
             queue.queue_cursor = selected_index;
             let _ = queue.queue.set_active_slot(selected_slot);
         }
-        let all_items = self.queue_for_scope(scope).all_queue_items();
-        let all_slots: Vec<_> = self
-            .queue_for_scope(scope)
-            .queue
-            .slots()
-            .iter()
-            .map(|slot| (slot.slot_id, slot.item.clone()))
-            .collect();
+        let all_slots = self.queue_for_scope(scope).all_queue_slots();
         // While a cast target is attached, playing a selection dispatches it
         // to the receiver instead of the local player (cast-session-control
         // "Attaching to a cast target does not engage the local player").
-        // `submit_queue`/local playback state below is never touched on this
+        // `submit_queue_slots`/local playback state below is never touched on this
         // path.
         if self.is_cast_attached() {
+            let all_items = self.queue_for_scope(scope).all_queue_items();
             self.dispatch_selection_to_cast(all_items, selected_index);
             self.set_queue_scope(scope);
             if !matches!(self.effective_panel_focus(), PanelFocus::Library) {
@@ -402,9 +397,13 @@ impl App {
             return true;
         }
         let audio_only = all_slots.iter().all(|(_, item)| item.is_audio());
-        let submitted =
-            self.player
-                .submit_queue(all_slots, selected_index, None, audio_only, self.ui_volume);
+        let submitted = self.player.submit_queue_slots(
+            all_slots,
+            selected_index,
+            None,
+            audio_only,
+            self.ui_volume,
+        );
         if !submitted {
             *self.queue_for_scope_mut(scope) = previous_queue;
             self.flash(

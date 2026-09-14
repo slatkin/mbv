@@ -32,10 +32,9 @@ fn purge_queue(
 ) -> Vec<(QueueSlotId, QueueItem)> {
     let active = queue.active_slot_id();
     let retained: Vec<_> = queue
-        .slots()
-        .iter()
-        .filter(|slot| !drop(&slot.item))
-        .map(|slot| (slot.slot_id, slot.item.clone()))
+        .slot_pairs()
+        .into_iter()
+        .filter(|(_, item)| !drop(item))
         .collect();
     let active = active.filter(|id| retained.iter().any(|(slot_id, _)| slot_id == id));
     let revision = queue.revision();

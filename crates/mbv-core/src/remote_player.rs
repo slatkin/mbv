@@ -173,7 +173,7 @@ impl RemotePlayer {
             // Queue mutation has no legacy wire form; it crosses ctrl
             // exclusively as `CtrlCmd::UnifiedQueue*`. Callers use the unified
             // path (`RemotePlayer::queue_append`/`queue_remove_slot`/
-            // `queue_move_slot`, `PlayerProxy::submit_queue`).
+            // `queue_move_slot`, `PlayerProxy::submit_queue_slots`).
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..) => {

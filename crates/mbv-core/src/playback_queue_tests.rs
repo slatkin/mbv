@@ -137,9 +137,8 @@ fn owner_assigned_dup_items_keep_distinct_slot_ids_through_submit_and_append() {
 
 #[test]
 fn from_queue_items_next_local_allocation_is_len_plus_one() {
-    // The bare Player owner seeds its slot-id counter to `items.len() + 1`
-    // after a cold start; this locks the assumption that a cold-started
-    // run's queue allocates exactly ids 1..=len.
+    // A newly constructed canonical queue allocates slot ids starting at one;
+    // this locks the assumption that its first three slots use ids 1..=3.
     let mut queue = PlaybackQueue::from_queue_items(
         vec![item("a"), item("b"), item("c")]
             .into_iter()

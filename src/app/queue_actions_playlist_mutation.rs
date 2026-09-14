@@ -404,8 +404,7 @@ impl App {
         let queued_item = QueueItem::Emby(Box::new(item));
         let slot_id = self
             .queue_for_scope_mut(scope)
-            .queue
-            .append(queued_item.clone());
+            .append_item(queued_item.clone());
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
