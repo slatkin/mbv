@@ -300,12 +300,8 @@ pub(in crate::app) fn render_pill_bar(
 
     // Only scroll when the pills overflow: when everything fits, paint
     // all of them from zero so moving selection never pushes visible
-    // pills out. When it overflows, the window is sticky: a retained
-    // window that still shows the selected pill does not move (a pointer
-    // selection of a painted pill must not slide the bar under the
-    // cursor), a selection outside it scrolls the fewest pills that
-    // reveal it, and only first paint or a stale retention centers on the
-    // selection. Starting at zero always put the selection at the
+    // pills out. When it overflows, the window is sticky (policy on
+    // `PillBarWindow`). Starting at zero always put the selection at the
     // trailing edge, so moving backward looked as though the final
     // visible pill stayed focused.
     // ponytail: O(n²) over a short selector row; use a sliding window only if
@@ -324,31 +320,39 @@ pub(in crate::app) fn render_pill_bar(
                 .saturating_sub(2) // reserve for " ›"
         };
         let window_end = |start: usize| (start + count_fitting(start, avail_from(start))).min(n);
-        // A position past the end (no active pill) anchors at zero, exactly
-        // as before the sticky window: every painted pill renders unselected.
+        // Sticky window: keep the retained start (already painted) or find
+        // the fewest-pills slide that reveals the selection. Each branch
+        // resolves `(start, end)` together so `window_end` isn't recomputed
+        // for the same `start` twice. A position past the end (no active
+        // pill) anchors at zero, exactly as before the sticky window: every
+        // painted pill renders unselected.
         let sticky = if bar.selected_pos < n {
             let selected = bar.selected_pos;
             match bar.window.start {
                 Some(prev) if prev < n && selected >= prev => {
-                    if selected < window_end(prev) {
-                        // The selection is already painted: keep the window.
-                        Some(prev)
+                    let end = window_end(prev);
+                    if selected < end {
+                        Some((prev, end))
                     } else {
-                        // Minimal slide right: the first window from the
+                        // Minimal slide right: the first window past the
                         // retained start that reaches past the selection.
-                        (prev..=selected).find(|&start| selected < window_end(start))
+                        (prev + 1..=selected).find_map(|start| {
+                            let end = window_end(start);
+                            (selected < end).then_some((start, end))
+                        })
                     }
                 }
-                Some(prev) if prev < n => (0..=selected)
-                    .rev()
-                    .find(|&start| selected < window_end(start)),
+                Some(prev) if prev < n => (0..=selected).rev().find_map(|start| {
+                    let end = window_end(start);
+                    (selected < end).then_some((start, end))
+                }),
                 _ => None,
             }
         } else {
             None
         };
-        let scroll_start = sticky.unwrap_or_else(|| {
-            (0..=bar.selected_pos.min(n - 1))
+        let (scroll_start, scroll_end) = sticky.unwrap_or_else(|| {
+            let start = (0..=bar.selected_pos.min(n - 1))
                 .filter_map(|start| {
                     let end = window_end(start);
                     if end == start || bar.selected_pos >= end {
@@ -364,11 +368,11 @@ pub(in crate::app) fn render_pill_bar(
                 // leaving it pinned to the trailing edge.
                 .max_by_key(|(edge_distance, start)| (*edge_distance, *start))
                 .map(|(_, start)| start)
-                .unwrap_or(0)
+                .unwrap_or(0);
+            (start, window_end(start))
         });
 
         let has_left = scroll_start > 0;
-        let scroll_end = window_end(scroll_start);
         let has_right = scroll_end < n;
         (scroll_start, scroll_end, has_left, has_right)
     };
