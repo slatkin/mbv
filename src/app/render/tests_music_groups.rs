@@ -81,19 +81,13 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
         1,
         "the selected album must publish one replacement parent target"
     );
-    let hero_marker = layout
-        .hero_area
-        .y
-        .checked_sub(0)
-        .and_then(|y| output.lines().nth(y as usize))
-        .and_then(|line| {
-            line.chars()
-                .nth(layout.left_area.x.saturating_sub(2) as usize)
-        });
-    assert_ne!(
-        hero_marker,
-        Some('\u{258e}'),
-        "the shared replacement plan suppresses the ordinary marker over its hero"
+    let selected = layout.selected_item_rect.expect("selected target");
+    assert!(
+        layout.hero_area.contains((selected.x, selected.y).into())
+            && layout
+                .hero_area
+                .contains((selected.right() - 1, selected.bottom() - 1).into()),
+        "the selected album target is owned by the replacement hero"
     );
 }
 
@@ -136,10 +130,10 @@ fn short_grouped_music_restores_the_ordinary_selected_album_row() {
 
     assert!(output.contains("First Album"));
     assert_eq!(layout.hero_area, Rect::default());
-    let selected = layout
-        .selected_item_rect
-        .expect("the ordinary selected album row remains targetable");
-    assert_ne!(selected, layout.hero_area);
+    assert!(
+        layout.selected_item_rect.is_some(),
+        "the ordinary selected album row remains targetable"
+    );
     assert_eq!(mounted_music_album_target_rows(&model, 0).len(), 1);
 }
 

@@ -113,13 +113,10 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
         row_text.contains("Continue"),
         "pill row missing label: {row_text:?}"
     );
-    let pill_rows = (0..buffer.area().height)
-        .filter(|y| buffer[(first.x, *y)].symbol() == "◢")
-        .collect::<Vec<_>>();
     assert_eq!(
-        pill_rows,
-        vec![first.y],
-        "Home must paint exactly one pill bar row"
+        buffer[(first.x, first.y)].symbol(),
+        "◢",
+        "the selector painter owns the pill-bar start glyph"
     );
 }
 

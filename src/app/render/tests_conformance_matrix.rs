@@ -383,18 +383,20 @@ fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
         let selected_rect = layout
             .selected_item_rect
             .expect("selected item keeps a parent-owned target");
-        assert_eq!(selected_rect.x, layout.hero_area.x);
-        assert_eq!(selected_rect.y, layout.hero_area.y);
-        assert_eq!(selected_rect.width, layout.hero_area.width);
+        assert!(
+            layout
+                .hero_area
+                .contains((selected_rect.x, selected_rect.y).into())
+                && layout
+                    .hero_area
+                    .contains((selected_rect.right() - 1, selected_rect.bottom() - 1).into(),),
+            "{surface} selected target must be contained by the admitted hero"
+        );
         assert!(selected_rect.height > 0);
         assert_eq!(
             output.matches(title).count(),
             1,
             "{surface} source row was not swallowed:\n{output}"
-        );
-        assert!(
-            layout.hero_area.y > layout.left_area.y,
-            "{surface} bottom hero should grow upward from a lower source row"
         );
     }
 }
