@@ -1,3 +1,5 @@
+use rstest::rstest;
+
 fn make_status(current_idx: usize, queue_len: usize, active: bool, paused: bool) -> PlayerStatus {
     PlayerStatus {
         paused,
@@ -8,24 +10,18 @@ fn make_status(current_idx: usize, queue_len: usize, active: bool, paused: bool)
     }
 }
 
-#[test]
-fn next_idx_advances_when_room() {
-    let status = make_status(1, 3, true, false);
-    assert_eq!(status.next_idx(), Some(2));
-}
-
-#[test]
-fn next_idx_none_at_end_of_queue() {
-    // Regression test for the mpris.rs bug: next() had no upper-bound check
-    // and would jump past the end of the queue.
-    let status = make_status(2, 3, true, false);
-    assert_eq!(status.next_idx(), None);
-}
-
-#[test]
-fn next_idx_none_when_inactive() {
-    let status = make_status(0, 3, false, false);
-    assert_eq!(status.next_idx(), None);
+#[rstest]
+#[case::next_idx_advances_when_room(1, 3, true, Some(2))]
+#[case::next_idx_none_at_end_of_queue(2, 3, true, None)]
+#[case::next_idx_none_when_inactive(0, 3, false, None)]
+fn next_idx_cases(
+    #[case] current_idx: usize,
+    #[case] queue_len: usize,
+    #[case] active: bool,
+    #[case] expected: Option<usize>,
+) {
+    let status = make_status(current_idx, queue_len, active, false);
+    assert_eq!(status.next_idx(), expected);
 }
 
 #[test]
@@ -80,22 +76,18 @@ fn clear_current_item_metadata_clears_art_fields() {
     assert_eq!(status.art_album_id, "");
 }
 
-#[test]
-fn previous_idx_none_at_start() {
-    let status = make_status(0, 3, true, false);
-    assert_eq!(status.previous_idx(), None);
-}
-
-#[test]
-fn previous_idx_steps_back() {
-    let status = make_status(2, 3, true, false);
-    assert_eq!(status.previous_idx(), Some(1));
-}
-
-#[test]
-fn previous_idx_none_when_inactive() {
-    let status = make_status(2, 3, false, false);
-    assert_eq!(status.previous_idx(), None);
+#[rstest]
+#[case::previous_idx_none_at_start(0, 3, true, None)]
+#[case::previous_idx_steps_back(2, 3, true, Some(1))]
+#[case::previous_idx_none_when_inactive(2, 3, false, None)]
+fn previous_idx_cases(
+    #[case] current_idx: usize,
+    #[case] queue_len: usize,
+    #[case] active: bool,
+    #[case] expected: Option<usize>,
+) {
+    let status = make_status(current_idx, queue_len, active, false);
+    assert_eq!(status.previous_idx(), expected);
 }
 
 #[test]
