@@ -22,6 +22,6 @@
 
 ## 5. Whole-change verification
 
-- [ ] 5.1 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`, fix any findings introduced by this change. Verify: both commands exit clean.
-- [ ] 5.2 Run `cargo nextest run -p mbv` for the full crate and confirm no regressions outside the tests touched above. Verify: full run is green.
+- [x] 5.1 Run `cargo fmt` and `cargo clippy --workspace --all-targets -- -D warnings`, fix any findings introduced by this change. Verify: both commands exit clean.
+- [x] 5.2 Run `cargo nextest run -p mbv` for the full crate and confirm no regressions outside the tests touched above. Verify: full run is green.
 - [ ] 5.3 Manually exercise a list with a title long enough to overflow (e.g. a long album/series title) in the running app: confirm the selected+focused row marquees, moving selection away truncates it normally, and an unfocused list's selection does not marquee. Verify: observed directly in the terminal.
