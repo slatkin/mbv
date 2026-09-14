@@ -177,12 +177,7 @@ pub(in crate::app) fn render_wide_skeleton(
     // List box focus: the panel's bit, minus the Workspace. When the hero's
     // media list holds focus the browser list drops its green and rests —
     // green marks the focused list, never both at once.
-    let workspace_focused = content
-        .hero
-        .as_ref()
-        .and_then(|hero| hero.workspace.as_ref())
-        .is_some_and(|workspace| workspace.focused);
-    let list_focused = browser_focused && !workspace_focused;
+    let list_focused = browser_focused && !content.workspace_focused();
 
     // List box: fill + shared border, then the slot's content in the inset
     // row-flow rect.

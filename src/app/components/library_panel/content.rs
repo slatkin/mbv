@@ -193,6 +193,18 @@ pub(in crate::app) struct LibraryPanelContent<'a> {
     pub hero: Option<HeroContent<'a>>,
 }
 
+impl<'a> LibraryPanelContent<'a> {
+    /// Whether the Hero pane's Workspace list holds focus (design D6): the
+    /// one owner of this fact, so every consumer reads it instead of
+    /// re-deriving it from `hero`/`workspace` at each call site.
+    pub(in crate::app) fn workspace_focused(&self) -> bool {
+        self.hero
+            .as_ref()
+            .and_then(|hero| hero.workspace.as_ref())
+            .is_some_and(|workspace| workspace.focused)
+    }
+}
+
 /// The closed paint policy the panel sets on its lists (design D3/D6): the
 /// focus bit and presentation-specific inputs — the Inline detail height
 /// the panel computes from the hero content. Selected-row surfaces are fixed

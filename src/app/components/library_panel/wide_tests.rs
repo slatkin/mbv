@@ -78,13 +78,14 @@ fn hero_facts(title: &str) -> HeroFacts {
 
 fn draw_skeleton(
     content: &mut LibraryPanelContent<'_>,
+    browser_focused: bool,
 ) -> (ratatui::buffer::Buffer, WideSkeletonGeometry, SkeletonHits) {
     let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
     let mut hits = SkeletonHits::default();
     let mut geometry = None;
     terminal
         .draw(|f| {
-            geometry = render_wide_skeleton(f, AREA, content, false, None, &mut hits);
+            geometry = render_wide_skeleton(f, AREA, content, browser_focused, None, &mut hits);
         })
         .unwrap();
     (
@@ -128,7 +129,7 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
             workspace: None,
         }),
     };
-    let (buf, geo, hits) = draw_skeleton(&mut content);
+    let (buf, geo, hits) = draw_skeleton(&mut content, false);
 
     // Hero pane: read-only, so it always renders the resting surface.
     assert_eq!(
@@ -188,7 +189,7 @@ fn list_controls_row_moves_the_list_box_down_one_row() {
         list: ListSlot::Media(&mut list),
         hero: None,
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
     let pane = browser_pane(AREA);
     let controls = geo.controls.expect("controls row reserved");
     assert!(text_in(&buf, controls, "17 items"));
@@ -219,7 +220,7 @@ fn workspace_selector_with_active_none_paints_no_active_pill() {
             }),
         }),
     };
-    let (buf, _geo, hits) = draw_skeleton(&mut content);
+    let (buf, _geo, hits) = draw_skeleton(&mut content, false);
 
     // The workspace selector's pills paint and their hitboxes are kept;
     // `active: None` paints no active pill — no cell in any retained
@@ -266,7 +267,7 @@ fn focused_workspace_hero_pane_stays_resting() {
             }),
         }),
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
 
     // The hero pane never takes the focused surface, even while its
     // Workspace holds focus — only the list box flips with the panel.
@@ -303,16 +304,7 @@ fn focused_workspace_hero_pane_stays_resting() {
             }),
         }),
     };
-    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
-    let mut hits = SkeletonHits::default();
-    let mut geometry = None;
-    terminal
-        .draw(|f| {
-            geometry = render_wide_skeleton(f, AREA, &mut focused_content, true, None, &mut hits);
-        })
-        .unwrap();
-    let geometry = geometry.expect("wide skeleton painted");
-    let buf = terminal.backend().buffer().clone();
+    let (buf, geometry, _hits) = draw_skeleton(&mut focused_content, true);
     assert_eq!(
         buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
         palette::surface_colors(palette::Surface::LibraryPanel, false).fill
@@ -341,16 +333,7 @@ fn browser_focused_list_carries_the_focus_green() {
             }),
         }),
     };
-    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
-    let mut hits = SkeletonHits::default();
-    let mut geometry = None;
-    terminal
-        .draw(|f| {
-            geometry = render_wide_skeleton(f, AREA, &mut content, true, None, &mut hits);
-        })
-        .unwrap();
-    let geometry = geometry.expect("wide skeleton painted");
-    let buf = terminal.backend().buffer().clone();
+    let (buf, geometry, _hits) = draw_skeleton(&mut content, true);
     // The browser list holds focus: green list box, resting hero pane and
     // resting workspace box.
     assert_eq!(
@@ -386,7 +369,7 @@ fn unfocused_workspace_hero_renders_resting_surfaces() {
             }),
         }),
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
     assert_eq!(
         buf[(geo.hero.x, geo.hero.y)].bg,
         palette::surface_colors(palette::Surface::HeroPane, false).fill
@@ -416,7 +399,7 @@ fn workspace_box_sits_one_blank_row_below_the_hero_content() {
             }),
         }),
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
     let (box_panel, _) = geo.workspace.expect("workspace box painted");
     assert!(rect_contains(geo.hero, box_panel));
 
@@ -461,7 +444,7 @@ fn overview_box_fills_the_hero_pane_when_there_is_no_workspace() {
             workspace: None,
         }),
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
     let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
     let pane_fill = palette::surface_colors(palette::Surface::HeroPane, false).fill;
     assert!(geo.workspace.is_none());
@@ -499,7 +482,7 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
             workspace: None,
         }),
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
 
     // The search box occupies the Selector row's place: query text in the
     // bar rect, and no selector pill painted there instead.
@@ -532,7 +515,7 @@ fn empty_list_slot_paints_its_placeholder_in_the_list_box() {
         },
         hero: None,
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
     assert!(text_in(&buf, geo.list_area, "Nothing here"));
 }
 
@@ -547,7 +530,7 @@ fn empty_loading_list_slot_paints_the_loading_placeholder() {
         },
         hero: None,
     };
-    let (buf, geo, _hits) = draw_skeleton(&mut content);
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
     assert!(text_in(&buf, geo.list_area, "Loading"));
 }
 
