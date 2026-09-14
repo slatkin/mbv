@@ -6,10 +6,10 @@
 
 ## 2. Main Library Selector-row hover
 
-- [ ] 2.1 Add focused `LibraryPanel` tests for movement over an unselected main Selector-row pill and movement into a gap, proving the component changes only its private main-selector hover identity, returns no `Msg`, and does not alter selection; verify with the narrowest `cargo nextest run -p mbv` filters covering `library_panel`.
-- [ ] 2.2 Add the private main-selector hover identity to `LibraryPanel`, replace it from the existing `hits.selector` registry on every `MouseEventKind::Moved`, and leave List controls, Workspace selector, hero, and media-list mouse paths untouched; verify the task 2.1 tests pass.
-- [ ] 2.3 Extend the shared `PillBar` paint model with an explicit optional hovered identity, thread it only through the Library panel's main `paint_selector_row`, and implement selected-over-hover-over-resting style precedence from existing semantic theme roles; verify focused pill-bar buffer tests pass.
-- [ ] 2.4 Add buffer coverage proving main Selector-row hover paints in both Narrow and Wide Library panel presentations while Workspace-selector and selection-modal pills remain unchanged when no hover identity is supplied; verify with the narrowest matching `cargo nextest run -p mbv` filters.
+- [x] 2.1 Add focused `LibraryPanel` tests for movement over an unselected main Selector-row pill and movement into a gap, proving the component changes only its private main-selector hover identity, returns no `Msg`, and does not alter selection; verify with the narrowest `cargo nextest run -p mbv` filters covering `library_panel`.
+- [x] 2.2 Add the private main-selector hover identity to `LibraryPanel`, replace it from the existing `hits.selector` registry on every `MouseEventKind::Moved`, and leave List controls, Workspace selector, hero, and media-list mouse paths untouched; verify the task 2.1 tests pass.
+- [x] 2.3 Extend the shared `PillBar` paint model with an explicit optional hovered identity, thread it only through the Library panel's main `paint_selector_row`, and implement selected-over-hover-over-resting style precedence from existing semantic theme roles; verify focused pill-bar buffer tests pass.
+- [x] 2.4 Add buffer coverage proving main Selector-row hover paints in both Narrow and Wide Library panel presentations while Workspace-selector and selection-modal pills remain unchanged when no hover identity is supplied; verify with the narrowest matching `cargo nextest run -p mbv` filters.
 
 ## 3. Live delivery and architecture records
 
