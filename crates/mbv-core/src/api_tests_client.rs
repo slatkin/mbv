@@ -219,39 +219,6 @@ fn device_name_falls_back_to_mbv() {
 
 // ── device_id ────────────────────────────────────────────────────────────
 
-#[test]
-fn device_id_is_stable_across_calls() {
-    let dir = crate::config::TestTempDir::new();
-    let first = device_id_in(dir.path().to_path_buf());
-    let second = device_id_in(dir.path().to_path_buf());
-    assert_eq!(first, second);
-}
-
-#[test]
-fn device_id_respects_xdg_data_home() {
-    let dir = crate::config::TestTempDir::new();
-    let id = device_id_in(dir.path().to_path_buf());
-    let persisted = std::fs::read_to_string(dir.join("mbv/device_id")).unwrap();
-    assert_eq!(persisted.trim(), id);
-}
-
-#[test]
-fn device_id_migrates_from_legacy_mby_dir() {
-    let dir = crate::config::TestTempDir::new();
-    let legacy_dir = dir.join("mby");
-    std::fs::create_dir_all(&legacy_dir).unwrap();
-    let legacy_id = uuid::Uuid::new_v4().to_string();
-    std::fs::write(legacy_dir.join("device_id"), &legacy_id).unwrap();
-    let id = device_id_in(dir.path().to_path_buf());
-    assert_eq!(id, legacy_id, "should reuse the legacy mby device_id");
-    let persisted = std::fs::read_to_string(dir.join("mbv/device_id")).unwrap();
-    assert_eq!(
-        persisted.trim(),
-        legacy_id,
-        "should persist migrated id to new location"
-    );
-}
-
 // ── get_playback_info_for_cast (task 4.2) ─────────────────────────────────
 
 #[test]

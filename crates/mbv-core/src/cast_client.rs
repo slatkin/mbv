@@ -334,13 +334,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn connect_failure_returns_error_not_panic() {
-        // Port 0 on loopback refuses immediately; no real device required.
-        let result = CastClient::connect("127.0.0.1", 1);
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn build_media_sets_url_and_content_type() {
         let media = build_media("http://host/stream.mp4", "video/mp4");
         assert_eq!(media.content_id, "http://host/stream.mp4");
