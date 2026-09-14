@@ -40,3 +40,17 @@ Fixtures keep meaningful varying arguments explicit. Cross-file support, one-con
 ## Deferred categories
 
 Do not convert families with different assertion verbs/sets, materially different setup or match arms, already aggregated multi-assertion coverage, or helper arguments that express the test scenario. In particular, do not introduce a cross-file fixture registry, `#[values]`, `#[files]`, timeout/async rstest features, or a broad helper conversion.
+
+## Disposition (unit 5)
+
+All 21 ledger case families were reconfirmed against the source diffs from `34b7561e` and converted with named `#[case::<old_test_name>]` rows. Per-family parity is unchanged: `ws.rs` 6; `api_tests_parsing.rs` 2 + 3 + 3 + 7; `player_tests_status.rs` 3 + 3; `player_tests_session_feed.rs` 3; `playback_queue_tests_feed.rs` 3 + 3; `playback_queue_tests_persistence.rs` 3; `help.rs` 8 + 6; `tests_lifecycle.rs` 5 + 2; `tests_queue_reorder.rs` 4; `actions_tests_letter.rs` 2; `daemon_lost.rs` 2; `actions_tests_queue.rs` 3; `search_sidebar.rs` 4; and `feeds_component_tests.rs` 2. This is 77 selected cases, with no deferrals or scope drift. All seven eligible fixture helpers and their recorded consumers remain present with the same-file mappings listed above.
+
+Verification evidence:
+
+- `cargo nextest list -p mbv-core`: 513 tests (baseline 513).
+- `cargo nextest list -p mbv`: 1441 tests (baseline 1441).
+- `cargo fmt --all -- --check`: passed.
+- `cargo clippy --workspace --all-targets -- -D warnings`: passed.
+- `cargo nextest run --release --test-threads=4`: 1960 passed, 0 skipped.
+- `cargo tree -p rstest --target all`: `rstest v0.27.0` has only `rstest_macros` and its proc-macro dependencies; no async runtime or timeout path.
+- `git diff --name-only 34b7561e..HEAD`: only the 16 converted test-bearing source files plus `baseline.md` and `tasks.md`; no unrelated files. (The proposal/design/candidate artifacts are unchanged from the propose commit where applicable.)
