@@ -394,10 +394,13 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         input: RowLocalInput,
         target: Option<Target>,
     ) -> RowLocalOutcome<Target> {
-        match self.active {
+        let before = self.multi_selection().len();
+        let outcome = match self.active {
             Presentation::Wide => self.wide.delegate(input, target),
             Presentation::Inline => self.inline.delegate(input, target),
-        }
+        };
+        self.selection_changed |= before != self.multi_selection().len();
+        outcome
     }
 
     /// Whether the active presentation's retained current frame claims

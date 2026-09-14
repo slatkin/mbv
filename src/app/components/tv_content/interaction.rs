@@ -287,6 +287,24 @@ impl TvContent {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn select_targets_for_test(&mut self, targets: &[String]) {
+        let Some(first) = targets.first() else { return };
+        self.carrier.select_target(first);
+        self.carrier.enter_visual_mode();
+        for target in targets.iter().skip(1) {
+            self.carrier.select_target(target);
+            self.carrier.extend_selection_to(target);
+        }
+        self.carrier.selection_changed_msg();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn context_click_for_test(&mut self, target: String) -> Option<usize> {
+        self.carrier.delegate(RowLocalInput::ContextClick(Position::new(0, 0)), Some(target));
+        self.carrier.selection_changed_msg()
+    }
+
     /// Test-only: the shared owner's current rows' semantic states, in
     /// display order.
     #[cfg(test)]
