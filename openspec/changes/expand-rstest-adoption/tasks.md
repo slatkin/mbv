@@ -13,14 +13,14 @@
 
 ## 3. Root-package interaction and state batch
 
-- [ ] 3.1 Convert the 14 selected `help.rs` key-to-message and scroll tests to named case tables; verify each generated case maps to a ledger test name, run `cargo fmt --all`, `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv help`, and commit only that file.
-- [ ] 3.2 Convert the seven selected `tests_lifecycle.rs` transport and render-interval tests to named case tables; verify 7→7 parity, run root-package per-file gates, and commit only that file.
-- [ ] 3.3 Convert the four `move_queue_item_*` tests and the eligible `make_feed_entry("f1")` fixture in `tests_queue_reorder.rs`; retain order, cursor, and undo assertions, verify case/fixture consumer mappings, run root-package per-file gates, and commit only that file.
-- [ ] 3.4 Convert the two letter-pill tests in `actions_tests_letter.rs` to named cases; verify 2→2 parity, run root-package per-file gates, and commit only that file.
-- [ ] 3.5 Convert the two `set_content_*` tests in `components/daemon_lost.rs` to named cases; verify 2→2 parity, run root-package per-file gates, and commit only that file.
-- [ ] 3.6 Convert the three `remote_seek_*` tests in `actions_tests_queue.rs` to named cases; verify 3→3 parity, run root-package per-file gates, and commit only that file.
-- [ ] 3.7 Convert the four selected search-sidebar key tests in `components/search_sidebar.rs` to named cases; verify 4→4 parity, run root-package per-file gates, and commit only that file.
-- [ ] 3.8 Convert the two selected watched/unwatched filter tests in `components/feeds_component_tests.rs` to named cases; verify 2→2 parity, run root-package per-file gates, and commit only that file.
+- [x] 3.1 Convert the 14 selected `help.rs` key-to-message and scroll tests to named case tables; verify each generated case maps to a ledger test name, run `cargo fmt --all`, `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv help`, and commit only that file.
+- [x] 3.2 Convert the seven selected `tests_lifecycle.rs` transport and render-interval tests to named case tables; verify 7→7 parity, run root-package per-file gates, and commit only that file.
+- [x] 3.3 Convert the four `move_queue_item_*` tests and the eligible `make_feed_entry("f1")` fixture in `tests_queue_reorder.rs`; retain order, cursor, and undo assertions, verify case/fixture consumer mappings, run root-package per-file gates, and commit only that file.
+- [x] 3.4 Convert the two letter-pill tests in `actions_tests_letter.rs` to named cases; verify 2→2 parity, run root-package per-file gates, and commit only that file.
+- [x] 3.5 Convert the two `set_content_*` tests in `components/daemon_lost.rs` to named cases; verify 2→2 parity, run root-package per-file gates, and commit only that file.
+- [x] 3.6 Convert the three `remote_seek_*` tests in `actions_tests_queue.rs` to named cases; verify 3→3 parity, run root-package per-file gates, and commit only that file.
+- [x] 3.7 Convert the four selected search-sidebar key tests in `components/search_sidebar.rs` to named cases; verify 4→4 parity, run root-package per-file gates, and commit only that file.
+- [x] 3.8 Convert the two selected watched/unwatched filter tests in `components/feeds_component_tests.rs` to named cases; verify 2→2 parity, run root-package per-file gates, and commit only that file.
 
 ## 4. Root-package fixture batch
 
