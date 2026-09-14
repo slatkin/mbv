@@ -40,6 +40,7 @@ impl Component for LibraryPanel {
                 &mut content,
                 self.focused,
                 self.list_pane_width,
+                self.hovered_selector,
                 &mut hits,
                 &mut windows,
             ) {
@@ -66,6 +67,7 @@ impl Component for LibraryPanel {
                 area,
                 &mut content,
                 self.focused,
+                self.hovered_selector,
                 &mut hits,
                 &mut windows,
             );

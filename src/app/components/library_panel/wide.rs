@@ -121,6 +121,7 @@ pub(in crate::app) fn render_wide_skeleton(
     content: &mut LibraryPanelContent<'_>,
     browser_focused: bool,
     override_width: Option<u16>,
+    hovered_selector: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
 ) -> Option<WideSkeletonGeometry> {
@@ -144,6 +145,7 @@ pub(in crate::app) fn render_wide_skeleton(
                 pane.pills_area,
                 pane.spacer_area,
                 selector,
+                hovered_selector,
                 &mut hits.selector,
                 &mut windows.selector,
             );
@@ -158,6 +160,7 @@ pub(in crate::app) fn render_wide_skeleton(
                 f,
                 pane.pills_area,
                 &[],
+                None,
                 None,
                 Some(SELECTOR_ROW_PREFIX),
                 &mut hits.selector,
@@ -357,6 +360,7 @@ fn paint_workspace_box(
                 bar,
                 &selector.pills,
                 selector.active,
+                None,
                 Some(WORKSPACE_SELECTOR_PREFIX),
                 hits,
                 window,

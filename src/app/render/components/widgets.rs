@@ -185,19 +185,19 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
 /// surface, muted text on the dark unselected surface. This is the canonical
 /// appearance for every interactive pill selector (Home sections, feed
 /// groups, music groups, letter filters, and series seasons).
-fn selector_pill_style(selected: bool) -> Style {
+fn selector_pill_style(selected: bool, hovered: bool) -> Style {
     let chip = if selected {
         palette::Surface::PillChipSelected
     } else {
         palette::Surface::PillChip
     };
     Style::default()
-        .fg(if selected {
+        .fg(if selected || hovered {
             palette::PILL_SELECTED_FG
         } else {
             palette::PILL_FG
         })
-        .bg(palette::surface_colors(chip, selected).fill)
+        .bg(palette::surface_colors(chip, selected || hovered).fill)
 }
 
 /// A horizontally-scrolling row of selector pills, shared by every
@@ -212,6 +212,7 @@ pub(in crate::app) struct PillBar<'a> {
     pub labels: &'a [String],
     pub ids: &'a [usize],
     pub selected_pos: usize,
+    pub hovered: Option<usize>,
     pub prefix: Option<&'a str>,
     /// The row's retained overflow window (its last painted one). `Default`
     /// on first paint or after a layout change: the window centers on the
@@ -414,7 +415,8 @@ pub(in crate::app) fn render_pill_bar(
         let abs_idx = scroll_start + offset;
         let selected = abs_idx == bar.selected_pos;
         let is_last_pill = abs_idx + 1 == n;
-        let style = selector_pill_style(selected);
+        let hovered = bar.hovered == Some(abs_idx);
+        let style = selector_pill_style(selected, hovered);
         let pill = format!(" {} ", label);
         let marker_w = "◢◤".width() as u16;
         let pill_w = pill.width() as u16 + marker_w;

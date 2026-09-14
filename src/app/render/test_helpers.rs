@@ -166,6 +166,7 @@ pub fn render_pill_bar_hitboxes_with_window(
                 labels,
                 ids,
                 selected_pos,
+                hovered: None,
                 prefix: None,
                 window,
             },

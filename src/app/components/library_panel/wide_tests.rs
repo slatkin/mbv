@@ -92,6 +92,7 @@ fn draw_skeleton(
                 content,
                 browser_focused,
                 None,
+                None,
                 &mut hits,
                 &mut windows,
             );
@@ -567,6 +568,7 @@ fn sub_breakpoint_area_paints_nothing() {
                 narrow,
                 &mut content,
                 false,
+                None,
                 None,
                 &mut hits,
                 &mut windows,

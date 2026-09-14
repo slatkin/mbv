@@ -27,6 +27,7 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
                     labels: &labels,
                     ids: &ids,
                     selected_pos: 0,
+                    hovered: None,
                     prefix: None,
                     window: PillBarWindow::default(),
                 },

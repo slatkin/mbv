@@ -206,6 +206,34 @@ fn panel_paints_the_active_owner_and_resolves_slot_events() {
 /// A list click resolves the row under the pointer through the owner's
 /// typed carrier and delegates it as today.
 #[test]
+fn selector_move_updates_only_private_hover_identity_and_returns_no_message() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    let _ = draw_panel(&mut panel);
+    let (pill, _) = panel.test_selector_hits().regions()[1];
+
+    assert_eq!(
+        panel.on(&mouse_event(MouseEventKind::Moved, pill.x + 1, pill.y)),
+        None
+    );
+    assert_eq!(panel.test_hovered_selector(), Some(1));
+    assert!(log.borrow().events.is_empty());
+
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Moved,
+            pill.right() + 1,
+            pill.y
+        )),
+        None
+    );
+    assert_eq!(panel.test_hovered_selector(), None);
+    assert!(log.borrow().events.is_empty());
+}
+
+#[test]
 fn list_click_delegates_to_the_active_owner() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();
