@@ -39,7 +39,10 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
     );
     let (event_tx, _event_rx) = mpsc::channel();
     let session = PlaybackRun::new_from_slot_items(
-        vec![(QueueSlotId::from_raw(1), QueueItem::Feed(entry))],
+        vec![ExecSlot {
+            slot_id: QueueSlotId::from_raw(1),
+            item: QueueItem::Feed(entry),
+        }],
         0,
         PlaybackOrigin::Standalone,
         reporter,
@@ -429,10 +432,10 @@ fn append_items_to_queue_keeps_feed_items() {
     let (mut session, _status) = make_queue_session_for_pos_tests(1);
     let entry = make_feed_entry("feed-1", "Podcast Episode 1");
 
-    session.append_items_to_queue(vec![(
-        QueueSlotId::from_raw(4_242),
-        QueueItem::Feed(entry.clone()),
-    )]);
+    session.append_items_to_queue(vec![ExecSlot {
+        slot_id: QueueSlotId::from_raw(4_242),
+        item: QueueItem::Feed(entry.clone()),
+    }]);
 
     assert_eq!(session.queue_len(), 4);
     assert_eq!(

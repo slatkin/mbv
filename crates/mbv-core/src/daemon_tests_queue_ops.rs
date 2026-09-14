@@ -77,12 +77,12 @@ fn unified_queue_append_adds_slots_and_forwards_to_player() {
     );
     match cmd_rx.recv().unwrap() {
         PlayerCommand::QueueAppend { items } => {
-            let ids: Vec<_> = items.iter().map(|(_, item)| item.id().to_string()).collect();
+            let ids: Vec<_> = items.iter().map(|slot| slot.item.id().to_string()).collect();
             assert_eq!(ids, vec!["b", "c"]);
             // The daemon allocates the canonical slot ids and hands the same
             // ids to the player run.
             let canonical: Vec<_> = queue.slots()[1..].iter().map(|s| s.slot_id).collect();
-            assert_eq!(items.iter().map(|(id, _)| *id).collect::<Vec<_>>(), canonical);
+            assert_eq!(items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), canonical);
         }
         _ => panic!("expected QueueAppend"),
     }

@@ -1,4 +1,5 @@
 use mbv_core::api::EmbyItem;
+use mbv_core::playback_execution_sequence::ExecSlot;
 use mbv_core::playback_queue::{
     PlaybackQueue, QueueItem, QueueMutationResult, QueueSlot, QueueSlotId, RefreshMergeResult,
     RemoveSlotResult,
@@ -30,7 +31,7 @@ impl PlayerTab {
         let active_index = state
             .active_slot
             .and_then(|slot_id| state.slots.iter().position(|slot| slot.slot_id == slot_id));
-        let slots = state
+        let slots: Vec<(QueueSlotId, mbv_core::playback_queue::QueueItem)> = state
             .slots
             .iter()
             .map(|slot| (QueueSlotId::from_raw(slot.slot_id), slot.item.clone()))
@@ -160,12 +161,12 @@ impl PlayerTab {
 
     /// Append one item to the canonical queue and return the slot identity the
     /// owner must see alongside it, so callers never re-derive the pair.
-    pub(super) fn append_item(&mut self, item: QueueItem) -> (QueueSlotId, QueueItem) {
+    pub(super) fn append_item(&mut self, item: QueueItem) -> ExecSlot {
         let slot_id = self.queue.append(item.clone());
-        (slot_id, item)
+        ExecSlot { slot_id, item }
     }
 
-    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<(QueueSlotId, QueueItem)> {
+    pub(super) fn append_items(&mut self, items: Vec<EmbyItem>) -> Vec<ExecSlot> {
         items
             .into_iter()
             .map(|item| self.append_item(QueueItem::Emby(Box::new(item))))
@@ -236,7 +237,7 @@ impl PlayerTab {
             .collect()
     }
 
-    pub(super) fn all_queue_slots(&self) -> Vec<(QueueSlotId, QueueItem)> {
+    pub(super) fn all_queue_slots(&self) -> Vec<ExecSlot> {
         self.queue.slot_pairs()
     }
 

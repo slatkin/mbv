@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::api::{EmbyItem, TICKS_PER_SECOND};
+use crate::playback_execution_sequence::ExecSlot;
 
 const PROGRESS_CONFIRMATION_TOLERANCE_TICKS: i64 = TICKS_PER_SECOND * 3;
 
@@ -277,10 +278,13 @@ impl PlaybackQueue {
     }
 
     /// Clone the canonical queue entries together with their stable slot identities.
-    pub fn slot_pairs(&self) -> Vec<(QueueSlotId, QueueItem)> {
+    pub fn slot_pairs(&self) -> Vec<ExecSlot> {
         self.slots
             .iter()
-            .map(|slot| (slot.slot_id, slot.item.clone()))
+            .map(|slot| ExecSlot {
+                slot_id: slot.slot_id,
+                item: slot.item.clone(),
+            })
             .collect()
     }
 

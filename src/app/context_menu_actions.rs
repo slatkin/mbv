@@ -50,26 +50,12 @@ impl App {
                 }
             }
             Some(ContextAction::PlaySelection(items)) => {
-                let direct_remote = self.has_direct_remote_queue();
-                if !direct_remote {
-                    self.replace_playback_queue(items.clone(), 0);
-                }
-                self.queue_source = crate::config::QueueSource::Unknown;
-                if !direct_remote {
-                    self.save_queue_state();
-                }
+                self.rebuild_queue_for_selection(&items, crate::config::QueueSource::Unknown);
                 self.play_items_routed(items, 0, crate::config::QueueSource::Unknown);
             }
             Some(ContextAction::ShuffleSelection(mut items)) => {
                 items.shuffle(&mut rand::rng());
-                let direct_remote = self.has_direct_remote_queue();
-                if !direct_remote {
-                    self.replace_playback_queue(items.clone(), 0);
-                }
-                self.queue_source = crate::config::QueueSource::Shuffle;
-                if !direct_remote {
-                    self.save_queue_state();
-                }
+                self.rebuild_queue_for_selection(&items, crate::config::QueueSource::Shuffle);
                 self.play_items_routed(items, 0, crate::config::QueueSource::Shuffle);
             }
             Some(ContextAction::EnqueueSelection(items)) => {
@@ -184,6 +170,23 @@ impl App {
                 self.spawn_navigate_to_item(item_id, item_type, libs);
             }
             None => {}
+        }
+    }
+
+    /// Rebuild the local canonical queue from a context-menu selection, unless
+    /// the run is a direct remote queue (which rebuilds its own queue on
+    /// submission instead). Shared by `PlaySelection`/`ShuffleSelection`.
+    fn rebuild_queue_for_selection(
+        &mut self,
+        items: &[EmbyItem],
+        source: crate::config::QueueSource,
+    ) {
+        if !self.has_direct_remote_queue() {
+            self.replace_playback_queue(items.to_vec(), 0);
+        }
+        self.queue_source = source;
+        if !self.has_direct_remote_queue() {
+            self.save_queue_state();
         }
     }
 

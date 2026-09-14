@@ -340,11 +340,11 @@ impl App {
         if !start_playback {
             let previous_dirty = self.queue_dirty;
             let previous_queue = self.queue_for_scope(scope).clone();
-            let (slot_id, queued_item) = self.queue_for_scope_mut(scope).append_item(item);
+            let appended_slot = self.queue_for_scope_mut(scope).append_item(item);
             if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
             }
-            if self.sync_playback_queue_items_after_append(scope, vec![(slot_id, queued_item)]) {
+            if self.sync_playback_queue_items_after_append(scope, vec![appended_slot]) {
                 self.persist_local_queue_state_if_needed(scope);
                 self.advance_remote_queue_lineage();
                 return true;
@@ -387,7 +387,7 @@ impl App {
             }
             return true;
         }
-        let audio_only = all_slots.iter().all(|(_, item)| item.is_audio());
+        let audio_only = all_slots.iter().all(|slot| slot.item.is_audio());
         let submitted = self.player.submit_queue_slots(
             all_slots,
             selected_index,

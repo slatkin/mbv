@@ -36,7 +36,7 @@ fn audiobookshelf_play_selects_canonical_slot_and_submits_to_eligible_owner() {
     match commands.recv().unwrap() {
         mbv_core::player::PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(start_idx, 0);
-            assert!(items[0].1.is_audiobookshelf());
+            assert!(items[0].item.is_audiobookshelf());
         }
         _ => panic!("expected canonical play submission"),
     }
@@ -79,7 +79,7 @@ fn audiobookshelf_enqueue_mutates_eligible_bound_queue_without_starting() {
     match commands.recv().unwrap() {
         mbv_core::player::PlayerCommand::QueueAppend { items } => {
             assert_eq!(items.len(), 1);
-            assert!(items[0].1.is_audiobookshelf());
+            assert!(items[0].item.is_audiobookshelf());
         }
         _ => panic!("expected canonical enqueue"),
     }

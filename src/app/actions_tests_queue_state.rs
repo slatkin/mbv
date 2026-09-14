@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::tests::make_item;
 use crate::app::ContextAction;
+use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem, QueueItemContentId,
 };
@@ -121,24 +122,17 @@ fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) 
     }));
 }
 
-#[test]
-fn context_play_selection_rebuilds_canonical_queue_before_submission() {
+#[rstest]
+#[case::play(ContextAction::PlaySelection as fn(Vec<EmbyItem>) -> ContextAction)]
+#[case::shuffle(ContextAction::ShuffleSelection as fn(Vec<EmbyItem>) -> ContextAction)]
+fn context_selection_rebuilds_canonical_queue_before_submission(
+    #[case] action: fn(Vec<EmbyItem>) -> ContextAction,
+) {
     let selected = vec![
         make_item("selected", "Movie"),
         make_item("selected-2", "Movie"),
     ];
-    assert_context_selection_replaces_nonsequential_queue(ContextAction::PlaySelection(selected));
-}
-
-#[test]
-fn context_shuffle_selection_rebuilds_canonical_queue_before_submission() {
-    let selected = vec![
-        make_item("selected", "Movie"),
-        make_item("selected-2", "Movie"),
-    ];
-    assert_context_selection_replaces_nonsequential_queue(ContextAction::ShuffleSelection(
-        selected,
-    ));
+    assert_context_selection_replaces_nonsequential_queue(action(selected));
 }
 
 #[test]

@@ -28,7 +28,10 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
 
     let entry = make_feed_entry("feed-1", "Podcast Episode 1");
     player.submit_queue_slots(
-        vec![(QueueSlotId::from_raw(1), QueueItem::Feed(entry))],
+        vec![ExecSlot {
+            slot_id: QueueSlotId::from_raw(1),
+            item: QueueItem::Feed(entry),
+        }],
         0,
         None,
         false,
@@ -42,7 +45,7 @@ fn submit_queue_fast_path_sends_command_for_feed_entry() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(items.len(), 1);
             assert_eq!(start_idx, 0);
-            assert!(matches!(&items[0].1, QueueItem::Feed(e) if e.guid == "feed-1"));
+            assert!(matches!(&items[0].item, QueueItem::Feed(e) if e.guid == "feed-1"));
         }
         _ => panic!("expected SubmitQueue command"),
     }
@@ -64,20 +67,20 @@ fn queue_append_forwards_caller_slot_ids() {
     );
     let cmd_rx = player.spy_on_commands();
     let slots = vec![
-        (
-            QueueSlotId::from_raw(17),
-            QueueItem::Feed(make_feed_entry("append-a", "Append A")),
-        ),
-        (
-            QueueSlotId::from_raw(4),
-            QueueItem::Feed(make_feed_entry("append-b", "Append B")),
-        ),
+        ExecSlot {
+            slot_id: QueueSlotId::from_raw(17),
+            item: QueueItem::Feed(make_feed_entry("append-a", "Append A")),
+        },
+        ExecSlot {
+            slot_id: QueueSlotId::from_raw(4),
+            item: QueueItem::Feed(make_feed_entry("append-b", "Append B")),
+        },
     ];
     assert!(player.queue_append(slots));
 
     match cmd_rx.try_recv().expect("expected QueueAppend command") {
         PlayerCommand::QueueAppend { items } => {
-            assert_eq!(items.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+            assert_eq!(items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
                        vec![QueueSlotId::from_raw(17), QueueSlotId::from_raw(4)]);
         }
         _ => panic!("expected QueueAppend command"),
@@ -111,7 +114,10 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
     let items: Vec<_> = ids
         .iter()
         .zip(["feed-a", "feed-b"])
-        .map(|(id, guid)| (*id, QueueItem::Feed(make_feed_entry(guid, guid))))
+        .map(|(id, guid)| ExecSlot {
+            slot_id: *id,
+            item: QueueItem::Feed(make_feed_entry(guid, guid)),
+        })
         .collect();
     player.submit_queue_slots(items, 1, None, false, 100);
 
@@ -119,7 +125,7 @@ fn submit_queue_slots_preserves_caller_slot_ids() {
         PlayerCommand::SubmitQueue { items, start_idx } => {
             assert_eq!(start_idx, 1);
             assert_eq!(
-                items.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+                items.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(),
                 ids,
                 "caller slot identities must survive the submission boundary"
             );
@@ -151,7 +157,10 @@ fn submit_queue_fast_path_updates_status_before_sending() {
 
     let entry = make_feed_entry("feed-test", "Test Episode");
     player.submit_queue_slots(
-        vec![(QueueSlotId::from_raw(1), QueueItem::Feed(entry))],
+        vec![ExecSlot {
+            slot_id: QueueSlotId::from_raw(1),
+            item: QueueItem::Feed(entry),
+        }],
         0,
         None,
         false,
@@ -296,7 +305,10 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
 
     assert!(player.can_admit_audiobookshelf());
     assert!(player.submit_queue_slots(
-        vec![(QueueSlotId::from_raw(1), audiobookshelf_item())],
+        vec![ExecSlot {
+            slot_id: QueueSlotId::from_raw(1),
+            item: audiobookshelf_item(),
+        }],
         0,
         None,
         false,
@@ -305,7 +317,7 @@ fn complete_bare_player_admits_audiobookshelf_without_ctrl_transport() {
     assert!(matches!(
         commands.try_recv().unwrap(),
         PlayerCommand::SubmitQueue { items, start_idx }
-            if start_idx == 0 && items.len() == 1 && items[0].1.is_audiobookshelf()
+            if start_idx == 0 && items.len() == 1 && items[0].item.is_audiobookshelf()
     ));
 }
 
@@ -368,7 +380,10 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
 
     assert!(!player.can_admit_audiobookshelf());
     assert!(!player.submit_queue_slots(
-        vec![(QueueSlotId::from_raw(1), audiobookshelf_item())],
+        vec![ExecSlot {
+            slot_id: QueueSlotId::from_raw(1),
+            item: audiobookshelf_item(),
+        }],
         0,
         None,
         false,
@@ -376,7 +391,10 @@ fn context_loss_rejects_audiobookshelf_without_mutating_bound_submission() {
     ));
     // Book-shaped items hit the same combined-classification refusal.
     assert!(!player.submit_queue_slots(
-        vec![(QueueSlotId::from_raw(2), audiobookshelf_book_item())],
+        vec![ExecSlot {
+            slot_id: QueueSlotId::from_raw(2),
+            item: audiobookshelf_book_item(),
+        }],
         0,
         None,
         false,

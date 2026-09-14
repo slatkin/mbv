@@ -626,7 +626,7 @@ impl App {
         }
 
         let all_slots = self.queue_for_scope(scope).all_queue_slots();
-        let audio_only = all_slots.iter().all(|(_, item)| item.is_audio());
+        let audio_only = all_slots.iter().all(|slot| slot.item.is_audio());
         let submitted = self.player.submit_queue_slots(
             all_slots,
             selected_index,

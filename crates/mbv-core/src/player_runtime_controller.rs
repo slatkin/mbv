@@ -309,11 +309,14 @@ impl Player {
     /// Play a freshly fetched Emby sequence with no canonical queue behind it.
     /// Ids are pinned to 1..=len because the controlling app rebuilds its own
     /// queue for these paths with exactly those ids (`replace_playback_queue`).
-    fn sequential_slot_ids(items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
+    fn sequential_slot_ids(items: Vec<QueueItem>) -> Vec<ExecSlot> {
         items
             .into_iter()
             .enumerate()
-            .map(|(i, item)| (QueueSlotId::from_raw(i as u64 + 1), item))
+            .map(|(i, item)| ExecSlot {
+                slot_id: QueueSlotId::from_raw(i as u64 + 1),
+                item,
+            })
             .collect()
     }
 
@@ -360,14 +363,14 @@ impl Player {
     /// not playlist positions.
     pub fn submit_queue_slots(
         &self,
-        items: Vec<(QueueSlotId, QueueItem)>,
+        items: Vec<ExecSlot>,
         start_idx: usize,
         client: Option<Arc<EmbyClient>>,
         headless: bool,
         initial_volume: u8,
     ) -> bool {
         if items.is_empty()
-            || (items.iter().any(|(_, item)| item.is_audiobookshelf_any())
+            || (items.iter().any(|slot| slot.item.is_audiobookshelf_any())
                 && !self.can_admit_audiobookshelf())
         {
             return false;
@@ -378,7 +381,7 @@ impl Player {
         if self.status.lock().unwrap().active
             && (self.current_is_headless.load(Ordering::Relaxed) == headless)
         {
-            let start_item = &items[start_idx].1;
+            let start_item = &items[start_idx].item;
             {
                 let mut st = self.status.lock().unwrap();
                 st.seed_from_item(start_item, start_idx, items.len());
@@ -442,7 +445,7 @@ impl Player {
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
         // Set initial status for the start item.
-        let start_item = &items[start_idx].1;
+        let start_item = &items[start_idx].item;
         {
             let mut st = status.lock().unwrap();
             st.seed_from_item(start_item, start_idx, items.len());
@@ -484,7 +487,7 @@ impl Player {
 
             let active_file_projection = items
                 .iter()
-                .any(|(_, item)| item.is_audiobookshelf_any());
+                .any(|slot| slot.item.is_audiobookshelf_any());
             let load_indices: Vec<_> = if active_file_projection {
                 vec![start_idx]
             } else {
@@ -492,7 +495,7 @@ impl Player {
             };
             let mut active_prepared_source = None;
             for i in load_indices {
-                let item = &items[i].1;
+                let item = &items[i].item;
                 let prepared = match prepare_source(
                     item,
                     &server_url,
@@ -547,7 +550,7 @@ impl Player {
             // send_ep_info only for Emby items.
             if let Some(emby) = items
                 .get(start_idx)
-                .and_then(|(_, item)| item.as_emby())
+                .and_then(|slot| slot.item.as_emby())
             {
                 send_ep_info(&mpv, emby);
             }
@@ -557,7 +560,7 @@ impl Player {
             let (reporter, progress) = if let Some(client) = client {
                 if let Some(emby) = items
                     .get(start_idx)
-                    .and_then(|(_, item)| item.as_emby())
+                    .and_then(|slot| slot.item.as_emby())
                 {
                     let info = client.get_playback_info(&emby.id);
                     let reporter = SessionReporter::new(
@@ -596,7 +599,7 @@ impl Player {
                         ItemId::empty(),
                         MediaSourceId::new(""),
                         EmbySessionId::new(""),
-                        items[start_idx].1.is_audio(),
+                        items[start_idx].item.is_audio(),
                         status.clone(),
                     );
                     reporter.clear_session();
@@ -616,7 +619,7 @@ impl Player {
                     ItemId::empty(),
                     MediaSourceId::new(""),
                     EmbySessionId::new(""),
-                    items[start_idx].1.is_audio(),
+                    items[start_idx].item.is_audio(),
                     status.clone(),
                 );
                 reporter.clear_session();
@@ -657,9 +660,9 @@ impl Player {
         true
     }
 
-    pub fn queue_append(&self, slots: Vec<(QueueSlotId, QueueItem)>) -> bool {
+    pub fn queue_append(&self, slots: Vec<ExecSlot>) -> bool {
         if slots.is_empty()
-            || (slots.iter().any(|(_, item)| item.is_audiobookshelf_any())
+            || (slots.iter().any(|slot| slot.item.is_audiobookshelf_any())
                 && !self.can_admit_audiobookshelf())
         {
             return false;

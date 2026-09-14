@@ -529,8 +529,8 @@ impl App {
                     let owner_can_admit_audiobookshelf = self.player.can_admit_audiobookshelf();
                     let eligible: Vec<_> = all_slots
                         .into_iter()
-                        .filter(|(_, item)| {
-                            item.admissible_for_owner_with_audiobookshelf(
+                        .filter(|slot| {
+                            slot.item.admissible_for_owner_with_audiobookshelf(
                                 false,
                                 |service| {
                                     service != mbv_core::config::ServiceKind::Audiobookshelf
@@ -549,7 +549,7 @@ impl App {
                     }
                     let start_idx = eligible
                         .iter()
-                        .position(|(_, queued)| queued.content_id() == item.content_id())
+                        .position(|slot| slot.item.content_id() == item.content_id())
                         .unwrap_or_else(|| {
                             eligible
                                 .iter()
@@ -557,7 +557,7 @@ impl App {
                                 .count()
                                 .min(eligible.len().saturating_sub(1))
                         });
-                    let headless = eligible.iter().all(|(_, item)| item.is_audio());
+                    let headless = eligible.iter().all(|slot| slot.item.is_audio());
                     self.player.submit_queue_slots(
                         eligible,
                         start_idx,

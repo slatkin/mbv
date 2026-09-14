@@ -472,7 +472,7 @@ impl PlaybackRun {
     /// Construct a `PlaybackRun` from the Player owner's canonical slots.
     #[allow(clippy::too_many_arguments)]
     fn new_from_slot_items(
-        items: Vec<(QueueSlotId, QueueItem)>,
+        items: Vec<ExecSlot>,
         start_idx: usize,
         origin: PlaybackOrigin,
         reporter: SessionReporter,
@@ -487,8 +487,11 @@ impl PlaybackRun {
         audiobookshelf_context: Option<AudiobookshelfPlayerContext>,
         prepared_source: Option<PreparedSource>,
     ) -> Self {
-        let active_slot_id = items.get(start_idx).map(|(id, _)| *id);
-        let queue = ExecutionSequence::from_slot_items(items, active_slot_id);
+        let active_slot_id = items.get(start_idx).map(|slot| slot.slot_id);
+        let queue = ExecutionSequence::from_slot_items(
+            items.into_iter().map(|slot| (slot.slot_id, slot.item)).collect(),
+            active_slot_id,
+        );
         Self::init_from_queue(
             queue,
             start_idx,

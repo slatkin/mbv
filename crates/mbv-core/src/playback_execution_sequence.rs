@@ -11,7 +11,7 @@
 use crate::playback_queue::{QueueItem, QueueSlotId};
 
 /// One entry of the execution sequence: an owner-assigned slot id and its item.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExecSlot {
     pub slot_id: QueueSlotId,
     pub item: QueueItem,
@@ -34,8 +34,7 @@ impl ExecutionSequence {
         slots: Vec<(QueueSlotId, QueueItem)>,
         active_slot_id: Option<QueueSlotId>,
     ) -> Self {
-        #[cfg(debug_assertions)]
-        debug_assert_unique_slot_ids(&slots, &[]);
+        assert_unique_slot_ids(&slots, &[]);
         let slots: Vec<ExecSlot> = slots
             .into_iter()
             .map(|(slot_id, item)| ExecSlot { slot_id, item })
@@ -86,8 +85,7 @@ impl ExecutionSequence {
 
     /// Append a slot carrying an owner-assigned identity.
     pub fn append_with_id(&mut self, slot_id: QueueSlotId, item: QueueItem) {
-        #[cfg(debug_assertions)]
-        debug_assert_unique_slot_ids(
+        assert_unique_slot_ids(
             &[(slot_id, item.clone())],
             self.slots
                 .iter()
@@ -148,9 +146,11 @@ impl ExecutionSequence {
     }
 }
 
-#[cfg(debug_assertions)]
-fn debug_assert_unique_slot_ids(incoming: &[(QueueSlotId, QueueItem)], existing: &[QueueSlotId]) {
-    debug_assert!(
+// A real (not debug-only) assert: CI runs `cargo test --release`, where
+// `debug_assert!` compiles out, and a slot-id collision here means the run
+// silently desyncs from the owner's canonical queue.
+fn assert_unique_slot_ids(incoming: &[(QueueSlotId, QueueItem)], existing: &[QueueSlotId]) {
+    assert!(
         incoming.iter().enumerate().all(|(index, (slot_id, _))| {
             !incoming[..index].iter().any(|(other, _)| other == slot_id)
                 && !existing.iter().any(|other| other == slot_id)
@@ -180,10 +180,6 @@ mod tests {
         })
     }
 
-    // The guard is a `debug_assert!`, so it is compiled out of a release build.
-    // CI runs `cargo test --release`, where these cases would fail for the wrong
-    // reason; they describe debug behaviour only.
-    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "execution sequence slot identities must be unique")]
     fn rejects_duplicate_slot_ids_on_submission() {
@@ -191,7 +187,6 @@ mod tests {
         ExecutionSequence::from_slot_items(vec![(id, item()), (id, item())], Some(id));
     }
 
-    #[cfg(debug_assertions)]
     #[test]
     #[should_panic(expected = "execution sequence slot identities must be unique")]
     fn rejects_appended_slot_id_collision() {

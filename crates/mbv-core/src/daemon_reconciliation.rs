@@ -29,22 +29,26 @@ fn stop_old_emby_run(player: &Player) -> bool {
 fn purge_queue(
     queue: &mut PlaybackQueue,
     drop: impl Fn(&QueueItem) -> bool,
-) -> Vec<(QueueSlotId, QueueItem)> {
+) -> Vec<ExecSlot> {
     let active = queue.active_slot_id();
     let retained: Vec<_> = queue
         .slot_pairs()
         .into_iter()
-        .filter(|(_, item)| !drop(item))
+        .filter(|slot| !drop(&slot.item))
         .collect();
-    let active = active.filter(|id| retained.iter().any(|(slot_id, _)| slot_id == id));
+    let active = active.filter(|id| retained.iter().any(|slot| slot.slot_id == *id));
     let revision = queue.revision();
-    *queue = PlaybackQueue::from_slot_items(retained.clone(), active, revision);
+    *queue = PlaybackQueue::from_slot_items(
+        retained.iter().map(|slot| (slot.slot_id, slot.item.clone())).collect(),
+        active,
+        revision,
+    );
     retained
 }
 
 fn update_player_queue(
     player: &Player,
-    items: Vec<(QueueSlotId, QueueItem)>,
+    items: Vec<ExecSlot>,
     active_index: Option<usize>,
     client: &Arc<Mutex<crate::api::EmbyClient>>,
 ) {
@@ -56,7 +60,7 @@ fn update_player_queue(
         return;
     }
     let client = Arc::new(client.lock().unwrap().clone());
-    let all_audio = items.iter().all(|(_, item)| item.is_audio());
+    let all_audio = items.iter().all(|slot| slot.item.is_audio());
     let headless = player.headless_for(&client, all_audio);
     let _ = player.submit_queue_slots(items, active_index, Some(client), headless, 100);
 }

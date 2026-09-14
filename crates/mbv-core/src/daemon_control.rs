@@ -351,7 +351,7 @@ fn handle_ctrl(
             // route through `submit_queue_slots`, which cold-starts one when
             // needed (as `play_resolved_items` does).
             let queue_slots = queue.slot_pairs();
-            let all_audio = queue_slots.iter().all(|(_, item)| item.is_audio());
+            let all_audio = queue_slots.iter().all(|slot| slot.item.is_audio());
             let c = Arc::new(client.lock().unwrap().clone());
             let headless = player.headless_for(&c, all_audio);
             player.submit_queue_slots(queue_slots, next_cursor, Some(c), headless, 100);
@@ -408,11 +408,14 @@ fn handle_ctrl(
             }
             // Allocate the owner slot ids once, in the daemon's canonical
             // queue, and hand the same ids to the Playback run.
-            let items_for_player: Vec<(QueueSlotId, QueueItem)> = items
+            let items_for_player: Vec<ExecSlot> = items
                 .into_iter()
                 .map(|item| {
                     let slot_id = queue.append(item.clone());
-                    (slot_id, item)
+                    ExecSlot {
+                        slot_id,
+                        item,
+                    }
                 })
                 .collect();
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);

@@ -401,13 +401,13 @@ impl App {
         let scope = self.viewed_queue_scope();
         let previous_dirty = self.queue_dirty;
         let previous_queue = self.queue_for_scope(scope).clone();
-        let (slot_id, queued_item) = self
+        let appended_slot = self
             .queue_for_scope_mut(scope)
             .append_item(QueueItem::Emby(Box::new(item)));
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
-        if self.sync_playback_queue_items_after_append(scope, vec![(slot_id, queued_item)]) {
+        if self.sync_playback_queue_items_after_append(scope, vec![appended_slot]) {
             self.persist_local_queue_state_if_needed(scope);
             self.advance_remote_queue_lineage();
         } else {

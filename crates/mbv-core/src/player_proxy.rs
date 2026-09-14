@@ -152,7 +152,7 @@ impl PlayerProxy {
     /// for remote players it sends `UnifiedQueueReplace`.
     pub fn submit_queue_slots(
         &self,
-        slots: Vec<(QueueSlotId, QueueItem)>,
+        slots: Vec<ExecSlot>,
         start_idx: usize,
         client: Option<Arc<EmbyClient>>,
         headless: bool,
@@ -171,21 +171,21 @@ impl PlayerProxy {
                 if slots.is_empty() {
                     return false;
                 }
-                if slots.iter().any(|(_, item)| item.is_audiobookshelf())
+                if slots.iter().any(|slot| slot.item.is_audiobookshelf())
                     && !r.ctrl_compatibility.supports_abs_queue
                 {
                     return false;
                 }
                 if slots
                     .iter()
-                    .any(|(_, item)| item.is_audiobookshelf_book())
+                    .any(|slot| slot.item.is_audiobookshelf_book())
                     && !r.ctrl_compatibility.supports_abs_book_queue
                 {
                     return false;
                 }
                 let start_idx = start_idx.min(slots.len() - 1);
                 r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
-                    items: slots.into_iter().map(|(_, item)| item).collect(),
+                    items: slots.into_iter().map(|slot| slot.item).collect(),
                     start_idx: Some(start_idx),
                 })
             }
@@ -270,23 +270,23 @@ impl PlayerProxy {
         }
     }
 
-    pub fn queue_append(&self, slots: Vec<(QueueSlotId, QueueItem)>) -> bool {
+    pub fn queue_append(&self, slots: Vec<ExecSlot>) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.queue_append(slots),
             PlayerProxyInner::Remote(r) => {
-                if slots.iter().any(|(_, item)| item.is_audiobookshelf())
+                if slots.iter().any(|slot| slot.item.is_audiobookshelf())
                     && !r.ctrl_compatibility.supports_abs_queue
                 {
                     return false;
                 }
                 if slots
                     .iter()
-                    .any(|(_, item)| item.is_audiobookshelf_book())
+                    .any(|slot| slot.item.is_audiobookshelf_book())
                     && !r.ctrl_compatibility.supports_abs_book_queue
                 {
                     return false;
                 }
-                r.queue_append(slots.into_iter().map(|(_, item)| item).collect())
+                r.queue_append(slots.into_iter().map(|slot| slot.item).collect())
             }
         }
     }

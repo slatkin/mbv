@@ -69,10 +69,13 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
 /// Ids come from one monotonic counter per thread rather than a fixed base, so
 /// a test that seeds a run and *then* appends cannot hand the run an identity it
 /// already holds — the execution sequence asserts slot uniqueness on adoption.
-fn owner_paired(items: Vec<QueueItem>) -> Vec<(QueueSlotId, QueueItem)> {
+fn owner_paired(items: Vec<QueueItem>) -> Vec<ExecSlot> {
     items
         .into_iter()
-        .map(|item| (owner_slot_id(), item))
+        .map(|item| ExecSlot {
+            slot_id: owner_slot_id(),
+            item,
+        })
         .collect()
 }
 

@@ -311,7 +311,7 @@ pub enum PlayerCommand {
     /// Relative single-step backward nav; carries no request identity (see D4).
     Previous,
     QueueAppend {
-        items: Vec<(QueueSlotId, QueueItem)>,
+        items: Vec<ExecSlot>,
     },
     /// Remove an existing queue occurrence by its owner-assigned slot
     /// identity (never an ordinal — the occurrence may have moved since the
@@ -351,7 +351,7 @@ pub enum PlayerCommand {
     /// the same lifecycle path — source URL and reporting branch on `QueueItem`
     /// variant; everything else is shared.
     SubmitQueue {
-        items: Vec<(QueueSlotId, QueueItem)>,
+        items: Vec<ExecSlot>,
         start_idx: usize,
     },
 }

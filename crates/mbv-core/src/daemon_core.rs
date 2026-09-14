@@ -17,6 +17,7 @@ use crate::ctrl::{
     PlaybackIntentEvent, PlaybackIntentOutcome, PlaybackRequestId,
 };
 use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
+use crate::playback_execution_sequence::ExecSlot;
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::stream::SocketStream;
 use crate::ws::WsEvent;

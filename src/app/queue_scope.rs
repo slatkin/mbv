@@ -1,7 +1,8 @@
 use super::notify_actions::ToastSeverity;
 use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
 use mbv_core::api::EmbyItem;
-use mbv_core::playback_queue::{QueueItem, QueueMutationResult, QueueSlotId, RefreshMergeResult};
+use mbv_core::playback_execution_sequence::ExecSlot;
+use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
 use mbv_core::player::PlayerCommand;
 
 impl App {
@@ -86,7 +87,7 @@ impl App {
     pub(super) fn sync_playback_queue_items_after_append(
         &mut self,
         scope: QueueScope,
-        items: Vec<(mbv_core::playback_queue::QueueSlotId, QueueItem)>,
+        items: Vec<ExecSlot>,
     ) -> bool {
         if items.is_empty() || scope != self.playing_queue_scope() {
             return true;
