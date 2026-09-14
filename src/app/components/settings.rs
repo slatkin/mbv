@@ -8,7 +8,9 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent};
+use super::msg::{
+    LeafKeyResult, Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
@@ -431,7 +433,9 @@ impl Component for SettingsComponent {
 impl AppComponent<Msg, UserEvent> for SettingsComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => {
+                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
+            }
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

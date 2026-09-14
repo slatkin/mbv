@@ -13,7 +13,7 @@ use tuirealm::event::{Event, Key};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{ConfirmIntent, Msg, ShellRequest};
+use super::msg::{ConfirmIntent, LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_confirm_modal_content;
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
@@ -99,14 +99,24 @@ impl Component for ConfirmComponent {
     }
 }
 
+impl ConfirmComponent {
+    fn key_result(&self, key: &tuirealm::event::KeyEvent) -> LeafKeyResult {
+        let Some(action) = self.on_confirm.as_ref() else {
+            return LeafKeyResult::Unhandled;
+        };
+        let Some(intent) = confirm_intent_for_key(action, key.code) else {
+            return LeafKeyResult::Unhandled;
+        };
+        LeafKeyResult::Consumed(Some(Msg::Shell(ShellRequest::ConfirmIntent(intent))))
+    }
+}
+
 impl AppComponent<Msg, UserEvent> for ConfirmComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
-        let Event::Keyboard(key) = ev else {
-            return None;
-        };
-        let action = self.on_confirm.as_ref()?;
-        let intent = confirm_intent_for_key(action, key.code)?;
-        Some(Msg::Shell(ShellRequest::ConfirmIntent(intent)))
+        match ev {
+            Event::Keyboard(key) => self.key_result(key).into_option(),
+            _ => None,
+        }
     }
 }
 

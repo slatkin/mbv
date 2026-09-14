@@ -10,7 +10,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::Msg;
+use super::msg::{LeafKeyResult, Msg};
 use super::user_event::UserEvent;
 use crate::app::render::{render_multiselect_content, MultiSelectRenderModel};
 use crate::app::types_context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
@@ -210,7 +210,9 @@ impl Component for MultiselectComponent {
 impl AppComponent<Msg, UserEvent> for MultiselectComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => {
+                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
+            }
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

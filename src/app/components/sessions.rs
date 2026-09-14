@@ -14,7 +14,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
+use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::panel_targets::PanelTarget;
 
@@ -213,7 +213,9 @@ impl Component for SessionsComponent {
 impl AppComponent<Msg, UserEvent> for SessionsComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => {
+                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
+            }
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

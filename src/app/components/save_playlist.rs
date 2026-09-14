@@ -7,7 +7,7 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use super::msg::{Msg, SavePlaylistIntent, ShellRequest};
+use super::msg::{LeafKeyResult, Msg, SavePlaylistIntent, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_save_playlist_content;
 use crate::app::SavePlaylistStage;
@@ -148,7 +148,9 @@ impl Component for SavePlaylistComponent {
 impl AppComponent<Msg, UserEvent> for SavePlaylistComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => {
+                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
+            }
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

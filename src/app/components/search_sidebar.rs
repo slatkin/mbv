@@ -29,7 +29,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ServiceRequest, ShellRequest};
+use super::msg::{LeafKeyResult, Msg, ServiceRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::search_sidebar::SearchSidebar;
 use crate::app::ui_util::move_cursor;
@@ -356,7 +356,9 @@ impl Component for SearchSidebarComponent {
 impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => {
+                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
+            }
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             Event::User(UserEvent::Clock(now)) => self.handle_clock(*now),
             _ => None,

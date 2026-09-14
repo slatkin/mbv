@@ -10,7 +10,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{FeedsManageIntent, Msg, ShellRequest};
+use super::msg::{FeedsManageIntent, LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_feeds_manage_content, FeedsManageRenderModel};
 use crate::app::types_feeds_manage::{FeedForm, FeedFormField, FeedsManageStage};
@@ -352,7 +352,9 @@ impl Component for FeedsManageComponent {
 impl AppComponent<Msg, UserEvent> for FeedsManageComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => {
+                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
+            }
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
