@@ -124,6 +124,18 @@ fn previous_dispatches_and_reports_errors_without_tracking() {
 }
 
 #[test]
+fn direct_selection_dispatches_and_reports_errors_without_tracking() {
+    let (mut app, http) = remote_command_app();
+    let request = capture_error(&http, &mut app, |app| {
+        app.dispatch(action::Command::QueuePlayCursor(1));
+    });
+    assert!(request.starts_with("POST /Sessions/session/Playing HTTP/1.1"));
+    assert!(request.contains("ItemIds"));
+    assert!(request.contains("StartIndex"));
+    assert!(request.contains("StartPositionTicks"));
+}
+
+#[test]
 fn remote_jump_target_resolves_next_and_previous_without_tracking() {
     let mut app = attached_app();
     let mut first = app.player_tab.emby_items()[0].clone(); first.id = "a".into(); first.playback_position_ticks = 10;
