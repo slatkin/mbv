@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::components::QueueRequest;
+use rstest::{fixture, rstest};
 use crate::app::tests::*;
 
 #[test]
@@ -45,16 +46,29 @@ fn move_to_matches_two_keyboard_moves_and_records_one_undo() {
     assert_eq!(keyboard.queue_undo_stack.len(), 2);
 }
 
-#[test]
-fn move_queue_item_up_swaps_items_and_cursor_follows() {
+#[rstest]
+#[case::move_queue_item_up_swaps_items_and_cursor_follows(true, 1, 0, [1, 0, 2], true)]
+#[case::move_queue_item_down_swaps_items_and_cursor_follows(false, 1, 2, [0, 2, 1], true)]
+#[case::move_queue_item_up_is_noop_at_start_of_queue(true, 0, 0, [0, 1, 2], false)]
+#[case::move_queue_item_down_is_noop_at_end_of_queue(false, 2, 2, [0, 1, 2], false)]
+fn move_queue_item(
+    #[case] up: bool,
+    #[case] initial_cursor: usize,
+    #[case] expected_cursor: usize,
+    #[case] order: [usize; 3],
+    #[case] records_undo: bool,
+) {
     let _guard = crate::config::TestStateDirGuard::new();
     let items = make_items(3);
     let mut app = make_app_stub();
-    app.player_tab
-        .set_items(items.clone(), app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 1;
+    app.player_tab.set_items(items.clone(), app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = initial_cursor;
 
-    app.move_queue_item_up(app.player_tab.queue_cursor);
+    if up {
+        app.move_queue_item_up(app.player_tab.queue_cursor);
+    } else {
+        app.move_queue_item_down(app.player_tab.queue_cursor);
+    }
 
     assert_eq!(
         app.player_tab
@@ -62,87 +76,14 @@ fn move_queue_item_up_swaps_items_and_cursor_follows() {
             .iter()
             .map(|i| i.id.as_str())
             .collect::<Vec<_>>(),
-        vec![
-            items[1].id.as_str(),
-            items[0].id.as_str(),
-            items[2].id.as_str()
-        ]
+        order.iter().map(|&index| items[index].id.as_str()).collect::<Vec<_>>()
     );
-    assert_eq!(app.player_tab.queue_cursor, 0);
-    assert_eq!(app.queue_undo_stack.len(), 1);
-}
-
-#[test]
-fn move_queue_item_down_swaps_items_and_cursor_follows() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let items = make_items(3);
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(items.clone(), app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 1;
-
-    app.move_queue_item_down(app.player_tab.queue_cursor);
-
-    assert_eq!(
-        app.player_tab
-            .emby_items()
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>(),
-        vec![
-            items[0].id.as_str(),
-            items[2].id.as_str(),
-            items[1].id.as_str()
-        ]
-    );
-    assert_eq!(app.player_tab.queue_cursor, 2);
-    assert_eq!(app.queue_undo_stack.len(), 1);
-}
-
-#[test]
-fn move_queue_item_up_is_noop_at_start_of_queue() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let items = make_items(3);
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(items.clone(), app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 0;
-
-    app.move_queue_item_up(app.player_tab.queue_cursor);
-
-    assert_eq!(
-        app.player_tab
-            .emby_items()
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>(),
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
-    );
-    assert_eq!(app.player_tab.queue_cursor, 0);
-    assert!(app.queue_undo_stack.is_empty());
-}
-
-#[test]
-fn move_queue_item_down_is_noop_at_end_of_queue() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let items = make_items(3);
-    let mut app = make_app_stub();
-    app.player_tab
-        .set_items(items.clone(), app.player_tab.queue_cursor);
-    app.player_tab.queue_cursor = 2;
-
-    app.move_queue_item_down(app.player_tab.queue_cursor);
-
-    assert_eq!(
-        app.player_tab
-            .emby_items()
-            .iter()
-            .map(|i| i.id.as_str())
-            .collect::<Vec<_>>(),
-        items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
-    );
-    assert_eq!(app.player_tab.queue_cursor, 2);
-    assert!(app.queue_undo_stack.is_empty());
+    assert_eq!(app.player_tab.queue_cursor, expected_cursor);
+    if records_undo {
+        assert_eq!(app.queue_undo_stack.len(), 1);
+    } else {
+        assert!(app.queue_undo_stack.is_empty());
+    }
 }
 
 #[test]
@@ -556,10 +497,11 @@ fn moving_now_playing_item_keeps_cursor_on_it() {
 
 // ── Feed-slot preservation in queue sync ───────────────────────────────────
 
-fn make_feed_entry(guid: &str) -> mbv_core::playback_queue::FeedEntry {
+#[fixture]
+fn make_feed_entry() -> mbv_core::playback_queue::FeedEntry {
     mbv_core::playback_queue::FeedEntry {
-        guid: guid.into(),
-        title: format!("Feed {guid}"),
+        guid: "f1".into(),
+        title: "Feed f1".into(),
         enclosure_url: None,
         link: None,
         mime_type: None,
@@ -573,8 +515,8 @@ fn make_feed_entry(guid: &str) -> mbv_core::playback_queue::FeedEntry {
 }
 
 /// `slot_id_at` must resolve a Feed-tail index without dropping slots.
-#[test]
-fn slot_id_at_resolves_feed_slot_without_destruction() {
+#[rstest]
+fn slot_id_at_resolves_feed_slot_without_destruction(make_feed_entry: mbv_core::playback_queue::FeedEntry) {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab
@@ -583,9 +525,7 @@ fn slot_id_at_resolves_feed_slot_without_destruction() {
     let feed_sid = app
         .player_tab
         .queue
-        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry(
-            "f1",
-        )));
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry));
     assert_eq!(app.player_tab.queue.slots().len(), 3);
 
     let resolved = app.player_tab.slot_id_at(2);
@@ -599,8 +539,8 @@ fn slot_id_at_resolves_feed_slot_without_destruction() {
 
 /// Shift+Up on a Feed cursor now moves it — the Emby-only guard has
 /// been removed so either kind may move across the other.
-#[test]
-fn move_up_on_feed_cursor_preserves_feed_slots() {
+#[rstest]
+fn move_up_on_feed_cursor_preserves_feed_slots(make_feed_entry: mbv_core::playback_queue::FeedEntry) {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     app.player_tab
@@ -608,9 +548,7 @@ fn move_up_on_feed_cursor_preserves_feed_slots() {
 
     app.player_tab
         .queue
-        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry(
-            "f1",
-        )));
+        .append(mbv_core::playback_queue::QueueItem::Feed(make_feed_entry));
     // Cursor on the Feed slot (index 2, past the 2 Emby items).
     app.player_tab.queue_cursor = 2;
 
@@ -631,8 +569,8 @@ fn move_up_on_feed_cursor_preserves_feed_slots() {
     );
 }
 
-#[test]
-fn unified_queue_event_preserves_owner_slot_ids_and_source() {
+#[rstest]
+fn unified_queue_event_preserves_owner_slot_ids_and_source(make_feed_entry: mbv_core::playback_queue::FeedEntry) {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();
     let state = mbv_core::ctrl::UnifiedQueueStateData {
@@ -644,7 +582,7 @@ fn unified_queue_event_preserves_owner_slot_ids_and_source() {
             },
             mbv_core::ctrl::UnifiedQueueSlot {
                 slot_id: 97,
-                item: mbv_core::playback_queue::QueueItem::Feed(make_feed_entry("f1")),
+                item: mbv_core::playback_queue::QueueItem::Feed(make_feed_entry),
             },
         ],
         active_slot: Some(97),
