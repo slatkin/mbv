@@ -437,7 +437,7 @@ fn run_worker(
     drop(listener);
 }
 
-fn join_worker(handle: JoinHandle<()>) {
+pub(crate) fn join_worker(handle: JoinHandle<()>) {
     let (done_tx, done_rx) = mpsc::channel();
     thread::spawn(move || {
         if handle.join().is_err() {
