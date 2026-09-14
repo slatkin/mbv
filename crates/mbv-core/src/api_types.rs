@@ -259,9 +259,6 @@ pub struct EmbyItem {
     /// unchanged.
     #[serde(default)]
     pub image_tags: EmbyImageTags,
-    /// Emby's declared primary-artwork aspect ratio (width / height).
-    #[serde(default)]
-    pub primary_image_aspect: Option<f32>,
 }
 
 /// Declared image availability for one item (task 5.3, design D5): the
@@ -371,7 +368,6 @@ impl EmbyItem {
             genre: String::new(),
             playlist_item_id: String::new(),
             image_tags: EmbyImageTags::default(),
-            primary_image_aspect: None,
         }
     }
 

@@ -39,7 +39,6 @@ pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
         genre: String::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
-        primary_image_aspect: None,
     }
 }
 

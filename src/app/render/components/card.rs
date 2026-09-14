@@ -21,8 +21,6 @@ pub(in crate::app) struct QueueCardProjection {
     /// The artwork slot's cache key; `None` paints the bundled placeholder
     /// (empty queue, a source without artwork, or a resolved-empty fetch).
     pub(in crate::app) cache_key: Option<String>,
-    /// Emby's declared primary-artwork aspect ratio (width / height).
-    pub(in crate::app) primary_image_aspect: Option<f32>,
     /// Terminal images are off: the slot reserves its last painted geometry
     /// and paints nothing.
     pub(in crate::app) images_enabled: bool,
@@ -58,7 +56,6 @@ pub(in crate::app) fn queue_card_reserved_rect(
     terminal_height: u16,
     area: Rect,
     left_align: bool,
-    primary_image_aspect: Option<f32>,
 ) -> Rect {
     let (last_height, last_width) = last_card;
     let max_h = area.height.min(if terminal_height <= 30 { 12 } else { 24 });
@@ -74,13 +71,7 @@ pub(in crate::app) fn queue_card_reserved_rect(
         last_height
     };
     let width = if last_width == 0 {
-        if let Some(aspect) =
-            primary_image_aspect.filter(|aspect| aspect.is_finite() && *aspect > 0.0)
-        {
-            ((height as f32 * aspect).round() as u16)
-                .max(1)
-                .min(area.width)
-        } else if left_align {
+        if left_align {
             height.saturating_mul(2).min(area.width)
         } else {
             area.width
@@ -123,13 +114,7 @@ pub(in crate::app) fn render_card_painting(
     // The visualizer never reaches this painter (the `App` adapter paints it
     // from the shell's sample window); degenerate input reserves geometry.
     if projection.visualizer || !projection.images_enabled {
-        let rect = queue_card_reserved_rect(
-            last_card,
-            terminal_height,
-            area,
-            left_align,
-            projection.primary_image_aspect,
-        );
+        let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
         return (rect.height, rect.width, false);
     }
     // The bundled placeholder slot caps its height at 24 rows like the
@@ -183,13 +168,7 @@ pub(in crate::app) fn render_card_painting(
     // painted geometry holds the slot steady.
     let (last_height, last_width) = last_card;
     let reservation = if last_height == 0 && loading {
-        queue_card_reserved_rect(
-            last_card,
-            terminal_height,
-            area,
-            left_align,
-            projection.primary_image_aspect,
-        )
+        queue_card_reserved_rect(last_card, terminal_height, area, left_align)
     } else {
         Rect {
             x: area.x,
@@ -220,13 +199,7 @@ pub(in crate::app) fn render_card_painting(
     if placeholder_slot && reservation.height == 0 && last_width == 0 && !loading {
         // An empty queue with no previous artwork geometry still reserves its
         // fallback rectangle so toggling `v` never moves the queue list.
-        let rect = queue_card_reserved_rect(
-            last_card,
-            terminal_height,
-            area,
-            left_align,
-            projection.primary_image_aspect,
-        );
+        let rect = queue_card_reserved_rect(last_card, terminal_height, area, left_align);
         return (rect.height, rect.width, false);
     }
     (reservation.height, placeholder_w, loading)
@@ -244,7 +217,6 @@ impl App {
             self.terminal_height,
             area,
             left_align,
-            None,
         );
         let bg = palette::surface_colors(
             palette::Surface::QueueCardVisualizer,
@@ -277,7 +249,6 @@ impl App {
                 self.terminal_height,
                 area,
                 left_align,
-                projection.primary_image_aspect,
             );
             return (rect.height, rect.width, false);
         }
@@ -329,12 +300,11 @@ impl App {
     pub(in crate::app) fn refresh_queue_card_image(&mut self) {
         let mut projection = QueueCardProjection {
             cache_key: None,
-            primary_image_aspect: None,
             images_enabled: self.images_enabled(),
             visualizer: self.visualizer_enabled,
         };
         if projection.visualizer || !projection.images_enabled {
-            self.set_queue_card_projection(projection);
+            self.queue_card_projection = projection;
             return;
         }
         // Presentation: the visual slot follows a selected-but-unconfirmed
@@ -374,7 +344,7 @@ impl App {
                 _ => None,
             };
             let Some((item_id, is_book)) = cover_id else {
-                self.set_queue_card_projection(projection);
+                self.queue_card_projection = projection;
                 return;
             };
             let Some(server_url) = self
@@ -385,7 +355,7 @@ impl App {
                 .as_ref()
                 .map(|setup| setup.server_url.clone())
             else {
-                self.set_queue_card_projection(projection);
+                self.queue_card_projection = projection;
                 return;
             };
             if is_book {
@@ -407,7 +377,7 @@ impl App {
                 )
             };
             projection.cache_key = Some(cache_key);
-            self.set_queue_card_projection(projection);
+            self.queue_card_projection = projection;
             return;
         };
 
@@ -443,15 +413,6 @@ impl App {
             self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
         }
         projection.cache_key = Some(cache_key);
-        projection.primary_image_aspect = item.primary_image_aspect;
-        self.set_queue_card_projection(projection);
-    }
-
-    fn set_queue_card_projection(&mut self, projection: QueueCardProjection) {
-        if self.queue_card_projection.cache_key != projection.cache_key {
-            self.last_card_height = 0;
-            self.last_card_width = 0;
-        }
         self.queue_card_projection = projection;
     }
 }

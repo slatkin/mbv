@@ -274,11 +274,6 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
             .unwrap_or_default(),
         playlist_item_id: raw["PlaylistItemId"].as_str().unwrap_or("").to_string(),
         image_tags: parse_image_tags(raw),
-        primary_image_aspect: raw
-            .get("PrimaryImageAspectRatio")
-            .and_then(|value| value.as_f64().or_else(|| value.as_str()?.parse().ok()))
-            .map(|aspect| aspect as f32)
-            .filter(|aspect| aspect.is_finite() && *aspect > 0.0),
         audio_info: raw["MediaStreams"]
             .as_array()
             .map(|s| parse_audio_info(s))

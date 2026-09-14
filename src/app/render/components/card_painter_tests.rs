@@ -5,28 +5,6 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 #[test]
-fn known_aspect_seeds_loading_reservation_and_first_paint_geometry() {
-    let area = Rect::new(0, 0, 20, 10);
-    let projection = QueueCardProjection {
-        cache_key: Some("now-playing:P".into()),
-        primary_image_aspect: Some(1.0),
-        images_enabled: true,
-        visualizer: false,
-    };
-    let reserved =
-        queue_card_reserved_rect((0, 0), 40, area, true, projection.primary_image_aspect);
-    assert_eq!(reserved.width, reserved.height);
-
-    let mut term = Terminal::new(TestBackend::new(20, 10)).unwrap();
-    let mut result = (0, 0, false);
-    term.draw(|f| {
-        result = render_card_painting(f, area, true, &projection, true, None, (0, 0), 40);
-    })
-    .unwrap();
-    assert_eq!((result.0, result.1), (reserved.height, reserved.width));
-}
-
-#[test]
 fn card_painting_paints_from_projected_state_without_app_access() {
     let mut term = Terminal::new(TestBackend::new(20, 10)).unwrap();
     let area = Rect::new(0, 0, 20, 10);
@@ -36,7 +14,6 @@ fn card_painting_paints_from_projected_state_without_app_access() {
     // the dim loading block.
     let projection = QueueCardProjection {
         cache_key: Some("now-playing:P".into()),
-        primary_image_aspect: None,
         images_enabled: true,
         visualizer: false,
     };
@@ -65,7 +42,6 @@ fn card_painting_paints_from_projected_state_without_app_access() {
     // nothing — no fetch, no placeholder state.
     let off = QueueCardProjection {
         cache_key: Some("now-playing:P".into()),
-        primary_image_aspect: None,
         images_enabled: false,
         visualizer: false,
     };
@@ -92,7 +68,6 @@ fn card_painting_paints_from_projected_state_without_app_access() {
     // (the bundled placeholder's reservation) with no loading block.
     let placeholder = QueueCardProjection {
         cache_key: None,
-        primary_image_aspect: None,
         images_enabled: true,
         visualizer: false,
     };

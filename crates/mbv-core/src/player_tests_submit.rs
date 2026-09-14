@@ -143,7 +143,6 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         genre: String::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
-        primary_image_aspect: None,
     })));
     let feed_slot = queue.append(QueueItem::Feed(make_feed_entry("podcast-ep", "Podcast Ep")));
     let _other = queue.append(QueueItem::Feed(make_feed_entry("other-ep", "Other Ep")));

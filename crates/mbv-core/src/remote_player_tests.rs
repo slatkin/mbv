@@ -36,7 +36,6 @@ fn make_media_item(id: &str) -> EmbyItem {
         genre: String::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
-        primary_image_aspect: None,
     }
 }
 
