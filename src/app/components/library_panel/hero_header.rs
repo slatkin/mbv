@@ -14,8 +14,7 @@ use ratatui::Frame;
 
 use crate::app::palette;
 use crate::app::render::{
-    paint_wide_hero_text, render_artwork_placeholder, wrap_overview_lines, WrappedHeroLine,
-    PANE_PAD_X, PANE_PAD_Y,
+    paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
 
 use super::content::{HeroContent, HeroFacts, HeroHeader};
@@ -185,8 +184,13 @@ pub(in crate::app) fn paint_hero_pane_content(
         .map(str::trim)
         .filter(|text| !text.is_empty())
     {
+        // Matches `paint_wide_hero_text`'s own wrap width exactly (its
+        // `area` below is `box_content`, whose width is `content_w`, minus
+        // the same 1-column margin) so this measures the same line count
+        // the text will actually paint at, instead of double-wrapping.
         let content_w = area.width.saturating_sub(PANE_PAD_X * 2) as usize;
-        let lines = wrap_overview_lines(overview, |_| content_w);
+        let wrap_width = content_w.saturating_sub(1).max(1);
+        let lines = textwrap::wrap(overview, wrap_width);
         // One blank hero-pane row always separates the header text from the
         // recessed overview box. The gap row keeps the pane's resting fill
         // (the hero never takes the focused surface); only the rows below
@@ -244,14 +248,14 @@ pub(in crate::app) fn paint_hero_pane_content(
             };
             // Plain text, never destination-styled, and always soft white:
             // the overview is body content, so the hero pane's focus (derived
-            // from the Workspace, design D6) does not dim it.
-            let lines: Vec<WrappedHeroLine<'_>> = lines
-                .iter()
-                .map(|line| WrappedHeroLine {
-                    text: line,
-                    style: ratatui::style::Style::default().fg(palette::TEXT_EMPHASIS),
-                })
-                .collect();
+            // from the Workspace, design D6) does not dim it. `overview` is
+            // passed unwrapped: `paint_wide_hero_text` does the one and only
+            // wrap, at `box_content`'s width — pre-wrapping it here too (at
+            // a different width) was double-wrapping and stranding words.
+            let lines = [WrappedHeroLine {
+                text: overview,
+                style: ratatui::style::Style::default().fg(palette::TEXT_EMPHASIS),
+            }];
             paint_wide_hero_text(f, box_content, &lines);
             next_row = box_area.bottom();
         }
