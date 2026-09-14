@@ -31,8 +31,8 @@ use super::library_panel::hero::hero_content_emby;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    letter_grouped_rows, MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
-    Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
+    letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
+    MediaSemanticState, Presentation, RowIntent, RowLocalInput,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -381,37 +381,39 @@ impl BrowserContent {
         // (design D3: local movement sends the resolved value).
         match key.code {
             Key::Up | Key::Char('k') => {
-                self.carrier.delegate(RowLocalInput::Move(-1), None);
+                self.carrier
+                    .delegate_operation(MediaListOperation::Move(-1));
                 return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::Down | Key::Char('j') => {
-                self.carrier.delegate(RowLocalInput::Move(1), None);
+                self.carrier.delegate_operation(MediaListOperation::Move(1));
                 return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::PageUp => {
-                self.carrier.delegate(RowLocalInput::Page(-1), None);
+                self.carrier
+                    .delegate_operation(MediaListOperation::Page(-1));
                 return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::PageDown => {
-                self.carrier.delegate(RowLocalInput::Page(1), None);
+                self.carrier.delegate_operation(MediaListOperation::Page(1));
                 return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::Home => {
-                self.carrier.delegate(RowLocalInput::First, None);
+                self.carrier.delegate_operation(MediaListOperation::First);
                 return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::End => {
-                self.carrier.delegate(RowLocalInput::Last, None);
+                self.carrier.delegate_operation(MediaListOperation::Last);
                 return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                     index: self.cursor(),
                 }));
@@ -428,20 +430,17 @@ impl BrowserContent {
             }
             Key::Char('.') if key.modifiers.is_empty() => match self
                 .carrier
-                .delegate(RowLocalInput::Context, None)
+                .delegate_operation(MediaListOperation::ContextCurrent)
+                .external_intent
             {
-                RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
-                    Some(ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
-                        None,
-                    ))
-                }
-                RowLocalOutcome::External(RowIntent::Context(target)) => {
-                    Some(ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Browser(vec![target]),
-                        None,
-                    ))
-                }
+                Some(RowIntent::ContextSelection(targets)) => Some(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Browser(targets),
+                    None,
+                )),
+                Some(RowIntent::Context(target)) => Some(ShellRequest::RowContextMenu(
+                    crate::app::types_context_menu::ContextMenuTargets::Browser(vec![target]),
+                    None,
+                )),
                 _ => None,
             },
             Key::Char('s') if ctrl => selected.map(|item| ShellRequest::BrowserShuffle { item }),
@@ -563,7 +562,11 @@ impl LibraryContentOwner for BrowserContent {
                         // `video_cursor`/resting-cursor write and pagination
                         // through the same typed arm as keyboard movement
                         // (`shell_browser.rs::handle_browser_request`).
-                        self.carrier.delegate(input, None);
+                        self.carrier
+                            .delegate_operation(MediaListOperation::Move(match input {
+                                RowLocalInput::Wheel { delta, .. } => delta,
+                                _ => 0,
+                            }));
                         Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                             index: self.cursor(),
                         }))
@@ -572,7 +575,8 @@ impl LibraryContentOwner for BrowserContent {
                     | RowLocalInput::ToggleClick(_at)
                     | RowLocalInput::RangeClick(_at) => {
                         let target = target?;
-                        self.carrier.delegate(input, Some(target.clone()));
+                        self.carrier
+                            .delegate_operation(input.into_operation(Some(target.clone()))?);
                         if let Some(count) = self.carrier.selection_changed_msg() {
                             return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
                         }
@@ -580,10 +584,10 @@ impl LibraryContentOwner for BrowserContent {
                             target: Some(target),
                         }))
                     }
-                    RowLocalInput::DoubleClick(at) => {
+                    RowLocalInput::DoubleClick(_at) => {
                         let target = target?;
                         self.carrier
-                            .delegate(RowLocalInput::DoubleClick(at), Some(target.clone()));
+                            .delegate_operation(MediaListOperation::Activate(target.clone()));
                         Some(Msg::Shell(ShellRequest::BrowserRowActivate {
                             target: Some(target),
                         }))
@@ -592,12 +596,10 @@ impl LibraryContentOwner for BrowserContent {
                         let target = target?;
                         let outcome = self
                             .carrier
-                            .delegate(RowLocalInput::ContextClick(at), Some(target.clone()));
-                        let targets = match outcome {
-                            RowLocalOutcome::External(RowIntent::Context(target)) => vec![target],
-                            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
-                                targets
-                            }
+                            .delegate_operation(MediaListOperation::Context(target.clone()));
+                        let targets = match outcome.external_intent {
+                            Some(RowIntent::Context(target)) => vec![target],
+                            Some(RowIntent::ContextSelection(targets)) => targets,
                             _ => vec![target],
                         };
                         Some(Msg::Shell(ShellRequest::RowContextMenu(

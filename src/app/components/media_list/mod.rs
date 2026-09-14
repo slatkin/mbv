@@ -309,6 +309,28 @@ pub enum MediaListOperation<Target> {
     ContextSelection,
 }
 
+impl RowLocalInput {
+    pub fn into_operation<Target>(
+        self,
+        target: Option<Target>,
+    ) -> Option<MediaListOperation<Target>> {
+        Some(match self {
+            Self::Move(delta) => MediaListOperation::Move(delta),
+            Self::Page(delta) => MediaListOperation::Page(delta),
+            Self::First => MediaListOperation::First,
+            Self::Last => MediaListOperation::Last,
+            Self::Activate => MediaListOperation::ActivateCurrent,
+            Self::Context => MediaListOperation::ContextCurrent,
+            Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
+            Self::Click(_) => MediaListOperation::Select(target?),
+            Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
+            Self::RangeClick(_) => MediaListOperation::Range(target?),
+            Self::DoubleClick(_) => MediaListOperation::Activate(target?),
+            Self::ContextClick(_) => MediaListOperation::Context(target?),
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaListDisposition {
     Unhandled,
@@ -329,7 +351,7 @@ pub struct MediaListTransition<Target> {
 }
 
 impl<Target> MediaListTransition<Target> {
-    fn unhandled() -> Self {
+    pub(crate) fn unhandled() -> Self {
         Self {
             disposition: MediaListDisposition::Unhandled,
             selected_target: None,
@@ -669,6 +691,13 @@ impl<Target> MediaList<Target> {
     {
         let before = self.selected_target().cloned();
         let before_count = self.multi_selection.len();
+        let extends_range = matches!(
+            operation,
+            MediaListOperation::Move(_)
+                | MediaListOperation::Page(_)
+                | MediaListOperation::First
+                | MediaListOperation::Last
+        );
         let external_intent = match operation {
             MediaListOperation::Move(delta) => {
                 self.move_selection(delta);
@@ -712,6 +741,11 @@ impl<Target> MediaList<Target> {
             MediaListOperation::Context(target) => Some(self.context_intent(target)),
             MediaListOperation::ContextSelection => None,
         };
+        if extends_range && self.live_range {
+            if let Some(target) = self.selected_target().cloned() {
+                self.extend_selection_to(&target);
+            }
+        }
         let after = self.selected_target().cloned();
         let disposition = if before.is_some()
             || after.is_some()

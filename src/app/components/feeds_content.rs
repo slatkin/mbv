@@ -31,8 +31,8 @@ use super::library_panel::hero::hero_content_feed;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaSemanticState,
-    Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListTransition,
+    MediaSemanticState, Presentation, RowIntent, RowLocalInput,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
@@ -198,8 +198,12 @@ impl FeedsContent {
         &mut self,
         input: RowLocalInput,
         pointer_target: Option<String>,
-    ) -> RowLocalOutcome<String> {
-        self.carrier.delegate(input, pointer_target)
+    ) -> MediaListTransition<String> {
+        input
+            .into_operation(pointer_target)
+            .map_or_else(MediaListTransition::unhandled, |operation| {
+                self.carrier.delegate_operation(operation)
+            })
     }
 
     /// Cycle the Watched filter and re-project (the legacy `w` key).
@@ -292,21 +296,25 @@ impl FeedsContent {
                 self.cycle_group(1);
                 None
             }
-            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => {
-                    Some(Msg::Shell(ShellRequest::FeedsPlay(
-                        self.entry_for_target(&target)
-                            .cloned()
-                            .into_iter()
-                            .collect(),
-                    )))
-                }
+            Key::Enter => match self
+                .delegate_row_local_input(RowLocalInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::FeedsPlay(
+                    self.entry_for_target(&target)
+                        .cloned()
+                        .into_iter()
+                        .collect(),
+                ))),
                 _ => Some(Msg::Shell(ShellRequest::FeedsPlay(Vec::new()))),
             },
             Key::Char('.') => {
                 let target = self.carrier.selected_target()?.clone();
-                let entries = match self.delegate_row_local_input(RowLocalInput::Context, None) {
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                let entries = match self
+                    .delegate_row_local_input(RowLocalInput::Context, None)
+                    .external_intent
+                {
+                    Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
                         .filter_map(|target| self.entry_for_target(&target).cloned())
                         .collect(),
@@ -317,15 +325,16 @@ impl FeedsContent {
                     None,
                 )))
             }
-            Key::Char('e') => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => {
-                    Some(Msg::Shell(ShellRequest::FeedsEnqueue(
-                        self.entry_for_target(&target)
-                            .cloned()
-                            .into_iter()
-                            .collect(),
-                    )))
-                }
+            Key::Char('e') => match self
+                .delegate_row_local_input(RowLocalInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::FeedsEnqueue(
+                    self.entry_for_target(&target)
+                        .cloned()
+                        .into_iter()
+                        .collect(),
+                ))),
                 _ => Some(Msg::Shell(ShellRequest::FeedsEnqueue(Vec::new()))),
             },
             _ => None,
@@ -526,8 +535,8 @@ impl LibraryContentOwner for FeedsContent {
                 RowLocalInput::ContextClick(at) => {
                     let target = self.resolve_row_id(at)?;
                     let outcome = self.delegate_row_local_input(input, Some(target.clone()));
-                    let entries = match outcome {
-                        RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                    let entries = match outcome.external_intent {
+                        Some(RowIntent::ContextSelection(targets)) => targets
                             .into_iter()
                             .filter_map(|target| self.entry_for_target(&target).cloned())
                             .collect(),

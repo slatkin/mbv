@@ -21,8 +21,8 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibraryKey, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaSemanticState,
-    Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListTransition,
+    MediaSemanticState, Presentation, RowIntent, RowLocalInput,
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
@@ -225,8 +225,12 @@ impl HomeContent {
         &mut self,
         input: RowLocalInput,
         pointer_target: Option<String>,
-    ) -> RowLocalOutcome<String> {
-        self.carrier.delegate(input, pointer_target)
+    ) -> MediaListTransition<String> {
+        input
+            .into_operation(pointer_target)
+            .map_or_else(MediaListTransition::unhandled, |operation| {
+                self.carrier.delegate_operation(operation)
+            })
     }
 
     /// Home's typed request target for a stable item identity the shared
@@ -336,11 +340,14 @@ impl HomeContent {
                 None
             }
             Key::Char('.') if self.section == 0 => {
-                let targets = match self.delegate_row_local_input(RowLocalInput::Context, None) {
-                    RowLocalOutcome::External(RowIntent::Context(target)) => {
+                let targets = match self
+                    .delegate_row_local_input(RowLocalInput::Context, None)
+                    .external_intent
+                {
+                    Some(RowIntent::Context(target)) => {
                         vec![self.home_row_target(Some(target))]
                     }
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                    Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
                         .map(|target| self.home_row_target(Some(target)))
                         .collect(),
@@ -353,10 +360,13 @@ impl HomeContent {
             }
             Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
-            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
-                    ShellRequest::HomePlay(self.home_row_target(Some(target))),
-                )),
+            Key::Enter => match self
+                .delegate_row_local_input(RowLocalInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::HomePlay(
+                    self.home_row_target(Some(target)),
+                ))),
                 _ => None,
             },
             Key::Char('a') if ctrl => {
