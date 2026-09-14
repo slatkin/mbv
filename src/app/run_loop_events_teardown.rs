@@ -3,7 +3,18 @@
 
 use crate::app::{App, QUIT_REQUESTED};
 use std::sync::atomic::Ordering;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+
+fn player_join_outer_bound(quit_timeout: Duration) -> Duration {
+    quit_timeout + Duration::from_millis(200) + Duration::from_secs(1)
+}
+
+fn join_visualizer_worker(handle: Option<JoinHandle<()>>) {
+    if let Some(handle) = handle {
+        crate::app::visualizer_worker::join_worker(handle);
+    }
+}
 
 impl App {
     /// Shared local-player teardown sequence for both the signal-triggered
@@ -11,13 +22,10 @@ impl App {
     /// path (both now break out of `run()`'s event loop the same way) —
     /// these two used to diverge, one bounded and one not, which is #202:
     /// an unbounded join on a hung `report_stopped` call during shutdown
-    /// could hold the single-instance flock indefinitely. `quit_timeout`
-    /// bounds every blocking step below; the player thread's own nested
-    /// bounded calls (`ProgressGuard::stop_and_join`,
-    /// `SessionReporter::report_stopped_for_shutdown`) each derive their
-    /// own budget from the same value via `Player::stop_for_shutdown` —
-    /// see the `outer_bound` comment below for why the outer join needs
-    /// real headroom over those, not an identical `Duration`.
+    /// could hold the single-instance flock indefinitely. The player thread's
+    /// stopped report derives its own budget from `quit_timeout` via
+    /// `Player::stop_for_shutdown`, while the visualizer join remains bounded
+    /// independently by its worker shutdown timeout.
     ///
     /// Extracted from `run()`'s tail so it's callable directly against a
     /// stubbed `App` in tests without a real tty — `run()` itself remains
@@ -55,7 +63,13 @@ impl App {
         // doc comment) -- so flush it now rather than waiting for the
         // run loop's idle check, which won't run again.
         self.flush_library_position_now();
-        self.stop_visualizer_worker();
+        // Signal the visualizer before starting player shutdown so its worker
+        // can stop concurrently with the player thread.
+        let visualizer_handle = self.visualizer.take().and_then(|mut worker| {
+            let handle = worker.signal_stop();
+            self.visualizer_window = Default::default();
+            handle
+        });
         // Advance the queue lineage so any late work from this process cannot
         // be applied after teardown.
         self.advance_remote_queue_lineage();
@@ -217,29 +231,21 @@ impl App {
         }
         if !self.player.is_remote() {
             self.player.stop_for_shutdown(quit_timeout);
-            // The two nested bounded calls inside the player thread's own
-            // shutdown path (on_shutdown, run sequentially) do NOT share an
-            // identical budget: PlaybackSession::progress_join_budget gives
-            // ProgressGuard::stop_and_join only quit_timeout/2 (it's a
-            // secondary, non-network-critical join), while
-            // report_stopped_for_shutdown keeps the full quit_timeout as its
-            // own budget (the session-terminating call, worth protecting
-            // most — see progress_join_budget's doc comment). Worst case the
-            // two together take quit_timeout/2 + quit_timeout =
-            // 1.5*quit_timeout, so the outer bound below is that plus a 3s
-            // cushion — a real, explicit margin for the remaining
-            // bookkeeping and fixed overhead (thread-spawn cost, contended
-            // locks, drop cleanup; mark_played retry is fire-and-forget on a
-            // detached thread and the PlayerEvent::Stopped send is a cheap
-            // channel op), not just "the same Duration racing every layer of
-            // the timeout composition" as an earlier version of this
-            // function did.
-            let outer_bound = quit_timeout + quit_timeout / 2 + Duration::from_secs(3);
+            // During quit shutdown there is no progress-thread join and no WS
+            // flush. The player thread's worst case is the bounded stopped
+            // report (`quit_timeout`) plus the 200ms mpv quit fallback. The
+            // one-second cushion makes the outer join bound
+            // `quit_timeout + 200ms + 1s`. Join the visualizer while the
+            // player is still shutting down, using its own bounded join.
+            join_visualizer_worker(visualizer_handle);
+            let outer_bound = player_join_outer_bound(quit_timeout);
             let started = Instant::now();
             self.player.join_or_timeout(outer_bound);
             let elapsed = started.elapsed();
             log::info!(target: "player", "quit: player join finished in {}ms (bound={}ms)",
                 elapsed.as_millis(), outer_bound.as_millis());
+        } else {
+            join_visualizer_worker(visualizer_handle);
         }
         // After a failed shutdown request (Rejected, Disconnected,
         // TimedOut, or failure to connect Local), set a post-terminal message
@@ -308,5 +314,19 @@ impl App {
                 None
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::player_join_outer_bound;
+    use std::time::Duration;
+
+    #[test]
+    fn player_join_outer_bound_includes_quit_fallback_and_cushion() {
+        assert_eq!(
+            player_join_outer_bound(Duration::from_secs(5)),
+            Duration::from_millis(6_200)
+        );
     }
 }

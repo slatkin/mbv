@@ -44,11 +44,10 @@ impl PlaybackRun {
     /// UI/mpv can proceed immediately). Callers must still guard on
     /// `self.stop_report` before calling this.
     fn report_stop_now_or_background(&mut self, progress: &mut ProgressGuard) {
+        let _ = progress.stop_tx.send(());
         if self.is_quit_shutdown() {
-            progress.stop_and_join(self.progress_join_budget());
             self.stop_report = StopReport::mark_sent(self.report_stopped_for_current_context());
         } else {
-            let _ = progress.stop_tx.send(());
             let handle = progress.handle.take();
             let budget = self.progress_join_budget();
             let stopped = self.reporter.stopped_report_data(self.last_valid_pos);
@@ -74,40 +73,25 @@ impl PlaybackRun {
         }
     }
 
-    /// Budget for `ProgressGuard::stop_and_join`. During a real quit
-    /// (`shutdown_report_timeout` set via `Player::stop_for_shutdown`),
-    /// this is deliberately *half* of `quit_timeout_secs`, not the full
-    /// value: `report_stopped_for_shutdown` (see
-    /// `report_stopped_for_current_context`) keeps the full
-    /// `quit_timeout_secs` as its own budget per the spec's resolved
-    /// design (it's the session-terminating call and the one worth
-    /// protecting most), so giving this secondary, non-network-critical
-    /// join the same full budget would leave the outer teardown bound
-    /// with only a thin, constant margin over the worst case of the two
-    /// nested calls combined — see `App::teardown`'s `outer_bound` for
-    /// the composition this budget feeds into. Outside of shutdown
-    /// (ordinary track transitions), there is no time pressure, so a
-    /// generous fixed budget (matching the shared agent's own ~30s worst
-    /// case) just guards against a truly stuck thread without adding
-    /// latency to the common fast case.
+    /// Budget for `ProgressGuard::stop_and_join` during ordinary track
+    /// transitions. There is no time pressure, so a generous fixed budget
+    /// just guards against a truly stuck thread without adding latency to
+    /// the common fast case.
     fn progress_join_budget(&self) -> Duration {
-        match *self.shutdown_report_timeout.lock().unwrap() {
-            Some(quit_timeout) => quit_timeout / 2,
-            None => Duration::from_secs(30),
-        }
+        Duration::from_secs(30)
     }
 
     /// Clears any pending-quit state so a `LoadNew`/`SubmitQueue` command
     /// that arrives while a quit is in flight fully cancels it — not just
-    /// `quit_at`, but also the shutdown-scoped report budget set by
+    /// `quit_at`, but also the shutdown-scoped report context set by
     /// `Player::stop_for_shutdown`. Without resetting
     /// `shutdown_report_timeout` here too, a cancelled quit would leave it
     /// `Some` for the rest of this `PlaybackRun`'s lifetime (nothing
     /// else clears it once set), so every subsequent track transition
-    /// would silently keep using the tight shutdown budget/no-retry
-    /// behavior via `progress_join_budget`/`report_stopped_for_current_context`
-    /// instead of the ordinary one — no crash, just quietly degraded
-    /// reliability for the rest of the session.
+    /// would silently keep using the shutdown report behavior from
+    /// `report_stopped_for_current_context` instead of the ordinary one —
+    /// no crash, just quietly degraded reliability for the rest of the
+    /// session.
     fn cancel_pending_quit(&mut self) {
         self.quit_at = None;
         self.stop_slot = None;
