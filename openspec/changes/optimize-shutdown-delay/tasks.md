@@ -1,9 +1,9 @@
 ## 1. Player thread shutdown (mbv-core)
 
-- [ ] 1.1 Reduce mpv quit fallback from 2s to 200ms in `player_run_run.rs:97` — change `Duration::from_secs(2)` to `Duration::from_millis(200)`. Verify: `cargo check -p mbv-core`
-- [ ] 1.2 In `report_stop_now_or_background` (`player_run_queue.rs:46–49`), skip `progress.stop_and_join()` during shutdown: send the stop signal (`stop_tx.send(())`) but don't join. Keep the non-shutdown path unchanged. Verify: `cargo check -p mbv-core`
-- [ ] 1.3 In `report_stopped_for_shutdown` (`player_report_worker.rs:287–290`), remove the `ws_tx.flush()` call. Verify: `cargo check -p mbv-core`
-- [ ] 1.4 Update or remove the `cancel_pending_quit_clears_quit_at_and_shutdown_timeout` test and any other tests that assert on the old shutdown budget or progress-join behavior. Verify: `cargo nextest run -p mbv-core`
+- [x] 1.1 Reduce mpv quit fallback from 2s to 200ms in `player_run_run.rs:97` — change `Duration::from_secs(2)` to `Duration::from_millis(200)`. Verify: `cargo check -p mbv-core`
+- [x] 1.2 In `report_stop_now_or_background` (`player_run_queue.rs:46–49`), skip `progress.stop_and_join()` during shutdown: send the stop signal (`stop_tx.send(())`) but don't join. Keep the non-shutdown path unchanged. Verify: `cargo check -p mbv-core`
+- [x] 1.3 In `report_stopped_for_shutdown` (`player_report_worker.rs:287–290`), remove the `ws_tx.flush()` call. Verify: `cargo check -p mbv-core`
+- [x] 1.4 Update or remove the `cancel_pending_quit_clears_quit_at_and_shutdown_timeout` test and any other tests that assert on the old shutdown budget or progress-join behavior. Verify: `cargo nextest run -p mbv-core`
 
 ## 2. App teardown (mbv binary)
 
