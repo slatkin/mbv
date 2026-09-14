@@ -135,14 +135,21 @@ fn live_tick_local_mutation_precedes_root_observation() {
         message,
         Msg::TerminalEvent(TerminalObserverEvent::Key(_))
     )));
-    assert!(second.messages.is_empty(), "local mutation emits no shell request");
-    assert_eq!(second.raw_messages.len(), 1, "only the root observes this local key");
+    assert!(second.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    assert!(second.messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    assert_eq!(second.raw_messages.len(), 2, "leaf claim and root observation");
     assert_eq!(
         search_component_mut(&mut harness).debounce_pending.as_deref(),
         Some("ab"),
         "the focused search component mutated its local query before root observation"
     );
-    assert_eq!(first.raw_messages.len(), 1);
+    assert_eq!(first.raw_messages.len(), 2, "each local key yields a leaf claim and root observation");
 }
 
 pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSidebarComponent {
@@ -159,7 +166,10 @@ pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSide
 fn arm_search_query(harness: &mut TickHarness, query: &str) {
     for c in query.chars() {
         let message = search_component_mut(harness).on(&key(Key::Char(c)));
-        assert!(message.is_none(), "typing search chars stays local");
+        assert!(matches!(
+            message,
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ), "typing search chars is locally consumed");
     }
 }
 
