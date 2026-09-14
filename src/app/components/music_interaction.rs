@@ -55,9 +55,7 @@ impl MusicContent {
                         MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::ToggleClick(at) | MediaListSurfaceInput::RangeClick(at) => {
                             let target = self.carrier.resolve_current_point(at)?.clone();
                             self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
-                            if let Some(count) = self.carrier.selection_changed_msg() {
-                                return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                            }
+                            let _ = ();
                             Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
                                 target: self.selected_album_index(),
                                 kind: AlbumCursorKind::Move,
@@ -69,9 +67,7 @@ impl MusicContent {
                         MediaListSurfaceInput::ContextClick(at) => {
                             let target = self.carrier.resolve_current_point(at)?.clone();
                             let outcome = self.carrier.delegate_operation(input.into_operation(Some(target.clone())).expect("resolved media-list pointer target"));
-                            if let Some(count) = self.carrier.selection_changed_msg() {
-                                return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                            }
+                            let _ = ();
                             let items = match outcome.external_intent {
                                 Some(RowIntent::ContextSelection(targets)) => targets
                                     .into_iter()
@@ -133,9 +129,7 @@ impl MusicContent {
                     let target = self.track_list.resolve_current_point(at)?.clone();
                     let item = self.context.album_tracks.as_deref().unwrap_or_default().iter().find(|track| track.id == target)?.clone();
                     let outcome = self.track_list.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
-                    if let Some(count) = self.track_list.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                     let items = match outcome.external_intent {
                         Some(RowIntent::ContextSelection(targets)) => targets
                             .into_iter()

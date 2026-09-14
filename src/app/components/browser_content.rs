@@ -366,8 +366,10 @@ impl BrowserContent {
         }
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         let alt = key.modifiers.contains(KeyModifiers::ALT);
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if alt && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down) {
             return None;
@@ -588,9 +590,7 @@ impl LibraryContentOwner for BrowserContent {
                         let target = target?;
                         self.carrier
                             .delegate_operation(input.into_operation(Some(target.clone()))?);
-                        if let Some(count) = self.carrier.selection_changed_msg() {
-                            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                        }
+                        let _ = ();
                         Some(Msg::Shell(ShellRequest::BrowserRowClick {
                             target: Some(target),
                         }))

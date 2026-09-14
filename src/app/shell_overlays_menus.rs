@@ -166,7 +166,9 @@ impl Model {
                 self.app
                     .execute_context_action(action, self.home_context_item.clone());
                 if is_bulk {
-                    self.clear_multi_selection();
+                    if let Some(origin) = self.context_menu_origin.take() {
+                        self.clear_multi_selection_from_origin(origin);
+                    }
                 }
             }
             ContextMenuIntent::Dismiss => self.dismiss_context_menu(),
@@ -190,7 +192,9 @@ impl Model {
         self.app
             .execute_context_action(action, self.home_context_item.clone());
         if is_bulk {
-            self.clear_multi_selection();
+            if let Some(origin) = self.context_menu_origin.take() {
+                self.clear_multi_selection_from_origin(origin);
+            }
         }
     }
 
@@ -213,21 +217,6 @@ impl Model {
                         panel.clear_active_selection();
                     }
                 }
-            }
-        }
-    }
-
-    pub(crate) fn clear_multi_selection(&mut self) {
-        self.visual_selection = None;
-        if self.app.effective_panel_focus() == PanelFocus::Queue {
-            if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue) {
-                if let Some(queue) = comp.as_any_mut().downcast_mut::<QueueComponent>() {
-                    queue.clear_selection();
-                }
-            }
-        } else if let Some(comp) = self.application.get_component_mut(&ComponentId::Library) {
-            if let Some(panel) = comp.as_any_mut().downcast_mut::<LibraryPanel>() {
-                panel.clear_active_selection();
             }
         }
     }

@@ -277,8 +277,10 @@ impl QueueComponent {
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         match key.code {
             Key::Char('[')
@@ -475,9 +477,7 @@ impl QueueComponent {
                         ClickModifier::None => MediaListSurfaceInput::Click(at),
                     };
                     self.delegate_row_local_input(input, Some(target));
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                 }
                 self.drag_grab = if modifier == ClickModifier::None {
                     target
@@ -512,9 +512,7 @@ impl QueueComponent {
                     MediaListSurfaceInput::ContextClick(at),
                     Some(slot_id),
                 );
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
+                let _ = ();
                 let targets = match outcome.external_intent {
                     Some(RowIntent::Context(target)) => vec![target],
                     Some(RowIntent::ContextSelection(targets)) => targets,

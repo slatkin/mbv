@@ -298,8 +298,10 @@ impl HomeContent {
     /// owns every global chord and keeps precedence).
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if key.modifiers.contains(KeyModifiers::ALT)
             && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
@@ -509,9 +511,7 @@ impl LibraryContentOwner for HomeContent {
                 ) {
                     self.carrier
                         .delegate_operation(input.into_operation(target.clone())?);
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                 }
                 match input {
                     MediaListSurfaceInput::Wheel { .. } => {
@@ -533,9 +533,7 @@ impl LibraryContentOwner for HomeContent {
                             self.carrier
                                 .delegate_operation(MediaListOperation::Context(target))
                         };
-                        if let Some(count) = self.carrier.selection_changed_msg() {
-                            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                        }
+                        let _ = ();
                         let targets = match outcome.external_intent {
                             Some(RowIntent::Context(target)) => {
                                 vec![self.home_row_target(Some(target))]

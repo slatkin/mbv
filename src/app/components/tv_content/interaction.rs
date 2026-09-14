@@ -78,9 +78,7 @@ impl TvContent {
             MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::ToggleClick(at) | MediaListSurfaceInput::RangeClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
                 self.apply_pane_click(hit.clone(), at, input);
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
+                let _ = ();
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             MediaListSurfaceInput::DoubleClick(at) => {
@@ -92,9 +90,7 @@ impl TvContent {
                 let target = self.carrier.resolve_current_point(at)?.clone();
                 let item = self.context.list.items.iter().find(|item| item.id == target)?.clone();
                 let outcome = self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
+                let _ = ();
                 let items = match outcome.external_intent {
                     Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
@@ -137,9 +133,7 @@ impl TvContent {
         match input {
             MediaListSurfaceInput::Click(_) | MediaListSurfaceInput::ToggleClick(_) | MediaListSurfaceInput::RangeClick(_) => {
                 self.apply_pane_click(hit.clone(), at, input);
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
+                let _ = ();
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
             MediaListSurfaceInput::DoubleClick(_) => {
@@ -156,9 +150,7 @@ impl TvContent {
                     TvHit::EpisodeRow(target) => target.clone(),
                     _ => return None,
                 })).expect("resolved media-list pointer target"));
-                if let Some(count) = self.episodes.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
+                let _ = ();
                 let items = match outcome.external_intent {
                     Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
@@ -296,13 +288,13 @@ impl TvContent {
             self.carrier.select_target(target);
             self.carrier.extend_selection_to(target);
         }
-        self.carrier.selection_changed_msg();
+        let _ = self.carrier.selection_summary();
     }
 
     #[cfg(test)]
     pub(crate) fn context_click_for_test(&mut self, target: String) -> Option<usize> {
         self.carrier.delegate_operation(MediaListSurfaceInput::ContextClick(Position::new(0, 0)).into_operation(Some(target)).expect("resolved media-list pointer target"));
-        self.carrier.selection_changed_msg()
+        Some(self.carrier.multi_selection().len())
     }
 
     /// Test-only: the shared owner's current rows' semantic states, in

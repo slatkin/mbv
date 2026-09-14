@@ -4,8 +4,25 @@ use crate::app::types_settings::PanelFocus;
 use std::time::Instant;
 
 impl Model {
-    pub(crate) fn set_visual_selection_count(&mut self, count: usize) {
-        self.visual_selection = (count > 0).then_some((self.app.effective_panel_focus(), count));
+    fn refresh_visual_selection(&mut self) {
+        let summary = if self.app.effective_panel_focus() == PanelFocus::Queue {
+            self.application
+                .get_component(&crate::app::components::ComponentId::Queue)
+                .and_then(|component| {
+                    component
+                        .as_any()
+                        .downcast_ref::<crate::app::components::QueueComponent>()
+                })
+                .map(|queue| queue.selection_summary())
+        } else {
+            self.application
+                .get_component_mut(&crate::app::components::ComponentId::Library)
+                .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+                .and_then(|panel| panel.focused_summary())
+        };
+        self.visual_selection = summary
+            .filter(|summary| summary.count > 0)
+            .map(|summary| (self.app.effective_panel_focus(), summary.count));
     }
 
     pub(crate) fn handle_terminal_message(
@@ -14,6 +31,7 @@ impl Model {
         music_resize: &mut bool,
         tv_resize: &mut bool,
     ) -> bool {
+        self.refresh_visual_selection();
         let mut quit = false;
         match msg {
             Msg::TerminalEvent(event) => {
@@ -21,8 +39,9 @@ impl Model {
             }
             Msg::Shell(request) => {
                 match request {
-                    ShellRequest::SelectionChanged(count) => {
-                        self.set_visual_selection_count(count);
+                    ShellRequest::SelectionProjection(summary) => {
+                        self.visual_selection = (summary.count > 0)
+                            .then_some((self.app.effective_panel_focus(), summary.count));
                     }
                     ShellRequest::ClearMultiSelection(origin) => {
                         // The status-bar request carries the legacy default
@@ -449,6 +468,8 @@ impl Model {
                         crate::app::types_context_menu::ContextMenuTargets::Queue(slot_ids),
                         anchor,
                     ) => {
+                        self.context_menu_origin =
+                            Some(crate::app::components::media_list::SelectionOrigin::Queue);
                         if slot_ids.len() > 1 {
                             let scope = self.app.viewed_queue_scope();
                             let (items, remove_targets, capabilities) = slot_ids
@@ -501,6 +522,11 @@ impl Model {
                     }
                     // Other destination payloads are converted in later slices.
                     ShellRequest::RowContextMenu(targets, anchor) => {
+                        self.context_menu_origin = Some(
+                            crate::app::components::media_list::SelectionOrigin::Library(
+                                crate::app::components::media_list::LibrarySelectionOrigin::Home,
+                            ),
+                        );
                         match targets {
                             crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {
                                 if items.len() > 1 {

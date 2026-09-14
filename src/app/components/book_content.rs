@@ -483,9 +483,7 @@ impl BookContent {
                             .into_operation(Some(target))
                             .expect("resolved media-list pointer target"),
                     );
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                     self.sync_book_from_owner();
                     self.book_request()
                 }
@@ -580,8 +578,10 @@ impl LibraryContentOwner for BookContent {
     }
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Books is focused.

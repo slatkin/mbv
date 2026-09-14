@@ -435,8 +435,10 @@ impl LibraryContentOwner for MusicContent {
                 None => None,
             };
         }
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Music is focused.

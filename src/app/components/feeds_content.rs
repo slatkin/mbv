@@ -250,8 +250,10 @@ impl FeedsContent {
     /// router owns every global chord and keeps precedence). Page movement
     /// uses the shared owner's canonical page stride.
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if key.modifiers.contains(KeyModifiers::CONTROL)
             || key.modifiers.contains(KeyModifiers::ALT)
@@ -538,9 +540,7 @@ impl LibraryContentOwner for FeedsContent {
                 | MediaListSurfaceInput::RangeClick(at) => {
                     let target = self.resolve_row_id(at)?;
                     self.delegate_row_local_input(input, Some(target));
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                     Some(Msg::Shell(ShellRequest::FeedsRowClick))
                 }
                 MediaListSurfaceInput::ContextClick(at) => {

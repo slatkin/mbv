@@ -383,9 +383,7 @@ impl LibraryContentOwner for PodcastContent {
                             .into_operation(Some(target))
                             .expect("resolved media-list pointer target"),
                     );
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                     self.sync_show_selection();
                     self.show_move()
                 }
@@ -396,9 +394,7 @@ impl LibraryContentOwner for PodcastContent {
                             .into_operation(None)
                             .expect("resolved media-list pointer target"),
                     );
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                     self.sync_show_selection();
                     self.show_move()
                 }
@@ -445,8 +441,10 @@ impl LibraryContentOwner for PodcastContent {
     }
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if !self.focused {
             return None;

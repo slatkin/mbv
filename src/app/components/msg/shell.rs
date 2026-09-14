@@ -62,10 +62,8 @@ pub enum ShellRequest {
     /// stores the session override. Live-only: there is no end/persist
     /// variant, because nothing is persisted.
     ResizeListPaneLive(u16),
-    /// The focused list changed its Visual selection. The shell records the
-    /// count once; components never expose their local selection state for
-    /// router queries.
-    SelectionChanged(usize),
+    /// Project the focused list's count-only summary to the Status bar.
+    SelectionProjection(crate::app::components::media_list::SelectionSummary),
     /// Clear the active list's Visual selection from the status indicator.
     ClearMultiSelection(crate::app::components::media_list::SelectionOrigin),
     /// Select the left-panel tab at the position the mounted `TabPanel`
