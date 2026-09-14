@@ -298,7 +298,7 @@ pub(in crate::app) fn render_wide_skeleton(
         // one title/meta painter, and the overview box when overview text
         // exists. Returns the first unpainted row and the projected image's
         // reserved box (task 5.10: `Ready` reserves; the shell paints).
-        let (next_row, image_box) = paint_hero_pane_content(f, hero_area, &*hero);
+        let (next_row, image_box) = paint_hero_pane_content(f, hero_area, &*hero, false);
         if let (HeroImageState::Ready { cache_key, .. }, Some(box_rect)) =
             (&hero.facts.artwork.image, image_box)
         {

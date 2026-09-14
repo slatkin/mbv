@@ -96,7 +96,15 @@ pub(in crate::app) fn paint_overview_box(
         row = row.saturating_add(1);
     }
     if let Some(credits) = credits {
-        paint_credits(f, Rect { y: row, ..inner }, credits);
+        paint_credits(
+            f,
+            Rect {
+                y: row,
+                height: inner.bottom().saturating_sub(row),
+                ..inner
+            },
+            credits,
+        );
     }
     Some(panel.bottom())
 }
@@ -107,6 +115,9 @@ fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
         .map(|c| UnicodeWidthStr::width(c.name.as_str()))
         .max()
         .unwrap_or(0) as u16;
+    // Keep enough room for the role column even when one name is unusually long.
+    const MIN_ROLE_WIDTH: u16 = 8;
+    let name_width = name_width.min(area.width.saturating_sub(MIN_ROLE_WIDTH));
     let role_x = area.x.saturating_add(name_width).saturating_add(2);
     for (i, credit) in credits.iter().enumerate() {
         let y = area.y.saturating_add(i as u16);
@@ -163,8 +174,13 @@ fn truncate_ellipsis(text: &str, width: usize) -> String {
     out
 }
 
+fn contains_control(text: &str) -> bool {
+    text.chars()
+        .any(|ch| ch.is_ascii_control() || matches!(ch, '\u{80}'..='\u{9f}'))
+}
+
 pub(in crate::app) fn sanitize_url(url: &str) -> Option<&str> {
-    if url.is_empty() || url.bytes().any(|b| b.is_ascii_control()) {
+    if url.is_empty() || contains_control(url) {
         return None;
     }
     let scheme = url.split_once(":")?.0;
@@ -175,6 +191,10 @@ pub(in crate::app) fn sanitize_url(url: &str) -> Option<&str> {
     }
 }
 
+fn sanitize_label(label: &str) -> Option<&str> {
+    (!contains_control(label)).then_some(label)
+}
+
 pub(in crate::app) fn hyperlinks_supported(term_program: Option<&str>, term: Option<&str>) -> bool {
     matches!(
         term_program,
@@ -182,11 +202,13 @@ pub(in crate::app) fn hyperlinks_supported(term_program: Option<&str>, term: Opt
     ) || matches!(term, Some(t) if t == "foot" || t.starts_with("xterm-kitty") || t.starts_with("vte-"))
 }
 
-pub(in crate::app) fn overlay_links(f: &mut Frame, area: Rect, facts: &HeroFacts) {
-    if !hyperlinks_supported(
-        std::env::var("TERM_PROGRAM").ok().as_deref(),
-        std::env::var("TERM").ok().as_deref(),
-    ) {
+pub(in crate::app) fn overlay_links(
+    f: &mut Frame,
+    area: Rect,
+    facts: &HeroFacts,
+    hyperlink_capable: bool,
+) {
+    if !hyperlink_capable {
         return;
     }
     let joined = facts
@@ -205,7 +227,7 @@ pub(in crate::app) fn overlay_links(f: &mut Frame, area: Rect, facts: &HeroFacts
     let mut y = area.y;
     for line in std::iter::once(&facts.title)
         .chain(facts.meta_rows.iter())
-        .take(index + 1)
+        .take(index + 2)
     {
         let lines = textwrap::wrap(line, wrap);
         if line == &joined {
@@ -215,9 +237,14 @@ pub(in crate::app) fn overlay_links(f: &mut Frame, area: Rect, facts: &HeroFacts
             let mut offset = 0usize;
             for link in &facts.links {
                 let label_width = UnicodeWidthStr::width(link.name.as_str());
-                if label_width > 0 && offset + label_width <= area.width as usize {
-                    if let Some(url) = sanitize_url(&link.url) {
-                        let symbol = format!("\x1b]8;;{url}\x1b\\{}\x1b]8;;\x1b\\", link.name);
+                if label_width > 0
+                    && y < area.bottom()
+                    && offset + label_width <= area.width as usize
+                {
+                    if let (Some(url), Some(label)) =
+                        (sanitize_url(&link.url), sanitize_label(&link.name))
+                    {
+                        let symbol = format!("\x1b]8;;{url}\x1b\\{label}\x1b]8;;\x1b\\");
                         if let Some(cell) = f.buffer_mut().cell_mut((area.x + offset as u16, y)) {
                             if let Some(width) = NonZeroU16::new(label_width as u16) {
                                 cell.set_symbol(&symbol)
@@ -237,6 +264,7 @@ pub(in crate::app) fn overlay_links(f: &mut Frame, area: Rect, facts: &HeroFacts
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::library_panel::content::{HeroArtwork, HeroLink};
 
     #[test]
     fn sanitizer_accepts_only_web_urls_without_controls() {
@@ -257,5 +285,131 @@ mod tests {
         assert!(hyperlinks_supported(None, Some("vte-256color")));
         assert!(!hyperlinks_supported(None, None));
         assert!(!hyperlinks_supported(Some("xterm"), Some("xterm-256color")));
+    }
+
+    #[test]
+    fn sanitizer_rejects_control_bytes_in_urls_and_labels() {
+        assert_eq!(sanitize_url("https://example.test/\n"), None);
+        assert_eq!(sanitize_url("https://example.test/\u{0085}"), None);
+        assert_eq!(sanitize_label("IMDb\n"), None);
+        assert_eq!(sanitize_label("IMDb\u{009b}"), None);
+    }
+
+    #[test]
+    fn supported_link_overlays_forced_width_escape_cell_on_links_row() {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(30, 3)).unwrap();
+        let facts = HeroFacts {
+            title: "Title".into(),
+            meta_rows: vec!["IMDb".into()],
+            links: vec![HeroLink {
+                name: "IMDb".into(),
+                url: "https://example.test".into(),
+            }],
+            artwork: HeroArtwork {
+                shape: super::super::content::ArtworkShape::Landscape,
+                source: None,
+                image: super::super::content::HeroImageState::None,
+            },
+        };
+        terminal
+            .draw(|f| {
+                paint_wide_hero_text(
+                    f,
+                    Rect::new(0, 0, 30, 3),
+                    &[
+                        WrappedHeroLine {
+                            text: "Title",
+                            style: Style::default(),
+                        },
+                        WrappedHeroLine {
+                            text: "IMDb",
+                            style: Style::default(),
+                        },
+                    ],
+                );
+                overlay_links(f, Rect::new(0, 0, 30, 3), &facts, true);
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(0, 1)];
+        assert!(cell.symbol().contains("\x1b]8;;https://example.test"));
+        assert_eq!(
+            cell.diff_option,
+            CellDiffOption::ForcedWidth(NonZeroU16::new(4).unwrap())
+        );
+    }
+
+    #[test]
+    fn unsupported_link_is_plain_text() {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(30, 2)).unwrap();
+        let facts = HeroFacts {
+            title: "Title".into(),
+            meta_rows: vec!["IMDb".into()],
+            links: vec![HeroLink {
+                name: "IMDb".into(),
+                url: "https://example.test".into(),
+            }],
+            artwork: HeroArtwork {
+                shape: super::super::content::ArtworkShape::Landscape,
+                source: None,
+                image: super::super::content::HeroImageState::None,
+            },
+        };
+        terminal
+            .draw(|f| overlay_links(f, Rect::new(0, 0, 30, 2), &facts, false))
+            .unwrap();
+        assert_eq!(terminal.backend().buffer()[(0, 1)].symbol(), " ");
+    }
+
+    #[test]
+    fn credits_clip_and_role_column_survives_long_name() {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(24, 3)).unwrap();
+        terminal
+            .draw(|f| {
+                paint_credits(
+                    f,
+                    Rect::new(0, 0, 24, 1),
+                    &[HeroCredit {
+                        name: "A very long credit name".into(),
+                        role: "Actor".into(),
+                    }],
+                );
+            })
+            .unwrap();
+        assert_eq!(terminal.backend().buffer()[(0, 1)].symbol(), " ");
+        let row = (0..24)
+            .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+            .collect::<String>();
+        assert!(
+            row.contains("Actor"),
+            "role column survives long name: {row:?}"
+        );
+    }
+
+    #[test]
+    fn link_outside_box_is_not_overlaid() {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(20, 1)).unwrap();
+        let facts = HeroFacts {
+            title: "Title".into(),
+            meta_rows: vec!["Link".into()],
+            links: vec![HeroLink {
+                name: "Link".into(),
+                url: "https://example.test".into(),
+            }],
+            artwork: HeroArtwork {
+                shape: super::super::content::ArtworkShape::Landscape,
+                source: None,
+                image: super::super::content::HeroImageState::None,
+            },
+        };
+        terminal
+            .draw(|f| overlay_links(f, Rect::new(0, 0, 20, 1), &facts, true))
+            .unwrap();
+        assert!(!terminal.backend().buffer()[(0, 0)]
+            .symbol()
+            .contains("\x1b]8"));
     }
 }

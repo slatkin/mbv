@@ -133,6 +133,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     f: &mut Frame,
     area: Rect,
     content: &HeroContent<'_>,
+    hyperlink_capable: bool,
 ) -> (u16, Option<Rect>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
@@ -160,7 +161,7 @@ pub(in crate::app) fn paint_hero_pane_content(
             ..area
         },
     };
-    let mut next_row = paint_title_and_meta(f, text_area, &content.facts);
+    let mut next_row = paint_title_and_meta(f, text_area, &content.facts, hyperlink_capable);
     // The header's painted bottom edge includes a right-side artwork box the
     // text block may not reach.
     if header.arm() != super::content::HeroHeaderArm::Landscape {
@@ -181,7 +182,12 @@ pub(in crate::app) fn paint_hero_pane_content(
 /// design D5). Returns the first unpainted row. The un-migrated legacy
 /// `Hero` painters style the same Emby meta rows by meaning instead
 /// (`hero_model.rs::emby_meta_row_styles`); 9.1 converges the two.
-fn paint_title_and_meta(f: &mut Frame, area: Rect, facts: &HeroFacts) -> u16 {
+fn paint_title_and_meta(
+    f: &mut Frame,
+    area: Rect,
+    facts: &HeroFacts,
+    hyperlink_capable: bool,
+) -> u16 {
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
@@ -195,7 +201,7 @@ fn paint_title_and_meta(f: &mut Frame, area: Rect, facts: &HeroFacts) -> u16 {
         });
     }
     let next_row = paint_wide_hero_text(f, area, &lines);
-    overview_box::overlay_links(f, area, facts);
+    overview_box::overlay_links(f, area, facts, hyperlink_capable);
     next_row
 }
 
@@ -258,7 +264,7 @@ mod hero_header_tests {
         let pane_area = area;
         terminal
             .draw(|f| {
-                paint_hero_pane_content(f, pane_area, pane);
+                paint_hero_pane_content(f, pane_area, pane, false);
             })
             .unwrap();
         terminal.backend().buffer().clone()
