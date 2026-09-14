@@ -213,9 +213,17 @@ impl Component for SessionsComponent {
 impl AppComponent<Msg, UserEvent> for SessionsComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => {
-                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
-            }
+            Event::Keyboard(key) => match self.handle_key(key) {
+                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                None if matches!(
+                    key.code,
+                    Key::Up | Key::Down | Key::Enter | Key::Esc | Key::Char(_)
+                ) =>
+                {
+                    LeafKeyResult::Consumed(None).into_option()
+                }
+                None => LeafKeyResult::Unhandled.into_option(),
+            },
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

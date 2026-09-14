@@ -624,7 +624,21 @@ impl LibraryContentOwner for BrowserContent {
         let active = self.inline_search.is_active();
         match self.handle_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
-            None if active => LeafKeyResult::Consumed(None),
+            None if active
+                && matches!(
+                    key.code,
+                    Key::Esc
+                        | Key::Enter
+                        | Key::Backspace
+                        | Key::Up
+                        | Key::Down
+                        | Key::Left
+                        | Key::Right
+                        | Key::Char(_)
+                ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
             None => LeafKeyResult::Unhandled,
         }
     }

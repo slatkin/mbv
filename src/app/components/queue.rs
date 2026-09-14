@@ -247,7 +247,27 @@ impl QueueComponent {
     }
 
     fn handle_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
-        LeafKeyResult::from_unhandled_option(self.handle_key(key))
+        match self.handle_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if matches!(
+                key.code,
+                Key::Up
+                    | Key::Down
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Home
+                    | Key::End
+                    | Key::Left
+                    | Key::Right
+                    | Key::Enter
+                    | Key::Delete
+                    | Key::Char('[' | ']' | '.' | 'i' | 'p' | 's' | 'c' | 'z')
+            ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {

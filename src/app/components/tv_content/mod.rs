@@ -557,7 +557,21 @@ impl LibraryContentOwner for TvContent {
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.on_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
-            None if self.inline_search.is_active() => LeafKeyResult::Consumed(None),
+            None if self.inline_search.is_active()
+                && matches!(
+                    key.code,
+                    tuirealm::event::Key::Esc
+                        | tuirealm::event::Key::Enter
+                        | tuirealm::event::Key::Backspace
+                        | tuirealm::event::Key::Up
+                        | tuirealm::event::Key::Down
+                        | tuirealm::event::Key::Left
+                        | tuirealm::event::Key::Right
+                        | tuirealm::event::Key::Char(_)
+                ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
             None => LeafKeyResult::Unhandled,
         }
     }

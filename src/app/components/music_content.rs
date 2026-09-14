@@ -583,7 +583,31 @@ impl LibraryContentOwner for MusicContent {
         let active = self.inline_search.is_active();
         match self.on_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
-            None if active || self.track_focused => LeafKeyResult::Consumed(None),
+            None if (active
+                && matches!(
+                    key.code,
+                    Key::Esc
+                        | Key::Enter
+                        | Key::Backspace
+                        | Key::Up
+                        | Key::Down
+                        | Key::Left
+                        | Key::Right
+                        | Key::Char(_)
+                ))
+                || (self.track_focused
+                    && matches!(
+                        key.code,
+                        Key::Enter
+                            | Key::Esc
+                            | Key::Backspace
+                            | Key::Up
+                            | Key::Down
+                            | Key::Char('k' | 'j' | '.')
+                    )) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
             None => LeafKeyResult::Unhandled,
         }
     }

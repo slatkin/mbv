@@ -111,7 +111,21 @@ impl LibraryPlaybackPanel {
     }
 
     fn key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
-        LeafKeyResult::from_unhandled_option(self.key(key))
+        match self.key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if matches!(
+                key.code,
+                Key::Char(' ')
+                    | Key::Esc
+                    | Key::Left
+                    | Key::Right
+                    | Key::Char('m' | '[' | ']' | '<' | '>')
+            ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     fn key(&mut self, key: &KeyEvent) -> Option<Msg> {

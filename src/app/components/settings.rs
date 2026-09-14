@@ -433,9 +433,24 @@ impl Component for SettingsComponent {
 impl AppComponent<Msg, UserEvent> for SettingsComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => {
-                LeafKeyResult::from_unhandled_option(self.handle_key(key)).into_option()
-            }
+            Event::Keyboard(key) => match self.handle_key(key) {
+                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                None if matches!(
+                    key.code,
+                    Key::Up
+                        | Key::Down
+                        | Key::Tab
+                        | Key::BackTab
+                        | Key::Enter
+                        | Key::Backspace
+                        | Key::Esc
+                        | Key::Char(_)
+                ) =>
+                {
+                    LeafKeyResult::Consumed(None).into_option()
+                }
+                None => LeafKeyResult::Unhandled.into_option(),
+            },
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

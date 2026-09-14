@@ -545,6 +545,21 @@ impl LibraryContentOwner for HomeContent {
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.handle_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if matches!(
+                key.code,
+                Key::Up
+                    | Key::Down
+                    | Key::Left
+                    | Key::Right
+                    | Key::Home
+                    | Key::End
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Enter
+            ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
             None => LeafKeyResult::Unhandled,
         }
     }
