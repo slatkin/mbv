@@ -227,8 +227,8 @@ fn wide_both_columns_panels_and_chrome_follow_the_table() {
             ),
         );
         // No title band: one blank QueuePanel row sits above the list (the
-        // scope pills moved to the status bar — covered by the status-bar
-        // scope-pill tests).
+        // scope pills paint in the QueueColumn footer — covered by the
+        // queue-component scope-pill tests).
         let placement = model.app.queue_panel_placement();
         let blank_y = queue_view.content_area.y - 1;
         assert!(
@@ -424,8 +424,8 @@ fn queue_only_strip_and_queue_follow_the_table() {
         ),
     );
     // No title band: one blank QueuePanel row sits above the list (the
-    // scope pills moved to the status bar — covered by the status-bar
-    // scope-pill tests).
+    // scope pills paint in the QueueColumn footer — covered by the
+    // queue-component scope-pill tests).
     let placement = model.app.queue_panel_placement();
     let blank_y = queue_view.content_area.y - 1;
     assert!(

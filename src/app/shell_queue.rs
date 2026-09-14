@@ -179,9 +179,15 @@ impl Model {
                 }
                 queue.set_cursor(cursor);
                 queue.set_scope(scope);
+                // The footer pills are all queue concern (playlist source,
+                // autosave, Local/Remote scope while on an mbv-based
+                // session) — never the library column's status bar.
+                let title = self.app.queue_title_model();
+                let scope_pills = (title.show_split && title.is_mbv_session).then_some(title);
                 queue.set_status_pills(
                     self.app.playlist_status_spans(),
                     self.app.autosave_status_spans(),
+                    scope_pills,
                 );
                 // The queue panel's placement (task 3.1): computed from the
                 // same paint-free checkpoint the draw path consumes (the last

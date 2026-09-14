@@ -2,15 +2,16 @@
 //! (`RootFrame.status_bar` placement, task 2.2; design D10).
 //!
 //! Owns the status row's pointer regions: the volume pill (scroll adjusts
-//! the volume), the mute pill (click toggles mute), and the queue-scope
-//! pills (click switches the queue scope, moved from the queue column's
-//! removed title band). The remote/session pill region is retained verbatim,
-//! but it has no click dispatch: `show_session_pill` is hard-coded `false`
-//! (preserved from the base frame), so the pill never paints and the region
-//! stays `None`. The pill/right-segment spans are shell-produced
-//! content (`chrome_status.rs`), projected one-way by
-//! `Model::sync_status_bar_panel`; the component owns the overflow
-//! drop-order, pill geometry and event resolution.
+//! the volume) and the mute pill (click toggles mute). The remote/session
+//! pill region is retained verbatim, but it has no click dispatch:
+//! `show_session_pill` is hard-coded `false` (preserved from the base
+//! frame), so the pill never paints and the region stays `None`. The
+//! pill/right-segment spans are shell-produced content (`chrome_status.rs`),
+//! projected one-way by `Model::sync_status_bar_panel`; the component owns
+//! the overflow drop-order, pill geometry and event resolution.
+//!
+//! The Local/Remote queue-scope pills are queue concern and live in the
+//! QueueColumn footer (`QueueComponent`), never here.
 
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -24,7 +25,6 @@ use super::msg::{Msg, PlaybackRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::action::VOLUME_STEP;
 use crate::app::render::{render_status_bar, StatusBarModel, StatusBarRegions};
-use crate::app::types_playback::QueueScope;
 
 /// The status row panel: paints the status row where `RootFrame` places it
 /// and retains its volume/mute/remote pill regions.
@@ -69,26 +69,13 @@ impl StatusBarPanel {
                 // Same `Command::ToggleMute` the `m` key dispatches.
                 Some(Msg::Playback(PlaybackRequest::ToggleMute))
             }
-            // Queue-scope pills (moved from the queue column's removed title
-            // band): the same `QueueScopeClick` the title pills emitted.
+            // The visual-mode indicator clears the multi-selection; the
+            // Local/Remote queue-scope pills live in the QueueColumn footer
+            // (`QueueComponent`), so the status row has no scope dispatch.
             MouseEventKind::Down(MouseButton::Left)
                 if self.regions.visual_clear.is_some_and(|r| r.contains(at)) =>
             {
                 Some(Msg::Shell(ShellRequest::ClearMultiSelection))
-            }
-            MouseEventKind::Down(MouseButton::Left)
-                if self.regions.scope_local.is_some_and(|r| r.contains(at)) =>
-            {
-                Some(Msg::Shell(ShellRequest::QueueScopeClick {
-                    scope: QueueScope::Local,
-                }))
-            }
-            MouseEventKind::Down(MouseButton::Left)
-                if self.regions.scope_remote.is_some_and(|r| r.contains(at)) =>
-            {
-                Some(Msg::Shell(ShellRequest::QueueScopeClick {
-                    scope: QueueScope::Remote,
-                }))
             }
             _ => None,
         }
@@ -136,18 +123,6 @@ mod tests {
     use ratatui::Terminal;
 
     use crate::app::palette;
-    use crate::app::render::components::queue::QueueTitleModel;
-
-    fn scope_title(local_selected: bool) -> QueueTitleModel {
-        QueueTitleModel {
-            local_icon: String::new(),
-            local_label: String::new(),
-            remote_icon: "M".into(),
-            local_selected,
-            show_split: true,
-            is_mbv_session: true,
-        }
-    }
 
     fn pill(text: impl Into<String>, fg: Color) -> Vec<Span<'static>> {
         let fill = palette::surface_colors(palette::Surface::StatusBarPill, false).fill;
@@ -165,7 +140,6 @@ mod tests {
             mute,
             volume,
             right: pill("R", Color::White),
-            queue_scope: None,
             visual_mode: None,
         }
     }
@@ -369,126 +343,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    /// The queue-scope pills (moved from the queue column's removed title
-    /// band): while connected to an mbv-based session they paint at the far
-    /// right — Local selected — and each region sits over its painted pill.
-    #[test]
-    fn status_row_paints_queue_scope_pills_at_the_far_right() {
-        let mut panel = StatusBarPanel::new();
-        let mut m = model(pill(" 60", palette::ACCENT), None);
-        m.queue_scope = Some(scope_title(true));
-        panel.set_model(m);
-        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
-        terminal
-            .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
-            .unwrap();
-        let buffer = terminal.backend().buffer().clone();
-        let row: String = (0..60).map(|x| buffer[(x, 0)].symbol()).collect();
-        assert!(row.contains("\u{2302}"), "local pill row: {row:?}");
-        assert!(row.contains(" M "), "remote pill row: {row:?}");
-
-        let regions = panel.regions();
-        let local = regions.scope_local.expect("local scope region");
-        let remote = regions.scope_remote.expect("remote scope region");
-        assert_eq!(
-            remote.right(),
-            60,
-            "scope pills end at the row's right edge"
-        );
-        assert_eq!(local.right(), remote.x, "local precedes remote");
-        let local_text: String = (local.x..local.right())
-            .map(|x| buffer[(x, 0)].symbol())
-            .collect();
-        assert!(
-            local_text.contains("\u{2302}"),
-            "local pill row: {local_text:?}"
-        );
-        // Selected Local keeps the scope-selected fill; unselected Remote
-        // the chip fill.
-        assert_eq!(
-            buffer[(local.x + 1, 0)].style().bg,
-            Some(palette::surface_colors(palette::Surface::QueueScopePillSelected, false).fill)
-        );
-        assert_eq!(
-            buffer[(remote.x + 1, 0)].style().bg,
-            Some(palette::surface_colors(palette::Surface::PillChip, false).fill)
-        );
-    }
-
-    /// Clicking a queue-scope pill emits the matching `QueueScopeClick` —
-    /// the same message the removed title pills emitted.
-    #[test]
-    fn click_on_a_queue_scope_pill_emits_the_scope_click() {
-        let mut panel = StatusBarPanel::new();
-        let mut m = model(pill(" 60", palette::ACCENT), None);
-        m.queue_scope = Some(scope_title(false));
-        panel.set_model(m);
-        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
-        terminal
-            .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
-            .unwrap();
-        let regions = panel.regions();
-        let click = |x: u16| {
-            Event::Mouse(tuirealm::event::MouseEvent {
-                kind: MouseEventKind::Down(MouseButton::Left),
-                column: x,
-                row: 0,
-                modifiers: tuirealm::event::KeyModifiers::NONE,
-            })
-        };
-        assert_eq!(
-            panel.on(&click(regions.scope_local.expect("local region").x + 1)),
-            Some(Msg::Shell(ShellRequest::QueueScopeClick {
-                scope: QueueScope::Local,
-            }))
-        );
-        assert_eq!(
-            panel.on(&click(regions.scope_remote.expect("remote region").x + 1)),
-            Some(Msg::Shell(ShellRequest::QueueScopeClick {
-                scope: QueueScope::Remote,
-            }))
-        );
-    }
-
-    /// Without an mbv-based session there are no scope pills and no scope
-    /// regions — the right segment keeps the far right.
-    #[test]
-    fn status_row_hides_queue_scope_pills_when_disconnected() {
-        let mut panel = StatusBarPanel::new();
-        panel.set_model(model(pill(" 60", palette::ACCENT), None));
-        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
-        terminal
-            .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
-            .unwrap();
-        let buffer = terminal.backend().buffer().clone();
-        let row: String = (0..60).map(|x| buffer[(x, 0)].symbol()).collect();
-        assert!(!row.contains("\u{2302}"), "no scope pill row: {row:?}");
-        assert!(panel.regions().scope_local.is_none());
-        assert!(panel.regions().scope_remote.is_none());
-    }
-
-    /// On a narrow terminal the scope pills win over the right segment: the
-    /// service glyphs yield first so scope switching stays reachable.
-    #[test]
-    fn narrow_status_row_keeps_scope_pills_over_the_right_segment() {
-        let mut panel = StatusBarPanel::new();
-        let mut m = model(pill(" 60", palette::ACCENT), None);
-        m.queue_scope = Some(scope_title(true));
-        panel.set_model(m);
-        // Left (5) + right (3) + scope (6): too narrow for all three, wide
-        // enough for left + scope.
-        let mut terminal = Terminal::new(TestBackend::new(12, 1)).unwrap();
-        terminal
-            .draw(|f| panel.view(f, Rect::new(0, 0, 12, 1)))
-            .unwrap();
-        let buffer = terminal.backend().buffer().clone();
-        let row: String = (0..12).map(|x| buffer[(x, 0)].symbol()).collect();
-        assert!(
-            row.contains("\u{2302}"),
-            "scope pills survive narrowing: {row:?}"
-        );
-        assert!(panel.regions().scope_remote.is_some());
     }
 }

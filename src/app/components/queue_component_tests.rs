@@ -594,3 +594,90 @@ fn queue_scope_switch_resets_component_scroll() {
         "set_content scope change must reset the component's own scroll"
     );
 }
+
+fn scope_title(local_selected: bool) -> crate::app::render::components::queue::QueueTitleModel {
+    crate::app::render::components::queue::QueueTitleModel {
+        local_icon: String::new(),
+        local_label: String::new(),
+        remote_icon: "M".into(),
+        local_selected,
+        show_split: true,
+        is_mbv_session: true,
+    }
+}
+
+fn footer_component(
+    scope: Option<crate::app::render::components::queue::QueueTitleModel>,
+) -> QueueComponent {
+    let mut component = QueueComponent::new();
+    component.set_content(
+        queue(),
+        QueueCursorUpdate::Set(0),
+        QueueScope::Local,
+        PlaybackState::default(),
+    );
+    component.set_status_pills(Vec::new(), None, scope);
+    component.set_focused(true);
+    let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    component
+}
+
+fn click(column: u16, row: u16) -> Event<super::user_event::UserEvent> {
+    Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers: KeyModifiers::NONE,
+    })
+}
+
+/// The QueueColumn footer paints the Local/Remote scope pills (queue
+/// concern, while on an mbv-based session) at the far right, each region
+/// over its painted pill.
+#[test]
+fn queue_footer_paints_scope_pills_at_the_far_right() {
+    let component = footer_component(Some(scope_title(true)));
+    let (local, remote) = component.test_scope_pill_areas();
+    let local = local.expect("local scope region");
+    let remote = remote.expect("remote scope region");
+    assert_eq!(local.right(), remote.x, "local precedes remote");
+    assert_eq!(
+        remote.right(),
+        38,
+        "scope pills end at the footer's right edge"
+    );
+    assert_eq!(local.y, 10, "scope pills sit on the footer row");
+}
+
+/// Clicking a footer scope pill emits the matching `QueueScopeClick`.
+#[test]
+fn click_on_a_footer_scope_pill_emits_the_scope_click() {
+    let mut component = footer_component(Some(scope_title(false)));
+    let (local, remote) = component.test_scope_pill_areas();
+    let local = local.expect("local region");
+    let remote = remote.expect("remote region");
+    assert_eq!(
+        component.on(&click(local.x + 1, local.y)),
+        Some(Msg::Shell(ShellRequest::QueueScopeClick {
+            scope: QueueScope::Local
+        }))
+    );
+    assert_eq!(
+        component.on(&click(remote.x + 1, remote.y)),
+        Some(Msg::Shell(ShellRequest::QueueScopeClick {
+            scope: QueueScope::Remote
+        }))
+    );
+}
+
+/// Without an mbv-based session the footer shows no scope pills and a
+/// footer click resolves to no scope message.
+#[test]
+fn queue_footer_hides_scope_pills_when_disconnected() {
+    let mut component = footer_component(None);
+    assert_eq!(component.test_scope_pill_areas(), (None, None));
+    assert_eq!(component.on(&click(37, 10)), None);
+}

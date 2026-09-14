@@ -100,7 +100,8 @@ pub(in crate::app) fn render_queue_status(
     area: Rect,
     playlist: Vec<Span<'static>>,
     autosave: Option<Vec<Span<'static>>>,
-) {
+    scope: Option<QueueTitleModel>,
+) -> (Option<Rect>, Option<Rect>) {
     frame.render_widget(
         Block::default().style(
             Style::default()
@@ -109,12 +110,77 @@ pub(in crate::app) fn render_queue_status(
         area,
     );
     frame.render_widget(Paragraph::new(Line::from(playlist)), area);
+    // The Local/Remote scope pills (queue concern, shown only for an
+    // mbv-based session): at the far right, winning over autosave and the
+    // playlist on narrow footers — scope switching stays reachable.
+    let (scope_local, scope_remote) = match scope.filter(|m| m.show_split && m.is_mbv_session) {
+        Some(m) => {
+            let selected_bg =
+                palette::surface_colors(palette::Surface::QueueScopePillSelected, false).fill;
+            let chip_bg = palette::surface_colors(palette::Surface::PillChip, false).fill;
+            let (local_bg, local_fg, remote_bg, remote_fg) = if m.local_selected {
+                (
+                    selected_bg,
+                    palette::TEXT_FOCUS_ACCENT,
+                    chip_bg,
+                    palette::PILL_FG,
+                )
+            } else {
+                (
+                    chip_bg,
+                    palette::PILL_FG,
+                    selected_bg,
+                    palette::TEXT_FOCUS_ACCENT,
+                )
+            };
+            let local_span = Span::styled(" \u{2302} ", Style::default().fg(local_fg).bg(local_bg));
+            let remote_span = Span::styled(
+                format!(" {} ", m.remote_icon),
+                Style::default().fg(remote_fg).bg(remote_bg),
+            );
+            let local_w = local_span.content.width() as u16;
+            let remote_w = remote_span.content.width() as u16;
+            let scope_w = local_w + remote_w;
+            if scope_w == 0 || scope_w >= area.width {
+                (None, None)
+            } else {
+                let scope_x = area.x + area.width - scope_w;
+                frame.render_widget(
+                    Paragraph::new(Line::from(vec![local_span, remote_span])),
+                    Rect {
+                        x: scope_x,
+                        y: area.y,
+                        width: scope_w,
+                        height: 1,
+                    },
+                );
+                (
+                    Some(Rect {
+                        x: scope_x,
+                        y: area.y,
+                        width: local_w,
+                        height: 1,
+                    }),
+                    Some(Rect {
+                        x: scope_x + local_w,
+                        y: area.y,
+                        width: remote_w,
+                        height: 1,
+                    }),
+                )
+            }
+        }
+        None => (None, None),
+    };
     if let Some(spans) = autosave {
         let width = spans
             .iter()
             .map(|span| span.content.width() as u16)
             .sum::<u16>();
-        let x = area.x + area.width.saturating_sub(width);
+        // Autosave yields the far right to the scope pills when shown.
+        let scope_w = scope_remote.map(|r| r.right() - r.x).unwrap_or(0)
+            + scope_local.map(|r| r.right() - r.x).unwrap_or(0);
+        let x = area.x + area.width.saturating_sub(scope_w).saturating_sub(width);
         if x > area.x {
             frame.render_widget(
                 Paragraph::new(Line::from(spans)),
@@ -127,4 +193,5 @@ pub(in crate::app) fn render_queue_status(
             );
         }
     }
+    (scope_local, scope_remote)
 }

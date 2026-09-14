@@ -186,13 +186,14 @@ impl Model {
 
     /// Mount/unmount the `StatusBarPanel` to the `RootFrame.status_bar`
     /// placement and project the status-row content (pill and right-segment
-    /// spans, built by `chrome_status.rs`'s App-side builders).
+    /// spans, built by `chrome_status.rs`'s App-side builders). The
+    /// Local/Remote queue-scope pills are queue concern: the shell projects
+    /// them into the `QueueComponent` footer in `sync_queue`, never here.
     pub(super) fn sync_status_bar_panel(&mut self) {
         let placement = self.sync_chrome_root().status_bar;
         self.mount_to_placement(ChromePanel::StatusBar, placement);
         let id = ChromePanel::StatusBar.id();
-        // The base frame has always passed `show_session_pill: false` here:
-        // the queue-scope pills below show the same remote/session info.
+        // The base frame has always passed `show_session_pill: false` here.
         let show_session_pill = false;
         let remote_status = if show_session_pill {
             let endpoint = self
@@ -207,17 +208,15 @@ impl Model {
         } else {
             Vec::new()
         };
-        // Queue-scope pills (moved from the queue column's removed title
-        // band): shown only while connected to an mbv-based session.
-        let title = self.app.queue_title_model();
-        let queue_scope = (title.show_split && title.is_mbv_session).then_some(title);
+        // Queue-scope pills are queue concern (projected into the
+        // `QueueComponent` footer in `sync_queue`); the status row carries
+        // only the library column's own pills.
         let model = StatusBarModel {
             show_session_pill,
             remote: remote_status,
             mute: self.app.mute_status_spans(),
             volume: self.app.volume_status_spans(),
             right: self.app.status_bar_right_spans(),
-            queue_scope,
             visual_mode: self
                 .visual_selection
                 .map(|(_, count)| VisualModeIndicator { count }),

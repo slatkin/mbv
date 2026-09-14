@@ -6,10 +6,12 @@
 //! methods here are content production only: they read app state and build
 //! the pill/right-segment spans the shell projects into the component. The
 //! free [`render_status_bar`] is the component's painter.
+//!
+//! The Local/Remote queue-scope pills are queue concern and paint in the
+//! QueueColumn footer (`render_queue_status`), never here.
 
 use super::chrome::{daemon_endpoint_label, service_state_color};
 use super::indicators;
-use super::queue::QueueTitleModel;
 use crate::app::{palette, App, PanelFocus, RemoteSlotState};
 use ratatui::layout::Rect;
 use ratatui::style::{Color, Modifier, Style};
@@ -527,8 +529,6 @@ pub(in crate::app) struct StatusBarModel {
     pub volume: Vec<Span<'static>>,
     /// Fully built right segment (scope label, username, service glyphs).
     pub right: Vec<Span<'static>>,
-    /// Queue-scope pills, present only for an mbv-based session.
-    pub queue_scope: Option<QueueTitleModel>,
     /// Visual-mode count indicator, when selected items exist.
     pub visual_mode: Option<VisualModeIndicator>,
 }
@@ -542,10 +542,6 @@ pub(in crate::app) struct StatusBarRegions {
     pub mute: Option<Rect>,
     /// Remote/session pill region, when the session pill is enabled.
     pub remote: Option<Rect>,
-    /// Queue-scope Local pill, when the scope pills are shown.
-    pub scope_local: Option<Rect>,
-    /// Queue-scope Remote pill, when the scope pills are shown.
-    pub scope_remote: Option<Rect>,
     /// Visual-mode region; clicking it clears selection.
     pub visual_clear: Option<Rect>,
 }
@@ -556,9 +552,9 @@ pub(in crate::app) struct StatusBarRegions {
 /// Persistent bottom status bar. Left side: volume, connection,
 /// and mute status groups. Right side: queue source/save-state/scope
 /// detail and the service-state glyphs (Emby, Audiobookshelf,
-/// stay-alive), with the queue-scope pills (Local/Remote,
-/// while connected to an mbv-based session) at the far right.
-/// The playlist status pill renders in the left queue panel instead.
+/// stay-alive). The playlist status pill renders in the left queue panel
+/// instead; the Local/Remote queue-scope pills paint in the QueueColumn
+/// footer (`render_queue_status`), never here.
 pub(in crate::app) fn render_status_bar(
     f: &mut Frame,
     area: Rect,
@@ -694,88 +690,15 @@ pub(in crate::app) fn render_status_bar(
     }
 
     let right_spans = &model.right;
-    // Queue-scope pills (moved from the queue column's removed title band):
-    // at the far right while connected to an mbv-based session. They win
-    // over the right segment on narrow terminals — scope switching stays
-    // reachable while the passive service glyphs yield.
-    let scope = model
-        .queue_scope
-        .as_ref()
-        .filter(|m| m.show_split && m.is_mbv_session);
-    let (scope_spans, scope_local_w, scope_remote_w) = match scope {
-        Some(m) => {
-            let selected_bg =
-                palette::surface_colors(palette::Surface::QueueScopePillSelected, false).fill;
-            let chip_bg = palette::surface_colors(palette::Surface::PillChip, false).fill;
-            let (local_bg, local_fg, remote_bg, remote_fg) = if m.local_selected {
-                (
-                    selected_bg,
-                    palette::TEXT_FOCUS_ACCENT,
-                    chip_bg,
-                    palette::PILL_FG,
-                )
-            } else {
-                (
-                    chip_bg,
-                    palette::PILL_FG,
-                    selected_bg,
-                    palette::TEXT_FOCUS_ACCENT,
-                )
-            };
-            let local_span = Span::styled(" \u{2302} ", Style::default().fg(local_fg).bg(local_bg));
-            let remote_span = Span::styled(
-                format!(" {} ", m.remote_icon),
-                Style::default().fg(remote_fg).bg(remote_bg),
-            );
-            let local_w = local_span.content.width() as u16;
-            let remote_w = remote_span.content.width() as u16;
-            (vec![local_span, remote_span], local_w, remote_w)
-        }
-        None => (Vec::new(), 0, 0),
-    };
-    let scope_w = scope_local_w + scope_remote_w;
-    if !right_spans.is_empty() || scope_w > 0 {
+    if !right_spans.is_empty() {
         let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
         // Compare against `left_content_w` (pill + session label, from Task 2),
         // not a hardcoded pill-only width -- otherwise this check passes while
         // the right segment still overlaps a rendered session label (e.g.
         // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
         let left_end = area.x + left_content_w;
-        // The scope pills sit at the far right; the right segment yields
-        // first when the two no longer fit alongside the left segment.
-        let scope_x = area.x + area.width.saturating_sub(scope_w);
-        let show_scope = scope_w > 0 && scope_x > left_end;
-        let right_end = if show_scope {
-            scope_x
-        } else {
-            scope_x + scope_w
-        };
-        let right_x = right_end.saturating_sub(right_w);
-        let show_right = right_w > 0 && right_x > left_end;
-        if show_scope {
-            regions.scope_local = Some(Rect {
-                x: scope_x,
-                y: area.y,
-                width: scope_local_w,
-                height: 1,
-            });
-            regions.scope_remote = Some(Rect {
-                x: scope_x + scope_local_w,
-                y: area.y,
-                width: scope_remote_w,
-                height: 1,
-            });
-            f.render_widget(
-                Paragraph::new(Line::from(scope_spans)).style(bar_style),
-                Rect {
-                    x: scope_x,
-                    y: area.y,
-                    width: scope_w,
-                    height: 1,
-                },
-            );
-        }
-        if show_right {
+        let right_x = area.x + area.width.saturating_sub(right_w);
+        if right_w > 0 && right_x > left_end {
             let right_rect = Rect {
                 x: right_x,
                 y: area.y,
@@ -787,8 +710,8 @@ pub(in crate::app) fn render_status_bar(
                 right_rect,
             );
         }
-        // else: terminal too narrow for both segments -- right segment drops
-        // silently rather than overlapping the pill or the session label.
+        // else: terminal too narrow -- the right segment drops silently
+        // rather than overlapping the pill or the session label.
         // (Design doc's open question on narrow-terminal truncation: right
         // segment yields first.)
     }
