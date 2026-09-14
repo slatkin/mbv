@@ -179,12 +179,9 @@ pub(in crate::app) fn paint_hero_pane_content(
         let content_w = area.width.saturating_sub(PANE_PAD_X * 2) as usize;
         let lines = wrap_overview_lines(overview, |_| content_w);
         // One blank hero-pane row always separates the header text from the
-        // recessed overview box. The gap row keeps the pane's own fill;
-        // only the rows below it carry the box surface.
-        let focused = content
-            .workspace
-            .as_ref()
-            .is_some_and(|workspace| workspace.focused);
+        // recessed overview box. The gap row keeps the pane's resting fill
+        // (the hero never takes the focused surface); only the rows below
+        // it carry the box surface.
         let box_y = next_row.saturating_add(OVERVIEW_GAP_ROWS);
         let room = area.bottom().saturating_sub(box_y);
         let content_height = (lines.len() as u16).max(1).saturating_add(PANE_PAD_Y * 2);
@@ -201,7 +198,7 @@ pub(in crate::app) fn paint_hero_pane_content(
         // Room only for padding: no box renders (the shared padding is part
         // of the box's reserved rows).
         if box_height > PANE_PAD_Y * 2 {
-            let pane_bg = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
+            let pane_bg = palette::surface_colors(palette::Surface::HeroPane, false).fill;
             f.render_widget(
                 Block::default().style(Style::default().bg(pane_bg)),
                 Rect {

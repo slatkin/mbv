@@ -249,7 +249,7 @@ fn workspace_selector_with_active_none_paints_no_active_pill() {
 }
 
 #[test]
-fn focused_workspace_hero_uses_the_focused_surfaces() {
+fn focused_workspace_hero_pane_stays_resting() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
     let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
     let mut content = LibraryPanelContent {
@@ -268,10 +268,11 @@ fn focused_workspace_hero_uses_the_focused_surfaces() {
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content);
 
-    // A hero with a Workspace is focusable and its surface is focused.
+    // The hero pane never takes the focused surface, even while its
+    // Workspace holds focus — only the list box flips with the panel.
     assert_eq!(
         buf[(geo.hero.x, geo.hero.y)].bg,
-        palette::surface_colors(palette::Surface::HeroPane, true).fill
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
     );
     let (box_panel, box_content) = geo.workspace.expect("workspace box painted");
     // Accent-soft box surface while the workspace list holds focus.
@@ -283,6 +284,88 @@ fn focused_workspace_hero_uses_the_focused_surfaces() {
     assert_eq!(workspace_list.painted, Some(box_content));
     assert!(text_in(&buf, box_content, "Ep 1"));
     assert!(rect_contains(geo.hero, box_panel));
+
+    // With the panel focused but the Workspace holding it, the browser
+    // list drops its green and rests while the hero pane stays resting.
+    let mut focused_list = StubList::with_rows(vec!["Alpha"]);
+    let mut focused_workspace_list = StubList::with_rows(vec!["Ep 1"]);
+    let mut focused_content = LibraryPanelContent {
+        selector: None,
+        controls: None,
+        list: ListSlot::Media(&mut focused_list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Series"),
+            overview: None,
+            workspace: Some(Workspace {
+                selector: None,
+                list: &mut focused_workspace_list,
+                focused: true,
+            }),
+        }),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
+    let mut hits = SkeletonHits::default();
+    let mut geometry = None;
+    terminal
+        .draw(|f| {
+            geometry = render_wide_skeleton(f, AREA, &mut focused_content, true, None, &mut hits);
+        })
+        .unwrap();
+    let geometry = geometry.expect("wide skeleton painted");
+    let buf = terminal.backend().buffer().clone();
+    assert_eq!(
+        buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
+        palette::surface_colors(palette::Surface::LibraryPanel, false).fill
+    );
+    assert_eq!(
+        buf[(geometry.hero.x, geometry.hero.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
+}
+
+#[test]
+fn browser_focused_list_carries_the_focus_green() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
+    let mut content = LibraryPanelContent {
+        selector: None,
+        controls: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Series"),
+            overview: None,
+            workspace: Some(Workspace {
+                selector: None,
+                list: &mut workspace_list,
+                focused: false,
+            }),
+        }),
+    };
+    let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
+    let mut hits = SkeletonHits::default();
+    let mut geometry = None;
+    terminal
+        .draw(|f| {
+            geometry = render_wide_skeleton(f, AREA, &mut content, true, None, &mut hits);
+        })
+        .unwrap();
+    let geometry = geometry.expect("wide skeleton painted");
+    let buf = terminal.backend().buffer().clone();
+    // The browser list holds focus: green list box, resting hero pane and
+    // resting workspace box.
+    assert_eq!(
+        buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
+        palette::surface_colors(palette::Surface::LibraryPanel, true).fill
+    );
+    assert_eq!(
+        buf[(geometry.hero.x, geometry.hero.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
+    let (box_panel, _) = geometry.workspace.expect("workspace box painted");
+    assert_eq!(
+        buf[(box_panel.x, box_panel.y)].bg,
+        palette::surface_colors(palette::Surface::MainContentBox, false).fill
+    );
 }
 
 #[test]

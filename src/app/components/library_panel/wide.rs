@@ -1,6 +1,7 @@
 //! The Wide Library panel skeleton (task 5.2, design D4): the Hero pane
-//! (resting surface; focused only when a Workspace is present and focused,
-//! design D6) | gap | Browser pane (Selector row, List controls row, list
+//! (always the resting surface; only the focused list flips with focus —
+//! the browser list rests while the Workspace media list holds it)
+//! | gap | Browser pane (Selector row, List controls row, list
 //! box). One skeleton for every Wide library destination: destinations supply
 //! typed [`LibraryPanelContent`] and paint nothing themselves.
 //!
@@ -173,9 +174,19 @@ pub(in crate::app) fn render_wide_skeleton(
         _ => (pane.list_panel, None),
     };
 
+    // List box focus: the panel's bit, minus the Workspace. When the hero's
+    // media list holds focus the browser list drops its green and rests —
+    // green marks the focused list, never both at once.
+    let workspace_focused = content
+        .hero
+        .as_ref()
+        .and_then(|hero| hero.workspace.as_ref())
+        .is_some_and(|workspace| workspace.focused);
+    let list_focused = browser_focused && !workspace_focused;
+
     // List box: fill + shared border, then the slot's content in the inset
     // row-flow rect.
-    wide_hero_browser_border(f, list_panel, browser_focused);
+    wide_hero_browser_border(f, list_panel, list_focused);
     let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
     match &mut content.list {
         ListSlot::Search(search) => {
@@ -193,7 +204,7 @@ pub(in crate::app) fn render_wide_skeleton(
                 items,
                 cursor,
                 scroll_in,
-                browser_focused,
+                list_focused,
                 1,
                 search.layout_mut(),
             );
@@ -208,7 +219,7 @@ pub(in crate::app) fn render_wide_skeleton(
                 list_area.height.max(1) as usize,
             );
             list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
-                focused: browser_focused,
+                focused: list_focused,
             });
             // The canonical rail owns the full panel row (matching the
             // pre-migration wide rail): the selected background reaches
@@ -231,15 +242,11 @@ pub(in crate::app) fn render_wide_skeleton(
         }
     }
 
-    // Hero pane: the fill's focus is derived, not declared (design D6) —
-    // focusable exactly when a Workspace is present, focused exactly when
-    // that Workspace holds focus.
-    let focused = content
-        .hero
-        .as_ref()
-        .and_then(|hero| hero.workspace.as_ref())
-        .is_some_and(|workspace| workspace.focused);
-    let hero_area = wide_hero_hero_pane(f, area, focused, override_width)?;
+    // Hero pane: always the resting fill. It never takes the focused
+    // surface when the media list (or its Workspace) holds focus — only
+    // the list box above flips with the panel's focus. A focused Workspace
+    // still shows through its own content-box tint.
+    let hero_area = wide_hero_hero_pane(f, area, false, override_width)?;
 
     // The list slot's painted selection: the context-menu anchor's painted
     // truth (the selected row's rect, or the admitted inline hero block).
