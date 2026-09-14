@@ -501,6 +501,7 @@ impl LibraryContentOwner for BrowserContent {
             HeroContent {
                 facts,
                 overview: data.overview,
+                credits: data.credits,
                 workspace: None,
             }
         });

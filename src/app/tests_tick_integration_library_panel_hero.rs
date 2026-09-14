@@ -70,6 +70,7 @@ impl LibraryContentOwner for HeroFixtureOwner {
             hero: Some(HeroContent {
                 facts: self.hero.facts.clone(),
                 overview: self.hero.overview.clone(),
+                credits: self.hero.credits.clone(),
                 workspace: None,
             }),
         }

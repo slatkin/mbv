@@ -402,6 +402,7 @@ impl TvContent {
         let hero = hero_data.map(|data| HeroContent {
             facts: data.facts,
             overview: data.overview,
+            credits: data.credits,
             workspace: Some(Workspace {
                 selector: workspace_selector,
                 list: &mut self.episodes,

@@ -2,6 +2,7 @@ use super::*;
 
 use crate::app::images::series_image_cache_key;
 use mbv_core::audiobookshelf::AudiobookshelfBook;
+use rstest::rstest;
 use serde_json::json;
 
 // Policy table (task 5.4): parsed `EmbyItem`s from recorded item JSON
@@ -274,6 +275,96 @@ fn emby_producer_fills_plain_meta_rows_and_overview() {
     // The overview is trimmed plain text (clean_overview strips URLs, not
     // markup).
     assert_eq!(produced.overview.as_deref(), Some("<b>The</b> survivors"));
+}
+
+#[test]
+fn movie_meta_rows_append_genres_and_links_after_runtime() {
+    let item = emby_item(json!({
+        "Id": "m1", "Name": "Dune", "Type": "Movie",
+        "PremiereDate": "2021-10-22", "RunTimeTicks": 7_200_000_000i64,
+        "Genres": ["Action", "Drama"],
+        "ExternalUrls": [{"Name": "IMDb", "Url": "https://imdb.test/dune"}],
+        "UserData": {}
+    }));
+    let data = hero_content_emby(&item);
+    assert_eq!(
+        data.facts.meta_rows,
+        vec!["22 Oct 2021", "12m", "Action  Drama", "IMDb"]
+    );
+    assert_eq!(
+        data.facts.links,
+        vec![HeroLink {
+            name: "IMDb".into(),
+            url: "https://imdb.test/dune".into()
+        }]
+    );
+}
+
+#[test]
+fn movie_without_genres_or_links_keeps_only_existing_rows() {
+    let item = emby_item(json!({
+        "Id": "m1", "Name": "Dune", "Type": "Movie", "PremiereDate": "2021-10-22",
+        "RunTimeTicks": 7_200_000_000i64, "UserData": {}
+    }));
+    let data = hero_content_emby(&item);
+    assert_eq!(data.facts.meta_rows, vec!["22 Oct 2021", "12m"]);
+    assert!(data.facts.links.is_empty());
+}
+
+#[rstest]
+#[case(vec![("Director", "", "A")], vec![("A", "Director")])]
+#[case(vec![("Director", "", "A"), ("Director", "Dir", "B"), ("Actor", "C1", "C"), ("Actor", "C2", "D")], vec![("A", "Director"), ("B", "Dir"), ("C", "C1"), ("D", "C2")])]
+#[case(vec![("Actor", "C1", "C")], vec![("C", "C1")])]
+#[case(vec![("Director", "Dir", "A"), ("Actor", "C1", "B"), ("Actor", "C2", "C")], vec![("A", "Dir"), ("B", "C1"), ("C", "C2")])]
+#[case(Vec::<(&str, &str, &str)>::new(), Vec::<(&str, &str)>::new())]
+fn movie_credits_are_grouped_and_capped(
+    #[case] people: Vec<(&str, &str, &str)>,
+    #[case] expected: Vec<(&str, &str)>,
+) {
+    let people_json: Vec<_> = people
+        .iter()
+        .map(|(kind, role, name)| json!({"Name": name, "Role": role, "Type": kind}))
+        .collect();
+    let item = emby_item(
+        json!({"Id": "m1", "Name": "Dune", "Type": "Movie", "People": people_json, "UserData": {}}),
+    );
+    let data = hero_content_emby(&item);
+    let actual: Vec<_> = data
+        .credits
+        .unwrap_or_default()
+        .into_iter()
+        .map(|credit| (credit.name, credit.role))
+        .collect::<Vec<(String, String)>>();
+    let expected: Vec<_> = expected
+        .into_iter()
+        .map(|(name, role)| (name.to_string(), role.to_string()))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn movie_credits_cap_actors_at_nine_but_keeps_directors() {
+    let mut people = vec![json!({"Name": "Director", "Type": "Director"})];
+    people.extend((0..14).map(|index| json!({"Name": format!("Actor {index}"), "Type": "Actor"})));
+    let item = emby_item(
+        json!({"Id": "m1", "Name": "Dune", "Type": "Movie", "People": people, "UserData": {}}),
+    );
+    assert_eq!(hero_content_emby(&item).credits.unwrap().len(), 10);
+}
+
+#[test]
+fn series_and_music_album_keep_their_existing_metadata_rows() {
+    let series = emby_item(
+        json!({"Name": "Lost", "Type": "Series", "ProductionYear": 2004, "Genres": ["Adventure"], "UserData": {}}),
+    );
+    assert_eq!(
+        hero_content_emby(&series).facts.meta_rows,
+        vec!["2004  ADVENTURE"]
+    );
+    let album = emby_item(
+        json!({"Name": "Album", "Type": "MusicAlbum", "Genres": ["Rock"], "UserData": {}}),
+    );
+    assert!(hero_content_music_album(&album).facts.meta_rows.is_empty());
 }
 
 #[test]

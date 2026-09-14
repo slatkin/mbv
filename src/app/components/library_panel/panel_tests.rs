@@ -71,6 +71,7 @@ impl LibraryContentOwner for FixtureOwner {
                 facts: crate::app::components::library_panel::HeroFacts {
                     title: "Dune".into(),
                     meta_rows: vec!["2021".into()],
+                    links: Vec::new(),
                     artwork: crate::app::components::library_panel::HeroArtwork {
                         shape: crate::app::components::library_panel::ArtworkShape::Landscape,
                         source: None,
@@ -78,6 +79,7 @@ impl LibraryContentOwner for FixtureOwner {
                     },
                 },
                 overview: None,
+                credits: None,
                 workspace: None,
             }),
         }

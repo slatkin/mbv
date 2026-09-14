@@ -463,6 +463,7 @@ impl LibraryContentOwner for FeedsContent {
             HeroContent {
                 facts,
                 overview: data.overview,
+                credits: data.credits,
                 workspace: None,
             }
         });

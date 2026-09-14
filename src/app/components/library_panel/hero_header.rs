@@ -320,6 +320,7 @@ mod hero_header_tests {
         HeroFacts {
             title: "Dune".into(),
             meta_rows: vec!["2021".into()],
+            links: Vec::new(),
             artwork: HeroArtwork {
                 shape,
                 source: None,
@@ -332,6 +333,7 @@ mod hero_header_tests {
         HeroContent {
             facts: facts(shape),
             overview: None,
+            credits: None,
             workspace: None,
         }
     }
@@ -493,6 +495,7 @@ mod hero_header_tests {
         let pane_facts = HeroFacts {
             title: "T".into(),
             meta_rows: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            links: Vec::new(),
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,
@@ -502,6 +505,7 @@ mod hero_header_tests {
         let pane = HeroContent {
             facts: pane_facts,
             overview: None,
+            credits: None,
             workspace: None,
         };
         let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
@@ -538,6 +542,7 @@ mod hero_header_tests {
         let with = HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: Some("A very long overview.".into()),
+            credits: None,
             workspace: None,
         };
         let buf = draw_pane(AREA.width, AREA.height, &with);
@@ -557,6 +562,7 @@ mod hero_header_tests {
         let focused = HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: Some("A very long overview.".into()),
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,
@@ -579,6 +585,7 @@ mod hero_header_tests {
         let with = HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: Some("A very long overview.".into()),
+            credits: None,
             workspace: None,
         };
         let buf = draw_pane(AREA.width, AREA.height, &with);
@@ -610,6 +617,7 @@ mod hero_header_tests {
         let with = HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: Some("A very long overview.".into()),
+            credits: None,
             workspace: None,
         };
         let buf = draw_pane(AREA.width, AREA.height, &with);
@@ -623,6 +631,7 @@ mod hero_header_tests {
         let with_workspace = HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: Some("A very long overview.".into()),
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,
@@ -642,6 +651,7 @@ mod hero_header_tests {
         let constrained = HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,
