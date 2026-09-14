@@ -21,8 +21,8 @@ use crate::app::palette;
 use crate::app::render::arrangements::library::selected_detail_content_area;
 use crate::app::render::arrangements::wide_hero::pill_bar_areas;
 use crate::app::render::{
-    render_artwork_placeholder, render_inline_search, render_placeholder, selected_detail_shell,
-    wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS, SELECTED_BLOCK_SIDE_PADDING,
+    render_artwork_placeholder, render_inline_search, render_placeholder, wrap_overview_lines,
+    HERO_BLOCK_EXTRA_ROWS, SELECTED_BLOCK_SIDE_PADDING,
 };
 
 use super::content::{LibraryPanelContent, ListSlot, PanelHeroImagePaint, PanelListPaintPolicy};
@@ -241,10 +241,14 @@ pub(in crate::app) fn paint_inline_hero(
     if plan.detail_rows == 0 || block.height == 0 {
         return None;
     }
-    // The shared selected-block shell: the same ▁/▔ framed shell every
-    // inline selected-detail block paints (one implementation, no second
-    // loop as underpaint).
-    selected_detail_shell(f, block, plan.detail_rows as u16, focused);
+    // The detail block's own fill spans the whole block, its top and bottom
+    // spacer rows included: one fill, no second loop as underpaint.
+    crate::app::render::components::widgets::fill_surface(
+        f,
+        block,
+        palette::Surface::InlineHero,
+        focused,
+    );
     let content =
         selected_detail_content_area(block, SELECTED_BLOCK_SIDE_PADDING, HERO_BLOCK_EXTRA_ROWS);
     // The image box: right-aligned, sized from its aspect — the projected

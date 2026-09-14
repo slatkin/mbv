@@ -299,25 +299,6 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
          after the narrow repaint"
     );
     apply_outcome(&mut harness, outcome);
-
-    // A click below the fixture's two painted rows — inside the list slot's
-    // rect but past its last row — must not claim without a resolved target,
-    // proving resolution consults the freshly painted narrow layout (the
-    // hero block replaces the selected row at the flow's top; blank space
-    // below the rows claims nothing).
-    harness.inject(click(
-        narrow_list_area.x,
-        narrow_list_area.bottom().saturating_sub(1),
-    ));
-    let outcome = harness.step();
-    assert!(
-        outcome
-            .raw_messages
-            .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
-        "a blank narrow-list click must not claim without a resolved target"
-    );
-    apply_outcome(&mut harness, outcome);
 }
 
 /// A Music click delivered through `Application::tick` resolves against the

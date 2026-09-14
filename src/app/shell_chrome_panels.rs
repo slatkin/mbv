@@ -361,11 +361,11 @@ impl Model {
     }
 
     /// Paint the mounted `StatusBarPanel` into its `RootFrame.status_bar`
-    /// band. The band's own row and gutter columns are the library column's
-    /// backdrop (the same `LibraryColumn` fill `render_library_panel_at`
-    /// gives that placement) and the status row is inset two columns each
-    /// side with one padding row below it, so the bar floats clear of the
-    /// column's edges.
+    /// band. The gap row above the bar plus the band's gutter columns and
+    /// padding row below are the library column's backdrop (the same
+    /// `LibraryColumn` fill `render_library_panel_at` gives that
+    /// placement) and the status row is inset two columns each side, so
+    /// the bar floats clear of the content above and the column's edges.
     pub(super) fn render_status_bar_panel_at(&mut self, frame: &mut Frame, area: Rect) {
         let id = ComponentId::StatusBarPanel;
         if !self.application.mounted(&id) {

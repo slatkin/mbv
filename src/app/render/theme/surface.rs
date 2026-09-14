@@ -113,7 +113,7 @@ pub(super) struct Row {
 
 /// Declares the closed `Surface` set and the enumerable [`Surface::ALL`] list
 /// from one variant list, so a new variant cannot be added without appearing
-/// in `ALL` (and `row`/`border` fail to compile until it is placed).
+/// in `ALL` (and `row` fails to compile until it is placed).
 macro_rules! declare_surfaces {
     ($($variant:ident),+ $(,)?) => {
         /// A rendered-surface identity: a structural position in the layout,

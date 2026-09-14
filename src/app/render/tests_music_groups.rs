@@ -98,26 +98,22 @@ fn narrow_grouped_music_replaces_selected_album_row_with_hero_detail() {
 }
 
 #[test]
-fn narrow_grouped_music_does_not_repaint_album_hero_with_zero_row_shell() {
+fn narrow_grouped_music_paints_the_album_hero_content() {
+    // The album hero block's own content still paints over its placement (the
+    // former `▁`/`▔` frame rows are gone; the block's internal spacing is not
+    // re-asserted here).
     let app = make_music_group_app();
     let (model, output) = narrow_music_frame(app, 30);
     let layout = mounted_music_layout(&model);
 
-    let top_row = output
-        .lines()
-        .nth(layout.hero_area.y as usize)
-        .unwrap_or_default();
-    let bottom_row = output
-        .lines()
-        .nth(layout.hero_area.bottom().saturating_sub(1) as usize)
-        .unwrap_or_default();
     assert!(
-        top_row.contains('▁'),
-        "album hero top border missing: {top_row:?}"
+        output.contains("First Album"),
+        "the hero's own content still paints:\n{output}"
     );
     assert!(
-        bottom_row.contains('▔'),
-        "album hero bottom border missing: {bottom_row:?}"
+        layout.hero_area.height > 0,
+        "the album hero block is admitted: {:?}",
+        layout.hero_area
     );
 }
 

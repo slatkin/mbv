@@ -733,10 +733,11 @@ fn coverage_table_accounts_for_every_surface_row() {
 }
 
 /// The status bar floats inside its reserved band at the bottom of the
-/// library column (the QueueColumn footer's shape): the status row is inset
-/// two columns each side, one padding row sits below it, and the band's
-/// gutters and padding row keep the library column's backdrop rather than
-/// the status fill. The bar no longer touches the column's bottom, left or
+/// library column (the QueueColumn footer's shape): one gap row sits above
+/// the bar, the status row is inset two columns each side, one padding row
+/// sits below it, and the gap row plus the band's gutters and padding row
+/// keep the library column's backdrop rather than the status fill. The bar
+/// no longer touches the content above or the column's bottom, left or
 /// right edge.
 #[test]
 fn status_bar_floats_inside_its_band_clear_of_the_edges() {
@@ -756,9 +757,9 @@ fn status_bar_floats_inside_its_band_clear_of_the_edges() {
             x: chrome.right_area.x,
             y: chrome.right_area.bottom(),
             width: chrome.right_area.width,
-            height: 2,
+            height: 3,
         },
-        "the band is the column's own width and the two bottom rows"
+        "the band is the column's own width and the three bottom rows"
     );
     let row = super::arrangements::chrome::status_bar_row(band);
     assert_eq!(
@@ -767,11 +768,21 @@ fn status_bar_floats_inside_its_band_clear_of_the_edges() {
         "the status row is inset two columns each side"
     );
     assert_eq!(row.height, 1, "the status row is one row");
+    assert_eq!(row.y, band.y + 1, "one gap row sits above the status row");
     assert_eq!(
         row.y,
         area.bottom() - 2,
         "one padding row sits below the status row"
     );
+    // The gap row above the bar keeps the backdrop in every column.
+    for x in [band.x, row.x, row.right() - 1, band.right() - 1] {
+        painted.expect(
+            "band gap row",
+            palette::Surface::LibraryColumn,
+            false,
+            Rect::new(x, band.y, 1, 1),
+        );
+    }
 
     painted.expect("status row", palette::Surface::StatusBar, false, row);
     // The two columns each side of the row are the column's backdrop.

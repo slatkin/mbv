@@ -20,19 +20,20 @@ pub(in crate::app) const PLAYER_BOX_HEIGHT: u16 = 3;
 pub(in crate::app) const QUEUE_PLAYBACK_HEADER_ROWS: u16 = 2;
 
 /// Rows the right column reserves at the bottom for the floating status
-/// bar: the status row plus one padding row below it, the same floating
-/// shape as the QueueColumn footer.
-pub(in crate::app) const STATUS_BAR_BAND_HEIGHT: u16 = 2;
+/// bar: one gap row, the status row, one padding row below it, the same
+/// floating shape as the QueueColumn footer.
+pub(in crate::app) const STATUS_BAR_BAND_HEIGHT: u16 = 3;
 
 /// The status row inside its reserved band: two columns of padding each
-/// side, so the bar floats clear of the library column's edges instead of
-/// touching them (the QueueColumn footer's inset).
+/// side plus one gap row above it, so the bar floats clear of the content
+/// above and the library column's edges instead of touching them (the
+/// QueueColumn footer's inset).
 pub(in crate::app) fn status_bar_row(band: Rect) -> Rect {
     Rect {
         x: band.x + 2,
+        y: band.y.saturating_add(1),
         width: band.width.saturating_sub(4),
         height: 1,
-        ..band
     }
 }
 
@@ -309,9 +310,10 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
     };
 
     // The floating status bar band sits at the bottom of the right panel
-    // only: the status row plus one padding row below it. The panel paints
-    // the row inset inside the band (`status_bar_row`), so the band's own
-    // row and gutters keep the library column's backdrop.
+    // only: one gap row, the status row, one padding row below it. The
+    // panel paints the row inset inside the band (`status_bar_row`), so
+    // the gap row, gutters, and padding row keep the library column's
+    // backdrop.
     let status_area = Rect {
         x: right_area.x,
         y: right_area.y + right_area.height,

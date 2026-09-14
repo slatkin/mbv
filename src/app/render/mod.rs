@@ -84,12 +84,10 @@ pub(in crate::app) use screens::feeds_model::{
 #[cfg(test)]
 pub(in crate::app) use arrangements::library::wide_library_panes;
 pub(in crate::app) use arrangements::wide_hero::{
-    paint_wide_hero_text, place_media_list_below, wide_hero_browser_border, wide_hero_browser_pane,
-    wide_hero_fits, wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
+    paint_wide_hero_text, place_media_list_below, wide_hero_browser_pane, wide_hero_fits,
+    wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
-pub(in crate::app) use components::hero::{
-    selected_detail_shell, wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS,
-};
+pub(in crate::app) use components::hero::{wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS};
 pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
 pub(in crate::app) use components::media_list::{
@@ -126,10 +124,7 @@ pub(in crate::app) use components::chrome::{render_panel_shell_at, render_sideba
 // sibling submodules (album, card, detail, home, list, music, pills, queue)
 // and/or `use super::*` in render/tests.rs.
 pub use components::indicators;
-use components::widgets::{render_right_scrollbar, render_selected_block_background};
-pub(in crate::app) use components::widgets::{
-    render_selected_block_borders, SelectedBlockBorderStyle,
-};
+use components::widgets::render_right_scrollbar;
 pub(super) use screens::album_plan::sorted_group_album_order;
 pub(super) use screens::sort_filter::{
     effective_sort_str, letter_bucket, parse_album_folder_name, strip_article,

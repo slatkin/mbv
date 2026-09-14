@@ -8,7 +8,10 @@ use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-pub(in crate::app) const HERO_BLOCK_EXTRA_ROWS: u16 = 4;
+/// Rows the inline detail block spends outside its text: one blank spacer
+/// row above the content and one below. The block's former `▁`/`▔` frame
+/// rows are gone, so the budget no longer pays for them.
+pub(in crate::app) const HERO_BLOCK_EXTRA_ROWS: u16 = 2;
 
 pub(in crate::app) fn wrap_overview_lines(
     text: &str,
@@ -94,34 +97,6 @@ pub(in crate::app) fn inline_detail_flow(
     Some(InlineDetailFlow {
         offset: stored_offset.clamp(lower_bound, cursor_row),
     })
-}
-
-pub(in crate::app) fn selected_detail_shell(
-    f: &mut Frame,
-    hero_area: Rect,
-    hero_rows: u16,
-    focused: bool,
-) {
-    let bg = palette::surface_colors(palette::Surface::InlineHero, focused).fill;
-    let visible = hero_rows as usize;
-    crate::app::render::render_selected_block_background(
-        f,
-        hero_area,
-        0,
-        visible,
-        1,
-        visible.saturating_sub(2),
-        bg,
-    );
-    crate::app::render::render_selected_block_borders(
-        f,
-        hero_area,
-        0,
-        visible,
-        1,
-        visible.saturating_sub(2),
-        crate::app::render::SelectedBlockBorderStyle::Framed,
-    );
 }
 
 pub(in crate::app) fn render_search_box(f: &mut Frame, area: Rect, query: &str, loading: bool) {

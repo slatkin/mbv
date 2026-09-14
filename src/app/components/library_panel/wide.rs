@@ -19,8 +19,8 @@ use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::{
-    render_inline_search, render_placeholder, wide_hero_browser_border, wide_hero_browser_pane,
-    wide_hero_hero_pane, PANE_PAD_X, PANE_PAD_Y,
+    render_inline_search, render_placeholder, wide_hero_browser_pane, wide_hero_hero_pane,
+    PANE_PAD_X, PANE_PAD_Y,
 };
 
 use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroImagePaint};
@@ -98,8 +98,8 @@ pub(in crate::app) struct WideSkeletonGeometry {
 ///
 /// Rows top-to-bottom in the Browser pane: the Selector row (one pill bar +
 /// the panel's spacer, reserved even without a `SelectorRow`), the optional
-/// List controls row, and the list box (fill + `wide_hero_browser_border`,
-/// then the list presentation or the `ListSlot::Empty` placeholder). While
+/// List controls row, and the list box (fill, then the list presentation or
+/// the `ListSlot::Empty` placeholder). While
 /// `ListSlot::Search` is active, the search box paints in the Selector row's
 /// rect and the results in the list box, and the rest of the panel is
 /// unchanged.
@@ -179,10 +179,22 @@ pub(in crate::app) fn render_wide_skeleton(
     // green marks the focused list, never both at once.
     let list_focused = browser_focused && !content.workspace_focused();
 
-    // List box: fill + shared border, then the slot's content in the inset
-    // row-flow rect.
-    wide_hero_browser_border(f, list_panel, list_focused);
-    let list_area = padded_rect(list_panel, PANE_PAD_X, PANE_PAD_Y);
+    // List box: fill, then the slot's content in the inset row-flow rect.
+    crate::app::render::components::widgets::fill_surface(
+        f,
+        list_panel,
+        palette::Surface::LibraryPanel,
+        list_focused,
+    );
+    // The rail's row flow keeps the side and top pads only: the status band
+    // owns the one gap row below the rail, so a bottom pad here would leave a
+    // second blank row above the status bar instead of one.
+    let list_area = Rect {
+        x: list_panel.x.saturating_add(PANE_PAD_X),
+        y: list_panel.y.saturating_add(PANE_PAD_Y),
+        width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
+        height: list_panel.height.saturating_sub(PANE_PAD_Y),
+    };
     match &mut content.list {
         ListSlot::Search(search) => {
             let items = search.ordered_items();

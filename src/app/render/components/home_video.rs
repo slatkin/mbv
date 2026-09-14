@@ -66,18 +66,21 @@ pub(in crate::app::render) fn render_home_video_item(
     focused: bool,
 ) {
     let expanded = selected && item_h > 1;
-    let title_y = row_y + if expanded { 2 } else { 0 };
+    let title_y = row_y + if expanded { 1 } else { 0 };
 
     if expanded {
-        let bg = palette::surface_colors(palette::Surface::InlineHero, focused).fill;
-        f.render_widget(
-            Block::default().style(Style::default().bg(bg)),
+        // The expanded item's own fill spans its whole cell, its top and
+        // bottom spacer rows included.
+        super::widgets::fill_surface(
+            f,
             Rect {
                 x: content_area.x,
-                y: row_y + 1,
+                y: row_y,
                 width: text_w as u16,
-                height: item_h.saturating_sub(2),
+                height: item_h,
             },
+            palette::Surface::InlineHero,
+            focused,
         );
     }
 
@@ -113,21 +116,4 @@ pub(in crate::app::render) fn render_home_video_item(
             height: 1,
         },
     );
-
-    if expanded && row_y < content_area.y + content_area.height {
-        super::widgets::render_selected_block_borders(
-            f,
-            Rect {
-                x: content_area.x,
-                width: text_w as u16,
-                y: row_y,
-                height: item_h,
-            },
-            0,
-            item_h as usize,
-            1,
-            item_h.saturating_sub(2) as usize,
-            super::widgets::SelectedBlockBorderStyle::Framed,
-        );
-    }
 }

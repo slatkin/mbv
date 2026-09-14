@@ -36,15 +36,17 @@ fn home_video_item_characterization_covers_default_focused_narrow_and_selected_s
         "  Birthday Clip         \n"
     );
     assert_eq!(render_item(8, 1, 1, true, true), "  Bir…  \n");
-    let expected = format!(
-        "{}\n{:<width$}\n{:<width$}\n{:<width$}\n{:<width$}\n{}\n",
-        "▁".repeat(24),
-        "",
+    // The expanded cell paints its title on the first content row below its
+    // top spacer, with no frame glyphs around it.
+    let expanded = render_item(24, 6, 6, true, true);
+    let rows: Vec<&str> = expanded.lines().collect();
+    assert_eq!(
+        rows[1].trim_end(),
         "  Birthday Clip",
-        "",
-        "",
-        "▔".repeat(24),
-        width = 24,
+        "the expanded cell titles its first content row: {expanded:?}"
     );
-    assert_eq!(render_item(24, 6, 6, true, true), expected);
+    assert!(
+        !expanded.contains('▁') && !expanded.contains('▔'),
+        "the expanded cell paints no frame glyphs: {expanded:?}"
+    );
 }

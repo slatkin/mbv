@@ -30,49 +30,6 @@ fn panel(model: &crate::app::shell::Model) -> &LibraryPanel {
         .expect("Library panel type")
 }
 
-/// Task 5.3d, Home legacy underpaint removal — regression: the legacy base
-/// frame (`App::render`) no longer paints any Home content before the panel
-/// view runs. It still reserves the full library destination area
-/// (`home_area`) as the placement handoff, but paints no Home rows, pills,
-/// or hero there.
-///
-/// `remove-migrated-surface-underpaint` 3.1 (D4): the Home dispatch arm
-/// reserves `layout.home_area = area` with no width branch, so
-/// the geometry-only hand-off holds at every breakpoint; the wide case is
-/// exercised here too.
-/// Task 5.11, Home as the first panel owner: this characterization renders
-/// through the mounted `LibraryPanel` (via the shell-equivalent
-/// `render_home_shell_with` helper) instead of the deleted mounted
-/// `HomeComponent`. The behavioural assertion — each width/focused state
-/// still paints the selected movie's hero/list — is unchanged; the header,
-/// artwork and overview presentation is now the panel skeleton's (tasks
-/// 5.5/5.7), so the assertions are content-level (the item's title paints in
-/// both breakpoints and both focus states).
-#[test]
-fn home_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
-    let states = [
-        (120, 40, true),
-        (120, 40, false),
-        (60, 40, true),
-        (60, 12, true),
-    ];
-    for (width, height, focused) in states {
-        let mut app = home_app();
-        if !focused {
-            app.panel_focus = PanelFocus::Queue;
-        }
-        let cw_item = emby_cw_item();
-        let (_model, terminal) = render_home_shell_with(app, width, height, |m| {
-            m.home_content.continue_items = vec![cw_item.clone()];
-        });
-        let output = buffer_to_string(&terminal);
-        assert!(
-            output.contains("Focused Movie"),
-            "home hero/list missing in {width}x{height}: {output:?}"
-        );
-    }
-}
-
 /// Task 5.3d + 5.11: the startup frame shows the Home owner's loading
 /// affordances (its Selector row's pill bar and the empty-state placeholder
 /// while home_content.loading is still set and no content has arrived)

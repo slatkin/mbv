@@ -66,10 +66,12 @@ pub(in crate::app::render) fn wide_hero_presentation(
     content_area: Rect,
     override_width: Option<u16>,
 ) -> Option<WideHeroPanes> {
+    // The panes tile `content_area` exactly. The status bar's own band is
+    // already excluded by `chrome_geometry` before the Library panel sees its
+    // placement, so reserving a second row here only left a stray blank row
+    // under the panel's bottom spacer.
     wide_hero_fits(content_area).then(|| {
-        let (mut browser, mut hero) = wide_hero_split(content_area, override_width);
-        hero.height = hero.height.saturating_sub(1);
-        browser.height = browser.height.saturating_sub(1);
+        let (browser, hero) = wide_hero_split(content_area, override_width);
         WideHeroPanes { browser, hero }
     })
 }
@@ -83,7 +85,7 @@ mod tests {
     /// both returned panes already exclude the terminal's bottom status row,
     /// so callers must not shrink them again.
     #[test]
-    fn shared_presentation_reserves_one_status_row_on_both_panes() {
+    fn shared_presentation_fills_the_given_area_on_both_panes() {
         let area = Rect {
             x: 2,
             y: 4,
@@ -94,10 +96,10 @@ mod tests {
             hero: left,
             browser: right,
         } = wide_hero_presentation(area, None).expect("wide area");
-        assert_eq!(left.height, area.height - 1);
-        assert_eq!(right.height, area.height - 1);
-        assert_eq!(left.bottom(), area.bottom() - 1);
-        assert_eq!(right.bottom(), area.bottom() - 1);
+        assert_eq!(left.height, area.height);
+        assert_eq!(right.height, area.height);
+        assert_eq!(left.bottom(), area.bottom());
+        assert_eq!(right.bottom(), area.bottom());
     }
 
     #[test]
@@ -370,35 +372,6 @@ mod wide_hero_hero_pane_tests {
             }
         }
     }
-}
-
-/// Paints the focused browser rail's border using the shared framing primitive:
-/// a `▔` top row and a `▁` bottom row, with a focus-resolved background, one
-/// row inside `list_panel`'s own top/bottom edge. The rail uses the shared
-/// painter's focused-rail framing arm; its fixed window mirrors `hero_block_shell`'s
-/// (`offset = 0`, fully visible, padding rows `[1, height - 2]`); this is
-/// Wide hero's thin shell entry point, the same role `hero_block_shell`
-/// plays for inline presentation.
-pub(in crate::app) fn wide_hero_browser_border(f: &mut Frame, list_panel: Rect, focused: bool) {
-    if list_panel.height == 0 {
-        return;
-    }
-    let background = palette::surface_colors(palette::Surface::LibraryPanel, focused).fill;
-    for y in list_panel.y..list_panel.bottom() {
-        for x in list_panel.x..list_panel.right() {
-            let cell = f.buffer_mut().cell_mut((x, y)).expect("panel cell exists");
-            cell.set_bg(background);
-        }
-    }
-    crate::app::render::render_selected_block_borders(
-        f,
-        list_panel,
-        0,
-        list_panel.height as usize,
-        1,
-        (list_panel.height as usize).saturating_sub(2),
-        crate::app::render::SelectedBlockBorderStyle::FocusedRail { focused },
-    );
 }
 
 /// Paints the Wide hero arrangement's main content box: the `MainContentBox`

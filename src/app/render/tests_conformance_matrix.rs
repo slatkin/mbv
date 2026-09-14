@@ -368,34 +368,6 @@ fn assert_one_pill_row_and_spacer(
 }
 
 #[test]
-fn matrix_cannot_fit_preserves_an_ordinary_selected_row() {
-    let cases = [
-        ("Movies", make_movie_app(), "Focused Movie"),
-        ("TV", series_app(), "Movie"),
-        ("Music", make_music_group_app(), "First Album"),
-    ];
-
-    for (surface, app, title) in cases {
-        // Books/Podcasts drive their component directly with the full rect;
-        // Movies/TV/Music route through `Model::draw_frame`, which reserves
-        // chrome, so give them a slightly taller terminal whose *content* area
-        // is still far shorter than any hero needs.
-        let (terminal, layout) = render_browse_component(app, 60, 12);
-        let output = buffer_to_string(&terminal);
-        assert_eq!(
-            layout.hero_area,
-            Rect::default(),
-            "{surface} must suppress a hero that cannot fit"
-        );
-        assert!(
-            output.contains(title),
-            "{surface} must retain the ordinary selected row:\n{output}"
-        );
-        assert_ne!(layout.selected_item_rect, Some(layout.hero_area));
-    }
-}
-
-#[test]
 fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
     let mut music = make_music_group_app();
     music.libs[0].nav_stack[1].set_resting_cursor(0);

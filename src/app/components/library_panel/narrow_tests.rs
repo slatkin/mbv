@@ -3,7 +3,8 @@ use crate::app::components::library_panel::narrow::InlineHeroPlan;
 use crate::app::components::library_panel::{
     inline_hero_plan, render_narrow_skeleton, LibraryPanelContent, ListSlot,
 };
-use crate::app::render::SELECTED_BLOCK_SIDE_PADDING;
+use crate::app::render::arrangements::library::selected_detail_content_area;
+use crate::app::render::{HERO_BLOCK_EXTRA_ROWS, SELECTED_BLOCK_SIDE_PADDING};
 use ratatui::layout::Rect;
 
 use crate::app::components::library_panel::{
@@ -80,14 +81,14 @@ fn draw_narrow(
     )
 }
 
-/// The painted image box for one plan inside an admitted hero block.
+/// The painted image box for one plan inside an admitted hero block, derived
+/// from the same content area the painter uses so the two cannot drift.
 fn image_box(block: Rect, plan: &InlineHeroPlan) -> Rect {
+    let content =
+        selected_detail_content_area(block, SELECTED_BLOCK_SIDE_PADDING, HERO_BLOCK_EXTRA_ROWS);
     Rect {
-        x: block
-            .right()
-            .saturating_sub(SELECTED_BLOCK_SIDE_PADDING)
-            .saturating_sub(plan.image_cols),
-        y: block.y.saturating_add(2),
+        x: content.right().saturating_sub(plan.image_cols),
+        y: content.y,
         width: plan.image_cols,
         height: plan.image_rows,
     }

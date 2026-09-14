@@ -365,22 +365,6 @@ impl Surface {
     pub(super) const fn level(self) -> Level {
         row(self).level
     }
-
-    /// The border colour this surface frames itself with, when it paints one.
-    ///
-    /// Only the Wide hero library/rail panel paints a surface border: its
-    /// `▔`/`▁` frame rows in `render_selected_block_borders`' `FocusedRail`
-    /// arm, whose glyph colour is `PROGRESS_TRACK` and whose background is the
-    /// panel's own fill (`render/arrangements/wide_hero.rs:422`,
-    /// `render/components/widgets.rs:190-192`). Every other surface's frame
-    /// glyphs are foreground text, not a surface border, so they say `None`
-    /// rather than inventing one.
-    pub(super) const fn border(self) -> Option<Color> {
-        match self {
-            Surface::LibraryPanel => Some(PROGRESS_TRACK),
-            _ => None,
-        }
-    }
 }
 
 /// The rows whose resting value is not their level's resting default, with

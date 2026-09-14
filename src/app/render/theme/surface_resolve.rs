@@ -23,16 +23,15 @@ use ratatui::style::Color;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct SurfaceColors {
     pub(in crate::app) fill: Color,
-    pub(in crate::app) border: Option<Color>,
 }
 
 impl SurfaceColors {
     const fn fill(fill: Color) -> Self {
-        Self { fill, border: None }
+        Self { fill }
     }
 }
 
-/// Resolves a surface's fill and border from the call site's own focus bit
+/// Resolves a surface's fill from the call site's own focus bit
 /// (design D1/D2/D3).
 pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> SurfaceColors {
     let row = row(surface);
@@ -48,7 +47,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
         "{surface:?} rests at a value that is neither its level default nor a declared deviation"
     );
     let follow_focus = focused && row.focus != FocusSource::Fixed;
-    let mut colors = if follow_focus {
+    if follow_focus {
         SurfaceColors::fill(if row.soft {
             primitives::SOFT_CONTENT_BODY_BG
         } else {
@@ -56,9 +55,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
         })
     } else {
         SurfaceColors::fill(row.resting)
-    };
-    colors.border = surface.border();
-    colors
+    }
 }
 
 #[cfg(test)]
@@ -70,8 +67,8 @@ mod tests {
 
     /// Every variant is placed, `ALL` has no duplicates, and every one
     /// resolves. `ALL` is generated from the same macro variant list as the
-    /// enum, so it is complete by construction; the exhaustive matches in
-    /// `row`/`border` fail to compile if a new variant is not placed.
+    /// enum, so it is complete by construction; the exhaustive match in
+    /// `row` fails to compile if a new variant is not placed.
     #[test]
     fn all_lists_every_surface_and_every_surface_resolves() {
         let mut seen = HashSet::new();
@@ -81,12 +78,10 @@ mod tests {
                 "duplicate surface in ALL: {surface:?}"
             );
             for focused in [false, true] {
-                let colors = surface_colors(surface, focused);
-                assert_eq!(
-                    colors.border,
-                    surface.border(),
-                    "{surface:?} carries its declared border"
-                );
+                // Resolution is the assertion: the fill values themselves are
+                // pinned by `pinned_fills` below, and `row`'s exhaustive
+                // match fails to compile for an unplaced variant.
+                surface_colors(surface, focused);
             }
         }
         assert_eq!(seen.len(), Surface::ALL.len());
