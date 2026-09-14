@@ -31,6 +31,8 @@ pub struct TabPanel {
     /// Per-tab hit targets from the last paint, as
     /// `(screen_rect, tab_position)`; resolved against clicks.
     hits: Vec<(Rect, usize)>,
+    /// Full tab position currently under the pointer, if any.
+    hovered: Option<usize>,
 }
 
 impl TabPanel {
@@ -40,6 +42,7 @@ impl TabPanel {
             selected: 0,
             scroll: 0,
             hits: Vec::new(),
+            hovered: None,
         }
     }
 
@@ -85,6 +88,7 @@ impl Component for TabPanel {
                 titles: &self.titles,
                 selected: self.selected,
                 scroll: self.scroll,
+                hovered: self.hovered,
             },
             &mut self.hits,
         );
@@ -107,6 +111,15 @@ impl AppComponent<Msg, UserEvent> for TabPanel {
             // Resolve only geometry this panel painted; clicks elsewhere
             // (including the overflow arrows, which have never been
             // clickable) are no-ops.
+            Event::Mouse(mouse) if mouse.kind == MouseEventKind::Moved => {
+                let pos = Position::new(mouse.column, mouse.row);
+                self.hovered = self
+                    .hits
+                    .iter()
+                    .find(|(rect, _)| rect.contains(pos))
+                    .map(|(_, tab_pos)| *tab_pos);
+                None
+            }
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                 let pos = Position::new(mouse.column, mouse.row);
                 self.resolve_click(pos)
@@ -198,6 +211,77 @@ mod tests {
             Some(Msg::Shell(ShellRequest::TabSelect(2))),
             "clicking the third tab selects it"
         );
+    }
+
+    #[test]
+    fn moved_over_unselected_tab_sets_hover_without_selection_or_msg() {
+        let (mut panel, _) = drawn_panel(80, 0, 0);
+        let (rect, position) = panel.hit_regions()[1];
+        let msg = panel.on(&Event::Mouse(tuirealm::event::MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: rect.x,
+            row: rect.y,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        }));
+        assert_eq!(msg, None);
+        assert_eq!(panel.hovered, Some(position));
+        assert_eq!(panel.selected, 0);
+    }
+
+    #[test]
+    fn moved_into_gap_clears_hover_without_selection_or_msg() {
+        let (mut panel, _) = drawn_panel(80, 0, 0);
+        let (rect, _) = panel.hit_regions()[1];
+        panel.hovered = Some(1);
+        let msg = panel.on(&Event::Mouse(tuirealm::event::MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: rect.x,
+            row: 0,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        }));
+        assert_eq!(msg, None);
+        assert_eq!(panel.hovered, None);
+        assert_eq!(panel.selected, 0);
+    }
+
+    #[test]
+    fn moved_over_selected_tab_sets_hover_without_changing_selection() {
+        let (mut panel, _) = drawn_panel(80, 2, 0);
+        let (rect, position) = panel.hit_regions()[2];
+        let msg = panel.on(&Event::Mouse(tuirealm::event::MouseEvent {
+            kind: MouseEventKind::Moved,
+            column: rect.x,
+            row: rect.y,
+            modifiers: tuirealm::event::KeyModifiers::NONE,
+        }));
+        assert_eq!(msg, None);
+        assert_eq!(panel.hovered, Some(position));
+        assert_eq!(panel.selected, 2);
+    }
+
+    #[test]
+    fn unselected_hover_strengthens_label_while_selected_style_wins() {
+        let (mut panel, _) = drawn_panel(80, 0, 0);
+        let unselected = panel.hit_regions()[1].0;
+        let selected = panel.hit_regions()[0].0;
+        panel.hovered = Some(1);
+        let mut terminal = Terminal::new(TestBackend::new(80, 3)).unwrap();
+        terminal
+            .draw(|f| panel.view(f, Rect::new(0, 0, 80, 3)))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert_eq!(
+            buffer[(unselected.x + 2, unselected.y)].fg,
+            palette::TEXT_STRONG
+        );
+        assert_eq!(
+            buffer[(selected.x + 1, selected.y)].fg,
+            palette::TEXT_STRONG,
+            "selected styling remains unchanged when another tab is hovered"
+        );
+        assert!(buffer[(selected.x + 1, selected.y)]
+            .modifier
+            .contains(ratatui::style::Modifier::BOLD));
     }
 
     /// A click outside the painted tab labels — including the overflow
