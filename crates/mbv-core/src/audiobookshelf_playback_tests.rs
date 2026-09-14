@@ -198,10 +198,11 @@ fn playback_failures_and_rest_only_hls_readiness_are_classified() {
 fn late_success_after_create_bound_is_closed_on_loopback() {
     let http = MockHttp::new();
     let agent = http.agent();
-    // The create response arrives far too late for the 5ms bound; the next
+    // The create response arrives far too late for the 5ms bound (4x margin
+    // keeps the race deterministic without paying the old 50ms); the next
     // scripted response serves the cleanup close.
     http.delayed(
-        Duration::from_millis(50),
+        Duration::from_millis(20),
         &fixture("play-direct.json").replace("<DIRECT_PATH>", "/direct.mp3"),
     );
     http.respond(200, &fixture("session-close.json"));

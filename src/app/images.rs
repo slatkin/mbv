@@ -319,7 +319,7 @@ mod tests {
         );
         assert_eq!(box_cells.height, 25);
 
-        let source = image::DynamicImage::new_rgb8(800, 600);
+        let source = image::DynamicImage::new_rgb8(80, 60);
         let encoded = cover_fill_hero_box(&source, 160, u32::from(box_cells.height) * 20);
         use image::GenericImageView;
         assert_eq!(encoded.dimensions(), (160, 500));

@@ -235,7 +235,7 @@ fn feed_empty_queue_creates_standalone_session() {
 
 #[test]
 fn reporter_session_lifecycle() {
-    let with_ids = make_no_session_reporter_with_ids();
+    let (with_ids, _) = make_no_session_reporter_with_ids();
     assert!(with_ids.has_session());
     with_ids.clear_session();
     assert!(!with_ids.has_session());
@@ -304,7 +304,7 @@ fn feed_append_displaced_emby_reported_before_ids_clear_and_drain() {
 fn mixed_queue_feed_advances_to_next_emby_item() {
     // After a Feed item completes in a mixed queue, on_end_file's advance
     // path should reach a subsequent Emby item and re-initialize reporting.
-    let (mut session, _status) = make_queue_session_for_pos_tests(0);
+    let (mut session, _status, _, http) = make_queue_session_for_pos_tests_with_mock(0);
     // Queue: [Emby(ep1), Emby(ep2), Feed(f1), Emby(ep3)]
     let feed = make_feed_entry("f1", "Feed 1");
     session
@@ -329,6 +329,9 @@ fn mixed_queue_feed_advances_to_next_emby_item() {
         ids.2 = EmbySessionId::new("sid-ep3");
     }
     assert!(session.reporter.has_session());
+    // Succeeds instantly on the mock instead of failing against no server
+    // with a 500ms retry sleep.
+    http.respond(200, "");
     let _ = session.reporter.report_stopped(0);
 }
 
@@ -389,22 +392,38 @@ fn reporter_no_session_all_reporting_is_noop() {
 
 #[test]
 fn reporter_with_session_stopped_proceeds_to_client() {
-    let reporter = make_no_session_reporter_with_ids();
+    let (reporter, http) = make_no_session_reporter_with_ids();
     assert!(reporter.has_session());
-    assert!(!reporter.report_stopped(0));
+    // Succeeds instantly on the mock: with a session the call must proceed
+    // to the client and hit the Stopped endpoint — previously this asserted
+    // `!report_stopped`, i.e. it depended on no server answering.
+    http.respond(200, "");
+    assert!(reporter.report_stopped(0));
+    let requests = http.requests();
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].starts_with("POST /Sessions/Playing/Stopped"));
 }
 
-fn make_no_session_reporter_with_ids() -> SessionReporter {
+fn make_no_session_reporter_with_ids() -> (SessionReporter, crate::mock_http::MockHttp) {
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
-    let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
-    SessionReporter::new(
-        client,
-        None,
-        ItemId::new("real-item"),
-        MediaSourceId::new("msid"),
-        EmbySessionId::new("sid"),
-        false,
-        status,
+    let http = crate::mock_http::MockHttp::new();
+    let agent = http.agent();
+    let cfg = crate::config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..crate::config::Config::default()
+    };
+    let client = Arc::new(EmbyClient::new(cfg).with_test_agent(agent));
+    (
+        SessionReporter::new(
+            client,
+            None,
+            ItemId::new("real-item"),
+            MediaSourceId::new("msid"),
+            EmbySessionId::new("sid"),
+            false,
+            status,
+        ),
+        http,
     )
 }
 

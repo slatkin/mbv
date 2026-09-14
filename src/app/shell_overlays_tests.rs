@@ -251,14 +251,15 @@ mod tests {
     /// `drain_search_results` block.
     ///
     /// The component anchors `debounce_deadline` to `Instant::now()` at
-    /// keystroke time, so this test uses one real `sleep(310 ms)` rather
-    /// than fudging timestamps; 305 / 10 ms of slack for scheduling jitter.
-    /// #[cfg(miri)] could swap to an injectable clock, but a 310 ms test
-    /// wake-up is cheaper than a `Clock` seam that exists only for tests.
+    /// keystroke time. The test expires that deadline by writing the
+    /// crate-visible field directly instead of sleeping out the 300ms
+    /// wall clock: no `Clock` seam in prod is needed, and the duration
+    /// itself is not under test — only that a past-due deadline dispatches
+    /// through the sweep.
     #[test]
     fn search_sidebar_debounce_dispatches_in_a_mounted_shell() {
         use crate::app::components::{SearchSidebarComponent, ServiceRequest};
-        use std::time::{Duration, Instant};
+        use std::time::Instant;
 
         let mut model = Model::new(make_app_stub());
         model.mount_sidebar(super::super::SidebarId::Search);
@@ -293,7 +294,15 @@ mod tests {
         // Sweep before the 300 ms deadline: should not fire.
         assert!(model.tick_search_clock(Instant::now()).is_none());
 
-        std::thread::sleep(Duration::from_millis(310));
+        // Expire the deadline directly (see doc comment) instead of sleeping.
+        model
+            .application
+            .get_component_mut(&search_id)
+            .expect("search sidebar mounted")
+            .as_any_mut()
+            .downcast_mut::<SearchSidebarComponent>()
+            .expect("search sidebar type")
+            .debounce_deadline = Some(Instant::now() - std::time::Duration::from_millis(1));
 
         // Sweep after the deadline: the production run loop calls
         // handle_service_request on the returned Msg. With no Emby client

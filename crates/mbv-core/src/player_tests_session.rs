@@ -75,8 +75,16 @@ fn playlist_pos_does_not_clobber_in_flight_jump_to() {
 
 #[test]
 fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
-    let (mut session, status, events) = make_queue_session_for_pos_tests_with_events(0);
+    let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
     session.pending_initial_playlist_layout = false;
+    // Adoption reports the abandoned item stopped, resolves the new item via
+    // PlaybackInfo, and starts it — all succeed instantly on the mock (plus
+    // slack for any extra bookkeeping calls).
+    http.respond(200, "");
+    http.respond(200, "{}");
+    http.respond(200, "");
+    http.respond(200, "{}");
+    http.respond(200, "");
 
     session.on_playlist_pos_changed(2, 0);
 
@@ -93,6 +101,12 @@ fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
         announced,
         Some((session.slot_id_at(2).unwrap(), None)),
         "an mpv-initiated move is announced as a natural track change"
+    );
+    // The abandoned item was actually reported stopped, not just left behind.
+    assert!(
+        http.requests()
+            .iter()
+            .any(|r| r.starts_with("POST /Sessions/Playing/Stopped")),
     );
 }
 
@@ -256,12 +270,16 @@ fn progress_guard_stop_and_join_bounded_when_thread_hangs() {
     };
 
     let started = std::time::Instant::now();
-    guard.stop_and_join(Duration::from_millis(150));
+    // Small budget on purpose: the bound is enforced by recv_timeout, so any
+    // budget proves boundedness; a small one keeps the test fast. The 5s hang
+    // still exceeds the 1s assertion, so an unbounded-join regression fails
+    // instead of passing slowly.
+    guard.stop_and_join(Duration::from_millis(20));
     let elapsed = started.elapsed();
 
     assert!(
         elapsed < Duration::from_secs(1),
-        "stop_and_join should return near its 150ms budget, took {elapsed:?}"
+        "stop_and_join should return near its 20ms budget, took {elapsed:?}"
     );
     assert!(
         guard.handle.is_none(),
@@ -307,7 +325,11 @@ fn player_join_or_timeout_does_not_wait_for_a_stuck_run() {
     }));
 
     let started = Instant::now();
-    player.join_or_timeout(Duration::from_millis(100));
+    // Small budget on purpose: the bound is a recv_timeout, so any budget
+    // proves boundedness; a small one keeps the test fast. The 5s hang
+    // still exceeds the 1s assertion, so an unbounded-join regression fails
+    // instead of passing slowly.
+    player.join_or_timeout(Duration::from_millis(20));
 
     assert!(
         started.elapsed() < Duration::from_secs(1),

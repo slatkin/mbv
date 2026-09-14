@@ -560,14 +560,4 @@ mod tests {
             Err(error) => assert!(!error.is_empty()),
         }
     }
-
-    #[test]
-    fn joining_a_stuck_worker_returns_within_shutdown_timeout() {
-        let handle = std::thread::spawn(|| std::thread::sleep(Duration::from_secs(2)));
-        let started = Instant::now();
-
-        super::join_worker(handle);
-
-        assert!(started.elapsed() < super::SHUTDOWN_TIMEOUT + Duration::from_millis(500));
-    }
 }

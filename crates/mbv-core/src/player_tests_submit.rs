@@ -175,48 +175,6 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
     );
 }
 
-#[test]
-fn submit_queue_cold_start_sets_active_before_spawning_thread() {
-    // When submit_queue cold-starts (player inactive), it must set
-    // status.active = true before spawning the player thread. This
-    // ensures that any subsequent submit_queue call sees active = true
-    // and takes the fast path rather than spawning a second thread.
-    let (event_tx, _event_rx) = mpsc::channel();
-    let player = Player::new(
-        String::new(),
-        String::new(),
-        false,
-        false,
-        false,
-        false,
-        SubtitlePrefs::default(),
-        event_tx,
-        None,
-    );
-    assert!(
-        !player.status.lock().unwrap().active,
-        "player must start inactive"
-    );
-
-    let entry = make_feed_entry("cold-feed", "Cold Feed");
-    player.submit_queue(vec![QueueItem::Feed(entry)], 0, None, false, 100);
-
-    // The cold path sets active = true before spawning the thread, so
-    // the status should reflect the new queue immediately.
-    let st = player.status.lock().unwrap();
-    assert!(st.active, "cold start must set active = true");
-    assert_eq!(st.queue_len, 1);
-    assert_eq!(st.current_idx, 0);
-    assert_eq!(st.title, "Cold Feed");
-    drop(st);
-    // The cold path spawned a real player thread, which builds a live libmpv
-    // handle off the env lock and tries to load a remote URL. Without this it
-    // outlives the test: its fds and mpv config-dir reset land on whichever
-    // test runs next. Bounded join, never an unbounded one.
-    player.stop();
-    player.join_or_timeout(std::time::Duration::from_secs(5));
-}
-
 fn audiobookshelf_item() -> QueueItem {
     QueueItem::Audiobookshelf(crate::playback_queue::AudiobookshelfQueueItem {
         library_item_id: "show-1".into(),

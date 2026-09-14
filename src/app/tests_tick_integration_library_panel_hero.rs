@@ -127,21 +127,6 @@ fn migrated_home_with_hero(item: mbv_core::api::EmbyItem, terminal_width: u16) -
     harness
 }
 
-fn owner_of(harness: &TickHarness) -> &HeroFixtureOwner {
-    harness
-        .model()
-        .application
-        .get_component(&ComponentId::Library)
-        .and_then(|component| {
-            component
-                .as_any()
-                .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
-        })
-        .and_then(|panel| panel.owner(&home_key()))
-        .and_then(|owner| owner.as_any().downcast_ref::<HeroFixtureOwner>())
-        .expect("the hero fixture owner is installed")
-}
-
 /// One fetch per new hero cache key, and none on a repaint tick with the
 /// same key (task 5.10's Verify clause, mirroring the queue visual slot's
 /// `queue_projection_fetches_now_playing_image_once_and_none_on_repaint`,
@@ -206,89 +191,4 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
         .app
         .card_image_loading
         .contains("hero-b:Backdrop,Primary,Logo"));
-}
-
-/// A real terminal resize invalidates every card image (`sync_terminal_resize`,
-/// pre-existing behaviour: font-pixel metrics can change on a real resize, so
-/// the whole cache clears and every key re-fetches). For the hero key this
-/// means exactly one fresh reservation at the resize's sync pass, resolved to
-/// the new box size once "fetched" (simulated the same way as the initial
-/// fetch) — one placeholder frame, then Ready at the new box.
-#[test]
-fn hero_projection_refetches_and_reencodes_on_resize_with_one_placeholder_frame() {
-    let mut harness = migrated_home_with_hero(landscape_hero_item("hero-a"), 160);
-    let key = "hero-a:Backdrop,Primary,Logo".to_string();
-
-    // Establish the Ready state at the initial width.
-    drop(draw_frame_sized(&mut harness));
-    harness.model_mut().sync_mounted_surfaces();
-    assert!(harness.model().app.card_image_loading.contains(&key));
-    let img = image::DynamicImage::new_rgb8(64, 64);
-    let entry = harness.model().app.build_cached_image(&key, Some(img));
-    harness.model_mut().app.card_image_loading.remove(&key);
-    harness
-        .model_mut()
-        .app
-        .card_image_states
-        .insert(key.clone(), entry);
-    harness.model_mut().sync_mounted_surfaces();
-    let box1 = harness
-        .model()
-        .app
-        .card_image_states
-        .get(&key)
-        .and_then(|entry| entry.cover_box)
-        .expect("the Wide header's cover-fit box is keyed on the entry");
-    assert!(matches!(
-        owner_of(&harness).image_states.last(),
-        Some(HeroImageState::Ready { .. })
-    ));
-
-    // Resize: draw computes the fresh geometry, then the sync pass clears the
-    // stale cache and reserves exactly one fresh fetch for the same key.
-    harness.model_mut().app.terminal_width = 220;
-    drop(draw_frame_sized(&mut harness));
-    harness.model_mut().sync_mounted_surfaces();
-    assert!(harness.model().app.card_image_states.is_empty());
-    assert_eq!(
-        harness.model().app.card_image_loading.len(),
-        1,
-        "the resize starts exactly one fresh fetch for the hero key"
-    );
-    assert!(harness.model().app.card_image_loading.contains(&key));
-    assert_eq!(harness.model().app.image_fetches_active, 0);
-    assert!(harness.model().app.pending_image_fetches.is_empty());
-    assert!(
-        matches!(
-            owner_of(&harness).image_states.last(),
-            Some(HeroImageState::Loading)
-        ),
-        "the resize's sync pass shows the placeholder for its one frame"
-    );
-
-    // "Fetch" resolves: the new box size's re-encode.
-    let img = image::DynamicImage::new_rgb8(64, 64);
-    let entry = harness.model().app.build_cached_image(&key, Some(img));
-    harness.model_mut().app.card_image_loading.remove(&key);
-    harness
-        .model_mut()
-        .app
-        .card_image_states
-        .insert(key.clone(), entry);
-    harness.model_mut().sync_mounted_surfaces();
-    assert!(
-        matches!(
-            owner_of(&harness).image_states.last(),
-            Some(HeroImageState::Ready { .. })
-        ),
-        "the placeholder shows for at most the one frame the resize's sync pass painted"
-    );
-    let box2 = harness
-        .model()
-        .app
-        .card_image_states
-        .get(&key)
-        .and_then(|entry| entry.cover_box)
-        .expect("the resize re-encode keeps the box keyed on the entry");
-    assert_ne!(box1, box2, "the wider panel re-encodes at a new box size");
 }

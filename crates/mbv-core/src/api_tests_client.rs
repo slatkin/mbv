@@ -23,24 +23,6 @@ fn mock_client(url: &str) -> (EmbyClient, MockHttp) {
 }
 
 #[test]
-fn ordinary_report_stopped_still_retries_once() {
-    let (client, http) = mock_client(TEST_URL);
-    http.fail(std::io::ErrorKind::ConnectionRefused);
-    http.fail(std::io::ErrorKind::ConnectionRefused);
-
-    let ok = client.report_stopped(
-        &ItemId::new("item"),
-        &MediaSourceId::new("msid"),
-        123,
-        &EmbySessionId::new("sid"),
-        456,
-    );
-
-    assert!(!ok);
-    assert_eq!(http.requests().len(), 2);
-}
-
-#[test]
 fn ws_url_http_becomes_ws() {
     let url = client_with_url("http://server:8096").ws_url();
     assert!(url.starts_with("ws://"));

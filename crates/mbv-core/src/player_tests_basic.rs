@@ -86,6 +86,42 @@ fn make_queue_session_for_pos_tests_with_events(
     Arc<Mutex<PlayerStatus>>,
     mpsc::Receiver<PlayerEvent>,
 ) {
+    let (session, status, events, _) = make_queue_session_for_pos_tests_with_mock(start_idx);
+    (session, status, events)
+}
+
+/// Mock-backed session fixture: the Emby client runs on an in-memory
+/// transport, so reporting calls succeed instantly instead of failing against
+/// no server with a 500ms retry sleep each. Script responses via the returned
+/// `MockHttp` before triggering. The mock transport ignores the URL, but it
+/// must stay an IP literal so the default resolver never attempts DNS.
+fn make_queue_session_for_pos_tests_with_mock(
+    start_idx: usize,
+) -> (
+    PlaybackRun,
+    Arc<Mutex<PlayerStatus>>,
+    mpsc::Receiver<PlayerEvent>,
+    crate::mock_http::MockHttp,
+) {
+    let http = crate::mock_http::MockHttp::new();
+    let agent = http.agent();
+    let cfg = crate::config::Config {
+        server_url: "http://127.0.0.1:1".into(),
+        ..crate::config::Config::default()
+    };
+    let client = Arc::new(EmbyClient::new(cfg).with_test_agent(agent));
+    let (session, status, events) = queue_session_for_pos_tests_with_client(start_idx, client);
+    (session, status, events, http)
+}
+
+fn queue_session_for_pos_tests_with_client(
+    start_idx: usize,
+    client: Arc<EmbyClient>,
+) -> (
+    PlaybackRun,
+    Arc<Mutex<PlayerStatus>>,
+    mpsc::Receiver<PlayerEvent>,
+) {
     let emby_items = [
         make_media_item("ep1"),
         make_media_item("ep2"),
@@ -104,7 +140,6 @@ fn make_queue_session_for_pos_tests_with_events(
         title: emby_items[start_idx].display_name(),
         ..Default::default()
     }));
-    let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
     let reporter = SessionReporter::new(
         client,
         None,

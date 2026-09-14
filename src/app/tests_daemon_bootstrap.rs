@@ -191,6 +191,11 @@ fn local_daemon_app_keeps_live_queue_over_stale_disk_snapshot() {
 // and reconciles browse state on adoption via the daemon progress event path.
 #[test]
 fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
+    // Isolated state dir: without this the empty-remote bootstrap reads
+    // ambient queue_state (real home in isolation, another test's leftovers
+    // in-suite), arms a phantom adoption that fails against the stub's
+    // dropped command channel, and pays ~1s of disconnect-failure handling.
+    let _guard = crate::config::TestStateDirGuard::new();
     // Create a local daemon app with no Emby remote items so the live queue
     // starts empty — we inject an ABS slot directly below.
     let mut app = make_local_daemon_app_stub(Vec::new());

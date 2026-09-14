@@ -118,11 +118,33 @@ mod tests {
         (app, calls)
     }
 
+    /// Wait for the fake worker thread to record a matching call instead of
+    /// sleeping a fixed 50ms per command: the transport records
+    /// synchronously, so only the job-channel hop is async (usually ~1ms).
+    /// Still fails loudly (2s deadline) if the command never arrives.
+    fn wait_for_cast_call(
+        calls: &Arc<Mutex<Vec<String>>>,
+        mut matches: impl FnMut(&str) -> bool,
+        desc: &str,
+    ) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        loop {
+            if calls.lock().unwrap().iter().any(|c| matches(c)) {
+                return;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "timed out waiting for cast call {desc}"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+    }
+
     #[test]
     fn toggle_play_pause_sends_pause_while_playing() {
         let (mut app, calls) = attached_app_with_fake_transport();
         CastPlaybackTarget.toggle_play_pause(&mut app);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(&calls, |c| c == "pause", "pause");
         assert!(calls.lock().unwrap().contains(&"pause".to_string()));
     }
 
@@ -138,7 +160,7 @@ mod tests {
             playing_content_id: None,
         });
         CastPlaybackTarget.toggle_play_pause(&mut app);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(&calls, |c| c == "play", "play");
         assert!(calls.lock().unwrap().contains(&"play".to_string()));
     }
 
@@ -146,7 +168,7 @@ mod tests {
     fn stop_sends_stop() {
         let (mut app, calls) = attached_app_with_fake_transport();
         CastPlaybackTarget.stop(&mut app);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(&calls, |c| c == "stop", "stop");
         assert!(calls.lock().unwrap().contains(&"stop".to_string()));
     }
 
@@ -154,7 +176,7 @@ mod tests {
     fn seek_relative_sends_seek_from_the_extrapolated_position() {
         let (mut app, calls) = attached_app_with_fake_transport();
         CastPlaybackTarget.seek_relative(&mut app, 5.0);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(&calls, |c| c.starts_with("seek("), "seek(");
         assert!(calls.lock().unwrap().iter().any(|c| c.starts_with("seek(")));
     }
 
@@ -170,9 +192,9 @@ mod tests {
     fn jump_track_routes_to_skip_next_and_skip_previous() {
         let (mut app, calls) = attached_app_with_fake_transport();
         CastPlaybackTarget.jump_track(&mut app, 1);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(&calls, |c| c == "skip_next", "skip_next");
         CastPlaybackTarget.jump_track(&mut app, -1);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(&calls, |c| c == "skip_previous", "skip_previous");
         let calls = calls.lock().unwrap().clone();
         assert!(calls.contains(&"skip_next".to_string()));
         assert!(calls.contains(&"skip_previous".to_string()));
@@ -183,7 +205,11 @@ mod tests {
         let (mut app, calls) = attached_app_with_fake_transport();
         assert!(!CastPlaybackTarget.displayed_mute(&app));
         CastPlaybackTarget.toggle_command_mute(&mut app);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(
+            &calls,
+            |c| c.starts_with("set_muted(true)"),
+            "set_muted(true)",
+        );
         assert!(CastPlaybackTarget.displayed_mute(&app));
         assert!(calls
             .lock()
@@ -197,7 +223,7 @@ mod tests {
         let (mut app, calls) = attached_app_with_fake_transport();
         app.cast_attachment.as_mut().unwrap().volume = 50;
         CastPlaybackTarget.adjust_volume(&mut app, 10);
-        std::thread::sleep(std::time::Duration::from_millis(50));
+        wait_for_cast_call(&calls, |c| c.starts_with("set_volume("), "set_volume(");
         assert_eq!(CastPlaybackTarget.displayed_volume(&app), 60);
         assert!(calls
             .lock()

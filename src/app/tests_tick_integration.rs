@@ -230,7 +230,11 @@ fn search_clock_user_event_reaches_mounted_search_component() {
     let mut harness = TickHarness::new(make_app_stub());
     harness.model_mut().mount_sidebar(SidebarId::Search);
     arm_search_query(&mut harness, "ab");
-    std::thread::sleep(Duration::from_millis(310));
+    // Expire the deadline directly instead of sleeping out the 300ms
+    // wall-clock debounce: the duration is not under test, only that a
+    // past-due deadline dispatches on Clock.
+    search_component_mut(&mut harness).debounce_deadline =
+        Some(Instant::now() - Duration::from_millis(1));
 
     harness.inject(Event::User(UserEvent::Clock(Instant::now())));
     let raw_messages = harness
@@ -262,14 +266,27 @@ fn search_clock_sweep_dispatches_debounce_on_step() {
         .tick_search_clock(Instant::now())
         .is_none());
 
-    std::thread::sleep(Duration::from_millis(310));
-    let outcome = harness.step();
-
-    assert!(outcome.raw_messages.is_empty());
+    // Expire the deadline directly instead of sleeping out the 300ms
+    // wall-clock debounce, and invoke the run-loop sweep directly: step()'s
+    // trailing application.tick would block its full 500ms poll with no
+    // event queued, and this test asserts nothing about that tick part
+    // (raw_messages is expected empty).
+    search_component_mut(&mut harness).debounce_deadline =
+        Some(Instant::now() - Duration::from_millis(1));
+    let dispatched = harness
+        .model_mut()
+        .tick_search_clock(Instant::now())
+        .expect("sweep must dispatch a past-due debounce");
+    assert!(
+        matches!(
+            dispatched,
+            Msg::Service(ServiceRequest::SearchQuery(ref query)) if query == "ab"
+        ),
+        "sweep must dispatch the armed query, got {dispatched:?}"
+    );
     let component = search_component_mut(&mut harness);
     assert!(component.debounce_pending.is_none());
     assert!(component.debounce_deadline.is_none());
-    let _ = ServiceRequest::SearchQuery;
 }
 
 /// Mini view keeps `effective_panel_focus` on Queue, so `sync_queue` must not

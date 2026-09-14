@@ -108,13 +108,15 @@ mod tests {
     #[test]
     fn times_out_when_closure_outlives_the_bound() {
         // No real socket or filesystem access -- this exercises the generic
-        // timeout/abandon mechanics in isolation, in well under a second.
+        // timeout/abandon mechanics in isolation. No timing is asserted
+        // (only the Err value), so the bound is small: any bound far below
+        // the 5s hang proves the same property.
         let result = run_with_hard_bound(
             || {
                 std::thread::sleep(Duration::from_secs(5));
                 Ok::<_, String>(())
             },
-            Duration::from_millis(50),
+            Duration::from_millis(10),
         );
         assert_eq!(result, Err("timed out after 0s".to_string()));
     }
