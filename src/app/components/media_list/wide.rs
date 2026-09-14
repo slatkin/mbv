@@ -224,6 +224,15 @@ impl<Target> WideMediaList<Target> {
         self.core.set_scroll(offset);
     }
 
+    pub(crate) fn marquee_state(&mut self, text: &str) -> (String, std::time::Instant) {
+        self.core.marquee_state(text)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_marquee_started_at(&mut self, text: &str, at: std::time::Instant) {
+        self.core.set_marquee_started_at(text, at);
+    }
+
     /// Move the cursor by `delta` selectable rows, clamped to the ends.
     pub fn move_selection(&mut self, delta: i64) {
         self.core.move_selection(delta);

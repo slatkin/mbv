@@ -103,7 +103,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     snapshot.panel_focus = crate::app::PanelFocus::Queue;
     assert_eq!(
         resolve_router_outcome_with_focused(
-            KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+            KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
             &snapshot,
             None
         ),
@@ -119,12 +119,50 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     );
     assert_eq!(
         resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
+            &snapshot,
+            None
+        ),
+        RouterOutcome::Swallow,
+        "Alt+Right yielded its panel-switch duty to plain Right; alt_swallow claims it"
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
             KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT),
             &snapshot,
             None
         ),
         RouterOutcome::Swallow,
         "unhandled Alt chords must not leak into destination handling"
+    );
+}
+#[test]
+fn plain_panel_arrows_yield_while_an_overlay_holds_focus() {
+    // With the Playlists sidebar (or any overlay) holding focus, the plain
+    // panel arrows must fall through to the leaf: the sidebar owns the
+    // keyboard (its own Left collapses the open playlist), and panel focus
+    // must not move behind it.
+    let mut snapshot = idle_snapshot();
+    snapshot.panel_focus = crate::app::PanelFocus::Library;
+    snapshot.overlay_holds_focus = true;
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
+            &snapshot,
+            None
+        ),
+        RouterOutcome::FallThrough,
+        "plain Left stays with the focused sidebar"
+    );
+    snapshot.panel_focus = crate::app::PanelFocus::Queue;
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
+            &snapshot,
+            None
+        ),
+        RouterOutcome::FallThrough,
+        "plain Right stays with the focused sidebar"
     );
 }
 #[test]

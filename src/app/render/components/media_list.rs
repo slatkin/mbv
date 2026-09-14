@@ -16,6 +16,106 @@ mod wide_row_regression_tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
+    use std::time::{Duration, Instant};
+
+    fn title_row_at(list: &mut WideMediaList<String>, focused: bool, y: u16) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(80, 4)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(
+                    f,
+                    Rect::new(0, 0, 40, 2),
+                    Rect::new(0, 0, 40, 2),
+                    list,
+                    focused,
+                    palette::SURFACE_RESTING,
+                );
+            })
+            .unwrap();
+        (2..38)
+            .map(|x| {
+                terminal.backend().buffer()[(x, y)]
+                    .symbol()
+                    .chars()
+                    .next()
+                    .unwrap_or(' ')
+            })
+            .collect()
+    }
+
+    fn title_row(list: &mut WideMediaList<String>, focused: bool) -> String {
+        title_row_at(list, focused, 0)
+    }
+
+    #[test]
+    fn selected_focused_title_marquees_and_restarts_on_content_change() {
+        let mut list = WideMediaList::new();
+        list.set_content(vec![item(
+            "one",
+            "A very long selected title that overflows",
+            None,
+        )]);
+        let at_rest = title_row(&mut list, true);
+        list.set_marquee_started_at(
+            "A very long selected title that overflows",
+            Instant::now() - Duration::from_millis(1_401),
+        );
+        let advanced = title_row(&mut list, true);
+        assert_ne!(at_rest, advanced);
+        assert!(!at_rest.contains('…'));
+
+        list.set_content(vec![item(
+            "two",
+            "A newly changed overflowing title with more text",
+            None,
+        )]);
+        let restarted = title_row(&mut list, true);
+        assert!(restarted.trim_start().starts_with("A newly changed"));
+    }
+
+    #[test]
+    fn non_marquee_rows_still_ellipsis_truncate() {
+        let mut list = WideMediaList::new();
+        list.set_content(vec![item(
+            "one",
+            "A very long selected title that overflows",
+            None,
+        )]);
+        assert!(title_row(&mut list, false).contains('…'));
+
+        let mut list = WideMediaList::new();
+        list.set_content(vec![
+            item(
+                "selected",
+                "A very long selected title that overflows",
+                None,
+            ),
+            item(
+                "other",
+                "A very long non-selected title that overflows",
+                None,
+            ),
+        ]);
+        let selected_at_rest = title_row_at(&mut list, true, 0);
+        list.set_marquee_started_at(
+            "A very long selected title that overflows",
+            Instant::now() - Duration::from_millis(1_401),
+        );
+        let selected_advanced = title_row_at(&mut list, true, 0);
+        let other = title_row_at(&mut list, true, 1);
+        assert!(
+            !selected_at_rest.contains('…'),
+            "selected row should marquee at rest: {selected_at_rest:?}"
+        );
+        assert_ne!(
+            selected_at_rest, selected_advanced,
+            "selected row should advance while another overflowing row is painted"
+        );
+        assert!(
+            other.contains('…'),
+            "non-selected row should use ellipsis truncation: {other:?}"
+        );
+    }
 
     /// migrate-home-feeds 4.6: the selected row's highlight bar must span the
     /// whole panel width (never just the row text, with or without a duration

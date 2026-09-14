@@ -48,8 +48,19 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     selected_bg: Color,
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
-    let rows = list.rows();
     let selected_row = geometry.selected_row();
+    let marquee_primary = focused
+        .then_some(selected_row)
+        .flatten()
+        .and_then(|row| list.rows().get(row))
+        .and_then(|row| match row {
+            crate::app::components::media_list::MediaListRow::Item { primary, .. } => {
+                Some(primary.clone())
+            }
+            _ => None,
+        });
+    let mut marquee = marquee_primary.map(|primary| list.marquee_state(&primary));
+    let rows = list.rows();
     let offset = geometry.offset();
     let total_rows = geometry.len();
 
@@ -71,6 +82,10 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
                 selected_bg,
                 inner_width,
                 scrollbar,
+                marquee
+                    .as_mut()
+                    .filter(|_| Some(row) == selected_row)
+                    .map(|(text, started_at)| (text, started_at)),
             )
         })
         .collect();
@@ -132,7 +147,7 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
     f: &mut Frame,
     paint_area: Rect,
     content_area: Rect,
-    list: &InlineMediaBrowser<Target>,
+    list: &mut InlineMediaBrowser<Target>,
     desired_detail_rows: usize,
     focused: bool,
     selected_bg: Color,
@@ -140,10 +155,22 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
     let layout: InlineLayout<Target> =
         list.resolve_inline_layout(content_area.height as usize, desired_detail_rows);
     let geometry = layout.row_geometry;
-    let rows = list.rows();
     let offset = geometry.offset();
     let total_rows = geometry.len();
     let selected_row = geometry.selected_row();
+    let marquee_primary = (focused && layout.detail_rows == 0)
+        .then_some(selected_row)
+        .flatten()
+        .and_then(|row| geometry.source_row(row))
+        .and_then(|row| list.rows().get(row))
+        .and_then(|row| match row {
+            crate::app::components::media_list::MediaListRow::Item { primary, .. } => {
+                Some(primary.clone())
+            }
+            _ => None,
+        });
+    let mut marquee = marquee_primary.map(|primary| list.marquee_state(&primary));
+    let rows = list.rows();
 
     let overflows = total_rows > content_area.height as usize;
     let inner_width = paint_area
@@ -166,6 +193,12 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
                         selected_bg,
                         inner_width,
                         focused && overflows,
+                        marquee
+                            .as_mut()
+                            .filter(|_| {
+                                Some(display_row) == selected_row && layout.detail_rows == 0
+                            })
+                            .map(|(text, started_at)| (text, started_at)),
                     )
                 })
                 .unwrap_or_else(|| ListItem::new(Line::default()))

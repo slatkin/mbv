@@ -15,6 +15,7 @@ use crate::app::components::{
     ComponentId, ModalId, Msg, MusicContent, OverlayId, QueueRequest, SearchPool,
     SearchSidebarComponent, ShellRequest, TerminalObserverEvent, UserEvent,
 };
+use crate::app::action::Command;
 use crate::app::router::RouterOutcome;
 use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
@@ -309,6 +310,41 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
         Some(&ComponentId::Library),
         "the Home owner is installed with the panel, so the normalized Home tab routes to the Library panel (task 5.11)"
     );
+}
+
+/// Plain Left/Right now own panel switching (formerly Alt+Left/Right): the
+/// router fold must claim the bare chords and move panel focus, proven here
+/// through the real tick + sync pass rather than a direct `Component::on`.
+#[test]
+fn tick_plain_arrows_switch_main_panels() {
+    // Queue focused: plain Right moves panel focus to Library.
+    let mut harness = queue_focused_harness();
+    harness.inject(key(Key::Right));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(Command::FocusPanel(PanelFocus::Library))
+    );
+    if let RouterOutcome::Command(command) = outcome.router {
+        harness.model_mut().dispatch_router_command(command);
+    }
+    assert_eq!(harness.model().app.panel_focus, PanelFocus::Library);
+
+    // Library focused in Both mode: plain Left moves panel focus to Queue.
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::Both;
+    let mut both = TickHarness::new(app);
+    both.inject(key(Key::Left));
+    let outcome = both.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(Command::FocusPanel(PanelFocus::Queue))
+    );
+    if let RouterOutcome::Command(command) = outcome.router {
+        both.model_mut().dispatch_router_command(command);
+    }
+    assert_eq!(both.model().app.panel_focus, PanelFocus::Queue);
 }
 
 #[test]
