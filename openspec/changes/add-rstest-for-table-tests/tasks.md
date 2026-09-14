@@ -19,14 +19,14 @@
 
 ## 4. Backdrop dim family (root package)
 
-- [ ] 4.1 Convert the `dim_*` shape in `src/app/render/components/backdrop.rs` (the measured `dim_rgb_*` trio plus its four identical-shape siblings, per design D8) to one `#[case]` table over `(Color, Color)` with named cases. Verify `cargo nextest run -p mbv dim` passes seven named cases and that `Color::Indexed` passthrough plus the `White`/`Black`/`Reset` cases keep their existing expectations.
-- [ ] 4.2 Verify no assertion was lost in 4.1: seven cases against seven removed `#[test]` functions, and no remaining single-case `dim_*` test. Verify by reading the `git diff` and `cargo nextest list -p mbv | grep -c 'backdrop.*dim'`, which must equal seven.
-- [ ] 4.3 Run the per-file gates and commit `backdrop.rs` alone: `cargo fmt --all`, `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv`. Verify all three pass and the commit touches only that file.
+- [x] 4.1 Convert the `dim_*` shape in `src/app/render/components/backdrop.rs` (the measured `dim_rgb_*` trio plus its four identical-shape siblings, per design D8) to one `#[case]` table over `(Color, Color)` with named cases. Verify `cargo nextest run -p mbv dim` passes seven named cases and that `Color::Indexed` passthrough plus the `White`/`Black`/`Reset` cases keep their existing expectations.
+- [x] 4.2 Verify no assertion was lost in 4.1: seven cases against seven removed `#[test]` functions, and no remaining single-case `dim_*` test. Verify by reading the `git diff` and `cargo nextest list -p mbv | grep -c 'backdrop.*dim'`, which must equal seven.
+- [x] 4.3 Run the per-file gates and commit `backdrop.rs` alone: `cargo fmt --all`, `cargo clippy -p mbv --all-targets -- -D warnings`, `cargo nextest run -p mbv`. Verify all three pass and the commit touches only that file.
 
 ## 5. Convention
 
-- [ ] 5.1 Add the convention to the testing policy section of `AGENTS.md` (design D6): fixture-varying test families use named `#[case]` tables; `#[case]` is not a mechanism for generating many thin tests; conversions are opportunistic and file-by-file. Verify the line sits inside the existing testing rules rather than as a new standalone section, and that it names both the encouragement and the guard.
-- [ ] 5.2 Commit the `AGENTS.md` change alone and verify the commit touches only that file.
+- [x] 5.1 Add the convention to the testing policy section of `AGENTS.md` (design D6): fixture-varying test families use named `#[case]` tables; `#[case]` is not a mechanism for generating many thin tests; conversions are opportunistic and file-by-file. Verify the line sits inside the existing testing rules rather than as a new standalone section, and that it names both the encouragement and the guard.
+- [x] 5.2 Commit the `AGENTS.md` change alone and verify the commit touches only that file.
 
 ## 6. Workspace verification
 
