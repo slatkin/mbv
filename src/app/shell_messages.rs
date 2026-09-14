@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::components::library_panel::LibraryPanel;
+use crate::app::types_settings::PanelFocus;
 use std::time::Instant;
 
 impl Model {
@@ -24,6 +25,18 @@ impl Model {
                         self.set_visual_selection_count(count);
                     }
                     ShellRequest::ClearMultiSelection(origin) => {
+                        // The status-bar request carries the legacy default
+                        // origin; prefer the origin captured in the focused
+                        // summary when it is still available.
+                        let origin = self
+                            .visual_selection
+                            .map(|(focus, _)| match focus {
+                                PanelFocus::Library => crate::app::components::media_list::SelectionOrigin::Library(
+                                    crate::app::components::media_list::LibrarySelectionOrigin::Home,
+                                ),
+                                PanelFocus::Queue => crate::app::components::media_list::SelectionOrigin::Queue,
+                            })
+                            .unwrap_or(origin);
                         self.clear_multi_selection_from_origin(origin);
                     }
                     ShellRequest::MusicAlbumActivate { item } => {
