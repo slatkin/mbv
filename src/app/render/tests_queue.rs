@@ -99,26 +99,6 @@ fn strip_rows_are_reserved_only_in_library_only() {
 }
 
 #[test]
-#[ignore = "obsolete legacy-render characterization"]
-fn short_window_keeps_queue_in_left_column() {
-    let mut app = make_movie_app();
-    app.queue_column_width = 40;
-
-    let (_term, layout) = render_queue_view_to_terminal(&mut app, 100, 12);
-
-    assert!(
-        layout.content_area.x < app.queue_column_width,
-        "expected short-height queue to stay in the left column, got {:?}",
-        layout.content_area
-    );
-    assert!(
-        app.layout.left_area.x >= app.queue_column_width,
-        "expected library area to remain in the right column, got {:?}",
-        app.layout.left_area
-    );
-}
-
-#[test]
 fn short_queue_panel_drops_padding_before_rows() {
     let mut app = make_queue_app(20);
 
@@ -606,89 +586,6 @@ fn queue_playback_panel_unmounts_in_library_only() {
             "{mode:?}: the panel is mounted in every queue-visible layout"
         );
     }
-}
-
-#[test]
-#[ignore = "obsolete legacy-render characterization"]
-fn wide_active_queue_starts_below_panel_rows() {
-    // Wide queue-only paints the panel beside the card, so on a frame where
-    // the card is shorter than the four panel rows the queue must begin
-    // below the panel rect — otherwise list rows overpaint the panel.
-    let mut app = make_queue_app(5);
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    app.player.status.lock().unwrap().active = true;
-    let width = 120;
-    let height = 40;
-    let (_term, layout) = render_queue_view_to_terminal(&mut app, width, height);
-    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, height));
-    let panel_rows = app.layout.card.height.max(4);
-    assert!(
-        layout.content_area.y > chrome.left_content.y + panel_rows,
-        "queue must start below the painted wide panel rows (plus the header row and its separator)"
-    );
-    // The panel background must still fill the wide side-by-side slot.
-    assert!(
-        layout.content_area.y > chrome.left_content.y,
-        "queue must sit below the left-column content top"
-    );
-}
-
-#[test]
-#[ignore = "obsolete legacy-render characterization"]
-fn wide_queue_only_leftover_rows_stay_dark_bg_without_duplicate_visualizer() {
-    let mut app = make_queue_app(5);
-    app.panel_mode = crate::app::PanelMode::QueueOnly;
-    app.visualizer_enabled = true;
-    app.player.status.lock().unwrap().active = true;
-    app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
-        left: 1.0,
-        right: 1.0,
-    }];
-
-    let (term, _layout) = render_queue_view_to_terminal(&mut app, 120, 40);
-    let buf = term.backend().buffer();
-
-    // With no previous artwork geometry, the initial visualizer reservation
-    // is (x=2, y=1, w=48, h=24) — the full 24-row cap, because the real
-    // shell paint path normalizes `terminal_height` from the drawn frame —
-    // and the wide playback panel starts at x=52, its 4-row player content
-    // topped by the panel background. The side-by-side slot below that
-    // content stays on the dark chrome background rather than hosting a
-    // second visualizer.
-    let leftover_cell = &buf[(60, 20)];
-    assert_eq!(
-        leftover_cell.style().bg,
-        Some(palette::SURFACE_CHROME),
-        "wide playback leftovers must keep DARK_BG, got {:?}",
-        leftover_cell.style().bg
-    );
-    // Region the removed wide-panel visualizer branch used to paint.
-    let mut duplicate = false;
-    'scan: for y in 5..25 {
-        for x in 52..buf.area().width {
-            if buf[(x, y)].symbol() == crate::config::DEFAULT_VISUALIZER_GLYPH {
-                duplicate = true;
-                break 'scan;
-            }
-        }
-    }
-    assert!(
-        !duplicate,
-        "the visualizer must only render inside the queue card slot, never in playback-panel leftovers"
-    );
-    let mut card_visualizer = false;
-    'card: for y in 1..25 {
-        for x in 2..50 {
-            if buf[(x, y)].symbol() == crate::config::DEFAULT_VISUALIZER_GLYPH {
-                card_visualizer = true;
-                break 'card;
-            }
-        }
-    }
-    assert!(
-        card_visualizer,
-        "the selected visualizer must render inside the queue card slot"
-    );
 }
 
 /// A locally selected row paints as now-playing, and the playback panel

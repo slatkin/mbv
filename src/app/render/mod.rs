@@ -68,27 +68,21 @@ pub(crate) fn browser_legacy_plain_rows_paints() -> usize {
     components::media_list::PLAIN_ROWS_PAINTS.with(std::cell::Cell::get)
 }
 
+pub(in crate::app) use arrangements::wide_hero::{
+    paint_wide_hero_text, place_media_list_below, wide_hero_browser_pane, wide_hero_fits,
+    wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
+};
+pub(in crate::app) use components::hero::{wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS};
 pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
+pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 pub(in crate::app) use screens::feeds_model::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
 };
-// Task 5.3d.17a: BrowserComponent paints the wide Movies/home-video
-// Wide hero layout itself (mirroring HomeComponent's image-deferral),
-// so the legacy wide renderer can be deleted in 5.3d.17b. Re-export the
-// shared helpers it needs at crate::app visibility.
-#[cfg(test)]
-pub(in crate::app) use arrangements::library::wide_library_panes;
-pub(in crate::app) use arrangements::wide_hero::{
-    paint_wide_hero_text, place_media_list_below, wide_hero_browser_pane, wide_hero_fits,
-    wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
-};
-pub(in crate::app) use components::hero::{wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS};
-pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
 pub(in crate::app) use components::media_list::{
     render_inline_media_browser_component, render_wide_media_list_component,
