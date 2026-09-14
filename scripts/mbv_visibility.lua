@@ -48,7 +48,7 @@ set_virt_mouse_area(0, 0, 0, 0, 'window-controls')
 
 --
 -- Next-Up banner
--- Full-width bottom bar, same height as OSC, with DISMISS and SKIP buttons.
+-- Full-width bottom bar, same height as OSC, with DISMISS and START NOW buttons.
 -- While visible the OSC is hidden and inaccessible.
 --
 
@@ -74,7 +74,7 @@ local next_up = make_overlay(1001, {
 
     local pad = math.floor(pw * 0.03)  -- left/right padding
 
-    -- Buttons: right-aligned, stacked vertically (SKIP on top, DISMISS below)
+    -- Buttons: right-aligned, stacked vertically (START NOW on top, DISMISS below)
     local bar_h = 180
     local bar_y = ph - bar_h  -- top edge of overlay
     local btn_w   = math.max(110, math.floor(pw * 0.13))
@@ -132,7 +132,7 @@ local next_up = make_overlay(1001, {
     ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', txt_fs))
     ass:append(label:gsub('{', '\\{'))
 
-    -- SKIP button (green, top)
+    -- START NOW button (green, top)
     ass:new_event()
     ass:pos(btn_x, skip_y1)
     ass:an(7)
@@ -145,7 +145,7 @@ local next_up = make_overlay(1001, {
     ass:pos(btn_x + btn_w / 2, skip_y1 + btn_h / 2)
     ass:an(5)
     ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', btn_fs))
-    ass:append('SKIP')
+    ass:append('START NOW')
 
     -- DISMISS button (dark grey, bottom)
     ass:new_event()
