@@ -268,10 +268,6 @@ impl Model {
                         self.app.remove_from_queue(index);
                     }
                 }
-                // The component cleared its local selection before emitting
-                // this request; reset the shell-owned badge in the same way
-                // as the established SelectionChanged(0) path.
-                self.set_visual_selection_count(0);
             }
             QueueRequest::Move {
                 scope,

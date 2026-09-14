@@ -37,16 +37,6 @@ pub(super) struct RouterSnapshot {
     /// it (e.g. the Playlists sidebar's collapse/open) instead of moving
     /// panel focus behind it.
     pub overlay_holds_focus: bool,
-    /// Whether the focused media list is in keyboard Visual mode.
-    pub visual_mode_active: bool,
-    /// Whether the previous eligible Space press is within the double-tap
-    /// window. The timer remains App-owned; this is the router's plain-data
-    /// view of it.
-    pub space_double_tap: bool,
-    /// Whether the previous eligible Esc press is within the double-tap
-    /// window. The timer remains App-owned; this is the router's plain-data
-    /// view of it.
-    pub esc_double_tap: bool,
 }
 
 /// One ordered layer of the keyboard policy.
@@ -175,11 +165,7 @@ impl KeyPolicyGate {
             Self::Playback => {
                 // Playback shortcuts are single letters (space, o, m, z, a, …);
                 // a focused text entry must keep them as typed characters.
-                if snapshot.blocking_overlay_open
-                    || snapshot.text_entry_focused
-                    || (snapshot.visual_mode_active
-                        && matches!(chord.code, KeyCode::Char(' ') | KeyCode::Esc))
-                {
+                if snapshot.blocking_overlay_open || snapshot.text_entry_focused {
                     return false;
                 }
                 let input = InputSnapshot {
@@ -427,11 +413,7 @@ pub(super) fn command_for_policy(
                     KeyResolution::FallThrough | KeyResolution::Swallow => None,
                 }
             })?;
-            match command {
-                Command::TogglePlayPause if !snapshot.space_double_tap => None,
-                Command::Stop if !snapshot.esc_double_tap => None,
-                command => Some(command),
-            }
+            Some(command)
         }
         _ => None,
     }
@@ -564,20 +546,9 @@ mod tests {
     }
 
     #[test]
-    fn visual_mode_leaves_space_and_escape_to_the_focused_list() {
-        let mut visual = snapshot();
-        visual.player_active = true;
-        visual.visual_mode_active = true;
-        assert!(resolve_policy(chord(KeyCode::Char(' '), KeyModifiers::NONE), &visual).is_none());
-        assert!(resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &visual).is_none());
-    }
-
-    #[test]
     fn sessions_sidebar_escape_precedes_double_escape_playback_stop() {
         let mut armed = snapshot();
         armed.player_active = true;
-        armed.esc_double_tap = true;
-
         assert_eq!(
             resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &armed)
                 .unwrap()

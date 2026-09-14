@@ -93,9 +93,9 @@ fn hero_double_click_activates_the_selected_track() {
         .draw(|frame| owner.track_list.wide_mut().view(frame, area))
         .unwrap();
 
-    let message = owner.on_slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::DoubleClick(
-        Position { x: 0, y: 0 },
-    )));
+    let message = owner.on_slot_event(LibrarySlotEvent::HeroPane(
+        MediaListSurfaceInput::DoubleClick(Position { x: 0, y: 0 }),
+    ));
     match message {
         Some(Msg::Shell(ShellRequest::MusicTrackActivate {
             album_id,
@@ -120,7 +120,7 @@ fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
         .draw(|frame| owner.carrier.inline_mut().view(frame, area))
         .unwrap();
 
-    let event = LibrarySlotEvent::List(RowLocalInput::Wheel {
+    let event = LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
         at: Position { x: 0, y: 0 },
         delta: 1,
     });

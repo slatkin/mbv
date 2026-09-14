@@ -13,7 +13,9 @@
 use ratatui::layout::Position;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::media_list::RowLocalInput;
+use crate::app::components::media_list::{
+    LibrarySelectionOrigin, MediaListSurfaceInput, SelectionOrigin, SelectionSummary,
+};
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::list_pane_width::normalize_list_pane_width;
@@ -80,6 +82,27 @@ pub struct LibraryPanel {
     /// A wheel also needs to persist the owner's resolved scroll. Queue that
     /// secondary shell intent while returning the owner's cursor echo.
     deferred_msg: Option<Msg>,
+    focused_summary: Option<SelectionSummary>,
+}
+
+impl From<LibraryKey> for LibrarySelectionOrigin {
+    fn from(key: LibraryKey) -> Self {
+        match key {
+            LibraryKey::Home => Self::Home,
+            LibraryKey::Feeds => Self::Feeds,
+            LibraryKey::Service(key) => Self::Service(key),
+        }
+    }
+}
+
+impl From<LibrarySelectionOrigin> for LibraryKey {
+    fn from(origin: LibrarySelectionOrigin) -> Self {
+        match origin {
+            LibrarySelectionOrigin::Home => Self::Home,
+            LibrarySelectionOrigin::Feeds => Self::Feeds,
+            LibrarySelectionOrigin::Service(key) => Self::Service(key),
+        }
+    }
 }
 
 impl LibraryPanel {
@@ -99,6 +122,7 @@ impl LibraryPanel {
             gestures: MouseGestureState::new(),
             image_paint: None,
             deferred_msg: None,
+            focused_summary: None,
         }
     }
 
@@ -136,14 +160,25 @@ impl LibraryPanel {
     /// Point the panel at the active library's owner (the shell drives this
     /// from its tab resolution each sync pass).
     pub(in crate::app) fn set_active(&mut self, key: Option<LibraryKey>) {
-        if self.owners.active_key() != key.as_ref() {
+        let identity_changed = self.owners.active_key() != key.as_ref();
+        if identity_changed {
             if let Some(previous) = self.owners.active_key().cloned() {
                 if let Some(owner) = self.owners.get_mut(&previous) {
                     owner.clear_selection();
                 }
             }
         }
-        self.owners.set_active(key);
+        self.owners.set_active(key.clone());
+        if let Some(key) = key {
+            let origin = LibrarySelectionOrigin::from(key);
+            if let Some(owner) = self.owners.active_mut() {
+                owner.set_selection_origin(SelectionOrigin::Library(origin));
+            }
+        }
+        self.focused_summary = self
+            .owners
+            .active_mut()
+            .and_then(|owner| owner.selection_summary());
     }
 
     /// Record the session-only Wide split width override for the next `view`.
@@ -279,15 +314,37 @@ impl LibraryPanel {
         }
     }
 
+    /// Clear the multi-selection of the owner named by `origin`, whether or
+    /// not it is the active library (design D6: a clear intent carries the
+    /// origin captured at invocation, never the dispatch-time focus).
+    /// Returns whether an owner for `origin` is installed.
+    pub(in crate::app) fn clear_selection_for_origin(
+        &mut self,
+        origin: &LibrarySelectionOrigin,
+    ) -> bool {
+        let key = LibraryKey::from(origin.clone());
+        let was_active = self.owners.active_key() == Some(&key);
+        let Some(owner) = self.owners.get_mut(&key) else {
+            return false;
+        };
+        owner.clear_selection();
+        if was_active {
+            self.focused_summary = owner.selection_summary();
+        }
+        true
+    }
+
+    pub(in crate::app) fn focused_summary(&mut self) -> Option<SelectionSummary> {
+        self.focused_summary = self
+            .owners
+            .active_mut()
+            .and_then(|owner| owner.selection_summary());
+        self.focused_summary.clone()
+    }
+
     /// Mutably borrow the owner installed for `key` (the shell's
     /// destination-specific content pushes reach a typed owner through its
     /// `as_any_mut`).
-    pub(in crate::app) fn clear_active_selection(&mut self) {
-        if let Some(owner) = self.owners.active_mut() {
-            owner.clear_selection();
-        }
-    }
-
     pub(in crate::app) fn owner_mut(
         &mut self,
         key: &LibraryKey,
@@ -348,12 +405,15 @@ impl LibraryPanel {
     /// Route one already-normalized pointer input to the active owner's
     /// list. The owner performs the typed point resolution through its own
     /// carrier and translates the outcome into its `Msg`s.
-    fn delegate_list_input(&mut self, input: RowLocalInput) -> Option<Msg> {
+    fn delegate_list_input(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         self.slot_event(LibrarySlotEvent::List(input))
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
-        let is_wheel = matches!(event, LibrarySlotEvent::List(RowLocalInput::Wheel { .. }));
+        let is_wheel = matches!(
+            event,
+            LibrarySlotEvent::List(MediaListSurfaceInput::Wheel { .. })
+        );
         let result = self
             .owners
             .active_mut()
@@ -438,20 +498,20 @@ impl LibraryPanel {
             return match gesture {
                 MouseGesture::Click { at, modifier } => {
                     let input = match modifier {
-                        ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
-                        ClickModifier::Shift => RowLocalInput::RangeClick(at),
-                        ClickModifier::None => RowLocalInput::Click(at),
+                        ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                        ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                        ClickModifier::None => MediaListSurfaceInput::Click(at),
                     };
                     self.slot_event(LibrarySlotEvent::HeroPane(input))
                 }
-                MouseGesture::DoubleClick(at) => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::DoubleClick(at)))
-                }
-                MouseGesture::RightClick(at) => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::ContextClick(at)))
-                }
+                MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::DoubleClick(at),
+                )),
+                MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::ContextClick(at),
+                )),
                 MouseGesture::Scroll { at, delta } => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::Wheel {
+                    self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
                         at,
                         delta,
                     }))
@@ -463,20 +523,23 @@ impl LibraryPanel {
         match gesture {
             MouseGesture::Click { at, modifier } if inside_list => {
                 let input = match modifier {
-                    ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
-                    ClickModifier::Shift => RowLocalInput::RangeClick(at),
-                    ClickModifier::None => RowLocalInput::Click(at),
+                    ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                    ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                    ClickModifier::None => MediaListSurfaceInput::Click(at),
                 };
                 self.slot_event(LibrarySlotEvent::List(input))
             }
-            MouseGesture::DoubleClick(at) if inside_list => {
-                self.slot_event(LibrarySlotEvent::List(RowLocalInput::DoubleClick(at)))
-            }
-            MouseGesture::RightClick(at) if inside_list => {
-                self.slot_event(LibrarySlotEvent::List(RowLocalInput::ContextClick(at)))
-            }
+            MouseGesture::DoubleClick(at) if inside_list => self.slot_event(
+                LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(at)),
+            ),
+            MouseGesture::RightClick(at) if inside_list => self.slot_event(LibrarySlotEvent::List(
+                MediaListSurfaceInput::ContextClick(at),
+            )),
             MouseGesture::Scroll { at, delta } if inside_list => {
-                self.slot_event(LibrarySlotEvent::List(RowLocalInput::Wheel { at, delta }))
+                self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+                    at,
+                    delta,
+                }))
             }
             _ => None,
         }

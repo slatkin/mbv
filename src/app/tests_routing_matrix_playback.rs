@@ -35,20 +35,18 @@ fn playback_gating_esc_first_press_falls_through() {
 }
 #[test]
 fn playback_gating_space_second_press_claims_toggle() {
-    let mut snapshot = active_snapshot();
-    snapshot.space_double_tap = true;
+    let snapshot = active_snapshot();
     assert_eq!(
         resolve_router_outcome_with_focused(key(KeyCode::Char(' ')), &snapshot, None),
-        RouterOutcome::Command(Command::TogglePlayPause)
+        RouterOutcome::Deferred(Command::TogglePlayPause)
     );
 }
 #[test]
 fn playback_gating_esc_second_press_claims_stop() {
-    let mut snapshot = active_snapshot();
-    snapshot.esc_double_tap = true;
+    let snapshot = active_snapshot();
     assert_eq!(
         resolve_router_outcome_with_focused(key(KeyCode::Esc), &snapshot, None),
-        RouterOutcome::Command(Command::Stop)
+        RouterOutcome::Deferred(Command::Stop)
     );
 }
 #[test]
@@ -87,7 +85,6 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
     let snapshot = RouterSnapshot {
         player_active: true,
         blocking_overlay_open: true,
-        space_double_tap: true,
         ..RouterSnapshot::default()
     };
 

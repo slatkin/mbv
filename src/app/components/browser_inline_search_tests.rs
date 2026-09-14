@@ -3,7 +3,7 @@ use crate::app::components::component_id::BrowserKind;
 use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
 use crate::app::components::library_panel::content::ListSlot;
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
-use crate::app::components::media_list::RowLocalInput;
+use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::tests::{make_item, make_items};
 use ratatui::layout::{Position, Rect};
@@ -79,7 +79,7 @@ fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
 /// right-click/wheel through the embedded control's own retained geometry,
 /// exactly as the mounted `BrowserComponent` did for TV/Movies before this
 /// task, minus the raw-event "press in the bar, release on a row"
-/// cross-region gesture the panel's normalized `RowLocalInput` cannot carry
+/// cross-region gesture the panel's normalized `MediaListSurfaceInput` cannot carry
 /// (documented deviation, task 6.1 report).
 #[test]
 fn browser_owner_search_pointer_resolves_against_painted_rows() {
@@ -98,18 +98,20 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
     *owner.inline_search_mut().layout_mut() = Rect::new(0, 0, 40, 10);
 
     let at = Position::new(0, 0);
-    let message = owner.on_slot_event(LibrarySlotEvent::List(RowLocalInput::Click(at)));
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(at)));
     assert!(message.is_none(), "a plain click emits no Msg");
     assert_eq!(owner.inline_search().cursor(), 0);
 
-    let message = owner.on_slot_event(LibrarySlotEvent::List(RowLocalInput::Wheel {
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
         at,
         delta: 1,
     }));
     assert!(matches!(message, Some(Msg::TerminalEvent(_))));
     assert_eq!(owner.inline_search().cursor(), 1);
 
-    let message = owner.on_slot_event(LibrarySlotEvent::List(RowLocalInput::DoubleClick(at)));
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
+        at,
+    )));
     assert_eq!(
         message,
         Some(Msg::Shell(ShellRequest::InlineSearchActivate {
@@ -119,7 +121,9 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
         "double-click activates the row it selected"
     );
 
-    let message = owner.on_slot_event(LibrarySlotEvent::List(RowLocalInput::ContextClick(at)));
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
+        at,
+    )));
     assert!(
         matches!(
             message,

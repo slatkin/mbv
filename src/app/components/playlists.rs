@@ -8,7 +8,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
+use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use super::user_event::UserEvent;
 use crate::app::render::{render_playlists_content, PlaylistsRenderGeometry, PlaylistsViewState};
 use mbv_core::api::EmbyItem;
@@ -339,7 +339,28 @@ impl Component for PlaylistsComponent {
 impl AppComponent<Msg, UserEvent> for PlaylistsComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => match self.handle_key(key) {
+                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                None if matches!(
+                    key.code,
+                    Key::Up
+                        | Key::Down
+                        | Key::PageUp
+                        | Key::PageDown
+                        | Key::Home
+                        | Key::End
+                        | Key::Left
+                        | Key::Right
+                        | Key::Esc
+                        | Key::Backspace
+                        | Key::Enter
+                        | Key::Char(_)
+                ) =>
+                {
+                    LeafKeyResult::Consumed(None).into_option()
+                }
+                None => LeafKeyResult::Unhandled.into_option(),
+            },
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

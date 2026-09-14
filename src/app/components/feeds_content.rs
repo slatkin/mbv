@@ -31,10 +31,10 @@ use super::library_panel::hero::hero_content_feed;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
+    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
 };
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
+use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
 };
@@ -196,10 +196,14 @@ impl FeedsContent {
 
     pub(in crate::app) fn delegate_row_local_input(
         &mut self,
-        input: RowLocalInput,
+        input: MediaListSurfaceInput,
         pointer_target: Option<String>,
-    ) -> RowLocalOutcome<String> {
-        self.carrier.delegate(input, pointer_target)
+    ) -> MediaListTransition<String> {
+        input
+            .into_operation(pointer_target)
+            .map_or_else(MediaListTransition::unhandled, |operation| {
+                self.carrier.delegate_operation(operation)
+            })
     }
 
     /// Cycle the Watched filter and re-project (the legacy `w` key).
@@ -246,8 +250,10 @@ impl FeedsContent {
     /// router owns every global chord and keeps precedence). Page movement
     /// uses the shared owner's canonical page stride.
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if key.modifiers.contains(KeyModifiers::CONTROL)
             || key.modifiers.contains(KeyModifiers::ALT)
@@ -261,27 +267,27 @@ impl FeedsContent {
                 None
             }
             Key::Up | Key::Char('k') | Key::Left | Key::Char('h') => {
-                self.delegate_row_local_input(RowLocalInput::Move(-1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Move(-1), None);
                 None
             }
             Key::Down | Key::Char('j') | Key::Right | Key::Char('l') => {
-                self.delegate_row_local_input(RowLocalInput::Move(1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Move(1), None);
                 None
             }
             Key::PageUp => {
-                self.delegate_row_local_input(RowLocalInput::Page(-1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Page(-1), None);
                 None
             }
             Key::PageDown => {
-                self.delegate_row_local_input(RowLocalInput::Page(1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Page(1), None);
                 None
             }
             Key::Home => {
-                self.delegate_row_local_input(RowLocalInput::First, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::First, None);
                 None
             }
             Key::End => {
-                self.delegate_row_local_input(RowLocalInput::Last, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Last, None);
                 None
             }
             Key::Char('[') => {
@@ -292,21 +298,25 @@ impl FeedsContent {
                 self.cycle_group(1);
                 None
             }
-            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => {
-                    Some(Msg::Shell(ShellRequest::FeedsPlay(
-                        self.entry_for_target(&target)
-                            .cloned()
-                            .into_iter()
-                            .collect(),
-                    )))
-                }
+            Key::Enter => match self
+                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::FeedsPlay(
+                    self.entry_for_target(&target)
+                        .cloned()
+                        .into_iter()
+                        .collect(),
+                ))),
                 _ => Some(Msg::Shell(ShellRequest::FeedsPlay(Vec::new()))),
             },
             Key::Char('.') => {
                 let target = self.carrier.selected_target()?.clone();
-                let entries = match self.delegate_row_local_input(RowLocalInput::Context, None) {
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                let entries = match self
+                    .delegate_row_local_input(MediaListSurfaceInput::Context, None)
+                    .external_intent
+                {
+                    Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
                         .filter_map(|target| self.entry_for_target(&target).cloned())
                         .collect(),
@@ -317,15 +327,16 @@ impl FeedsContent {
                     None,
                 )))
             }
-            Key::Char('e') => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => {
-                    Some(Msg::Shell(ShellRequest::FeedsEnqueue(
-                        self.entry_for_target(&target)
-                            .cloned()
-                            .into_iter()
-                            .collect(),
-                    )))
-                }
+            Key::Char('e') => match self
+                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::FeedsEnqueue(
+                    self.entry_for_target(&target)
+                        .cloned()
+                        .into_iter()
+                        .collect(),
+                ))),
                 _ => Some(Msg::Shell(ShellRequest::FeedsEnqueue(Vec::new()))),
             },
             _ => None,
@@ -397,7 +408,7 @@ impl FeedsContent {
     /// change (design D5: re-project then explicitly select the required
     /// stable target).
     fn reset_selection(&mut self) {
-        self.delegate_row_local_input(RowLocalInput::First, None);
+        self.delegate_row_local_input(MediaListSurfaceInput::First, None);
     }
 
     #[cfg(test)]
@@ -429,6 +440,17 @@ impl Default for FeedsContent {
 impl LibraryContentOwner for FeedsContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
+    }
+
+    fn set_selection_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.carrier.set_selection_origin(origin);
+    }
+
+    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+        Some(self.carrier.selection_summary())
     }
 
     fn content(&mut self) -> LibraryPanelContent<'_> {
@@ -504,30 +526,28 @@ impl LibraryContentOwner for FeedsContent {
             }
             LibrarySlotEvent::ControlPicked(_) => None,
             LibrarySlotEvent::List(input) => match input {
-                RowLocalInput::Wheel { at, delta } => {
+                MediaListSurfaceInput::Wheel { at, delta } => {
                     // The claim gate mirrors the mounted component: a wheel
                     // outside the painted active list is unclaimed.
                     if !self.claims_current_point(at) {
                         return None;
                     }
-                    self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
+                    self.delegate_row_local_input(MediaListSurfaceInput::Wheel { at, delta }, None);
                     Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                 }
-                RowLocalInput::Click(at)
-                | RowLocalInput::ToggleClick(at)
-                | RowLocalInput::RangeClick(at) => {
+                MediaListSurfaceInput::Click(at)
+                | MediaListSurfaceInput::ToggleClick(at)
+                | MediaListSurfaceInput::RangeClick(at) => {
                     let target = self.resolve_row_id(at)?;
                     self.delegate_row_local_input(input, Some(target));
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    let _ = ();
                     Some(Msg::Shell(ShellRequest::FeedsRowClick))
                 }
-                RowLocalInput::ContextClick(at) => {
+                MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.resolve_row_id(at)?;
                     let outcome = self.delegate_row_local_input(input, Some(target.clone()));
-                    let entries = match outcome {
-                        RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                    let entries = match outcome.external_intent {
+                        Some(RowIntent::ContextSelection(targets)) => targets
                             .into_iter()
                             .filter_map(|target| self.entry_for_target(&target).cloned())
                             .collect(),
@@ -538,11 +558,11 @@ impl LibraryContentOwner for FeedsContent {
                         Some((at.x, at.y)),
                     )))
                 }
-                RowLocalInput::DoubleClick(at) => {
-                    // Select the painted row through the same delegation seam
-                    // the first click uses, then play the resolved entry.
+                MediaListSurfaceInput::DoubleClick(at) => {
+                    // Resolve once, then delegate the target-bearing activation.
                     let target = self.resolve_row_id(at)?;
-                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target.clone()));
+                    self.carrier
+                        .delegate_operation(MediaListOperation::Activate(target.clone()));
                     let entry = self.entry_for_target(&target)?.clone();
                     Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry])))
                 }
@@ -555,6 +575,27 @@ impl LibraryContentOwner for FeedsContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.handle_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if matches!(
+                key.code,
+                Key::Up
+                    | Key::Down
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Home
+                    | Key::End
+                    | Key::Left
+                    | Key::Right
+            ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

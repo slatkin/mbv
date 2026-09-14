@@ -24,7 +24,7 @@ use crate::app::components::library_panel::{
     hero_content_emby, ArtworkShape, HeroArtwork, HeroContentData, HeroFacts, LibraryKey,
 };
 use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, MediaListSurfaceInput,
 };
 use crate::app::components::msg::{Msg, TerminalObserverEvent};
 use crate::app::components::{BrowserKind, ComponentId};
@@ -107,9 +107,9 @@ impl LibraryContentOwner for FixtureOwner {
                 // The owner's typed translation "as today": resolve the
                 // pointer target through its own carrier, then delegate.
                 let target = match input {
-                    RowLocalInput::Click(at)
-                    | RowLocalInput::DoubleClick(at)
-                    | RowLocalInput::ContextClick(at) => {
+                    MediaListSurfaceInput::Click(at)
+                    | MediaListSurfaceInput::DoubleClick(at)
+                    | MediaListSurfaceInput::ContextClick(at) => {
                         self.carrier.resolve_current_point(at).cloned()
                     }
                     _ => None,
@@ -117,7 +117,7 @@ impl LibraryContentOwner for FixtureOwner {
                 if let Some(target) = &target {
                     self.carrier.select_target(target);
                 }
-                self.carrier.delegate(input, target);
+                self.carrier.delegate_operation(input.into_operation(target).expect("resolved media-list pointer target"));
                 self.carrier.selected_target().cloned()
             }
             _ => self.carrier.selected_target().cloned(),
@@ -581,7 +581,7 @@ fn wide_to_narrow_resize_drops_the_stale_wide_geometry() {
         log.borrow()
             .events
             .iter()
-            .any(|event| matches!(event, LibrarySlotEvent::List(RowLocalInput::Click(_)))),
+            .any(|event| matches!(event, LibrarySlotEvent::List(MediaListSurfaceInput::Click(_)))),
         "the narrow list click outside the stale Wide rect reaches the owner"
     );
 }

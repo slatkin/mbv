@@ -1,6 +1,6 @@
 use super::{
-    letter_grouped_rows, MediaList, MediaListRow, RowGeometry, RowLocalInput, RowLocalOutcome,
-    ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
+    letter_grouped_rows, MediaList, MediaListOperation, MediaListRow, MediaListTransition,
+    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -354,12 +354,11 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     /// delegate outcome is selection-only and changes no row-flow geometry, so
     /// the completed frame's retained facts stay valid for a continuing pointer
     /// gesture (matching `select_target`); the next `view` re-publishes them.
-    pub fn delegate(
+    pub fn delegate_operation(
         &mut self,
-        input: RowLocalInput,
-        target: Option<Target>,
-    ) -> RowLocalOutcome<Target> {
-        self.core.delegate(input, target)
+        operation: MediaListOperation<Target>,
+    ) -> MediaListTransition<Target> {
+        self.core.delegate_operation(operation)
     }
 }
 

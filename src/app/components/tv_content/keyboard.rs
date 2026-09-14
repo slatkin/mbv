@@ -47,8 +47,10 @@ impl TvContent {
                 None => self.inline_search_result_action(key),
             };
         }
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if !self.context.focused {
             return None;

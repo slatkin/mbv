@@ -26,6 +26,9 @@ pub(super) enum RouterOutcome {
     Swallow,
     /// The leaf's message stands (if it produced one).
     FallThrough,
+    /// A context-sensitive candidate resolved after leaf arbitration.
+    #[allow(dead_code)]
+    Deferred(Command),
 }
 
 /// Resolve a chord against the live ordered policy. A matched command is
@@ -83,6 +86,9 @@ pub(super) fn resolve_router_outcome_with_focused(
                 return RouterOutcome::FallThrough;
             }
             match command_for_policy(entry.binding, chord, snapshot) {
+                Some(cmd @ (Command::TogglePlayPause | Command::Stop)) => {
+                    RouterOutcome::Deferred(cmd)
+                }
                 Some(cmd) => RouterOutcome::Command(cmd),
                 None => {
                     if snapshot.blocking_overlay_open {

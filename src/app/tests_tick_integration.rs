@@ -17,7 +17,7 @@ use crate::app::components::{
 };
 use crate::app::action::Command;
 use crate::app::router::RouterOutcome;
-use crate::app::shell::apply_router_outcome;
+use crate::app::shell::fold_keyboard_messages;
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_confirm::{ConfirmAction, ConfirmModal};
@@ -70,6 +70,89 @@ fn queue_focused_harness() -> TickHarness {
     TickHarness::new(app)
 }
 
+fn active_queue_harness() -> TickHarness {
+    let mut app = make_app_stub();
+    app.panel_focus = PanelFocus::Queue;
+    app.player.status.lock().unwrap().active = true;
+    TickHarness::new(app)
+}
+
+#[test]
+fn live_tick_characterizes_space_double_tap_lifecycle() {
+    let mut harness = active_queue_harness();
+
+    harness.inject(key(Key::Char(' ')));
+    let first = harness.step();
+    assert!(matches!(first.router, RouterOutcome::Deferred(_)));
+    assert!(harness.model().app.last_space_press.is_some());
+
+    harness.model_mut().app.last_space_press = Some(Instant::now());
+    harness.inject(key(Key::Char(' ')));
+    let second = harness.step();
+    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::TogglePlayPause));
+    assert!(harness.model().app.last_space_press.is_none());
+
+    harness.model_mut().app.last_space_press = Some(Instant::now() - Duration::from_secs(1));
+    harness.inject(key(Key::Char(' ')));
+    let expired = harness.step();
+    assert!(matches!(expired.router, RouterOutcome::Deferred(_)));
+    assert!(harness.model().app.last_space_press.is_some());
+}
+
+#[test]
+fn live_tick_characterizes_escape_double_tap_lifecycle() {
+    let mut harness = active_queue_harness();
+
+    harness.inject(key(Key::Esc));
+    let first = harness.step();
+    assert!(matches!(first.router, RouterOutcome::Deferred(_)));
+    assert!(harness.model().app.last_esc_press.is_some());
+
+    harness.model_mut().app.last_esc_press = Some(Instant::now());
+    harness.inject(key(Key::Esc));
+    let second = harness.step();
+    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::Stop));
+    assert!(harness.model().app.last_esc_press.is_none());
+
+    harness.model_mut().app.last_esc_press = Some(Instant::now() - Duration::from_secs(1));
+    harness.inject(key(Key::Esc));
+    let expired = harness.step();
+    assert!(matches!(expired.router, RouterOutcome::Deferred(_)));
+    assert!(harness.model().app.last_esc_press.is_some());
+}
+
+#[test]
+fn live_tick_local_mutation_precedes_root_observation() {
+    let mut harness = TickHarness::new(make_app_stub());
+    harness.model_mut().mount_sidebar(SidebarId::Search);
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(key(Key::Char('a')));
+    let first = harness.step();
+    harness.inject(key(Key::Char('b')));
+    let second = harness.step();
+
+    assert!(matches!(second.router, RouterOutcome::FallThrough));
+    assert!(second.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::Key(_))
+    )));
+    assert!(second.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    assert!(second.messages.iter().all(|message| !matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    assert_eq!(second.raw_messages.len(), 2, "leaf claim and root observation");
+    assert_eq!(
+        search_component_mut(&mut harness).debounce_pending.as_deref(),
+        Some("ab"),
+        "the focused search component mutated its local query before root observation"
+    );
+    assert_eq!(first.raw_messages.len(), 2, "each local key yields a leaf claim and root observation");
+}
+
 pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSidebarComponent {
     harness
         .model_mut()
@@ -84,7 +167,10 @@ pub(super) fn search_component_mut(harness: &mut TickHarness) -> &mut SearchSide
 fn arm_search_query(harness: &mut TickHarness, query: &str) {
     for c in query.chars() {
         let message = search_component_mut(harness).on(&key(Key::Char(c)));
-        assert!(message.is_none(), "typing search chars stays local");
+        assert!(matches!(
+            message,
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ), "typing search chars is locally consumed");
     }
 }
 
@@ -392,7 +478,7 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
         .tick(PollStrategy::Once(Duration::from_millis(500)))
         .expect("tick lower focused queue");
     let router = harness.model_mut().router_outcome(&raw_messages);
-    let messages = apply_router_outcome(raw_messages, pre_fold_focus.as_ref(), &router);
+    let messages = fold_keyboard_messages(raw_messages, pre_fold_focus.as_ref(), &router);
     assert_eq!(pre_fold_focus, Some(ComponentId::Queue));
     assert!(matches!(router, RouterOutcome::Swallow));
     assert!(messages.is_empty());

@@ -21,11 +21,11 @@ use super::library_panel::{
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome, ViewportAnchor,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
+    Presentation, RowIntent, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
+use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{list_duration_secs, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -538,6 +538,17 @@ impl LibraryContentOwner for TvContent {
         self.carrier.clear_selection();
     }
 
+    fn set_selection_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.carrier.set_selection_origin(origin);
+    }
+
+    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+        Some(self.carrier.selection_summary())
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }
@@ -553,6 +564,27 @@ impl LibraryContentOwner for TvContent {
     /// owns every global chord and keeps precedence).
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
+    }
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if self.inline_search.is_active()
+                && matches!(
+                    key.code,
+                    tuirealm::event::Key::Esc
+                        | tuirealm::event::Key::Enter
+                        | tuirealm::event::Key::Backspace
+                        | tuirealm::event::Key::Up
+                        | tuirealm::event::Key::Down
+                        | tuirealm::event::Key::Left
+                        | tuirealm::event::Key::Right
+                        | tuirealm::event::Key::Char(_)
+                ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
+        }
     }
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.context.selected_series.as_ref().map(hero_content_emby)

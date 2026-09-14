@@ -4,6 +4,8 @@ use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEven
 
 use crate::app::components::home_content::HomeContent;
 use crate::app::components::library_panel::LibraryPanel;
+use crate::app::components::media_list::{LibrarySelectionOrigin, SelectionOrigin};
+use crate::app::components::msg::HomeRowTarget;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::tests::{make_app_stub, make_item};
 use crate::app::tests_tick_harness::TickHarness;
@@ -45,6 +47,19 @@ fn home_owner(harness: &TickHarness) -> &HomeContent {
         .owner(&crate::app::components::library_panel::LibraryKey::Home)
         .and_then(|owner| owner.as_any().downcast_ref::<HomeContent>())
         .expect("Home owner installed")
+}
+
+/// The mounted Queue component, for seeding/reading its local selection.
+fn queue_owner(harness: &TickHarness) -> Option<&crate::app::components::QueueComponent> {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Queue)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::QueueComponent>()
+        })
 }
 
 /// The painted row cell for one row title (the panel's own paint is the
@@ -206,13 +221,218 @@ fn visual_mode_status_bar_click_clears_selection_through_tick() {
     }));
     let outcome = harness.step();
     assert!(
-        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection)),
+        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
+            SelectionOrigin::Library(LibrarySelectionOrigin::Home),
+        ))),
         "clear request must reach the shell: {:?}",
         outcome.messages
     );
     handle_tick_messages(&mut harness, outcome.messages);
     assert!(harness.model().visual_selection.is_none());
     assert_eq!(home_owner(&harness).test_multi_selection_len(), 0);
+}
+
+/// P1 regression guard: the Home route never reaches the shell's generic
+/// `RowContextMenu` arm, so its bulk menu must capture the Home origin itself
+/// or the bulk action leaves the multi-selection (and Visual mode) armed.
+#[test]
+fn home_bulk_context_action_clears_home_multi_selection() {
+    let mut harness = home_harness(160, 30, 3);
+    let _ = draw(&mut harness, 160, 30);
+
+    harness.inject(key_with_modifiers(Key::Char('v'), KeyModifiers::SHIFT));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    harness.inject(key(Key::Down));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 2);
+
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Home(vec![
+                HomeRowTarget {
+                    item_id: Some("home-0".into()),
+                    source: None,
+                    from_continue_watching: true,
+                },
+                HomeRowTarget {
+                    item_id: Some("home-1".into()),
+                    source: None,
+                    from_continue_watching: true,
+                },
+            ]),
+            None,
+        )),
+        &mut false,
+        &mut false,
+    );
+    let idx = {
+        let Some(crate::app::types_overlay::OverlayRequest::ContextMenu(ref menu)) =
+            harness.model().app.pending_overlay
+        else {
+            panic!("Home bulk selection must open a context menu");
+        };
+        menu.entries
+            .iter()
+            .position(|entry| {
+                matches!(
+                    entry.action,
+                    Some(crate::app::ContextAction::EnqueueSelection(_))
+                )
+            })
+            .expect("bulk enqueue entry")
+    };
+    harness.model_mut().sync_mounted_surfaces();
+    harness.model_mut().handle_context_menu_select(idx);
+
+    assert_eq!(
+        home_owner(&harness).test_multi_selection_len(),
+        0,
+        "a Home bulk context action must clear the Home multi-selection"
+    );
+}
+
+/// The clear intent routes by the origin it carries, never by the panel that
+/// happens to hold focus when it is dispatched (design D6 contract 4).
+#[test]
+fn clear_multi_selection_routes_by_origin_not_dispatch_focus() {
+    let mut harness = home_harness(160, 30, 2);
+    let _ = draw(&mut harness, 160, 30);
+
+    harness.inject(key_with_modifiers(Key::Char('v'), KeyModifiers::SHIFT));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    harness.inject(key(Key::Down));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 2);
+
+    // Give the Queue its own selection, then focus it: dispatch-time focus now
+    // names the Queue while the captured origin still names the Library.
+    harness.model_mut().app.player_tab.set_queue_items(
+        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
+            "Queued",
+            "Movie",
+        )))],
+        0,
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    let slot0 = queue_owner(&harness)
+        .and_then(|queue| queue.test_selected_target())
+        .expect("queue row selected");
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Queue)
+        .and_then(|component| {
+            component
+                .as_any_mut()
+                .downcast_mut::<crate::app::components::QueueComponent>()
+        })
+        .expect("queue mounted")
+        .test_toggle_selection(slot0);
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness.model_mut().app.mini_view_focus = PanelFocus::Queue;
+    assert_eq!(
+        queue_owner(&harness).map(|queue| queue.test_multi_selection().len()),
+        Some(1),
+        "the Queue must hold dispatch-time focus with its own selection"
+    );
+
+    // The captured origin still names the Library, so the clear must route
+    // there rather than to the focused Queue.
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(ShellRequest::ClearMultiSelection(
+            SelectionOrigin::Library(LibrarySelectionOrigin::Home),
+        )),
+        &mut false,
+        &mut false,
+    );
+    assert_eq!(
+        home_owner(&harness).test_multi_selection_len(),
+        0,
+        "the named origin's list must clear even while another panel is focused"
+    );
+    assert_eq!(
+        queue_owner(&harness).map(|queue| queue.test_multi_selection().len()),
+        Some(1),
+        "the dispatch-focused list must be left untouched"
+    );
+}
+
+/// The Queue-focused half of the same contract: the pill projected from the
+/// Queue summary clears the Queue.
+#[test]
+fn status_bar_clear_with_queue_origin_clears_queue() {
+    let mut harness = home_harness(160, 30, 1);
+    let _ = draw(&mut harness, 160, 30);
+
+    harness.model_mut().app.player_tab.set_queue_items(
+        vec![mbv_core::playback_queue::QueueItem::Emby(Box::new(make_item(
+            "Queued",
+            "Movie",
+        )))],
+        0,
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    let slot0 = queue_owner(&harness)
+        .and_then(|queue| queue.test_selected_target())
+        .expect("queue row selected");
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Queue)
+        .and_then(|component| {
+            component
+                .as_any_mut()
+                .downcast_mut::<crate::app::components::QueueComponent>()
+        })
+        .expect("queue mounted")
+        .test_toggle_selection(slot0);
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness.model_mut().app.mini_view_focus = PanelFocus::Queue;
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, 160, 30);
+    assert!(
+        harness
+            .model()
+            .visual_selection
+            .is_some_and(|(focus, count)| focus == PanelFocus::Queue && count == 1),
+        "the Queue summary must project onto the pill"
+    );
+
+    let clear = harness
+        .model()
+        .application
+        .get_component(&ComponentId::StatusBarPanel)
+        .expect("status bar mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::StatusBarPanel>()
+        .expect("status bar component")
+        .regions()
+        .visual_clear
+        .expect("visual clear region painted");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: clear.x,
+        row: clear.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.messages.contains(&Msg::Shell(ShellRequest::ClearMultiSelection(
+            SelectionOrigin::Queue,
+        ))),
+        "clear request must carry the projected Queue origin: {:?}",
+        outcome.messages
+    );
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert_eq!(
+        queue_owner(&harness).map(|queue| queue.test_multi_selection().len()),
+        Some(0),
+        "the Queue summary's clear must clear the Queue"
+    );
 }
 
 #[test]
@@ -252,7 +472,10 @@ fn home_wide_tick_navigation_keeps_the_selected_owner_row() {
     let _ = draw(&mut harness, 160, 30);
     harness.inject(key(Key::Down));
     let outcome = harness.step();
-    assert!(outcome.messages.is_empty(), "local navigation emits no shell request");
+    assert!(outcome.messages.iter().all(|message| !matches!(
+        message,
+        Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::KeyClaimed)
+    )), "the fold consumes the local claim marker");
 
     let _ = draw(&mut harness, 160, 30);
     assert_eq!(home_owner(&harness).cursor(), 1);

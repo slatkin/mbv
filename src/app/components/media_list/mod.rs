@@ -5,6 +5,7 @@
 //! transitions between genuinely different owners. Painting
 //! lives in `crate::app::render::components::media_list`.
 
+use crate::app::components::component_id::BrowserKey;
 use crate::app::ui_util::move_cursor;
 use ratatui::layout::{Position, Rect};
 use std::time::Instant;
@@ -272,10 +273,10 @@ impl InlineMediaBrowserPaintPolicy {
     }
 }
 
-/// Normalized row-local input offered by a mounted destination after it has
-/// resolved its own precedence and gesture timing.
+/// Pointer surface input resolved by a mounted presentation. Convert this to
+/// a target-bearing operation before delegating to the canonical owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RowLocalInput {
+pub enum MediaListSurfaceInput {
     Move(i64),
     Page(i64),
     First,
@@ -290,13 +291,92 @@ pub enum RowLocalInput {
     Wheel { at: Position, delta: i64 },
 }
 
-/// Provider-neutral result of delegating one row-local input to a list owner.
+/// Target-resolved operation accepted by the canonical media-list owner.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RowLocalOutcome<Target> {
+pub enum MediaListOperation<Target> {
+    Move(i64),
+    Page(i64),
+    First,
+    Last,
+    ActivateCurrent,
+    ContextCurrent,
+    Select(Target),
+    Toggle(Target),
+    Range(Target),
+    Activate(Target),
+    Context(Target),
+    ContextSelection,
+}
+
+impl MediaListSurfaceInput {
+    pub fn into_operation<Target>(
+        self,
+        target: Option<Target>,
+    ) -> Option<MediaListOperation<Target>> {
+        Some(match self {
+            Self::Move(delta) => MediaListOperation::Move(delta),
+            Self::Page(delta) => MediaListOperation::Page(delta),
+            Self::First => MediaListOperation::First,
+            Self::Last => MediaListOperation::Last,
+            Self::Activate => MediaListOperation::ActivateCurrent,
+            Self::Context => MediaListOperation::ContextCurrent,
+            Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
+            Self::Click(_) => MediaListOperation::Select(target?),
+            Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
+            Self::RangeClick(_) => MediaListOperation::Range(target?),
+            Self::DoubleClick(_) => MediaListOperation::Activate(target?),
+            Self::ContextClick(_) => MediaListOperation::Context(target?),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaListDisposition {
     Unhandled,
     Consumed,
-    SelectedTargetChanged(Target),
-    External(RowIntent<Target>),
+}
+
+/// Stable coordination identity for a MediaList selection. This identifies
+/// the list that produced a projection or delayed action; it never carries
+/// selection membership.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SelectionOrigin {
+    Library(LibrarySelectionOrigin),
+    Queue,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum LibrarySelectionOrigin {
+    Home,
+    Feeds,
+    Service(BrowserKey),
+}
+
+/// Read-only presentation projection of a MediaList selection. Membership is
+/// deliberately private to the owner and cannot be reconstructed here.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectionSummary {
+    pub count: usize,
+    pub origin: SelectionOrigin,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MediaListTransition<Target> {
+    pub disposition: MediaListDisposition,
+    pub selected_target: Option<Target>,
+    pub selection_summary: Option<SelectionSummary>,
+    pub external_intent: Option<RowIntent<Target>>,
+}
+
+impl<Target> MediaListTransition<Target> {
+    pub(crate) fn unhandled() -> Self {
+        Self {
+            disposition: MediaListDisposition::Unhandled,
+            selected_target: None,
+            selection_summary: None,
+            external_intent: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -304,7 +384,6 @@ pub enum RowIntent<Target> {
     Activate(Target),
     Context(Target),
     ContextSelection(Vec<Target>),
-    SelectionChanged(usize),
 }
 
 /// A closed, provider-neutral row vocabulary for embedded media lists.
@@ -522,114 +601,94 @@ impl<Target> MediaList<Target> {
         Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
     }
 
-    /// Apply the row-local portion of an already-normalized input. Pointer
-    /// actions are supplied with their resolved stable target by a presentation
-    /// after it has consulted its retained current-frame geometry.
-    pub fn delegate(
+    /// Apply a target-resolved operation and report all independent effects.
+    pub fn delegate_operation(
         &mut self,
-        input: RowLocalInput,
-        pointer_target: Option<Target>,
-    ) -> RowLocalOutcome<Target>
+        operation: MediaListOperation<Target>,
+    ) -> MediaListTransition<Target>
     where
         Target: Clone + PartialEq,
     {
         let before = self.selected_target().cloned();
-        match input {
-            RowLocalInput::Move(delta) | RowLocalInput::Wheel { delta, .. } => {
+        let before_count = self.multi_selection.len();
+        let extends_range = matches!(
+            operation,
+            MediaListOperation::Move(_)
+                | MediaListOperation::Page(_)
+                | MediaListOperation::First
+                | MediaListOperation::Last
+        );
+        let external_intent = match operation {
+            MediaListOperation::Move(delta) => {
                 self.move_selection(delta);
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
+                None
             }
-            RowLocalInput::Page(delta) => {
+            MediaListOperation::Page(delta) => {
                 self.move_selection(delta.saturating_mul(5));
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
+                None
             }
-            RowLocalInput::First => {
+            MediaListOperation::First => {
                 self.select_first();
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
+                None
             }
-            RowLocalInput::Last => {
+            MediaListOperation::Last => {
                 self.select_last();
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
+                None
             }
-            RowLocalInput::Activate => {
-                return self
-                    .selected_target()
-                    .cloned()
-                    .map_or(RowLocalOutcome::Unhandled, |target| {
-                        RowLocalOutcome::External(RowIntent::Activate(target))
-                    });
+            MediaListOperation::ActivateCurrent => {
+                self.selected_target().cloned().map(RowIntent::Activate)
             }
-            RowLocalInput::DoubleClick(_) => {
-                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
-                    RowLocalOutcome::External(RowIntent::Activate(target))
-                });
-            }
-            RowLocalInput::Context => {
-                return self
-                    .selected_target()
-                    .cloned()
-                    .map_or(RowLocalOutcome::Unhandled, |target| {
-                        RowLocalOutcome::External(self.context_intent(target))
-                    });
-            }
-            RowLocalInput::ContextClick(_) => {
-                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
-                    RowLocalOutcome::External(self.context_intent(target))
-                });
-            }
-            RowLocalInput::ToggleClick(_) => {
-                if let Some(target) = pointer_target {
-                    self.toggle_selection(&target);
-                    self.select_target(&target);
-                    return RowLocalOutcome::Consumed;
-                }
-                return RowLocalOutcome::Unhandled;
-            }
-            RowLocalInput::RangeClick(_) => {
-                if let Some(target) = pointer_target {
-                    self.extend_selection_to(&target);
-                    self.select_target(&target);
-                    return RowLocalOutcome::Consumed;
-                }
-                return RowLocalOutcome::Unhandled;
-            }
-            RowLocalInput::Click(_) => {
+            MediaListOperation::ContextCurrent => self
+                .selected_target()
+                .cloned()
+                .map(|target| self.context_intent(target)),
+            MediaListOperation::Select(target) => {
                 self.clear_selection();
-                if let Some(target) = pointer_target {
-                    if self.select_target(&target) {
-                        return if before.as_ref() == Some(&target) {
-                            RowLocalOutcome::Consumed
-                        } else {
-                            RowLocalOutcome::SelectedTargetChanged(target)
-                        };
-                    }
-                }
-                return RowLocalOutcome::Unhandled;
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Toggle(target) => {
+                self.toggle_selection(&target);
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Range(target) => {
+                self.extend_selection_to(&target);
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Activate(target) => {
+                self.select_target(&target);
+                Some(RowIntent::Activate(target))
+            }
+            MediaListOperation::Context(target) => Some(self.context_intent(target)),
+            MediaListOperation::ContextSelection => None,
+        };
+        if extends_range && self.live_range {
+            if let Some(target) = self.selected_target().cloned() {
+                self.extend_selection_to(&target);
             }
         }
         let after = self.selected_target().cloned();
-        match (before, after) {
-            (Some(before), Some(after)) if before != after => {
-                RowLocalOutcome::SelectedTargetChanged(after)
-            }
-            (Some(_), Some(_)) | (None, None) => RowLocalOutcome::Consumed,
-            _ => RowLocalOutcome::Unhandled,
+        let disposition = if before.is_some()
+            || after.is_some()
+            || external_intent.is_some()
+            || before_count != self.multi_selection.len()
+        {
+            MediaListDisposition::Consumed
+        } else {
+            MediaListDisposition::Unhandled
+        };
+        MediaListTransition {
+            disposition,
+            selected_target: (before != after).then_some(after).flatten(),
+            selection_summary: (before_count != self.multi_selection.len()).then_some(
+                SelectionSummary {
+                    count: self.multi_selection.len(),
+                    origin: SelectionOrigin::Queue,
+                },
+            ),
+            external_intent,
         }
     }
 }

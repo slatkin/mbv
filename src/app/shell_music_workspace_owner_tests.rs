@@ -624,7 +624,7 @@ fn narrow_heading_click_resolves_to_nothing() {
     let heading_point = (layout.left_area.x + 1, layout.left_area.y);
     let message = model.test_music_owner_mut().on_slot_event(
         crate::app::components::library_panel::owner::LibrarySlotEvent::List(
-            crate::app::components::media_list::RowLocalInput::Click(
+            crate::app::components::media_list::MediaListSurfaceInput::Click(
                 ratatui::layout::Position::new(heading_point.0, heading_point.1),
             ),
         ),

@@ -95,9 +95,10 @@ mod tests {
     #[test]
     fn toggle_adds_and_removes() {
         let mut list = list();
-        list.delegate(
-            super::super::RowLocalInput::Click(ratatui::layout::Position { x: 0, y: 0 }),
-            Some(2),
+        list.delegate_operation(
+            super::super::MediaListSurfaceInput::Click(ratatui::layout::Position { x: 0, y: 0 })
+                .into_operation(Some(2))
+                .expect("resolved media-list pointer target"),
         );
         list.toggle_selection(&2);
         assert_eq!(list.multi_selection(), &[2]);
@@ -144,9 +145,17 @@ mod tests {
         list.select_target(&3);
         list.enter_visual_mode();
         assert_eq!(list.multi_selection(), &[3]);
-        list.delegate(super::super::RowLocalInput::Move(2), None);
+        list.delegate_operation(
+            super::super::MediaListSurfaceInput::Move(2)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
         assert_eq!(list.multi_selection(), &[3, 4, 5]);
-        list.delegate(super::super::RowLocalInput::Move(-1), None);
+        list.delegate_operation(
+            super::super::MediaListSurfaceInput::Move(-1)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
         assert_eq!(list.multi_selection(), &[3, 4]);
     }
 
@@ -192,12 +201,24 @@ mod tests {
         let mut list = list();
         list.select_target(&3);
         list.enter_visual_mode();
-        list.delegate(super::super::RowLocalInput::Move(1), None);
+        list.delegate_operation(
+            super::super::MediaListSurfaceInput::Move(1)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
         list.toggle_selection(&4);
-        list.delegate(super::super::RowLocalInput::Move(2), None);
+        list.delegate_operation(
+            super::super::MediaListSurfaceInput::Move(2)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
         assert_eq!(list.multi_selection(), &[3]);
         list.enter_visual_mode();
-        list.delegate(super::super::RowLocalInput::Move(0), None);
+        list.delegate_operation(
+            super::super::MediaListSurfaceInput::Move(0)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
         assert_eq!(list.multi_selection(), &[3, 6]);
     }
 

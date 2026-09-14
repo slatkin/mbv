@@ -13,10 +13,12 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
+    Presentation,
 };
 use super::msg::{
-    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, Msg, ShellRequest,
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
+    ShellRequest,
 };
 use crate::app::audiobookshelf_browse_actions::audiobookshelf_book_queue_item;
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
@@ -250,8 +252,12 @@ impl BookContent {
     /// provider-neutral outcome; the component mirrors the owner's selection
     /// into the projected snapshot and returns the typed book-move request
     /// (design.md D3).
-    pub(in crate::app) fn move_book(&mut self, input: RowLocalInput) -> Option<Msg> {
-        self.carrier.delegate(input, None);
+    pub(in crate::app) fn move_book(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        self.carrier.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
         self.sync_book_from_owner();
         self.book_request()
     }
@@ -361,7 +367,11 @@ impl BookContent {
     }
 
     pub(in crate::app) fn move_chapter(&mut self, delta: i64) {
-        self.chapter_list.delegate(RowLocalInput::Move(delta), None);
+        self.chapter_list.delegate_operation(
+            MediaListSurfaceInput::Move(delta)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
     }
 
     /// The selected book's producer facts (design D5): the shared
@@ -457,28 +467,33 @@ impl BookContent {
                 self.bucket_request()
             }
             LibrarySlotEvent::List(input) => match input {
-                RowLocalInput::Wheel { at, delta } => {
+                MediaListSurfaceInput::Wheel { at, delta } => {
                     if self.carrier.claims_current_point(at) {
-                        self.move_book(RowLocalInput::Wheel { at, delta })
+                        self.move_book(MediaListSurfaceInput::Wheel { at, delta })
                     } else {
                         None
                     }
                 }
-                RowLocalInput::Click(at)
-                | RowLocalInput::ToggleClick(at)
-                | RowLocalInput::RangeClick(at) => {
+                MediaListSurfaceInput::Click(at)
+                | MediaListSurfaceInput::ToggleClick(at)
+                | MediaListSurfaceInput::RangeClick(at) => {
                     let target = self.carrier.resolve_current_point(at)?.clone();
-                    self.carrier.delegate(input, Some(target));
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                    self.carrier.delegate_operation(
+                        input
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
+                    let _ = ();
                     self.sync_book_from_owner();
                     self.book_request()
                 }
-                RowLocalInput::DoubleClick(at) => {
+                MediaListSurfaceInput::DoubleClick(at) => {
                     let target = self.carrier.resolve_current_point(at)?.clone();
-                    self.carrier
-                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.carrier.delegate_operation(
+                        MediaListSurfaceInput::Click(at)
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
                     self.sync_book_from_owner();
                     Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
                         AudiobookshelfBookIntent::Activate,
@@ -490,26 +505,37 @@ impl BookContent {
                 None
             }
             LibrarySlotEvent::HeroPane(input) => match input {
-                RowLocalInput::Wheel { at, delta } => {
+                MediaListSurfaceInput::Wheel { at, delta } => {
                     if self.chapter_list.claims_current_point(at) {
-                        self.chapter_list
-                            .delegate(RowLocalInput::Wheel { at, delta }, None);
+                        self.chapter_list.delegate_operation(
+                            MediaListSurfaceInput::Wheel { at, delta }
+                                .into_operation(None)
+                                .expect("resolved media-list pointer target"),
+                        );
                     }
                     None
                 }
-                RowLocalInput::Click(at)
-                | RowLocalInput::ToggleClick(at)
-                | RowLocalInput::RangeClick(at) => {
+                MediaListSurfaceInput::Click(at)
+                | MediaListSurfaceInput::ToggleClick(at)
+                | MediaListSurfaceInput::RangeClick(at) => {
                     let target = self.chapter_list.resolve_current_point(at).copied()?;
                     self.enter_chapter_focus();
-                    self.chapter_list.delegate(input, Some(target));
+                    self.chapter_list.delegate_operation(
+                        input
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
                     self.chapter_focus_request()
                 }
-                RowLocalInput::DoubleClick(at) | RowLocalInput::ContextClick(at) => {
+                MediaListSurfaceInput::DoubleClick(at)
+                | MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.chapter_list.resolve_current_point(at).copied()?;
                     self.enter_chapter_focus();
-                    self.chapter_list
-                        .delegate(RowLocalInput::Click(at), Some(target));
+                    self.chapter_list.delegate_operation(
+                        MediaListSurfaceInput::Click(at)
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
                     Some(Msg::Shell(ShellRequest::AudiobookshelfBookIntent(
                         AudiobookshelfBookIntent::ActivateChapter(self.chapter_target()),
                     )))
@@ -532,6 +558,17 @@ impl LibraryContentOwner for BookContent {
         self.chapter_list.clear_selection();
     }
 
+    fn set_selection_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.carrier.set_selection_origin(origin);
+    }
+
+    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+        Some(self.carrier.selection_summary())
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.panel_content()
     }
@@ -541,8 +578,10 @@ impl LibraryContentOwner for BookContent {
     }
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Books is focused.
@@ -563,10 +602,12 @@ impl LibraryContentOwner for BookContent {
                 self.move_chapter(1);
                 self.chapter_focus_request()
             }
-            Key::Up | Key::Char('k') => self.move_book(RowLocalInput::Move(-1)),
-            Key::Down | Key::Char('j') => self.move_book(RowLocalInput::Move(1)),
-            Key::PageUp if !self.chapter_focused => self.move_book(RowLocalInput::Page(-1)),
-            Key::PageDown if !self.chapter_focused => self.move_book(RowLocalInput::Page(1)),
+            Key::Up | Key::Char('k') => self.move_book(MediaListSurfaceInput::Move(-1)),
+            Key::Down | Key::Char('j') => self.move_book(MediaListSurfaceInput::Move(1)),
+            Key::PageUp if !self.chapter_focused => self.move_book(MediaListSurfaceInput::Page(-1)),
+            Key::PageDown if !self.chapter_focused => {
+                self.move_book(MediaListSurfaceInput::Page(1))
+            }
             Key::Home if !self.chapter_focused => {
                 self.select_bucket_edge(false);
                 self.book_request()
@@ -610,6 +651,21 @@ impl LibraryContentOwner for BookContent {
                 )))
             }
             _ => None,
+        }
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if self.chapter_focused
+                || matches!(
+                    key.code,
+                    Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home | Key::End
+                ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
         }
     }
 

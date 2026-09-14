@@ -10,12 +10,13 @@ use super::library_panel::content::{
 use super::library_panel::hero::hero_content_abs_show;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
-use super::media_list::RowLocalInput;
+use super::media_list::MediaListSurfaceInput;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
 };
 use super::msg::{
-    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+    LeafKeyResult, Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition,
+    ShellRequest,
 };
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
@@ -330,6 +331,17 @@ impl LibraryContentOwner for PodcastContent {
         self.carrier.clear_selection();
     }
 
+    fn set_selection_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.carrier.set_selection_origin(origin);
+    }
+
+    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+        Some(self.carrier.selection_summary())
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.content()
     }
@@ -346,37 +358,73 @@ impl LibraryContentOwner for PodcastContent {
                     crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
                 ))
             }
-            LibrarySlotEvent::List(input) => {
-                self.episode_focused = false;
-                self.carrier.delegate(input, None);
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+            LibrarySlotEvent::List(input) => match input {
+                MediaListSurfaceInput::Wheel { at, delta } => {
+                    if !self.carrier.claims_current_point(at) {
+                        return None;
+                    }
+                    self.carrier.delegate_operation(
+                        MediaListSurfaceInput::Wheel { at, delta }
+                            .into_operation(None)
+                            .expect("resolved media-list pointer target"),
+                    );
+                    self.sync_show_selection();
+                    self.show_move()
                 }
-                self.sync_show_selection();
-                self.show_move()
-            }
+                MediaListSurfaceInput::Click(at)
+                | MediaListSurfaceInput::ToggleClick(at)
+                | MediaListSurfaceInput::RangeClick(at)
+                | MediaListSurfaceInput::DoubleClick(at)
+                | MediaListSurfaceInput::ContextClick(at) => {
+                    let target = self.carrier.resolve_current_point(at)?.clone();
+                    self.episode_focused = false;
+                    self.carrier.delegate_operation(
+                        input
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
+                    let _ = ();
+                    self.sync_show_selection();
+                    self.show_move()
+                }
+                _ => {
+                    self.episode_focused = false;
+                    self.carrier.delegate_operation(
+                        input
+                            .into_operation(None)
+                            .expect("resolved media-list pointer target"),
+                    );
+                    let _ = ();
+                    self.sync_show_selection();
+                    self.show_move()
+                }
+            },
             LibrarySlotEvent::HeroPane(input) => {
                 let point = match input {
-                    RowLocalInput::Click(p)
-                    | RowLocalInput::ToggleClick(p)
-                    | RowLocalInput::RangeClick(p)
-                    | RowLocalInput::DoubleClick(p)
-                    | RowLocalInput::ContextClick(p) => p,
-                    RowLocalInput::Wheel { at, .. } => at,
+                    MediaListSurfaceInput::Click(p)
+                    | MediaListSurfaceInput::ToggleClick(p)
+                    | MediaListSurfaceInput::RangeClick(p)
+                    | MediaListSurfaceInput::DoubleClick(p)
+                    | MediaListSurfaceInput::ContextClick(p) => p,
+                    MediaListSurfaceInput::Wheel { at, .. } => at,
                     _ => return None,
                 };
                 if let Some(target) = self.episode_list.resolve_current_point(point).cloned() {
                     if matches!(
                         input,
-                        RowLocalInput::Click(_)
-                            | RowLocalInput::ToggleClick(_)
-                            | RowLocalInput::RangeClick(_)
-                            | RowLocalInput::DoubleClick(_)
+                        MediaListSurfaceInput::Click(_)
+                            | MediaListSurfaceInput::ToggleClick(_)
+                            | MediaListSurfaceInput::RangeClick(_)
+                            | MediaListSurfaceInput::DoubleClick(_)
                     ) {
                         self.episode_focused = true;
                     }
-                    self.episode_list.delegate(input, Some(target));
-                    if matches!(input, RowLocalInput::DoubleClick(_)) {
+                    self.episode_list.delegate_operation(
+                        input
+                            .into_operation(Some(target))
+                            .expect("resolved media-list pointer target"),
+                    );
+                    if matches!(input, MediaListSurfaceInput::DoubleClick(_)) {
                         return Some(Msg::Shell(
                             ShellRequest::AudiobookshelfPodcastEpisodeIntent(
                                 PodcastEpisodeIntent::OpenOrPlay(self.episode_target()),
@@ -393,8 +441,10 @@ impl LibraryContentOwner for PodcastContent {
     }
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if !self.focused {
             return None;
@@ -402,17 +452,29 @@ impl LibraryContentOwner for PodcastContent {
         let episode = self.episode_focused;
         match key.code {
             Key::Up | Key::Char('k') if !episode => {
-                self.carrier.delegate(RowLocalInput::Move(-1), None);
+                self.carrier.delegate_operation(
+                    MediaListSurfaceInput::Move(-1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
                 self.sync_show_selection();
                 self.show_move()
             }
             Key::Down | Key::Char('j') if !episode => {
-                self.carrier.delegate(RowLocalInput::Move(1), None);
+                self.carrier.delegate_operation(
+                    MediaListSurfaceInput::Move(1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
                 self.sync_show_selection();
                 self.show_move()
             }
             Key::Up | Key::Char('k') if episode => {
-                self.episode_list.delegate(RowLocalInput::Move(-1), None);
+                self.episode_list.delegate_operation(
+                    MediaListSurfaceInput::Move(-1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
                 Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::PreviousEpisode,
@@ -420,7 +482,11 @@ impl LibraryContentOwner for PodcastContent {
                 ))
             }
             Key::Down | Key::Char('j') if episode => {
-                self.episode_list.delegate(RowLocalInput::Move(1), None);
+                self.episode_list.delegate_operation(
+                    MediaListSurfaceInput::Move(1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
                 Some(Msg::Shell(
                     ShellRequest::AudiobookshelfPodcastEpisodeTransition(
                         PodcastEpisodeTransition::NextEpisode,
@@ -474,6 +540,14 @@ impl LibraryContentOwner for PodcastContent {
             _ => None,
         }
     }
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if self.focused => LeafKeyResult::Consumed(None),
+            None => LeafKeyResult::Unhandled,
+        }
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()
     }
@@ -492,6 +566,12 @@ impl LibraryContentOwner for PodcastContent {
 mod tests {
     use super::*;
     use mbv_core::audiobookshelf::{AudiobookshelfLibrary, AudiobookshelfShow};
+    use ratatui::{
+        backend::TestBackend,
+        layout::{Position, Rect},
+        Terminal,
+    };
+    use tuirealm::component::Component;
 
     fn state() -> AudiobookshelfBrowseState {
         let mut state = AudiobookshelfBrowseState::new(AudiobookshelfLibrary {
@@ -570,6 +650,34 @@ mod tests {
         ));
         assert!(!owner.episode_focused());
         assert_eq!(owner.selected_id().as_deref(), Some("show"));
+    }
+
+    #[test]
+    fn podcast_pointer_click_resolves_current_frame_and_unknown_point_is_noop() {
+        let mut owner = PodcastContent::new();
+        owner.set_content(&state(), false);
+
+        let area = Rect::new(0, 0, 30, 1);
+        owner.carrier.inline_mut().set_geometry(area, area);
+        let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
+        terminal
+            .draw(|frame| owner.carrier.inline_mut().view(frame, area))
+            .unwrap();
+
+        assert!(matches!(
+            owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+                Position { x: 0, y: 0 }
+            ))),
+            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+                library_item_id: Some(ref id)
+            })) if id == "show"
+        ));
+        assert_eq!(
+            owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+                Position { x: 0, y: 1 }
+            ))),
+            None
+        );
     }
 
     #[test]

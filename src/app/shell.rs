@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use super::action::{playback_command_for_key, Command};
+use super::action::Command;
 use super::components::msg::AlbumCursorKind;
 use super::components::{
     ComponentId, Msg, OverlayId, QueueBoundaryComponent, ShellRequest, TerminalObserverEvent,
@@ -14,7 +14,6 @@ use super::{
     init_terminal, install_signal_handlers, restore_terminal, start_quit_watchdog, QUIT_REQUESTED,
 };
 use super::{App, IdleFeed, ToastSeverity};
-use crossterm::event::KeyCode;
 use tuirealm::application::{Application, PollStrategy};
 use tuirealm::listener::EventListenerCfg;
 
@@ -108,6 +107,12 @@ pub struct Model {
     pub(super) last_queue_projection: Option<super::shell_queue::QueueProjectionFingerprint>,
     /// Shell-owned projection of the focused list's Visual selection.
     pub(super) visual_selection: Option<(super::types_settings::PanelFocus, usize)>,
+    pub(super) context_menu_origin: Option<crate::app::components::media_list::SelectionOrigin>,
+    pub(super) context_action_snapshot: Option<
+        crate::app::types_context_menu::ContextActionSnapshot<
+            crate::app::types_context_menu::ContextMenuTargets,
+        >,
+    >,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -126,46 +131,117 @@ pub struct Model {
 ///
 /// Non-key observer signals (`Resize`, `FocusGained/Lost`, `NoOp`) always pass
 /// through: they are redraw/layout signals, not chords.
-pub(super) fn apply_router_outcome(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ArbitrationDiagnostic {
+    pub chord: Option<String>,
+    pub captured_focus: Option<String>,
+    pub router_result: String,
+    pub leaf_disposition: &'static str,
+    pub final_disposition: &'static str,
+    pub dispatch_kind: &'static str,
+}
+
+#[allow(dead_code)]
+pub(super) fn fold_keyboard_messages(
     messages: Vec<Msg>,
     focused: Option<&ComponentId>,
     router: &RouterOutcome,
 ) -> Vec<Msg> {
-    let observed_key = messages
+    arbitrate_key(messages, focused, router).0
+}
+
+/// Pure arbitration seam, returning both surviving messages and its compact
+/// diagnostic record (never containing request payloads).
+pub(super) fn arbitrate_key(
+    messages: Vec<Msg>,
+    focused: Option<&ComponentId>,
+    router: &RouterOutcome,
+) -> (Vec<Msg>, ArbitrationDiagnostic) {
+    let chord = messages.iter().find_map(|m| match m {
+        Msg::TerminalEvent(TerminalObserverEvent::Key(key)) => Some(format!("{key:?}")),
+        _ => None,
+    });
+    let key_count = messages
         .iter()
-        .any(|msg| matches!(msg, Msg::TerminalEvent(TerminalObserverEvent::Key(_))));
+        .filter(|m| matches!(m, Msg::TerminalEvent(TerminalObserverEvent::Key(_))))
+        .count();
+    debug_assert!(
+        key_count <= 1,
+        "malformed arbitration: duplicate router observations"
+    );
+    let claims = messages
+        .iter()
+        .filter(|m| matches!(m, Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)))
+        .count();
+    debug_assert!(
+        claims <= 1,
+        "malformed arbitration: multiple focused key claims"
+    );
+    let observed_key = key_count == 1;
     let mut out = Vec::with_capacity(messages.len());
     for msg in messages {
         match msg {
             Msg::TerminalEvent(TerminalObserverEvent::Key(_)) => {
-                // The observed chord. When UiRoot itself is focused this is
-                // the leaf message (the active component's own request) and
-                // its survival is decided by the router like any leaf message.
-                if focused == Some(&ComponentId::UiRoot) {
-                    match router {
-                        RouterOutcome::FallThrough => out.push(msg),
-                        RouterOutcome::Command(_) | RouterOutcome::Swallow => {}
-                    }
+                if focused == Some(&ComponentId::UiRoot)
+                    && matches!(
+                        router,
+                        RouterOutcome::FallThrough | RouterOutcome::Deferred(_)
+                    )
+                {
+                    out.push(msg);
                 }
-                // When a leaf is focused the observer key is only the router's
-                // trigger; the fold already applied the outcome to the leaf's
-                // own message below.
+            }
+            Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed) => {
+                debug_assert!(
+                    observed_key,
+                    "malformed arbitration: key claim without observer event"
+                );
             }
             Msg::TerminalEvent(_) => out.push(msg),
             leaf => {
-                // The focused component's request (or a typed shell request
-                // from a subscription). `FallThrough` lets it stand; the
-                // router's `Command`/`Swallow` discards it for this tick.
-                // With no key observed, nothing was routed and every message
-                // stands.
-                match (router, observed_key) {
-                    (RouterOutcome::FallThrough, _) | (_, false) => out.push(leaf),
-                    (RouterOutcome::Command(_) | RouterOutcome::Swallow, true) => {}
+                if !observed_key
+                    || matches!(
+                        router,
+                        RouterOutcome::FallThrough | RouterOutcome::Deferred(_)
+                    )
+                {
+                    out.push(leaf);
                 }
             }
         }
     }
-    out
+    let leaf_disposition = if claims > 0 || out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_)))
+    {
+        "consumed"
+    } else {
+        "unhandled"
+    };
+    let final_disposition = match router {
+        RouterOutcome::Command(_) => "command",
+        RouterOutcome::Swallow => "swallow",
+        RouterOutcome::FallThrough => {
+            if leaf_disposition == "consumed" {
+                "fall-through-consumed"
+            } else {
+                "fall-through"
+            }
+        }
+        RouterOutcome::Deferred(_) => "deferred",
+    };
+    let dispatch_kind = match router {
+        RouterOutcome::Command(_) => "command",
+        _ if out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_))) => "request",
+        _ => "none",
+    };
+    let diagnostic = ArbitrationDiagnostic {
+        chord,
+        captured_focus: focused.map(|f| format!("{f:?}")),
+        router_result: format!("{router:?}"),
+        leaf_disposition,
+        final_disposition,
+        dispatch_kind,
+    };
+    (out, diagnostic)
 }
 
 /// ADR 0024: the mouse fold, applied to a `tick()` message list beside the
@@ -212,6 +288,7 @@ pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
                         | TerminalObserverEvent::FocusLost
                         | TerminalObserverEvent::MouseClick { .. }
                         | TerminalObserverEvent::MouseClaimed
+                        | TerminalObserverEvent::KeyClaimed
                 )
             )
         })
@@ -284,12 +361,6 @@ impl Model {
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),
             idle_feed_link_available: self.app.idle_feed_link_available(),
-            // A selection belongs to the panel that created it. Keep the
-            // shell-owned count for projection, but do not let it suppress
-            // playback chords after focus moves to another panel.
-            visual_mode_active: self.visual_selection.is_some_and(|(focus, count)| {
-                count > 0 && focus == self.app.effective_panel_focus()
-            }),
             text_entry_focused: matches!(
                 self.application.focus(),
                 Some(
@@ -297,62 +368,35 @@ impl Model {
                         | ComponentId::Overlay(OverlayId::Settings)
                 )
             ) || self.active_inline_search_is_open(),
-            space_double_tap: self
-                .app
-                .last_space_press
-                .is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300)),
-            esc_double_tap: self
-                .app
-                .last_esc_press
-                .is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300)),
         };
 
-        let outcome = resolve_router_outcome_with_focused(key, &snapshot, self.application.focus());
-        // The router arms the double-tap timer on the first eligible Space/Esc
-        // press regardless of focus; the second press within the window is
-        // claimed by `command_for_policy` when the double-tap snapshot flag is
-        // set.
-        self.update_double_tap_state(key, &snapshot, &outcome);
-        outcome
+        resolve_router_outcome_with_focused(key, &snapshot, self.application.focus())
     }
 
-    /// Keep the existing App-owned double-tap timestamps in sync while the
-    /// router owns playback resolution. A first eligible press falls through
-    /// to the focused leaf and starts its timer; a second press is claimed by
-    /// the router and clears the timer after dispatch is selected.
-    fn update_double_tap_state(
+    /// Apply a deferred candidate after the focused leaf has been arbitrated.
+    pub(super) fn apply_deferred_candidate(
         &mut self,
-        key: crossterm::event::KeyEvent,
-        snapshot: &RouterSnapshot,
-        outcome: &RouterOutcome,
-    ) {
-        let playback = playback_command_for_key(
-            super::input_resolver::KeyChord::from_key(key),
-            snapshot.player_active,
-            snapshot.has_remote_session,
-        );
-        match (key.code, playback, outcome) {
-            (KeyCode::Char(' '), Some(Command::TogglePlayPause), RouterOutcome::FallThrough)
-                if !snapshot.space_double_tap && !snapshot.visual_mode_active =>
-            {
-                self.app.last_space_press = Some(Instant::now());
-            }
-            (
-                KeyCode::Char(' '),
-                Some(Command::TogglePlayPause),
-                RouterOutcome::Command(Command::TogglePlayPause),
-            ) => self.app.last_space_press = None,
-            (KeyCode::Esc, Some(Command::Stop), RouterOutcome::FallThrough)
-                if !snapshot.esc_double_tap && !snapshot.visual_mode_active =>
-            {
-                self.app.last_esc_press = Some(Instant::now());
-            }
-            (KeyCode::Esc, Some(Command::Stop), RouterOutcome::Command(Command::Stop)) => {
-                self.app.last_esc_press = None;
-            }
-            // any other (key, playback command, router outcome) triple: no
-            // double-tap timer to arm or clear.
-            _ => {}
+        router: &RouterOutcome,
+        leaf_consumed: bool,
+    ) -> bool {
+        let RouterOutcome::Deferred(command) = router else {
+            return false;
+        };
+        let slot = match command {
+            Command::TogglePlayPause => &mut self.app.last_space_press,
+            Command::Stop => &mut self.app.last_esc_press,
+            _ => return false,
+        };
+        let completed = slot.is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300));
+        if leaf_consumed {
+            *slot = None;
+            false
+        } else if completed {
+            *slot = None;
+            self.dispatch_router_command(command.clone())
+        } else {
+            *slot = Some(Instant::now());
+            false
         }
     }
 
@@ -400,6 +444,8 @@ impl Model {
             pending_terminal_resize: false,
             last_queue_projection: None,
             visual_selection: None,
+            context_menu_origin: None,
+            context_action_snapshot: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
@@ -486,7 +532,8 @@ fn apply_terminal_observer(
         TerminalObserverEvent::MouseClick { .. } => {}
         TerminalObserverEvent::Key(_)
         | TerminalObserverEvent::NoOp
-        | TerminalObserverEvent::MouseClaimed => {}
+        | TerminalObserverEvent::MouseClaimed
+        | TerminalObserverEvent::KeyClaimed => {}
     }
 }
 

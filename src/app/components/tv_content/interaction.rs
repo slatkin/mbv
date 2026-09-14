@@ -1,12 +1,12 @@
 impl TvContent {
     pub(super) fn context_menu_request(&mut self) -> Option<ShellRequest> {
-        let outcome = self.carrier.delegate(RowLocalInput::Context, None);
-        let items = match outcome {
-            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+        let outcome = self.carrier.delegate_operation(MediaListSurfaceInput::Context.into_operation(None).expect("resolved media-list pointer target"));
+        let items = match outcome.external_intent {
+            Some(RowIntent::ContextSelection(targets)) => targets
                 .into_iter()
                 .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
                 .collect(),
-            RowLocalOutcome::External(RowIntent::Context(target)) => self
+            Some(RowIntent::Context(target)) => self
                 .context
                 .list
                 .items
@@ -44,7 +44,7 @@ impl TvContent {
                 self.apply_pane_click(
                     TvHit::SeasonTab(index),
                     Position::new(0, 0),
-                    RowLocalInput::Click(Position::new(0, 0)),
+                    MediaListSurfaceInput::Click(Position::new(0, 0)),
                 );
                 Some(Msg::Shell(ShellRequest::TvHitClick {
                     hit: TvHit::SeasonTab(index),
@@ -61,9 +61,9 @@ impl TvContent {
     /// The series list's row-local input. Wide and Narrow share the one
     /// carrier, so the resolved target and the emitted `TvHit` are the same
     /// at both breakpoints; the shell's `TvHit*` arms do the rest.
-    fn series_list_event(&mut self, input: RowLocalInput) -> Option<Msg> {
+    fn series_list_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         match input {
-            RowLocalInput::Wheel { at, delta } => {
+            MediaListSurfaceInput::Wheel { at, delta } => {
                 // The series rail is the only scrollable TV surface. Its
                 // canonical control claims the painted region.
                 if !self.carrier.claims_current_point(at) {
@@ -75,28 +75,24 @@ impl TvContent {
                 // mutation be discarded by the mouse fold.
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
-            RowLocalInput::Click(at) | RowLocalInput::ToggleClick(at) | RowLocalInput::RangeClick(at) => {
+            MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::ToggleClick(at) | MediaListSurfaceInput::RangeClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
                 self.apply_pane_click(hit.clone(), at, input);
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
+                let _ = ();
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
-            RowLocalInput::DoubleClick(at) => {
+            MediaListSurfaceInput::DoubleClick(at) => {
                 let hit = self.resolve_series_hit(at)?;
-                self.apply_pane_click(hit.clone(), at, RowLocalInput::Click(at));
+                self.apply_pane_click(hit.clone(), at, MediaListSurfaceInput::Click(at));
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
-            RowLocalInput::ContextClick(at) => {
+            MediaListSurfaceInput::ContextClick(at) => {
                 let target = self.carrier.resolve_current_point(at)?.clone();
                 let item = self.context.list.items.iter().find(|item| item.id == target)?.clone();
-                let outcome = self.carrier.delegate(input, Some(target));
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
-                let items = match outcome {
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                let outcome = self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
+                let _ = ();
+                let items = match outcome.external_intent {
+                    Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
                         .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
                         .collect(),
@@ -114,16 +110,16 @@ impl TvContent {
     /// The hero pane's row-local input: the Workspace episode box resolves
     /// its row through its own carrier, and blank pane space is the
     /// `EpisodesPane` hit the deleted `resolve_hit` fallback produced.
-    fn hero_pane_event(&mut self, input: RowLocalInput) -> Option<Msg> {
+    fn hero_pane_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         let at = match input {
-            RowLocalInput::Click(at)
-            | RowLocalInput::ToggleClick(at)
-            | RowLocalInput::RangeClick(at)
-            | RowLocalInput::DoubleClick(at)
-            | RowLocalInput::ContextClick(at) => at,
+            MediaListSurfaceInput::Click(at)
+            | MediaListSurfaceInput::ToggleClick(at)
+            | MediaListSurfaceInput::RangeClick(at)
+            | MediaListSurfaceInput::DoubleClick(at)
+            | MediaListSurfaceInput::ContextClick(at) => at,
             // The series rail is the only scrollable TV surface; a wheel
             // over the hero pane is unclaimed (legacy `handle_mouse_wide`).
-            RowLocalInput::Wheel { .. } => return None,
+            MediaListSurfaceInput::Wheel { .. } => return None,
             _ => return None,
         };
         let hit = if self.episodes.claims_current_point(at) {
@@ -135,32 +131,28 @@ impl TvContent {
             TvHit::EpisodesPane
         };
         match input {
-            RowLocalInput::Click(_) | RowLocalInput::ToggleClick(_) | RowLocalInput::RangeClick(_) => {
+            MediaListSurfaceInput::Click(_) | MediaListSurfaceInput::ToggleClick(_) | MediaListSurfaceInput::RangeClick(_) => {
                 self.apply_pane_click(hit.clone(), at, input);
-                if let Some(count) = self.carrier.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
+                let _ = ();
                 Some(Msg::Shell(ShellRequest::TvHitClick { hit }))
             }
-            RowLocalInput::DoubleClick(_) => {
-                self.apply_pane_click(hit.clone(), at, RowLocalInput::Click(at));
+            MediaListSurfaceInput::DoubleClick(_) => {
+                self.apply_pane_click(hit.clone(), at, MediaListSurfaceInput::Click(at));
                 Some(Msg::Shell(ShellRequest::TvHitDoubleClick { hit }))
             }
-            RowLocalInput::ContextClick(_) => {
+            MediaListSurfaceInput::ContextClick(_) => {
                 let item = match &hit {
                     TvHit::EpisodeRow(target) => self.current_season_episodes().iter().find(|item| item.id == *target).cloned(),
                     TvHit::SeriesRow(target) => self.context.list.items.iter().find(|item| item.id == *target).cloned(),
                     _ => None,
                 }?;
-                let outcome = self.episodes.delegate(input, Some(match &hit {
+                let outcome = self.episodes.delegate_operation(input.into_operation(Some(match &hit {
                     TvHit::EpisodeRow(target) => target.clone(),
                     _ => return None,
-                }));
-                if let Some(count) = self.episodes.selection_changed_msg() {
-                    return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                }
-                let items = match outcome {
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                })).expect("resolved media-list pointer target"));
+                let _ = ();
+                let items = match outcome.external_intent {
+                    Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
                         .filter_map(|target| self.current_season_episodes().iter().find(|item| item.id == target).cloned())
                         .collect(),
@@ -177,16 +169,16 @@ impl TvContent {
 
     /// Inline Search pointer handling (mirrors `BrowserContent::
     /// handle_search_pointer`): the panel's own recognizer already collapsed
-    /// the raw event into a normalized `RowLocalInput`, so click /
+    /// the raw event into a normalized `MediaListSurfaceInput`, so click /
     /// double-click / right-click / wheel against a painted result row are
     /// reproduced here.
-    fn handle_search_pointer(&mut self, input: RowLocalInput) -> Option<Msg> {
+    fn handle_search_pointer(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         match input {
-            RowLocalInput::Click(at) => {
+            MediaListSurfaceInput::Click(at) => {
                 self.inline_search.select_row_at_point(at);
                 None
             }
-            RowLocalInput::DoubleClick(at) => {
+            MediaListSurfaceInput::DoubleClick(at) => {
                 self.inline_search.select_row_at_point(at);
                 self.inline_search.selected_item().map(|item| {
                     Msg::Shell(ShellRequest::InlineSearchActivate {
@@ -195,7 +187,7 @@ impl TvContent {
                     })
                 })
             }
-            RowLocalInput::ContextClick(at) => {
+            MediaListSurfaceInput::ContextClick(at) => {
                 self.inline_search.select_row_at_point(at);
                 self.inline_search
                     .selected_item()
@@ -203,7 +195,7 @@ impl TvContent {
                         crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), None,
                     )))
             }
-            RowLocalInput::Wheel { delta, .. } => {
+            MediaListSurfaceInput::Wheel { delta, .. } => {
                 self.inline_search.move_cursor_by(delta);
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
@@ -225,7 +217,7 @@ impl TvContent {
     /// in the already-focused pane keeps it. Clicking a season pill also
     /// selects that season; blank Episodes-pane space is consumed without
     /// changing the pane. Right-clicks never call this.
-    fn apply_pane_click(&mut self, hit: TvHit, _at: Position, input: RowLocalInput) {
+    fn apply_pane_click(&mut self, hit: TvHit, _at: Position, input: MediaListSurfaceInput) {
         match hit {
             TvHit::SeasonTab(index) => {
                 self.pane = Pane::Episodes;
@@ -235,11 +227,11 @@ impl TvContent {
             }
             TvHit::EpisodeRow(target) => {
                 self.pane = Pane::Episodes;
-                self.episodes.delegate(input, Some(target));
+                self.episodes.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
             }
             TvHit::SeriesRow(target) => {
                 self.pane = Pane::Series;
-                self.carrier.delegate(input, Some(target));
+                self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
             }
             TvHit::EpisodesPane | TvHit::LetterPill(_) => {}
         }
@@ -296,13 +288,13 @@ impl TvContent {
             self.carrier.select_target(target);
             self.carrier.extend_selection_to(target);
         }
-        self.carrier.selection_changed_msg();
+        let _ = self.carrier.selection_summary();
     }
 
     #[cfg(test)]
     pub(crate) fn context_click_for_test(&mut self, target: String) -> Option<usize> {
-        self.carrier.delegate(RowLocalInput::ContextClick(Position::new(0, 0)), Some(target));
-        self.carrier.selection_changed_msg()
+        self.carrier.delegate_operation(MediaListSurfaceInput::ContextClick(Position::new(0, 0)).into_operation(Some(target)).expect("resolved media-list pointer target"));
+        Some(self.carrier.multi_selection().len())
     }
 
     /// Test-only: the shared owner's current rows' semantic states, in

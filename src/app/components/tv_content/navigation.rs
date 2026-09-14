@@ -1,9 +1,13 @@
 use super::TvContent;
-use crate::app::components::media_list::RowLocalInput;
+use crate::app::components::media_list::MediaListSurfaceInput;
 
 impl TvContent {
     pub(super) fn move_episode(&mut self, delta: i64) {
-        self.episodes.delegate(RowLocalInput::Move(delta), None);
+        self.episodes.delegate_operation(
+            MediaListSurfaceInput::Move(delta)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
     }
 
     pub(super) fn move_season(&mut self, delta: i64) {
@@ -26,16 +30,24 @@ impl TvContent {
     /// display-row indices (headings included), not selectable cursor
     /// indices, so consulting it made Down jump across grouped rows.
     pub(super) fn move_rows(&mut self, rows: i64) {
-        self.carrier.delegate(RowLocalInput::Move(rows), None);
+        self.carrier.delegate_operation(
+            MediaListSurfaceInput::Move(rows)
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
     }
 
     pub(super) fn jump_cursor(&mut self, to_end: bool) {
         let input = if to_end {
-            RowLocalInput::Last
+            MediaListSurfaceInput::Last
         } else {
-            RowLocalInput::First
+            MediaListSurfaceInput::First
         };
-        self.carrier.delegate(input, None);
+        self.carrier.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
     }
 
     /// Painted item rows the Narrow pager moves per PageUp/PageDown: the

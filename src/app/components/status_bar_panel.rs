@@ -21,6 +21,7 @@ use tuirealm::event::{Event, MouseButton, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
+use super::media_list::SelectionOrigin;
 use super::msg::{Msg, PlaybackRequest, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::action::VOLUME_STEP;
@@ -31,6 +32,7 @@ use crate::app::render::{render_status_bar, StatusBarModel, StatusBarRegions};
 pub struct StatusBarPanel {
     model: StatusBarModel,
     regions: StatusBarRegions,
+    visual_origin: SelectionOrigin,
 }
 
 impl StatusBarPanel {
@@ -38,6 +40,7 @@ impl StatusBarPanel {
         Self {
             model: StatusBarModel::default(),
             regions: StatusBarRegions::default(),
+            visual_origin: SelectionOrigin::Queue,
         }
     }
 
@@ -49,6 +52,10 @@ impl StatusBarPanel {
     /// The pill regions retained from the last paint (test accessor).
     pub(in crate::app) fn regions(&self) -> StatusBarRegions {
         self.regions
+    }
+
+    pub(in crate::app) fn set_visual_origin(&mut self, origin: SelectionOrigin) {
+        self.visual_origin = origin;
     }
 
     fn handle_mouse(&mut self, event: &tuirealm::event::MouseEvent) -> Option<Msg> {
@@ -75,7 +82,9 @@ impl StatusBarPanel {
             MouseEventKind::Down(MouseButton::Left)
                 if self.regions.visual_clear.is_some_and(|r| r.contains(at)) =>
             {
-                Some(Msg::Shell(ShellRequest::ClearMultiSelection))
+                Some(Msg::Shell(ShellRequest::ClearMultiSelection(
+                    self.visual_origin.clone(),
+                )))
             }
             _ => None,
         }

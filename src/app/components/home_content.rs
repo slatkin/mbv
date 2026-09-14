@@ -21,12 +21,12 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibraryKey, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
+    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
-use super::msg::{Msg, ShellRequest};
+use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::{fmt_duration_short, trunc_str};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -122,7 +122,7 @@ impl HomeContent {
             self.section = idx + 1;
             self.clamp_section();
             self.project_active_section();
-            self.delegate_row_local_input(RowLocalInput::First, None);
+            self.delegate_row_local_input(MediaListSurfaceInput::First, None);
             true
         } else {
             false
@@ -223,10 +223,14 @@ impl HomeContent {
     /// key or pointer gesture to the shared owner carrying its active section.
     fn delegate_row_local_input(
         &mut self,
-        input: RowLocalInput,
+        input: MediaListSurfaceInput,
         pointer_target: Option<String>,
-    ) -> RowLocalOutcome<String> {
-        self.carrier.delegate(input, pointer_target)
+    ) -> MediaListTransition<String> {
+        input
+            .into_operation(pointer_target)
+            .map_or_else(MediaListTransition::unhandled, |operation| {
+                self.carrier.delegate_operation(operation)
+            })
     }
 
     /// Home's typed request target for a stable item identity the shared
@@ -267,7 +271,7 @@ impl HomeContent {
         // A discrete section change re-projects the active section and parks
         // the shared owner at its first row (no per-section cursor cache).
         self.project_active_section();
-        self.delegate_row_local_input(RowLocalInput::First, None);
+        self.delegate_row_local_input(MediaListSurfaceInput::First, None);
         true
     }
 
@@ -294,8 +298,10 @@ impl HomeContent {
     /// owns every global chord and keeps precedence).
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        if let Some(count) = self.carrier.handle_visual_key(key) {
-            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
+        if self.carrier.handle_visual_key(key).is_some() {
+            return Some(Msg::Shell(ShellRequest::SelectionProjection(
+                self.carrier.selection_summary(),
+            )));
         }
         if key.modifiers.contains(KeyModifiers::ALT)
             && matches!(key.code, Key::Left | Key::Right | Key::Up | Key::Down)
@@ -304,11 +310,11 @@ impl HomeContent {
         }
         match key.code {
             Key::Up => {
-                self.delegate_row_local_input(RowLocalInput::Move(-1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Move(-1), None);
                 None
             }
             Key::Down => {
-                self.delegate_row_local_input(RowLocalInput::Move(1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Move(1), None);
                 None
             }
             Key::Char('[') if !ctrl => {
@@ -320,27 +326,30 @@ impl HomeContent {
                 self.section_msg(changed)
             }
             Key::PageUp => {
-                self.delegate_row_local_input(RowLocalInput::Page(-1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Page(-1), None);
                 None
             }
             Key::PageDown => {
-                self.delegate_row_local_input(RowLocalInput::Page(1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Page(1), None);
                 None
             }
             Key::Home => {
-                self.delegate_row_local_input(RowLocalInput::First, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::First, None);
                 None
             }
             Key::End => {
-                self.delegate_row_local_input(RowLocalInput::Last, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Last, None);
                 None
             }
             Key::Char('.') if self.section == 0 => {
-                let targets = match self.delegate_row_local_input(RowLocalInput::Context, None) {
-                    RowLocalOutcome::External(RowIntent::Context(target)) => {
+                let targets = match self
+                    .delegate_row_local_input(MediaListSurfaceInput::Context, None)
+                    .external_intent
+                {
+                    Some(RowIntent::Context(target)) => {
                         vec![self.home_row_target(Some(target))]
                     }
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets
+                    Some(RowIntent::ContextSelection(targets)) => targets
                         .into_iter()
                         .map(|target| self.home_row_target(Some(target)))
                         .collect(),
@@ -353,10 +362,13 @@ impl HomeContent {
             }
             Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
-            Key::Enter => match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                RowLocalOutcome::External(RowIntent::Activate(target)) => Some(Msg::Shell(
-                    ShellRequest::HomePlay(self.home_row_target(Some(target))),
-                )),
+            Key::Enter => match self
+                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::HomePlay(
+                    self.home_row_target(Some(target)),
+                ))),
                 _ => None,
             },
             Key::Char('a') if ctrl => {
@@ -393,6 +405,17 @@ impl HomeContent {
 impl LibraryContentOwner for HomeContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
+    }
+
+    fn set_selection_origin(
+        &mut self,
+        origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+        self.carrier.set_selection_origin(origin);
+    }
+
+    fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
+        Some(self.carrier.selection_summary())
     }
 
     /// This frame's panel content (design D3): the section pills as the
@@ -469,50 +492,56 @@ impl LibraryContentOwner for HomeContent {
             }
             LibrarySlotEvent::List(input) => {
                 let at = match input {
-                    RowLocalInput::Click(at)
-                    | RowLocalInput::ToggleClick(at)
-                    | RowLocalInput::RangeClick(at)
-                    | RowLocalInput::DoubleClick(at)
-                    | RowLocalInput::ContextClick(at) => Some(at),
+                    MediaListSurfaceInput::Click(at)
+                    | MediaListSurfaceInput::ToggleClick(at)
+                    | MediaListSurfaceInput::RangeClick(at)
+                    | MediaListSurfaceInput::DoubleClick(at)
+                    | MediaListSurfaceInput::ContextClick(at) => Some(at),
                     _ => None,
                 };
                 // Pointer target resolution and local selection: the same
                 // `claim_row` contract (a blank/gap click leaves the
                 // selection unchanged).
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if at.is_some() {
-                    self.carrier.delegate(input, target.clone());
-                    if let Some(count) = self.carrier.selection_changed_msg() {
-                        return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                    }
+                if matches!(
+                    input,
+                    MediaListSurfaceInput::Click(_)
+                        | MediaListSurfaceInput::ToggleClick(_)
+                        | MediaListSurfaceInput::RangeClick(_)
+                ) {
+                    self.carrier
+                        .delegate_operation(input.into_operation(target.clone())?);
+                    let _ = ();
                 }
                 match input {
-                    RowLocalInput::Wheel { .. } => {
+                    MediaListSurfaceInput::Wheel { .. } => {
                         self.delegate_row_local_input(input, None);
                         Some(Msg::TerminalEvent(
                             super::msg::TerminalObserverEvent::MouseClaimed,
                         ))
                     }
-                    RowLocalInput::DoubleClick(_) => {
+                    MediaListSurfaceInput::DoubleClick(_) => {
+                        self.carrier
+                            .delegate_operation(MediaListOperation::Activate(target?));
                         Some(Msg::Shell(ShellRequest::HomeRowActivate {
                             target: self.row_target(),
                         }))
                     }
-                    RowLocalInput::ContextClick(at) => {
-                        let outcome = self.carrier.delegate(input, target);
-                        if let Some(count) = self.carrier.selection_changed_msg() {
-                            return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
-                        }
-                        let targets = match outcome {
-                            RowLocalOutcome::External(RowIntent::Context(target)) => {
+                    MediaListSurfaceInput::ContextClick(at) => {
+                        let outcome = {
+                            let target = target?;
+                            self.carrier
+                                .delegate_operation(MediaListOperation::Context(target))
+                        };
+                        let _ = ();
+                        let targets = match outcome.external_intent {
+                            Some(RowIntent::Context(target)) => {
                                 vec![self.home_row_target(Some(target))]
                             }
-                            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
-                                targets
-                                    .into_iter()
-                                    .map(|target| self.home_row_target(Some(target)))
-                                    .collect()
-                            }
+                            Some(RowIntent::ContextSelection(targets)) => targets
+                                .into_iter()
+                                .map(|target| self.home_row_target(Some(target)))
+                                .collect(),
                             _ => vec![self.row_target()],
                         };
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
@@ -520,9 +549,9 @@ impl LibraryContentOwner for HomeContent {
                             Some((at.x, at.y)),
                         )))
                     }
-                    RowLocalInput::Click(_)
-                    | RowLocalInput::ToggleClick(_)
-                    | RowLocalInput::RangeClick(_) => {
+                    MediaListSurfaceInput::Click(_)
+                    | MediaListSurfaceInput::ToggleClick(_)
+                    | MediaListSurfaceInput::RangeClick(_) => {
                         Some(Msg::Shell(ShellRequest::HomeRowClick {
                             target: self.row_target(),
                         }))
@@ -540,6 +569,28 @@ impl LibraryContentOwner for HomeContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.handle_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if matches!(
+                key.code,
+                Key::Up
+                    | Key::Down
+                    | Key::Left
+                    | Key::Right
+                    | Key::Home
+                    | Key::End
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Enter
+            ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     /// The current hero's content data, for the shell's image projection

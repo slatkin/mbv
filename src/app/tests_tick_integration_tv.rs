@@ -9,7 +9,7 @@ use crate::app::components::msg::TvHit;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::tv_content::TvContent;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
-use crate::app::shell::{apply_router_outcome, fold_mouse_messages};
+use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::render::make_movie_app;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
@@ -89,7 +89,7 @@ fn step_without_sync(harness: &mut TickHarness) -> Vec<Msg> {
         .expect("tick injected event");
     let folded = fold_mouse_messages(raw_messages);
     let router = harness.model_mut().router_outcome(&folded);
-    apply_router_outcome(folded, pre_fold_focus.as_ref(), &router)
+    fold_keyboard_messages(folded, pre_fold_focus.as_ref(), &router)
 }
 
 #[test]

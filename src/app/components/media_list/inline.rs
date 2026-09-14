@@ -1,6 +1,6 @@
 use super::{
-    InlineMediaBrowserPaintPolicy, MediaList, MediaListRow, RowGeometry, RowLocalInput,
-    RowLocalOutcome, ViewportAnchor, WideViewport,
+    InlineMediaBrowserPaintPolicy, MediaList, MediaListOperation, MediaListRow,
+    MediaListTransition, RowGeometry, ViewportAnchor, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -420,12 +420,11 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
     /// the completed frame's retained facts stay valid for a continuing pointer
     /// gesture (matching the Wide presentation); the next `view` re-publishes
     /// them.
-    pub fn delegate(
+    pub fn delegate_operation(
         &mut self,
-        input: RowLocalInput,
-        target: Option<Target>,
-    ) -> RowLocalOutcome<Target> {
-        self.core.delegate(input, target)
+        operation: MediaListOperation<Target>,
+    ) -> MediaListTransition<Target> {
+        self.core.delegate_operation(operation)
     }
 }
 

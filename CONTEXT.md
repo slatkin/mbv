@@ -546,11 +546,21 @@ _Avoid_: component (bare), controller, render component, widget
 **Keyboard Router**:
 The single keyboard routing authority, in the `UiRoot` Interactive Component
 (ADR 0023). It observes every chord regardless of focus and resolves it against
-ordered policy to one of ADR 0002's outcomes — `Command`, `Swallow`, or
-`FallThrough` — where `FallThrough` lets the focused Interactive Component's own
-typed request stand. There is exactly one.
+ordered policy to one of ADR 0002's outcomes — `Command`, `Swallow`,
+`FallThrough`, or a `Deferred` context-sensitive candidate — where `FallThrough`
+lets the focused Interactive Component's own typed request stand. There is
+exactly one.
 _Avoid_: input handler, dispatcher, context stack, key policy (the policy is
 data the router evaluates, not a second router)
+
+**Arbitration fold**:
+The one central, pure combination (`arbitrate_key`, ADR 0023 amendment) of the
+Keyboard Router's outcome and the focused component's leaf disposition for the
+same tick into a final disposition and the requests to dispatch. It owns no
+policy and resolves no chord, so it is not a second Keyboard Router. It is the
+only place a local claim suppresses a context-sensitive candidate, and the only
+place deferred-candidate clocks advance or reset.
+_Avoid_: second router, dispatcher, message filter
 
 **Global chord**:
 A key combination whose meaning does not depend on which surface is focused, and

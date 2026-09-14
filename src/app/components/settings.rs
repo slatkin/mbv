@@ -8,7 +8,9 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::{Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent};
+use super::msg::{
+    LeafKeyResult, Msg, ServiceRequest, SettingsIntent, ShellRequest, TerminalObserverEvent,
+};
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
@@ -431,7 +433,24 @@ impl Component for SettingsComponent {
 impl AppComponent<Msg, UserEvent> for SettingsComponent {
     fn on(&mut self, event: &Event<UserEvent>) -> Option<Msg> {
         match event {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => match self.handle_key(key) {
+                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                None if matches!(
+                    key.code,
+                    Key::Up
+                        | Key::Down
+                        | Key::Tab
+                        | Key::BackTab
+                        | Key::Enter
+                        | Key::Backspace
+                        | Key::Esc
+                        | Key::Char(_)
+                ) =>
+                {
+                    LeafKeyResult::Consumed(None).into_option()
+                }
+                None => LeafKeyResult::Unhandled.into_option(),
+            },
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
@@ -657,8 +676,11 @@ mod tests {
             area: Rect::new(0, 0, 40, 12),
         });
         // Move the Services cursor off the top row (Down is a local cursor
-        // move; it emits no message).
-        assert!(component.on(&key(Key::Down)).is_none());
+        // move and emits the framework-local claim marker).
+        assert!(matches!(
+            component.on(&key(Key::Down)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
         // Leaving Services via Back zeroes the component's own cursor, so the
         // next Services entry starts back at the top instead of remembering
         // the old position.

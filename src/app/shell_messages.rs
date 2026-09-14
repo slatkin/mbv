@@ -1,10 +1,28 @@
 use super::*;
 use crate::app::components::library_panel::LibraryPanel;
+use crate::app::types_settings::PanelFocus;
 use std::time::Instant;
 
 impl Model {
-    pub(crate) fn set_visual_selection_count(&mut self, count: usize) {
-        self.visual_selection = (count > 0).then_some((self.app.effective_panel_focus(), count));
+    fn refresh_visual_selection(&mut self) {
+        let summary = if self.app.effective_panel_focus() == PanelFocus::Queue {
+            self.application
+                .get_component(&crate::app::components::ComponentId::Queue)
+                .and_then(|component| {
+                    component
+                        .as_any()
+                        .downcast_ref::<crate::app::components::QueueComponent>()
+                })
+                .map(|queue| queue.selection_summary())
+        } else {
+            self.application
+                .get_component_mut(&crate::app::components::ComponentId::Library)
+                .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+                .and_then(|panel| panel.focused_summary())
+        };
+        self.visual_selection = summary
+            .filter(|summary| summary.count > 0)
+            .map(|summary| (self.app.effective_panel_focus(), summary.count));
     }
 
     pub(crate) fn handle_terminal_message(
@@ -13,6 +31,7 @@ impl Model {
         music_resize: &mut bool,
         tv_resize: &mut bool,
     ) -> bool {
+        self.refresh_visual_selection();
         let mut quit = false;
         match msg {
             Msg::TerminalEvent(event) => {
@@ -20,11 +39,15 @@ impl Model {
             }
             Msg::Shell(request) => {
                 match request {
-                    ShellRequest::SelectionChanged(count) => {
-                        self.set_visual_selection_count(count);
+                    ShellRequest::SelectionProjection(summary) => {
+                        self.visual_selection = (summary.count > 0)
+                            .then_some((self.app.effective_panel_focus(), summary.count));
                     }
-                    ShellRequest::ClearMultiSelection => {
-                        self.clear_multi_selection();
+                    ShellRequest::ClearMultiSelection(origin) => {
+                        // Route by the origin captured when the pill was
+                        // projected, never a re-derivation from dispatch-time
+                        // focus (design D6).
+                        self.clear_multi_selection_from_origin(origin);
                     }
                     ShellRequest::MusicAlbumActivate { item } => {
                         if self.app.tab.emby_library_index().is_some()
@@ -436,6 +459,17 @@ impl Model {
                         crate::app::types_context_menu::ContextMenuTargets::Queue(slot_ids),
                         anchor,
                     ) => {
+                        self.context_menu_origin =
+                            Some(crate::app::components::media_list::SelectionOrigin::Queue);
+                        self.context_action_snapshot =
+                            Some(crate::app::types_context_menu::ContextActionSnapshot {
+                                origin: crate::app::components::media_list::SelectionOrigin::Queue,
+                                values: vec![
+                                    crate::app::types_context_menu::ContextMenuTargets::Queue(
+                                        slot_ids.clone(),
+                                    ),
+                                ],
+                            });
                         if slot_ids.len() > 1 {
                             let scope = self.app.viewed_queue_scope();
                             let (items, remove_targets, capabilities) = slot_ids
@@ -488,6 +522,17 @@ impl Model {
                     }
                     // Other destination payloads are converted in later slices.
                     ShellRequest::RowContextMenu(targets, anchor) => {
+                        // The origin is the active library's stable identity
+                        // (design D6): a bulk clear routes to the list the menu
+                        // was opened from, not the dispatch-time focus.
+                        if let Some(origin) = self.active_library_selection_origin() {
+                            self.context_menu_origin = Some(origin.clone());
+                            self.context_action_snapshot =
+                                Some(crate::app::types_context_menu::ContextActionSnapshot {
+                                    origin,
+                                    values: vec![targets.clone()],
+                                });
+                        }
                         match targets {
                             crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {
                                 if items.len() > 1 {

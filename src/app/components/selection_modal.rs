@@ -13,7 +13,7 @@ use tuirealm::event::{Event, Key, KeyEvent, MouseButton, MouseEvent, MouseEventK
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
+use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::{render_selection_modal_content, SelectionModalRenderModel};
 use crate::app::types_selection_modal::{
@@ -287,7 +287,22 @@ impl Component for SelectionModalComponent {
 impl AppComponent<Msg, UserEvent> for SelectionModalComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => match self.handle_key(key) {
+                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                None if matches!(
+                    key.code,
+                    Key::Up
+                        | Key::Down
+                        | Key::Enter
+                        | Key::Esc
+                        | Key::Backspace
+                        | Key::Char('[' | ']')
+                ) =>
+                {
+                    LeafKeyResult::Consumed(None).into_option()
+                }
+                None => LeafKeyResult::Unhandled.into_option(),
+            },
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }

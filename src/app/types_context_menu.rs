@@ -8,7 +8,17 @@ pub(super) enum BulkRemoveTarget {
 }
 use ratatui::layout::Rect;
 
+use crate::app::components::media_list::SelectionOrigin;
 use crate::app::components::msg::HomeRowTarget;
+
+/// Values resolved when a context menu opens. The overlay never re-resolves
+/// these values after focus changes.
+#[allow(dead_code)]
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ContextActionSnapshot<T> {
+    pub origin: SelectionOrigin,
+    pub values: Vec<T>,
+}
 
 /// Destination-qualified targets supplied by row context-menu requests.
 #[allow(dead_code)]

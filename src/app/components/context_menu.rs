@@ -19,7 +19,7 @@ use tuirealm::event::{Event, MouseButton, MouseEvent, MouseEventKind};
 use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
-use super::msg::{Msg, ShellRequest};
+use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use super::user_event::UserEvent;
 use crate::app::render::render_context_menu_content;
 use crate::app::types_context_menu::{ContextAction, ContextMenuAnchor, ContextMenuEntry};
@@ -183,23 +183,24 @@ impl Component for ContextMenuComponent {
     }
 }
 
+impl ContextMenuComponent {
+    fn key_result(&self, key: &tuirealm::event::KeyEvent) -> LeafKeyResult {
+        let intent = match key.code {
+            tuirealm::event::Key::Up => super::msg::ContextMenuIntent::MoveUp,
+            tuirealm::event::Key::Down => super::msg::ContextMenuIntent::MoveDown,
+            tuirealm::event::Key::Enter => super::msg::ContextMenuIntent::Select,
+            tuirealm::event::Key::Esc => super::msg::ContextMenuIntent::Dismiss,
+            _ => return LeafKeyResult::Unhandled,
+        };
+        LeafKeyResult::Consumed(Some(Msg::Shell(ShellRequest::ContextMenuIntent(intent))))
+    }
+}
+
 impl AppComponent<Msg, UserEvent> for ContextMenuComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => {
-                let intent = match key.code {
-                    tuirealm::event::Key::Up => super::msg::ContextMenuIntent::MoveUp,
-                    tuirealm::event::Key::Down => super::msg::ContextMenuIntent::MoveDown,
-                    tuirealm::event::Key::Enter => super::msg::ContextMenuIntent::Select,
-                    tuirealm::event::Key::Esc => super::msg::ContextMenuIntent::Dismiss,
-                    _ => return None,
-                };
-                Some(Msg::Shell(ShellRequest::ContextMenuIntent(intent)))
-            }
-            // The component owns its mouse hit-test (task 5.3c).
+            Event::Keyboard(key) => self.key_result(key).into_option(),
             Event::Mouse(mouse) => self.handle_mouse(mouse),
-            // Non-key/non-mouse events are handled by UiRoot's permanent
-            // observer, which supplies the redraw signal (design D12).
             _ => None,
         }
     }

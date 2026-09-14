@@ -7,7 +7,7 @@ use tuirealm::listener::{EventListenerCfg, Poll, PortResult};
 
 use crate::app::components::{ComponentId, Msg, UserEvent};
 use crate::app::router::RouterOutcome;
-use crate::app::shell::{apply_router_outcome, fold_mouse_messages, Model};
+use crate::app::shell::{fold_mouse_messages, Model};
 use crate::app::App;
 
 const INJECT_PORT_INTERVAL: Duration = Duration::from_millis(1);
@@ -80,7 +80,15 @@ impl TickHarness {
         // fold (ADR 0024). A keyboard tick passes the mouse fold untouched.
         let folded = fold_mouse_messages(raw_messages.clone());
         let router = self.model.router_outcome(&folded);
-        let messages = apply_router_outcome(folded, pre_fold_focus.as_ref(), &router);
+        let (messages, diagnostic) = crate::app::shell::arbitrate_key(
+            folded,
+            pre_fold_focus.as_ref(),
+            &router,
+        );
+        self.model.apply_deferred_candidate(
+            &router,
+            diagnostic.leaf_disposition == "consumed",
+        );
         StepOutcome {
             raw_messages,
             messages,

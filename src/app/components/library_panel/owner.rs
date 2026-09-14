@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use tuirealm::event::KeyEvent;
 
 use crate::app::components::component_id::BrowserKey;
-use crate::app::components::media_list::RowLocalInput;
-use crate::app::components::msg::Msg;
+use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
+use crate::app::components::msg::{LeafKeyResult, Msg};
 
 use super::content::{HeroImageState, LibraryPanelContent};
 use super::hero::HeroContentData;
@@ -45,14 +45,14 @@ pub(in crate::app) enum LibrarySlotEvent {
     /// A Workspace selector pill was picked.
     WorkspaceSelectorPicked(usize),
     /// An already-normalized row-local input for the active owner's list.
-    List(RowLocalInput),
+    List(MediaListSurfaceInput),
     /// An already-normalized pointer input inside the hero pane, delivered
     /// when no painted pill row or list slot claimed it. The panel resolves
     /// the pointer against the hero pane rect it painted; the owner decides
     /// whether the point lies in its Workspace list (resolving the row's
     /// stable target through its own carrier), in the pane but off every
     /// row, or nowhere it claims.
-    HeroPane(RowLocalInput),
+    HeroPane(MediaListSurfaceInput),
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot
@@ -68,15 +68,18 @@ pub(in crate::app) trait LibraryContentOwner {
     /// `Msg`s (design D2). `None` when the owner claims nothing for it.
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg>;
 
-    /// The panel's minimal keyboard forwarding (task 5.11, design D3): the
-    /// focused panel hands one already-routed chord to the active owner,
-    /// which keeps its own local key interpretation exactly as a mounted
-    /// destination did. The router keeps precedence — the panel only
-    /// forwards when it holds framework focus, so no chord is resolved
-    /// outside `router.rs`/`key_policy.rs`.
+    /// Handle one already-routed chord with an explicit leaf disposition.
+    /// Legacy compatibility for direct component tests; mounted routing uses
+    /// `on_key_result` implementations below.
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let _ = key;
         None
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        self.on_key(key)
+            .map(|message| LeafKeyResult::Consumed(Some(message)))
+            .unwrap_or(LeafKeyResult::Unhandled)
     }
 
     /// The current hero's content data for the shell's image projection
@@ -94,6 +97,18 @@ pub(in crate::app) trait LibraryContentOwner {
     /// Clear local multi-selection when the panel activates a different
     /// destination identity. Overlay activation never calls this.
     fn clear_selection(&mut self) {}
+
+    /// Read-only focused-list projection for the Status bar. The owner never
+    /// exposes membership; the panel caches only this summary.
+    fn selection_summary(&self) -> Option<SelectionSummary> {
+        None
+    }
+
+    fn set_selection_origin(
+        &mut self,
+        _origin: crate::app::components::media_list::SelectionOrigin,
+    ) {
+    }
 
     /// The owner-resolved cursor and resting scroll after local movement.
     /// `None` is used by owners whose position is not persisted by App.

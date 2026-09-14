@@ -49,6 +49,19 @@ impl Model {
         }
     }
 
+    /// The active library's stable selection origin (design D6/D7): the
+    /// identity a projection or delayed action carries so a clear intent can
+    /// route to the list that produced it, never the dispatch-time focus.
+    pub(super) fn active_library_selection_origin(
+        &self,
+    ) -> Option<crate::app::components::media_list::SelectionOrigin> {
+        self.active_library_key().map(|key| {
+            crate::app::components::media_list::SelectionOrigin::Library(
+                crate::app::components::media_list::LibrarySelectionOrigin::from(key),
+            )
+        })
+    }
+
     /// Every [`LibraryKey`] currently in the catalog: the shell tabs that are
     /// always live (Home, Feeds) plus one `Service` key per configured
     /// library, independent of the active tab. `LibraryPanel::retain_owners`

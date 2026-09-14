@@ -23,7 +23,9 @@ Panel. A destination supplies only typed slot content. A mounted embedded
 presentations read its one owner. Grid is retired.
 
 Mouse eligibility follows the Panel painted in the latest frame (ADR 0024).
-Keyboard precedence remains in the single Keyboard Router (ADR 0023).
+Keyboard precedence remains in the single Keyboard Router (ADR 0023); the
+router's outcome and the focused leaf's disposition are combined by the one
+central arbitration fold (same ADR), which is not a second router.
 
 ## Panel ledger
 

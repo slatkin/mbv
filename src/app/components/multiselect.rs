@@ -10,7 +10,7 @@ use tuirealm::state::State;
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use super::mouse::hit::HitRegions;
-use super::msg::Msg;
+use super::msg::{LeafKeyResult, Msg};
 use super::user_event::UserEvent;
 use crate::app::render::{render_multiselect_content, MultiSelectRenderModel};
 use crate::app::types_context_menu::{MultiSelectItem, MultiSelectKind, MultiSelectPopup};
@@ -210,7 +210,17 @@ impl Component for MultiselectComponent {
 impl AppComponent<Msg, UserEvent> for MultiselectComponent {
     fn on(&mut self, ev: &Event<UserEvent>) -> Option<Msg> {
         match ev {
-            Event::Keyboard(key) => self.handle_key(key),
+            Event::Keyboard(key) => match self.handle_key(key) {
+                Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                None if matches!(
+                    key.code,
+                    Key::Up | Key::Down | Key::Char(' ') | Key::Enter | Key::Esc
+                ) =>
+                {
+                    LeafKeyResult::Consumed(None).into_option()
+                }
+                None => LeafKeyResult::Unhandled.into_option(),
+            },
             Event::Mouse(mouse) => self.handle_mouse(mouse),
             _ => None,
         }
@@ -220,6 +230,7 @@ impl AppComponent<Msg, UserEvent> for MultiselectComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::msg::TerminalObserverEvent;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use tuirealm::event::{KeyEvent, KeyModifiers};
@@ -246,8 +257,14 @@ mod tests {
     fn settings_popup_multiselect_keeps_local_cursor_and_choice() {
         let mut component = MultiselectComponent::new();
         component.set_content(&popup());
-        assert_eq!(component.on(&key(Key::Down)), None);
-        assert_eq!(component.on(&key(Key::Char(' '))), None);
+        assert_eq!(
+            component.on(&key(Key::Down)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        );
+        assert_eq!(
+            component.on(&key(Key::Char(' '))),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        );
 
         assert_eq!(component.cursor, 1);
         assert!(!component.items[1].2);
