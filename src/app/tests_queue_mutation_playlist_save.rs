@@ -114,6 +114,7 @@ fn manual_save_overwrite_and_save_on_quit_share_per_playlist_ordering() {
     // attempted save (on_queue_replace_silent would have cleared both).
     app.queue_dirty = true;
     app.config.lock().unwrap().save_playlist_on_quit = true;
+    app.config.lock().unwrap().quit_timeout_secs = 0;
     assert!(app.try_quit());
     assert!(matches!(
         app.queue_source,
@@ -227,6 +228,7 @@ fn save_and_save_on_quit_cannot_resurrect_a_consumed_occurrence() {
     // occurrence is never re-added by the quit save.
     app.queue_dirty = true;
     app.config.lock().unwrap().save_playlist_on_quit = true;
+    app.config.lock().unwrap().quit_timeout_secs = 0;
     assert!(app.try_quit());
     let persisted = crate::config::load_queue_state().expect("queue persisted");
     assert_eq!(persisted.items.len(), 1);

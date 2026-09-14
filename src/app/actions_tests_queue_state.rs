@@ -443,6 +443,7 @@ fn quit_preserves_saved_playlist_source_for_restart_restore() {
         name: "Saved Queue".into(),
     };
     app.queue_dirty = true;
+    app.config.lock().unwrap().quit_timeout_secs = 0;
 
     assert!(app.try_quit());
     app.save_queue_state_no_clear();

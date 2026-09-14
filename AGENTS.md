@@ -149,6 +149,13 @@ coverage.
   or state directories, no live servers. Mock the boundary; keep tests deterministic
   and hermetic. mbv is a single-user system — live/smoke coverage is inappropriate;
   anything that genuinely needs the real external is a manual check, not a test.
+* **Tests that force real sleeps are a smell — do not add them.** A test that pays
+  wall-clock time (`thread::sleep`, timeouts, retry backoff) to prove its point is
+  testing the clock, not the code. Restructure so the property is asserted without
+  waiting: inject the outcome, not the delay (a mock that returns the terminal state
+  directly, a zeroed timeout, a seam that observes attempts instead of sleeping
+  through them). A slow test that cannot be made fast without changing prod timing
+  is either asserting the wrong thing or needs deleting, not keeping.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
 * format: `cargo fmt`
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`

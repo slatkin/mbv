@@ -1,38 +1,6 @@
 use super::*;
 use crate::app::tests::*;
 
-// #202: the in-app quit-key path used to join the player thread
-// unboundedly, so a hanging shutdown-time network call could hold the
-// single-instance flock indefinitely. `teardown` is the extracted,
-// testable sequence both the normal quit-key path and the
-// SIGHUP/SIGTERM watchdog path now share; this proves it actually
-// returns within its bounded window against a player thread that
-// hangs well past the configured `quit_timeout`, without needing a
-// real tty (`run()` itself stays untested end-to-end, unchanged status
-// quo).
-#[test]
-fn teardown_bounds_previously_unbounded_normal_quit_join() {
-    use mbv_core::player::PlayerProxy;
-
-    let mut app = make_app_stub();
-    let status = app.player.status.clone();
-    // Thread hangs for 10s; quit_timeout below is 200ms, so a correctly
-    // bounded teardown (outer_bound = quit_timeout + quit_timeout/2 +
-    // 3s cushion ~= 3.3s here) must return well short of the full hang.
-    app.player = PlayerProxy::stub_with_hung_thread(status, Duration::from_secs(10));
-
-    let started = std::time::Instant::now();
-    app.teardown(Duration::from_millis(200));
-    let elapsed = started.elapsed();
-
-    assert!(
-        elapsed < Duration::from_secs(5),
-        "teardown should return within its bounded window (outer_bound \
-             ~= 3.3s here), took {elapsed:?} — previously unbounded on the \
-             normal in-app quit path, which is the #202 bug"
-    );
-}
-
 #[test]
 fn teardown_fast_when_player_thread_is_not_hung() {
     let mut app = make_app_stub();

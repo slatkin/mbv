@@ -67,8 +67,19 @@ fn reattach_falls_back_when_daemon_stays_unreachable() {
     app.player_endpoint = Some(remote_tcp_endpoint());
     app.config.lock().unwrap().auto_reconnect = true;
 
-    assert!(!app.try_reattach_remote_daemon());
+    // Injected clock: observe the backoff without paying wall-clock time.
+    let sleeps = std::cell::RefCell::new(Vec::new());
+    assert!(!app.try_reattach_remote_daemon_with_sleep(|d| sleeps.borrow_mut().push(d)));
 
     *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
     assert!(!app.player.is_remote(), "caller must run local restore");
+    assert_eq!(
+        *sleeps.borrow(),
+        vec![
+            std::time::Duration::from_millis(300),
+            std::time::Duration::from_millis(600),
+            std::time::Duration::from_millis(1200),
+        ],
+        "all three attempts must run with doubling backoff before falling back"
+    );
 }

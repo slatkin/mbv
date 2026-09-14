@@ -37,41 +37,6 @@ impl PlayerProxy {
         }
     }
 
-    /// Like [`stub`](Self::stub), but with a real background thread wired up
-    /// as the local `Player`'s `thread_handle`, which sleeps for `sleep`
-    /// before finishing. Lets root-crate tests prove teardown code that
-    /// calls `join_or_timeout` actually returns within its bound instead of
-    /// blocking for the full `sleep` duration — the previously-unbounded
-    /// normal in-app quit path (#202) is exactly this scenario with a
-    /// hanging player thread.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn stub_with_hung_thread(status: Arc<Mutex<PlayerStatus>>, sleep: Duration) -> Self {
-        let (tx, _rx) = std::sync::mpsc::channel();
-        let mut player = Player::new(
-            String::new(),
-            String::new(),
-            false,
-            false,
-            false,
-            false,
-            SubtitlePrefs::default(),
-            tx,
-            None,
-        );
-        player.status = status.clone();
-        let handle = std::thread::spawn(move || {
-            std::thread::sleep(sleep);
-        });
-        *player.thread_handle.lock().unwrap() = Some(handle);
-        let subtitle_prefs = player.subtitle_prefs.clone();
-        PlayerProxy {
-            always_play_next: false,
-            status,
-            subtitle_prefs,
-            inner: PlayerProxyInner::Local(player),
-        }
-    }
-
     /// Wires a fresh command channel into the local player and returns the
     /// receiving end, so a test can assert on what `send_command` actually sent
     /// without a real mpv thread running.

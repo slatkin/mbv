@@ -175,6 +175,17 @@ impl App {
     /// the caller must skip `restore_local_mode`. Local daemons are excluded:
     /// those already have the modal / `home_is_local_daemon` reconnect paths.
     pub(super) fn try_reattach_remote_daemon(&mut self) -> bool {
+        self.try_reattach_remote_daemon_with_sleep(std::thread::sleep)
+    }
+
+    /// Retry loop with an injectable sleep clock so tests can observe the
+    /// backoff sequence without paying wall-clock time. The loop, attempt
+    /// count, and backoff constants are identical to the shipped path — only
+    /// the clock differs.
+    pub(super) fn try_reattach_remote_daemon_with_sleep(
+        &mut self,
+        sleep: impl Fn(Duration),
+    ) -> bool {
         let Some(endpoint) = self.player_endpoint.clone() else {
             return false;
         };
@@ -200,7 +211,7 @@ impl App {
                         target: "auto_reconnect",
                         "reattach attempt {attempt} to {endpoint} failed: {e}"
                     );
-                    std::thread::sleep(backoff);
+                    sleep(backoff);
                     backoff *= 2;
                 }
             }
