@@ -399,6 +399,11 @@ impl HomeContent {
     pub(in crate::app) fn test_active_scroll(&self) -> usize {
         self.carrier.scroll()
     }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_multi_selection_len(&self) -> usize {
+        self.carrier.multi_selection().len()
+    }
 }
 
 impl LibraryContentOwner for HomeContent {

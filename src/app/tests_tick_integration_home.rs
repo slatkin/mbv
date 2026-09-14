@@ -121,10 +121,23 @@ fn tick_frame_is_nonempty_in_mini_view() {
 }
 
 fn key(code: Key) -> Event<crate::app::components::UserEvent> {
-    Event::Keyboard(KeyEvent {
-        code,
-        modifiers: KeyModifiers::NONE,
-    })
+    key_with_modifiers(code, KeyModifiers::NONE)
+}
+
+fn key_with_modifiers(
+    code: Key,
+    modifiers: KeyModifiers,
+) -> Event<crate::app::components::UserEvent> {
+    Event::Keyboard(KeyEvent { code, modifiers })
+}
+
+fn handle_tick_messages(harness: &mut TickHarness, messages: Vec<Msg>) {
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
 }
 
 fn wheel(column: u16, row: u16) -> Event<crate::app::components::UserEvent> {
@@ -134,6 +147,61 @@ fn wheel(column: u16, row: u16) -> Event<crate::app::components::UserEvent> {
         row,
         modifiers: KeyModifiers::NONE,
     })
+}
+
+#[test]
+fn visual_mode_space_toggles_selection_without_playback() {
+    let mut harness = home_harness(160, 30, 2);
+    let _ = draw(&mut harness, 160, 30);
+
+    harness.inject(key_with_modifiers(Key::Char('v'), KeyModifiers::SHIFT));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().all(|message| !matches!(
+        message,
+        Msg::Playback(crate::app::components::PlaybackRequest::TogglePlayPause)
+    )));
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 1);
+
+    harness.inject(key(Key::Char(' ')));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().all(|message| !matches!(
+        message,
+        Msg::Playback(crate::app::components::PlaybackRequest::TogglePlayPause)
+    )));
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 0);
+}
+
+#[test]
+fn visual_mode_escape_clears_without_arming_playback_stop() {
+    let mut harness = home_harness(160, 30, 2);
+    let _ = draw(&mut harness, 160, 30);
+
+    harness.inject(key_with_modifiers(Key::Char('v'), KeyModifiers::SHIFT));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert!(harness.model().app.last_esc_press.is_none());
+
+    harness.inject(key(Key::Esc));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().all(|message| !matches!(
+        message,
+        Msg::Playback(crate::app::components::PlaybackRequest::Stop)
+    )));
+    handle_tick_messages(&mut harness, outcome.messages);
+    assert_eq!(home_owner(&harness).test_multi_selection_len(), 0);
+    assert!(harness.model().app.last_esc_press.is_none());
+
+    // Once Visual mode has exited, the next Esc follows the ordinary
+    // first-press playback path: it does not stop immediately.
+    harness.inject(key(Key::Esc));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().all(|message| !matches!(
+        message,
+        Msg::Playback(crate::app::components::PlaybackRequest::Stop)
+    )));
+    assert!(harness.model().app.last_esc_press.is_none());
 }
 
 #[test]
