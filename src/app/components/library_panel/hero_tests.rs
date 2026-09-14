@@ -313,6 +313,7 @@ fn movie_without_genres_or_links_keeps_only_existing_rows() {
 
 #[rstest]
 #[case(vec![("Director", "", "A")], vec![("A", "Director")])]
+#[case(vec![("Director", "", "Director"), ("Actor", "Actor 0", "Actor 0"), ("Actor", "Actor 1", "Actor 1"), ("Actor", "Actor 2", "Actor 2"), ("Actor", "Actor 3", "Actor 3"), ("Actor", "Actor 4", "Actor 4"), ("Actor", "Actor 5", "Actor 5"), ("Actor", "Actor 6", "Actor 6"), ("Actor", "Actor 7", "Actor 7"), ("Actor", "Actor 8", "Actor 8"), ("Actor", "Actor 9", "Actor 9"), ("Actor", "Actor 10", "Actor 10"), ("Actor", "Actor 11", "Actor 11"), ("Actor", "Actor 12", "Actor 12"), ("Actor", "Actor 13", "Actor 13")], vec![("Director", "Director"), ("Actor 0", "Actor 0"), ("Actor 1", "Actor 1"), ("Actor 2", "Actor 2"), ("Actor 3", "Actor 3"), ("Actor 4", "Actor 4"), ("Actor 5", "Actor 5"), ("Actor 6", "Actor 6"), ("Actor 7", "Actor 7"), ("Actor 8", "Actor 8")])]
 #[case(vec![("Director", "", "A"), ("Director", "Dir", "B"), ("Actor", "C1", "C"), ("Actor", "C2", "D")], vec![("A", "Director"), ("B", "Dir"), ("C", "C1"), ("D", "C2")])]
 #[case(vec![("Actor", "C1", "C")], vec![("C", "C1")])]
 #[case(vec![("Director", "Dir", "A"), ("Actor", "C1", "B"), ("Actor", "C2", "C")], vec![("A", "Dir"), ("B", "C1"), ("C", "C2")])]
@@ -343,13 +344,34 @@ fn movie_credits_are_grouped_and_capped(
 }
 
 #[test]
-fn movie_credits_cap_actors_at_nine_but_keeps_directors() {
-    let mut people = vec![json!({"Name": "Director", "Type": "Director"})];
-    people.extend((0..14).map(|index| json!({"Name": format!("Actor {index}"), "Type": "Actor"})));
-    let item = emby_item(
-        json!({"Id": "m1", "Name": "Dune", "Type": "Movie", "People": people, "UserData": {}}),
-    );
-    assert_eq!(hero_content_emby(&item).credits.unwrap().len(), 10);
+fn movie_credits_reach_library_panel_content_through_browser_owner() {
+    use crate::app::components::browser_content::{BrowserContent, BrowserOwnerPush};
+    use crate::app::components::component_id::BrowserKind;
+    use crate::app::components::library_panel::LibraryContentOwner;
+
+    let movie = emby_item(json!({
+        "Id": "m1", "Name": "Dune", "Type": "Movie",
+        "People": [{"Name": "Denis Villeneuve", "Type": "Director"}],
+        "UserData": {}
+    }));
+    let mut owner = BrowserContent::new(BrowserKind::Movies);
+    owner.set_content(BrowserOwnerPush {
+        items: vec![movie],
+        total_count: 1,
+        library_total: None,
+        letter_filter: None,
+        loading: false,
+        group_pills: false,
+        home_video: false,
+        show_letter_pills: false,
+        feed_groups: Vec::new(),
+        feed_group_cursor: 0,
+    });
+
+    let content = owner.content();
+    let credits = content.hero.expect("movie hero").credits.expect("credits");
+    assert_eq!(credits[0].name, "Denis Villeneuve");
+    assert_eq!(credits[0].role, "Director");
 }
 
 #[test]
