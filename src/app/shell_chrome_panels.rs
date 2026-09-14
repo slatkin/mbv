@@ -22,7 +22,7 @@ use crate::app::render::arrangements::chrome::{
 };
 use crate::app::render::components::card::queue_card_reserved_rect;
 use crate::app::render::components::widgets::{fill_surface, queue_panel_inset};
-use crate::app::render::StatusBarModel;
+use crate::app::render::{StatusBarModel, VisualModeIndicator};
 use crate::app::NowPlayingStatus;
 
 pub(crate) fn sync_panel_area(app: &App) -> Option<Rect> {
@@ -218,6 +218,9 @@ impl Model {
             volume: self.app.volume_status_spans(),
             right: self.app.status_bar_right_spans(),
             queue_scope,
+            visual_mode: self
+                .visual_selection
+                .map(|(_, count)| VisualModeIndicator { count }),
         };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>() {

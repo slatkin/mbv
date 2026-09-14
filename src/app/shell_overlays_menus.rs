@@ -214,7 +214,7 @@ impl Model {
         }
     }
 
-    fn clear_multi_selection(&mut self) {
+    pub(crate) fn clear_multi_selection(&mut self) {
         self.visual_selection = None;
         if self.app.effective_panel_focus() == PanelFocus::Queue {
             if let Some(comp) = self.application.get_component_mut(&ComponentId::Queue) {

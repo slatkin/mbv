@@ -66,6 +66,8 @@ pub enum ShellRequest {
     /// count once; components never expose their local selection state for
     /// router queries.
     SelectionChanged(usize),
+    /// Clear the active list's Visual selection from the status indicator.
+    ClearMultiSelection,
     /// Select the left-panel tab at the position the mounted `TabPanel`
     /// resolved from its own painted hit regions (task 2.1). The shell owns
     /// the tab switch and its side effects; the panel only reports which tab

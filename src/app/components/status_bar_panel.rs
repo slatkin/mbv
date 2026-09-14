@@ -72,6 +72,11 @@ impl StatusBarPanel {
             // Queue-scope pills (moved from the queue column's removed title
             // band): the same `QueueScopeClick` the title pills emitted.
             MouseEventKind::Down(MouseButton::Left)
+                if self.regions.visual_clear.is_some_and(|r| r.contains(at)) =>
+            {
+                Some(Msg::Shell(ShellRequest::ClearMultiSelection))
+            }
+            MouseEventKind::Down(MouseButton::Left)
                 if self.regions.scope_local.is_some_and(|r| r.contains(at)) =>
             {
                 Some(Msg::Shell(ShellRequest::QueueScopeClick {
@@ -161,6 +166,7 @@ mod tests {
             volume,
             right: pill("R", Color::White),
             queue_scope: None,
+            visual_mode: None,
         }
     }
 
@@ -176,6 +182,27 @@ mod tests {
             .draw(|f| panel.view(f, Rect::new(0, 0, width, 1)))
             .unwrap();
         (panel, terminal.backend().buffer().clone())
+    }
+
+    #[test]
+    fn visual_indicator_paints_count_and_retains_clear_region() {
+        let mut panel = StatusBarPanel::new();
+        let mut model = model(Vec::new(), None);
+        model.visual_mode = Some(crate::app::render::VisualModeIndicator { count: 4 });
+        panel.set_model(model);
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| panel.view(f, Rect::new(0, 0, 60, 1)))
+            .unwrap();
+        let text: String = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .map(|cell| cell.symbol().to_string())
+            .collect();
+        assert!(text.contains("-- VISUAL (4) --"));
+        assert!(panel.regions().visual_clear.is_some());
     }
 
     /// The moved painter's characterization: volume and mute pills paint on

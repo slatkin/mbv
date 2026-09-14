@@ -20,6 +20,9 @@ impl Model {
                         self.visual_selection =
                             (count > 0).then_some((self.app.effective_panel_focus(), count));
                     }
+                    ShellRequest::ClearMultiSelection => {
+                        self.clear_multi_selection();
+                    }
                     ShellRequest::MusicAlbumActivate { item } => {
                         if self.app.tab.emby_library_index().is_some()
                             && !self.app.is_right_panel_wide()
