@@ -7,9 +7,9 @@
 
 ## 2. App teardown (mbv binary)
 
-- [ ] 2.1 In `App::teardown` (`run_loop_events_teardown.rs:52–58`), move `stop_visualizer_worker()` to run concurrently with the player join: take the visualizer worker via `self.visualizer.take()` and send its stop signal before `player.stop_for_shutdown()`; join the extracted handle after signaling but before or during `player.join_or_timeout()`. Verify: `cargo check -p mbv`
-- [ ] 2.2 Update the `outer_bound` formula (`run_loop_events_teardown.rs:237`) to reflect the reduced player-thread budget: `quit_timeout + Duration::from_millis(200) + Duration::from_secs(1)`. Update the comment. Verify: `cargo check -p mbv`
-- [ ] 2.3 Update the teardown boundedness test (`run_loop_events_teardown.rs:231+`) to match the new `outer_bound`. Verify: `cargo nextest run -p mbv`
+- [x] 2.1 In `App::teardown` (`run_loop_events_teardown.rs:52–58`), move `stop_visualizer_worker()` to run concurrently with the player join: take the visualizer worker via `self.visualizer.take()` and send its stop signal before `player.stop_for_shutdown()`; join the extracted handle after signaling but before or during `player.join_or_timeout()`. Verify: `cargo check -p mbv`
+- [x] 2.2 Update the `outer_bound` formula (`run_loop_events_teardown.rs:237`) to reflect the reduced player-thread budget: `quit_timeout + Duration::from_millis(200) + Duration::from_secs(1)`. Update the comment. Verify: `cargo check -p mbv`
+- [x] 2.3 Update the teardown boundedness test (`run_loop_events_teardown.rs:231+`) to match the new `outer_bound`. Verify: `cargo nextest run -p mbv`
 
 ## 3. Final gate
 
