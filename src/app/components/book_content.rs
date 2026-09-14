@@ -16,7 +16,8 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowLocalInput,
 };
 use super::msg::{
-    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, Msg, ShellRequest,
+    AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
+    ShellRequest,
 };
 use crate::app::audiobookshelf_browse_actions::audiobookshelf_book_queue_item;
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
@@ -610,6 +611,21 @@ impl LibraryContentOwner for BookContent {
                 )))
             }
             _ => None,
+        }
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if self.chapter_focused
+                || matches!(
+                    key.code,
+                    Key::Up | Key::Down | Key::PageUp | Key::PageDown | Key::Home | Key::End
+                ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
         }
     }
 

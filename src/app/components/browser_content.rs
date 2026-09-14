@@ -34,7 +34,7 @@ use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
     Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
 };
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
+use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
 
 /// Browse identity used to decide when a projected position should be applied.
@@ -618,6 +618,15 @@ impl LibraryContentOwner for BrowserContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        let active = self.inline_search.is_active();
+        match self.handle_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if active => LeafKeyResult::Consumed(None),
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

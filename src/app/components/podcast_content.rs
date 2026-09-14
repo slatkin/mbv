@@ -15,7 +15,8 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
 };
 use super::msg::{
-    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, ShellRequest,
+    LeafKeyResult, Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition,
+    ShellRequest,
 };
 use crate::app::types_audiobookshelf_browse::{
     AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter,
@@ -474,6 +475,14 @@ impl LibraryContentOwner for PodcastContent {
             _ => None,
         }
     }
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if self.focused => LeafKeyResult::Consumed(None),
+            None => LeafKeyResult::Unhandled,
+        }
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()
     }

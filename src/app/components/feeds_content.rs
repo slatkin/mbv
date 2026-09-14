@@ -34,7 +34,7 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
     RowLocalInput, RowLocalOutcome,
 };
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent};
+use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
 };
@@ -555,6 +555,27 @@ impl LibraryContentOwner for FeedsContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.handle_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if matches!(
+                key.code,
+                Key::Up
+                    | Key::Down
+                    | Key::PageUp
+                    | Key::PageDown
+                    | Key::Home
+                    | Key::End
+                    | Key::Left
+                    | Key::Right
+            ) =>
+            {
+                LeafKeyResult::Consumed(None)
+            }
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

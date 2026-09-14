@@ -20,8 +20,8 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
     RowLocalInput, RowLocalOutcome,
 };
-use super::msg::TerminalObserverEvent;
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
+use super::msg::{LeafKeyResult, TerminalObserverEvent};
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::{list_duration_secs, trunc_str};
 
@@ -576,6 +576,15 @@ impl LibraryContentOwner for MusicContent {
             Key::PageUp => self.move_album(RowLocalInput::Page(-1), AlbumCursorKind::Page),
             Key::PageDown => self.move_album(RowLocalInput::Page(1), AlbumCursorKind::Page),
             _ => None,
+        }
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        let active = self.inline_search.is_active();
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if active || self.track_focused => LeafKeyResult::Consumed(None),
+            None => LeafKeyResult::Unhandled,
         }
     }
 

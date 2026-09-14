@@ -25,7 +25,7 @@ use super::media_list::{
     RowLocalInput, RowLocalOutcome, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
-use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
+use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{list_duration_secs, natural_sort_key};
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
@@ -553,6 +553,13 @@ impl LibraryContentOwner for TvContent {
     /// owns every global chord and keeps precedence).
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
+    }
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.on_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None if self.inline_search.is_active() => LeafKeyResult::Consumed(None),
+            None => LeafKeyResult::Unhandled,
+        }
     }
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.context.selected_series.as_ref().map(hero_content_emby)

@@ -68,23 +68,18 @@ pub(in crate::app) trait LibraryContentOwner {
     /// `Msg`s (design D2). `None` when the owner claims nothing for it.
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg>;
 
-    /// The panel's minimal keyboard forwarding (task 5.11, design D3): the
-    /// focused panel hands one already-routed chord to the active owner,
-    /// which keeps its own local key interpretation exactly as a mounted
-    /// destination did. The router keeps precedence — the panel only
-    /// forwards when it holds framework focus, so no chord is resolved
-    /// outside `router.rs`/`key_policy.rs`.
+    /// Handle one already-routed chord with an explicit leaf disposition.
+    /// Legacy compatibility for direct component tests; mounted routing uses
+    /// `on_key_result` implementations below.
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         let _ = key;
         None
     }
 
-    /// Explicit leaf disposition used at the mounted component boundary.
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
-        match self.on_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
-            None => LeafKeyResult::Unhandled,
-        }
+        self.on_key(key)
+            .map(|message| LeafKeyResult::Consumed(Some(message)))
+            .unwrap_or(LeafKeyResult::Unhandled)
     }
 
     /// The current hero's content data for the shell's image projection

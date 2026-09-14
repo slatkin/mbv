@@ -26,7 +26,7 @@ use super::media_list::{
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
-use super::msg::{Msg, ShellRequest};
+use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::{fmt_duration_short, trunc_str};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -540,6 +540,13 @@ impl LibraryContentOwner for HomeContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        match self.handle_key(key) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     /// The current hero's content data, for the shell's image projection
