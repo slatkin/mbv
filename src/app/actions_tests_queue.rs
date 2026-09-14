@@ -12,6 +12,7 @@ use crate::app::{
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
+use rstest::rstest;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
@@ -42,23 +43,12 @@ fn recursive_music_app() -> App {
 }
 // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
 
-#[test]
-fn remote_seek_rewind_clamps_at_zero() {
-    // 3s in, rewind 5s: would go negative, must clamp to 0.
-    assert_eq!(App::remote_seek_ticks(3, -5.0), 0);
-}
-
-#[test]
-fn remote_seek_rewind_does_not_clamp_when_unnecessary() {
-    assert_eq!(App::remote_seek_ticks(20, -5.0), 15 * TICKS_PER_SECOND);
-}
-
-#[test]
-fn remote_seek_forward_has_no_clamp() {
-    // Fast-forward has no lower-bound clamp in the original code; a small
-    // pos_s plus a large forward delta simply goes wherever the math
-    // says, same as rewind's clamp being absent here.
-    assert_eq!(App::remote_seek_ticks(3, 5.0), 8 * TICKS_PER_SECOND);
+#[rstest]
+#[case::remote_seek_rewind_clamps_at_zero(3, -5.0, 0)]
+#[case::remote_seek_rewind_does_not_clamp_when_unnecessary(20, -5.0, 15 * TICKS_PER_SECOND)]
+#[case::remote_seek_forward_has_no_clamp(3, 5.0, 8 * TICKS_PER_SECOND)]
+fn remote_seek(#[case] position: i64, #[case] delta: f64, #[case] expected: i64) {
+    assert_eq!(App::remote_seek_ticks(position, delta), expected);
 }
 
 // ── execute_context_action(Play) on the queue tab (issue #134 follow-up) ─
