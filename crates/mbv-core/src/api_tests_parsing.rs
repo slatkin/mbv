@@ -30,10 +30,11 @@ fn make_item(name: &str, item_type: &str) -> EmbyItem {
         date_added: String::new(),
         total_count: 0,
         container: String::new(),
-        director: String::new(),
         video_info: String::new(),
         audio_info: String::new(),
-        genre: String::new(),
+        genres: Vec::new(),
+        people: Vec::new(),
+        external_urls: Vec::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
     }
@@ -64,6 +65,35 @@ fn parse_item_basic_fields() {
     assert_eq!(item.runtime_ticks, 36_000_000_000);
     assert!(item.played);
     assert_eq!(item.playback_position_ticks, 5_000_000);
+}
+
+#[test]
+fn parse_item_metadata_lists() {
+    let item = parse_item(&json!({
+        "Type": "Movie",
+        "Genres": ["Action", "Drama"],
+        "People": [
+            {"Name": "Director", "Type": "Director"},
+            {"Name": "Actor", "Role": "Hero", "Type": "Actor"}
+        ],
+        "ExternalUrls": [
+            {"Name": "IMDb", "Url": "https://imdb.example/movie"},
+            {"Name": "Blank", "Url": ""}
+        ]
+    }));
+    assert_eq!(item.genres, vec!["Action", "Drama"]);
+    assert_eq!(item.people[0], EmbyPerson { name: "Director".into(), role: "".into(), kind: "Director".into() });
+    assert_eq!(item.people[1].role, "Hero");
+    assert_eq!(item.external_urls[0].name, "IMDb");
+    assert_eq!(item.external_urls[1].url, "");
+}
+
+#[test]
+fn parse_item_metadata_lists_absent_default_empty() {
+    let item = parse_item(&json!({"Type": "Movie"}));
+    assert!(item.genres.is_empty());
+    assert!(item.people.is_empty());
+    assert!(item.external_urls.is_empty());
 }
 
 #[rstest]

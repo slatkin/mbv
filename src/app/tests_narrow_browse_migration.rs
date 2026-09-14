@@ -358,7 +358,7 @@ fn feed_home_video_group_app() -> App {
     let mut first = make_item("Video One", "Movie");
     first.id = "video-one".into();
     first.runtime_ticks = 3_600 * 10_000_000;
-    first.genre = "Family".into();
+    first.genres = vec!["Family".into()];
     first.overview = "Distinctive wrapping overview fragment for inline expansion.".into();
     let mut second = make_item("Video Two", "Movie");
     second.id = "video-two".into();
@@ -675,10 +675,10 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
     let mut app = feed_home_video_group_app();
     let state = app.libs[0].feed_home_video.as_mut().unwrap();
     state.groups[0].items[0].overview.clear();
-    state.groups[0].items[0].genre.clear();
+    state.groups[0].items[0].genres.clear();
     state.groups[0].items[0].runtime_ticks = 0;
     state.all_items[0].overview.clear();
-    state.all_items[0].genre.clear();
+    state.all_items[0].genres.clear();
     state.all_items[0].runtime_ticks = 0;
     let mut model = Model::new(app);
     model.sync_mounted_surfaces();

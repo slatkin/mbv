@@ -221,6 +221,19 @@ fn device_id_in(data_home: std::path::PathBuf) -> String {
 // item as the explicit owned target of a typed effect. Additive derive only;
 // no semantics change.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EmbyPerson {
+    pub name: String,
+    pub role: String,
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct EmbyLink {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EmbyItem {
     pub id: String,
     pub name: String,
@@ -248,10 +261,14 @@ pub struct EmbyItem {
     pub date_added: String,
     pub total_count: u32,
     pub container: String,
-    pub director: String,
     pub video_info: String,
     pub audio_info: String,
-    pub genre: String,
+    #[serde(default)]
+    pub genres: Vec<String>,
+    #[serde(default)]
+    pub people: Vec<EmbyPerson>,
+    #[serde(default)]
+    pub external_urls: Vec<EmbyLink>,
     pub playlist_item_id: String,
     /// Declared image availability (task 5.3): the Emby default-DTO image
     /// tags the hero artwork policy reads to choose an artwork shape before
@@ -362,10 +379,11 @@ impl EmbyItem {
             date_added: String::new(),
             total_count: 0,
             container: String::new(),
-            director: String::new(),
             video_info: String::new(),
             audio_info: String::new(),
-            genre: String::new(),
+            genres: Vec::new(),
+            people: Vec::new(),
+            external_urls: Vec::new(),
             playlist_item_id: String::new(),
             image_tags: EmbyImageTags::default(),
         }

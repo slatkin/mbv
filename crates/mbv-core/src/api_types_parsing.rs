@@ -253,21 +253,40 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
             .unwrap_or_default(),
         total_count,
         container: raw["Container"].as_str().unwrap_or("").to_string(),
-        genre: raw["Genres"]
+        genres: raw["Genres"]
             .as_array()
-            .and_then(|g| g.first().and_then(|v| v.as_str()))
-            .unwrap_or("")
-            .to_string(),
-        director: raw["People"]
+            .map(|genres| {
+                genres
+                    .iter()
+                    .filter_map(|genre| genre.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        people: raw["People"]
             .as_array()
-            .and_then(|people| {
+            .map(|people| {
                 people
                     .iter()
-                    .find(|p| p["Type"].as_str() == Some("Director"))
-                    .and_then(|p| p["Name"].as_str())
+                    .map(|person| EmbyPerson {
+                        name: person["Name"].as_str().unwrap_or("").to_string(),
+                        role: person["Role"].as_str().unwrap_or("").to_string(),
+                        kind: person["Type"].as_str().unwrap_or("").to_string(),
+                    })
+                    .collect()
             })
-            .unwrap_or("")
-            .to_string(),
+            .unwrap_or_default(),
+        external_urls: raw["ExternalUrls"]
+            .as_array()
+            .map(|links| {
+                links
+                    .iter()
+                    .map(|link| EmbyLink {
+                        name: link["Name"].as_str().unwrap_or("").to_string(),
+                        url: link["Url"].as_str().unwrap_or("").to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
         video_info: raw["MediaStreams"]
             .as_array()
             .map(|s| parse_video_info(s))

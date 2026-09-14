@@ -23,6 +23,28 @@ fn mock_client(url: &str) -> (EmbyClient, MockHttp) {
 }
 
 #[test]
+fn library_items_request_includes_external_urls_field() {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    client
+        .get_items_sorted("library", None, false, 0, 10, "SortName", "Ascending")
+        .unwrap();
+    assert!(http.requests()[0].contains("Fields="));
+    assert!(http.requests()[0].contains("ExternalUrls"));
+}
+
+#[test]
+fn playlist_items_request_includes_external_urls_field() {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(200, r#"{"Items":[]}"#);
+    client.get_playlist_items("playlist").unwrap();
+    assert!(http.requests()[0].contains("Fields="));
+    assert!(http.requests()[0].contains("ExternalUrls"));
+}
+
+#[test]
 fn ws_url_http_becomes_ws() {
     let url = client_with_url("http://server:8096").ws_url();
     assert!(url.starts_with("ws://"));

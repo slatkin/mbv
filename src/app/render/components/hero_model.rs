@@ -18,7 +18,11 @@ pub(in crate::app) fn emby_hero_meta_rows_plain(item: &EmbyItem) -> Vec<String> 
             (s, _) if s > 0 => format!("{}", s),
             _ => String::new(),
         };
-        let genre_upper = item.genre.to_uppercase();
+        let genre_upper = item
+            .genres
+            .first()
+            .map(|genre| genre.to_uppercase())
+            .unwrap_or_default();
         let line = [year_range.as_str(), genre_upper.as_str()]
             .iter()
             .filter(|s| !s.is_empty())

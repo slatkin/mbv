@@ -26,9 +26,13 @@ pub fn make_movie_app() -> App {
     let mut focused = make_item("Focused Movie", "Movie");
     focused.id = "movie-focused".into();
     focused.overview = "This overview should appear in the compact movie banner while the list remains visible underneath.".into();
-    focused.director = "Director Hidden".into();
+    focused.people = vec![mbv_core::api::EmbyPerson {
+        name: "Director Hidden".into(),
+        role: String::new(),
+        kind: "Director".into(),
+    }];
     focused.production_year = 1988;
-    focused.genre = "Action".into();
+    focused.genres = vec!["Action".into()];
 
     let mut second = make_item("Second Movie", "Movie");
     second.id = "movie-second".into();

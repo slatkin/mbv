@@ -54,10 +54,11 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
         date_added: String::new(),
         total_count: 0,
         container: String::new(),
-        director: String::new(),
         video_info: String::new(),
         audio_info: String::new(),
-        genre: String::new(),
+        genres: Vec::new(),
+        people: Vec::new(),
+        external_urls: Vec::new(),
         playlist_item_id: String::new(),
         image_tags: Default::default(),
     }
