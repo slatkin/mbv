@@ -2,7 +2,7 @@ use super::*;
 use crate::app::components::library_panel::{
     LibraryContentOwner, LibraryKey, LibraryPanel, LibrarySlotEvent,
 };
-use crate::app::components::media_list::RowLocalInput;
+use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::{Msg, UserEvent};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseEvent, MouseEventKind};
@@ -89,9 +89,9 @@ impl LibraryContentOwner for FixtureOwner {
                 // Typed translation "as today": the owner resolves the
                 // pointer target through its own carrier, then delegates.
                 let target = match input {
-                    RowLocalInput::Click(at)
-                    | RowLocalInput::DoubleClick(at)
-                    | RowLocalInput::ContextClick(at) => {
+                    MediaListSurfaceInput::Click(at)
+                    | MediaListSurfaceInput::DoubleClick(at)
+                    | MediaListSurfaceInput::ContextClick(at) => {
                         self.carrier.resolve_current_point(at).cloned()
                     }
                     _ => None,
@@ -99,7 +99,11 @@ impl LibraryContentOwner for FixtureOwner {
                 if let Some(target) = &target {
                     self.carrier.select_target(target);
                 }
-                self.carrier.delegate(input, target);
+                self.carrier.delegate_operation(
+                    input
+                        .into_operation(target)
+                        .expect("resolved media-list pointer target"),
+                );
                 self.carrier.selected_target().cloned()
             }
             _ => self.carrier.selected_target().cloned(),
@@ -257,7 +261,9 @@ fn list_click_delegates_to_the_active_owner() {
     assert!(
         log.events.last().is_some_and(|event| matches!(
             event,
-            LibrarySlotEvent::List(crate::app::components::media_list::RowLocalInput::Click(_))
+            LibrarySlotEvent::List(
+                crate::app::components::media_list::MediaListSurfaceInput::Click(_)
+            )
         )),
         "a row click routes List delegation to the owner"
     );

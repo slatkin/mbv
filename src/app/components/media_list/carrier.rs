@@ -22,8 +22,8 @@ use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
-    InlineMediaBrowser, MediaListOperation, MediaListRow, MediaListTransition, RowLocalInput,
-    RowLocalOutcome, ViewportAnchor, WideMediaList,
+    InlineMediaBrowser, MediaListOperation, MediaListRow, MediaListSurfaceInput,
+    MediaListTransition, ViewportAnchor, WideMediaList,
 };
 
 /// The centrally-defined closed set of media-list presentations (CONTEXT.md
@@ -407,12 +407,20 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
 
     pub fn delegate(
         &mut self,
-        input: RowLocalInput,
+        input: MediaListSurfaceInput,
         target: Option<Target>,
-    ) -> RowLocalOutcome<Target> {
+    ) -> MediaListTransition<Target> {
         self.track_selection_change(|this| match this.active {
-            Presentation::Wide => this.wide.delegate(input, target),
-            Presentation::Inline => this.inline.delegate(input, target),
+            Presentation::Wide => this.wide.delegate_operation(
+                input
+                    .into_operation(target)
+                    .expect("resolved media-list pointer target"),
+            ),
+            Presentation::Inline => this.inline.delegate_operation(
+                input
+                    .into_operation(target)
+                    .expect("resolved media-list pointer target"),
+            ),
         })
     }
 

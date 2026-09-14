@@ -21,8 +21,8 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibraryKey, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListTransition,
-    MediaSemanticState, Presentation, RowIntent, RowLocalInput,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
+    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
@@ -122,7 +122,7 @@ impl HomeContent {
             self.section = idx + 1;
             self.clamp_section();
             self.project_active_section();
-            self.delegate_row_local_input(RowLocalInput::First, None);
+            self.delegate_row_local_input(MediaListSurfaceInput::First, None);
             true
         } else {
             false
@@ -223,7 +223,7 @@ impl HomeContent {
     /// key or pointer gesture to the shared owner carrying its active section.
     fn delegate_row_local_input(
         &mut self,
-        input: RowLocalInput,
+        input: MediaListSurfaceInput,
         pointer_target: Option<String>,
     ) -> MediaListTransition<String> {
         input
@@ -271,7 +271,7 @@ impl HomeContent {
         // A discrete section change re-projects the active section and parks
         // the shared owner at its first row (no per-section cursor cache).
         self.project_active_section();
-        self.delegate_row_local_input(RowLocalInput::First, None);
+        self.delegate_row_local_input(MediaListSurfaceInput::First, None);
         true
     }
 
@@ -308,11 +308,11 @@ impl HomeContent {
         }
         match key.code {
             Key::Up => {
-                self.delegate_row_local_input(RowLocalInput::Move(-1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Move(-1), None);
                 None
             }
             Key::Down => {
-                self.delegate_row_local_input(RowLocalInput::Move(1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Move(1), None);
                 None
             }
             Key::Char('[') if !ctrl => {
@@ -324,24 +324,24 @@ impl HomeContent {
                 self.section_msg(changed)
             }
             Key::PageUp => {
-                self.delegate_row_local_input(RowLocalInput::Page(-1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Page(-1), None);
                 None
             }
             Key::PageDown => {
-                self.delegate_row_local_input(RowLocalInput::Page(1), None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Page(1), None);
                 None
             }
             Key::Home => {
-                self.delegate_row_local_input(RowLocalInput::First, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::First, None);
                 None
             }
             Key::End => {
-                self.delegate_row_local_input(RowLocalInput::Last, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Last, None);
                 None
             }
             Key::Char('.') if self.section == 0 => {
                 let targets = match self
-                    .delegate_row_local_input(RowLocalInput::Context, None)
+                    .delegate_row_local_input(MediaListSurfaceInput::Context, None)
                     .external_intent
                 {
                     Some(RowIntent::Context(target)) => {
@@ -361,7 +361,7 @@ impl HomeContent {
             Key::Char('.') => None,
             Key::Enter if ctrl => Some(Msg::Shell(ShellRequest::HomeEnqueue(self.row_target()))),
             Key::Enter => match self
-                .delegate_row_local_input(RowLocalInput::Activate, None)
+                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
                 .external_intent
             {
                 Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::HomePlay(
@@ -479,11 +479,11 @@ impl LibraryContentOwner for HomeContent {
             }
             LibrarySlotEvent::List(input) => {
                 let at = match input {
-                    RowLocalInput::Click(at)
-                    | RowLocalInput::ToggleClick(at)
-                    | RowLocalInput::RangeClick(at)
-                    | RowLocalInput::DoubleClick(at)
-                    | RowLocalInput::ContextClick(at) => Some(at),
+                    MediaListSurfaceInput::Click(at)
+                    | MediaListSurfaceInput::ToggleClick(at)
+                    | MediaListSurfaceInput::RangeClick(at)
+                    | MediaListSurfaceInput::DoubleClick(at)
+                    | MediaListSurfaceInput::ContextClick(at) => Some(at),
                     _ => None,
                 };
                 // Pointer target resolution and local selection: the same
@@ -492,9 +492,9 @@ impl LibraryContentOwner for HomeContent {
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
                 if matches!(
                     input,
-                    RowLocalInput::Click(_)
-                        | RowLocalInput::ToggleClick(_)
-                        | RowLocalInput::RangeClick(_)
+                    MediaListSurfaceInput::Click(_)
+                        | MediaListSurfaceInput::ToggleClick(_)
+                        | MediaListSurfaceInput::RangeClick(_)
                 ) {
                     self.carrier
                         .delegate_operation(input.into_operation(target.clone())?);
@@ -503,20 +503,20 @@ impl LibraryContentOwner for HomeContent {
                     }
                 }
                 match input {
-                    RowLocalInput::Wheel { .. } => {
+                    MediaListSurfaceInput::Wheel { .. } => {
                         self.delegate_row_local_input(input, None);
                         Some(Msg::TerminalEvent(
                             super::msg::TerminalObserverEvent::MouseClaimed,
                         ))
                     }
-                    RowLocalInput::DoubleClick(_) => {
+                    MediaListSurfaceInput::DoubleClick(_) => {
                         self.carrier
                             .delegate_operation(MediaListOperation::Activate(target?));
                         Some(Msg::Shell(ShellRequest::HomeRowActivate {
                             target: self.row_target(),
                         }))
                     }
-                    RowLocalInput::ContextClick(at) => {
+                    MediaListSurfaceInput::ContextClick(at) => {
                         let outcome = {
                             let target = target?;
                             self.carrier
@@ -540,9 +540,9 @@ impl LibraryContentOwner for HomeContent {
                             Some((at.x, at.y)),
                         )))
                     }
-                    RowLocalInput::Click(_)
-                    | RowLocalInput::ToggleClick(_)
-                    | RowLocalInput::RangeClick(_) => {
+                    MediaListSurfaceInput::Click(_)
+                    | MediaListSurfaceInput::ToggleClick(_)
+                    | MediaListSurfaceInput::RangeClick(_) => {
                         Some(Msg::Shell(ShellRequest::HomeRowClick {
                             target: self.row_target(),
                         }))

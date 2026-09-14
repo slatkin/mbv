@@ -13,7 +13,7 @@
 use ratatui::layout::Position;
 use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::media_list::RowLocalInput;
+use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::list_pane_width::normalize_list_pane_width;
@@ -348,12 +348,15 @@ impl LibraryPanel {
     /// Route one already-normalized pointer input to the active owner's
     /// list. The owner performs the typed point resolution through its own
     /// carrier and translates the outcome into its `Msg`s.
-    fn delegate_list_input(&mut self, input: RowLocalInput) -> Option<Msg> {
+    fn delegate_list_input(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         self.slot_event(LibrarySlotEvent::List(input))
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
-        let is_wheel = matches!(event, LibrarySlotEvent::List(RowLocalInput::Wheel { .. }));
+        let is_wheel = matches!(
+            event,
+            LibrarySlotEvent::List(MediaListSurfaceInput::Wheel { .. })
+        );
         let result = self
             .owners
             .active_mut()
@@ -438,20 +441,20 @@ impl LibraryPanel {
             return match gesture {
                 MouseGesture::Click { at, modifier } => {
                     let input = match modifier {
-                        ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
-                        ClickModifier::Shift => RowLocalInput::RangeClick(at),
-                        ClickModifier::None => RowLocalInput::Click(at),
+                        ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                        ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                        ClickModifier::None => MediaListSurfaceInput::Click(at),
                     };
                     self.slot_event(LibrarySlotEvent::HeroPane(input))
                 }
-                MouseGesture::DoubleClick(at) => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::DoubleClick(at)))
-                }
-                MouseGesture::RightClick(at) => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::ContextClick(at)))
-                }
+                MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::DoubleClick(at),
+                )),
+                MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::ContextClick(at),
+                )),
                 MouseGesture::Scroll { at, delta } => {
-                    self.slot_event(LibrarySlotEvent::HeroPane(RowLocalInput::Wheel {
+                    self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
                         at,
                         delta,
                     }))
@@ -463,20 +466,23 @@ impl LibraryPanel {
         match gesture {
             MouseGesture::Click { at, modifier } if inside_list => {
                 let input = match modifier {
-                    ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
-                    ClickModifier::Shift => RowLocalInput::RangeClick(at),
-                    ClickModifier::None => RowLocalInput::Click(at),
+                    ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                    ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                    ClickModifier::None => MediaListSurfaceInput::Click(at),
                 };
                 self.slot_event(LibrarySlotEvent::List(input))
             }
-            MouseGesture::DoubleClick(at) if inside_list => {
-                self.slot_event(LibrarySlotEvent::List(RowLocalInput::DoubleClick(at)))
-            }
-            MouseGesture::RightClick(at) if inside_list => {
-                self.slot_event(LibrarySlotEvent::List(RowLocalInput::ContextClick(at)))
-            }
+            MouseGesture::DoubleClick(at) if inside_list => self.slot_event(
+                LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(at)),
+            ),
+            MouseGesture::RightClick(at) if inside_list => self.slot_event(LibrarySlotEvent::List(
+                MediaListSurfaceInput::ContextClick(at),
+            )),
             MouseGesture::Scroll { at, delta } if inside_list => {
-                self.slot_event(LibrarySlotEvent::List(RowLocalInput::Wheel { at, delta }))
+                self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+                    at,
+                    delta,
+                }))
             }
             _ => None,
         }

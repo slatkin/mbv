@@ -17,8 +17,8 @@ use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
+    Presentation, RowIntent,
 };
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
@@ -196,8 +196,12 @@ impl MusicContent {
     /// (design.md D3) and report the resulting selection as the shell's
     /// `MusicAlbumCursor` request; the owner stays authoritative for the
     /// selected album and scroll.
-    fn move_album(&mut self, input: RowLocalInput, kind: AlbumCursorKind) -> Option<Msg> {
-        self.carrier.delegate(input, None);
+    fn move_album(&mut self, input: MediaListSurfaceInput, kind: AlbumCursorKind) -> Option<Msg> {
+        self.carrier.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
         let target = self.carrier.selected_target()?;
         let index = self
             .context
@@ -465,11 +469,19 @@ impl LibraryContentOwner for MusicContent {
                 None
             }
             Key::Up | Key::Char('k') if self.track_focused => {
-                self.track_list.delegate(RowLocalInput::Move(-1), None);
+                self.track_list.delegate_operation(
+                    MediaListSurfaceInput::Move(-1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
                 None
             }
             Key::Down | Key::Char('j') if self.track_focused => {
-                self.track_list.delegate(RowLocalInput::Move(1), None);
+                self.track_list.delegate_operation(
+                    MediaListSurfaceInput::Move(1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
                 None
             }
             Key::Char('/') => {
@@ -481,8 +493,16 @@ impl LibraryContentOwner for MusicContent {
             // generic library context menu (mirrors the retired
             // `MusicWorkspaceComponent`'s '.' handling).
             Key::Char('.') if self.track_focused => {
-                match self.track_list.delegate(RowLocalInput::Context, None) {
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+                match self
+                    .track_list
+                    .delegate_operation(
+                        MediaListSurfaceInput::Context
+                            .into_operation(None)
+                            .expect("resolved media-list pointer target"),
+                    )
+                    .external_intent
+                {
+                    Some(RowIntent::ContextSelection(targets)) => {
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
                             crate::app::types_context_menu::ContextMenuTargets::Emby(
                                 targets
@@ -501,7 +521,7 @@ impl LibraryContentOwner for MusicContent {
                             None,
                         )))
                     }
-                    RowLocalOutcome::External(RowIntent::Context(target)) => self
+                    Some(RowIntent::Context(target)) => self
                         .context
                         .album_tracks
                         .as_deref()
@@ -520,8 +540,16 @@ impl LibraryContentOwner for MusicContent {
                     _ => None,
                 }
             }
-            Key::Char('.') => match self.carrier.delegate(RowLocalInput::Context, None) {
-                RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
+            Key::Char('.') => match self
+                .carrier
+                .delegate_operation(
+                    MediaListSurfaceInput::Context
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                )
+                .external_intent
+            {
+                Some(RowIntent::ContextSelection(targets)) => {
                     Some(Msg::Shell(ShellRequest::RowContextMenu(
                         crate::app::types_context_menu::ContextMenuTargets::Emby(
                             targets
@@ -539,14 +567,12 @@ impl LibraryContentOwner for MusicContent {
                         None,
                     )))
                 }
-                RowLocalOutcome::External(RowIntent::Context(_target)) => {
-                    self.selected_item().map(|item| {
-                        Msg::Shell(ShellRequest::RowContextMenu(
-                            crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
-                            None,
-                        ))
-                    })
-                }
+                Some(RowIntent::Context(_target)) => self.selected_item().map(|item| {
+                    Msg::Shell(ShellRequest::RowContextMenu(
+                        crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                        None,
+                    ))
+                }),
                 _ => None,
             },
             Key::Char('r')
@@ -566,15 +592,15 @@ impl LibraryContentOwner for MusicContent {
             // `self.track_focused` arms above take precedence while the
             // track pane holds local focus.
             Key::Up | Key::Char('k') => {
-                self.move_album(RowLocalInput::Move(-1), AlbumCursorKind::Move)
+                self.move_album(MediaListSurfaceInput::Move(-1), AlbumCursorKind::Move)
             }
             Key::Down | Key::Char('j') => {
-                self.move_album(RowLocalInput::Move(1), AlbumCursorKind::Move)
+                self.move_album(MediaListSurfaceInput::Move(1), AlbumCursorKind::Move)
             }
-            Key::Home => self.move_album(RowLocalInput::First, AlbumCursorKind::Jump),
-            Key::End => self.move_album(RowLocalInput::Last, AlbumCursorKind::Jump),
-            Key::PageUp => self.move_album(RowLocalInput::Page(-1), AlbumCursorKind::Page),
-            Key::PageDown => self.move_album(RowLocalInput::Page(1), AlbumCursorKind::Page),
+            Key::Home => self.move_album(MediaListSurfaceInput::First, AlbumCursorKind::Jump),
+            Key::End => self.move_album(MediaListSurfaceInput::Last, AlbumCursorKind::Jump),
+            Key::PageUp => self.move_album(MediaListSurfaceInput::Page(-1), AlbumCursorKind::Page),
+            Key::PageDown => self.move_album(MediaListSurfaceInput::Page(1), AlbumCursorKind::Page),
             _ => None,
         }
     }

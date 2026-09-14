@@ -10,8 +10,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTransition,
+    MediaSemanticState, Presentation, RowIntent,
 };
 use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
@@ -217,10 +217,14 @@ impl QueueComponent {
     /// translates external row intents into its typed Msgs (design.md D3).
     fn delegate_row_local_input(
         &mut self,
-        input: RowLocalInput,
+        input: MediaListSurfaceInput,
         pointer_target: Option<QueueSlotId>,
-    ) -> RowLocalOutcome<QueueSlotId> {
-        self.carrier.delegate(input, pointer_target)
+    ) -> MediaListTransition<QueueSlotId> {
+        self.carrier.delegate_operation(
+            input
+                .into_operation(pointer_target)
+                .expect("resolved media-list pointer target"),
+        )
     }
 
     /// The scope/slot pair for Queue's current selection.
@@ -240,9 +244,11 @@ impl QueueComponent {
     }
 
     fn move_cursor(&mut self, delta: i64) -> Option<Msg> {
-        match self.delegate_row_local_input(RowLocalInput::Move(delta), None) {
-            RowLocalOutcome::SelectedTargetChanged(_) => self.cursor_message(),
-            _ => None,
+        let outcome = self.delegate_row_local_input(MediaListSurfaceInput::Move(delta), None);
+        if outcome.selected_target.is_some() {
+            self.cursor_message()
+        } else {
+            None
         }
     }
 
@@ -324,21 +330,22 @@ impl QueueComponent {
                 return self.move_cursor(self.content_area.height.saturating_sub(1).max(1) as i64);
             }
             Key::Home if key.modifiers.is_empty() => {
-                self.delegate_row_local_input(RowLocalInput::First, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::First, None);
                 return self.cursor_message();
             }
             Key::End if key.modifiers.is_empty() => {
-                self.delegate_row_local_input(RowLocalInput::Last, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Last, None);
                 return self.cursor_message();
             }
             Key::Enter => {
-                return match self.delegate_row_local_input(RowLocalInput::Activate, None) {
-                    RowLocalOutcome::External(RowIntent::Activate(slot_id)) => {
-                        Some(Msg::Queue(QueueRequest::Play {
-                            scope: self.scope,
-                            slot_id,
-                        }))
-                    }
+                return match self
+                    .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+                    .external_intent
+                {
+                    Some(RowIntent::Activate(slot_id)) => Some(Msg::Queue(QueueRequest::Play {
+                        scope: self.scope,
+                        slot_id,
+                    })),
                     _ => None,
                 };
             }
@@ -384,19 +391,19 @@ impl QueueComponent {
                 // `.` is a selection-dependent chord the focused component
                 // owns (CONTEXT.md "Global chord"): emit the queue context-menu
                 // request for the currently selected row.
-                return match self.delegate_row_local_input(RowLocalInput::Context, None) {
-                    RowLocalOutcome::External(RowIntent::Context(slot_id)) => {
+                return match self
+                    .delegate_row_local_input(MediaListSurfaceInput::Context, None)
+                    .external_intent
+                {
+                    Some(RowIntent::Context(slot_id)) => {
                         Some(Msg::Shell(ShellRequest::RowContextMenu(
                             ContextMenuTargets::Queue(vec![slot_id]),
                             None,
                         )))
                     }
-                    RowLocalOutcome::External(RowIntent::ContextSelection(slot_ids)) => {
-                        Some(Msg::Shell(ShellRequest::RowContextMenu(
-                            ContextMenuTargets::Queue(slot_ids),
-                            None,
-                        )))
-                    }
+                    Some(RowIntent::ContextSelection(slot_ids)) => Some(Msg::Shell(
+                        ShellRequest::RowContextMenu(ContextMenuTargets::Queue(slot_ids), None),
+                    )),
                     _ => Some(Msg::Shell(ShellRequest::RowContextMenu(
                         ContextMenuTargets::Queue(vec![]),
                         None,
@@ -447,7 +454,7 @@ impl QueueComponent {
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                self.delegate_row_local_input(RowLocalInput::Wheel { at, delta }, None);
+                self.delegate_row_local_input(MediaListSurfaceInput::Wheel { at, delta }, None);
                 // Return a framework-visible claim after mutating local state;
                 // dropping the message would let the framework's mutation be
                 // discarded by the mouse fold.
@@ -463,9 +470,9 @@ impl QueueComponent {
                 let target = self.carrier.resolve_current_point(at).copied();
                 if let Some(target) = target {
                     let input = match modifier {
-                        ClickModifier::Ctrl => RowLocalInput::ToggleClick(at),
-                        ClickModifier::Shift => RowLocalInput::RangeClick(at),
-                        ClickModifier::None => RowLocalInput::Click(at),
+                        ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                        ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                        ClickModifier::None => MediaListSurfaceInput::Click(at),
                     };
                     self.delegate_row_local_input(input, Some(target));
                     if let Some(count) = self.carrier.selection_changed_msg() {
@@ -490,7 +497,7 @@ impl QueueComponent {
                 }
                 let target = self.carrier.resolve_current_point(at).copied();
                 if let Some(target) = target {
-                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target));
+                    self.delegate_row_local_input(MediaListSurfaceInput::Click(at), Some(target));
                 }
                 Some(Msg::Shell(ShellRequest::QueueRowActivate {
                     slot_id: self.carrier.selected_target().copied(),
@@ -501,14 +508,16 @@ impl QueueComponent {
                 // menu. Only resolve a menu when the click lands on a row —
                 // never fall back to the prior selection (design.md D4).
                 let slot_id = self.carrier.resolve_current_point(at).copied()?;
-                let outcome =
-                    self.delegate_row_local_input(RowLocalInput::ContextClick(at), Some(slot_id));
+                let outcome = self.delegate_row_local_input(
+                    MediaListSurfaceInput::ContextClick(at),
+                    Some(slot_id),
+                );
                 if let Some(count) = self.carrier.selection_changed_msg() {
                     return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
                 }
-                let targets = match outcome {
-                    RowLocalOutcome::External(RowIntent::Context(target)) => vec![target],
-                    RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => targets,
+                let targets = match outcome.external_intent {
+                    Some(RowIntent::Context(target)) => vec![target],
+                    Some(RowIntent::ContextSelection(targets)) => targets,
                     _ => vec![slot_id],
                 };
                 Some(Msg::Shell(ShellRequest::RowContextMenu(
@@ -522,7 +531,7 @@ impl QueueComponent {
                 if resolved == grabbed {
                     return None;
                 }
-                self.delegate_row_local_input(RowLocalInput::Click(to), Some(grabbed));
+                self.delegate_row_local_input(MediaListSurfaceInput::Click(to), Some(grabbed));
                 Some(Msg::Queue(QueueRequest::MoveTo {
                     scope: self.scope,
                     slot_id: grabbed,

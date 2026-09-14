@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use tuirealm::event::KeyEvent;
 
 use crate::app::components::component_id::BrowserKey;
-use crate::app::components::media_list::RowLocalInput;
+use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::msg::{LeafKeyResult, Msg};
 
 use super::content::{HeroImageState, LibraryPanelContent};
@@ -45,14 +45,14 @@ pub(in crate::app) enum LibrarySlotEvent {
     /// A Workspace selector pill was picked.
     WorkspaceSelectorPicked(usize),
     /// An already-normalized row-local input for the active owner's list.
-    List(RowLocalInput),
+    List(MediaListSurfaceInput),
     /// An already-normalized pointer input inside the hero pane, delivered
     /// when no painted pill row or list slot claimed it. The panel resolves
     /// the pointer against the hero pane rect it painted; the owner decides
     /// whether the point lies in its Workspace list (resolving the row's
     /// stable target through its own carrier), in the pane but off every
     /// row, or nowhere it claims.
-    HeroPane(RowLocalInput),
+    HeroPane(MediaListSurfaceInput),
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot

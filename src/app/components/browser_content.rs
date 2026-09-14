@@ -32,7 +32,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
-    MediaSemanticState, Presentation, RowIntent, RowLocalInput,
+    MediaListSurfaceInput, MediaSemanticState, Presentation, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -302,20 +302,20 @@ impl BrowserContent {
     /// deliberately reduced-fidelity translation of
     /// `InlineSearch::handle_mouse`'s raw-event gesture recognition — the
     /// panel's own gesture recognizer already collapsed the raw event into a
-    /// normalized `RowLocalInput` before this owner sees it, so the
+    /// normalized `MediaListSurfaceInput` before this owner sees it, so the
     /// "press starts in the bar, releases on a row" cross-region gesture
     /// (`InlineSearch::handle_mouse`'s `left_press` tracking) is not
     /// reproduced here; click/double-click/right-click/wheel against a
     /// painted result row are.
-    fn handle_search_pointer(&mut self, input: RowLocalInput) -> Option<Msg> {
+    fn handle_search_pointer(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         match input {
-            RowLocalInput::Click(at)
-            | RowLocalInput::ToggleClick(at)
-            | RowLocalInput::RangeClick(at) => {
+            MediaListSurfaceInput::Click(at)
+            | MediaListSurfaceInput::ToggleClick(at)
+            | MediaListSurfaceInput::RangeClick(at) => {
                 self.inline_search.select_row_at_point(at);
                 None
             }
-            RowLocalInput::DoubleClick(at) => {
+            MediaListSurfaceInput::DoubleClick(at) => {
                 self.inline_search.select_row_at_point(at);
                 self.inline_search.selected_item().map(|item| {
                     Msg::Shell(ShellRequest::InlineSearchActivate {
@@ -324,7 +324,7 @@ impl BrowserContent {
                     })
                 })
             }
-            RowLocalInput::ContextClick(at) => {
+            MediaListSurfaceInput::ContextClick(at) => {
                 self.inline_search.select_row_at_point(at);
                 self.inline_search.selected_item().map(|item| {
                     Msg::Shell(ShellRequest::RowContextMenu(
@@ -333,7 +333,7 @@ impl BrowserContent {
                     ))
                 })
             }
-            RowLocalInput::Wheel { delta, .. } => {
+            MediaListSurfaceInput::Wheel { delta, .. } => {
                 self.inline_search.move_cursor_by(delta);
                 Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
             }
@@ -547,33 +547,33 @@ impl LibraryContentOwner for BrowserContent {
                 // target (the detail block replaces the selected row), empty list
                 // space claims nothing.
                 let target = match input {
-                    RowLocalInput::Click(at)
-                    | RowLocalInput::ToggleClick(at)
-                    | RowLocalInput::RangeClick(at)
-                    | RowLocalInput::DoubleClick(at)
-                    | RowLocalInput::ContextClick(at) => {
+                    MediaListSurfaceInput::Click(at)
+                    | MediaListSurfaceInput::ToggleClick(at)
+                    | MediaListSurfaceInput::RangeClick(at)
+                    | MediaListSurfaceInput::DoubleClick(at)
+                    | MediaListSurfaceInput::ContextClick(at) => {
                         self.carrier.resolve_current_point(at).cloned()
                     }
                     _ => None,
                 };
                 match input {
-                    RowLocalInput::Wheel { .. } => {
+                    MediaListSurfaceInput::Wheel { .. } => {
                         // The resolved wheel echo drives the shell's
                         // `video_cursor`/resting-cursor write and pagination
                         // through the same typed arm as keyboard movement
                         // (`shell_browser.rs::handle_browser_request`).
                         self.carrier
                             .delegate_operation(MediaListOperation::Move(match input {
-                                RowLocalInput::Wheel { delta, .. } => delta,
+                                MediaListSurfaceInput::Wheel { delta, .. } => delta,
                                 _ => 0,
                             }));
                         Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
                             index: self.cursor(),
                         }))
                     }
-                    RowLocalInput::Click(_at)
-                    | RowLocalInput::ToggleClick(_at)
-                    | RowLocalInput::RangeClick(_at) => {
+                    MediaListSurfaceInput::Click(_at)
+                    | MediaListSurfaceInput::ToggleClick(_at)
+                    | MediaListSurfaceInput::RangeClick(_at) => {
                         let target = target?;
                         self.carrier
                             .delegate_operation(input.into_operation(Some(target.clone()))?);
@@ -584,7 +584,7 @@ impl LibraryContentOwner for BrowserContent {
                             target: Some(target),
                         }))
                     }
-                    RowLocalInput::DoubleClick(_at) => {
+                    MediaListSurfaceInput::DoubleClick(_at) => {
                         let target = target?;
                         self.carrier
                             .delegate_operation(MediaListOperation::Activate(target.clone()));
@@ -592,7 +592,7 @@ impl LibraryContentOwner for BrowserContent {
                             target: Some(target),
                         }))
                     }
-                    RowLocalInput::ContextClick(at) => {
+                    MediaListSurfaceInput::ContextClick(at) => {
                         let target = target?;
                         let outcome = self
                             .carrier

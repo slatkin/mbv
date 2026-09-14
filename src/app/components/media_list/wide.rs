@@ -1,7 +1,6 @@
 use super::{
-    letter_grouped_rows, MediaList, MediaListOperation, MediaListRow, MediaListTransition,
-    RowGeometry, RowLocalInput, RowLocalOutcome, ViewportAnchor, WideMediaListPaintPolicy,
-    WideViewport,
+    letter_grouped_rows, MediaList, MediaListOperation, MediaListRow, MediaListSurfaceInput,
+    MediaListTransition, RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -355,10 +354,14 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
 
     pub fn delegate(
         &mut self,
-        input: RowLocalInput,
+        input: MediaListSurfaceInput,
         target: Option<Target>,
-    ) -> RowLocalOutcome<Target> {
-        self.core.delegate(input, target)
+    ) -> MediaListTransition<Target> {
+        self.core.delegate_operation(
+            input
+                .into_operation(target)
+                .expect("resolved media-list pointer target"),
+        )
     }
 }
 

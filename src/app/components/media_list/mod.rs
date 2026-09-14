@@ -271,10 +271,10 @@ impl InlineMediaBrowserPaintPolicy {
     }
 }
 
-/// Normalized row-local input offered by a mounted destination after it has
-/// resolved its own precedence and gesture timing.
+/// Pointer surface input resolved by a mounted presentation. Convert this to
+/// a target-bearing operation before delegating to the canonical owner.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum RowLocalInput {
+pub enum MediaListSurfaceInput {
     Move(i64),
     Page(i64),
     First,
@@ -289,10 +289,7 @@ pub enum RowLocalInput {
     Wheel { at: Position, delta: i64 },
 }
 
-/// Provider-neutral result of delegating one row-local input to a list owner.
-/// Target-resolved operations accepted by the canonical media-list owner.
-/// Pointer coordinates are intentionally absent: presentations resolve them
-/// against their retained frame before constructing these values.
+/// Target-resolved operation accepted by the canonical media-list owner.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListOperation<Target> {
     Move(i64),
@@ -309,7 +306,7 @@ pub enum MediaListOperation<Target> {
     ContextSelection,
 }
 
-impl RowLocalInput {
+impl MediaListSurfaceInput {
     pub fn into_operation<Target>(
         self,
         target: Option<Target>,
@@ -359,15 +356,6 @@ impl<Target> MediaListTransition<Target> {
             external_intent: None,
         }
     }
-}
-
-/// Compatibility result retained while destinations migrate to transitions.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum RowLocalOutcome<Target> {
-    Unhandled,
-    Consumed,
-    SelectedTargetChanged(Target),
-    External(RowIntent<Target>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -568,117 +556,6 @@ impl<Target> MediaList<Target> {
     fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
         let row = self.selected_display_row()?;
         Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
-    }
-
-    /// Apply the row-local portion of an already-normalized input. Pointer
-    /// actions are supplied with their resolved stable target by a presentation
-    /// after it has consulted its retained current-frame geometry.
-    pub fn delegate(
-        &mut self,
-        input: RowLocalInput,
-        pointer_target: Option<Target>,
-    ) -> RowLocalOutcome<Target>
-    where
-        Target: Clone + PartialEq,
-    {
-        let before = self.selected_target().cloned();
-        match input {
-            RowLocalInput::Move(delta) | RowLocalInput::Wheel { delta, .. } => {
-                self.move_selection(delta);
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
-            }
-            RowLocalInput::Page(delta) => {
-                self.move_selection(delta.saturating_mul(5));
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
-            }
-            RowLocalInput::First => {
-                self.select_first();
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
-            }
-            RowLocalInput::Last => {
-                self.select_last();
-                if self.live_range {
-                    if let Some(target) = self.selected_target().cloned() {
-                        self.extend_selection_to(&target);
-                    }
-                }
-            }
-            RowLocalInput::Activate => {
-                return self
-                    .selected_target()
-                    .cloned()
-                    .map_or(RowLocalOutcome::Unhandled, |target| {
-                        RowLocalOutcome::External(RowIntent::Activate(target))
-                    });
-            }
-            RowLocalInput::DoubleClick(_) => {
-                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
-                    RowLocalOutcome::External(RowIntent::Activate(target))
-                });
-            }
-            RowLocalInput::Context => {
-                return self
-                    .selected_target()
-                    .cloned()
-                    .map_or(RowLocalOutcome::Unhandled, |target| {
-                        RowLocalOutcome::External(self.context_intent(target))
-                    });
-            }
-            RowLocalInput::ContextClick(_) => {
-                return pointer_target.map_or(RowLocalOutcome::Unhandled, |target| {
-                    RowLocalOutcome::External(self.context_intent(target))
-                });
-            }
-            RowLocalInput::ToggleClick(_) => {
-                if let Some(target) = pointer_target {
-                    self.toggle_selection(&target);
-                    self.select_target(&target);
-                    return RowLocalOutcome::Consumed;
-                }
-                return RowLocalOutcome::Unhandled;
-            }
-            RowLocalInput::RangeClick(_) => {
-                if let Some(target) = pointer_target {
-                    self.extend_selection_to(&target);
-                    self.select_target(&target);
-                    return RowLocalOutcome::Consumed;
-                }
-                return RowLocalOutcome::Unhandled;
-            }
-            RowLocalInput::Click(_) => {
-                self.clear_selection();
-                if let Some(target) = pointer_target {
-                    if self.select_target(&target) {
-                        return if before.as_ref() == Some(&target) {
-                            RowLocalOutcome::Consumed
-                        } else {
-                            RowLocalOutcome::SelectedTargetChanged(target)
-                        };
-                    }
-                }
-                return RowLocalOutcome::Unhandled;
-            }
-        }
-        let after = self.selected_target().cloned();
-        match (before, after) {
-            (Some(before), Some(after)) if before != after => {
-                RowLocalOutcome::SelectedTargetChanged(after)
-            }
-            (Some(_), Some(_)) | (None, None) => RowLocalOutcome::Consumed,
-            _ => RowLocalOutcome::Unhandled,
-        }
     }
 
     /// Apply a target-resolved operation and report all independent effects.

@@ -21,8 +21,8 @@ use super::library_panel::{
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome, ViewportAnchor,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
+    Presentation, RowIntent, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};

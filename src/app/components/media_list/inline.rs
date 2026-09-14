@@ -1,6 +1,6 @@
 use super::{
     InlineMediaBrowserPaintPolicy, MediaList, MediaListOperation, MediaListRow,
-    MediaListTransition, RowGeometry, RowLocalInput, RowLocalOutcome, ViewportAnchor, WideViewport,
+    MediaListSurfaceInput, MediaListTransition, RowGeometry, ViewportAnchor, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -425,10 +425,14 @@ impl<Target: Clone + PartialEq> InlineMediaBrowser<Target> {
 
     pub fn delegate(
         &mut self,
-        input: RowLocalInput,
+        input: MediaListSurfaceInput,
         target: Option<Target>,
-    ) -> RowLocalOutcome<Target> {
-        self.core.delegate(input, target)
+    ) -> MediaListTransition<Target> {
+        self.core.delegate_operation(
+            input
+                .into_operation(target)
+                .expect("resolved media-list pointer target"),
+        )
     }
 }
 

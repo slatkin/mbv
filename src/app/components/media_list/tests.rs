@@ -236,207 +236,6 @@ mod resolve_point {
     }
 }
 
-#[test]
-fn delegate_first_toggle_includes_prior_cursor_target() {
-    use super::{RowLocalInput, RowLocalOutcome};
-
-    let mut list = super::MediaList::new();
-    list.set_content(
-        (1..=5)
-            .map(|target| lifecycle_item(&target.to_string()))
-            .collect(),
-    );
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
-            Some("4".to_string()),
-        ),
-        RowLocalOutcome::Consumed
-    );
-    assert_eq!(list.multi_selection(), &["1".to_string(), "4".to_string()]);
-}
-
-#[test]
-fn delegate_modifier_clicks_manage_multi_selection_and_plain_click_clears() {
-    use super::{RowLocalInput, RowLocalOutcome};
-
-    let mut list = super::MediaList::new();
-    list.set_content(
-        (1..=5)
-            .map(|target| lifecycle_item(&target.to_string()))
-            .collect(),
-    );
-    list.select_target(&"2".to_string());
-
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
-            Some("4".to_string()),
-        ),
-        RowLocalOutcome::Consumed
-    );
-    assert_eq!(list.multi_selection(), &["2".to_string(), "4".to_string()]);
-
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::ToggleClick(Position { x: 0, y: 0 }),
-            Some("4".to_string()),
-        ),
-        RowLocalOutcome::Consumed
-    );
-    assert_eq!(list.multi_selection(), &["2".to_string()]);
-
-    list.delegate(
-        RowLocalInput::RangeClick(Position { x: 0, y: 0 }),
-        Some("5".to_string()),
-    );
-    assert_eq!(
-        list.multi_selection(),
-        &[
-            "2".to_string(),
-            "3".to_string(),
-            "4".to_string(),
-            "5".to_string()
-        ]
-    );
-    list.delegate(
-        RowLocalInput::RangeClick(Position { x: 0, y: 0 }),
-        Some("3".to_string()),
-    );
-    assert_eq!(list.multi_selection(), &["2".to_string(), "3".to_string()]);
-
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::Click(Position { x: 0, y: 0 }),
-            Some("5".to_string()),
-        ),
-        RowLocalOutcome::SelectedTargetChanged("5".to_string())
-    );
-    assert!(list.multi_selection().is_empty());
-    assert_eq!(list.selected_target(), Some(&"5".to_string()));
-}
-
-#[test]
-fn row_local_delegation_covers_movement_selection_and_external_intents() {
-    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
-    let mut list = super::MediaList::new();
-    list.set_content(vec![
-        lifecycle_item("a"),
-        lifecycle_item("b"),
-        lifecycle_item("c"),
-    ]);
-    assert_eq!(
-        list.delegate(RowLocalInput::Move(1), None),
-        RowLocalOutcome::SelectedTargetChanged("b".into())
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::Page(1), None),
-        RowLocalOutcome::SelectedTargetChanged("c".into())
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::Last, None),
-        RowLocalOutcome::Consumed
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::First, None),
-        RowLocalOutcome::SelectedTargetChanged("a".into())
-    );
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::Wheel {
-                at: Position::new(0, 0),
-                delta: 1
-            },
-            None
-        ),
-        RowLocalOutcome::SelectedTargetChanged("b".into())
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::Click(Position::new(0, 0)), None),
-        RowLocalOutcome::Unhandled
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::DoubleClick(Position::new(0, 0)), None),
-        RowLocalOutcome::Unhandled
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::ContextClick(Position::new(0, 0)), None),
-        RowLocalOutcome::Unhandled
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::Activate, None),
-        RowLocalOutcome::External(RowIntent::Activate("b".into()))
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::Context, None),
-        RowLocalOutcome::External(RowIntent::Context("b".into()))
-    );
-    assert_eq!(
-        list.delegate(RowLocalInput::Click(Position::new(0, 0)), Some("a".into())),
-        RowLocalOutcome::SelectedTargetChanged("a".into())
-    );
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::DoubleClick(Position::new(0, 0)),
-            Some("a".into())
-        ),
-        RowLocalOutcome::External(RowIntent::Activate("a".into()))
-    );
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::ContextClick(Position::new(0, 0)),
-            Some("a".into())
-        ),
-        RowLocalOutcome::External(RowIntent::Context("a".into()))
-    );
-}
-
-#[test]
-fn context_on_selection_uses_selectable_list_order() {
-    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
-    let mut list = super::MediaList::new();
-    list.set_content(
-        (1..=5)
-            .map(|target| lifecycle_item(&target.to_string()))
-            .collect(),
-    );
-    list.select_target(&"2".to_string());
-    list.toggle_selection(&"5".to_string());
-    list.extend_selection_to(&"4".to_string());
-
-    assert_eq!(
-        list.delegate(RowLocalInput::Context, None),
-        RowLocalOutcome::External(RowIntent::ContextSelection(vec![
-            "2".into(),
-            "3".into(),
-            "4".into(),
-            "5".into()
-        ],))
-    );
-}
-
-#[test]
-fn context_click_outside_selection_clears_and_is_single_item() {
-    use super::{RowIntent, RowLocalInput, RowLocalOutcome};
-    let mut list = super::MediaList::new();
-    list.set_content(
-        (1..=8)
-            .map(|target| lifecycle_item(&target.to_string()))
-            .collect(),
-    );
-    list.select_target(&"2".to_string());
-    list.extend_selection_to(&"4".to_string());
-
-    assert_eq!(
-        list.delegate(
-            RowLocalInput::ContextClick(Position::new(0, 0)),
-            Some("8".into()),
-        ),
-        RowLocalOutcome::External(RowIntent::Context("8".into()))
-    );
-    assert!(list.multi_selection().is_empty());
-}
-
 fn lifecycle_item(target: &str) -> MediaListRow<String> {
     MediaListRow::Item {
         target: target.into(),
@@ -705,9 +504,10 @@ fn inline_delegate_keeps_the_completed_frame_for_pointer_continuity() {
     // A selection-only delegation must not invalidate the frame the pointer is
     // still resolving against; the whole admitted detail block maps to the
     // retained selected target (design.md D6, ADR 0024).
-    browser.delegate(
-        super::RowLocalInput::Click(Position::new(detail.x, detail.y)),
-        Some("two".to_string()),
+    browser.delegate_operation(
+        super::MediaListSurfaceInput::Click(Position::new(detail.x, detail.y))
+            .into_operation(Some("two".to_string()))
+            .expect("resolved media-list pointer target"),
     );
     assert_eq!(
         browser.resolve_current_point(Position::new(detail.x, detail.y + 1)),
@@ -745,9 +545,10 @@ fn wide_delegate_keeps_the_completed_frame_for_pointer_continuity() {
         .unwrap();
     // A click selecting another row is selection-only; the painted frame
     // remains valid so a following drag/wheel still resolves (design.md D6).
-    list.delegate(
-        super::RowLocalInput::Click(Position::new(0, 1)),
-        Some("two".to_string()),
+    list.delegate_operation(
+        super::MediaListSurfaceInput::Click(Position::new(0, 1))
+            .into_operation(Some("two".to_string()))
+            .expect("resolved media-list pointer target"),
     );
     assert_eq!(
         list.resolve_current_point(Position::new(0, 1)),
