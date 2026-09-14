@@ -14,6 +14,7 @@ use mbv_core::playback_queue::FeedEntry;
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
+use rstest::rstest;
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
@@ -210,20 +211,15 @@ fn watched_filter_cycle_order() {
     }
 }
 
-#[test]
-fn watched_filter_shows_only_played() {
+#[rstest]
+#[case::watched_filter_shows_only_played(1, ["Second"])]
+#[case::unwatched_filter_shows_only_unplayed(2, ["First"])]
+fn watched_filter(#[case] key_presses: usize, #[case] expected: [&str; 1]) {
     let mut owner = component();
-    down(&mut owner, Key::Char('w'));
-    assert_eq!(owner.visible_titles(), ["Second"]);
-}
-
-#[test]
-fn unwatched_filter_shows_only_unplayed() {
-    let mut owner = component();
-    for _ in 0..2 {
+    for _ in 0..key_presses {
         down(&mut owner, Key::Char('w'));
     }
-    assert_eq!(owner.visible_titles(), ["First"]);
+    assert_eq!(owner.visible_titles(), expected);
 }
 
 #[test]
