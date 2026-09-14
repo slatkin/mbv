@@ -45,8 +45,8 @@
 
 ## 7. Reconcile Dependent Planning and Documentation
 
-- [ ] 7.1 Update `add-media-list-multi-select` proposal, specs, and design to depend on the landed semantic arbitration/media-list transition contracts, remove router-state mirrors and duplicate transition sequencing, and preserve the confirmed simultaneous Library/Queue selection behavior; verify `openspec validate add-media-list-multi-select --strict` passes.
-- [ ] 7.2 Update ADR 0023 and the interactive architecture documentation to describe deferred candidates and the single central arbiter without creating a second Keyboard Router; verify terminology agrees with `CONTEXT.md`, the capability specs, and production ownership.
+- [x] 7.1 ~~Update `add-media-list-multi-select` proposal, specs, and design~~ RE-SCOPED by orchestrator (2026-09-14): that change is already implemented (`6fe59894`, #706), merged, and archived (`archive/2026-09-14-add-media-list-multi-select`); archived artifacts are never edited. The row's intent is realized in-repo instead: the `SelectionChanged` router mirrors were removed (row 6.6, `cd822d78`), destinations consume `MediaListTransition` (no duplicate transition sequencing), and the confirmed simultaneous Library/Queue selection behavior is preserved and pinned by tests. Docs reconciliation for the landed contracts lives in row 7.2; verify `openspec validate unify-semantic-input-arbitration --strict` (row 8.2).
+- [x] 7.2 Update ADR 0023 and the interactive architecture documentation to describe deferred candidates and the single central arbiter without creating a second Keyboard Router; verify terminology agrees with `CONTEXT.md`, the capability specs, and production ownership.
 
 ## 8. Final Verification
 

@@ -86,10 +86,11 @@ replaced by the leaf's own local interpretation. A blocking overlay is
 `FallThrough`, which is how the leaf gets its key.
 
 Fall-through that depends on router state needs no special case. The Space and
-Escape double-tap returns `FallThrough` on the first press — so browse
-`go_back` or Audiobookshelf play happens, from the leaf, as it does today — and
-`Command(Stop)` / `Command(TogglePlayPause)` on the second press within 300 ms,
-discarding the leaf's request.
+Escape double-tap resolved `FallThrough` on the first press and
+`Command(Stop)` / `Command(TogglePlayPause)` on the second press within 300 ms.
+That pre-arbitration resolution is superseded by this ADR's Amendment: the
+router now returns a deferred candidate and the central fold applies it after
+the leaf disposition, which the original description could not express safely.
 
 `UiRoot` is skipped by `forward_to_subscriptions` while it holds focus, and
 receives the event as the active component instead. Delivery is therefore
@@ -142,3 +143,42 @@ exactly once whether or not a leaf is focused.
   mapping its Consequences section requires.
 - Deferred user-configurable keybindings (ADR 0002) stay a data-loading phase
   over one table, not a re-architecture.
+
+## Amendment (2026-09-14, `unify-semantic-input-arbitration`)
+
+The leaf/protocol described above evolved in three ways; the single-router
+rule is unchanged.
+
+**Explicit leaf disposition.** A leaf's key handler now returns an internal
+`LeafKeyResult` — `Unhandled`, or `Consumed` with an optional typed request —
+instead of a bare `Option<Msg>`, whose `None` could not distinguish "not mine"
+from "mine, consumed locally". At the TuiRealm boundary a consumed leaf with no
+request emits one framework-local `KeyClaimed` marker (no payload, no shell
+dispatch arm). "A leaf that does not recognize a chord returns `None`" now
+reads: returns `Unhandled`.
+
+**One central arbitration fold.** `arbitrate_key` (a pure function) combines
+the router observation and the captured leaf disposition for the same tick and
+produces the final disposition plus the requests to dispatch. It is the only
+place a local claim can suppress a context-sensitive global candidate. This is
+not a second Keyboard Router: the fold owns no policy and resolves no chord —
+it arbitrates between the router's outcome and the leaf's claim, and `UiRoot`
+remains the sole policy authority. The diagram above becomes:
+
+```
+key ──┬─▶ focused leaf ─────▶ LeafKeyResult (Unhandled | Consumed + ?Msg)
+      │
+      └─▶ UiRoot router ────▶ outcome ─┐
+                                        ▼
+                       arbitrate_key ──▶ final disposition + requests
+```
+
+**Deferred candidates.** Context-sensitive Space and Escape double-taps no
+longer resolve to an immediate `Command` from precomputed snapshot facts. The
+router returns a `Deferred` candidate; the fold applies it only when the leaf
+did not consume the key, and a consumed press resets its own candidate clock so
+a later unhandled press cannot complete a sequence begun inside a local mode.
+Candidate clocks advance only after arbitration proves non-consumption, and
+the router's policy evaluation no longer mutates them or reads any
+component-local mirror. Immediate `Command` and overlay `Swallow` outcomes are
+unchanged.
