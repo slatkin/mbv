@@ -174,16 +174,12 @@ fn parse_item_episode_fields() {
 
 // ── EmbyItem::playback_label ────────────────────────────────────────────
 
-#[test]
-fn playback_label_audio_without_artist_falls_back_to_display_name() {
-    let item = make_item("Song", "Audio");
-    assert_eq!(item.playback_label(), "Song");
-}
-
-#[test]
-fn playback_label_video_uses_display_name() {
-    let item = make_item("Inception", "Movie");
-    assert_eq!(item.playback_label(), "Inception");
+#[rstest]
+#[case::playback_label_audio_without_artist_falls_back_to_display_name("Song", "Audio", "Song")]
+#[case::playback_label_video_uses_display_name("Inception", "Movie", "Inception")]
+fn playback_label_cases(#[case] name: &str, #[case] item_type: &str, #[case] expected: &str) {
+    let item = make_item(name, item_type);
+    assert_eq!(item.playback_label(), expected);
 }
 
 // ── EmbyItem::file_name / sort_key ──────────────────────────────────────
@@ -233,22 +229,12 @@ fn parse_item_audio_not_folder() {
     assert!(!item.is_folder);
 }
 
-#[test]
-fn parse_item_artist_from_album_artist_field() {
-    let raw = json!({ "Type": "Audio", "AlbumArtist": "Pink Floyd", "UserData": {} });
-    assert_eq!(parse_item(&raw).artist, "Pink Floyd");
-}
-
-#[test]
-fn parse_item_artist_falls_back_to_artists_array() {
-    let raw = json!({ "Type": "Audio", "Artists": ["David Bowie"], "UserData": {} });
-    assert_eq!(parse_item(&raw).artist, "David Bowie");
-}
-
-#[test]
-fn parse_item_album_artist_takes_priority_over_artists_array() {
-    let raw = json!({ "Type": "Audio", "AlbumArtist": "Album Artist", "Artists": ["Track Artist"], "UserData": {} });
-    assert_eq!(parse_item(&raw).artist, "Album Artist");
+#[rstest]
+#[case::parse_item_artist_from_album_artist_field(json!({ "Type": "Audio", "AlbumArtist": "Pink Floyd", "UserData": {} }), "Pink Floyd")]
+#[case::parse_item_artist_falls_back_to_artists_array(json!({ "Type": "Audio", "Artists": ["David Bowie"], "UserData": {} }), "David Bowie")]
+#[case::parse_item_album_artist_takes_priority_over_artists_array(json!({ "Type": "Audio", "AlbumArtist": "Album Artist", "Artists": ["Track Artist"], "UserData": {} }), "Album Artist")]
+fn parse_item_artist_cases(#[case] raw: serde_json::Value, #[case] expected: &str) {
+    assert_eq!(parse_item(&raw).artist, expected);
 }
 
 // ── decode_entities ─────────────────────────────────────────────────────
@@ -358,34 +344,20 @@ fn audio_stream(lang: &str, codec: &str, layout: &str) -> serde_json::Value {
     json!({"Type": "Audio", "Language": lang, "Codec": codec, "ChannelLayout": layout})
 }
 
-#[test]
-fn parse_audio_info_multiple_tracks() {
-    let streams = json!([
-        audio_stream("eng", "ac3", "5.1"),
-        audio_stream("fra", "aac", "stereo"),
-    ]);
-    assert_eq!(
-        parse_audio_info(streams.as_array().unwrap()),
-        "English AC3 5.1  |  French AAC Stereo"
-    );
-}
-
-#[test]
-fn parse_audio_info_unknown_lang_omitted_from_label() {
-    let streams = json!([audio_stream("und", "aac", "stereo")]);
-    assert_eq!(parse_audio_info(streams.as_array().unwrap()), "AAC Stereo");
-}
-
-#[test]
-fn parse_audio_info_skips_non_audio_streams() {
-    let streams = json!([
-        {"Type": "Video", "Language": "eng", "Codec": "h264", "ChannelLayout": ""},
-        audio_stream("eng", "aac", "stereo"),
-    ]);
-    assert_eq!(
-        parse_audio_info(streams.as_array().unwrap()),
-        "English AAC Stereo"
-    );
+#[rstest]
+#[case::parse_audio_info_multiple_tracks(json!([
+    audio_stream("eng", "ac3", "5.1"),
+    audio_stream("fra", "aac", "stereo"),
+]), "English AC3 5.1  |  French AAC Stereo")]
+#[case::parse_audio_info_unknown_lang_omitted_from_label(json!([
+    audio_stream("und", "aac", "stereo"),
+]), "AAC Stereo")]
+#[case::parse_audio_info_skips_non_audio_streams(json!([
+    {"Type": "Video", "Language": "eng", "Codec": "h264", "ChannelLayout": ""},
+    audio_stream("eng", "aac", "stereo"),
+]), "English AAC Stereo")]
+fn parse_audio_info_cases(#[case] streams: serde_json::Value, #[case] expected: &str) {
+    assert_eq!(parse_audio_info(streams.as_array().unwrap()), expected);
 }
 
 // Sync guard: every ISO code in parse_audio_info must produce the same English
@@ -486,54 +458,21 @@ fn parse_session_media_info_handles_audio_only_sessions() {
 
 // ── should_resume ────────────────────────────────────────────────────────
 
-#[test]
-fn should_resume_zero_position_returns_false() {
-    assert!(!make_item("X", "Movie").should_resume());
-}
-
-#[test]
-fn should_resume_negative_position_returns_false() {
+#[rstest]
+#[case::should_resume_zero_position_returns_false(0, 0, false)]
+#[case::should_resume_negative_position_returns_false(0, -1, false)]
+#[case::should_resume_mid_way_returns_true(TICKS_PER_SECOND * 7200, TICKS_PER_SECOND * 3600, true)]
+#[case::should_resume_under_six_percent_returns_false(TICKS_PER_SECOND * 7200, TICKS_PER_SECOND * 60, false)]
+#[case::should_resume_exactly_six_percent_returns_true(TICKS_PER_SECOND * 100, TICKS_PER_SECOND * 6, true)]
+#[case::should_resume_just_below_six_percent_returns_false(TICKS_PER_SECOND * 100, TICKS_PER_SECOND * 6 - 1, false)]
+#[case::should_resume_with_unknown_runtime_returns_true(0, TICKS_PER_SECOND * 60, true)]
+fn should_resume_cases(
+    #[case] runtime_ticks: i64,
+    #[case] playback_position_ticks: i64,
+    #[case] expected: bool,
+) {
     let mut item = make_item("X", "Movie");
-    item.playback_position_ticks = -1;
-    assert!(!item.should_resume());
-}
-
-#[test]
-fn should_resume_mid_way_returns_true() {
-    let mut item = make_item("X", "Movie");
-    item.runtime_ticks = TICKS_PER_SECOND * 7200;
-    item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 50%
-    assert!(item.should_resume());
-}
-
-#[test]
-fn should_resume_under_six_percent_returns_false() {
-    let mut item = make_item("X", "Movie");
-    item.runtime_ticks = TICKS_PER_SECOND * 7200; // 2h
-    item.playback_position_ticks = TICKS_PER_SECOND * 60; // ~0.8%
-    assert!(!item.should_resume());
-}
-
-#[test]
-fn should_resume_exactly_six_percent_returns_true() {
-    let mut item = make_item("X", "Movie");
-    item.runtime_ticks = TICKS_PER_SECOND * 100; // 100s
-    item.playback_position_ticks = TICKS_PER_SECOND * 6; // exactly 6%
-    assert!(item.should_resume());
-}
-
-#[test]
-fn should_resume_just_below_six_percent_returns_false() {
-    let mut item = make_item("X", "Movie");
-    item.runtime_ticks = TICKS_PER_SECOND * 100; // 100s
-    item.playback_position_ticks = TICKS_PER_SECOND * 6 - 1; // just below 6%
-    assert!(!item.should_resume());
-}
-
-#[test]
-fn should_resume_with_unknown_runtime_returns_true() {
-    let mut item = make_item("X", "Movie");
-    item.runtime_ticks = 0;
-    item.playback_position_ticks = TICKS_PER_SECOND * 60;
-    assert!(item.should_resume());
+    item.runtime_ticks = runtime_ticks;
+    item.playback_position_ticks = playback_position_ticks;
+    assert_eq!(item.should_resume(), expected);
 }
