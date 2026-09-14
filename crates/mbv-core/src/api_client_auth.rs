@@ -81,8 +81,7 @@ impl EmbyClient {
     }
 
     /// Install an in-memory mock transport (see `mock_http`).
-    #[cfg(test)]
-    pub(crate) fn with_test_agent(mut self, agent: ureq::Agent) -> Self {
+    pub fn with_test_agent(mut self, agent: ureq::Agent) -> Self {
         self.agent = agent;
         self.mock_agent = true;
         self

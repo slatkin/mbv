@@ -37,7 +37,7 @@ struct Shared {
 
 /// Handle to the scripted responses and recorded requests of one mock agent.
 #[derive(Clone)]
-pub(crate) struct MockHttp {
+pub struct MockHttp {
     shared: Arc<Shared>,
 }
 
@@ -48,7 +48,7 @@ impl Default for MockHttp {
 }
 
 impl MockHttp {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             shared: Arc::new(Shared {
                 script: Mutex::new(VecDeque::new()),
@@ -58,7 +58,7 @@ impl MockHttp {
     }
 
     /// Queue a response with the given status and JSON/text body.
-    pub(crate) fn respond(&self, status: u16, body: &str) {
+    pub fn respond(&self, status: u16, body: &str) {
         self.push(Scripted::Respond(Self::response(status, body)));
     }
 
@@ -72,28 +72,28 @@ impl MockHttp {
 
     /// Queue a response that arrives only after `duration`, long after the
     /// caller's hard bound has fired (the abandoned worker still receives it).
-    pub(crate) fn delayed(&self, duration: Duration, body: &str) {
+    pub fn delayed(&self, duration: Duration, body: &str) {
         self.push(Scripted::Delayed(duration, Self::response(200, body)));
     }
 
     /// Queue a connection-level failure (refused / dropped / stalled socket).
-    pub(crate) fn fail(&self, kind: io::ErrorKind) {
+    pub fn fail(&self, kind: io::ErrorKind) {
         self.push(Scripted::Fail(kind));
     }
 
     /// Queue a response that never arrives in time: the transport stalls past
     /// the caller's hard bound, which synthesizes the timed-out failure.
-    pub(crate) fn stall(&self, duration: Duration) {
+    pub fn stall(&self, duration: Duration) {
         self.push(Scripted::Stall(duration));
     }
 
     /// The full wire text of every request transmitted so far, in order.
-    pub(crate) fn requests(&self) -> Vec<String> {
+    pub fn requests(&self) -> Vec<String> {
         self.shared.requests.lock().unwrap().clone()
     }
 
     /// Number of requests transmitted so far, without cloning them.
-    pub(crate) fn request_count(&self) -> usize {
+    pub fn request_count(&self) -> usize {
         self.shared.requests.lock().unwrap().len()
     }
 
@@ -102,7 +102,7 @@ impl MockHttp {
     }
 
     /// Build a ureq agent whose HTTP round-trips run entirely in memory.
-    pub(crate) fn agent(&self) -> Agent {
+    pub fn agent(&self) -> Agent {
         let connector = MockConnector {
             shared: self.shared.clone(),
         };

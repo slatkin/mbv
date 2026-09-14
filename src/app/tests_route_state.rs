@@ -158,6 +158,58 @@ fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
 }
 
 #[test]
+fn switch_to_direct_remote_disconnects_the_previous_remote_on_a_remote_to_remote_swap() {
+    // #233: a second Direct Remote upgrade must disconnect the old remote.
+    // The claim is shell-owned bookkeeping; the peer's socket reaching EOF is
+    // the in-memory oracle (no real listener).
+    let mut app = make_app_stub();
+    let (remote_a, rx_a, daemon_a) =
+        mbv_core::remote_player::connect_stub_daemon_pair().unwrap();
+    app.switch_to_direct_remote(&make_session("daemon-a", "mbv"), remote_a, rx_a, &stub_endpoint());
+
+    let (remote_b, rx_b, _daemon_b) =
+        mbv_core::remote_player::connect_stub_daemon_pair().unwrap();
+    app.switch_to_direct_remote(&make_session("daemon-b", "mbv"), remote_b, rx_b, &stub_endpoint());
+
+    daemon_a
+        .join()
+        .expect("old direct-remote client socket must be shut down after the swap");
+}
+
+#[test]
+fn switch_to_library_route_disconnects_the_previous_remote_on_a_route_to_route_swap() {
+    // #233: route-to-route swap must disconnect the old RemotePlayer's socket.
+    let mut app = make_app_stub();
+    let (remote_a, rx_a, daemon_a) =
+        mbv_core::remote_player::connect_stub_daemon_pair().unwrap();
+    app.switch_to_library_route("music", remote_a, rx_a, &stub_endpoint());
+    assert!(!app.player.is_remote_disconnected());
+
+    let (remote_b, rx_b, _daemon_b) =
+        mbv_core::remote_player::connect_stub_daemon_pair().unwrap();
+    app.switch_to_library_route("movies", remote_b, rx_b, &stub_endpoint());
+
+    daemon_a
+        .join()
+        .expect("old library route's client socket must be shut down after the swap");
+}
+
+#[test]
+fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
+    // #233: restore_local_mode must disconnect the old remote before restoring local.
+    let mut app = make_app_stub();
+    let (remote, rx, daemon) = mbv_core::remote_player::connect_stub_daemon_pair().unwrap();
+    app.switch_to_library_route("music", remote, rx, &stub_endpoint());
+    assert!(!app.player.is_remote_disconnected());
+
+    app.restore_local_mode("test: ending library route session");
+
+    daemon
+        .join()
+        .expect("old remote's client socket must be shut down after restore_local_mode");
+}
+
+#[test]
 fn restore_local_mode_rebinds_mpris_back_to_the_suspended_local_status() {
     // #175 follow-through: after a Direct Remote takeover ends (however
     // it ends -- disconnect, user action, etc.), MPRIS must follow

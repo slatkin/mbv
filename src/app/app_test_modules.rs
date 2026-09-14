@@ -15,6 +15,10 @@ mod tests_library_position;
 mod tests_library_position_refresh;
 
 #[cfg(test)]
+#[path = "tests_library_position_restore.rs"]
+mod tests_library_position_restore;
+
+#[cfg(test)]
 #[path = "tests_library_position_activation.rs"]
 mod tests_library_position_activation;
 
@@ -110,6 +114,10 @@ mod tests_queue_mutation;
 #[cfg(test)]
 #[path = "tests_queue_reorder.rs"]
 mod tests_queue_reorder;
+
+#[cfg(test)]
+#[path = "tests_remote_commands.rs"]
+mod tests_remote_commands;
 
 #[cfg(test)]
 #[path = "tests_route_state.rs"]

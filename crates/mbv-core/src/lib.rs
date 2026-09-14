@@ -13,8 +13,8 @@ pub(crate) mod daemon_ctrl;
 pub mod feed_entry_state;
 pub mod id_types;
 pub use id_types::{EmbySessionId, ItemId, MediaSourceId};
-#[cfg(test)]
-pub(crate) mod mock_http;
+#[cfg(any(test, feature = "test-support"))]
+pub mod mock_http;
 pub mod playback_execution_sequence;
 pub mod playback_queue;
 pub mod playback_transition;
