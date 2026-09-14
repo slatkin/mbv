@@ -7,7 +7,9 @@ See `proposal.md` for motivation. The archived `audit-remove-fragile-ui-render-t
 - Interactive Components own local state, input interpretation, viewport, and retained hit geometry;
 - shell tick integration owns mounting, focus, subscriptions, routing, projection, and cross-boundary effects.
 
-The current tree still contains eleven ignored obsolete presentation tests, many whole-buffer render helpers, glyph assertions at multiple layers, and terminal dimensions that sometimes select a presentation accidentally. Existing project policy requires mounted `Application::tick()` integration tests for mounting, focus, subscription, or routing changes; those tests cannot simply be replaced by direct component tests. Tests must remain hermetic and use conventional Rust test tooling only.
+The current tree contains ten ignored legacy render characterizations plus one ignored obsolete boundary test, many whole-buffer render helpers, glyph assertions at multiple layers, and terminal dimensions that sometimes select a presentation accidentally. Existing project policy requires mounted `Application::tick()` integration tests for mounting, focus, subscription, or routing changes; those tests cannot simply be replaced by direct component tests.
+
+The workspace also has an explicit mocks-only policy: tests must not construct real mpv handles, sockets/listeners, product processes, writable config/state directories, live servers, or Services. Recent #697 follow-up work removed known live mbv-core harnesses and introduced an in-memory HTTP transport, but this change re-audits every current workspace test target rather than assuming that work was exhaustive or stayed exhaustive. Read-only static fixture files remain allowed.
 
 This is a cross-cutting test-only change, so `design.md` is warranted. It deliberately has no delta spec because product behavior does not change.
 
@@ -20,12 +22,15 @@ This is a cross-cutting test-only change, so `design.md` is warranted. It delibe
 - Preserve integration coverage for composition and interaction while removing repeated appearance claims.
 - Make terminal dimensions communicate whether they are boundary inputs or merely sufficient fixture capacity.
 - Reduce obsolete test and helper code without introducing replacement infrastructure.
+- Prove that every workspace test target is hermetic under the repository's mocks-only policy.
+- Preserve mbv-owned behavior assertions by moving them onto an existing mock seam when their live harness is incidental.
 
 **Non-Goals:**
 
 - Raising or preserving a line-coverage percentage.
-- Auditing all 213 test-bearing `src/app` files or all literal `TestBackend` dimensions.
-- Adding shell/effect/run-loop coverage from #697.
+- Auditing all 213 test-bearing `src/app` files for presentation redundancy or all literal `TestBackend` dimensions; the live/smoke audit is workspace-wide because the policy boundary is workspace-wide.
+- Adding shell/effect/run-loop coverage from #697 merely to replace deleted tests.
+- Testing the correctness of mpv, operating-system sockets/filesystems/processes, or remote Services.
 - Changing production rendering, layout, hit behavior, or visible output.
 - Replacing the test framework, introducing snapshots, or adding lint/check scripts.
 
@@ -59,6 +64,8 @@ The audit begins with known debt from #707 and #697:
 
 A temporary one-row spacer perturbation may be used to reveal additional row-budget coupling. The perturbation is never committed, is restored before editing tests, and produces an inventory rather than a deletion list. Every discovered failure receives one disposition: keep unchanged, rewrite at its owner, narrow to its integration claim, or delete as duplicate/churn.
 
+The inventory is part of `tasks.md` completion evidence. Every removed assertion names either the exact surviving owner test/assertion or states that the detail is intentionally no longer a contract. A deletion cannot rely only on the implementer's classification label.
+
 Alternative: inspect every literal terminal size or every TUI test. Rejected as an unbounded audit whose cost could exceed the debt it removes.
 
 ### 3. Treat terminal dimensions according to intent
@@ -83,13 +90,35 @@ Whole-frame string equality is removed because it couples unrelated surfaces and
 
 Alternative: introduce approved snapshots with filtering or normalization. Rejected because it adds infrastructure while preserving the same broad oracle.
 
-### 6. Delete obsolete tests and helpers without compensating coverage
+### 6. Delete obsolete tests and helpers only with explicit disposition evidence
 
-Ignored obsolete tests are deleted rather than enabled, rewritten, or left as documentation. Helpers with no callers after the bounded audit are deleted. No replacement test is required when the removed test duplicated an already-owned fact or asserted only deliberate presentation detail.
+Ignored obsolete tests are deleted rather than enabled, rewritten, or left as documentation. Helpers with no callers after the bounded audit are deleted. For every removed assertion, the task completion note names the surviving owner test/assertion or records that the detail is intentionally no longer a contract. No replacement test is required only after that evidence establishes duplication or deliberate de-contracting.
 
-Alternative: replace each deletion one-for-one to avoid reducing test count or coverage. Rejected because test count and line coverage are not product contracts.
+Alternative: replace each deletion one-for-one to avoid reducing test count or coverage. Rejected because test count and line coverage are not product contracts; explicit disposition evidence protects real contracts without preserving test count.
 
-### 7. Put prevention in the existing frontend skill
+### 7. Audit live and smoke construction across the entire workspace
+
+The audit searches test modules, test-support modules, benches/examples used as tests, and integration-test targets for construction or use of:
+
+- real `init_mpv`/`test_mpv` handles or other live media engines;
+- `TcpListener`, `TcpStream`, Unix sockets, loopback HTTP servers, or network-dependent clients;
+- `Command`/product-binary spawning and daemon/process smoke harnesses;
+- temporary or fixed writable config/state directories, symlinks, and tests of filesystem preparation;
+- live Emby, Audiobookshelf, feed, Cast, or other external Services.
+
+Search results are candidates, not automatic violations: read-only static fixtures, pure path/string calculations, in-memory buffers, threads, and channels remain valid. Each candidate receives one disposition:
+
+1. delete when the assertion tests the external or harness itself;
+2. convert to an existing in-memory/mock boundary when it protects mbv-owned request formation, error classification, lifecycle decisions, or bookkeeping;
+3. retain with a recorded explanation when inspection proves no live external is constructed.
+
+The audit uses repository search and conventional test commands, not a committed checker. Test-only injection seams may be added to production modules only when no existing mock boundary can drive retained mbv-owned behavior, and must stay narrower than the logic under test.
+
+Alternative: trust the #697 follow-up commits as a permanent proof. Rejected because the current workspace can regress and the earlier report concentrated on known mbv-core families rather than establishing an acceptance check across every test target.
+
+Alternative: delete every candidate match. Rejected because names and imports do not prove live construction, and deleting mbv-owned behavior assertions would trade flake reduction for blind spots.
+
+### 8. Put presentation-test prevention in the existing frontend skill
 
 The `mbv-frontend` Tests section gains the layer ownership matrix, the terminal-size distinction, the glyph-owner rule, and the prohibition on whole-frame equality. Its completion checklist requires reviewers to confirm that mounted tests assert only their integration contract and that an intentional presentation change affects only its owner-level characterization.
 
@@ -97,7 +126,7 @@ No mechanical checker, CI wrapper, custom script, or snapshot harness is added.
 
 Alternative: enforce the policy with source scanning. Rejected by repository policy and because lexical checks cannot distinguish semantic glyph output from a glyph used as a layout locator.
 
-### 8. Keep #697 as a separate follow-up
+### 9. Keep new coverage for #697 as a separate follow-up
 
 After deletion, `cargo llvm-cov` may be run once to establish a fresh informational baseline if available. Coverage movement is recorded for #697 but creates no task to backfill presentation coverage. Any future shell/effect tests require their own design around hermetic seams and are outside this change.
 
@@ -109,13 +138,18 @@ After deletion, `cargo llvm-cov` may be run once to establish a fresh informatio
 - **[Fewer visual assertions allow accidental appearance changes]** -> Keep one focused owner-level characterization per relevant surface and presentation; accept that unowned cosmetic details are reviewed visually rather than frozen at every layer.
 - **[The audit expands indefinitely through helper dependencies]** -> Limit edits to the failure-derived families and helpers that become unused; defer unrelated shape-duplicate families and #697 gaps.
 - **[Deleting ignored tests changes no execution but creates a large diff]** -> Remove them first as an isolated task so later behavioral changes are reviewable independently.
+- **[Lexical live-test searches flag harmless fixture reads or type references]** -> Inspect construction and execution flow before disposition; search matches are inventory leads, never deletion authority.
+- **[A live harness carries mbv-owned behavior assertions]** -> Convert only those claims to an existing in-memory/mock boundary; do not preserve external setup merely because valuable assertions sit behind it.
+- **[A new test-only injection seam leaks into production design]** -> Prefer existing mocks and pure extraction; permit the narrowest `cfg(test)` seam only when retained logic cannot otherwise be driven.
 
 ## Migration Plan
 
-1. Record the bounded baseline and classify the eleven ignored tests.
-2. Delete obsolete ignored tests and only the helpers/imports made dead by that deletion.
-3. Run and restore the optional one-row perturbation, recording affected tests and dispositions.
-4. Process owner families independently: arrangement/Render Component first, then Interactive Component, then mounted tick/mouse assertions.
-5. Update the frontend skill after the concrete classifications prove the wording.
-6. Run formatting, targeted `mbv` tests for each affected family, the full `mbv` package suite, clippy for the package, and OpenSpec validation.
-7. Roll back by reverting individual family commits; no data or compatibility migration exists.
+1. Inventory all workspace live/smoke candidates and record inspected dispositions before changing them.
+2. Delete external-behavior tests and convert retained mbv-owned claims to existing mocks in bounded families, verifying each affected package.
+3. Record the bounded presentation baseline and classify the ten ignored legacy render tests plus the one ignored obsolete boundary test.
+4. Delete obsolete ignored tests and only the helpers/imports made dead by that deletion.
+5. Run and restore the optional one-row perturbation, recording affected tests and deletion evidence.
+6. Process presentation owners independently: arrangement/Render Component first, then Interactive Component, then mounted tick/mouse assertions; each #707 named test belongs to exactly one task group.
+7. Update the frontend skill after the concrete classifications prove the wording.
+8. Run formatting, workspace tests, workspace clippy, and OpenSpec validation; confirm no live external construction or temporary perturbation remains.
+9. Roll back by reverting individual audit-family commits; no data or compatibility migration exists.
