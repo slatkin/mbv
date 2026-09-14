@@ -225,7 +225,7 @@ fn displayed_queue_playback_state_stays_active_for_local_daemon_queue() {
         app.displayed_queue_playback_state(),
         PlaybackState {
             active: true,
-            active_idx: 2,
+            active_idx: Some(2),
             position_ticks: 42,
             runtime_ticks: 84,
             paused: true,
@@ -264,7 +264,7 @@ fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
     assert_eq!(app.player_tab.queue_cursor, 1);
     assert_eq!(
         app.displayed_queue_playback_state().active_idx,
-        1,
+        Some(1),
         "after removing the completed item, the active index must shift to \
              the now-playing item's new slot instead of following the stale \
              pre-removal numeric index"
@@ -314,7 +314,7 @@ fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
     assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
     assert_eq!(
         app.displayed_queue_playback_state().active_idx,
-        2,
+        Some(2),
         "the Client keeps its prior queue until the owner snapshot arrives"
     );
 }
@@ -523,4 +523,55 @@ fn throbber_freezes_when_remote_pause_is_observed() {
         app.playback_transport_paused(),
         "throbber must freeze once a single API poll observes IsPaused=true with no position advance"
     );
+}
+
+/// A watched remote Session can be playing something the local queue does not
+/// hold (another device's own selection). The transport is active so the Now
+/// Playing panel renders, but no local row is the playhead.
+#[test]
+fn attached_session_playing_foreign_content_is_active_without_a_local_slot() {
+    let mut app = make_remote_app_stub(make_items(2), make_items(3));
+    app.connected_session_id = Some("sess-1".into());
+    app.connected_session_state = Some({
+        let mut s = make_session("remote-host", "Emby");
+        s.now_playing = Some("Foreign Movie".into());
+        s.now_playing_item_id = Some("not-in-local-queue".into());
+        s.runtime_s = 600;
+        s
+    });
+    app.player_tab.queue_cursor = 1;
+
+    let playback = app.effective_playback_state();
+    assert!(
+        playback.active,
+        "an observed remote title makes the transport active so the panel renders"
+    );
+    assert_eq!(
+        playback.active_idx, None,
+        "foreign content has no local queue slot; no row may be highlighted"
+    );
+    assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
+
+    // The foreign playhead must not drag the queue cursor to row 0.
+    app.focus_queue_initial_item();
+    assert_eq!(app.player_tab.queue_cursor, 1);
+}
+
+/// The same transport keeps its local slot — and the row highlight — when the
+/// watched Session is playing an item the local queue does hold.
+#[test]
+fn attached_session_playing_a_local_queue_item_keeps_its_slot() {
+    let mut app = make_remote_app_stub(make_items(2), make_items(3));
+    app.connected_session_id = Some("sess-1".into());
+    app.connected_session_state = Some({
+        let mut s = make_session("remote-host", "Emby");
+        s.now_playing = Some("Item 1".into());
+        s.now_playing_item_id = Some("id1".into());
+        s.runtime_s = 600;
+        s
+    });
+
+    let playback = app.effective_playback_state();
+    assert!(playback.active);
+    assert_eq!(playback.active_idx, Some(1));
 }

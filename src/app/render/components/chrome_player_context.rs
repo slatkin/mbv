@@ -73,8 +73,9 @@ impl App {
         let playback = self.effective_playback_state();
         playback
             .active
-            .then(|| self.playback_queue().emby_item_at(playback.active_idx))
+            .then_some(playback.active_idx)
             .flatten()
+            .and_then(|idx| self.playback_queue().emby_item_at(idx))
             .filter(|item| item.item_type == "Episode" && !item.series_name.is_empty())
             .filter(|item| item.display_name() == title)
             .map(|item| {

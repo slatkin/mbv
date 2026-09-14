@@ -845,3 +845,45 @@ fn queue_status_bar_paints_as_a_column_footer_below_the_panel() {
         "the footer spans the recessed box width (the header width)"
     );
 }
+
+/// A watched remote Session playing content the local queue does not hold
+/// still paints the Now Playing panel with its transport: the observed remote
+/// title, live progress, controls, and no local row wearing the playhead.
+#[test]
+fn attached_session_playing_foreign_content_paints_the_panel() {
+    let mut app = make_queue_app(5);
+    app.panel_mode = crate::app::PanelMode::QueueOnly;
+    app.connected_session_id = Some("sess-1".into());
+    app.connected_session_state = Some({
+        let mut s = make_session("remote-host", "Emby");
+        s.now_playing = Some("Foreign Movie".into());
+        s.now_playing_item_id = Some("not-in-local-queue".into());
+        s.position_s = 30;
+        s.runtime_s = 600;
+        s.position_ticks = 30 * mbv_core::api::TICKS_PER_SECOND;
+        s.runtime_ticks = 600 * mbv_core::api::TICKS_PER_SECOND;
+        s
+    });
+
+    let (term, _layout) = render_queue_view_to_terminal(&mut app, 80, 40);
+    let screen = buffer_to_string(&term);
+
+    assert_eq!(
+        app.effective_playback_state().active_idx,
+        None,
+        "no local slot backs the observed remote item"
+    );
+    assert!(
+        app.layout.card.height > 0,
+        "the visual slot is reserved while the transport is active"
+    );
+    assert!(
+        screen.contains("PLAYING"),
+        "the header states the observed transport:\n{screen}"
+    );
+    assert!(
+        screen.contains("Foreign Movie"),
+        "the title row carries the observed remote title:\n{screen}"
+    );
+    assert!(screen.contains('\u{2594}'), "the seekbar paints:\n{screen}");
+}

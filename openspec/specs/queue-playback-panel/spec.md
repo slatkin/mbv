@@ -78,6 +78,13 @@ follow the queue scope being viewed.
 - **WHEN** a queue-visible layout is painted while no transport is active
 - **THEN** the header row SHALL read `IDLE` on the left and the resolved target on the right
 
+#### Scenario: Active watched remote playback
+
+- **WHEN** a queue-visible layout is painted while attached to a Session that reports a
+  now-playing item the viewed queue does not hold (another device's own selection)
+- **THEN** the header row SHALL read `PLAYING` and the target SHALL name that Session
+- **AND** no queue row SHALL be painted as the playhead
+
 #### Scenario: Header follows the playback target, not the viewed queue
 
 - **WHEN** the layout is queue-visible while attached to a remote session and the local queue scope is
@@ -164,6 +171,14 @@ NOT keep the panel: the header row's `IDLE` wording and target are the only idle
 
 - **WHEN** the queue column is visible and playback is paused
 - **THEN** the visual slot and the panel SHALL remain rendered
+
+#### Scenario: Connected transport that is playing keeps the panel
+
+- **WHEN** the queue column is visible and the connected remote Session reports a now-playing
+  item, whether or not the local queue holds it
+- **THEN** the visual slot and the panel SHALL render, the panel's title and `pos / dur` SHALL
+  describe the Session's observed playback, and its transport SHALL dispatch the Session's
+  supported remote commands
 
 #### Scenario: Connected but idle does not keep the panel
 

@@ -315,17 +315,25 @@ impl App {
         }
         // Presentation: the visual slot follows a selected-but-unconfirmed
         // slot, so the artwork switches with the queue row's highlight.
+        //
+        // Active-first, then the viewed queue's selection. The exception is a
+        // watched remote Session playing foreign content: the transport is
+        // active with no local slot, so the slot paints the placeholder rather
+        // than borrowing the selected row's artwork.
         let playback = self.displayed_playback_state();
+        let slotless_active = playback.active && playback.active_idx.is_none();
         let active_source = if playback.active {
-            let queue = self.playback_queue();
-            queue
-                .emby_item_at(playback.active_idx)
-                .cloned()
-                .map(|item| (playback.active_idx, item))
+            playback.active_idx.and_then(|idx| {
+                let queue = self.playback_queue();
+                queue.emby_item_at(idx).cloned().map(|item| (idx, item))
+            })
         } else {
             None
         };
         let selected_source = || {
+            if slotless_active {
+                return None;
+            }
             let queue = self.displayed_queue();
             queue
                 .clone_emby_item_at(queue.queue_cursor)
@@ -336,11 +344,16 @@ impl App {
             // empty) -- resolve the raw `QueueItem` the same active-first,
             // then-selected way so Audiobookshelf artwork still renders here.
             let raw_item = if playback.active {
-                self.playback_queue().item_at(playback.active_idx).cloned()
+                playback
+                    .active_idx
+                    .and_then(|idx| self.playback_queue().item_at(idx).cloned())
             } else {
                 None
             }
             .or_else(|| {
+                if slotless_active {
+                    return None;
+                }
                 let queue = self.displayed_queue();
                 queue.item_at(queue.queue_cursor).cloned()
             });

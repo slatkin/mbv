@@ -1,5 +1,5 @@
 use crate::app::images::{CachedImage, QUEUE_CARD_PLACEHOLDER_KEY};
-use crate::app::tests::{make_app_stub, make_item, make_items};
+use crate::app::tests::{make_app_stub, make_item, make_items, make_session};
 use crate::app::{App, BrowseLevel, LibraryTab, PanelFocus, QueueScope, TabSelection};
 use crate::config::Config;
 use mbv_core::api::EmbyClient;
@@ -429,4 +429,32 @@ fn images_off_artwork_and_visualizer_return_identical_geometry_without_fetch() {
         "images-off must not fetch artwork"
     );
     assert!(app.card_image_states.is_empty());
+}
+
+/// A watched remote Session playing foreign content is active with no local
+/// slot: the visual slot paints the bundled placeholder instead of borrowing
+/// the selected row's artwork.
+#[test]
+fn active_foreign_remote_session_uses_the_card_placeholder() {
+    let mut app = make_queue_app(3, 1);
+    app.image_protocol_enabled = true;
+    app.connected_session_id = Some("sess-1".into());
+    app.connected_session_state = Some({
+        let mut s = make_session("remote-host", "Emby");
+        s.now_playing = Some("Foreign Movie".into());
+        s.now_playing_item_id = Some("not-in-local-queue".into());
+        s.runtime_s = 600;
+        s
+    });
+
+    render_card(&mut app);
+
+    assert!(
+        app.queue_card_projection.cache_key.is_none(),
+        "the placeholder stands in for an unresolvable active item"
+    );
+    assert!(
+        !fetch_triggered(&app, "id1:P"),
+        "the selected row's artwork must not back the active slot"
+    );
 }

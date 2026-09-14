@@ -28,8 +28,13 @@ pub(super) enum PlaybackTarget {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct PlaybackState {
+    /// Whether a transport is active, on any target. A watched remote
+    /// Session playing foreign content is active without a local slot.
     pub(super) active: bool,
-    pub(super) active_idx: usize,
+    /// The playhead's slot in the queue this state was read from. `None`
+    /// while a watched remote Session plays something the local queue does
+    /// not hold: the transport is active, but no row backs it.
+    pub(super) active_idx: Option<usize>,
     pub(super) position_ticks: i64,
     pub(super) runtime_ticks: i64,
     pub(super) paused: bool,

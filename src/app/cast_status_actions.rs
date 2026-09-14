@@ -103,7 +103,7 @@ impl App {
             // `attach_cast`'s optimistic-attach shape) rather than idle.
             return Some(super::PlaybackState {
                 active: !cast.dispatched.is_empty(),
-                active_idx: self.cast_active_queue_index(cast).unwrap_or(0),
+                active_idx: self.cast_active_queue_index(cast),
                 position_ticks: 0,
                 runtime_ticks: 0,
                 paused: false,
@@ -115,7 +115,7 @@ impl App {
             (status.duration_seconds.unwrap_or(0.0) as f64 * TICKS_PER_SECOND as f64) as i64;
         Some(super::PlaybackState {
             active,
-            active_idx: self.cast_active_queue_index(cast).unwrap_or(0),
+            active_idx: self.cast_active_queue_index(cast),
             position_ticks: (position_seconds as f64 * TICKS_PER_SECOND as f64) as i64,
             runtime_ticks,
             paused: status.state == CastPlaybackState::Paused,

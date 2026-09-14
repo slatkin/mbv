@@ -47,9 +47,9 @@ fn projected_active_target(
     pending_slot: Option<QueueSlotId>,
 ) -> Option<QueueSlotId> {
     if playback.active {
-        queue
-            .slots()
-            .get(playback.active_idx)
+        playback
+            .active_idx
+            .and_then(|idx| queue.slots().get(idx))
             .map(|slot| slot.slot_id)
     } else {
         pending_slot

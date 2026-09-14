@@ -148,6 +148,11 @@ impl App {
         if let Some(state) = self.cast_effective_playback_state() {
             state
         } else if let Some(ref remote) = self.connected_session_state {
+            // The observed item is only a *local* playhead when the queue
+            // holds it. A watched remote Session may be playing anything
+            // (another device's own selection), so `active` follows the
+            // Session and the slot stays `None`; presentation falls back to
+            // the Session's own title and progress.
             let maybe_active_idx = remote.now_playing_item_id.as_ref().and_then(|id| {
                 self.player_tab
                     .queue
@@ -155,7 +160,6 @@ impl App {
                     .iter()
                     .position(|s| s.item.id() == id)
             });
-            let active_idx = maybe_active_idx.unwrap_or(0);
             let pos_ticks = {
                 let elapsed_s = if remote.is_paused {
                     0.0
@@ -166,8 +170,8 @@ impl App {
                 (pos_s * mbv_core::api::TICKS_PER_SECOND as f64) as i64
             };
             super::PlaybackState {
-                active: remote.now_playing.is_some() && maybe_active_idx.is_some(),
-                active_idx,
+                active: remote.now_playing.is_some(),
+                active_idx: maybe_active_idx,
                 position_ticks: pos_ticks,
                 runtime_ticks: remote.runtime_s * mbv_core::api::TICKS_PER_SECOND,
                 paused: remote.is_paused,
@@ -182,7 +186,7 @@ impl App {
             let (position_ticks, runtime_ticks) = (s.position_ticks, s.runtime_ticks);
             super::PlaybackState {
                 active: s.active,
-                active_idx,
+                active_idx: Some(active_idx),
                 position_ticks,
                 runtime_ticks,
                 paused: s.paused,
@@ -218,12 +222,12 @@ impl App {
         let Some(index) = self.predicted_active_index() else {
             return state;
         };
-        if state.active && state.active_idx == index {
+        if state.active && state.active_idx == Some(index) {
             return state;
         }
         super::PlaybackState {
             active: true,
-            active_idx: index,
+            active_idx: Some(index),
             // The owner is still playing the outgoing item, so its position
             // says nothing about this slot: paint a fresh start against the
             // selected item's own runtime until the owner confirms.

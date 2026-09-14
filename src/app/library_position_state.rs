@@ -107,8 +107,13 @@ impl App {
         let playback = self.displayed_queue_playback_state();
         let queue = self.displayed_queue_mut();
         let total = queue.total_queue_len();
-        if playback.active && playback.active_idx < total {
-            queue.queue_cursor = playback.active_idx;
+        let active_slot = playback
+            .active
+            .then_some(playback.active_idx)
+            .flatten()
+            .filter(|idx| *idx < total);
+        if let Some(idx) = active_slot {
+            queue.queue_cursor = idx;
         } else if queue.queue_cursor >= total && total > 0 {
             queue.queue_cursor = 0;
         }

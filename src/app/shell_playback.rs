@@ -13,19 +13,27 @@ impl Model {
         // time describe the same item the queue row highlights.
         let state = self.app.displayed_playback_state();
         let title = if state.active {
-            self.app
-                .playback_queue()
-                .item_at(state.active_idx)
+            state
+                .active_idx
+                .and_then(|idx| self.app.playback_queue().item_at(idx))
                 .map(|item| item.title().to_string())
-                // `effective_playback_state` reports `active` for a cast target,
-                // but the local queue may hold no matching slot (a cast with an
-                // empty local queue). Fall back to the cast title so the
-                // component paints what the legacy player chrome used to (3.9).
+                // `effective_playback_state` reports `active` for a cast target
+                // or watched remote Session, but the local queue may hold no
+                // matching slot (a cast with an empty local queue, a remote
+                // device playing its own selection). Fall back to the attached
+                // target's now-playing title so the panel paints what the
+                // legacy player chrome used to (3.9).
                 .or_else(|| {
                     self.app
                         .cast_attachment
                         .as_ref()
                         .and_then(|cast| self.app.cast_now_playing_title(cast))
+                })
+                .or_else(|| {
+                    self.app
+                        .connected_session_state
+                        .as_ref()
+                        .and_then(|session| session.now_playing.clone())
                 })
         } else if let Some(cast) = self.app.cast_attachment.as_ref() {
             self.app.cast_now_playing_title(cast)

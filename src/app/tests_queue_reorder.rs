@@ -276,7 +276,7 @@ fn queue_move_preserves_observed_playback_until_owner_observes_change() {
     }
 
     assert!(app.apply_queue_move(QueueScope::Local, 1, 2));
-    assert_eq!(app.effective_playback_state().active_idx, 2);
+    assert_eq!(app.effective_playback_state().active_idx, Some(2));
     assert_eq!(app.player.status.lock().unwrap().current_idx, 2);
 }
 
@@ -294,7 +294,7 @@ fn playback_state_reads_observed_status_without_projection() {
         status.runtime_ticks = 24_000_000_000;
     }
     let playback = app.effective_playback_state();
-    assert_eq!(playback.active_idx, 2);
+    assert_eq!(playback.active_idx, Some(2));
     assert_eq!(playback.position_ticks, 18_000_000_000);
     assert_eq!(playback.runtime_ticks, 24_000_000_000);
 }
@@ -316,7 +316,7 @@ fn queue_play_cursor_keeps_observed_progress_until_player_ack() {
     app.player_tab.queue_cursor = 2;
     app.dispatch(crate::app::action::Command::QueuePlayCursor(2));
     let observed = app.effective_playback_state();
-    assert_eq!(observed.active_idx, 0);
+    assert_eq!(observed.active_idx, Some(0));
     assert_eq!(observed.position_ticks, 18_000_000_000);
 }
 
@@ -335,7 +335,7 @@ fn rejected_remote_queue_selection_keeps_observed_playhead() {
     }
     app.dispatch(crate::app::action::Command::QueuePlayCursor(2));
     let playback = app.effective_playback_state();
-    assert_eq!(playback.active_idx, 0);
+    assert_eq!(playback.active_idx, Some(0));
     assert_eq!(playback.position_ticks, 18_000_000_000);
     assert_eq!(app.status, "Playback owner rejected the queue selection");
 }

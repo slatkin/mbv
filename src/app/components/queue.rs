@@ -683,7 +683,7 @@ fn queue_media_row_at(
     // highlight immediately rather than sharing it
     // (queue-canonical-list, "Selecting a different item to play").
     let superseded = pending_slot.is_some_and(|target| target != slot.slot_id);
-    let is_active = playback.active && playback.active_idx == index && !superseded;
+    let is_active = playback.active && playback.active_idx == Some(index) && !superseded;
     let is_pending = pending_slot == Some(slot.slot_id) && !is_active;
     let (title, pos_ticks, duration_ticks) = queue_row_fields(&slot.item, playback, is_active);
     let (semantic_state, trailing) = if is_pending {

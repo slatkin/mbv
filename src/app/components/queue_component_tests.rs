@@ -403,7 +403,7 @@ fn queue_projection_clamps_active_progress_to_presentation_bounds() {
             &slots,
             PlaybackState {
                 active: true,
-                active_idx: 0,
+                active_idx: Some(0),
                 position_ticks,
                 runtime_ticks: 100,
                 paused: false,
@@ -490,7 +490,7 @@ fn now_playing_queue_row_drops_elapsed_and_keeps_progress() {
         QueueScope::Local,
         PlaybackState {
             active: true,
-            active_idx: 0,
+            active_idx: Some(0),
             position_ticks: 30 * mbv_core::api::TICKS_PER_SECOND,
             runtime_ticks: 120 * mbv_core::api::TICKS_PER_SECOND,
             paused: false,
