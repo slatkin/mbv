@@ -139,7 +139,7 @@ fn live_tick_local_mutation_precedes_root_observation() {
         message,
         Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
     )));
-    assert!(second.messages.iter().any(|message| matches!(
+    assert!(second.messages.iter().all(|message| !matches!(
         message,
         Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
     )));

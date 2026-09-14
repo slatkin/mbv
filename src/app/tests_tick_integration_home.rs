@@ -252,10 +252,10 @@ fn home_wide_tick_navigation_keeps_the_selected_owner_row() {
     let _ = draw(&mut harness, 160, 30);
     harness.inject(key(Key::Down));
     let outcome = harness.step();
-    assert!(outcome.messages.iter().any(|message| matches!(
+    assert!(outcome.messages.iter().all(|message| !matches!(
         message,
         Msg::TerminalEvent(crate::app::components::TerminalObserverEvent::KeyClaimed)
-    )), "local navigation is consumed by the owner");
+    )), "the fold consumes the local claim marker");
 
     let _ = draw(&mut harness, 160, 30);
     assert_eq!(home_owner(&harness).cursor(), 1);
