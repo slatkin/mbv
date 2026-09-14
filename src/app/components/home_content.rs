@@ -21,8 +21,8 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibraryKey, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaSemanticState,
+    Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
@@ -480,7 +480,12 @@ impl LibraryContentOwner for HomeContent {
                 // `claim_row` contract (a blank/gap click leaves the
                 // selection unchanged).
                 let target = at.and_then(|at| self.carrier.resolve_current_point(at).cloned());
-                if at.is_some() {
+                if matches!(
+                    input,
+                    RowLocalInput::Click(_)
+                        | RowLocalInput::ToggleClick(_)
+                        | RowLocalInput::RangeClick(_)
+                ) {
                     self.carrier.delegate(input, target.clone());
                     if let Some(count) = self.carrier.selection_changed_msg() {
                         return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
@@ -494,25 +499,29 @@ impl LibraryContentOwner for HomeContent {
                         ))
                     }
                     RowLocalInput::DoubleClick(_) => {
+                        self.carrier
+                            .delegate_operation(MediaListOperation::Activate(target?));
                         Some(Msg::Shell(ShellRequest::HomeRowActivate {
                             target: self.row_target(),
                         }))
                     }
                     RowLocalInput::ContextClick(at) => {
-                        let outcome = self.carrier.delegate(input, target);
+                        let outcome = {
+                            let target = target?;
+                            self.carrier
+                                .delegate_operation(MediaListOperation::Context(target))
+                        };
                         if let Some(count) = self.carrier.selection_changed_msg() {
                             return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
                         }
-                        let targets = match outcome {
-                            RowLocalOutcome::External(RowIntent::Context(target)) => {
+                        let targets = match outcome.external_intent {
+                            Some(RowIntent::Context(target)) => {
                                 vec![self.home_row_target(Some(target))]
                             }
-                            RowLocalOutcome::External(RowIntent::ContextSelection(targets)) => {
-                                targets
-                                    .into_iter()
-                                    .map(|target| self.home_row_target(Some(target)))
-                                    .collect()
-                            }
+                            Some(RowIntent::ContextSelection(targets)) => targets
+                                .into_iter()
+                                .map(|target| self.home_row_target(Some(target)))
+                                .collect(),
                             _ => vec![self.row_target()],
                         };
                         Some(Msg::Shell(ShellRequest::RowContextMenu(

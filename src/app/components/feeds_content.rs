@@ -31,8 +31,8 @@ use super::library_panel::hero::hero_content_feed;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, RowIntent,
-    RowLocalInput, RowLocalOutcome,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaSemanticState,
+    Presentation, RowIntent, RowLocalInput, RowLocalOutcome,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
@@ -539,10 +539,10 @@ impl LibraryContentOwner for FeedsContent {
                     )))
                 }
                 RowLocalInput::DoubleClick(at) => {
-                    // Select the painted row through the same delegation seam
-                    // the first click uses, then play the resolved entry.
+                    // Resolve once, then delegate the target-bearing activation.
                     let target = self.resolve_row_id(at)?;
-                    self.delegate_row_local_input(RowLocalInput::Click(at), Some(target.clone()));
+                    self.carrier
+                        .delegate_operation(MediaListOperation::Activate(target.clone()));
                     let entry = self.entry_for_target(&target)?.clone();
                     Some(Msg::Shell(ShellRequest::FeedsPlay(vec![entry])))
                 }

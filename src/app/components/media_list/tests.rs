@@ -1,6 +1,6 @@
 use super::{
-    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaListRow, MediaSemanticState,
-    ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
+    InlineMediaBrowser, InlineMediaBrowserPaintPolicy, MediaKind, MediaList, MediaListRow,
+    MediaSemanticState, ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -714,6 +714,23 @@ fn inline_delegate_keeps_the_completed_frame_for_pointer_continuity() {
         Some(&"two".to_string())
     );
     assert!(browser.current_detail_rect().is_some());
+}
+
+#[test]
+fn target_resolved_transition_reports_orthogonal_facts() {
+    let mut list = MediaList::new();
+    list.set_content(vec![lifecycle_item("one"), lifecycle_item("two")]);
+    list.enter_visual_mode();
+    let transition = list.delegate_operation(super::MediaListOperation::Context("two".into()));
+    assert_eq!(
+        transition.disposition,
+        super::MediaListDisposition::Consumed
+    );
+    assert!(transition.external_intent.is_some());
+    assert_eq!(
+        transition.selection_summary,
+        Some(super::SelectionSummary { count: 0 })
+    );
 }
 
 #[test]

@@ -290,6 +290,56 @@ pub enum RowLocalInput {
 }
 
 /// Provider-neutral result of delegating one row-local input to a list owner.
+/// Target-resolved operations accepted by the canonical media-list owner.
+/// Pointer coordinates are intentionally absent: presentations resolve them
+/// against their retained frame before constructing these values.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MediaListOperation<Target> {
+    Move(i64),
+    Page(i64),
+    First,
+    Last,
+    ActivateCurrent,
+    ContextCurrent,
+    Select(Target),
+    Toggle(Target),
+    Range(Target),
+    Activate(Target),
+    Context(Target),
+    ContextSelection,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MediaListDisposition {
+    Unhandled,
+    Consumed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectionSummary {
+    pub count: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MediaListTransition<Target> {
+    pub disposition: MediaListDisposition,
+    pub selected_target: Option<Target>,
+    pub selection_summary: Option<SelectionSummary>,
+    pub external_intent: Option<RowIntent<Target>>,
+}
+
+impl<Target> MediaListTransition<Target> {
+    fn unhandled() -> Self {
+        Self {
+            disposition: MediaListDisposition::Unhandled,
+            selected_target: None,
+            selection_summary: None,
+            external_intent: None,
+        }
+    }
+}
+
+/// Compatibility result retained while destinations migrate to transitions.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RowLocalOutcome<Target> {
     Unhandled,
@@ -606,6 +656,81 @@ impl<Target> MediaList<Target> {
             }
             (Some(_), Some(_)) | (None, None) => RowLocalOutcome::Consumed,
             _ => RowLocalOutcome::Unhandled,
+        }
+    }
+
+    /// Apply a target-resolved operation and report all independent effects.
+    pub fn delegate_operation(
+        &mut self,
+        operation: MediaListOperation<Target>,
+    ) -> MediaListTransition<Target>
+    where
+        Target: Clone + PartialEq,
+    {
+        let before = self.selected_target().cloned();
+        let before_count = self.multi_selection.len();
+        let external_intent = match operation {
+            MediaListOperation::Move(delta) => {
+                self.move_selection(delta);
+                None
+            }
+            MediaListOperation::Page(delta) => {
+                self.move_selection(delta.saturating_mul(5));
+                None
+            }
+            MediaListOperation::First => {
+                self.select_first();
+                None
+            }
+            MediaListOperation::Last => {
+                self.select_last();
+                None
+            }
+            MediaListOperation::ActivateCurrent => {
+                self.selected_target().cloned().map(RowIntent::Activate)
+            }
+            MediaListOperation::ContextCurrent => self
+                .selected_target()
+                .cloned()
+                .map(|target| self.context_intent(target)),
+            MediaListOperation::Select(target) => {
+                self.clear_selection();
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Toggle(target) => {
+                self.toggle_selection(&target);
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Range(target) => {
+                self.extend_selection_to(&target);
+                self.select_target(&target);
+                None
+            }
+            MediaListOperation::Activate(target) => Some(RowIntent::Activate(target)),
+            MediaListOperation::Context(target) => Some(self.context_intent(target)),
+            MediaListOperation::ContextSelection => None,
+        };
+        let after = self.selected_target().cloned();
+        let disposition = if before.is_some()
+            || after.is_some()
+            || external_intent.is_some()
+            || before_count != self.multi_selection.len()
+        {
+            MediaListDisposition::Consumed
+        } else {
+            MediaListDisposition::Unhandled
+        };
+        MediaListTransition {
+            disposition,
+            selected_target: (before != after).then_some(after).flatten(),
+            selection_summary: (before_count != self.multi_selection.len()).then_some(
+                SelectionSummary {
+                    count: self.multi_selection.len(),
+                },
+            ),
+            external_intent,
         }
     }
 }
