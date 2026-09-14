@@ -219,7 +219,7 @@ pub(in crate::app) fn render_wide_skeleton(
             // The canonical rail owns the full panel row (matching the
             // pre-migration wide rail): the selected background reaches
             // `list_panel`'s border while the row flow/hit geometry stays on
-            // the inset `list_area`, so `wide_media_row`'s own 2-column text
+            // the inset `list_area`, so `media_list_row`'s own 2-column text
             // indent is the row's only indent instead of stacking atop
             // `list_area`'s inset.
             list.set_geometry(full_width_claim(list_panel, list_area), list_area);

@@ -1,4 +1,4 @@
-use super::wide_row::wide_media_row;
+use super::row::media_list_row;
 use crate::app::components::media_list::{
     InlineLayout, InlineMediaBrowser, InlineMediaBrowserPaintPolicy, RowGeometry,
     SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
@@ -33,7 +33,7 @@ pub(super) struct MediaListPaint<Target> {
 /// full-width selection treatment while aligning painted rows with retained
 /// geometry. `content_area` remains the hit/scroll geometry rect (inset on
 /// both axes); the returned `selected_row_rect` and caller hit maps resolve
-/// against it. The title's text indent is applied per row in `wide_media_row`,
+/// against it. The title's text indent is applied per row in `media_list_row`,
 /// not by insetting either rect.
 ///
 /// The painter resolves the scroll offset and stores it back into `list` via
@@ -66,7 +66,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
                 .expect("wide geometry contains a source row");
             let row_target = rows[source_row].selectable_target();
             let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
-            wide_media_row(
+            media_list_row(
                 &rows[source_row],
                 Some(row) == selected_row || multi_selected,
                 focused || multi_selected,
@@ -128,7 +128,7 @@ pub(super) struct InlinePaintResult<Target> {
 /// replacement. The component owns the fit admission, fallback, and geometry
 /// (`InlineMediaBrowser::resolve_inline_layout`); this function paints the
 /// ordinary rows around the reserved detail block, reusing the shared
-/// `wide_media_row` primitive and `hero::inline_display_row` mapping.
+/// `media_list_row` primitive and `hero::inline_display_row` mapping.
 ///
 fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
     f: &mut Frame,
@@ -162,7 +162,7 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
                     let row_target = rows[source_row].selectable_target();
                     let multi_selected =
                         row_target.is_some_and(|target| list.is_selected_target(target));
-                    wide_media_row(
+                    media_list_row(
                         &rows[source_row],
                         (Some(display_row) == selected_row && layout.detail_rows == 0) && focused
                             || multi_selected,

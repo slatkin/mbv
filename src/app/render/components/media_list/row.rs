@@ -6,7 +6,8 @@ use ratatui::text::*;
 use ratatui::widgets::ListItem;
 use unicode_width::UnicodeWidthStr;
 
-/// One painted row of a `WideMediaList`. Semantic state drives the row
+/// One painted row of a media-list flow, shared by the Wide and Inline
+/// Presentations. Semantic state drives the row
 /// colour and, for active rows, an appended progress percentage; `primary`
 /// is truncated with an ellipsis to fit; `duration` is a distinct
 /// right-aligned green element ending at the panel text-flow content edge
@@ -26,7 +27,7 @@ use unicode_width::UnicodeWidthStr;
 /// indent — so the title lands at column 2 of the panel; the selected row's
 /// background fills the whole row via `List`'s row-style fill and bleeds to
 /// both panel edges.
-pub(in crate::app) fn wide_media_row<Target>(
+pub(in crate::app) fn media_list_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
     focused: bool,

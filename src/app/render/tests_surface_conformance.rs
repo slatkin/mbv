@@ -597,7 +597,7 @@ fn wide_music_browser_container_is_occluded_by_the_shell() {
 
 /// `unify-surface-colour-neutral` 4.1 pin (b): the queue's selected row paints
 /// a hole only while the queue column holds focus — the row policy gates the
-/// highlight on `selected && focused` (`media_list/wide_row.rs`), so with the
+/// highlight on `selected && focused` (`media_list/row.rs`), so with the
 /// queue resting (library holds panel focus) the row paints no hole at all.
 /// The pin fails if the gating ever changes to a cursor bit: a selected row
 /// driven by a cursor bit would paint the column's focused hole while resting.

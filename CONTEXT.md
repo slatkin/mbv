@@ -348,6 +348,10 @@ owner is the **Presentation** term, not the container.
 _Avoid_: active list, owner swap, second control, active carrier (for the
 owner-holding Presentation)
 
+**Media-list row**:
+The one painted row of a `MediaList` flow, shared by the Wide and Inline Presentations; the Inline Presentation only gates its highlight and reserves its detail block around it.
+_Avoid_: wide media row, wide_media_row
+
 **Inline Search**:
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Narrow and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
 _Avoid_: global search, Search sidebar, search overlay
