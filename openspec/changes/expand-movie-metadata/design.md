@@ -94,6 +94,13 @@ no production reader today and `genre` has exactly one (the Series meta row, whi
 `HeroFacts { .. }` sites and both painters untouched while giving the painter the labels it must
 overlay escapes on.
 
+*Clarified 2026-09-14 during apply* (the spec delta requires exactly "one row joining the item's
+provider link names" and says metadata rows "remain an ordered list of plain-text rows coloured by
+position"): the producer pushes the joined link-name row into `meta_rows` like any other row, and
+`HeroFacts.links` carries the typed names/URLs so the Wide painter can overlay the OSC 8 escape
+cells onto that already-painted row, per D5's "painted normally first and then covered". The
+painter SHALL NOT paint a second, separate links row.
+
 *Ceiling:* the painter, not the producer, decides that links render last. Acceptable while no provider
 needs links anywhere else; promote `meta_rows` to an ordered `Text | Links` row enum the day one does.
 
