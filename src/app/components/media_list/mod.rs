@@ -737,7 +737,10 @@ impl<Target> MediaList<Target> {
                 self.select_target(&target);
                 None
             }
-            MediaListOperation::Activate(target) => Some(RowIntent::Activate(target)),
+            MediaListOperation::Activate(target) => {
+                self.select_target(&target);
+                Some(RowIntent::Activate(target))
+            }
             MediaListOperation::Context(target) => Some(self.context_intent(target)),
             MediaListOperation::ContextSelection => None,
         };

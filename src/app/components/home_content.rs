@@ -496,7 +496,8 @@ impl LibraryContentOwner for HomeContent {
                         | RowLocalInput::ToggleClick(_)
                         | RowLocalInput::RangeClick(_)
                 ) {
-                    self.carrier.delegate(input, target.clone());
+                    self.carrier
+                        .delegate_operation(input.into_operation(target.clone())?);
                     if let Some(count) = self.carrier.selection_changed_msg() {
                         return Some(Msg::Shell(ShellRequest::SelectionChanged(count)));
                     }
