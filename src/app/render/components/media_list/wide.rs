@@ -84,6 +84,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
                 scrollbar,
                 marquee
                     .as_mut()
+                    .filter(|_| Some(row) == selected_row)
                     .map(|(text, started_at)| (&mut **text, &mut **started_at)),
             )
         })
@@ -194,6 +195,9 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
                         focused && overflows,
                         marquee
                             .as_mut()
+                            .filter(|_| {
+                                Some(display_row) == selected_row && layout.detail_rows == 0
+                            })
                             .map(|(text, started_at)| (&mut **text, &mut **started_at)),
                     )
                 })

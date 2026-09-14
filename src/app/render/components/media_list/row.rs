@@ -116,7 +116,7 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             let title_spans = marquee
                 .take()
-                .filter(|_| primary.width() > title_width)
+                .filter(|_| selected && primary.width() > title_width)
                 .map(|(text, started_at)| {
                     marquee_spans(
                         &[(primary.clone(), title_color)],

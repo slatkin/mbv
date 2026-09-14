@@ -94,16 +94,22 @@ mod wide_row_regression_tests {
                 None,
             ),
         ]);
-        let selected = title_row_at(&mut list, true, 0);
+        let selected_at_rest = title_row_at(&mut list, true, 0);
+        let (_, started_at) = list.marquee_state("A very long selected title that overflows");
+        *started_at = Instant::now() - Duration::from_millis(1_401);
+        let selected_advanced = title_row_at(&mut list, true, 0);
         let other = title_row_at(&mut list, true, 1);
         assert!(
-            !selected.contains('…'),
-            "selected row should marquee at rest: {selected:?}"
+            !selected_at_rest.contains('…'),
+            "selected row should marquee at rest: {selected_at_rest:?}"
+        );
+        assert_ne!(
+            selected_at_rest, selected_advanced,
+            "selected row should advance while another overflowing row is painted"
         );
         assert!(
-            other.contains('…')
-                || other.trim_end().len() < "A very long non-selected title that overflows".len(),
-            "non-selected row should remain truncated: {other:?}"
+            other.contains('…'),
+            "non-selected row should use ellipsis truncation: {other:?}"
         );
     }
 
