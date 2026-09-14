@@ -216,6 +216,15 @@ mod tests {
         );
         assert_eq!(
             buf[(hovered_rect.x + 1, hovered_rect.y)].fg,
+            palette::TEXT_EMPHASIS
+        );
+        assert_ne!(
+            buf[(hovered_rect.x + 1, hovered_rect.y)].fg,
+            buf[(hovered_rect.x + 1, hovered_rect.y)].bg,
+            "hovered pill text must remain legible against its surface"
+        );
+        assert_eq!(
+            buf[(selected_rect.x + 1, selected_rect.y)].fg,
             palette::PILL_SELECTED_FG
         );
     }
