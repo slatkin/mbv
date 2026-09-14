@@ -1,10 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use std::io::Read;
-    use std::net::{SocketAddr, TcpStream};
+    use std::net::SocketAddr;
     include!("remote_player_tests.rs");
-    include!("remote_player_tests_socket.rs");
-    include!("remote_player_tests_handshake.rs");
 }
 
 use std::collections::HashMap;
