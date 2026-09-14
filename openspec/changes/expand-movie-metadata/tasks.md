@@ -53,7 +53,7 @@
 
 ## 4. Verification gates
 
-- [ ] 4.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and
+- [x] 4.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, and
   `cargo nextest run -p mbv -p mbv-core`. Verify: all green.
 - [ ] 4.2 Manual visual sweep in a real terminal: Wide Movies with and without an overview, with and
   without provider links, with zero, one and two directors, and a pane short enough to clip the table;
@@ -70,7 +70,7 @@
   followed, no existing entry is left contradicting the new behavior, and
   `docs/architecture/interactive-surface-ledger.md` needs no change because no slot, hit region or
   geometry owner is added.
-- [ ] 5.2 `openspec validate expand-movie-metadata --strict`. Verify: passes.
+- [x] 5.2 `openspec validate expand-movie-metadata --strict`. Verify: passes.
 - [ ] 5.3 At archive, sync the deltas into `openspec/specs/library-panel/spec.md`. Verify:
   `openspec validate --specs` is clean and the modified overview requirement plus the three added
   requirements are present in the main spec.
