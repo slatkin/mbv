@@ -108,6 +108,11 @@ pub struct Model {
     /// Shell-owned projection of the focused list's Visual selection.
     pub(super) visual_selection: Option<(super::types_settings::PanelFocus, usize)>,
     pub(super) context_menu_origin: Option<crate::app::components::media_list::SelectionOrigin>,
+    pub(super) context_action_snapshot: Option<
+        crate::app::types_context_menu::ContextActionSnapshot<
+            crate::app::types_context_menu::ContextMenuTargets,
+        >,
+    >,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -439,6 +444,7 @@ impl Model {
             last_queue_projection: None,
             visual_selection: None,
             context_menu_origin: None,
+            context_action_snapshot: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other

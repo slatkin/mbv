@@ -470,6 +470,15 @@ impl Model {
                     ) => {
                         self.context_menu_origin =
                             Some(crate::app::components::media_list::SelectionOrigin::Queue);
+                        self.context_action_snapshot =
+                            Some(crate::app::types_context_menu::ContextActionSnapshot {
+                                origin: crate::app::components::media_list::SelectionOrigin::Queue,
+                                values: vec![
+                                    crate::app::types_context_menu::ContextMenuTargets::Queue(
+                                        slot_ids.clone(),
+                                    ),
+                                ],
+                            });
                         if slot_ids.len() > 1 {
                             let scope = self.app.viewed_queue_scope();
                             let (items, remove_targets, capabilities) = slot_ids
@@ -526,6 +535,14 @@ impl Model {
                             crate::app::components::media_list::SelectionOrigin::Library(
                                 crate::app::components::media_list::LibrarySelectionOrigin::Home,
                             ),
+                        );
+                        self.context_action_snapshot = Some(
+                            crate::app::types_context_menu::ContextActionSnapshot {
+                                origin: crate::app::components::media_list::SelectionOrigin::Library(
+                                    crate::app::components::media_list::LibrarySelectionOrigin::Home,
+                                ),
+                                values: vec![targets.clone()],
+                            },
                         );
                         match targets {
                             crate::app::types_context_menu::ContextMenuTargets::Emby(mut items) => {

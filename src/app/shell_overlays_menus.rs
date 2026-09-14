@@ -166,7 +166,12 @@ impl Model {
                 self.app
                     .execute_context_action(action, self.home_context_item.clone());
                 if is_bulk {
-                    if let Some(origin) = self.context_menu_origin.take() {
+                    let origin = self
+                        .context_action_snapshot
+                        .take()
+                        .map(|snapshot| snapshot.origin)
+                        .or_else(|| self.context_menu_origin.take());
+                    if let Some(origin) = origin {
                         self.clear_multi_selection_from_origin(origin);
                     }
                 }
@@ -192,7 +197,12 @@ impl Model {
         self.app
             .execute_context_action(action, self.home_context_item.clone());
         if is_bulk {
-            if let Some(origin) = self.context_menu_origin.take() {
+            let origin = self
+                .context_action_snapshot
+                .take()
+                .map(|snapshot| snapshot.origin)
+                .or_else(|| self.context_menu_origin.take());
+            if let Some(origin) = origin {
                 self.clear_multi_selection_from_origin(origin);
             }
         }
