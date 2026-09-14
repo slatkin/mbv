@@ -24,29 +24,37 @@ fn queue_item_serializes_tagged() {
     assert!(json.contains(r#""guid":"feed-1""#));
 }
 
-#[test]
-fn queue_item_deserializes_tagged() {
-    let json = r#"{"kind":"Emby","id":"e1","name":"Item e1","item_type":"Episode","is_folder":false,"media_type":"Video","collection_type":"","runtime_ticks":300000000,"played":false,"playback_position_ticks":0,"series_id":"","series_name":"","album_id":"","album":"","index_number":0,"parent_index_number":0,"unplayed_item_count":0,"path":"","artist":"","sort_name":"","production_year":0,"end_year":0,"overview":"","premiere_date":"","date_added":"","total_count":0,"container":"","director":"","video_info":"","audio_info":"","genre":"","playlist_item_id":""}"#;
+#[rstest::rstest]
+#[case::tagged(
+    r#"{"kind":"Emby","id":"e1","name":"Item e1","item_type":"Episode","is_folder":false,"media_type":"Video","collection_type":"","runtime_ticks":300000000,"played":false,"playback_position_ticks":0,"series_id":"","series_name":"","album_id":"","album":"","index_number":0,"parent_index_number":0,"unplayed_item_count":0,"path":"","artist":"","sort_name":"","production_year":0,"end_year":0,"overview":"","premiere_date":"","date_added":"","total_count":0,"container":"","director":"","video_info":"","audio_info":"","genre":"","playlist_item_id":""}"#,
+    true,
+    "e1"
+)]
+#[case::legacy_bare_emby_item(
+    r#"{"id":"legacy-1","name":"Legacy Item","item_type":"Episode","is_folder":false,"media_type":"Video","collection_type":"","runtime_ticks":300000000,"played":false,"playback_position_ticks":0,"series_id":"","series_name":"","album_id":"","album":"","index_number":0,"parent_index_number":0,"unplayed_item_count":0,"path":"","artist":"","sort_name":"","production_year":0,"end_year":0,"overview":"","premiere_date":"","date_added":"","total_count":0,"container":"","director":"","video_info":"","audio_info":"","genre":"","playlist_item_id":""}"#,
+    true,
+    "legacy-1"
+)]
+#[case::tagged_feed(
+    r#"{"kind":"Feed","guid":"feed-1","title":"Episode 1","enclosure_url":"https://example.com/ep1.mp3","link":null,"mime_type":"audio/mpeg","duration_ticks":36000000000}"#,
+    false,
+    "feed-1"
+)]
+fn queue_item_deserializes(
+    #[case] json: &str,
+    #[case] expected_emby: bool,
+    #[case] expected_id: &str,
+) {
     let qi: QueueItem = serde_json::from_str(json).unwrap();
-    assert!(matches!(qi, QueueItem::Emby(_)));
-    assert_eq!(qi.id(), "e1");
-}
-
-#[test]
-fn queue_item_deserializes_legacy_bare_emby_item() {
-    // Legacy format: bare EmbyItem object (no "kind" field)
-    let json = r#"{"id":"legacy-1","name":"Legacy Item","item_type":"Episode","is_folder":false,"media_type":"Video","collection_type":"","runtime_ticks":300000000,"played":false,"playback_position_ticks":0,"series_id":"","series_name":"","album_id":"","album":"","index_number":0,"parent_index_number":0,"unplayed_item_count":0,"path":"","artist":"","sort_name":"","production_year":0,"end_year":0,"overview":"","premiere_date":"","date_added":"","total_count":0,"container":"","director":"","video_info":"","audio_info":"","genre":"","playlist_item_id":""}"#;
-    let qi: QueueItem = serde_json::from_str(json).unwrap();
-    assert!(matches!(qi, QueueItem::Emby(_)));
-    assert_eq!(qi.id(), "legacy-1");
-}
-
-#[test]
-fn queue_item_deserializes_tagged_feed() {
-    let json = r#"{"kind":"Feed","guid":"feed-1","title":"Episode 1","enclosure_url":"https://example.com/ep1.mp3","link":null,"mime_type":"audio/mpeg","duration_ticks":36000000000}"#;
-    let qi: QueueItem = serde_json::from_str(json).unwrap();
-    assert!(matches!(qi, QueueItem::Feed(_)));
-    assert_eq!(qi.id(), "feed-1");
+    match (&qi, expected_emby) {
+        (QueueItem::Emby(_), true) | (QueueItem::Feed(_), false) => {}
+        (QueueItem::Emby(_), false) => panic!("expected Feed variant"),
+        (QueueItem::Feed(_), true) => panic!("expected Emby variant"),
+        (QueueItem::Audiobookshelf(_), _) | (QueueItem::AudiobookshelfBook(_), _) => {
+            panic!("unexpected queue item variant")
+        }
+    }
+    assert_eq!(qi.id(), expected_id);
 }
 
 #[test]
