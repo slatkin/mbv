@@ -8,24 +8,17 @@
 //! shell projection (task 5.10) shares with the painter.
 
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 
 use crate::app::palette;
-use crate::app::render::{
-    paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
-};
+use crate::app::render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
 
 use super::content::{HeroContent, HeroFacts, HeroHeader};
+use super::overview_box;
 
 /// Blank rows between the artwork box and the text block (the shared
 /// `wide_hero_slots` convention: metadata starts at `img_area.bottom() + 1`).
 const ARTWORK_TEXT_GAP_ROWS: u16 = 1;
-
-/// Blank rows between the header text block and the recessed overview box.
-/// The row belongs to the hero pane (its fill), never to the box.
-const OVERVIEW_GAP_ROWS: u16 = 1;
 
 /// Vertical room a present Workspace keeps below the header (design D5: the
 /// artwork shrinks before a Workspace viewport would drop). Two padding rows
@@ -178,88 +171,7 @@ pub(in crate::app) fn paint_hero_pane_content(
 
     // The overview Main content box only when overview text exists (design
     // D5); without it the Workspace moves up.
-    if let Some(overview) = content
-        .overview
-        .as_deref()
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-    {
-        // Matches `paint_wide_hero_text`'s own wrap width exactly (its
-        // `area` below is `box_content`, whose width is `content_w`, minus
-        // the same 1-column margin) so this measures the same line count
-        // the text will actually paint at, instead of double-wrapping.
-        let content_w = area.width.saturating_sub(PANE_PAD_X * 2) as usize;
-        let wrap_width = content_w.saturating_sub(1).max(1);
-        let lines = textwrap::wrap(overview, wrap_width);
-        // One blank hero-pane row always separates the header text from the
-        // recessed overview box. The gap row keeps the pane's resting fill
-        // (the hero never takes the focused surface); only the rows below
-        // it carry the box surface.
-        let box_y = next_row.saturating_add(OVERVIEW_GAP_ROWS);
-        let room = area.bottom().saturating_sub(box_y);
-        let content_height = (lines.len() as u16).max(1).saturating_add(PANE_PAD_Y * 2);
-        // The bottom-most recessed box on the hero fills the pane's
-        // remaining rows (`area` is already inset from the hero panel, so
-        // `area.bottom()` is the panel less one padding row). With no
-        // Workspace the overview box is that bottom-most box; with one, the
-        // overview stays content-sized and the Workspace box below it fills.
-        let box_height = if content.workspace.is_some() {
-            content_height.min(room)
-        } else {
-            room
-        };
-        // Room only for padding: no box renders (the shared padding is part
-        // of the box's reserved rows).
-        if box_height > PANE_PAD_Y * 2 {
-            let pane_bg = palette::surface_colors(palette::Surface::HeroPane, false).fill;
-            f.render_widget(
-                Block::default().style(Style::default().bg(pane_bg)),
-                Rect {
-                    y: next_row,
-                    height: OVERVIEW_GAP_ROWS.min(area.bottom().saturating_sub(next_row)),
-                    ..area
-                },
-            );
-            let box_area = Rect {
-                y: box_y,
-                height: box_height,
-                ..area
-            };
-            // The box fills `box_area` flush, matching the hero pane's own
-            // single inset (`hero_area` is already inset from the raw hero
-            // panel): no second outer margin on top of it. Only `box_content`
-            // below carries the box's own interior padding.
-            let panel = box_area;
-            f.render_widget(
-                Block::default().style(
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::MainContentBox,
-                        false,
-                    )
-                    .fill),
-                ),
-                panel,
-            );
-            let box_content = Rect {
-                x: panel.x.saturating_add(PANE_PAD_X),
-                y: panel.y.saturating_add(PANE_PAD_Y),
-                width: panel.width.saturating_sub(PANE_PAD_X * 2),
-                height: panel.height.saturating_sub(PANE_PAD_Y * 2),
-            };
-            // Plain text, never destination-styled, and always soft white:
-            // the overview is body content, so the hero pane's focus (derived
-            // from the Workspace, design D6) does not dim it. `overview` is
-            // passed unwrapped: `paint_wide_hero_text` does the one and only
-            // wrap, at `box_content`'s width — pre-wrapping it here too (at
-            // a different width) was double-wrapping and stranding words.
-            let lines = [WrappedHeroLine {
-                text: overview,
-                style: ratatui::style::Style::default().fg(palette::TEXT_EMPHASIS),
-            }];
-            paint_wide_hero_text(f, box_content, &lines);
-            next_row = box_area.bottom();
-        }
-    }
+    let next_row = overview_box::paint_overview_box(f, area, next_row, content).unwrap_or(next_row);
     (next_row, reserved_image)
 }
 
@@ -282,7 +194,9 @@ fn paint_title_and_meta(f: &mut Frame, area: Rect, facts: &HeroFacts) -> u16 {
                 .fg(palette::HERO_META_ROLES[index % palette::HERO_META_ROLES.len()]),
         });
     }
-    paint_wide_hero_text(f, area, &lines)
+    let next_row = paint_wide_hero_text(f, area, &lines);
+    overview_box::overlay_links(f, area, facts);
+    next_row
 }
 
 #[cfg(test)]
