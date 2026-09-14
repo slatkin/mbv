@@ -29,3 +29,4 @@ mdns-sd = { version = "0.21", default-features = false, features = ["log"] }
 # directly to feed synthetic events into cast_discovery's pure collection
 # logic without a real mDNS browse.
 flume = "0.12"
+rstest.workspace = true

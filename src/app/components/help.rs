@@ -185,115 +185,68 @@ impl AppComponent<Msg, UserEvent> for HelpComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers, MouseButton};
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> KeyEvent {
         KeyEvent { code, modifiers }
     }
 
-    #[test]
-    fn scroll_down_increments_scroll() {
+    #[rstest]
+    #[case::scroll_down_increments_scroll(5, Key::Down, 6)]
+    #[case::scroll_up_decrements_scroll(5, Key::Up, 4)]
+    #[case::scroll_up_saturates_at_zero(0, Key::Up, 0)]
+    #[case::page_down_increments_by_ten(5, Key::PageDown, 15)]
+    #[case::page_up_decrements_by_ten(5, Key::PageUp, 0)]
+    #[case::home_resets_scroll_to_zero(42, Key::Home, 0)]
+    fn scroll(#[case] initial: u16, #[case] key: Key, #[case] expected: u16) {
         let mut comp = HelpComponent::new();
-        comp.scroll = 5;
-        comp.handle_key(&make_key(Key::Down, KeyModifiers::NONE));
-        assert_eq!(comp.scroll, 6);
+        comp.scroll = initial;
+        comp.handle_key(&make_key(key, KeyModifiers::NONE));
+        assert_eq!(comp.scroll, expected);
     }
 
-    #[test]
-    fn scroll_up_decrements_scroll() {
+    #[rstest]
+    #[case::quit_emits_shell_quit(
+        Key::Char('q'),
+        KeyModifiers::NONE,
+        Some(Msg::Shell(ShellRequest::Quit))
+    )]
+    #[case::escape_emits_dismiss_help(
+        Key::Esc,
+        KeyModifiers::NONE,
+        Some(Msg::Shell(ShellRequest::DismissHelp))
+    )]
+    #[case::f1_emits_dismiss_help(
+        Key::Function(1),
+        KeyModifiers::NONE,
+        Some(Msg::Shell(ShellRequest::DismissHelp))
+    )]
+    #[case::f2_emits_open_settings(
+        Key::Function(2),
+        KeyModifiers::NONE,
+        Some(Msg::Shell(ShellRequest::OpenSettings))
+    )]
+    #[case::f3_emits_open_sessions(
+        Key::Function(3),
+        KeyModifiers::NONE,
+        Some(Msg::Shell(ShellRequest::OpenSessions))
+    )]
+    #[case::f4_emits_open_playlists(
+        Key::Function(4),
+        KeyModifiers::NONE,
+        Some(Msg::Shell(ShellRequest::OpenPlaylists))
+    )]
+    #[case::unbound_key_is_swallowed(Key::Char('x'), KeyModifiers::NONE, None)]
+    #[case::ctrl_q_does_not_emit_quit(Key::Char('q'), KeyModifiers::CONTROL, None)]
+    fn key_to_msg(
+        #[case] key: Key,
+        #[case] modifiers: KeyModifiers,
+        #[case] expected: Option<Msg>,
+    ) {
         let mut comp = HelpComponent::new();
-        comp.scroll = 5;
-        comp.handle_key(&make_key(Key::Up, KeyModifiers::NONE));
-        assert_eq!(comp.scroll, 4);
-    }
-
-    #[test]
-    fn scroll_up_saturates_at_zero() {
-        let mut comp = HelpComponent::new();
-        comp.scroll = 0;
-        comp.handle_key(&make_key(Key::Up, KeyModifiers::NONE));
-        assert_eq!(comp.scroll, 0);
-    }
-
-    #[test]
-    fn page_down_increments_by_ten() {
-        let mut comp = HelpComponent::new();
-        comp.scroll = 5;
-        comp.handle_key(&make_key(Key::PageDown, KeyModifiers::NONE));
-        assert_eq!(comp.scroll, 15);
-    }
-
-    #[test]
-    fn page_up_decrements_by_ten() {
-        let mut comp = HelpComponent::new();
-        comp.scroll = 5;
-        comp.handle_key(&make_key(Key::PageUp, KeyModifiers::NONE));
-        assert_eq!(comp.scroll, 0);
-    }
-
-    #[test]
-    fn home_resets_scroll_to_zero() {
-        let mut comp = HelpComponent::new();
-        comp.scroll = 42;
-        comp.handle_key(&make_key(Key::Home, KeyModifiers::NONE));
-        assert_eq!(comp.scroll, 0);
-    }
-
-    #[test]
-    fn quit_emits_shell_quit() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Char('q'), KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::Quit)));
-    }
-
-    #[test]
-    fn escape_emits_dismiss_help() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Esc, KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::DismissHelp)));
-    }
-
-    #[test]
-    fn f1_emits_dismiss_help() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Function(1), KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::DismissHelp)));
-    }
-
-    #[test]
-    fn f2_emits_open_settings() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Function(2), KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::OpenSettings)));
-    }
-
-    #[test]
-    fn f3_emits_open_sessions() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Function(3), KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::OpenSessions)));
-    }
-
-    #[test]
-    fn f4_emits_open_playlists() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Function(4), KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::OpenPlaylists)));
-    }
-
-    #[test]
-    fn unbound_key_is_swallowed() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Char('x'), KeyModifiers::NONE));
-        assert_eq!(msg, None);
-    }
-
-    #[test]
-    fn ctrl_q_does_not_emit_quit() {
-        let mut comp = HelpComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Char('q'), KeyModifiers::CONTROL));
-        // Ctrl+Q is not the plain-q quit binding; it's swallowed.
-        assert_eq!(msg, None);
+        let msg = comp.handle_key(&make_key(key, modifiers));
+        assert_eq!(msg, expected);
     }
 
     #[test]

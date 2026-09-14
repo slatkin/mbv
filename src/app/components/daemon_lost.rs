@@ -108,6 +108,7 @@ impl AppComponent<Msg, UserEvent> for DaemonLostComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> tuirealm::event::KeyEvent {
@@ -156,21 +157,18 @@ mod tests {
         );
     }
 
-    #[test]
-    fn set_content_updates_fields() {
+    #[rstest]
+    #[case::set_content_updates_fields(Some("Birthday Clip"), "/tmp/mbvd.log", Some("refused"))]
+    #[case::set_content_with_none_values(None, "/var/log/mbvd.log", None)]
+    fn set_content(
+        #[case] title: Option<&str>,
+        #[case] log_path: &str,
+        #[case] restart_error: Option<&str>,
+    ) {
         let mut comp = DaemonLostComponent::new();
-        comp.set_content(Some("Birthday Clip"), "/tmp/mbvd.log", Some("refused"));
-        assert_eq!(comp.last_playing_title, Some("Birthday Clip".into()));
-        assert_eq!(comp.daemon_log_path, "/tmp/mbvd.log");
-        assert_eq!(comp.restart_error, Some("refused".into()));
-    }
-
-    #[test]
-    fn set_content_with_none_values() {
-        let mut comp = DaemonLostComponent::new();
-        comp.set_content(None, "/var/log/mbvd.log", None);
-        assert_eq!(comp.last_playing_title, None);
-        assert_eq!(comp.daemon_log_path, "/var/log/mbvd.log");
-        assert_eq!(comp.restart_error, None);
+        comp.set_content(title, log_path, restart_error);
+        assert_eq!(comp.last_playing_title.as_deref(), title);
+        assert_eq!(comp.daemon_log_path, log_path);
+        assert_eq!(comp.restart_error.as_deref(), restart_error);
     }
 }

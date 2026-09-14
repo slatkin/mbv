@@ -1,5 +1,6 @@
 use super::*;
 use mbv_core::api::TICKS_PER_SECOND;
+use rstest::{fixture, rstest};
 use mbv_core::audiobookshelf_socket::AudiobookshelfProgress;
 use mbv_core::audiobookshelf_socket::SocketEvent;
 use mbv_core::playback_queue::QueueItem;
@@ -420,6 +421,7 @@ fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
 
 /// Set up the app with a known socket generation and a matching
 /// browse progress entry so the merge will recognise the episode.
+#[fixture]
 fn make_socket_merge_ready_app() -> App {
     let mut app = super::tests_podcast::audiobookshelf_app();
     app.audiobookshelf_socket_generation = Some(app.audiobookshelf_runtime.generation());
@@ -435,9 +437,11 @@ fn make_socket_merge_ready_app() -> App {
     app
 }
 
-#[test]
-fn socket_progress_updates_matching_inactive_queued_episode() {
-    let mut app = make_socket_merge_ready_app();
+#[rstest]
+fn socket_progress_updates_matching_inactive_queued_episode(
+    make_socket_merge_ready_app: App,
+) {
+    let mut app = make_socket_merge_ready_app;
     // Enqueue the known episode as an inactive slot.
     app.enqueue_selected_audiobookshelf_episode(
         0,
@@ -503,9 +507,9 @@ fn socket_progress_updates_matching_inactive_queued_episode() {
     assert!(progress.is_finished);
 }
 
-#[test]
-fn socket_progress_skips_active_slot() {
-    let mut app = make_socket_merge_ready_app();
+#[rstest]
+fn socket_progress_skips_active_slot(make_socket_merge_ready_app: App) {
+    let mut app = make_socket_merge_ready_app;
     app.enqueue_selected_audiobookshelf_episode(
         0,
         0,
@@ -544,9 +548,9 @@ fn socket_progress_skips_active_slot() {
     assert!(!episode.is_finished);
 }
 
-#[test]
-fn socket_progress_skips_unmatched_episode() {
-    let mut app = make_socket_merge_ready_app();
+#[rstest]
+fn socket_progress_skips_unmatched_episode(make_socket_merge_ready_app: App) {
+    let mut app = make_socket_merge_ready_app;
     let before_browse = app.audiobookshelf_browse[0].progress.clone();
 
     app.handle_audiobookshelf_socket_event(SocketEvent::ProgressUpdated(AudiobookshelfProgress {
@@ -564,9 +568,9 @@ fn socket_progress_skips_unmatched_episode() {
     assert!(app.player_tab.queue.slots().is_empty());
 }
 
-#[test]
-fn socket_progress_skips_superseded_generation() {
-    let mut app = make_socket_merge_ready_app();
+#[rstest]
+fn socket_progress_skips_superseded_generation(make_socket_merge_ready_app: App) {
+    let mut app = make_socket_merge_ready_app;
     app.audiobookshelf_browse[0].progress.insert(
         ("show-a".into(), "episode-a".into()),
         mbv_core::audiobookshelf::AudiobookshelfProgress {

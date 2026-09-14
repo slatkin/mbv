@@ -24,6 +24,7 @@ libc = "0.2"
 mimalloc = "0.1"
 pipewire = "0.10.1"
 nix = { version = "0.31", features = ["fs", "process", "signal", "term", "socket"] }
+rstest = { version = "0.27", default-features = false }
 
 [package]
 name = "mbv"
@@ -66,6 +67,7 @@ pipewire.workspace = true
 
 [dev-dependencies]
 uuid.workspace = true
+rstest.workspace = true
 
 [package.metadata.deb]
 maintainer = "slatkin <slatkin@gmail.com>"

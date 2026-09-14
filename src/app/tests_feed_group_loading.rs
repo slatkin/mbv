@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::tests::*;
+use rstest::{fixture, rstest};
 use crate::app::types_browse::BrowseResting;
 
 #[test]
@@ -77,6 +78,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
     );
 }
 
+#[fixture]
 fn make_home_video_app() -> App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
@@ -147,16 +149,16 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
     active
 }
 
-#[test]
-fn feed_home_video_loaded_does_not_push_sublevel() {
-    let mut app = make_home_video_app();
+#[rstest]
+fn feed_home_video_loaded_does_not_push_sublevel(make_home_video_app: App) {
+    let mut app = make_home_video_app;
     seed_home_video_root_loaded(&mut app);
     assert_eq!(app.libs[0].nav_stack.len(), 1);
 }
 
-#[test]
-fn feed_home_video_aggregated_populates_groups_and_all_items() {
-    let mut app = make_home_video_app();
+#[rstest]
+fn feed_home_video_aggregated_populates_groups_and_all_items(make_home_video_app: App) {
+    let mut app = make_home_video_app;
     let active = seed_home_video_root_loaded(&mut app);
 
     let mut video = make_item("Episode 1", "Movie");
@@ -197,9 +199,11 @@ fn feed_home_video_aggregated_populates_groups_and_all_items() {
     assert_eq!(app.libs[0].nav_stack.len(), 1);
 }
 
-#[test]
-fn feed_home_video_aggregated_ensure_group_level_does_not_push_and_resolves_selected_items() {
-    let mut app = make_home_video_app();
+#[rstest]
+fn feed_home_video_aggregated_ensure_group_level_does_not_push_and_resolves_selected_items(
+    make_home_video_app: App,
+) {
+    let mut app = make_home_video_app;
     let active = seed_home_video_root_loaded(&mut app);
 
     let mut video = make_item("Episode 1", "Movie");

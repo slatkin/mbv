@@ -368,31 +368,30 @@ impl AppComponent<Msg, UserEvent> for SearchSidebarComponent {
 mod tests {
     use super::*;
     use crate::app::tests::make_item;
+    use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers};
 
     fn make_key(code: Key, modifiers: KeyModifiers) -> tuirealm::event::KeyEvent {
         tuirealm::event::KeyEvent { code, modifiers }
     }
 
-    #[test]
-    fn esc_emits_dismiss_search() {
+    #[rstest]
+    #[case::esc_emits_dismiss_search(
+        Key::Esc,
+        KeyModifiers::NONE,
+        Some(Msg::Shell(ShellRequest::DismissSearch))
+    )]
+    #[case::ctrl_key_is_swallowed(Key::Char('a'), KeyModifiers::CONTROL, None)]
+    #[case::alt_key_is_swallowed(Key::Char('a'), KeyModifiers::ALT, None)]
+    #[case::unbound_key_is_swallowed(Key::Function(1), KeyModifiers::NONE, None)]
+    fn key_handling(
+        #[case] key: Key,
+        #[case] modifiers: KeyModifiers,
+        #[case] expected: Option<Msg>,
+    ) {
         let mut comp = SearchSidebarComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Esc, KeyModifiers::NONE));
-        assert_eq!(msg, Some(Msg::Shell(ShellRequest::DismissSearch)));
-    }
-
-    #[test]
-    fn ctrl_key_is_swallowed() {
-        let mut comp = SearchSidebarComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::CONTROL));
-        assert_eq!(msg, None);
-    }
-
-    #[test]
-    fn alt_key_is_swallowed() {
-        let mut comp = SearchSidebarComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Char('a'), KeyModifiers::ALT));
-        assert_eq!(msg, None);
+        let msg = comp.handle_key(&make_key(key, modifiers));
+        assert_eq!(msg, expected);
     }
 
     #[test]
@@ -517,13 +516,6 @@ mod tests {
         assert!(comp.debounce_deadline.is_none());
 
         let msg = comp.handle_clock(Instant::now() + Duration::from_secs(1));
-        assert_eq!(msg, None);
-    }
-
-    #[test]
-    fn unbound_key_is_swallowed() {
-        let mut comp = SearchSidebarComponent::new();
-        let msg = comp.handle_key(&make_key(Key::Function(1), KeyModifiers::NONE));
         assert_eq!(msg, None);
     }
 

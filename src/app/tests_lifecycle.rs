@@ -1,5 +1,6 @@
 use super::*;
 use crate::app::tests::*;
+use rstest::rstest;
 
 #[test]
 fn teardown_fast_when_player_thread_is_not_hung() {
@@ -277,17 +278,15 @@ fn wants_terminal_render_true_when_due() {
 // placeholder box. Treating an in-flight image fetch the same as active
 // playback (fast 150ms cadence instead of the 1s idle one) gives the
 // loop a reason to repaint while the placeholder should be visible.
-#[test]
-fn render_interval_is_fast_while_a_card_image_fetch_is_in_flight() {
+#[rstest]
+#[case::render_interval_is_fast_while_a_card_image_fetch_is_in_flight(true, Duration::from_millis(150))]
+#[case::render_interval_is_slow_when_idle_with_no_fetches_in_flight(false, Duration::from_secs(1))]
+fn render_interval(#[case] image_loading: bool, #[case] expected: Duration) {
     let mut app = make_app_stub();
-    app.card_image_loading.insert("movie-1:cmp_primary".into());
-    assert_eq!(app.render_interval(), Duration::from_millis(150));
-}
-
-#[test]
-fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
-    let mut app = make_app_stub();
-    assert_eq!(app.render_interval(), Duration::from_secs(1));
+    if image_loading {
+        app.card_image_loading.insert("movie-1:cmp_primary".into());
+    }
+    assert_eq!(app.render_interval(), expected);
 }
 
 #[test]
@@ -342,64 +341,30 @@ fn enabling_auto_reconnect_persists_the_active_remote_target() {
 // boundaries. The header uses the `next` half directly, while the `P`/`N`
 // keys still reuse both halves.
 
-#[test]
-fn transport_prev_next_unavailable_when_player_inactive() {
-    let app = make_app_stub();
-    assert!(!app.player.status.lock().unwrap().active);
-    assert_eq!(app.transport_prev_next_available(), (false, false));
-}
-
-#[test]
-fn transport_prev_next_both_available_mid_queue() {
-    let app = make_app_stub();
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 3;
-        st.current_idx = 1;
-    }
-    assert_eq!(app.transport_prev_next_available(), (true, true));
-}
-
-#[test]
-fn transport_prev_unavailable_on_first_item() {
-    let app = make_app_stub();
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 3;
-        st.current_idx = 0;
-    }
-    assert_eq!(app.transport_prev_next_available(), (false, true));
-}
-
-#[test]
-fn transport_next_unavailable_on_last_item() {
-    let app = make_app_stub();
-    {
-        let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 3;
-        st.current_idx = 2;
-    }
-    assert_eq!(app.transport_prev_next_available(), (true, false));
-}
-
-#[test]
-fn transport_prev_next_both_available_for_connected_remote_session_regardless_of_local_status() {
-    // SessionInfo (see mbv_core::api::SessionInfo) exposes no
-    // queue-position/length fields, so there's no boundary to check for a
-    // connected remote session. Local status here is deliberately set to
-    // "last item" to prove it's ignored while a session is connected.
+#[rstest]
+#[case::transport_prev_next_unavailable_when_player_inactive(false, 0, 0, false, (false, false))]
+#[case::transport_prev_next_both_available_mid_queue(true, 3, 1, false, (true, true))]
+#[case::transport_prev_unavailable_on_first_item(true, 3, 0, false, (false, true))]
+#[case::transport_next_unavailable_on_last_item(true, 3, 2, false, (true, false))]
+#[case::transport_prev_next_both_available_for_connected_remote_session_regardless_of_local_status(true, 3, 2, true, (true, true))]
+fn transport_prev_next(
+    #[case] active: bool,
+    #[case] queue_len: usize,
+    #[case] current_idx: usize,
+    #[case] connected: bool,
+    #[case] expected: (bool, bool),
+) {
     let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
+    if connected {
+        app.connected_session_id = Some("session-1".into());
+    }
     {
         let mut st = app.player.status.lock().unwrap();
-        st.active = true;
-        st.queue_len = 3;
-        st.current_idx = 2;
+        st.active = active;
+        st.queue_len = queue_len;
+        st.current_idx = current_idx;
     }
-    assert_eq!(app.transport_prev_next_available(), (true, true));
+    assert_eq!(app.transport_prev_next_available(), expected);
 }
 
 #[test]

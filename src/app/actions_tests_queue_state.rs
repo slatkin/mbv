@@ -3,6 +3,7 @@ use crate::app::tests::make_item;
 use mbv_core::playback_queue::{
     AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry, QueueItem, QueueItemContentId,
 };
+use rstest::{fixture, rstest};
 
 use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
@@ -34,8 +35,9 @@ impl Drop for XdgHomeGuard {
         let _ = std::fs::remove_dir_all(&self.dir);
     }
 }
-fn make_queue_items(n: usize) -> Vec<mbv_core::playback_queue::QueueItem> {
-    crate::app::tests::make_items(n)
+#[fixture]
+fn make_queue_items() -> Vec<mbv_core::playback_queue::QueueItem> {
+    crate::app::tests::make_items(3)
         .into_iter()
         .map(|i| mbv_core::playback_queue::QueueItem::Emby(Box::new(i)))
         .collect()
@@ -184,23 +186,29 @@ fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() 
     assert_audiobookshelf_queue_purged(&mbv_core::config::load_queue_state().unwrap().items);
 }
 
-#[test]
-fn queue_restore_cursor_finds_last_played_by_id() {
-    let items = make_queue_items(3);
+#[rstest]
+fn queue_restore_cursor_finds_last_played_by_id(
+    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
+) {
+    let items = make_queue_items;
     let cursor = queue_restore_cursor(&items, 0, None, Some("id1"), false);
     assert_eq!(cursor, 1);
 }
 
-#[test]
-fn queue_restore_cursor_advances_past_a_completed_last_played_item() {
-    let items = make_queue_items(3);
+#[rstest]
+fn queue_restore_cursor_advances_past_a_completed_last_played_item(
+    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
+) {
+    let items = make_queue_items;
     let cursor = queue_restore_cursor(&items, 0, None, Some("id1"), true);
     assert_eq!(cursor, 2);
 }
 
-#[test]
-fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing() {
-    let items = make_queue_items(3);
+#[rstest]
+fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing(
+    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
+) {
+    let items = make_queue_items;
     // "id5" isn't in the restored list (e.g. it was removed from the
     // queue before quitting) — must fall back to the saved cursor, not
     // silently snap back to the front of the queue.
@@ -208,9 +216,11 @@ fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing()
     assert_eq!(cursor, 2);
 }
 
-#[test]
-fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
-    let items = make_queue_items(3);
+#[rstest]
+fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len(
+    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
+) {
+    let items = make_queue_items;
     let cursor = queue_restore_cursor(&items, 99, None, Some("id5"), false);
     #[rustfmt::skip]
     assert_eq!(
@@ -219,9 +229,11 @@ fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
     );
 }
 
-#[test]
-fn queue_restore_cursor_uses_saved_cursor_when_no_last_played_id() {
-    let items = make_queue_items(3);
+#[rstest]
+fn queue_restore_cursor_uses_saved_cursor_when_no_last_played_id(
+    make_queue_items: Vec<mbv_core::playback_queue::QueueItem>,
+) {
+    let items = make_queue_items;
     let cursor = queue_restore_cursor(&items, 1, None, None, false);
     assert_eq!(cursor, 1);
 }

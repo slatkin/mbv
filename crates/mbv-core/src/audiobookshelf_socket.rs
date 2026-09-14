@@ -356,6 +356,7 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
 
     // -- Engine.IO open packet -----------------------------------------------
 
@@ -443,50 +444,23 @@ mod tests {
 
     // -- Malformed / truncated / unknown framing -----------------------------
 
-    #[test]
-    fn malformed_json_returns_none() {
-        assert_eq!(parse("not json"), None);
-    }
-
-    #[test]
-    fn truncated_open_packet_returns_none() {
-        assert_eq!(parse("0{{{"), None);
+    #[rstest]
+    #[case::malformed_json("not json")]
+    #[case::truncated_open_packet("0{{{")]
+    #[case::engine_ping("2")]
+    #[case::engine_pong("3")]
+    #[case::engine_close("1")]
+    #[case::message_disconnect("41")]
+    #[case::message_ack("43")]
+    #[case::message_connect_error("44")]
+    fn parse_rejects_input(#[case] msg: &str) {
+        assert_eq!(parse(msg), None);
     }
 
     #[test]
     fn non_array_event_payload_returns_none() {
         let msg = r#"42"not-an-array""#;
         assert_eq!(parse(msg), None);
-    }
-
-    #[test]
-    fn engine_ping_returns_none() {
-        assert_eq!(parse("2"), None);
-    }
-
-    #[test]
-    fn engine_pong_returns_none() {
-        assert_eq!(parse("3"), None);
-    }
-
-    #[test]
-    fn engine_close_returns_none() {
-        assert_eq!(parse("1"), None);
-    }
-
-    #[test]
-    fn message_disconnect_returns_none() {
-        assert_eq!(parse("41"), None);
-    }
-
-    #[test]
-    fn message_ack_returns_none() {
-        assert_eq!(parse("43"), None);
-    }
-
-    #[test]
-    fn message_connect_error_returns_none() {
-        assert_eq!(parse("44"), None);
     }
 
     #[test]

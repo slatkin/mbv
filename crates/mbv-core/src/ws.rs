@@ -319,6 +319,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rstest::rstest;
     use std::sync::atomic::AtomicBool;
     use std::time::Duration;
 
@@ -383,9 +384,18 @@ mod tests {
         }
     }
 
-    #[test]
-    fn play_empty_item_ids_returns_none() {
-        let msg = r#"{"MessageType":"Play","Data":{"ItemIds":[]}}"#;
+    #[rstest]
+    #[case::play_empty_item_ids_returns_none(r#"{"MessageType":"Play","Data":{"ItemIds":[]}}"#)]
+    #[case::playstate_unknown_command_returns_none(
+        r#"{"MessageType":"Playstate","Data":{"Command":"FlyToMoon"}}"#
+    )]
+    #[case::general_command_unknown_returns_none(
+        r#"{"MessageType":"GeneralCommand","Data":{"Name":"SomethingUnknown"}}"#
+    )]
+    #[case::unknown_message_type_returns_none(r#"{"MessageType":"SomethingElse"}"#)]
+    #[case::malformed_json_returns_none("not json")]
+    #[case::missing_message_type_returns_none(r#"{"Data":{}}"#)]
+    fn parse_msg_returns_none(#[case] msg: &str) {
         assert!(parse_msg(msg).is_none());
     }
 
@@ -425,12 +435,6 @@ mod tests {
         } else {
             panic!();
         }
-    }
-
-    #[test]
-    fn playstate_unknown_command_returns_none() {
-        let msg = r#"{"MessageType":"Playstate","Data":{"Command":"FlyToMoon"}}"#;
-        assert!(parse_msg(msg).is_none());
     }
 
     // ── GeneralCommand ───────────────────────────────────────────────────────
@@ -483,29 +487,7 @@ mod tests {
         assert!(matches!(parse_msg(msg), Some(WsEvent::SetSub(-1))));
     }
 
-    #[test]
-    fn general_command_unknown_returns_none() {
-        let msg = r#"{"MessageType":"GeneralCommand","Data":{"Name":"SomethingUnknown"}}"#;
-        assert!(parse_msg(msg).is_none());
-    }
-
     // ── Other message types ──────────────────────────────────────────────────
-
-    #[test]
-    fn unknown_message_type_returns_none() {
-        let msg = r#"{"MessageType":"SomethingElse"}"#;
-        assert!(parse_msg(msg).is_none());
-    }
-
-    #[test]
-    fn malformed_json_returns_none() {
-        assert!(parse_msg("not json").is_none());
-    }
-
-    #[test]
-    fn missing_message_type_returns_none() {
-        assert!(parse_msg(r#"{"Data":{}}"#).is_none());
-    }
 
     #[test]
     fn flush_acknowledges_without_a_connection() {

@@ -12,6 +12,7 @@ use crate::app::{
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerEvent;
+use rstest::rstest;
 use std::collections::HashMap;
 use std::sync::mpsc;
 
@@ -261,30 +262,16 @@ fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
     });
 }
 
-#[test]
-fn should_show_letter_pills_true_for_large_tvshows_library() {
+#[rstest]
+#[case::should_show_letter_pills_true_for_large_tvshows_library(301)]
+#[case::should_show_letter_pills_true_for_any_tvshows_total(5)]
+fn should_show_letter_pills_true_for_tvshows_total(#[case] total: usize) {
     let mut app = make_app_stub();
     app.libs.push(lib_tab("tvshows"));
     push_top_level_tv(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(301);
+    app.libs[0].library_total = Some(total);
 
-    assert!(
-        app.should_show_letter_pills(0),
-        "large tvshows library should show letter pills"
-    );
-}
-
-#[test]
-fn should_show_letter_pills_true_for_any_tvshows_total() {
-    let mut app = make_app_stub();
-    app.libs.push(lib_tab("tvshows"));
-    push_top_level_tv(&mut app.libs[0], 10);
-    app.libs[0].library_total = Some(5);
-
-    assert!(
-        app.should_show_letter_pills(0),
-        "any captured tvshows total qualifies"
-    );
+    assert!(app.should_show_letter_pills(0));
 }
 
 #[test]

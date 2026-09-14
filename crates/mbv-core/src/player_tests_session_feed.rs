@@ -23,6 +23,7 @@ fn make_feed_entry_no_source(guid: &str, title: &str) -> crate::playback_queue::
     e
 }
 
+#[rstest::fixture]
 fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
     let entry = make_feed_entry("feed-1", "Podcast Episode 1");
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
@@ -67,77 +68,65 @@ fn make_feed_session() -> (PlaybackRun, Arc<Mutex<PlayerStatus>>) {
     (session, status)
 }
 
-#[test]
-fn feed_session_initializes_with_correct_title_and_queue_len() {
-    let (session, _status) = make_feed_session();
-    assert_eq!(session.osd_title, "Podcast Episode 1");
-    assert_eq!(session.queue_len(), 1);
-    assert_eq!(session.current_idx, 0);
-}
-
-#[test]
-fn feed_session_load_active_item_state_sets_zero_position() {
-    let (session, _status) = make_feed_session();
-    assert_eq!(session.last_valid_pos, 0);
-    assert!(session.series_id.as_str().is_empty());
-}
-
-#[test]
-fn feed_session_origin_is_standalone() {
-    let (session, _status) = make_feed_session();
-    // Feed from idle creates a Standalone session — no PlaybackOrigin::Feed.
-    assert_eq!(session.origin, PlaybackOrigin::Standalone);
-}
-
-#[test]
-fn feed_session_has_no_ext_sub_urls() {
-    let (session, _status) = make_feed_session();
-    assert!(session.ext_sub_urls.is_empty());
-}
-
-#[test]
-fn feed_session_reporter_has_no_session() {
-    let (session, _status) = make_feed_session();
-    assert!(
-        !session.reporter.has_session(),
-        "feed reporter must have no Emby session"
-    );
-}
-
-#[test]
-fn feed_queue_item_primary_source_returns_enclosure() {
-    let entry = make_feed_entry("g1", "title");
-    let qi = QueueItem::Feed(entry.clone());
-    if let QueueItem::Feed(e) = &qi {
-        assert_eq!(e.primary_source(), Some("https://example.com/g1.mp3"));
+#[rstest]
+#[case::initializes_with_correct_title_and_queue_len(0)]
+#[case::load_active_item_state_sets_zero_position(1)]
+#[case::origin_is_standalone(2)]
+#[case::has_no_ext_sub_urls(3)]
+#[case::reporter_has_no_session(4)]
+fn feed_session_properties(
+    make_feed_session: (PlaybackRun, Arc<Mutex<PlayerStatus>>),
+    #[case] property: u8,
+) {
+    let (session, _status) = make_feed_session;
+    match property {
+        0 => {
+            assert_eq!(session.osd_title, "Podcast Episode 1");
+            assert_eq!(session.queue_len(), 1);
+            assert_eq!(session.current_idx, 0);
+        }
+        1 => {
+            assert_eq!(session.last_valid_pos, 0);
+            assert!(session.series_id.as_str().is_empty());
+        }
+        2 => assert_eq!(session.origin, PlaybackOrigin::Standalone),
+        3 => assert!(session.ext_sub_urls.is_empty()),
+        4 => assert!(!session.reporter.has_session(), "feed reporter must have no Emby session"),
+        _ => unreachable!(),
     }
 }
 
-#[test]
-fn feed_queue_item_falls_back_to_link() {
+#[rstest::rstest]
+#[case::primary_source_returns_enclosure(
+    Some("https://example.com/g1.mp3"),
+    None,
+    Some("https://example.com/g1.mp3")
+)]
+#[case::falls_back_to_link(
+    None,
+    Some("https://fallback.example.com/ep"),
+    Some("https://fallback.example.com/ep")
+)]
+#[case::no_primary_source_when_both_absent(None, None, None)]
+fn feed_queue_item_primary_source(
+    #[case] enclosure: Option<&str>,
+    #[case] link: Option<&str>,
+    #[case] expected: Option<&str>,
+) {
     let mut entry = make_feed_entry("g1", "title");
-    entry.enclosure_url = None;
-    entry.link = Some("https://fallback.example.com/ep".into());
+    entry.enclosure_url = enclosure.map(str::to_owned);
+    entry.link = link.map(str::to_owned);
     let qi = QueueItem::Feed(entry);
     if let QueueItem::Feed(e) = &qi {
-        assert_eq!(e.primary_source(), Some("https://fallback.example.com/ep"));
+        assert_eq!(e.primary_source(), expected);
     }
 }
 
-#[test]
-fn feed_queue_item_no_primary_source_when_both_absent() {
-    let mut entry = make_feed_entry("g1", "title");
-    entry.enclosure_url = None;
-    entry.link = None;
-    let qi = QueueItem::Feed(entry);
-    if let QueueItem::Feed(e) = &qi {
-        assert!(e.primary_source().is_none());
-    }
-}
-
-#[test]
-fn feed_cancel_pending_quit_clears_state() {
-    let (mut session, _status) = make_feed_session();
+#[rstest::rstest]
+fn feed_cancel_pending_quit_clears_state(
+    make_feed_session: (PlaybackRun, Arc<Mutex<PlayerStatus>>),
+) {
+    let (mut session, _status) = make_feed_session;
     session.quit_at = Some(std::time::Instant::now());
     *session.shutdown_report_timeout.lock().unwrap() = Some(Duration::from_secs(5));
 
@@ -233,14 +222,16 @@ fn feed_empty_queue_creates_standalone_session() {
 
 // ── Reporter session guards ────────────────────────────────────────────────
 
-#[test]
-fn reporter_session_lifecycle() {
-    let (with_ids, _) = make_no_session_reporter_with_ids();
+#[rstest::rstest]
+fn reporter_session_lifecycle(
+    make_no_session_reporter_with_ids: (SessionReporter, crate::mock_http::MockHttp),
+    make_no_session_reporter: SessionReporter,
+) {
+    let (with_ids, _) = make_no_session_reporter_with_ids;
     assert!(with_ids.has_session());
     with_ids.clear_session();
     assert!(!with_ids.has_session());
-    let no_ids = make_no_session_reporter();
-    assert!(!no_ids.has_session());
+    assert!(!make_no_session_reporter.has_session());
 }
 
 // ── Source-less feed entry ─────────────────────────────────────────────────
@@ -365,6 +356,7 @@ fn feed_queue_quit_path_does_not_mark_played_with_empty_id() {
 
 // ── Behavioral: reporter no-session reporting ──────────────────────────────
 
+#[rstest::fixture]
 fn make_no_session_reporter() -> SessionReporter {
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
@@ -379,9 +371,9 @@ fn make_no_session_reporter() -> SessionReporter {
     )
 }
 
-#[test]
-fn reporter_no_session_all_reporting_is_noop() {
-    let reporter = make_no_session_reporter();
+#[rstest::rstest]
+fn reporter_no_session_all_reporting_is_noop(make_no_session_reporter: SessionReporter) {
+    let reporter = make_no_session_reporter;
     assert!(!reporter.has_session());
     assert!(!reporter.report_stopped(12345));
     assert!(!reporter.report_stopped_for_shutdown(0, Duration::from_secs(5)));
@@ -390,9 +382,11 @@ fn reporter_no_session_all_reporting_is_noop() {
     reporter.report_progress("Pause");
 }
 
-#[test]
-fn reporter_with_session_stopped_proceeds_to_client() {
-    let (reporter, http) = make_no_session_reporter_with_ids();
+#[rstest::rstest]
+fn reporter_with_session_stopped_proceeds_to_client(
+    make_no_session_reporter_with_ids: (SessionReporter, crate::mock_http::MockHttp),
+) {
+    let (reporter, http) = make_no_session_reporter_with_ids;
     assert!(reporter.has_session());
     // Succeeds instantly on the mock: with a session the call must proceed
     // to the client and hit the Stopped endpoint — previously this asserted
@@ -404,6 +398,7 @@ fn reporter_with_session_stopped_proceeds_to_client() {
     assert!(requests[0].starts_with("POST /Sessions/Playing/Stopped"));
 }
 
+#[rstest::fixture]
 fn make_no_session_reporter_with_ids() -> (SessionReporter, crate::mock_http::MockHttp) {
     let status = Arc::new(Mutex::new(PlayerStatus::default()));
     let http = crate::mock_http::MockHttp::new();
