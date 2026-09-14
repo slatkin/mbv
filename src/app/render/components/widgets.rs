@@ -181,10 +181,11 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
     area
 }
 
-/// Style for a pill-selector choice: soft-white text on the dark hovered
-/// surface, muted text while resting, and the dominant selected treatment.
-/// This is the canonical appearance for every interactive pill selector (Home
-/// sections, feed groups, music groups, letter filters, and series seasons).
+/// Style for a pill-selector choice: soft-white text while hovered (chip
+/// background unchanged), muted text while resting, and the dominant
+/// selected treatment. This is the canonical appearance for every
+/// interactive pill selector (Home sections, feed groups, music groups,
+/// letter filters, and series seasons).
 fn selector_pill_style(selected: bool, hovered: bool) -> Style {
     let chip = if selected {
         palette::Surface::PillChipSelected
