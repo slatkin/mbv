@@ -173,19 +173,22 @@ impl App {
         }
     }
 
-    /// Rebuild the local canonical queue from a context-menu selection, unless
-    /// the run is a direct remote queue (which rebuilds its own queue on
-    /// submission instead). Shared by `PlaySelection`/`ShuffleSelection`.
+    /// Rebuild the local canonical queue from a context-menu selection only
+    /// when this process owns playback. A direct remote queue rebuilds its own
+    /// queue on submission, while an attached Session must leave the local
+    /// Composed queue untouched. Shared by `PlaySelection`/`ShuffleSelection`.
     fn rebuild_queue_for_selection(
         &mut self,
         items: &[EmbyItem],
         source: crate::config::QueueSource,
     ) {
-        if !self.has_direct_remote_queue() {
+        let rebuild_local_queue =
+            !self.has_direct_remote_queue() && self.connected_session_id.is_none();
+        if rebuild_local_queue {
             self.replace_playback_queue(items.to_vec(), 0);
         }
         self.queue_source = source;
-        if !self.has_direct_remote_queue() {
+        if rebuild_local_queue {
             self.save_queue_state();
         }
     }

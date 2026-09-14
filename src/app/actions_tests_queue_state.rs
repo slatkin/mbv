@@ -135,6 +135,48 @@ fn context_selection_rebuilds_canonical_queue_before_submission(
     assert_context_selection_replaces_nonsequential_queue(action(selected));
 }
 
+fn assert_attached_context_selection_preserves_local_queue(action: ContextAction) {
+    let mut app = crate::app::tests::make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    app.player_tab.set_items(
+        crate::app::tests::make_items(2),
+        app.player_tab.queue_cursor,
+    );
+    app.player_tab.queue_cursor = 1;
+    let before: Vec<_> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+        .collect();
+
+    app.execute_context_action(Some(action), None);
+
+    let after: Vec<_> = app
+        .player_tab
+        .queue
+        .slots()
+        .iter()
+        .map(|slot| (slot.slot_id, slot.item.id().to_string()))
+        .collect();
+    assert_eq!(after, before);
+    assert_eq!(app.player_tab.queue_cursor, 1);
+}
+
+#[rstest]
+#[case::play(ContextAction::PlaySelection as fn(Vec<EmbyItem>) -> ContextAction)]
+#[case::shuffle(ContextAction::ShuffleSelection as fn(Vec<EmbyItem>) -> ContextAction)]
+fn attached_context_selection_preserves_local_queue(
+    #[case] action: fn(Vec<EmbyItem>) -> ContextAction,
+) {
+    let selected = vec![
+        make_item("selected", "Movie"),
+        make_item("selected-2", "Movie"),
+    ];
+    assert_attached_context_selection_preserves_local_queue(action(selected));
+}
+
 #[test]
 fn audiobookshelf_service_removal_and_replacement_purge_all_queue_projections() {
     let _g = XDG_HOME_LOCK.lock().unwrap();
