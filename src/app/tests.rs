@@ -65,43 +65,6 @@ pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_core::api::Se
     }
 }
 
-/// Minimal daemon-side protocol handshake for tests that need a real
-/// TCP socket `RemotePlayer::connect_endpoint` can connect to (#233):
-/// sends the protocol hello, drains the client's hello line, then
-/// sends an empty initial state. Returns the accepted `TcpStream` so
-/// the caller can observe what happens to it afterward (e.g. that the
-/// client shuts it down).
-pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net::TcpStream {
-    use std::io::{BufRead, BufReader, Write};
-    let mut writer = stream.try_clone().unwrap();
-    let mut reader = BufReader::new(stream.try_clone().unwrap());
-
-    let hello = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::Hello(
-        mbv_core::ctrl::CtrlHello::current(),
-    ))
-    .unwrap();
-    writeln!(writer, "{hello}").unwrap();
-
-    let mut client_hello = String::new();
-    reader.read_line(&mut client_hello).unwrap();
-
-    let initial_state = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::UnifiedQueueState(
-        mbv_core::ctrl::UnifiedQueueStateData {
-            status: mbv_core::player::PlayerStatus::default(),
-            slots: Vec::new(),
-            active_slot: None,
-            revision: 0,
-            source: crate::config::QueueSource::Unknown,
-            in_flight_transition: None,
-            queued_latest_transition: None,
-        },
-    ))
-    .unwrap();
-    writeln!(writer, "{initial_state}").unwrap();
-
-    stream
-}
-
 // ── test helpers ─────────────────────────────────────────────────────────
 
 pub(crate) fn make_items(n: usize) -> Vec<EmbyItem> {

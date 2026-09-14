@@ -239,13 +239,4 @@ impl PlayerTab {
     pub(super) fn set_slot_progress_at(&mut self, index: usize, position_ticks: i64) {
         self.queue.set_slot_progress_by_index(index, position_ticks);
     }
-
-    /// Test helper: replace the item at a specific index. Used by tests
-    /// that need to modify queue items after construction.
-    #[cfg(test)]
-    pub(super) fn set_item_at(&mut self, index: usize, item: QueueItem) {
-        if let Some(slot_id) = self.queue.slots().get(index).map(|slot| slot.slot_id) {
-            let _ = self.queue.update_slot_item(slot_id, item);
-        }
-    }
 }

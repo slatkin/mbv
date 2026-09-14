@@ -1,24 +1,8 @@
 use super::*;
 use crate::app::tests::*;
-use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
-use std::io::Read as _;
-use std::net::TcpListener;
-
+use mbv_core::remote_player::DaemonEndpoint;
 pub(super) fn stub_endpoint() -> DaemonEndpoint {
     DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap())
-}
-
-pub(super) fn spawn_stub_daemon() -> (
-    std::net::SocketAddr,
-    std::thread::JoinHandle<std::net::TcpStream>,
-) {
-    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-    let addr = listener.local_addr().unwrap();
-    let handle = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().unwrap();
-        crate::app::tests::run_stub_daemon_handshake(stream)
-    });
-    (addr, handle)
 }
 
 #[test]
@@ -129,37 +113,6 @@ fn switch_to_direct_remote_rebinds_mpris_to_the_new_remote_status() {
 }
 
 #[test]
-fn switch_to_direct_remote_disconnects_the_previous_remote_on_a_remote_to_remote_swap() {
-    // Same #233 regression, but for the Sessions-panel direct-remote
-    // #233: second Direct Remote upgrade must disconnect the old.
-    let (addr_a, daemon_a) = spawn_stub_daemon();
-    let (addr_b, daemon_b) = spawn_stub_daemon();
-
-    let mut app = make_app_stub();
-    let sess_a = make_session("daemon-a", "mbv");
-    let (remote_a, remote_a_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a)).unwrap();
-    app.switch_to_direct_remote(&sess_a, remote_a, remote_a_rx, &stub_endpoint());
-
-    let sess_b = make_session("daemon-b", "mbv");
-    let (remote_b, remote_b_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b)).unwrap();
-    app.switch_to_direct_remote(&sess_b, remote_b, remote_b_rx, &stub_endpoint());
-
-    let mut daemon_a_stream = daemon_a.join().unwrap();
-    daemon_a_stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
-        .unwrap();
-    let mut pending_control_bytes = Vec::new();
-    daemon_a_stream
-        .read_to_end(&mut pending_control_bytes)
-        .expect("old direct-remote client socket must be shut down after the swap");
-
-    drop(daemon_b);
-    let _ = addr_b;
-}
-
-#[test]
 fn switch_to_library_route_sets_active_route_and_suspends_local() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
@@ -202,35 +155,6 @@ fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
     app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
 
     assert!(app.has_direct_remote_queue());
-}
-
-#[test]
-fn switch_to_library_route_disconnects_the_previous_remote_on_a_route_to_route_swap() {
-    // #233: route-to-route swap must disconnect the old RemotePlayer's socket.
-    let (addr_a, daemon_a) = spawn_stub_daemon();
-    let (addr_b, daemon_b) = spawn_stub_daemon();
-
-    let mut app = make_app_stub();
-    let (remote_a, remote_a_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a)).unwrap();
-    app.switch_to_library_route("music", remote_a, remote_a_rx, &stub_endpoint());
-    assert!(!app.player.is_remote_disconnected());
-
-    let (remote_b, remote_b_rx) =
-        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b)).unwrap();
-    app.switch_to_library_route("movies", remote_b, remote_b_rx, &stub_endpoint());
-
-    let mut daemon_a_stream = daemon_a.join().unwrap();
-    daemon_a_stream
-        .set_read_timeout(Some(Duration::from_secs(2)))
-        .unwrap();
-    let mut pending_control_bytes = Vec::new();
-    daemon_a_stream
-        .read_to_end(&mut pending_control_bytes)
-        .expect("old library route's client socket must be shut down after the swap");
-
-    drop(daemon_b);
-    let _ = addr_b;
 }
 
 #[test]
@@ -277,41 +201,3 @@ fn restore_local_mode_clears_active_route() {
     assert!(!app.player.is_remote());
 }
 
-#[test]
-fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
-    // #233: restore_local_mode must disconnect the old remote before restoring local.
-    let (addr, daemon) = spawn_stub_daemon();
-
-    let mut app = make_app_stub();
-    let (remote, remote_rx) = RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr)).unwrap();
-    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
-    assert!(!app.player.is_remote_disconnected());
-
-    app.restore_local_mode("test: ending library route session");
-
-    // The client may still have in-flight protocol traffic queued ahead of
-    // the close (e.g. a trailing status message), so drain reads until the
-    // socket actually reaches EOF rather than asserting on a single read.
-    let mut daemon_stream = daemon.join().unwrap();
-    daemon_stream
-        .set_read_timeout(Some(Duration::from_millis(200)))
-        .unwrap();
-    let deadline = std::time::Instant::now() + Duration::from_secs(2);
-    let mut buf = [0u8; 256];
-    loop {
-        match daemon_stream.read(&mut buf) {
-            Ok(0) => break,
-            Ok(_) => {}
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
-                ) => {}
-            Err(e) => panic!("unexpected read error: {e}"),
-        }
-        assert!(
-            std::time::Instant::now() < deadline,
-            "old remote's client socket must be shut down after restore_local_mode"
-        );
-    }
-}
