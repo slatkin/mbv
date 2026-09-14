@@ -48,6 +48,9 @@ struct SplitGeometry {
 pub struct LibraryPanel {
     owners: LibraryOwners,
     focused: bool,
+    /// The main Selector row's locally resolved hovered pill, independent of
+    /// selection and the other pill surfaces owned by this panel.
+    hovered_selector: Option<usize>,
     /// Session-only Wide hero list-pane width override (shell-direct push;
     /// `None` = default ratio). Forwarded into the wide skeleton's shared
     /// split; never stored clamped.
@@ -84,6 +87,7 @@ impl LibraryPanel {
         Self {
             owners: LibraryOwners::new(),
             focused: false,
+            hovered_selector: None,
             list_pane_width: None,
             hits: SkeletonHits::default(),
             pill_windows: SkeletonPillWindows::default(),
@@ -192,6 +196,11 @@ impl LibraryPanel {
         &self,
     ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
         &self.hits.selector
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_hovered_selector(&self) -> Option<usize> {
+        self.hovered_selector
     }
 
     /// The List-controls row's retained hit regions, for the pill-row test
@@ -474,8 +483,9 @@ impl LibraryPanel {
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
-        // Browse does not consume hover-move (design.md D7).
         if matches!(mouse.kind, MouseEventKind::Moved) {
+            let at = Position::new(mouse.column, mouse.row);
+            self.hovered_selector = self.hits.selector.resolve(at).copied();
             return None;
         }
         // The panel resolves only geometry it painted; an unpainted frame

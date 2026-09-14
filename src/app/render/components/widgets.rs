@@ -181,11 +181,12 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
     area
 }
 
-/// Style for a pill-selector choice: white text on the green selected
-/// surface, muted text on the dark unselected surface. This is the canonical
-/// appearance for every interactive pill selector (Home sections, feed
-/// groups, music groups, letter filters, and series seasons).
-fn selector_pill_style(selected: bool) -> Style {
+/// Style for a pill-selector choice: soft-white text while hovered (chip
+/// background unchanged), muted text while resting, and the dominant
+/// selected treatment. This is the canonical appearance for every
+/// interactive pill selector (Home sections, feed groups, music groups,
+/// letter filters, and series seasons).
+fn selector_pill_style(selected: bool, hovered: bool) -> Style {
     let chip = if selected {
         palette::Surface::PillChipSelected
     } else {
@@ -194,6 +195,8 @@ fn selector_pill_style(selected: bool) -> Style {
     Style::default()
         .fg(if selected {
             palette::PILL_SELECTED_FG
+        } else if hovered {
+            palette::TEXT_EMPHASIS
         } else {
             palette::PILL_FG
         })
@@ -212,6 +215,7 @@ pub(in crate::app) struct PillBar<'a> {
     pub labels: &'a [String],
     pub ids: &'a [usize],
     pub selected_pos: usize,
+    pub hovered: Option<usize>,
     pub prefix: Option<&'a str>,
     /// The row's retained overflow window (its last painted one). `Default`
     /// on first paint or after a layout change: the window centers on the
@@ -414,7 +418,8 @@ pub(in crate::app) fn render_pill_bar(
         let abs_idx = scroll_start + offset;
         let selected = abs_idx == bar.selected_pos;
         let is_last_pill = abs_idx + 1 == n;
-        let style = selector_pill_style(selected);
+        let hovered = bar.hovered == Some(abs_idx);
+        let style = selector_pill_style(selected, hovered);
         let pill = format!(" {} ", label);
         let marker_w = "◢◤".width() as u16;
         let pill_w = pill.width() as u16 + marker_w;

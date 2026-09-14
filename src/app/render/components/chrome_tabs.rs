@@ -27,6 +27,8 @@ pub(in crate::app) struct TabBarModel<'a> {
     /// Scroll anchor shared with the keyboard tab-cycling path
     /// (`App::ensure_tab_visible`).
     pub scroll: usize,
+    /// Full tab position currently under the pointer, if any.
+    pub hovered: Option<usize>,
 }
 
 /// Tab-title widths: 2-column padding around each title. One definition for
@@ -148,6 +150,7 @@ pub(in crate::app) fn render_tab_bar(
         .enumerate()
         .map(|(i, n)| {
             let n = n.to_uppercase();
+            let position = vis_start + i;
             let line = if i == selected_tab {
                 Line::from(vec![
                     Span::styled("▐", Style::default().fg(palette::ACCENT)),
@@ -159,10 +162,12 @@ pub(in crate::app) fn render_tab_bar(
                     ),
                 ])
             } else {
-                Line::from(Span::styled(
-                    format!("  {n}  "),
-                    Style::default().fg(Color::Rgb(73, 81, 86)),
-                ))
+                let style = if model.hovered == Some(position) {
+                    Style::default().fg(palette::TEXT_STRONG)
+                } else {
+                    Style::default().fg(Color::Rgb(73, 81, 86))
+                };
+                Line::from(Span::styled(format!("  {n}  "), style))
             };
             let width = line.width() as u16;
             hits.push((
@@ -172,7 +177,7 @@ pub(in crate::app) fn render_tab_bar(
                     width,
                     height: 1,
                 },
-                vis_start + i,
+                position,
             ));
             tab_x += width;
             line

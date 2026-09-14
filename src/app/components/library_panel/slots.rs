@@ -30,6 +30,7 @@ pub(in crate::app) fn paint_pill_bar_row(
     area: Rect,
     labels: &[String],
     active: Option<usize>,
+    hovered: Option<usize>,
     prefix: Option<&str>,
     hits: &mut HitRegions<usize>,
     window: &mut PillBarWindow,
@@ -45,6 +46,7 @@ pub(in crate::app) fn paint_pill_bar_row(
             labels,
             ids: &ids,
             selected_pos,
+            hovered,
             prefix,
             window: *window,
         },
@@ -70,6 +72,7 @@ pub(in crate::app) fn paint_selector_row(
     bar_area: Rect,
     spacer_area: Rect,
     row: &SelectorRow,
+    hovered: Option<usize>,
     hits: &mut HitRegions<usize>,
     window: &mut PillBarWindow,
 ) {
@@ -79,6 +82,7 @@ pub(in crate::app) fn paint_selector_row(
             bar_area,
             &row.pills,
             row.active,
+            hovered,
             Some(SELECTOR_ROW_PREFIX),
             hits,
             window,
@@ -155,7 +159,7 @@ mod tests {
         let mut hits = HitRegions::new();
         let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, &mut hits, &mut window);
+            paint_selector_row(f, bar, spacer, &row, None, &mut hits, &mut window);
         });
         let buf = terminal.backend().buffer();
         assert!(text_in(buf, bar, "Movies") && text_in(buf, bar, "TV"));
@@ -183,6 +187,49 @@ mod tests {
     }
 
     #[test]
+    fn selector_row_hover_precedes_resting_but_selected_wins() {
+        let bar = Rect::new(2, 1, 20, 1);
+        let spacer = Rect::new(2, 2, 20, 1);
+        let row = SelectorRow {
+            pills: vec!["Movies".into(), "TV".into()],
+            active: Some(1),
+        };
+        let mut hits = HitRegions::new();
+        let mut window = PillBarWindow::default();
+        let terminal = draw(24, 4, |f| {
+            paint_selector_row(f, bar, spacer, &row, Some(0), &mut hits, &mut window);
+        });
+        let buf = terminal.backend().buffer();
+        let (hovered_rect, _) = hits.regions()[0];
+        let (selected_rect, _) = hits.regions()[1];
+        assert!(bar.contains(ratatui::layout::Position::new(
+            hovered_rect.x,
+            hovered_rect.y
+        )));
+        assert_eq!(
+            buf[(hovered_rect.x + 1, hovered_rect.y)].bg,
+            palette::surface_colors(palette::Surface::PillChip, true).fill
+        );
+        assert_eq!(
+            buf[(selected_rect.x + 1, selected_rect.y)].bg,
+            palette::PILL_SELECTED_BG
+        );
+        assert_eq!(
+            buf[(hovered_rect.x + 1, hovered_rect.y)].fg,
+            palette::TEXT_EMPHASIS
+        );
+        assert_ne!(
+            buf[(hovered_rect.x + 1, hovered_rect.y)].fg,
+            buf[(hovered_rect.x + 1, hovered_rect.y)].bg,
+            "hovered pill text must remain legible against its surface"
+        );
+        assert_eq!(
+            buf[(selected_rect.x + 1, selected_rect.y)].fg,
+            palette::PILL_SELECTED_FG
+        );
+    }
+
+    #[test]
     fn selector_row_with_active_none_paints_no_active_pill() {
         let bar = Rect::new(2, 1, 20, 1);
         let spacer = Rect::new(2, 2, 20, 1);
@@ -193,7 +240,7 @@ mod tests {
         let mut hits = HitRegions::new();
         let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, &mut hits, &mut window);
+            paint_selector_row(f, bar, spacer, &row, None, &mut hits, &mut window);
         });
         let buf = terminal.backend().buffer();
         // Both pills paint (unselected); no cell anywhere in the bar carries
@@ -227,7 +274,7 @@ mod tests {
         let mut hits = HitRegions::new();
         let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, &mut hits, &mut window);
+            paint_selector_row(f, bar, spacer, &row, None, &mut hits, &mut window);
         });
         let buf = terminal.backend().buffer();
         assert!(hits.regions().is_empty(), "no pill painted, no hit kept");

@@ -72,6 +72,7 @@ fn draw_narrow(
                 area,
                 &mut content,
                 false,
+                None,
                 &mut hits,
                 &mut windows,
             ));
@@ -360,6 +361,7 @@ fn narrow_skeleton_places_selector_controls_and_list() {
                 area,
                 &mut content,
                 false,
+                None,
                 &mut hits,
                 &mut windows,
             ));

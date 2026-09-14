@@ -83,6 +83,7 @@ pub(in crate::app) fn render_selection_modal_content(
                 labels: &filter.labels,
                 ids: &ids,
                 selected_pos: filter.selected,
+                hovered: None,
                 prefix: None,
                 window: PillBarWindow::default(),
             },

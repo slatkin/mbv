@@ -314,6 +314,7 @@ pub(in crate::app) fn render_narrow_skeleton(
     area: Rect,
     content: &mut LibraryPanelContent<'_>,
     browser_focused: bool,
+    hovered_selector: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
 ) -> NarrowSkeletonGeometry {
@@ -330,6 +331,7 @@ pub(in crate::app) fn render_narrow_skeleton(
                 areas.pills_area,
                 areas.spacer_area,
                 selector,
+                hovered_selector,
                 &mut hits.selector,
                 &mut windows.selector,
             );
@@ -344,6 +346,7 @@ pub(in crate::app) fn render_narrow_skeleton(
                 f,
                 areas.pills_area,
                 &[],
+                None,
                 None,
                 Some(SELECTOR_ROW_PREFIX),
                 &mut hits.selector,
