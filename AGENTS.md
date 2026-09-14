@@ -144,6 +144,11 @@ coverage.
   user to ask for it explicitly, per request.
 * check: `cargo check -p <package>`
 * test: `cargo nextest run -p <package>` locally (prefer nextest); CI runs `cargo test --release -- --test-threads=4` (fd-budget throttling, see `build.yml` comment); `cargo llvm-cov` should be used to help ensuring proper test covrerage.
+* **Unit tests are mocks only — no live tests, no smoke tests.** Unit tests must not
+  construct real externals: no live mpv handle (`init_mpv`/`test_mpv`), no real config
+  or state directories, no live servers. Mock the boundary; keep tests deterministic
+  and hermetic. mbv is a single-user system — live/smoke coverage is inappropriate;
+  anything that genuinely needs the real external is a manual check, not a test.
 * lint: `cargo clippy --workspace --all-targets -- -D warnings`
 * format: `cargo fmt`
 * errors: custom domain error types (e.g. `AudiobookshelfError`); do not introduce `anyhow`/`thiserror`/`eyre`
