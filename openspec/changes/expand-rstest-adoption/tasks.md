@@ -30,6 +30,6 @@
 
 ## 5. Whole-change verification and disposition
 
-- [ ] 5.1 Verify every converted table is named and preserves the baseline’s one-to-one test count: read each file diff, compare its cases to `baseline.md`, and verify `cargo nextest list -p mbv-core` and `-p mbv` totals remain unchanged; record selected/deferred results in `candidates.md` without changing deferred source.
-- [ ] 5.2 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --release --test-threads=4`; verify all succeed, `cargo tree -p rstest --target all` still contains no async runtime or timeout path, and `git diff --stat` contains only test modules, their test-only helpers, and this change’s artifacts.
-- [ ] 5.3 Commit the baseline, candidate disposition, and task-state docs separately from source commits; comment on #710 with the resulting family/case/fixture counts and explicitly note every deferred category, without closing the issue.
+- [x] 5.1 Verify every converted table is named and preserves the baseline’s one-to-one test count: read each file diff, compare its cases to `baseline.md`, and verify `cargo nextest list -p mbv-core` and `-p mbv` totals remain unchanged; record selected/deferred results in `candidates.md` without changing deferred source.
+- [x] 5.2 Run `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo nextest run --release --test-threads=4`; verify all succeed, `cargo tree -p rstest --target all` still contains no async runtime or timeout path, and `git diff --stat` contains only test modules, their test-only helpers, and this change’s artifacts.
+- [x] 5.3 Commit the baseline, candidate disposition, and task-state docs separately from source commits; comment on #710 with the resulting family/case/fixture counts and explicitly note every deferred category, without closing the issue.
