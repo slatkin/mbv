@@ -630,3 +630,27 @@ fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
 // ── PlayerStatus::next_idx / previous_idx / toggle_to_reach ──────────────
 // (issue #80: single source of truth for next/previous/toggle-play bounds
 // and paused-state logic, replacing four near-identical copies.)
+
+#[test]
+fn standalone_natural_end_file_marks_status_inactive() {
+    // Regression: a daemon's Standalone run reached natural EOF, reported
+    // Stopped + mark_played to Emby, and idled — but the shared status
+    // snapshot kept active=true at the final position. A client attaching
+    // later inherited a "still playing, 1s left" now-playing panel, and
+    // every StatusOnly broadcast kept replaying it.
+    let (mut session, status, events, http) = make_queue_session_for_pos_tests_with_mock(0);
+    session.origin = PlaybackOrigin::Standalone;
+    status.lock().unwrap().position_ticks = RUNTIME - TICKS_PER_SECOND;
+    // Script the Stopped + mark_played responses the EOF path will send.
+    http.respond(200, "");
+    http.respond(200, "");
+    let mut progress = noop_progress();
+
+    assert!(!session.on_end_file_standalone(mpv_end_file_reason::Eof, &mut progress));
+
+    assert!(!status.lock().unwrap().active, "EOF must deactivate the status snapshot");
+    let PlayerEvent::Stopped { played, .. } = events.try_recv().unwrap() else {
+        panic!("expected Stopped event");
+    };
+    assert!(played, "natural video EOF must surface as played");
+}

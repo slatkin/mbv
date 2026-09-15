@@ -396,6 +396,17 @@ impl EmbyItem {
             self.name.clone()
         }
     }
+
+    /// The two-tone title parts for a list row: the series title and, for
+    /// episode rows, the episode title that paints after it in the accent
+    /// role. Non-episode items return the display name with no second part.
+    pub fn display_name_parts(&self) -> (String, Option<String>) {
+        if self.item_type == "Episode" && !self.series_name.is_empty() {
+            (self.series_name.clone(), Some(self.name.clone()))
+        } else {
+            (self.name.clone(), None)
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

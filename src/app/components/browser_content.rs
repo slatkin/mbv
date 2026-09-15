@@ -82,6 +82,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
     MediaListRow::Item {
         target: item.id.clone(),
         primary,
+        secondary: None,
         trailing: (!item.is_folder && item.production_year > 0)
             .then(|| item.production_year.to_string()),
         duration: None,

@@ -20,6 +20,7 @@ pub(in crate::app) fn book_rows(
         .map(|book| MediaListRow::Item {
             target: book.library_item_id.clone(),
             primary: book.title.clone(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Collection,

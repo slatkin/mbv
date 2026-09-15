@@ -373,6 +373,7 @@ impl FeedsContent {
                     MediaListRow::Item {
                         target: entry.guid.clone(),
                         primary: entry.title.clone(),
+                        secondary: None,
                         trailing: None,
                         duration: feed_duration_text(entry.duration_ticks),
                         kind: MediaKind::Media,

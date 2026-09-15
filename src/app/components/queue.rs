@@ -747,6 +747,7 @@ fn queue_media_row_at(
     MediaListRow::Item {
         target: slot.slot_id,
         primary: title,
+        secondary: None,
         trailing,
         // The now-playing row shows its total duration in every state: a
         // pending selection is not playing yet, but it still has a known

@@ -96,6 +96,7 @@ fn grouped_album_rows_with_targets(
             rows.push(MediaListRow::Item {
                 target: targets[idx].clone(),
                 primary: name.clone(),
+                secondary: None,
                 trailing: (!year.is_empty()).then(|| year.clone()),
                 duration: None,
                 kind: MediaKind::Collection,

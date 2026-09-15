@@ -65,6 +65,7 @@ fn row(target: &str) -> MediaListRow<String> {
     MediaListRow::Item {
         target: target.into(),
         primary: target.into(),
+        secondary: None,
         trailing: None,
         duration: None,
         kind: MediaKind::Media,

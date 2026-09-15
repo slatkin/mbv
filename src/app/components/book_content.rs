@@ -58,6 +58,7 @@ fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaLis
             MediaListRow::Item {
                 target,
                 primary,
+                secondary: None,
                 trailing: None,
                 duration,
                 kind: MediaKind::Media,

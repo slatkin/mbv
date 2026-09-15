@@ -48,6 +48,18 @@ fn display_name_episode_without_series_falls_back_to_name() {
     assert_eq!(item.display_name(), "Standalone");
 }
 
+#[test]
+fn display_name_parts_splits_episode_from_series_title() {
+    let mut item = make_item("Episode Title", "Episode");
+    item.series_name = "Severance".into();
+    assert_eq!(
+        item.display_name_parts(),
+        ("Severance".into(), Some("Episode Title".into()))
+    );
+    let standalone = make_item("Movie", "Movie");
+    assert_eq!(standalone.display_name_parts(), ("Movie".into(), None));
+}
+
 // ── parse_item ───────────────────────────────────────────────────────────
 
 #[test]
