@@ -82,6 +82,8 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
         Some(crate::app::types_overlay::OverlayRequest::Confirm(ref modal))
             if modal.message.contains("Movie")
                 && modal.hint == "[y] Play here    [n] Cancel"
+                && modal.title.contains("127.0.0.1:0")
+                && !modal.title.contains("Tcp {")
     ));
     assert!(command_rx.try_recv().is_err());
 }
