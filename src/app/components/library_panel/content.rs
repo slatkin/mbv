@@ -54,6 +54,8 @@ pub(in crate::app) enum ArtworkSource {
 pub(in crate::app) struct HeroArtwork {
     pub shape: ArtworkShape,
     pub source: Option<ArtworkSource>,
+    /// Optional semantic decoration source, independent from base artwork.
+    pub decoration: Option<ArtworkSource>,
     /// Projected image state (task 5.10, design D9): set only by the shell's
     /// projection; the painters read it and never fetch. Producers build the
     /// default (`None`) and the owner copies the projection's state in.

@@ -41,6 +41,7 @@ fn facts(shape: ArtworkShape) -> HeroFacts {
         artwork: crate::app::components::library_panel::HeroArtwork {
             shape,
             source: None,
+            decoration: None,
             image: crate::app::components::library_panel::content::HeroImageState::None,
         },
     }
