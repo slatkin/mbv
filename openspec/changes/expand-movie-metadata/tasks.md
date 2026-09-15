@@ -119,6 +119,6 @@
   reflects the table's scroll. Verify: buffer tests proving the overview text and separator are
   identical at offset 0 and at max offset while the table rows shift; scrollbar thumb tracks the
   table's scroll.
-- [ ] 6.8 (OPEN — user is designing) Keyboard scrolling for the hero box: the panel cannot take
-  keyboard focus, so no key chord owns it yet. PARKED pending the user's approach; do not implement
-  without direction. Tracked so archive does not forget it.
+- [x] 6.8 (PARKED — superseded by tracker) Keyboard scrolling for the hero box: the panel cannot take
+  keyboard focus, so no key chord owns it yet. Tracked as GitHub issue #717 for design +
+  implementation; not part of this change.
