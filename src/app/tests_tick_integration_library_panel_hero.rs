@@ -47,6 +47,7 @@ struct HeroFixtureOwner {
     carrier: MediaListCarrier<String>,
     hero: HeroContentData,
     image_states: Vec<HeroImageState>,
+    hero_scroll: usize,
 }
 
 impl HeroFixtureOwner {
@@ -57,6 +58,7 @@ impl HeroFixtureOwner {
             carrier,
             hero,
             image_states: Vec::new(),
+            hero_scroll: 0,
         }
     }
 }
@@ -70,6 +72,7 @@ impl LibraryContentOwner for HeroFixtureOwner {
             hero: Some(HeroContent {
                 facts: self.hero.facts.clone(),
                 overview: self.hero.overview.clone(),
+                credits: self.hero.credits.clone(),
                 workspace: None,
             }),
         }
@@ -85,6 +88,22 @@ impl LibraryContentOwner for HeroFixtureOwner {
 
     fn set_hero_image(&mut self, state: HeroImageState) {
         self.image_states.push(state);
+    }
+
+    fn hero_scroll_offset(&self) -> usize {
+        self.hero_scroll
+    }
+
+    fn hero_scroll(&mut self, delta: i16, max_offset: usize) -> bool {
+        let next = if delta < 0 {
+            self.hero_scroll.saturating_sub((-delta) as usize)
+        } else {
+            self.hero_scroll.saturating_add(delta as usize)
+        }
+        .min(max_offset);
+        let changed = next != self.hero_scroll;
+        self.hero_scroll = next;
+        changed
     }
 
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
@@ -125,6 +144,96 @@ fn migrated_home_with_hero(item: mbv_core::api::EmbyItem, terminal_width: u16) -
         Box::new(HeroFixtureOwner::new(hero_content_emby(&item))),
     );
     harness
+}
+
+fn migrated_movie_with_hero(item: mbv_core::api::EmbyItem) -> TickHarness {
+    let mut app = crate::app::render::make_movie_app();
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    app.terminal_width = 160;
+    app.terminal_height = 70;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_library_panel();
+    harness.model_mut().push_library_owner(
+        movies_key(),
+        Box::new(HeroFixtureOwner::new(hero_content_emby(&item))),
+    );
+    harness
+}
+
+#[test]
+fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
+    let mut movie = crate::app::tests::make_item("Hero", "Movie");
+    movie.image_tags.thumb = "tag".into();
+    movie.overview = "A deliberately long overview that occupies several lines in the hero box. ".repeat(8);
+    movie.people = (0..20)
+        .map(|index| mbv_core::api::EmbyPerson {
+            name: format!("Actor {index}"),
+            role: "Actor".into(),
+            kind: "Actor".into(),
+        })
+        .collect();
+    let mut harness = migrated_movie_with_hero(movie);
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(160, 70)).unwrap();
+    terminal.draw(|frame| harness.model_mut().draw_frame(frame, false, false)).unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .expect("Library panel mounted");
+    let geometry = panel.test_wide_geometry().expect("Wide geometry painted");
+    assert!(geometry.hero_area.width > 0);
+    let box_rect = geometry.overview_box.expect("overflowing Movie overview box");
+    let max_offset = geometry.overview_content_length - geometry.overview_viewport;
+    assert!(max_offset > 0);
+    let before = panel.test_hero_scroll_offset();
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: box_rect.x + 1,
+        row: box_rect.y + 1,
+        modifiers: KeyModifiers::empty(),
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| {
+        matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    }));
+    let after = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .unwrap()
+        .test_hero_scroll_offset();
+    assert!(after > before);
+    assert!(after <= max_offset);
+
+    let mut fitting_movie = crate::app::tests::make_item("Hero", "Movie");
+    fitting_movie.image_tags.thumb = "tag".into();
+    fitting_movie.overview = "Short overview".into();
+    let mut fitting = migrated_movie_with_hero(fitting_movie);
+    terminal.draw(|frame| fitting.model_mut().draw_frame(frame, false, false)).unwrap();
+    fitting.model_mut().sync_mounted_surfaces();
+    let fitting_box = fitting
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
+        .and_then(|panel| panel.test_wide_geometry())
+        .and_then(|geometry| geometry.overview_box)
+        .expect("fitting Movie overview box");
+    fitting.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: fitting_box.x + 1,
+        row: fitting_box.y + 1,
+        modifiers: KeyModifiers::empty(),
+    }));
+    let outcome = fitting.step();
+    assert!(outcome.raw_messages.iter().all(|message| {
+        !matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    }));
 }
 
 /// One fetch per new hero cache key, and none on a repaint tick with the

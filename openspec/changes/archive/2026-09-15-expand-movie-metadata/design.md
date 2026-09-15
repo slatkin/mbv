@@ -13,6 +13,11 @@ See `proposal.md` for motivation. What shapes the approach:
   cast-first with directors anywhere in the list (observed at index 0, 8, 11, 12, 20 and 56); a
   director's `Role` is usually absent while an actor's role is the character name; of 60 movies, 6
   declared two directors and 2 declared none; 69 of 1126 people had no role text.
+- **CORRECTED 2026-09-15 against the live server:** the list query populates `ExternalUrls` ONLY when
+  `ProviderIds` is also present in the `Fields` list (`Fields=ExternalUrls` alone returns an empty
+  array; `Fields=ExternalUrls,ProviderIds` returns the full links). Both names MUST appear together
+  in the `Fields` query strings. The item-detail endpoint also carries `ExternalUrls`, but no extra
+  request is needed once `ProviderIds` joins the list query.
 - **`EmbyItem` carries none of it.** `genre` holds only the first genre and `director` holds one name
   that nothing in production reads.
 - **ratatui 0.30.2 already supports the hyperlink cell, end to end.** `ratatui-core 0.1.2` has
@@ -89,10 +94,21 @@ no production reader today and `genre` has exactly one (the Series meta row, whi
 
 ### D4 — The links row is a typed row rendered last by the painter, not a new meta-row enum
 
+*Superseded 2026-09-15 (see D4a/D5a/D6a below):* the row now carries only the item's IMDb link, and
+D5's OSC 8 escape-cell mechanism was reversed in favour of an app-owned click handler. This section is
+kept for the row-shape rationale (`meta_rows` vs. a typed row), which still holds.
+
 `meta_rows: Vec<String>` stays the ordered plain-text list; `HeroFacts` gains
 `links: Vec<HeroLink>` and the painter paints it as one more row after `meta_rows`. This keeps ~20
 `HeroFacts { .. }` sites and both painters untouched while giving the painter the labels it must
 overlay escapes on.
+
+*Clarified 2026-09-14 during apply* (the spec delta requires exactly "one row joining the item's
+provider link names" and says metadata rows "remain an ordered list of plain-text rows coloured by
+position"): the producer pushes the joined link-name row into `meta_rows` like any other row, and
+`HeroFacts.links` carries the typed names/URLs so the Wide painter can overlay the OSC 8 escape
+cells onto that already-painted row, per D5's "painted normally first and then covered". The
+painter SHALL NOT paint a second, separate links row.
 
 *Ceiling:* the painter, not the producer, decides that links render last. Acceptable while no provider
 needs links anywhere else; promote `meta_rows` to an ordered `Text | Links` row enum the day one does.
@@ -130,29 +146,63 @@ WezTerm, Windows Terminal, plus VTE-based terminals), defaulting to *not support
 prints escape bytes into the frame. The escape is a new trust boundary — the URL comes from the media
 server's metadata, and mbv already strips OSC 8 out of feed text for exactly this reason.
 
-### D7 — Every director, then at most 9 actors, in provider order
+### D7 — Every person, directors first, in provider order (amended 2026-09-15)
 
-Directors do not consume cast places, so the table is 10 rows with one director, 11 with two and 9 with
-none — the data supports all three (2/60 movies had no director, 6/60 had two). People typed as neither
-`Director` nor `Actor` are omitted: the "crew" in *Cast & Crew* is the directors. A person's role is the
+Originally every director then at most 9 actors; the user's visual sweep removed the cap and widened
+the table to every person in the provider's `People` list. Directors are moved to the front (in
+provider order) and every remaining person follows in provider order regardless of type — writers,
+producers and composers included. No other re-ordering: the provider's order is preserved within each
+group, so mbv never invents a ranking Emby did not send. A person's role is the
 provider's role text, falling back to the provider type when it is empty, which is what makes a
 role-less director read as `Director` and a role-less actor as `Actor`.
 
 ### D8 — Two aligned columns, sized from the table's own content, clipped at the box
 
-The name column is the longest rendered name plus a gap, capped so a role column survives; every role
-starts at that one column and is truncated with an ellipsis at the box's edge. When the pane is shorter
+The name column is the longest rendered name plus a gap, capped so a role column survives; the role
+column spans the box's remaining width, and every role is right-aligned at the box's right edge so
+the table uses the whole panel (amended 2026-09-15 from the user's visual sweep). A role longer than
+the remaining width is truncated with an ellipsis at the box's edge and still painted right-aligned.
+When the pane is shorter
 than the box's content, the table clips at the box's bottom edge — the Hero pane does not scroll, and
 the alternative (shrinking the artwork further) would fight the existing text-starvation rule.
 
+### D4a — Links row narrows to the IMDb link only (2026-09-15)
+
+By user direction on the visual sweep, the provider-link row carries only the item's IMDb link, when
+one is declared; other providers' links (TMDb, TheTVDB, Trakt) are parsed into `external_urls` but not
+shown. The row still does not render when there is no IMDb link.
+
+### D5a — Clicking resolves through the Library panel's own hit geometry, not an OSC 8 escape cell
+
+D5's forced-width escape cell is reversed: terminal-side ctrl-click never fires while mbv holds the
+captured mouse, so no terminal could act on the escape regardless of its declared hyperlink support.
+Instead the link name is an ordinary painted label; the Library panel resolves a click against the
+label's geometry (the same per-surface hit-resolution the panel already owns for its other rows, per
+ADR 0024 — no second routing site) and opens the URL through the same system-opener path
+(`xdg-open`/`open`/`start`) the feed link already uses (`feed_actions::open_url`), rather than spawning
+a new one.
+
+*Consequence:* D5's buffer-level analysis of ratatui's `ForcedWidth` cell and the crossterm backend's
+raw `Print` path is moot for this feature — no escape cell is ever painted. mbv still ships no
+hyperlink escape sequence anywhere in `src/`; `idle-feed-rotation`'s OSC 8 feed-title requirement
+remains unimplemented and unaffected by this reversal.
+
+### D6a — Sanitization gate drops the terminal-capability check, keeps the URL check
+
+D6's terminal hyperlink-support gate no longer applies (there is no escape to gate). The URL check
+survives unchanged: a link opens only when it is `http`/`https` with no control byte; anything else
+renders as plain text and does nothing when clicked.
+
 ## Risks / Trade-offs
 
-- **[A forced-width escape cell is not re-emitted when unchanged]** → the escape is self-closing inside
-  the label's span, so a skipped redraw is correct; if a future renderer (image protocol) clears the
-  region outside ratatui's knowledge, the row must be repainted, and `AlwaysUpdate` is ratatui's lever
-  (mutually exclusive with `ForcedWidth`, so it would need the split-cell form).
-- **[Hyperlink support detection is a heuristic]** → the failure mode is a lost click on an unknown
-  terminal, never visible garbage; the row renders as plain text.
+- **[A forced-width escape cell is not re-emitted when unchanged]** *(moot per D5a — no escape cell is
+  painted; kept for history)* → the escape is self-closing inside the label's span, so a skipped
+  redraw is correct; if a future renderer (image protocol) clears the region outside ratatui's
+  knowledge, the row must be repainted, and `AlwaysUpdate` is ratatui's lever (mutually exclusive with
+  `ForcedWidth`, so it would need the split-cell form).
+- **[Hyperlink support detection is a heuristic]** *(moot per D6a — there is no escape to gate; kept for
+  history)* → the failure mode is a lost click on an unknown terminal, never visible garbage; the row
+  renders as plain text.
 - **[The table competes with the overview for a short pane]** → clipping at the box bottom is the
   specified behaviour, and the existing artwork-starvation rule still shrinks the Landscape artwork
   first, so the box gets its rows before the pane runs out.

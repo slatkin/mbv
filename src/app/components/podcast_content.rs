@@ -259,6 +259,7 @@ impl PodcastContent {
                     .overview
                     .map(|s| clean_overview(&s))
                     .filter(|s| !s.is_empty()),
+                credits: data.credits,
                 workspace: Some(Workspace {
                     selector: Some(SelectorRow {
                         pills: AudiobookshelfEpisodeFilter::ALL

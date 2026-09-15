@@ -421,6 +421,7 @@ impl BookContent {
             HeroContent {
                 facts: data.facts,
                 overview: data.overview,
+                credits: data.credits,
                 workspace: Some(Workspace {
                     selector: None,
                     list: &mut self.chapter_list,

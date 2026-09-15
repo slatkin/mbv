@@ -17,7 +17,9 @@ use crate::app::render::components::hero_model::{
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
 use crate::app::ui_util::{clean_overview, fmt_duration_approx};
 
-use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroFacts, HeroImageState};
+use super::content::{
+    ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroImageState, HeroLink,
+};
 
 /// A producer's output (design D5): the facts plus the item's overview.
 /// Destinations attach a `Workspace` when assembling [`HeroContent`]; the
@@ -26,6 +28,7 @@ use super::content::{ArtworkShape, ArtworkSource, HeroArtwork, HeroFacts, HeroIm
 pub(in crate::app) struct HeroContentData {
     pub facts: HeroFacts,
     pub overview: Option<String>,
+    pub credits: Option<Vec<HeroCredit>>,
 }
 
 // ── Artwork policy ─────────────────────────────────────────────────────
@@ -254,15 +257,90 @@ fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
 /// The Emby item producer (design D5): plain title, plain meta rows (the
 /// series line, release date, duration), cleaned overview, policy artwork.
 pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
+    let movie = item.item_type == "Movie";
+    let mut meta_rows = emby_hero_meta_rows_plain(item);
+    if movie {
+        let genres = item
+            .genres
+            .iter()
+            .filter(|genre| !genre.is_empty())
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("/");
+        if !genres.is_empty() {
+            meta_rows.push(genres);
+        }
+        let links = item
+            .external_urls
+            .iter()
+            .filter(|link| link.name == "IMDb")
+            .take(1)
+            .map(|link| HeroLink {
+                name: link.name.clone(),
+                url: link.url.clone(),
+            })
+            .collect::<Vec<_>>();
+        if !links.is_empty() {
+            meta_rows.push(
+                links
+                    .iter()
+                    .map(|link| link.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join("|"),
+            );
+        }
+        let mut credits = Vec::new();
+        credits.extend(
+            item.people
+                .iter()
+                .filter(|person| person.kind == "Director")
+                .map(|person| HeroCredit {
+                    name: person.name.clone(),
+                    role: if person.role.is_empty() {
+                        person.kind.clone()
+                    } else {
+                        person.role.clone()
+                    },
+                }),
+        );
+        credits.extend(
+            item.people
+                .iter()
+                .filter(|person| person.kind != "Director")
+                .map(|person| HeroCredit {
+                    name: person.name.clone(),
+                    role: if person.role.is_empty() {
+                        person.kind.clone()
+                    } else {
+                        person.role.clone()
+                    },
+                }),
+        );
+        let credits = (!credits.is_empty()).then_some(credits);
+        let facts = HeroFacts {
+            title: item.name.clone(),
+            meta_rows,
+            links,
+            artwork: emby_artwork_policy(item),
+        };
+        let overview = clean_overview(&item.overview);
+        return HeroContentData {
+            facts,
+            overview: (!overview.is_empty()).then_some(overview),
+            credits,
+        };
+    }
     let facts = HeroFacts {
         title: item.name.clone(),
-        meta_rows: emby_hero_meta_rows_plain(item),
+        meta_rows,
+        links: Vec::new(),
         artwork: emby_artwork_policy(item),
     };
     let overview = clean_overview(&item.overview);
     HeroContentData {
         facts,
         overview: (!overview.is_empty()).then_some(overview),
+        credits: None,
     }
 }
 
@@ -298,11 +376,13 @@ pub(in crate::app) fn hero_content_abs_book(book: &AudiobookshelfBookQueueItem) 
     let facts = HeroFacts {
         title: book.title.clone(),
         meta_rows: abs_book_meta_rows(book),
+        links: Vec::new(),
         artwork: abs_book_artwork_policy(book),
     };
     HeroContentData {
         facts,
         overview: None,
+        credits: None,
     }
 }
 
@@ -343,6 +423,7 @@ pub(in crate::app) fn hero_content_abs_episode(
     let facts = HeroFacts {
         title: episode.title.clone(),
         meta_rows,
+        links: Vec::new(),
         artwork: abs_episode_artwork_policy(episode),
     };
     let overview = episode
@@ -350,7 +431,11 @@ pub(in crate::app) fn hero_content_abs_episode(
         .as_deref()
         .map(clean_overview)
         .filter(|d| !d.is_empty());
-    HeroContentData { facts, overview }
+    HeroContentData {
+        facts,
+        overview,
+        credits: None,
+    }
 }
 
 /// The Audiobookshelf podcast show producer (design D5): author as a plain
@@ -366,6 +451,7 @@ pub(in crate::app) fn hero_content_abs_show(
             .filter(|a| !a.is_empty())
             .map(|a| vec![a.to_string()])
             .unwrap_or_default(),
+        links: Vec::new(),
         artwork: abs_show_artwork_policy(show),
     };
     let overview = show
@@ -373,7 +459,11 @@ pub(in crate::app) fn hero_content_abs_show(
         .as_deref()
         .map(clean_overview)
         .filter(|d| !d.is_empty());
-    HeroContentData { facts, overview }
+    HeroContentData {
+        facts,
+        overview,
+        credits: None,
+    }
 }
 
 /// The feed entry producer (design D5): title and duration; no overview and
@@ -387,11 +477,13 @@ pub(in crate::app) fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
             .filter(|t| *t > 0)
             .map(|ticks| vec![fmt_duration_approx(ticks as i64 / TICKS_PER_SECOND)])
             .unwrap_or_default(),
+        links: Vec::new(),
         artwork: feed_artwork_policy(entry),
     };
     HeroContentData {
         facts,
         overview: None,
+        credits: None,
     }
 }
 

@@ -1,7 +1,7 @@
 use super::*;
 use crate::app::components::library_panel::narrow::InlineHeroPlan;
 use crate::app::components::library_panel::{
-    inline_hero_plan, render_narrow_skeleton, LibraryPanelContent, ListSlot,
+    inline_hero_plan, render_narrow_skeleton, HeroCredit, LibraryPanelContent, ListSlot,
 };
 use crate::app::render::arrangements::library::selected_detail_content_area;
 use crate::app::render::{HERO_BLOCK_EXTRA_ROWS, SELECTED_BLOCK_SIDE_PADDING};
@@ -37,12 +37,36 @@ fn facts(shape: ArtworkShape) -> HeroFacts {
     HeroFacts {
         title: "Dune".into(),
         meta_rows: vec!["2021".into(), "Science Fiction".into()],
+        links: Vec::new(),
         artwork: crate::app::components::library_panel::HeroArtwork {
             shape,
             source: None,
             image: crate::app::components::library_panel::content::HeroImageState::None,
         },
     }
+}
+
+#[test]
+fn inline_hero_plan_ignores_wide_only_credits() {
+    let plain = HeroContent {
+        facts: facts(ArtworkShape::Landscape),
+        overview: Some("Overview".into()),
+        credits: None,
+        workspace: None,
+    };
+    let with_credits = HeroContent {
+        facts: facts(ArtworkShape::Landscape),
+        overview: Some("Overview".into()),
+        credits: Some(vec![HeroCredit {
+            name: "Director".into(),
+            role: "Director".into(),
+        }]),
+        workspace: None,
+    };
+    assert_eq!(
+        inline_hero_plan(60, &plain),
+        inline_hero_plan(60, &with_credits)
+    );
 }
 
 fn draw_narrow(
@@ -58,6 +82,7 @@ fn draw_narrow(
         hero: Some(HeroContent {
             facts: facts(shape),
             overview: overview.map(Into::into),
+            credits: None,
             workspace: None,
         }),
     };
@@ -123,6 +148,7 @@ fn portrait_hero_paints_right_aligned_wrap_around_text() {
         &HeroContent {
             facts: facts(ArtworkShape::Portrait),
             overview: Some(overview.clone()),
+            credits: None,
             workspace: None,
         },
     );
@@ -207,6 +233,7 @@ fn landscape_hero_paints_right_aligned_wrap_around_text() {
         &HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: None,
+            credits: None,
             workspace: None,
         },
     );
@@ -264,6 +291,7 @@ fn wide_and_narrow_render_the_same_title_meta_and_image() {
     let hero = HeroContent {
         facts: facts(ArtworkShape::Portrait),
         overview: None,
+        credits: None,
         workspace: None,
     };
 
@@ -274,7 +302,14 @@ fn wide_and_narrow_render_the_same_title_meta_and_image() {
     let pane = Rect::new(0, 0, 70, 14);
     terminal
         .draw(|f| {
-            super::super::hero_header::paint_hero_pane_content(f, pane, &hero);
+            super::super::hero_header::paint_hero_pane_content(
+                f,
+                pane,
+                &hero,
+                0,
+                None,
+                &mut crate::app::components::mouse::hit::HitRegions::new(),
+            );
         })
         .unwrap();
     let wide_buf = terminal.backend().buffer().clone();

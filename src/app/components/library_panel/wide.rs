@@ -60,6 +60,7 @@ pub(in crate::app) struct SkeletonHits {
     pub selector: HitRegions<usize>,
     pub controls: HitRegions<usize>,
     pub workspace_selector: HitRegions<usize>,
+    pub links: HitRegions<usize>,
 }
 
 /// The pill rows' sticky overflow windows (ADR 0024 retained paint-local
@@ -99,6 +100,9 @@ pub(in crate::app) struct WideSkeletonGeometry {
     /// The projected hero image's paint (task 5.10, design D9), when the
     /// header reserved a ready image's box.
     pub hero_image: Option<PanelHeroImagePaint>,
+    pub overview_box: Option<Rect>,
+    pub overview_content_length: usize,
+    pub overview_viewport: usize,
     /// The selected row's rect from the list slot's view, when one painted
     /// (the context-menu anchor's painted truth).
     pub selected: Option<Rect>,
@@ -115,13 +119,16 @@ pub(in crate::app) struct WideSkeletonGeometry {
 /// `ListSlot::Search` is active, the search box paints in the Selector row's
 /// rect and the results in the list box, and the rest of the panel is
 /// unchanged.
+#[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn render_wide_skeleton(
     f: &mut Frame,
     area: Rect,
     content: &mut LibraryPanelContent<'_>,
     browser_focused: bool,
     override_width: Option<u16>,
+    overview_scroll: usize,
     hovered_selector: Option<usize>,
+    hovered_link: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
 ) -> Option<WideSkeletonGeometry> {
@@ -290,6 +297,9 @@ pub(in crate::app) fn render_wide_skeleton(
         hero_area,
         workspace: None,
         hero_image: None,
+        overview_box: None,
+        overview_content_length: 0,
+        overview_viewport: 0,
         selected,
     };
 
@@ -298,7 +308,19 @@ pub(in crate::app) fn render_wide_skeleton(
         // one title/meta painter, and the overview box when overview text
         // exists. Returns the first unpainted row and the projected image's
         // reserved box (task 5.10: `Ready` reserves; the shell paints).
-        let (next_row, image_box) = paint_hero_pane_content(f, hero_area, &*hero);
+        let (next_row, image_box, overview) = paint_hero_pane_content(
+            f,
+            hero_area,
+            &*hero,
+            overview_scroll,
+            hovered_link,
+            &mut hits.links,
+        );
+        if let Some(overview) = overview {
+            geometry.overview_box = Some(overview.rect);
+            geometry.overview_content_length = overview.content_length;
+            geometry.overview_viewport = overview.viewport;
+        }
         if let (HeroImageState::Ready { cache_key, .. }, Some(box_rect)) =
             (&hero.facts.artwork.image, image_box)
         {

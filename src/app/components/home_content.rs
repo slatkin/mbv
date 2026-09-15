@@ -439,6 +439,7 @@ impl LibraryContentOwner for HomeContent {
             HeroContent {
                 facts,
                 overview: data.overview,
+                credits: data.credits,
                 workspace: None,
             }
         });

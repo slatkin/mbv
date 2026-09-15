@@ -206,7 +206,7 @@ impl EmbyClient {
     pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<EmbyItem>, String> {
         let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", crate::encode_path_segment(playlist_id)))
             .query("UserId", &self.user_id)
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres,ExternalUrls,ProviderIds")
             .query("EnableUserData", "true")
             .call().map_err(|e| e.to_string())?
             .body_mut().read_json().map_err(|e| e.to_string())?;

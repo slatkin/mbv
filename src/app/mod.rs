@@ -81,6 +81,7 @@ mod session_switch;
 mod settings;
 mod shell_draw;
 mod shuffle_folder_actions;
+mod text_safety;
 mod types_audiobookshelf_browse;
 mod types_browse;
 mod types_cast;
@@ -346,8 +347,9 @@ impl App {
     }
 }
 
-fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>>
-{
+type AppTerminal = Terminal<CrosstermBackend<std::io::Stdout>>;
+
+fn init_terminal() -> Result<AppTerminal, Box<dyn std::error::Error>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
@@ -361,6 +363,38 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dy
         )
     );
     Ok(Terminal::new(CrosstermBackend::new(stdout))?)
+}
+
+pub(super) fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| ())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| ())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| ())
+    }
 }
 
 fn set_shift_escape_mode<W: Write>(writer: &mut W, enabled: bool) -> std::io::Result<()> {

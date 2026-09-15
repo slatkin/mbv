@@ -68,6 +68,7 @@ fn hero_facts(title: &str) -> HeroFacts {
     HeroFacts {
         title: title.into(),
         meta_rows: vec!["2020".into()],
+        links: Vec::new(),
         artwork: HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: None,
@@ -91,6 +92,8 @@ fn draw_skeleton(
                 AREA,
                 content,
                 browser_focused,
+                None,
+                0,
                 None,
                 None,
                 &mut hits,
@@ -136,6 +139,7 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
             overview: None,
+            credits: None,
             workspace: None,
         }),
     };
@@ -223,6 +227,7 @@ fn workspace_selector_with_active_none_paints_no_active_pill() {
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: Some(SelectorRow {
                     pills: vec!["Seasons".into(), "Episodes".into()],
@@ -273,6 +278,7 @@ fn focused_workspace_hero_pane_stays_resting() {
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,
@@ -310,6 +316,7 @@ fn focused_workspace_hero_pane_stays_resting() {
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut focused_workspace_list,
@@ -339,6 +346,7 @@ fn browser_focused_list_carries_the_focus_green() {
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,
@@ -375,6 +383,7 @@ fn unfocused_workspace_hero_renders_resting_surfaces() {
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,
@@ -405,6 +414,7 @@ fn workspace_box_sits_one_blank_row_below_the_hero_content() {
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,
@@ -454,6 +464,7 @@ fn overview_box_fills_the_hero_pane_when_there_is_no_workspace() {
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
             overview: Some("A very long overview.".into()),
+            credits: None,
             workspace: None,
         }),
     };
@@ -492,6 +503,7 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
             overview: None,
+            credits: None,
             workspace: None,
         }),
     };
@@ -571,6 +583,8 @@ fn sub_breakpoint_area_paints_nothing() {
                 narrow,
                 &mut content,
                 false,
+                None,
+                0,
                 None,
                 None,
                 &mut hits,

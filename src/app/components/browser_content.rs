@@ -142,6 +142,7 @@ pub(in crate::app) struct BrowserContent {
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
     hero_image: HeroImageState,
+    hero_scroll: usize,
     /// The embedded Inline Search control (design D3): this owner is its
     /// sole event boundary; the panel places its box in the Selector row's
     /// rect and its results in the list box (`ListSlot::Search`).
@@ -166,6 +167,7 @@ impl BrowserContent {
             last_identity: None,
             last_projected_rows: None,
             hero_image: HeroImageState::None,
+            hero_scroll: 0,
             inline_search: InlineSearch::new(),
         }
     }
@@ -210,6 +212,9 @@ impl BrowserContent {
     pub(in crate::app) fn note_browse_identity(&mut self, identity: BrowserIdentity) -> bool {
         let changed = self.last_identity.as_ref() != Some(&identity);
         self.last_identity = Some(identity);
+        if changed {
+            self.hero_scroll = 0;
+        }
         changed
     }
 
@@ -494,6 +499,22 @@ impl LibraryContentOwner for BrowserContent {
         Some((self.cursor(), self.scroll()))
     }
 
+    fn hero_scroll_offset(&self) -> usize {
+        self.hero_scroll
+    }
+
+    fn hero_scroll(&mut self, delta: i16, max_offset: usize) -> bool {
+        let next = if delta < 0 {
+            self.hero_scroll.saturating_sub((-delta) as usize)
+        } else {
+            self.hero_scroll.saturating_add(delta as usize)
+        }
+        .min(max_offset);
+        let changed = next != self.hero_scroll;
+        self.hero_scroll = next;
+        changed
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         let hero = self.hero_item().map(|item| {
             let data = hero_content_emby(item);
@@ -502,6 +523,7 @@ impl LibraryContentOwner for BrowserContent {
             HeroContent {
                 facts,
                 overview: data.overview,
+                credits: data.credits,
                 workspace: None,
             }
         });

@@ -489,7 +489,7 @@ impl App {
             return;
         };
 
-        if let Err(error) = open_url(&link) {
+        if let Err(error) = super::open_url(&link) {
             log::warn!(target: "idle_feed", "Failed to open feed link {link:?}: {error}");
             self.flash(
                 format!("Unable to open feed link: {error}"),
@@ -511,31 +511,5 @@ impl App {
             idle_feed.current_index = (idle_feed.current_index + 1) % idle_feed.items.len();
             idle_feed.last_rotation = Instant::now();
         }
-    }
-}
-
-fn open_url(url: &str) -> std::io::Result<()> {
-    #[cfg(target_os = "windows")]
-    {
-        std::process::Command::new("cmd")
-            .args(["/C", "start", "", url])
-            .spawn()
-            .map(|_| ())
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        std::process::Command::new("open")
-            .arg(url)
-            .spawn()
-            .map(|_| ())
-    }
-
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        std::process::Command::new("xdg-open")
-            .arg(url)
-            .spawn()
-            .map(|_| ())
     }
 }

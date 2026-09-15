@@ -8,24 +8,18 @@
 //! shell projection (task 5.10) shares with the painter.
 
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::Block;
 use ratatui::Frame;
 
 use crate::app::palette;
-use crate::app::render::{
-    paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
-};
+use crate::app::render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
 
 use super::content::{HeroContent, HeroFacts, HeroHeader};
+use super::overview_box;
+use super::overview_box::OverviewPaint;
 
 /// Blank rows between the artwork box and the text block (the shared
 /// `wide_hero_slots` convention: metadata starts at `img_area.bottom() + 1`).
 const ARTWORK_TEXT_GAP_ROWS: u16 = 1;
-
-/// Blank rows between the header text block and the recessed overview box.
-/// The row belongs to the hero pane (its fill), never to the box.
-const OVERVIEW_GAP_ROWS: u16 = 1;
 
 /// Vertical room a present Workspace keeps below the header (design D5: the
 /// artwork shrinks before a Workspace viewport would drop). Two padding rows
@@ -140,7 +134,10 @@ pub(in crate::app) fn paint_hero_pane_content(
     f: &mut Frame,
     area: Rect,
     content: &HeroContent<'_>,
-) -> (u16, Option<Rect>) {
+    overview_scroll: usize,
+    hovered_link: Option<usize>,
+    link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
+) -> (u16, Option<Rect>, Option<OverviewPaint>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
     let image_ready = matches!(
@@ -167,7 +164,7 @@ pub(in crate::app) fn paint_hero_pane_content(
             ..area
         },
     };
-    let mut next_row = paint_title_and_meta(f, text_area, &content.facts);
+    let mut next_row = paint_title_and_meta(f, text_area, &content.facts, hovered_link, link_hits);
     // The header's painted bottom edge includes a right-side artwork box the
     // text block may not reach.
     if header.arm() != super::content::HeroHeaderArm::Landscape {
@@ -178,89 +175,12 @@ pub(in crate::app) fn paint_hero_pane_content(
 
     // The overview Main content box only when overview text exists (design
     // D5); without it the Workspace moves up.
-    if let Some(overview) = content
-        .overview
-        .as_deref()
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-    {
-        // Matches `paint_wide_hero_text`'s own wrap width exactly (its
-        // `area` below is `box_content`, whose width is `content_w`, minus
-        // the same 1-column margin) so this measures the same line count
-        // the text will actually paint at, instead of double-wrapping.
-        let content_w = area.width.saturating_sub(PANE_PAD_X * 2) as usize;
-        let wrap_width = content_w.saturating_sub(1).max(1);
-        let lines = textwrap::wrap(overview, wrap_width);
-        // One blank hero-pane row always separates the header text from the
-        // recessed overview box. The gap row keeps the pane's resting fill
-        // (the hero never takes the focused surface); only the rows below
-        // it carry the box surface.
-        let box_y = next_row.saturating_add(OVERVIEW_GAP_ROWS);
-        let room = area.bottom().saturating_sub(box_y);
-        let content_height = (lines.len() as u16).max(1).saturating_add(PANE_PAD_Y * 2);
-        // The bottom-most recessed box on the hero fills the pane's
-        // remaining rows (`area` is already inset from the hero panel, so
-        // `area.bottom()` is the panel less one padding row). With no
-        // Workspace the overview box is that bottom-most box; with one, the
-        // overview stays content-sized and the Workspace box below it fills.
-        let box_height = if content.workspace.is_some() {
-            content_height.min(room)
-        } else {
-            room
-        };
-        // Room only for padding: no box renders (the shared padding is part
-        // of the box's reserved rows).
-        if box_height > PANE_PAD_Y * 2 {
-            let pane_bg = palette::surface_colors(palette::Surface::HeroPane, false).fill;
-            f.render_widget(
-                Block::default().style(Style::default().bg(pane_bg)),
-                Rect {
-                    y: next_row,
-                    height: OVERVIEW_GAP_ROWS.min(area.bottom().saturating_sub(next_row)),
-                    ..area
-                },
-            );
-            let box_area = Rect {
-                y: box_y,
-                height: box_height,
-                ..area
-            };
-            // The box fills `box_area` flush, matching the hero pane's own
-            // single inset (`hero_area` is already inset from the raw hero
-            // panel): no second outer margin on top of it. Only `box_content`
-            // below carries the box's own interior padding.
-            let panel = box_area;
-            f.render_widget(
-                Block::default().style(
-                    Style::default().bg(palette::surface_colors(
-                        palette::Surface::MainContentBox,
-                        false,
-                    )
-                    .fill),
-                ),
-                panel,
-            );
-            let box_content = Rect {
-                x: panel.x.saturating_add(PANE_PAD_X),
-                y: panel.y.saturating_add(PANE_PAD_Y),
-                width: panel.width.saturating_sub(PANE_PAD_X * 2),
-                height: panel.height.saturating_sub(PANE_PAD_Y * 2),
-            };
-            // Plain text, never destination-styled, and always soft white:
-            // the overview is body content, so the hero pane's focus (derived
-            // from the Workspace, design D6) does not dim it. `overview` is
-            // passed unwrapped: `paint_wide_hero_text` does the one and only
-            // wrap, at `box_content`'s width — pre-wrapping it here too (at
-            // a different width) was double-wrapping and stranding words.
-            let lines = [WrappedHeroLine {
-                text: overview,
-                style: ratatui::style::Style::default().fg(palette::TEXT_EMPHASIS),
-            }];
-            paint_wide_hero_text(f, box_content, &lines);
-            next_row = box_area.bottom();
-        }
-    }
-    (next_row, reserved_image)
+    let overview = overview_box::paint_overview_box(f, area, next_row, content, overview_scroll);
+    let next_row = overview
+        .as_ref()
+        .map(|overview| overview.bottom)
+        .unwrap_or(next_row);
+    (next_row, reserved_image, overview)
 }
 
 /// The one title/meta painter for all three arms: the title in
@@ -269,7 +189,13 @@ pub(in crate::app) fn paint_hero_pane_content(
 /// design D5). Returns the first unpainted row. The un-migrated legacy
 /// `Hero` painters style the same Emby meta rows by meaning instead
 /// (`hero_model.rs::emby_meta_row_styles`); 9.1 converges the two.
-fn paint_title_and_meta(f: &mut Frame, area: Rect, facts: &HeroFacts) -> u16 {
+fn paint_title_and_meta(
+    f: &mut Frame,
+    area: Rect,
+    facts: &HeroFacts,
+    hovered_link: Option<usize>,
+    link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
+) -> u16 {
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
@@ -282,7 +208,9 @@ fn paint_title_and_meta(f: &mut Frame, area: Rect, facts: &HeroFacts) -> u16 {
                 .fg(palette::HERO_META_ROLES[index % palette::HERO_META_ROLES.len()]),
         });
     }
-    paint_wide_hero_text(f, area, &lines)
+    let next_row = paint_wide_hero_text(f, area, &lines);
+    overview_box::overlay_links(f, area, facts, hovered_link, link_hits);
+    next_row
 }
 
 #[cfg(test)]
@@ -320,6 +248,7 @@ mod hero_header_tests {
         HeroFacts {
             title: "Dune".into(),
             meta_rows: vec!["2021".into()],
+            links: Vec::new(),
             artwork: HeroArtwork {
                 shape,
                 source: None,
@@ -332,6 +261,7 @@ mod hero_header_tests {
         HeroContent {
             facts: facts(shape),
             overview: None,
+            credits: None,
             workspace: None,
         }
     }
@@ -342,7 +272,14 @@ mod hero_header_tests {
         let pane_area = area;
         terminal
             .draw(|f| {
-                paint_hero_pane_content(f, pane_area, pane);
+                paint_hero_pane_content(
+                    f,
+                    pane_area,
+                    pane,
+                    0,
+                    None,
+                    &mut crate::app::components::mouse::hit::HitRegions::new(),
+                );
             })
             .unwrap();
         terminal.backend().buffer().clone()
@@ -493,6 +430,7 @@ mod hero_header_tests {
         let pane_facts = HeroFacts {
             title: "T".into(),
             meta_rows: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            links: Vec::new(),
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,
@@ -502,6 +440,7 @@ mod hero_header_tests {
         let pane = HeroContent {
             facts: pane_facts,
             overview: None,
+            credits: None,
             workspace: None,
         };
         let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
@@ -518,122 +457,6 @@ mod hero_header_tests {
     }
 
     #[test]
-    fn overview_box_presents_only_with_overview_text() {
-        let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
-        let pane = content(ArtworkShape::Landscape);
-        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
-        let below = Rect {
-            y: artwork.bottom() + 3,
-            height: AREA.bottom().saturating_sub(artwork.bottom() + 3),
-            ..AREA
-        };
-        // Without overview: no Main content box surface below the header.
-        let buf = draw_pane(AREA.width, AREA.height, &pane);
-        assert!(
-            (below.top()..below.bottom()).all(|y| buf[(AREA.x + 2, y)].bg != box_fill),
-            "no overview box without overview text"
-        );
-        // With overview text: the Main content box renders below the header
-        // and its text paints inside.
-        let with = HeroContent {
-            facts: facts(ArtworkShape::Landscape),
-            overview: Some("A very long overview.".into()),
-            workspace: None,
-        };
-        let buf = draw_pane(AREA.width, AREA.height, &with);
-        assert!(
-            (below.top()..below.bottom()).any(|y| buf[(AREA.x + 2, y)].bg == box_fill),
-            "overview box painted below the header"
-        );
-        assert!(text_in(&buf, below, "A very long overview."));
-        // Soft white at all times: the overview is body content, so the
-        // hero pane's focus (from the Workspace) never dims it.
-        assert_eq!(
-            text_fg(&buf, below, "A very long overview."),
-            Some(palette::TEXT_EMPHASIS),
-            "unfocused overview text"
-        );
-        let mut workspace_list = NoopList;
-        let focused = HeroContent {
-            facts: facts(ArtworkShape::Landscape),
-            overview: Some("A very long overview.".into()),
-            workspace: Some(Workspace {
-                selector: None,
-                list: &mut workspace_list,
-                focused: true,
-            }),
-        };
-        let buf = draw_pane(AREA.width, AREA.height, &focused);
-        assert_eq!(
-            text_fg(&buf, below, "A very long overview."),
-            Some(palette::TEXT_EMPHASIS),
-            "focused overview text"
-        );
-    }
-
-    #[test]
-    fn overview_box_keeps_a_blank_hero_pane_row_above_it() {
-        let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
-        let pane_fill = palette::surface_colors(palette::Surface::HeroPane, false).fill;
-        assert_ne!(box_fill, pane_fill, "seam needs distinct fills");
-        let with = HeroContent {
-            facts: facts(ArtworkShape::Landscape),
-            overview: Some("A very long overview.".into()),
-            workspace: None,
-        };
-        let buf = draw_pane(AREA.width, AREA.height, &with);
-        // Start below the artwork box: the imageless placeholder shares the
-        // box's resting fill, so a full-pane scan would catch row 0.
-        let artwork = hero_artwork_box(AREA, &with.facts, with.workspace.is_some());
-        let box_top =
-            (artwork.bottom()..AREA.bottom()).find(|y| buf[(AREA.x + 2, *y)].bg == box_fill);
-        assert!(box_top.is_some(), "overview box paints");
-        let box_top = box_top.unwrap();
-        assert!(box_top > AREA.top() + 1, "header text paints above the box");
-        let gap = box_top - 1;
-        assert_ne!(buf[(AREA.x + 2, gap)].bg, box_fill);
-        assert_eq!(buf[(AREA.x + 2, gap)].bg, pane_fill);
-        assert!(!text_in(
-            &buf,
-            Rect {
-                y: gap,
-                height: 1,
-                ..AREA
-            },
-            "A very long overview."
-        ));
-    }
-
-    #[test]
-    fn overview_box_fills_the_pane_when_no_workspace_follows_it() {
-        let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
-        let with = HeroContent {
-            facts: facts(ArtworkShape::Landscape),
-            overview: Some("A very long overview.".into()),
-            workspace: None,
-        };
-        let buf = draw_pane(AREA.width, AREA.height, &with);
-        // The bottom-most recessed box reaches the content area's last row:
-        // the hero panel's own bottom padding row sits outside `area`.
-        assert_eq!(buf[(AREA.x + 2, AREA.bottom() - 1)].bg, box_fill);
-
-        // With a Workspace below it the overview is no longer the bottom-most
-        // box, so it stays content-sized.
-        let mut workspace_list = NoopList;
-        let with_workspace = HeroContent {
-            facts: facts(ArtworkShape::Landscape),
-            overview: Some("A very long overview.".into()),
-            workspace: Some(Workspace {
-                selector: None,
-                list: &mut workspace_list,
-                focused: false,
-            }),
-        };
-        let buf = draw_pane(AREA.width, AREA.height, &with_workspace);
-        assert_ne!(buf[(AREA.x + 2, AREA.bottom() - 1)].bg, box_fill);
-    }
-
-    #[test]
     fn artwork_shrinks_before_a_workspace_viewport_drops() {
         let free = content(ArtworkShape::Landscape);
         let small = Rect::new(0, 0, 60, 14);
@@ -642,6 +465,7 @@ mod hero_header_tests {
         let constrained = HeroContent {
             facts: facts(ArtworkShape::Landscape),
             overview: None,
+            credits: None,
             workspace: Some(Workspace {
                 selector: None,
                 list: &mut workspace_list,

@@ -47,6 +47,11 @@ pub const SURFACE_SIDEBAR: Color = primitives::PANEL_BG; // plain (non-hero) sid
 #[allow(dead_code)]
 pub const SURFACE_ARTWORK_PLACEHOLDER: Color = primitives::ARTWORK_PLACEHOLDER;
 
+// Hero surfaces
+pub const HERO_OVERVIEW_SEPARATOR: Color = primitives::IRIS; // overview/credits separator
+pub const HERO_CREDITS_STRIPE: Color = primitives::PLAYBACK_PANEL_BG; // alternating credits row
+pub const HERO_CREDITS_NAME: Color = primitives::YELLOW; // credits name column
+
 // Accents
 pub const ACCENT: Color = primitives::AQUA; // selection marker, watched, folders, Emby brand glyph
 pub const ACCENT_ACTIVE: Color = primitives::IRIS; // active tab, focused pill/badge text, selected-row bg

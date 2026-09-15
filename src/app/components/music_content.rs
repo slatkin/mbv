@@ -333,6 +333,7 @@ impl MusicContent {
                 // provide an overview; the panel's generic producer already
                 // represents that as `None`.
                 overview: data.overview,
+                credits: data.credits,
                 workspace: Some(Workspace {
                     selector: None,
                     list: &mut self.track_list,

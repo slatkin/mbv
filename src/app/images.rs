@@ -307,6 +307,7 @@ mod tests {
         let facts = HeroFacts {
             title: "Dune".into(),
             meta_rows: vec!["2021".into()],
+            links: Vec::new(),
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,

@@ -15,6 +15,7 @@ pub mod content;
 pub mod hero;
 pub mod hero_header;
 pub mod narrow;
+pub mod overview_box;
 pub mod owner;
 pub mod panel;
 pub mod panel_list;
@@ -23,9 +24,9 @@ pub mod wide;
 
 #[allow(unused_imports)]
 pub(in crate::app) use content::{
-    ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroFacts, HeroHeader, HeroImageState,
-    LibraryPanelContent, ListControls, ListSlot, PanelHeroImagePaint, PanelList, SelectorRow,
-    Workspace,
+    ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroCredit, HeroFacts, HeroHeader,
+    HeroImageState, HeroLink, LibraryPanelContent, ListControls, ListSlot, PanelHeroImagePaint,
+    PanelList, SelectorRow, Workspace,
 };
 #[allow(unused_imports)]
 pub(in crate::app) use hero::{
@@ -35,6 +36,8 @@ pub(in crate::app) use hero::{
 };
 #[allow(unused_imports)]
 pub(in crate::app) use narrow::{inline_hero_plan, render_narrow_skeleton, NarrowSkeletonGeometry};
+#[allow(unused_imports)]
+pub(in crate::app) use overview_box::sanitize_url;
 #[allow(unused_imports)]
 pub(in crate::app) use owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
 #[allow(unused_imports)]

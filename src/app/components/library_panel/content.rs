@@ -89,7 +89,20 @@ pub(in crate::app) enum HeroImageState {
 pub(in crate::app) struct HeroFacts {
     pub title: String,
     pub meta_rows: Vec<String>,
+    pub links: Vec<HeroLink>,
     pub artwork: HeroArtwork,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::app) struct HeroLink {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::app) struct HeroCredit {
+    pub name: String,
+    pub role: String,
 }
 
 /// The Wide Hero header (spec: exactly three types). Its arm is the artwork
@@ -174,6 +187,7 @@ pub(in crate::app) struct Workspace<'a> {
 pub(in crate::app) struct HeroContent<'a> {
     pub facts: HeroFacts,
     pub overview: Option<String>,
+    pub credits: Option<Vec<HeroCredit>>,
     pub workspace: Option<Workspace<'a>>,
 }
 
