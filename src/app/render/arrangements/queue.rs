@@ -54,14 +54,36 @@ pub(in crate::app) fn queue_list_box(placement: Rect) -> Rect {
     box_area
 }
 
+/// The `Queue` title row inside the recessed box: one blank top-inset row
+/// stays above it, the list starts directly below it. Reserved only when
+/// the box fits padding + title + at least one list row + bottom padding;
+/// smaller boxes keep the legacy title-less content.
+pub(in crate::app) fn queue_panel_title_row(panel_box: Rect) -> Option<Rect> {
+    (panel_box.height >= 4 && panel_box.width > 0).then(|| Rect {
+        x: panel_box.x,
+        y: panel_box.y + 1,
+        width: panel_box.width,
+        height: 1,
+    })
+}
+
 /// The framed list content inside the recessed box. Shared by the root
 /// placement (`queue_panel_geometry`) and the mounted `QueuePanel`'s own
 /// view, which derives the same content from the placement it is handed
-/// (task 3.1) -- one source for the panel's internal geometry. There is no
-/// title band: the list starts below one blank top-inset row and ends above
-/// the box's own blank bottom-padding row, and the status bar lives in the
-/// QueueColumn footer below the box. A degenerate box reserves nothing.
+/// (task 3.1) -- one source for the panel's internal geometry. With a title
+/// row present the list starts directly below the title and ends above the
+/// box's own blank bottom-padding row (one blank top-inset row stays above
+/// the title); without one (degenerate boxes) the list keeps the legacy
+/// top/bottom inset, and the status bar lives in the QueueColumn footer
+/// below the box. A degenerate box reserves nothing.
 pub(in crate::app) fn queue_panel_subareas(panel_box: Rect) -> Rect {
+    if queue_panel_title_row(panel_box).is_some() {
+        return Rect {
+            y: panel_box.y + 2,
+            height: panel_box.height.saturating_sub(3),
+            ..panel_box
+        };
+    }
     let padding = u16::from(panel_box.height >= 3);
     Rect {
         y: panel_box.y + padding,
@@ -154,18 +176,25 @@ mod tests {
         }
     }
 
-    /// The list content fills the recessed box between one blank top-inset
-    /// row and one blank bottom-padding row (no title band, no in-panel
-    /// status reservation: the status bar lives in the QueueColumn footer
-    /// below the box).
+    /// The list content sits below the title row: one blank top-inset row,
+    /// the one-row title, the list, one blank bottom-padding row (no
+    /// in-panel status reservation: the status bar lives in the
+    /// QueueColumn footer below the box).
     #[test]
     fn queue_panel_subareas_stay_inside_the_box() {
         let panel_box = Rect::new(2, 6, 30, 20);
+        let title = queue_panel_title_row(panel_box).expect("roomy box reserves a title");
+        assert_eq!((title.x, title.y, title.width, title.height), (2, 7, 30, 1));
         let content = queue_panel_subareas(panel_box);
         assert!(panel_box.contains((content.x, content.y).into()));
-        assert_eq!(content.y, panel_box.y + 1);
+        assert_eq!(content.y, title.y + 1);
         assert_eq!(content.bottom(), panel_box.bottom() - 1);
-        assert_eq!(content.height, panel_box.height - 2);
+        assert_eq!(content.height, panel_box.height - 3);
+
+        // A title-less box keeps the legacy single inset (no title band).
+        let content = queue_panel_subareas(Rect::new(0, 0, 10, 3));
+        assert_eq!((content.y, content.height), (1, 1));
+        assert!(queue_panel_title_row(Rect::new(0, 0, 10, 3)).is_none());
 
         // A degenerate box reserves nothing.
         let content = queue_panel_subareas(Rect::new(0, 0, 10, 2));
@@ -206,11 +235,10 @@ mod tests {
     /// The idle queue-only pane-geometry chain (review of tasks 3.1-3.4,
     /// moved from the queue render test): with no visual slot or transport
     /// rows, the list content starts below the header row plus the panel's
-    /// one blank top-inset row (the panel's recessed inset is the single
-    /// space row below the header) — all from the arrangement's own inputs,
-    /// not pulled from a render-test buffer.
+    /// one blank top-inset row plus the one-row title — all from the
+    /// arrangement's own inputs, not pulled from a render-test buffer.
     #[test]
-    fn idle_pane_starts_below_header_without_a_title_band() {
+    fn idle_pane_starts_below_header_with_a_title_band() {
         let header = 1u16;
         let left = left_content(30);
         let geometry = queue_panel_geometry(QueuePanelInputs {
@@ -219,10 +247,10 @@ mod tests {
             card_height: 0,
         });
         // Header row plus the column inset row plus the recessed box's one
-        // blank top-inset row; no title band is reserved above the list any
-        // more. (The shell helper now resolves the same content the mounted
-        // panel paints, through the shared box helper.)
-        assert_eq!(geometry.content_area.y, left.y + header + 2);
+        // blank top-inset row plus the one-row title; the list starts
+        // directly below the title. (The shell helper now resolves the same
+        // content the mounted panel paints, through the shared box helper.)
+        assert_eq!(geometry.content_area.y, left.y + header + 3);
         assert_eq!(geometry.panel_area.bottom(), 30);
     }
 }

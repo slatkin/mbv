@@ -200,7 +200,9 @@ fn queue_component_renders_a_snapshot_without_app_state() {
         PlaybackState::default(),
     );
     component.set_focused(true);
-    let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
+    // 9 rows: the recessed box fits the blank inset + title + two list rows
+    // + bottom padding alongside the footer band, so both seeded rows paint.
+    let mut terminal = Terminal::new(TestBackend::new(40, 9)).unwrap();
 
     terminal
         .draw(|frame| component.view(frame, frame.area()))
