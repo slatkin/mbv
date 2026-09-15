@@ -51,6 +51,7 @@ pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_core::api::Se
         user_name: "user".into(),
         host: "127.0.0.1".into(),
         supported_commands: Vec::new(),
+        playable_media_types: Vec::new(),
         now_playing: None,
         now_playing_item_id: None,
         position_s: 0,

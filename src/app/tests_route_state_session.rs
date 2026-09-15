@@ -136,6 +136,37 @@ fn attached_session_state_wins_over_local_daemon_indicator() {
 }
 
 #[test]
+fn attached_session_advertising_audio_only_is_an_audio_only_owner() {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    let mut session = make_session("remote-host", "Emby");
+    session.playable_media_types = vec!["Audio".into()];
+    app.connected_session_state = Some(session);
+
+    assert!(app.session_owner_is_audio_only());
+}
+
+#[test]
+fn attached_session_advertising_audio_and_video_is_not_audio_only() {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    let mut session = make_session("remote-host", "Emby");
+    session.playable_media_types = vec!["Audio".into(), "Video".into()];
+    app.connected_session_state = Some(session);
+
+    assert!(!app.session_owner_is_audio_only());
+}
+
+#[test]
+fn attached_session_without_playable_media_advertisement_is_not_audio_only() {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    app.connected_session_state = Some(make_session("remote-host", "Emby"));
+
+    assert!(!app.session_owner_is_audio_only());
+}
+
+#[test]
 fn disconnect_remote_does_not_exit_local_daemon_mode() {
     let mut app = make_local_daemon_app_stub(make_items(3));
 

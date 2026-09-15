@@ -22,6 +22,54 @@ fn mock_client(url: &str) -> (EmbyClient, MockHttp) {
     (client_with_url(url).with_test_agent(agent), http)
 }
 
+fn session_response(playable_media_types: Option<serde_json::Value>) -> String {
+    let mut session = json!({
+        "Id": "session-id",
+        "DeviceId": "other-device",
+        "DeviceName": "Other device",
+        "Client": "Emby",
+        "UserName": "user",
+        "SupportsRemoteControl": true,
+    });
+    if let Some(playable_media_types) = playable_media_types {
+        session["PlayableMediaTypes"] = playable_media_types;
+    }
+    json!([session]).to_string()
+}
+
+fn parse_session_playable_media_types(
+    playable_media_types: Option<serde_json::Value>,
+) -> Vec<String> {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.device_id = "this-device".into();
+    let body = session_response(playable_media_types);
+    http.respond(200, &body);
+    client
+        .get_sessions_unfiltered()
+        .unwrap()
+        .pop()
+        .expect("mock session must be retained")
+        .playable_media_types
+}
+
+#[test]
+fn sessions_parse_playable_media_types_when_present() {
+    assert_eq!(
+        parse_session_playable_media_types(Some(json!(["Audio", "Video"]))),
+        vec!["Audio", "Video"]
+    );
+}
+
+#[test]
+fn sessions_default_playable_media_types_when_absent() {
+    assert!(parse_session_playable_media_types(None).is_empty());
+}
+
+#[test]
+fn sessions_default_playable_media_types_when_empty() {
+    assert!(parse_session_playable_media_types(Some(json!([]))).is_empty());
+}
+
 #[test]
 fn library_items_request_includes_external_urls_field() {
     let (mut client, http) = mock_client(TEST_URL);

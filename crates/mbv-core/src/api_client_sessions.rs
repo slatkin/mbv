@@ -103,6 +103,14 @@ impl EmbyClient {
                                         .collect()
                                 })
                                 .unwrap_or_default(),
+                            playable_media_types: v["PlayableMediaTypes"]
+                                .as_array()
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|value| value.as_str().map(str::to_string))
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
                             now_playing: npi["Name"].as_str().map(str::to_string),
                             now_playing_item_id: npi["Id"].as_str().map(str::to_string),
                             position_ticks: ps["PositionTicks"].as_i64().unwrap_or(0),

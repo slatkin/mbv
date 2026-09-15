@@ -417,6 +417,9 @@ pub struct SessionInfo {
     pub user_name: String,
     pub host: String,
     pub supported_commands: Vec<String>,
+    /// Media kinds this session advertises as playable. An empty list means
+    /// that the capability is unknown, rather than that the session is audio-only.
+    pub playable_media_types: Vec<String>,
     pub now_playing: Option<String>,
     pub now_playing_item_id: Option<String>,
     pub position_s: i64,
