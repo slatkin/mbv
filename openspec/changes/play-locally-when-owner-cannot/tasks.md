@@ -1,6 +1,6 @@
 ## 1. Preflight: the submission boundary the guard sits on
 
-- [ ] 1.1 Verify that a single-item library play while attached to a remote
+- [x] 1.1 Verify that a single-item library play while attached to a remote
       daemon submits the selection to that owner. `App::play_item`'s
       `direct_remote` branch skips `replace_playback_queue` and then submits the
       scope's existing queue (`src/app/actions.rs:283-300`); no test covers this.
