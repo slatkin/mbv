@@ -3,7 +3,7 @@
 //! shape: the owner lives inside the mounted `LibraryPanel`, addressed by
 //! `LibraryKey::Service { .. }`, and the shell projects Model-owned
 //! browse snapshots into it at the same writer seams `shell_emby_library.rs`
-//! already calls for TV's still-mounted `TvContent`
+//! already calls for TV's embedded `TvContent`
 //! (the former standalone browser lifecycle) — this file supplies the
 //! three functions take for the three migrated kinds, so every existing
 //! writer call site keeps working unchanged for both paths.

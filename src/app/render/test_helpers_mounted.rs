@@ -13,7 +13,7 @@ use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
 /// Build a `Model` at an explicit terminal size with the library pane focused.
-/// Characterization tests whose surface is now painted by a mounted component
+/// Characterization tests whose surface is now painted by an embedded owner
 /// (`EmbyLibraryContent` / `MusicWorkspaceComponent` / embedded `TvContent`)
 /// instead of the legacy library dispatch start here, then draw with
 /// `draw_mounted_frame` and read geometry via `mounted_*_layout`.

@@ -6,7 +6,7 @@
 //! `MediaList` owner of the active level's rows, and the embedded Inline
 //! Search session. It produces the panel's [`LibraryPanelContent`] per frame
 //! and translates the panel's slot events and forwarded chords into the same
-//! typed `Msg`s the embedded EmbyLibraryContent owner emits for these three kinds
+//! typed `Msg`s the former BrowserComponent emitted for these three kinds
 //! (`shell_emby_library.rs::handle_emby_library_request` and `shell_messages.rs`'s
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
@@ -192,7 +192,7 @@ impl EmbyLibraryContent {
     }
 
     /// Explicit, identity-gated resting-position re-seed (mirrors
-    /// the prior Emby library owner's position application): the shell calls this only when
+    /// the former BrowserComponent's position application): the shell calls this only when
     /// `note_browse_identity` reports a real identity change (drill-in,
     /// go-back, letter-filter reset, sort change, feed/home-video group
     /// switch). Within one identity no position crosses the boundary.
@@ -209,7 +209,7 @@ impl EmbyLibraryContent {
 
     /// Records the browse identity of the current shell content push and
     /// reports whether it differs from the previous push (mirrors
-    /// the prior Emby library owner's identity tracking).
+    /// the former BrowserComponent's identity tracking).
     pub(in crate::app) fn note_browse_identity(&mut self, identity: EmbyLibraryIdentity) -> bool {
         let changed = self.last_identity.as_ref() != Some(&identity);
         self.last_identity = Some(identity);
@@ -239,7 +239,7 @@ impl EmbyLibraryContent {
     /// Project the mirrored items into provider-neutral rows: letter-grouped
     /// `Heading`/`Spacer`/`Item` rows for a large library (or an active
     /// letter pill), natural-sorted plain rows otherwise (mirrors
-    /// the prior Emby library owner's row projection).
+    /// the former BrowserComponent's row projection).
     fn feed_owner(&mut self) {
         let grouped = self.true_total() >= 50 || self.letter_filter.is_some();
         let rows: Vec<MediaListRow<String>> = if grouped {
@@ -285,7 +285,7 @@ impl EmbyLibraryContent {
     }
 
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors
-    /// the prior Emby library owner's inline-search result action): reuses the ordinary
+    /// the former BrowserComponent's inline-search result action): reuses the ordinary
     /// result-row shell effects, resolved against the search cursor rather
     /// than the ordinary browse cursor.
     fn inline_search_result_action(&mut self, key: &KeyEvent) -> Option<Msg> {

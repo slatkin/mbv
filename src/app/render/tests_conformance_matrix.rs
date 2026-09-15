@@ -32,7 +32,7 @@ fn render_reserved_library_area(
 }
 
 /// Render an Emby browse surface (Movies / TV / grouped Music) through the real
-/// `Model::draw_frame` shell path — the mounted Emby/TV content owner /
+/// `Model::draw_frame` shell path — the embedded Emby/TV content owner /
 /// `MusicWorkspaceComponent` is the sole painter after task 3.8 — and surface
 /// the active component's own painted geometry as a `PaintedRowGeometry` so
 /// the shared conformance assertions still hold (mirrors
