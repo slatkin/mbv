@@ -1,13 +1,13 @@
 ## Why
 
-Movie logos are useful presentation artwork, but mbv currently treats `Logo` only as a fallback candidate for the hero's base image. A Movie whose Wide Hero uses portrait artwork can instead use an available transparent logo as a restrained decoration over its poster while preserving the portable single-image rendering path.
+Movie logos are useful presentation artwork, but mbv currently treats `Logo` only as a fallback candidate for the hero's base image. A Movie whose Wide Hero uses landscape artwork can instead use an available transparent logo as a restrained decoration over its fanart while preserving the portable single-image rendering path.
 
 ## What Changes
 
 - Parse Emby's declared Movie logo image tag so logo availability is known before fetching.
-- For a Movie using the Portrait Wide Hero header, fetch its logo independently and alpha-composite it into the top-left of the final poster bitmap.
-- Show the poster without waiting for the optional logo; rebuild the hero image when a cold logo fetch subsequently succeeds.
-- Leave Landscape Wide Hero artwork, Narrow inline heroes, non-Movie heroes, and Movies without usable logos unchanged.
+- For a Movie using the Landscape Wide Hero header, fetch its logo independently and alpha-composite it into the top-left of the final landscape bitmap.
+- Show the landscape art without waiting for the optional logo; rebuild the hero image when a cold logo fetch subsequently succeeds.
+- Leave Portrait Wide Hero artwork, Narrow inline heroes, non-Movie heroes, and Movies without usable logos unchanged.
 - Keep playback badges and progress overlays outside this change.
 
 ## Capabilities
@@ -18,7 +18,7 @@ None.
 
 ### Modified Capabilities
 
-- `library-panel`: Define the optional Movie-logo decoration of portrait artwork in the Wide Hero header and its fallback behavior.
+- `library-panel`: Define the optional Movie-logo decoration of landscape artwork in the Wide Hero header and its fallback behavior.
 
 ## Impact
 
