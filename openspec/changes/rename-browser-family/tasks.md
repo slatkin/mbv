@@ -5,9 +5,9 @@
 
 ## 2. Request family (design D3, D5 step 2)
 
-- [ ] 2.1 In `components/msg/shell.rs`: delete the six `Browser*` twins (`BrowserPlay`, `BrowserEnqueue`, `BrowserToggleWatched`, `BrowserShuffle`, `BrowserRefresh`, `BrowserRescan`), rename the eight no-twin variants to `EmbyLibrary*` (`Activate`, `Back`, `CycleLetterPill`, `CycleGroup`, `RowClick`, `RowActivate`, `PillClick`, `CursorIndex`), and refresh the doc comments (the "mirror the corresponding `Browser*` requests" note is obsolete). Verify: `cargo check -p mbv`.
-- [ ] 2.2 Update emitters: `components/emby_library_content.rs` (still `browser_content.rs` at this point) emits the renamed variants; `tv_content/keyboard.rs` emits `EmbyLibraryCursorIndex`; `music_content.rs` unchanged (already `EmbyLibrary*`). Verify: `cargo check -p mbv`.
-- [ ] 2.3 Collapse the merged dispatch arms: `shell_browser.rs::handle_browser_request` (each `BrowserX | EmbyLibraryX` pair becomes one `EmbyLibraryX` arm) and the three mouse arms in `shell_messages.rs` (`BrowserPillClick`/`BrowserRowClick`/`BrowserRowActivate`); update the routing-matrix and tick-integration test call sites. Verify: `cargo nextest run -p mbv` fully green (routing matrix + `tests_tick_integration*` included).
+- [x] 2.1 In `components/msg/shell.rs`: delete the six `Browser*` twins (`BrowserPlay`, `BrowserEnqueue`, `BrowserToggleWatched`, `BrowserShuffle`, `BrowserRefresh`, `BrowserRescan`), rename the eight no-twin variants to `EmbyLibrary*` (`Activate`, `Back`, `CycleLetterPill`, `CycleGroup`, `RowClick`, `RowActivate`, `PillClick`, `CursorIndex`), and refresh the doc comments (the "mirror the corresponding `Browser*` requests" note is obsolete). Verify: `cargo check -p mbv`.
+- [x] 2.2 Update emitters: `components/emby_library_content.rs` (still `browser_content.rs` at this point) emits the renamed variants; `tv_content/keyboard.rs` emits `EmbyLibraryCursorIndex`; `music_content.rs` unchanged (already `EmbyLibrary*`). Verify: `cargo check -p mbv`.
+- [x] 2.3 Collapse the merged dispatch arms: `shell_browser.rs::handle_browser_request` (each `BrowserX | EmbyLibraryX` pair becomes one `EmbyLibraryX` arm) and the three mouse arms in `shell_messages.rs` (`BrowserPillClick`/`BrowserRowClick`/`BrowserRowActivate`); update the routing-matrix and tick-integration test call sites. Verify: `cargo nextest run -p mbv` fully green (routing matrix + `tests_tick_integration*` included).
 
 ## 3. Owner and module names (design D1, D5 step 3)
 
