@@ -1,6 +1,7 @@
 //! Wide Hero Main content box: overview text and the Movie credits table.
 use ratatui::layout::Rect;
 use ratatui::style::Style;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
 use crate::app::render::components::widgets::render_right_scrollbar_inside;
@@ -9,7 +10,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
-use crate::app::render::{paint_wide_hero_text, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y};
+use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
 
@@ -58,16 +59,15 @@ pub(in crate::app) fn paint_overview_box(
         .unwrap_or(0);
     let credit_rows = credits.map(|rows| rows.len()).unwrap_or(0);
     let has_credits_gap = has_overview_and_credits(overview, credits);
-    // The overview and separator are pinned; only the table consumes the
-    // scrollable viewport.  The two fixed rows are the separator and its
-    // following blank gap.
-    let pinned_rows = text_rows
-        + if has_credits_gap {
-            OVERVIEW_CREDITS_GAP_ROWS
-        } else {
-            0
-        };
-    let inner_rows = pinned_rows + credit_rows;
+    // The overview text, the separator and the table are ONE scrollable flow:
+    // the caller's offset shifts the whole box content, so this is the box's
+    // full content length.
+    let gap_rows = if has_credits_gap {
+        OVERVIEW_CREDITS_GAP_ROWS
+    } else {
+        0
+    };
+    let inner_rows = text_rows + gap_rows + credit_rows;
     let box_y = next_row.saturating_add(1);
     let room = area.bottom().saturating_sub(box_y);
     let natural = (inner_rows.max(1) as u16).saturating_add(PANE_PAD_Y * 2);
@@ -107,38 +107,47 @@ pub(in crate::app) fn paint_overview_box(
         width: panel.width.saturating_sub(PANE_PAD_X * 2),
         height: panel.height.saturating_sub(PANE_PAD_Y * 2),
     };
-    let table_viewport = (inner.height as usize).saturating_sub(pinned_rows);
-    let max_offset = credit_rows.saturating_sub(table_viewport);
+    let viewport = inner.height as usize;
+    let max_offset = inner_rows.saturating_sub(viewport);
     let offset = scroll_offset.min(max_offset);
+    // One virtual row space for the whole flow: the overview occupies rows
+    // `0..text_rows`, then the separator and its blank row, then the table.
+    // `visible_row` maps a flow row to the screen row the current offset
+    // puts it on, or `None` while it is scrolled out of the viewport.
+    let visible_row = |flow_row: usize| -> Option<u16> {
+        let screen_row = u16::try_from(flow_row.checked_sub(offset)?).ok()?;
+        let y = inner.y.saturating_add(screen_row);
+        (y < inner.bottom()).then_some(y)
+    };
     if let Some(text) = overview {
+        // One row per wrapped line, empty lines included, so the flow's row
+        // positions stay exact while it scrolls.
         let wrapped = textwrap::wrap(text, (inner.width as usize).saturating_sub(1).max(1));
-        let lines: Vec<WrappedHeroLine<'_>> = wrapped
-            .iter()
-            .map(|line| WrappedHeroLine {
-                text: line.as_ref(),
-                style: Style::default().fg(palette::TEXT_EMPHASIS),
-            })
-            .collect();
-        // Keep pinned overview content inside the box when the pane is too
-        // short to show the whole overview (and its table, if present).
-        let visible_rows = (lines.len() as u16).min(inner.height);
-        if visible_rows > 0 {
-            paint_wide_hero_text(
-                f,
+        for (index, line) in wrapped.iter().enumerate() {
+            let Some(y) = visible_row(index) else {
+                continue;
+            };
+            if line.is_empty() {
+                continue;
+            }
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    line.as_ref(),
+                    Style::default().fg(palette::TEXT_EMPHASIS),
+                ))),
                 Rect {
-                    y: inner.y,
-                    height: visible_rows,
-                    ..inner
+                    x: inner.x,
+                    y,
+                    width: inner.width,
+                    height: 1,
                 },
-                &lines,
             );
         }
     }
     if has_credits_gap {
-        // The separator is directly below the overview, with one blank row
-        // below it; both remain pinned while the table scrolls.
-        let y = inner.y + text_rows as u16;
-        if y < inner.bottom() {
+        // The separator follows the overview in the same flow; the blank row
+        // below it is the flow's next row.
+        if let Some(y) = visible_row(text_rows) {
             crate::app::render::components::widgets::render_block_separator(
                 f,
                 Rect {
@@ -151,26 +160,29 @@ pub(in crate::app) fn paint_overview_box(
         }
     }
     if let Some(credits) = credits {
-        let y = inner.y + pinned_rows as u16;
-        if y < inner.bottom() {
-            paint_credits_from(
-                f,
-                Rect {
-                    y,
-                    height: inner.bottom().saturating_sub(y),
-                    ..inner
-                },
-                credits,
-                offset,
-            );
+        let credits_start = text_rows + gap_rows;
+        let first_visible = offset.saturating_sub(credits_start).min(credit_rows);
+        if first_visible < credit_rows {
+            if let Some(y) = visible_row(credits_start + first_visible) {
+                paint_credits_from(
+                    f,
+                    Rect {
+                        y,
+                        height: inner.bottom().saturating_sub(y),
+                        ..inner
+                    },
+                    credits,
+                    first_visible,
+                );
+            }
         }
     }
-    if max_offset > 0 && table_viewport > 0 {
+    if max_offset > 0 && viewport > 0 {
         render_right_scrollbar_inside(
             f,
             panel,
-            credit_rows,
-            table_viewport,
+            inner_rows,
+            viewport,
             offset,
             palette::TEXT_METADATA,
         );
@@ -178,8 +190,8 @@ pub(in crate::app) fn paint_overview_box(
     Some(OverviewPaint {
         bottom: panel.bottom(),
         rect: panel,
-        content_length: credit_rows,
-        viewport: table_viewport,
+        content_length: inner_rows,
+        viewport,
     })
 }
 

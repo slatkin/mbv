@@ -78,7 +78,7 @@ fn overview_credits_have_blank_row_separator_and_zebra_stripes() {
 }
 
 #[test]
-fn long_overview_is_clipped_to_inner_box_when_pane_is_short() {
+fn long_overview_scrolls_inside_a_short_box() {
     let content = HeroContent {
         facts: facts(ArtworkShape::Landscape),
         overview: Some("one two three four five six seven eight nine ten eleven twelve".into()),
@@ -100,7 +100,11 @@ fn long_overview_is_clipped_to_inner_box_when_pane_is_short() {
         .unwrap();
     let buffer = terminal.backend().buffer();
     let inner = Rect::new(2, 2, 28, 3);
-    assert_eq!(metrics.unwrap().viewport, 0);
+    let metrics = metrics.unwrap();
+    // The short box shows its own inner height and scrolls the rest of the
+    // flow (overview text, separator, table) rather than pinning anything.
+    assert_eq!(metrics.viewport, 3);
+    assert!(metrics.content_length > metrics.viewport);
     assert!(
         (inner.bottom()..6).all(|y| {
             (inner.left()..inner.right()).all(|x| buffer[(x, y)].symbol() != "▁")
@@ -108,10 +112,36 @@ fn long_overview_is_clipped_to_inner_box_when_pane_is_short() {
         }),
         "separator and table never paint below inner bottom"
     );
+
+    // At the end of the range the overview has scrolled out of the box and
+    // the flow's later rows hold the inner area instead.
+    terminal
+        .draw(|f| {
+            paint_overview_box(
+                f,
+                Rect::new(0, 0, 32, 6),
+                0,
+                &content,
+                metrics.content_length - metrics.viewport,
+            );
+        })
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    let inner_text = (inner.top()..inner.bottom())
+        .map(|y| {
+            (inner.left()..inner.right())
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+        })
+        .collect::<String>();
+    assert!(
+        !inner_text.contains("one two three"),
+        "the overview text scrolled out: {inner_text:?}"
+    );
 }
 
 #[test]
-fn pinned_overview_and_separator_stay_fixed_while_credits_scroll() {
+fn overview_separator_and_credits_scroll_as_one_flow() {
     let credits = (0..12)
         .map(|i| HeroCredit {
             name: format!("Person {i}"),
@@ -138,18 +168,36 @@ fn pinned_overview_and_separator_stay_fixed_while_credits_scroll() {
         (terminal.backend().buffer().clone(), paint.unwrap())
     };
     let (at_start, metrics) = draw(0);
-    let (at_end, _) = draw(metrics.content_length.saturating_sub(metrics.viewport));
-    let separator_y = 3;
-    assert_eq!(metrics.viewport, 8);
-    for y in 2..=separator_y {
-        for x in 0..31 {
-            assert_eq!(at_start[(x, y)].symbol(), at_end[(x, y)].symbol());
-        }
-    }
+    let max_offset = metrics.content_length.saturating_sub(metrics.viewport);
+    let (scrolled_by_one, _) = draw(1);
+    let (at_end, _) = draw(max_offset);
     let row = |buffer: &ratatui::buffer::Buffer, y| {
         (0..32).map(|x| buffer[(x, y)].symbol()).collect::<String>()
     };
-    assert_ne!(row(&at_start, 5), row(&at_end, 5));
+    let separator_row =
+        |buffer: &ratatui::buffer::Buffer| (2..14).find(|y| buffer[(2, *y)].symbol() == "▁");
+
+    // The flow is the overview line, the separator, the blank row and every
+    // credit row — the scroll range covers all of it.
+    assert_eq!(
+        metrics.content_length,
+        1 + OVERVIEW_CREDITS_GAP_ROWS + 12,
+        "the overview is part of the scrollable content"
+    );
+    assert_eq!(metrics.viewport, 11);
+
+    // At the top the overview paints above its separator; one row of scroll
+    // moves both up, so neither is pinned.
+    assert_eq!(separator_row(&at_start), Some(3));
+    assert!(row(&at_start, 2).contains("Overview text"));
+    assert_eq!(separator_row(&scrolled_by_one), Some(2));
+    assert!(!row(&scrolled_by_one, 3).contains("Overview text"));
+
+    // At the end of the range the overview and separator have scrolled out
+    // and the table fills the box.
+    assert_eq!(separator_row(&at_end), None);
+    assert!(row(&at_end, 2).contains("Person 1"));
+    assert!(row(&at_end, 12).contains("Person 11"));
 }
 
 #[test]

@@ -279,11 +279,14 @@ name column SHALL render in a yellow text role backed by the theme's `YELLOW` pr
 A person's role SHALL be the provider's role text for that person. When the provider supplies no role
 text, the person's provider type SHALL be shown instead.
 
-The cast and crew table SHALL scroll within the overview Main content box when it offers more rows
-than the box's height shows: the overview text and the separator line SHALL stay pinned at the box's
-top, the table rows SHALL shift under them, and a scrollbar indicator SHALL paint at the box's right
-edge only while the table overflows. The scroll offset SHALL be component-local (owned by the Library
-panel's destination owner), clamped at both ends, and reset when the shown item changes. The table
+The overview text, the separator line, the blank row and the cast and crew table SHALL form one
+scrollable flow inside the overview Main content box: when the flow offers more rows than the box's
+height shows, the caller's scroll offset SHALL shift the whole flow — the overview text and the
+separator scroll out of the box above the table instead of staying pinned — and a scrollbar
+indicator SHALL paint at the box's right edge only while the flow overflows. The scroll offset SHALL
+be component-local (owned by the Library
+panel's destination owner), clamped at both ends against the whole flow's length, and reset when the
+shown item changes. The table
 SHALL render only in the
 Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
 
@@ -322,6 +325,12 @@ Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
 - **WHEN** a Movie declares no people
 - **THEN** no cast and crew table renders, and the overview box renders as it does for any item with
   overview text
+
+#### Scenario: A long overview scrolls with its table
+
+- **WHEN** a Movie's overview and cast and crew table need more rows than the overview box shows
+- **THEN** scrolling the box shifts the overview text and the separator out of it above the table
+- **AND** the scroll range covers the overview, the separator, the blank row and every table row
 
 #### Scenario: A Movie selected in the Narrow panel
 

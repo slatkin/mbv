@@ -6,6 +6,7 @@ use crate::app::components::library_panel::hero_header::{
     hero_artwork_box, paint_hero_pane_content,
 };
 use crate::app::palette;
+use crate::app::render::{paint_wide_hero_text, WrappedHeroLine};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 
