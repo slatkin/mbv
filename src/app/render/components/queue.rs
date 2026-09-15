@@ -33,7 +33,7 @@ pub(in crate::app) fn render_queue_body(
             list.set_paint_policy(
                 WideMediaListPaintPolicy::for_queue(focused)
                     .with_zebra(ZebraStripe {
-                        focused: Color::from_u32(0x003c4841),
+                        focused: Color::from_u32(0x00f3f5d9),
                         unfocused: Color::from_u32(0x00333c43),
                     })
                     .with_selected_style(SelectedRowStyle {
