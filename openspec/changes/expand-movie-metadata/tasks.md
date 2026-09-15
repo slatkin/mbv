@@ -83,9 +83,12 @@
   `rstest` `#[case]` table updated so the cap case proves NO cap (a payload with more than 9 actors
   yields all of them), a mixed-type payload (writer/producer/composer) appears after the actors in
   provider order, and the existing no-people / no-role cases still pass.
-- [ ] 6.2 Replace the blank gap row under the overview text with a separator line of block characters
-  spanning the box's content width. Verify: a buffer test asserting the separator's presence and span
-  when both overview and table render, and its absence when there is no overview.
+- [ ] 6.2 Replace the blank gap row under the overview text with a separator: one blank row under the
+  overview text, then a separator line of `▁` (U+2581) block characters spanning the box's content
+  width, in the sage-green text role (#A7C080, the theme's existing `IRIS` primitive — via a semantic
+  role, never a raw Rgb in the painter). Verify: a buffer test asserting the blank row, the separator's
+  glyph, span and colour role when both overview and table render, and its absence when there is no
+  overview.
 - [ ] 6.3 Make the overview box's content interactively scrollable when it exceeds the box's height:
   mouse-wheel over the box scrolls the content (component-local scroll offset owned by the Library
   panel, clamped to the content, reset on item change), and a scrollbar indicator paints at the box's

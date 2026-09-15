@@ -78,8 +78,8 @@ column SHALL span the overview box's remaining width after the name column, whic
 longest name the table shows, and every role SHALL be right-aligned at the box's right edge. A role
 longer than the remaining width SHALL be truncated with an ellipsis at the box's edge. The table SHALL have
 no header row, and SHALL use the body text treatment the overview paragraph
-uses. A separator line of block characters SHALL sit between the overview text and the table's first
-row, spanning the box's content width.
+uses. A blank row SHALL sit under the overview text, followed by a separator line of `▁` (U+2581)
+block characters spanning the box's content width in the sage-green text role (#A7C080).
 
 A person's role SHALL be the provider's role text for that person. When the provider supplies no role
 text, the person's provider type SHALL be shown instead.

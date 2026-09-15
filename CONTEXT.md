@@ -545,8 +545,9 @@ one name column and one shared role column, right-aligned at the box's right edg
 separator. It lists
 every person the server reports: every Director in provider order, then every remaining person in
 provider order regardless of type; nothing is capped. An empty role falls back to the
-person's provider type. A line of block characters separates the overview text from the table's first
-row. The table starts at the box's first content row when there is no overview, and the box scrolls
+person's provider type. A blank row, then a line of ▁ block characters in sage green, separates the
+overview text from the table's first row. The table starts at the box's first content row when there
+is no overview, and the box scrolls
 when the content exceeds its height. The Narrow inline hero does not render it.
 _Avoid_: credits list, cast list, detail table
 
