@@ -91,7 +91,7 @@ impl PlayerProxy {
 
     /// Whether the owner is known to be configured audio-only. An in-process
     /// Player is always able to play video, while an older ctrl peer that did
-    /// not advertise the capability is treated as audio-capable.
+    /// not advertise the capability is assumed able to play video.
     pub fn owner_is_audio_only(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,

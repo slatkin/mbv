@@ -83,9 +83,13 @@ fn local_ctrl_socket_rejects_wrong_control_credential_without_emby_fallback() {
 #[test]
 fn audio_only_daemon_advertises_capability_in_ctrl_hello() {
     let (client, _events) = start_ctrl_auth_test_peer(None, true);
+    client
+        .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+        .unwrap();
     let mut reader = BufReader::new(client);
-    let hello = read_ctrl_event(&mut reader);
-    let CtrlEvent::Hello(hello) = hello else {
+    let mut line = String::new();
+    assert!(reader.read_line(&mut line).unwrap() > 0, "daemon hello was empty");
+    let CtrlEvent::Hello(hello) = serde_json::from_str(line.trim_end()).unwrap() else {
         panic!("expected daemon hello");
     };
     assert!(hello.supports_audio_only());
