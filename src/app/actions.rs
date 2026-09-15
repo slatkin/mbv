@@ -1,11 +1,89 @@
 use super::notify_actions::ToastSeverity;
 use super::ui_util::natural_sort_key;
-use super::{App, LocalPlaybackTarget, PanelFocus, PlaybackTarget, RemotePlaybackTarget};
+use super::{
+    App, LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, RemotePlaybackTarget,
+};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueItemContentId};
 use mbv_core::player::PlayerCommand;
 use mbv_core::ItemId;
 use std::sync::Arc;
+
+/// Classification for an explicit Emby play against the attached owner.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum PlaybackEligibility {
+    Ineligible,
+    WhollyUnplayable { unplayable_count: usize },
+    Mixed { unplayable_count: usize },
+    WhollyPlayable,
+}
+
+/// Format the existing playback request toast with the mixed-selection count.
+fn playback_request_message(label: &str, mixed_unplayable: Option<usize>) -> String {
+    match mixed_unplayable {
+        Some(count) => format!(
+            "Requesting playback: {label} ({} item{} unavailable to the audio-only owner)",
+            count,
+            if count == 1 { "" } else { "s" }
+        ),
+        None => format!("Requesting playback: {label}"),
+    }
+}
+
+fn classify_playback_eligibility(
+    attached: bool,
+    library_route: bool,
+    owner_is_audio_only: bool,
+    items: &[EmbyItem],
+) -> PlaybackEligibility {
+    if !attached || library_route || !owner_is_audio_only {
+        return PlaybackEligibility::Ineligible;
+    }
+    let unplayable_count = items
+        .iter()
+        .filter(|item| !item.media_type.eq_ignore_ascii_case("Audio"))
+        .count();
+    if unplayable_count == 0 {
+        PlaybackEligibility::WhollyPlayable
+    } else if unplayable_count == items.len() {
+        PlaybackEligibility::WhollyUnplayable { unplayable_count }
+    } else {
+        PlaybackEligibility::Mixed { unplayable_count }
+    }
+}
+
+impl App {
+    /// Return the audio-only fall-through decision for an explicit Emby play.
+    /// Empty/unknown selections and Library routes remain on today's path.
+    pub(super) fn playback_eligibility(&self, items: &[EmbyItem]) -> PlaybackEligibility {
+        let attached = self.connected_session_id.is_some() || self.player.is_remote();
+        let owner_is_audio_only = if self.connected_session_id.is_some() {
+            self.session_owner_is_audio_only()
+        } else {
+            self.player.owner_is_audio_only()
+        };
+        classify_playback_eligibility(
+            attached,
+            self.active_route.is_some(),
+            owner_is_audio_only,
+            items,
+        )
+    }
+
+    fn defer_local_play(
+        &mut self,
+        items: Vec<EmbyItem>,
+        start_idx: usize,
+        source: crate::config::QueueSource,
+    ) {
+        self.pending_local_play = Some(PendingQueueAction::PlayItems {
+            items,
+            start_idx,
+            source,
+            autostart: true,
+        });
+    }
+}
 
 /// Where playback should resume within a restored queue. Prefers locating
 /// `last_played_content_id` by identity (robust to the saved `cursor` index having
@@ -172,6 +250,14 @@ impl App {
         start_idx: usize,
         queue_source: crate::config::QueueSource,
     ) {
+        let mixed_unplayable = match self.playback_eligibility(&items) {
+            PlaybackEligibility::WhollyUnplayable { .. } => {
+                self.defer_local_play(items, start_idx, queue_source.clone());
+                return;
+            }
+            PlaybackEligibility::Mixed { unplayable_count } => Some(unplayable_count),
+            PlaybackEligibility::Ineligible | PlaybackEligibility::WhollyPlayable => None,
+        };
         if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
             log::info!(target: "library_route", "user action=queue-replace item_id={:?} item_name={:?}", item.id, item.name);
             if self.in_non_library_thin_client_mode() {
@@ -199,7 +285,7 @@ impl App {
                 .map(|i| i.playback_label())
                 .unwrap_or_default();
             self.flash(
-                format!("Requesting playback: {label}"),
+                playback_request_message(&label, mixed_unplayable),
                 ToastSeverity::Neutral,
             );
             self.submit_attached_sequence(&id, &items, start_idx);
@@ -208,7 +294,7 @@ impl App {
         if direct_remote {
             if let Some(item) = items.get(start_idx) {
                 self.flash(
-                    format!("Requesting playback: {}", item.playback_label()),
+                    playback_request_message(&item.playback_label(), mixed_unplayable),
                     ToastSeverity::Neutral,
                 );
             }
@@ -216,10 +302,27 @@ impl App {
         self.submit_tab_queue(self.playing_queue_scope(), start_idx);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
+        if let Some(count) = mixed_unplayable {
+            self.flash(
+                format!(
+                    "Playback started ({} item{} unavailable to the audio-only owner)",
+                    count,
+                    if count == 1 { "" } else { "s" }
+                ),
+                ToastSeverity::Neutral,
+            );
+        }
     }
 
     pub(super) fn play_item(&mut self, item: EmbyItem) {
         log::info!(target: "library_route", "user action=play item_id={:?} item_name={:?}", item.id, item.name);
+        if matches!(
+            self.playback_eligibility(std::slice::from_ref(&item)),
+            PlaybackEligibility::WhollyUnplayable { .. }
+        ) {
+            self.defer_local_play(vec![item], 0, self.queue_source.clone());
+            return;
+        }
         if self.in_non_library_thin_client_mode() {
             log::info!(target: "library_route", "route bypass action=play item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
         } else {

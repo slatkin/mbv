@@ -33,7 +33,6 @@ impl App {
     /// treated as able to play video.
     // This query is introduced ahead of the explicit-play guard that consumes
     // it in the next implementation unit.
-    #[allow(dead_code)]
     pub(super) fn session_owner_is_audio_only(&self) -> bool {
         self.connected_session_id.is_some()
             && self

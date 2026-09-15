@@ -4,7 +4,7 @@ use super::*;
 use crate::app::library_browse_actions::{
     build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
 };
-use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_items};
+use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_items, make_session};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
     FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
@@ -12,8 +12,128 @@ use crate::app::{
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::mock_http::MockHttp;
 use mbv_core::player::PlayerEvent;
+use rstest::rstest;
 use std::collections::HashMap;
 use std::sync::mpsc;
+
+fn selection(media_types: &[&str]) -> Vec<EmbyItem> {
+    media_types
+        .iter()
+        .enumerate()
+        .map(|(index, media_type)| {
+            let mut item = make_item(&format!("item-{index}"), "Movie");
+            item.media_type = (*media_type).into();
+            item
+        })
+        .collect()
+}
+
+#[rstest]
+#[case::ctrl_attached(true, false, true, &["Video"], PlaybackEligibility::WhollyUnplayable { unplayable_count: 1 })]
+#[case::emby_session(true, false, true, &["Video", "Audio"], PlaybackEligibility::Mixed { unplayable_count: 1 })]
+#[case::library_route(true, true, true, &["Video"], PlaybackEligibility::Ineligible)]
+#[case::unknown_capability(true, false, false, &["Video"], PlaybackEligibility::Ineligible)]
+#[case::wholly_unplayable(true, false, true, &["Video", "Photo"], PlaybackEligibility::WhollyUnplayable { unplayable_count: 2 })]
+#[case::mixed(true, false, true, &["Audio", "Video"], PlaybackEligibility::Mixed { unplayable_count: 1 })]
+#[case::wholly_playable(true, false, true, &["Audio", "Audio"], PlaybackEligibility::WhollyPlayable)]
+fn playback_eligibility_classifies_owner_and_selection(
+    #[case] attached: bool,
+    #[case] library_route: bool,
+    #[case] owner_is_audio_only: bool,
+    #[case] media_types: &[&str],
+    #[case] expected: PlaybackEligibility,
+) {
+    assert_eq!(
+        super::classify_playback_eligibility(
+            attached,
+            library_route,
+            owner_is_audio_only,
+            &selection(media_types),
+        ),
+        expected
+    );
+}
+
+#[test]
+fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    let mut session = make_session("audio-owner", "Emby");
+    session.playable_media_types = vec!["Audio".into()];
+    app.connected_session_state = Some(session);
+    let item = make_item("Movie", "Movie");
+
+    app.play_item(item.clone());
+
+    assert!(matches!(
+        app.pending_local_play,
+        Some(PendingQueueAction::PlayItems {
+            items,
+            start_idx: 0,
+            autostart: true,
+            ..
+        }) if items.len() == 1 && items[0].id == item.id
+    ));
+    assert!(app.player_tab.emby_items().is_empty());
+    assert!(app.status.is_empty());
+}
+
+#[test]
+fn mixed_play_submits_unchanged_and_reports_unplayable_count() {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    let mut session = make_session("audio-owner", "Emby");
+    session.playable_media_types = vec!["Audio".into()];
+    app.connected_session_state = Some(session);
+    let items = selection(&["Audio", "Video"]);
+
+    app.play_items_routed(items.clone(), 0, crate::config::QueueSource::Album);
+
+    assert!(app.pending_local_play.is_none());
+    assert_eq!(
+        app.status_severity,
+        crate::app::notify_actions::ToastSeverity::Neutral
+    );
+    assert!(app.status.contains("1 item"));
+    assert!(app.status.contains("unavailable"));
+    assert!(app.player_tab.emby_items().is_empty());
+}
+
+#[test]
+fn routed_wholly_unplayable_play_is_deferred_without_queue_replacement() {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    let mut session = make_session("audio-owner", "Emby");
+    session.playable_media_types = vec!["Audio".into()];
+    app.connected_session_state = Some(session);
+    let items = selection(&["Video", "Photo"]);
+
+    app.play_items_routed(items, 1, crate::config::QueueSource::Album);
+
+    assert!(matches!(
+        app.pending_local_play,
+        Some(PendingQueueAction::PlayItems {
+            start_idx: 1,
+            source: crate::config::QueueSource::Album,
+            autostart: true,
+            ..
+        })
+    ));
+    assert!(app.player_tab.emby_items().is_empty());
+    assert!(app.status.is_empty());
+}
+
+#[test]
+fn wholly_playable_play_keeps_the_existing_play_path() {
+    let mut app = make_app_stub();
+    let item = make_item("Song", "Audio");
+
+    app.play_item(item.clone());
+
+    assert!(app.pending_local_play.is_none());
+    assert_eq!(app.player_tab.emby_items().len(), 1);
+    assert_eq!(app.player_tab.emby_items()[0].id, item.id);
+}
 
 fn folder(id: &str, name: &str) -> EmbyItem {
     let mut item = make_item(name, "Folder");

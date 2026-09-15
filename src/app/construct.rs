@@ -175,6 +175,7 @@ impl App {
             queue_source: crate::config::QueueSource::Unknown,
             queue_dirty: false,
             pending_queue_action: None,
+            pending_local_play: None,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
             connected_session_id: None,
