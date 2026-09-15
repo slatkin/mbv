@@ -494,7 +494,7 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn non_adjacent_multi_selected_rows_and_unfocused_cursor_paint_selected_surface() {
+    fn non_adjacent_multi_selected_rows_take_accent_with_own_parity() {
         let rect = Rect::new(0, 0, 32, 4);
         let pair = ZebraStripe {
             focused: palette::surface_colors(palette::Surface::MainContentBox, true).fill,

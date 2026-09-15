@@ -37,13 +37,13 @@
 //! | `LibraryColumn` | yes (Both, LibraryOnly, mini library) | — (fixed row; probed in both frames) |
 //! | `WideSplitGutter` | yes (boundary component view) | — (pinned only here at buffer level) |
 //! | `HeroPane` | yes (LibraryOnly Movies, bit `false`) | `tests_wide_hero_pane_characterization.rs` (resting fill) |
-//! | `SelectedRow` | yes (LibraryOnly library rail) | `components/tv_wide_tests.rs::wide_tv_left_focus_drops_the_right_rail_to_the_resting_surface` |
-//! | `SelectedRowOnQueueColumn` | yes (wide scrollbar backing, both bits) | — |
-//! | `SelectedRowOnLibraryPane` | yes (library Wide scrollbar backing, both bits) | library Wide arm stripe regressions in `components/media_list.rs` |
+//! | `SelectedRow` | — | `render/components/media_list.rs::selected_row_spans_full_width_with_two_col_indent` (selected-row fill) |
+//! | `SelectedRowOnQueueColumn` | — | `render/components/media_list.rs::zebra_stripes_are_contained_and_selected_row_still_wins` (selected-row fill; no scrollbar-column probe) |
+//! | `SelectedRowOnLibraryPane` | — | `render/components/media_list.rs::library_wide_workspace_stripes_with_library_panel_pair` (library Wide arm stripe; no scrollbar-column probe) |
 //! | `ContextMenuSelectedRow` | yes (context-menu popup, component view) | — |
 //! | `LibraryPanel` | yes (Both, LibraryOnly, wide music) | `tests_library_characterization.rs` rail-body suites |
 //! | `QueuePanel` | yes (wide Both, both bools) | — |
-//! | `MainContentBox` | yes (library Browser-pane Wide stripe, both bits) | `components/music_workspace_cursor_tests.rs` |
+//! | `MainContentBox` | — | `render/components/media_list.rs::library_wide_browser_stripes_items_not_structural_rows` (browser-pane stripe) |
 //! | `InlineHero` | yes (selected detail, component view, both bits) | — |
 //! | `PlaybackPanel` | yes (Both, mini library) | `tests.rs` panel suites |
 //! | `QueueOnlyPlaybackPanel` | yes (wide QueueOnly, mini queue) | — (pinned only here at buffer level) |
@@ -53,7 +53,7 @@
 //! | `PlaybackRecess` | yes (wide Both, both bools) | `tests.rs` panel suites |
 //! | `PlaybackStatusPill` | yes (title-row pill, component view) | — |
 //! | `ArtworkPlaceholder` | — | `components/artwork_placeholder_tests.rs::artwork_placeholder_paints_requested_extent` |
-//! | `ArtworkLoadingPlaceholder` | — | `components/tv_wide_tests.rs` (unpainted portrait cells) |
+//! | `ArtworkLoadingPlaceholder` | — | residual: no surviving buffer-level probe observes its loading fill; `tv_wide.rs` is paint-free and the old `tv_wide_tests.rs` proof no longer exists |
 //! | `StatusBar` | yes (Both, LibraryOnly, mini library) | `tests.rs` status suites |
 //! | `StatusBarPill` | — | residual (see below): its pill spans carry the status band's own value |
 //! | `QueuePanelBand` | yes (Both, wide QueueOnly) | `queue_title_characterization_tests.rs` |
