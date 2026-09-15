@@ -126,12 +126,19 @@ resume progress per `browser_content.rs:56-72`, `tv_content/mod.rs:89-105`, `fee
 `NowPlaying` = live queue playback only). This change's design Non-Goals scoped glyph work out; this
 section lifts that scope at user direction.
 
-- [ ] 7.1 Amend the change's spec/design first: the `▶` marker SHALL paint only for `NowPlaying`,
+- [x] 7.1 Amend the change's spec/design first: the `▶` marker SHALL paint only for `NowPlaying`,
   never for `Active`. Update the design.md Non-Goals line that scopes glyph re-litigation out, and
   add the requirement + scenario to `specs/canonical-media-lists/spec.md`. Verify:
   `openspec validate --strict` passes.
-- [ ] 7.2 Split the `Active|NowPlaying` match arm in `src/app/render/components/media_list/row.rs`
+  (Accepted: impl `798f29e3`, correction `dd602e22` — Spec BLOCK-CLEARED via focused re-review:
+  ADDED block replaced by MODIFIED with full requirement text, all 7 main scenarios verbatim,
+  only the glyph sentence changed; validate --strict confirms valid.)
+- [x] 7.2 Split the `Active|NowPlaying` match arm in `src/app/render/components/media_list/row.rs`
   (scout: gate at `:69-87`, painted at `:186` — verify against the tree) so only `NowPlaying`
   yields the glyph. Verify: `cargo check -p mbv`, `cargo nextest run -p mbv`.
-- [ ] 7.3 Add a regression test: a row with resume progress (`Active`) but not now-playing paints no
+  (Accepted: impl `798f29e3`; Standards PASS — `Active` tuple verbatim except `live_icon: None`;
+  correction `dd602e22` restated the stale comment.)
+- [x] 7.3 Add a regression test: a row with resume progress (`Active`) but not now-playing paints no
   glyph; the now-playing row paints `▶ `. Verify: `cargo nextest run -p mbv`.
+  (Accepted: impl `798f29e3`; both glyph scenarios proven at buffer level; naming unified on
+  "play marker", no CONTEXT.md change — long-standing UI, not new vocabulary.)
