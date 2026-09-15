@@ -18,8 +18,8 @@
 
 ## 4. Replace the Inline Presentation
 
-- [ ] 4.1 Change `MediaListCarrier` and the Library panel so the fixed-row presentation remains active across Wide and non-Wide geometry, preserving the canonical owner and clamping its viewport without presentation-to-presentation state transfer; verify media-list and Library-panel tests cover stable target and viewport behavior in both directions.
-- [ ] 4.2 Remove Inline selected-row admission, painting, paint policy, detail geometry, and `InlineMediaBrowser` after all callers use fixed rows; verify code search finds no remaining Inline presentation or selected-row-replacement production path and targeted canonical media-list tests pass.
+- [x] 4.1 Change `MediaListCarrier` and the Library panel so the fixed-row presentation remains active across Wide and non-Wide geometry, preserving the canonical owner and clamping its viewport without presentation-to-presentation state transfer; verify media-list and Library-panel tests cover stable target and viewport behavior in both directions.
+- [x] 4.2 Remove Inline selected-row admission, painting, paint policy, detail geometry, and `InlineMediaBrowser` after all callers use fixed rows; verify code search finds no remaining Inline presentation or selected-row-replacement production path and targeted canonical media-list tests pass.
 
 ## 5. Migrate Destination Workspaces
 
