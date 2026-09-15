@@ -71,7 +71,7 @@
   `docs/architecture/interactive-surface-ledger.md` needs no change because no slot, hit region or
   geometry owner is added.
 - [x] 5.2 `openspec validate expand-movie-metadata --strict`. Verify: passes.
-- [ ] 5.3 At archive, sync the deltas into `openspec/specs/library-panel/spec.md`. Verify:
+- [x] 5.3 At archive, sync the deltas into `openspec/specs/library-panel/spec.md`. Verify:
   `openspec validate --specs` is clean and the modified overview requirement plus the three added
   requirements are present in the main spec.
 
