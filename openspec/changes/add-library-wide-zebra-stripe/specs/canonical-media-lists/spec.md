@@ -94,6 +94,25 @@ width calculations, and hit geometry SHALL remain unchanged.
 - **WHEN** a Wide presentation is configured without a zebra-stripe policy
 - **THEN** all unselected rows paint with no explicit background, matching today's behaviour
 
+## ADDED Requirements
+
+### Requirement: Wide row playback marker identifies only now-playing media
+
+The shared media-list row painter SHALL paint the `▶ ` marker only for an item whose
+semantic state is `NowPlaying`. An item whose semantic state is `Active` because it
+has resume progress SHALL never paint the marker. The marker's existing placement,
+colour, and all other row content SHALL remain unchanged.
+
+#### Scenario: Resume-progress rows have no play marker
+
+- **WHEN** a media-list row has resume progress and is `Active`, but is not now-playing
+- **THEN** it paints no `▶ ` marker before its title
+
+#### Scenario: Now-playing rows have the play marker
+
+- **WHEN** a media-list row is `NowPlaying`
+- **THEN** it paints the `▶ ` marker before its title
+
 ## MODIFIED Requirements
 
 ### Requirement: WideMediaList owns fixed-row mechanics

@@ -735,6 +735,66 @@ mod wide_row_regression_tests {
         );
     }
 
+    #[test]
+    fn play_marker_only_paints_for_now_playing_rows() {
+        use crate::app::components::media_list::{
+            ActiveProgress, MediaListRow, MediaSemanticState,
+        };
+
+        let rect = Rect::new(0, 0, 40, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "resume".into(),
+                primary: "Resume title".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Active {
+                    progress: Some(ActiveProgress::new(12)),
+                },
+            },
+            MediaListRow::Item {
+                target: "playing".into(),
+                primary: "Playing title".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::NowPlaying {
+                    progress: Some(ActiveProgress::new(47)),
+                },
+            },
+        ]);
+
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row_text = |y: u16| {
+            (0..rect.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        };
+
+        let resume = row_text(0);
+        assert!(
+            !resume.contains("▶ "),
+            "resume rows have no play marker: {resume:?}"
+        );
+        assert!(resume.contains("Resume title"));
+
+        let playing = row_text(1);
+        assert!(
+            playing.contains("▶ Playing title"),
+            "now-playing marker: {playing:?}"
+        );
+    }
+
     /// Queue now-playing rows paint their total duration like every other
     /// row — no throbber slot — while resume rows retain their inline badge
     /// and duration. Keep both cases in one buffer regression so a painter

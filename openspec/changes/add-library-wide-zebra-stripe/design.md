@@ -45,7 +45,7 @@ Baseline is #719 **as merged** (`8a9132c2`, release v0.19.3) with its deltas alr
 - No change to the Inline adapter or its selected-row background (Narrow is out of scope; inline-search
   legacy painters die with #720).
 - No new palette rows or primitives: both library pairs are already in the surface table.
-- No new marker glyph, and no re-litigating #719's accent-on-accent choice for two-tone episode rows.
+- No re-litigating #719's accent-on-accent choice for two-tone episode rows.
 
 ## Decisions
 

@@ -76,8 +76,12 @@ pub(in crate::app) fn media_list_row<Target>(
                 MediaSemanticState::Played | MediaSemanticState::Disabled => {
                     (palette::TEXT_MUTED, None, None)
                 }
-                MediaSemanticState::Active { progress }
-                | MediaSemanticState::NowPlaying { progress } => (
+                MediaSemanticState::Active { progress } => (
+                    palette::TEXT_EMPHASIS,
+                    (*progress).map(|value| format!("{}%", value.percent())),
+                    None,
+                ),
+                MediaSemanticState::NowPlaying { progress } => (
                     palette::TEXT_EMPHASIS,
                     (*progress).map(|value| format!("{}%", value.percent())),
                     Some("▶ "),
