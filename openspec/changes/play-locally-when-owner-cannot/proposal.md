@@ -1,8 +1,9 @@
 ## Why
 
-mbv can attach to a Player owner that cannot play video — a `mbvd --audio-only`
-reached over ctrl (direct daemon attach, Sessions-panel direct remote control, or
-the local daemon endpoint) or an Emby session that advertises audio media types
+mbv can attach to a Player owner that cannot play video — a packaged `mbvd
+--audio-only` reached over ctrl (direct daemon attach or Sessions-panel direct
+remote control; the Local stay-alive daemon is never audio-only) or an Emby
+session that advertises audio media types
 only. Pressing play on a movie there submits the item anyway:
 
 - over ctrl the owner refuses it and the client shows a generic 5-second error
