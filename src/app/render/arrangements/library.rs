@@ -100,6 +100,17 @@ mod tests {
     }
 
     #[test]
+    fn overlay_and_dim_backdrop_are_contained_by_library_when_queue_is_visible() {
+        let library = Rect::new(2, 3, 72, 24);
+        let queue = Rect::new(library.right(), library.y, 38, library.height);
+        let overlay = library_hero_overlay(library).unwrap();
+        assert!(contains(library, overlay));
+        assert!(overlay.right() <= queue.x);
+        let overlap = overlay.intersection(queue);
+        assert_eq!(overlap.width, 0);
+    }
+
+    #[test]
     fn wide_library_preserves_breakpoint_and_padding() {
         let area = Rect {
             x: 2,

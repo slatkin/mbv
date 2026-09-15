@@ -2,7 +2,7 @@ use crate::app::components::library_panel::{
     LibraryContentOwner, LibraryKey, LibraryPanel, LibrarySlotEvent,
 };
 use crate::app::components::media_list::MediaListSurfaceInput;
-use crate::app::components::{Msg, ShellRequest, UserEvent};
+use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent, UserEvent};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseEvent, MouseEventKind};
 
@@ -47,23 +47,34 @@ struct FixtureLog {
 /// infrastructure without converting any destination.
 struct FixtureOwner {
     carrier: MediaListCarrier<String>,
+    workspace_carrier: MediaListCarrier<String>,
     log: Rc<RefCell<FixtureLog>>,
     link: bool,
+    workspace: bool,
 }
 
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
         let mut carrier = MediaListCarrier::new(Presentation::Wide);
         carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
+        let mut workspace_carrier = MediaListCarrier::new(Presentation::Wide);
+        workspace_carrier.set_content(vec![item("track one"), item("track two")]);
         Self {
             carrier,
+            workspace_carrier,
             log,
             link: false,
+            workspace: false,
         }
     }
 
     fn with_link(mut self) -> Self {
         self.link = true;
+        self
+    }
+
+    fn with_workspace(mut self) -> Self {
+        self.workspace = true;
         self
     }
 }
@@ -101,7 +112,14 @@ impl LibraryContentOwner for FixtureOwner {
                 },
                 overview: None,
                 credits: None,
-                workspace: None,
+                workspace: self.workspace.then_some(
+                    crate::app::components::library_panel::content::Workspace {
+                        header: Some("Tracks"),
+                        selector: None,
+                        list: &mut self.workspace_carrier,
+                        focused: false,
+                    },
+                ),
             }),
         }
     }
@@ -167,7 +185,15 @@ fn draw_panel(panel: &mut LibraryPanel) -> ratatui::buffer::Buffer {
 }
 
 fn line_text(buf: &ratatui::buffer::Buffer, row: u16) -> String {
-    (0..120).map(|x| buf[(x, row)].symbol()).collect::<String>()
+    (0..buf.area.width)
+        .map(|x| buf[(x, row)].symbol())
+        .collect::<String>()
+}
+
+fn draw_panel_at(panel: &mut LibraryPanel, area: Rect) -> ratatui::buffer::Buffer {
+    let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+    terminal.draw(|f| Component::view(panel, f, area)).unwrap();
+    terminal.backend().buffer().clone()
 }
 
 /// The panel without a migrated owner claims nothing: no paint, no
@@ -407,6 +433,43 @@ fn wide_hero_link_click_emits_open_url_request() {
 }
 
 #[test]
+fn overlay_buffer_covers_leaf_and_workspace_hero_content() {
+    for (workspace, expected) in [(false, "Dune"), (true, "track")] {
+        let mut panel = LibraryPanel::new();
+        panel.set_active(Some(LibraryKey::Home));
+        let owner = FixtureOwner::new(Rc::new(RefCell::new(FixtureLog::default())));
+        let owner = if workspace {
+            owner.with_workspace()
+        } else {
+            owner
+        };
+        panel.insert_owner(LibraryKey::Home, Box::new(owner));
+        let normal = draw_panel(&mut panel);
+        panel.test_open_hero_overlay();
+        let overlay = draw_panel(&mut panel);
+        let (pane, frame) = panel.test_overlay_geometry().expect("overlay was painted");
+        assert!(line_text(&overlay, frame.y).contains("Library Hero"));
+        assert!(
+            (0..30).any(|y| line_text(&overlay, y).contains(expected)),
+            "expected {expected}"
+        );
+        let outside = (pane.y..pane.bottom())
+            .flat_map(|y| (pane.x..pane.right()).map(move |x| (x, y)))
+            .find(|&(x, y)| !frame.contains((x, y).into()))
+            .expect("backdrop cell outside frame");
+        assert_ne!(
+            overlay[outside].bg, normal[outside].bg,
+            "Library backdrop is dimmed"
+        );
+        let inside = (frame.x + 1, frame.y + 1);
+        assert_eq!(
+            overlay[inside].bg, normal[inside].bg,
+            "Hero content inside the frame is not dimmed"
+        );
+    }
+}
+
+#[test]
 fn overlay_paints_and_retains_library_geometry() {
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));
@@ -421,6 +484,65 @@ fn overlay_paints_and_retains_library_geometry() {
     let (pane, frame) = panel.test_overlay_geometry().expect("overlay was painted");
     assert!(frame.x >= pane.x && frame.right() <= pane.right());
     assert!(frame.y >= pane.y && frame.bottom() <= pane.bottom());
+}
+
+#[test]
+fn overlay_dismissal_consumes_backdrop_without_selection_mutation() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    let _ = draw_panel(&mut panel);
+    let list = panel.test_list_rect().expect("list was painted");
+    panel.test_open_hero_overlay();
+    let _ = draw_panel(&mut panel);
+    let (pane, frame) = panel.test_overlay_geometry().unwrap();
+    let point = (pane.y..pane.bottom())
+        .flat_map(|y| (pane.x..pane.right()).map(move |x| (x, y)))
+        .find(|&(x, y)| !frame.contains(ratatui::layout::Position::new(x, y)))
+        .expect("dimmed Library remainder");
+    let before = log.borrow().selections.clone();
+    let msg = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        point.0,
+        point.1,
+    ));
+    assert!(matches!(
+        msg,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+    assert_eq!(log.borrow().selections, before);
+    assert!(panel.test_overlay_geometry().is_none());
+    assert!(list.width > 0);
+}
+
+#[test]
+fn overlay_refresh_uses_latest_geometry_and_blocks_old_browser_point() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    let _ = draw_panel(&mut panel);
+    let old_list = panel.test_list_rect().unwrap();
+    panel.test_open_hero_overlay();
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 100, 30));
+    let (_, frame) = panel.test_overlay_geometry().unwrap();
+    let point = (old_list.y..old_list.bottom())
+        .flat_map(|y| {
+            (old_list.x..old_list.right()).map(move |x| ratatui::layout::Position::new(x, y))
+        })
+        .find(|point| frame.contains(*point))
+        .expect("old browser geometry overlaps refreshed frame");
+    let msg = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        point.x,
+        point.y,
+    ));
+    assert!(msg.is_some());
+    assert!(
+        log.borrow().events.is_empty(),
+        "covered browser did not receive click"
+    );
 }
 
 #[test]

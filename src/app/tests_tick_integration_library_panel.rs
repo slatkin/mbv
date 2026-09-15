@@ -309,6 +309,45 @@ fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> 
 /// un-migrated fixture is the grouped Music library (task 8 still mounts its
 /// workspace).
 #[test]
+fn library_overlay_dismissal_routes_through_tick_without_queue_click_through() {
+    let (mut harness, _log) = migrated_home();
+    harness.model_mut().app.panel_mode = PanelMode::Both;
+    harness.model_mut().sync_mounted_surfaces();
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any_mut()
+                .downcast_mut::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .expect("Library panel mounted")
+        .test_open_hero_overlay();
+    let _ = draw_frame(&mut harness);
+    let panel = panel_of(&harness).expect("Library panel painted");
+    let (pane, frame) = panel.test_overlay_geometry().expect("overlay painted");
+    let (x, y) = (pane.y..pane.bottom())
+        .flat_map(|y| (pane.x..pane.right()).map(move |x| (x, y)))
+        .find(|&(x, y)| !frame.contains(ratatui::layout::Position::new(x, y)))
+        .expect("dimmed Library remainder");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| {
+        matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    }));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_none());
+    assert!(harness.model().application.mounted(&ComponentId::Queue));
+}
+
+#[test]
 fn library_panel_focus_follows_the_active_library() {
     let (mut harness, _log) = migrated_home();
     assert_eq!(
