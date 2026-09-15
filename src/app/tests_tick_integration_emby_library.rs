@@ -8,6 +8,7 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
 
+use crate::app::tests::{install_test_emby, make_session};
 use crate::app::tests_tick_harness::TickHarness;
 
 /// The migrated Movies/HomeVideos/Generic owner inside the mounted
@@ -146,4 +147,91 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     // The next frame retains the selection in the shared owner.
     let _ = draw(&mut harness, 100, 30);
     assert_eq!(browser_owner(&harness).cursor(), 1);
+}
+
+#[test]
+fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
+    let mut app = make_movie_app();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    let http = mbv_core::mock_http::MockHttp::new();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    http.respond(404, "");
+    let (remote, player_rx, command_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_audio_only_with_command_rx(Vec::new(), 0);
+    let session = make_session("audio-owner", "mbv");
+    let endpoint = mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());
+    app.switch_to_direct_remote(&session, remote, player_rx, &endpoint);
+    while command_rx.try_recv().is_ok() {}
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, 100, 30);
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('p'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| {
+        matches!(
+            message,
+            Msg::Shell(ShellRequest::EmbyLibraryPlay { item })
+                if item.id == "movie-focused"
+        )
+    }));
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages.iter().cloned() {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    let confirm_id = ComponentId::Modal(crate::app::components::ModalId::Confirm);
+    assert!(harness.model().application.get_component(&confirm_id).is_some());
+    assert_eq!(harness.model().application.focus(), Some(&confirm_id));
+    assert!(command_rx.try_recv().is_err(), "play stayed unsubmitted");
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('y'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(!harness.model().app.player.is_remote());
+    assert!(!harness.model().app.direct_remote_connected);
+    assert!(harness.model().app.remote_player_tab.is_none());
+    assert_eq!(harness.model().app.queue_scope, crate::app::QueueScope::Local);
+    assert_eq!(
+        harness.model().app.player_tab.emby_items()[0].id,
+        "movie-focused"
+    );
+    assert!(command_rx.try_iter().any(|command| {
+        matches!(
+            command,
+            mbv_core::ctrl::CtrlCmd::PlaybackIntent(intent)
+                if intent.action == mbv_core::ctrl::PlaybackIntentAction::Stop
+        )
+    }));
 }
