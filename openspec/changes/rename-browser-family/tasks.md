@@ -11,9 +11,9 @@
 
 ## 3. Owner and module names (design D1, D5 step 3)
 
-- [ ] 3.1 `git mv src/app/components/browser_content.rs src/app/components/emby_library_content.rs`; rename `BrowserContent` → `EmbyLibraryContent`, `BrowserIdentity` → `EmbyLibraryIdentity`, and fix the module doc comment to state the contract (serves Generic/Movies/HomeVideos; TV and Music have their own owners). Verify: `cargo check -p mbv`.
-- [ ] 3.2 `git mv src/app/shell_browser.rs src/app/shell_emby_library.rs` and `src/app/shell_browser_content.rs src/app/shell_emby_library_content.rs`; rename `handle_browser_request` → `handle_emby_library_request` and the owner-push helpers (`push_browser_owner_content`, `push_active_browser_owner_content`, `active_migrated_browser_owner`, `browser_owner_identity`, `update_browser_owner`). Verify: `cargo check -p mbv` and `rg -n 'handle_browser_request|push_browser_owner' src/` returns nothing.
-- [ ] 3.3 Rename test files with their subjects: `tests_tick_integration_browser.rs` → `tests_tick_integration_emby_library.rs`, `components/browser_inline_search_tests.rs` → `components/emby_library_inline_search_tests.rs`; update `tests_narrow_browse_migration.rs`'s stale `BrowserComponent` comments. Verify: `cargo nextest run -p mbv` green.
+- [x] 3.1 `git mv src/app/components/browser_content.rs src/app/components/emby_library_content.rs`; rename `BrowserContent` → `EmbyLibraryContent`, `BrowserIdentity` → `EmbyLibraryIdentity`, and fix the module doc comment to state the contract (serves Generic/Movies/HomeVideos; TV and Music have their own owners). Verify: `cargo check -p mbv`.
+- [x] 3.2 `git mv src/app/shell_browser.rs src/app/shell_emby_library.rs` and `src/app/shell_browser_content.rs src/app/shell_emby_library_content.rs`; rename `handle_browser_request` → `handle_emby_library_request` and the owner-push helpers (`push_browser_owner_content`, `push_active_browser_owner_content`, `active_migrated_browser_owner`, `browser_owner_identity`, `update_browser_owner`). Verify: `cargo check -p mbv` and `rg -n 'handle_browser_request|push_browser_owner' src/` returns nothing.
+- [x] 3.3 Rename test files with their subjects: `tests_tick_integration_browser.rs` → `tests_tick_integration_emby_library.rs`, `components/browser_inline_search_tests.rs` → `components/emby_library_inline_search_tests.rs`; update `tests_narrow_browse_migration.rs`'s stale `BrowserComponent` comments. Verify: `cargo nextest run -p mbv` green.
 
 ## 4. Comment sweep and domain docs
 
