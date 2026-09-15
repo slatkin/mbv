@@ -227,6 +227,7 @@ mod wide_row_regression_tests {
             item("three", "Three", None),
             item("four", "Four", None),
         ]);
+        list.select_last();
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
@@ -242,10 +243,10 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_ne!(buf[(0, 0)].bg, zebra_bg);
-        assert_eq!(buf[(0, 1)].bg, zebra_bg);
-        assert_ne!(buf[(0, 2)].bg, zebra_bg);
-        assert_eq!(buf[(0, 3)].bg, zebra_bg);
+        assert_eq!(buf[(0, 0)].bg, zebra_bg);
+        assert_ne!(buf[(0, 1)].bg, zebra_bg);
+        assert_eq!(buf[(0, 2)].bg, zebra_bg);
+        assert_ne!(buf[(0, 3)].bg, zebra_bg);
     }
 
     #[test]

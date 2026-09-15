@@ -180,7 +180,7 @@ fn queue_only_strip_and_queue_follow_the_table() {
         true,
         Rect::new(
             queue_view.content_area.x + 1,
-            queue_view.content_area.y + 2,
+            queue_view.content_area.y + 1,
             1,
             1,
         ),
@@ -240,12 +240,16 @@ fn resting_queue_selected_row_paints_no_hole() {
     let panel_body = palette::surface_colors(palette::Surface::QueuePanel, false).fill;
     let focused_hole =
         palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, true).fill;
-    let actual = painted.buffer[(row.x, row.y)].bg;
+    // The selected row is the first selectable item and is intentionally
+    // zebra-striped now; probe the following unstriped item instead.
+    let actual = painted.buffer[(row.x, row.y + 1)].bg;
     assert_eq!(
-        actual, panel_body,
-        "the resting selected row must paint no hole: the queue panel's resting \
+        actual,
+        panel_body,
+        "the resting queue row must paint no hole: the queue panel's resting \
          backdrop ({panel_body:?}); painted {actual:?} at ({}, {})",
-        row.x, row.y
+        row.x,
+        row.y + 1
     );
     assert_ne!(
         actual, focused_hole,

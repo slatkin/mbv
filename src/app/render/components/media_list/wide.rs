@@ -97,7 +97,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                 .expect("wide geometry contains a source row");
             let row_target = rows[source_row].selectable_target();
             let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
-            let alternate_bg = zebra_bg.filter(|_| visible_item_index % 2 == 1);
+            let alternate_bg = zebra_bg.filter(|_| visible_item_index % 2 == 0);
             let item = media_list_row(
                 &rows[source_row],
                 Some(row) == selected_row || multi_selected,
