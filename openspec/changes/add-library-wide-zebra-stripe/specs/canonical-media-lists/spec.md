@@ -94,26 +94,47 @@ width calculations, and hit geometry SHALL remain unchanged.
 - **WHEN** a Wide presentation is configured without a zebra-stripe policy
 - **THEN** all unselected rows paint with no explicit background, matching today's behaviour
 
-## ADDED Requirements
-
-### Requirement: Wide row playback marker identifies only now-playing media
-
-The shared media-list row painter SHALL paint the `▶ ` marker only for an item whose
-semantic state is `NowPlaying`. An item whose semantic state is `Active` because it
-has resume progress SHALL never paint the marker. The marker's existing placement,
-colour, and all other row content SHALL remain unchanged.
-
-#### Scenario: Resume-progress rows have no play marker
-
-- **WHEN** a media-list row has resume progress and is `Active`, but is not now-playing
-- **THEN** it paints no `▶ ` marker before its title
-
-#### Scenario: Now-playing rows have the play marker
-
-- **WHEN** a media-list row is `NowPlaying`
-- **THEN** it paints the `▶ ` marker before its title
-
 ## MODIFIED Requirements
+
+### Requirement: Shared rows are provider-neutral and bounded
+The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the episode title of a series/show row, painted after the primary text in the yellow focus-accent role while the primary stays in the ordinary title role), optional trailing text, a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string, and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Heading and Spacer SHALL be excluded from selectable-target indexing. When a duration is shown it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. On Wide lists, `NowPlaying` rows SHALL be marked by an aqua right-pointing play glyph before the title (one space from it) in place of any accent title colour; their title text SHALL keep the ordinary colour. `Active` rows SHALL not be marked by the play glyph. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
+
+#### Scenario: Queue-like progress is presented safely
+- **WHEN** a parent supplies active progress
+- **THEN** the control receives only a bounded percentage
+- **AND** playback and queue authority remain with the parent/shell
+
+#### Scenario: Now-playing renders like other rows
+- **WHEN** a row carries the now-playing state
+- **THEN** an aqua play glyph is painted one space before the title, and the title keeps the ordinary colour
+- **AND** live progress renders inline next to the title exactly as resume progress does
+- **AND** the duration slot shows the total duration
+- **AND** no throbber glyph appears anywhere in the row
+
+#### Scenario: Now-playing with unknown runtime
+- **WHEN** a now-playing row carries no progress
+- **THEN** no percentage renders and the duration slot stays empty
+
+#### Scenario: Resume progress stays inline
+- **WHEN** a row carries the active resume state
+- **THEN** progress renders inline next to the title exactly as before this change
+- **AND** the duration slot is unchanged
+
+#### Scenario: Structural rows are displayed only
+- **WHEN** a Heading or Spacer is rendered
+- **THEN** it occupies display geometry
+- **AND** it cannot be selected or activated
+
+#### Scenario: Durations share one precise format
+- **WHEN** any media list shows a duration (queue, home, feeds, TV episode, music track, book chapter)
+- **THEN** every row uses the same `M:SS`/`H:MM:SS` format
+- **AND** imprecise forms (`4m`, `1h12m`, unbounded `62:03`) never appear in list rows
+
+#### Scenario: Collections stay duration-free
+- **WHEN** a row is a navigable container (movie/series folder, album, show, book title)
+- **THEN** it carries no duration string
+- **AND** the painter suppresses the duration slot even if one is projected
+
 
 ### Requirement: WideMediaList owns fixed-row mechanics
 

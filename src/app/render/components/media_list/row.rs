@@ -67,11 +67,11 @@ pub(in crate::app) fn media_list_row<Target>(
             // duration.
 
             let (fg, progress, live_icon) = match semantic_state {
-                // Live rows (active/now-playing) lose the accent colour: the
-                // aqua play glyph before the title marks them instead, so
-                // the row text keeps the ordinary role. Active and
-                // now-playing rows append the live progress percentage to
-                // the trailing text in the same style.
+                // Now-playing rows lose the accent colour: the aqua play marker
+                // before the title marks them instead, so the row text keeps
+                // the ordinary role. Active rows retain resume progress inline
+                // but do not receive the play marker. Both states append their
+                // progress percentage to the trailing text in the same style.
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
                 MediaSemanticState::Played | MediaSemanticState::Disabled => {
                     (palette::TEXT_MUTED, None, None)
