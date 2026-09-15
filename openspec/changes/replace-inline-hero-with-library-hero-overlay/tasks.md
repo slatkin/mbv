@@ -5,9 +5,9 @@
 
 ## 2. Add the Library Hero Overlay
 
-- [ ] 2.1 Add Library-panel-local open/dismiss state and a centered 85-percent Library-pane arrangement with frame, Library-only dimming, and `Esc` hint; verify arrangement tests prove containment at Narrow, Mini, constrained-height, and both-panels geometry without absolute coordinate assertions.
-- [ ] 2.2 Render the shared Hero composition inside the overlay and return its current image and Workspace geometry through the Library panel's existing paint result; verify focused buffer tests cover leaf and Workspace Heroes without changing Wide output.
-- [ ] 2.3 Gate covered browser geometry while the overlay is open, retain overlay/backdrop hit geometry from the latest frame, and consume outside-Library dismissal without click-through; verify focused Interactive Component tests cover stale geometry and dismissal without underlying selection mutation.
+- [x] 2.1 Add Library-panel-local open/dismiss state and a centered 85-percent Library-pane arrangement with frame, Library-only dimming, and `Esc` hint; verify arrangement tests prove containment at Narrow, Mini, constrained-height, and both-panels geometry without absolute coordinate assertions.
+- [x] 2.2 Render the shared Hero composition inside the overlay and return its current image and Workspace geometry through the Library panel's existing paint result; verify focused buffer tests cover leaf and Workspace Heroes without changing Wide output.
+- [x] 2.3 Gate covered browser geometry while the overlay is open, retain overlay/backdrop hit geometry from the latest frame, and consume outside-Library dismissal without click-through; verify focused Interactive Component tests cover stale geometry and dismissal without underlying selection mutation.
 
 ## 3. Route Focus and Activation
 
