@@ -38,7 +38,8 @@ pub(in crate::app) fn render_queue_body(
                     })
                     .with_selected_style(SelectedRowStyle {
                         bg: palette::QUEUE_SELECTED_ROW_BG,
-                        title_fg: palette::TEXT_FOCUS_ACCENT,
+                        title_fg: palette::QUEUE_SELECTED_ROW_BG,
+                        title_bg: palette::TEXT_FOCUS_ACCENT,
                         duration_fg: palette::ACCENT,
                     }),
             );

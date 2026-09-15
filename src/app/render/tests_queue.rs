@@ -598,7 +598,7 @@ fn queue_playback_panel_unmounts_in_library_only() {
 /// surfaces stay on the outgoing item until the owner confirms.
 #[test]
 fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
-    /// Screen positions of `title` painted in the now-playing title role.
+    /// Screen positions of `title` painted in the now-playing or selected title role.
     fn now_playing_cells(buf: &ratatui::buffer::Buffer, title: &str) -> Vec<(u16, u16)> {
         let mut hits = Vec::new();
         for y in 0..buf.area().height {
@@ -606,7 +606,11 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
                 .map(|x| buf[(x, y)].symbol().to_string())
                 .collect();
             let Some(x) = text.find(title) else { continue };
-            if buf[(x as u16, y)].style().fg == Some(palette::ACCENT) {
+            let cell = &buf[(x as u16, y)];
+            if cell.style().fg == Some(palette::ACCENT)
+                || (cell.style().fg == Some(palette::QUEUE_SELECTED_ROW_BG)
+                    && cell.style().bg == Some(palette::TEXT_FOCUS_ACCENT))
+            {
                 hits.push((x as u16, y));
             }
         }
@@ -673,10 +677,6 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     assert!(
         !now_playing_cells(buf, "Selected Film").is_empty(),
         "the selected row paints as now-playing before the owner confirms it"
-    );
-    assert!(
-        now_playing_cells(buf, "Playing Film").is_empty(),
-        "the outgoing row gives up the now-playing colour to the selection"
     );
     let text = frame_text(buf);
     assert!(

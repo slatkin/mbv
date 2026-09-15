@@ -134,7 +134,7 @@ pub(in crate::app) fn media_list_row<Target>(
                     None => vec![(primary.clone(), title_color)],
                 };
             let parts_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-            let title_spans = marquee
+            let mut title_spans = marquee
                 .take()
                 .filter(|_| selected && parts_width > title_width)
                 .map(|(text, started_at)| {
@@ -160,6 +160,11 @@ pub(in crate::app) fn media_list_row<Target>(
                     }
                     spans
                 });
+            if let Some(style) = selected_style {
+                for span in &mut title_spans {
+                    span.style = span.style.fg(style.title_fg).bg(style.title_bg);
+                }
+            }
 
             let mut spans = vec![Span::raw("  ")];
             spans.extend(title_spans);

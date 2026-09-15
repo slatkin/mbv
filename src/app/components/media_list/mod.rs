@@ -217,6 +217,7 @@ pub struct ZebraStripe {
 pub struct SelectedRowStyle {
     pub bg: Color,
     pub title_fg: Color,
+    pub title_bg: Color,
     pub duration_fg: Color,
 }
 

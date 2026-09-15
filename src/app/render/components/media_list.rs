@@ -335,7 +335,8 @@ mod wide_row_regression_tests {
                     Some(Color::Rgb(60, 72, 65)),
                     Some(SelectedRowStyle {
                         bg: palette::QUEUE_SELECTED_ROW_BG,
-                        title_fg: palette::TEXT_FOCUS_ACCENT,
+                        title_fg: palette::QUEUE_SELECTED_ROW_BG,
+                        title_bg: palette::TEXT_FOCUS_ACCENT,
                         duration_fg: palette::ACCENT,
                     }),
                 );
@@ -343,8 +344,10 @@ mod wide_row_regression_tests {
             .unwrap();
         let buf = terminal.backend().buffer();
         assert_eq!(buf[(0, 1)].bg, Color::from_u32(0x0045443c));
-        assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(buf[(2, 1)].fg, palette::QUEUE_SELECTED_ROW_BG);
+        assert_eq!(buf[(2, 1)].bg, palette::TEXT_FOCUS_ACCENT);
         assert_eq!(buf[(26, 1)].fg, palette::ACCENT);
+        assert_eq!(buf[(26, 1)].bg, palette::QUEUE_SELECTED_ROW_BG);
     }
 
     #[test]
