@@ -76,6 +76,8 @@ pub(super) struct CachedImage {
     /// keyed by the box, so a box change rebuilds the protocol at the new
     /// size. `None` for every non-hero cache entry (plain `Resize::Scale`).
     pub cover_box: Option<(u16, u16)>,
+    /// Cache key of the Logo applied to the retained hero protocol, if any.
+    pub applied_logo_cache_key: Option<String>,
 }
 
 impl CachedImage {
@@ -86,6 +88,7 @@ impl CachedImage {
             img: None,
             protocols: std::collections::HashMap::new(),
             cover_box: None,
+            applied_logo_cache_key: None,
         }
     }
 }
@@ -118,6 +121,37 @@ pub(in crate::app) fn cover_fill_hero_box(
 ) -> image::DynamicImage {
     let (w, h) = (box_w.max(1), box_h.max(1));
     source.resize_to_fill(w, h, image::imageops::FilterType::Lanczos3)
+}
+
+/// Contain-fit and alpha-composite a transparent Logo over a cover-fitted
+/// poster. The Logo is limited to the named poster-relative bounds and kept
+/// inside the rounded 5% insets.
+pub(in crate::app) fn composite_hero_logo(
+    poster: &image::DynamicImage,
+    logo: &image::DynamicImage,
+) -> image::DynamicImage {
+    let mut poster = poster.to_rgba8();
+    let logo = logo.to_rgba8();
+    let (pw, ph) = poster.dimensions();
+    let max_w = ((pw as f32 * 0.60).round() as u32).max(1);
+    let max_h = ((ph as f32 * 0.20).round() as u32).max(1);
+    let scale = (max_w as f32 / logo.width() as f32).min(max_h as f32 / logo.height() as f32);
+    let lw = ((logo.width() as f32 * scale).round() as u32)
+        .max(1)
+        .min(pw);
+    let lh = ((logo.height() as f32 * scale).round() as u32)
+        .max(1)
+        .min(ph);
+    let resized = image::imageops::resize(&logo, lw, lh, image::imageops::FilterType::Lanczos3);
+    let inset_x = ((pw as f32 * 0.05).round() as u32).min(pw.saturating_sub(lw));
+    let inset_y = ((ph as f32 * 0.05).round() as u32).min(ph.saturating_sub(lh));
+    image::imageops::overlay(
+        &mut poster,
+        &resized,
+        i64::from(inset_x),
+        i64::from(inset_y),
+    );
+    image::DynamicImage::ImageRgba8(poster)
 }
 
 impl App {
@@ -225,8 +259,22 @@ impl App {
                         facts,
                         workspace_present,
                     );
-                if !self.ensure_hero_cover_protocol(&cache_key, (box_cells.width, box_cells.height))
-                {
+                let applied_logo_cache_key =
+                    artwork
+                        .decoration
+                        .as_ref()
+                        .and_then(|decoration| match decoration {
+                            ArtworkSource::Emby { cache_key, .. } => self
+                                .card_image_states
+                                .get(cache_key)
+                                .and_then(|entry| entry.img.as_ref().map(|_| cache_key.clone())),
+                            ArtworkSource::AudiobookshelfCover { .. } => None,
+                        });
+                if !self.ensure_hero_cover_protocol(
+                    &cache_key,
+                    (box_cells.width, box_cells.height),
+                    applied_logo_cache_key,
+                ) {
                     return State::Loading;
                 }
             }
@@ -284,7 +332,10 @@ include!("image_protocol.rs");
 
 #[cfg(test)]
 mod tests {
-    use super::{cover_fill_hero_box, series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
+    use super::{
+        composite_hero_logo, cover_fill_hero_box, series_image_cache_key,
+        NAV_IMAGE_FETCH_IDLE_DELAY,
+    };
     use crate::app::tests::make_app_stub;
     use std::time::{Duration, Instant};
 
@@ -318,6 +369,30 @@ mod tests {
             brightness(rgb.get_pixel(80, 89)) < 64,
             "bottom band cropped"
         );
+    }
+
+    #[test]
+    fn hero_logo_is_contained_positioned_blended_and_preserves_poster() {
+        let poster = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            100,
+            100,
+            image::Rgba([0, 0, 200, 255]),
+        ));
+        let logo = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            2,
+            1,
+            image::Rgba([200, 0, 0, 128]),
+        ));
+        let result = composite_hero_logo(&poster, &logo);
+        use image::GenericImageView;
+        assert_eq!(result.dimensions(), (100, 100));
+        let rgba = result.as_rgba8().unwrap();
+        // 2:1 logo is 40x20 (within 60x20), at the rounded 5% inset.
+        assert_eq!(rgba.get_pixel(0, 0), &image::Rgba([0, 0, 200, 255]));
+        let blended = rgba.get_pixel(20, 15).0;
+        assert!(blended[0] > 90 && blended[0] < 110);
+        assert!(blended[2] > 90 && blended[2] < 110);
+        assert_eq!(rgba.get_pixel(99, 99), &image::Rgba([0, 0, 200, 255]));
     }
 
     #[test]
