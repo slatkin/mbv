@@ -133,6 +133,13 @@ pub(in crate::app) fn cover_fill_hero_box(
     source.resize_to_fill(w, h, image::imageops::FilterType::Lanczos3)
 }
 
+/// Logo decoration geometry, as percentages of the landscape hero bitmap
+/// (design D3): contain-fit within 60% width / 20% height, then placed at a 5%
+/// top-left inset clamped so the resized Logo stays inside the artwork.
+const LOGO_MAX_WIDTH_PERCENT: u32 = 60;
+const LOGO_MAX_HEIGHT_PERCENT: u32 = 20;
+const LOGO_INSET_PERCENT: f32 = 5.0;
+
 /// Decorate an already cover-fitted landscape bitmap with a transparent Logo.
 /// The Logo is contain-fitted into the prescribed bounds, then source-over
 /// composited at the rounded, clamped inset.
@@ -143,12 +150,15 @@ pub(in crate::app) fn composite_landscape_logo(
     use image::GenericImageView;
     let mut base = base.to_rgba8();
     let (base_w, base_h) = base.dimensions();
-    let max_w = ((base_w * 60) / 100).max(1);
-    let max_h = ((base_h * 20) / 100).max(1);
+    let max_w = ((base_w * LOGO_MAX_WIDTH_PERCENT) / 100).max(1);
+    let max_h = ((base_h * LOGO_MAX_HEIGHT_PERCENT) / 100).max(1);
     let logo = logo.resize(max_w, max_h, image::imageops::FilterType::Lanczos3);
     let (logo_w, logo_h) = logo.dimensions();
-    let inset_x = ((base_w as f32 * 0.05).round() as u32).min(base_w.saturating_sub(logo_w));
-    let inset_y = ((base_h as f32 * 0.05).round() as u32).min(base_h.saturating_sub(logo_h));
+    let inset_percent = LOGO_INSET_PERCENT / 100.0;
+    let inset_x =
+        ((base_w as f32 * inset_percent).round() as u32).min(base_w.saturating_sub(logo_w));
+    let inset_y =
+        ((base_h as f32 * inset_percent).round() as u32).min(base_h.saturating_sub(logo_h));
     image::imageops::overlay(
         &mut base,
         &logo.to_rgba8(),

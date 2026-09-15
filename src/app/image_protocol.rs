@@ -129,31 +129,23 @@ impl App {
             .get(bare_key)
             .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
         if reencode {
-            let (img, cover_box, logo_key) = self
+            let (img, cover_box, stored_logo_key) = self
                 .card_image_states
                 .get(bare_key)
                 .and_then(|e| e.img.clone().map(|img| (img, e.cover_box, e.applied_logo_key.clone())))
                 .expect("img present, just checked");
-            let logo_key = logo_key.filter(|key| {
-                self.card_image_states
-                    .get(key)
-                    .is_some_and(|entry| entry.img.is_some())
-            });
+            let logo_key = self.ready_logo_key(stored_logo_key.as_deref());
             // A hero entry's protocols carry the cover-fit crop (task 5.10,
             // design D5): rebuild from the source through the same cover step
             // so a suffix switch keeps the cropped aspect.
-            let mut img = match cover_box {
+            let img = match cover_box {
                 Some((w, h)) => {
                     let (px_w, px_h) = self.hero_box_pixels(w, h);
                     super::images::cover_fill_hero_box(&img, px_w, px_h)
                 }
                 None => img,
             };
-            if let Some(logo_key) = logo_key.as_deref() {
-                if let Some(logo) = self.card_image_states.get(logo_key).and_then(|e| e.img.as_ref()) {
-                    img = super::images::composite_landscape_logo(&img, logo);
-                }
-            }
+            let img = self.decorate_with_logo(img, logo_key.as_deref());
             let proto = self.build_protocol(bare_key, suffix, picker, img);
             if let Some(entry) = self.card_image_states.get_mut(bare_key) {
                 entry.protocols.insert(suffix, proto);
@@ -375,6 +367,35 @@ impl App {
         )
     }
 
+    /// Resolve an optional Logo cache key to the key of a Logo that has decoded
+    /// pixels to composite: a pending, absent, or failed Logo is not a
+    /// decoration input, so the base-only protocol stays valid.
+    fn ready_logo_key(&self, logo_cache_key: Option<&str>) -> Option<String> {
+        logo_cache_key
+            .filter(|key| {
+                self.card_image_states
+                    .get(*key)
+                    .is_some_and(|entry| entry.img.is_some())
+            })
+            .map(str::to_owned)
+    }
+
+    /// Paint the ready Logo at `logo_cache_key` over `img`, or return `img`
+    /// unchanged when there is none (design D3).
+    fn decorate_with_logo(
+        &self,
+        img: image::DynamicImage,
+        logo_cache_key: Option<&str>,
+    ) -> image::DynamicImage {
+        let Some(logo) = logo_cache_key
+            .and_then(|key| self.card_image_states.get(key))
+            .and_then(|entry| entry.img.as_ref())
+        else {
+            return img;
+        };
+        super::images::composite_landscape_logo(&img, logo)
+    }
+
     /// Ensure the hero cover-fit protocol for `cache_key` matches
     /// `box_cells` (task 5.10, design D5): the protocol is rebuilt from the
     /// decoded source through `cover_fill_hero_box` at the box's pixel size
@@ -394,9 +415,7 @@ impl App {
         let Some(source) = entry.img.clone() else {
             return false;
         };
-        let desired_logo_key = logo_cache_key
-            .filter(|key| self.card_image_states.get(*key).is_some_and(|e| e.img.is_some()))
-            .map(str::to_owned);
+        let desired_logo_key = self.ready_logo_key(logo_cache_key);
         if entry.cover_box == Some(box_cells)
             && entry.applied_logo_key == desired_logo_key
             && !entry.protocols.is_empty()
@@ -410,12 +429,10 @@ impl App {
             return false;
         };
         let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
-        let mut cropped = cover_fill_hero_box(&source, px_w, px_h);
-        if let Some(logo_key) = desired_logo_key.as_deref() {
-            if let Some(logo) = self.card_image_states.get(logo_key).and_then(|e| e.img.as_ref()) {
-                cropped = super::images::composite_landscape_logo(&cropped, logo);
-            }
-        }
+        let cropped = self.decorate_with_logo(
+            cover_fill_hero_box(&source, px_w, px_h),
+            desired_logo_key.as_deref(),
+        );
         let bare_key = cache_key.to_string();
         let proto = self.build_protocol(&bare_key, suffix, &picker, cropped);
         if let Some(entry) = self.card_image_states.get_mut(cache_key) {
