@@ -13,6 +13,11 @@ See `proposal.md` for motivation. What shapes the approach:
   cast-first with directors anywhere in the list (observed at index 0, 8, 11, 12, 20 and 56); a
   director's `Role` is usually absent while an actor's role is the character name; of 60 movies, 6
   declared two directors and 2 declared none; 69 of 1126 people had no role text.
+- **CORRECTED 2026-09-15 against the live server:** the list query populates `ExternalUrls` ONLY when
+  `ProviderIds` is also present in the `Fields` list (`Fields=ExternalUrls` alone returns an empty
+  array; `Fields=ExternalUrls,ProviderIds` returns the full links). Both names MUST appear together
+  in the `Fields` query strings. The item-detail endpoint also carries `ExternalUrls`, but no extra
+  request is needed once `ProviderIds` joins the list query.
 - **`EmbyItem` carries none of it.** `genre` holds only the first genre and `director` holds one name
   that nothing in production reads.
 - **ratatui 0.30.2 already supports the hyperlink cell, end to end.** `ratatui-core 0.1.2` has
