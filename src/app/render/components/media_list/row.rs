@@ -220,7 +220,8 @@ pub(in crate::app) fn media_list_row<Target>(
             // and put the selection glyph in the second column, right next
             // to the title text.
             if selected && gutter_glyph {
-                spans[0] = Span::styled(" \u{f054}", Style::default().fg(palette::TEXT_METADATA));
+                spans[0] =
+                    Span::styled(" \u{f101}", Style::default().fg(palette::PILL_SELECTED_FG));
             }
             ListItem::new(Line::from(spans)).style(if paint_selected {
                 Style::default().bg(selected_bg)

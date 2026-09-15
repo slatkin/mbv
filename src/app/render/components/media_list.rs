@@ -341,8 +341,8 @@ mod wide_row_regression_tests {
         // title paints in the focus accent. No selected background, and the
         // duration keeps the default colour.
         assert_eq!(buf[(0, 1)].symbol(), " ");
-        assert_eq!(buf[(1, 1)].symbol(), "\u{f054}");
-        assert_eq!(buf[(1, 1)].fg, palette::TEXT_METADATA);
+        assert_eq!(buf[(1, 1)].symbol(), "\u{f101}");
+        assert_eq!(buf[(1, 1)].fg, palette::PILL_SELECTED_FG);
         assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
         assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
         assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);

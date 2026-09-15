@@ -714,9 +714,12 @@ fn queue_selection_marker_is_inside_the_panel_gutter() {
         " ",
         "no marker may paint outside the box edge"
     );
-    // The selected row's second indent column carries the foam icon.
-    assert_eq!(buf[(box_area.x + 1, marker_y)].symbol(), "\u{f054}");
-    assert_eq!(buf[(box_area.x + 1, marker_y)].fg, palette::TEXT_METADATA);
+    // The selected row's second indent column carries the icon.
+    assert_eq!(buf[(box_area.x + 1, marker_y)].symbol(), "\u{f101}");
+    assert_eq!(
+        buf[(box_area.x + 1, marker_y)].fg,
+        palette::PILL_SELECTED_FG
+    );
 
     // Without panel focus the icon disappears.
     app.panel_focus = crate::app::PanelFocus::Library;
