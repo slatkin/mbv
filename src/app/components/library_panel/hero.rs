@@ -91,8 +91,16 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
 }
 
 fn movie_logo_source(item: &EmbyItem) -> Option<ArtworkSource> {
-    (item.item_type == "Movie" && !item.image_tags.logo.is_empty())
-        .then(|| emby_source(item, &["Logo"]))
+    if item.item_type != "Movie" || item.image_tags.logo.is_empty() {
+        return None;
+    }
+    let mut source = emby_source(item, &["Logo"]);
+    // Unlike base artwork, a Logo is independently addressed by its provider
+    // declaration. This prevents a changed Logo tag from reusing stale bytes.
+    if let ArtworkSource::Emby { cache_key, .. } = &mut source {
+        *cache_key = format!("{}:Logo:{}", item.id, item.image_tags.logo);
+    }
+    Some(source)
 }
 
 /// The artwork policy for one queue item: dispatches to the item kind's

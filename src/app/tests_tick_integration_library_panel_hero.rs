@@ -163,6 +163,49 @@ fn migrated_movie_with_hero(item: mbv_core::api::EmbyItem) -> TickHarness {
 }
 
 #[test]
+fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placeholder_or_non_movie() {
+    let mut landscape = landscape_hero_item("logo-wide");
+    landscape.image_tags.logo = "logo-tag".into();
+    let mut wide = migrated_home_with_hero(landscape, 160);
+    drop(draw_frame_sized(&mut wide));
+    wide.model_mut().sync_mounted_surfaces();
+    assert!(wide.model().app.card_image_loading.contains("logo-wide:Logo:logo-tag"));
+    assert_eq!(wide.model().app.card_image_fetch_calls, 2);
+
+    let mut portrait = crate::app::tests::make_item("Portrait", "Movie");
+    portrait.id = "logo-portrait".into();
+    portrait.image_tags.primary = "poster".into();
+    portrait.image_tags.logo = "logo-tag".into();
+    let mut portrait_harness = migrated_home_with_hero(portrait, 160);
+    drop(draw_frame_sized(&mut portrait_harness));
+    portrait_harness.model_mut().sync_mounted_surfaces();
+    assert!(!portrait_harness.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+
+    let mut narrow_item = landscape_hero_item("logo-narrow");
+    narrow_item.image_tags.logo = "logo-tag".into();
+    let mut narrow = migrated_home_with_hero(narrow_item, 80);
+    drop(draw_frame_sized(&mut narrow));
+    narrow.model_mut().sync_mounted_surfaces();
+    assert!(!narrow.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+
+    let mut non_movie = crate::app::tests::make_item("Series", "Series");
+    non_movie.id = "logo-series".into();
+    non_movie.image_tags.thumb = "thumb".into();
+    non_movie.image_tags.logo = "logo-tag".into();
+    let mut non_movie_harness = migrated_home_with_hero(non_movie, 160);
+    drop(draw_frame_sized(&mut non_movie_harness));
+    non_movie_harness.model_mut().sync_mounted_surfaces();
+    assert!(!non_movie_harness.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+
+    let mut placeholder = crate::app::tests::make_item("Placeholder", "Movie");
+    placeholder.id = "logo-placeholder".into();
+    let mut placeholder_harness = migrated_home_with_hero(placeholder, 160);
+    drop(draw_frame_sized(&mut placeholder_harness));
+    placeholder_harness.model_mut().sync_mounted_surfaces();
+    assert!(!placeholder_harness.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+}
+
+#[test]
 fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
     let mut movie = crate::app::tests::make_item("Hero", "Movie");
     movie.image_tags.thumb = "tag".into();

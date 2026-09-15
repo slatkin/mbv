@@ -162,6 +162,28 @@ impl App {
                     series_id.clone(),
                     &types,
                 );
+                // Logo artwork is optional and must never delay the base image.
+                // Reserve it only for a real Movie Landscape hero at Wide
+                // geometry; all other presentations remain undecorated.
+                if artwork.shape == crate::app::components::library_panel::ArtworkShape::Landscape
+                    && crate::app::render::wide_hero_fits(panel_area)
+                {
+                    if let Some(ArtworkSource::Emby {
+                        item_id,
+                        series_id,
+                        image_types,
+                        cache_key,
+                    }) = artwork.decoration.as_ref()
+                    {
+                        let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
+                        self.fetch_card_image(
+                            cache_key.clone(),
+                            item_id.clone(),
+                            series_id.clone(),
+                            &types,
+                        );
+                    }
+                }
                 Some(cache_key.clone())
             }
             ArtworkSource::AudiobookshelfCover {

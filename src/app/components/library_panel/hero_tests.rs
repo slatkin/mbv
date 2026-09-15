@@ -49,7 +49,7 @@ fn movie_with_backdrop_and_poster_is_landscape() {
             item_id: "m1".into(),
             series_id: String::new(),
             image_types: vec!["Logo".into()],
-            cache_key: "m1:Logo".into(),
+            cache_key: "m1:Logo:logo".into(),
         })
     );
 }
