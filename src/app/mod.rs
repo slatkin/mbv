@@ -12,7 +12,6 @@ mod audiobookshelf_service_actions;
 mod bootstrap;
 mod browse_level_actions;
 mod cast_actions;
-mod cast_reattach;
 mod cast_status_actions;
 pub mod components;
 mod construct;

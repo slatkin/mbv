@@ -4,7 +4,7 @@
 
 Governs attaching mbv to a Google Cast receiver, handing items to the receiver's own
 queue, controlling and displaying playback on it, and what becomes of the session when
-mbv exits and starts again.
+mbv exits.
 
 ## Requirements
 
@@ -151,32 +151,39 @@ SHALL NOT stop it or tear down its session.
 - **THEN** the receiver continues playing
 - **AND** mbv stops reporting progress for it
 
-### Requirement: mbv reattaches to a running cast session on launch
+### Requirement: Playback targets are mutually exclusive
 
-When automatic reconnection is enabled, mbv SHALL attempt on launch to reattach to a cast
-receiver it was attached to at exit, restoring control and displayed state from the
-receiver's reported status. Reattaching SHALL NOT dispatch items or alter what the
-receiver is playing. When automatic reconnection is disabled, mbv SHALL NOT attach to any
-cast receiver on launch.
+Connecting to a new playback target SHALL sever the currently connected one. The cast
+attachment, watched session, direct remote, and library-route slots are mutually
+exclusive; mbv SHALL NOT hold more than one live target connection. mbv SHALL NOT
+reattach to a cast receiver on launch: a cast receiver is only ever attached by
+explicit user selection in the running session.
 
-#### Scenario: Reattach enabled and receiver still playing
+#### Scenario: Cast target is selected while a session is watched
 
-- **WHEN** mbv launches with automatic reconnection enabled and the persisted receiver is
-  still playing
-- **THEN** mbv reattaches, presents the receiver's reported state, and resumes reporting
-  progress for items it can identify
+- **WHEN** the user selects a cast target while mbv is attached to a watched session,
+  direct remote, or library route
+- **THEN** that connection is severed before the cast attach
+- **AND** the cast attachment becomes the one active target
 
-#### Scenario: Reattach enabled and receiver is idle
+#### Scenario: A session or direct remote is connected while a cast target is attached
 
-- **WHEN** mbv launches with automatic reconnection enabled and the persisted receiver is
-  idle
-- **THEN** mbv attaches and presents no active playback
-- **AND** SHALL NOT dispatch anything
+- **WHEN** the user connects to an Emby session (Sessions panel or auto-reconnect)
+  while a cast target is attached
+- **THEN** the cast attachment is severed before the connect
+- **AND** the newly connected target becomes the one active target
 
-#### Scenario: Reattach disabled
+#### Scenario: A different cast target is selected while one is attached
 
-- **WHEN** mbv launches with automatic reconnection disabled
-- **THEN** mbv SHALL NOT attach to any cast receiver until the user selects one
+- **WHEN** the user selects a cast target while another cast receiver is attached
+- **THEN** the previous receiver's connection is dropped
+- **AND** the previous receiver is left as it is
+
+#### Scenario: mbv launches
+
+- **WHEN** mbv starts, regardless of `auto_reconnect` or any previously attached
+  receiver
+- **THEN** no cast receiver is attached until the user selects one
 
 ### Requirement: Losing the receiver connection is isolated from mbv
 

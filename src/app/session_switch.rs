@@ -379,17 +379,12 @@ impl App {
     }
 
     pub(super) fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
-        // Tear down an active library route (#223) before a Sessions-panel
-        // connect, rather than simply clearing `active_route` inline
-        // further down: `restore_local_mode` runs the real teardown
-        // (restores the suspended local `Player`, clears `active_route`,
-        // MPRIS rebind) so the Sessions-panel path always starts from a
-        // clean slate, regardless of which internal branch this function or
-        // `switch_to_direct_remote` takes next. A no-op when no library
-        // route is active.
-        if self.active_route.is_some() {
-            self.restore_local_mode("Local playback restored before connecting to session");
-        }
+        // Connecting to a new target severs the current one (attachment
+        // slots are mutually exclusive): tears down an active library
+        // route, detaches any cast attachment, and clears a watched
+        // session before this connect, rather than holding both. A no-op
+        // when nothing is connected.
+        self.sever_active_connection();
         let mut direct_upgrade_error = None;
         // `player.is_remote()` alone can't gate this: a stay-alive thin
         // client attached to its own local daemon (is_local_daemon()) is

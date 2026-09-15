@@ -92,40 +92,6 @@ fn teardown_issues_no_stop_for_an_attached_cast_target() {
 }
 
 #[test]
-fn teardown_persists_attached_cast_receiver_when_auto_reconnect_enabled() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let mut app = make_app_stub();
-    app.config.lock().unwrap().auto_reconnect = true;
-    app.attach_cast("device-1".to_string());
-
-    app.teardown(Duration::from_secs(1));
-
-    assert_eq!(
-        mbv_core::config::load_last_cast_receiver().unwrap(),
-        Some("device-1".to_string())
-    );
-}
-
-#[test]
-fn teardown_never_touches_persisted_cast_receiver_when_auto_reconnect_disabled() {
-    let _guard = crate::config::TestStateDirGuard::new();
-    let _ = mbv_core::config::save_last_cast_receiver(Some("device-old"));
-    let mut app = make_app_stub();
-    assert!(!app.config.lock().unwrap().auto_reconnect);
-    app.attach_cast("device-1".to_string());
-
-    app.teardown(Duration::from_secs(1));
-
-    // Feature is off: the previously saved record is left exactly as it
-    // was, not cleared or overwritten just because a cast target happens
-    // to be attached right now.
-    assert_eq!(
-        mbv_core::config::load_last_cast_receiver().unwrap(),
-        Some("device-old".to_string())
-    );
-}
-
-#[test]
 fn teardown_clears_persisted_connection_when_exiting_local() {
     let _guard = crate::config::TestStateDirGuard::new();
     let _ = crate::config::save_last_remote_connection(Some(
