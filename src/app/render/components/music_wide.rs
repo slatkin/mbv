@@ -1,6 +1,8 @@
 //! Grouped Music's wide Wide hero component.
 
-use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+use crate::app::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::App;
 use mbv_core::api::EmbyItem;
@@ -97,7 +99,7 @@ fn grouped_album_rows_with_targets(
                 target: targets[idx].clone(),
                 primary: name.clone(),
                 secondary: None,
-                trailing: (!year.is_empty()).then(|| year.clone()),
+                trailing: (!year.is_empty()).then(|| MediaListTrailing::Year(year.clone())),
                 duration: None,
                 kind: MediaKind::Collection,
                 semantic_state: MediaSemanticState::Ordinary,

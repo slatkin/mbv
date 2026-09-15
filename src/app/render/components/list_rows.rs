@@ -284,17 +284,18 @@ impl LibraryListRenderCtx {
     }
 }
 
-/// Builds the title (+ optional duration) spans for one list row, shared by
-/// both the letter-grouped and plain-list rendering branches (identical
-/// styling logic, only how `title`/`dur_str`/`avail` are computed differs
-/// between the two call sites). Every cell starts with a 1-column leading
+/// Builds the title (+ optional release year) spans for one list row, shared
+/// by both the letter-grouped and plain-list rendering branches (identical
+/// styling logic, only how `title`/`year_str`/`avail` are computed differs
+/// between the two call sites). The year keeps the green metadata role the
+/// canonical media-list rows use for it. Every cell starts with a 1-column leading
 /// space; the selected cell punches through to the library backdrop (the
 /// surface table's `SelectedRow` row) in both one- and two-column mode. The
 /// selected row's background is extended to the list's outer edge, outside
 /// the row's own content area, by `draw_column_selection_bleed`.
 pub(in crate::app::render) fn build_list_row_spans(
     title: String,
-    dur_str: String,
+    year_str: String,
     selected: bool,
     fg: Color,
 ) -> Vec<Span<'static>> {
@@ -308,13 +309,13 @@ pub(in crate::app::render) fn build_list_row_spans(
     } else {
         vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
     };
-    if !dur_str.is_empty() {
-        let dur_style = if selected {
-            Style::default().fg(palette::TEXT_METADATA).bg(bg)
+    if !year_str.is_empty() {
+        let year_style = if selected {
+            Style::default().fg(palette::STATUS_AVAILABLE).bg(bg)
         } else {
-            Style::default().fg(palette::TEXT_METADATA)
+            Style::default().fg(palette::STATUS_AVAILABLE)
         };
-        spans.push(Span::styled(dur_str, dur_style));
+        spans.push(Span::styled(year_str, year_style));
     }
     spans
 }
@@ -327,12 +328,12 @@ pub(in crate::app::render) fn build_list_row_spans(
 /// cell except the last in its row).
 pub(in crate::app::render) fn item_cell_spans(
     title: String,
-    dur_str: String,
+    year_str: String,
     selected: bool,
     fg: Color,
     pad_to: usize,
 ) -> Vec<Span<'static>> {
-    let mut spans = build_list_row_spans(title, dur_str, selected, fg);
+    let mut spans = build_list_row_spans(title, year_str, selected, fg);
     let used: usize = spans.iter().map(|s| s.width()).sum();
     let pad = pad_to.saturating_sub(used);
     if pad > 0 {

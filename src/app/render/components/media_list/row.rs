@@ -1,4 +1,6 @@
-use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
+use crate::app::components::media_list::{
+    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+};
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
 use crate::app::ui_util::trunc_str;
@@ -59,7 +61,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 Span::styled(
                     text.clone(),
                     Style::default()
-                        .fg(palette::TEXT_FOCUS_ACCENT)
+                        .fg(palette::TEXT_METADATA)
                         .add_modifier(Modifier::BOLD),
                 ),
             ],
@@ -106,15 +108,22 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
-            let trailing = match (
-                trailing.as_deref().filter(|text| !text.is_empty()),
-                progress,
-            ) {
-                (Some(text), Some(pct)) => format!("{text} {pct}"),
-                (Some(text), None) => text.to_owned(),
-                (None, Some(pct)) => pct,
-                (None, None) => String::new(),
-            };
+            // The left-aligned metadata pieces, in paint order: the trailing
+            // slot's own role (a year is green, a progress badge FOAM), then
+            // the active row's percentage as its own FOAM piece.
+            let mut trailing_pieces: Vec<(String, Color)> = Vec::new();
+            match trailing {
+                Some(MediaListTrailing::Year(text)) if !text.is_empty() => {
+                    trailing_pieces.push((text.clone(), palette::STATUS_AVAILABLE));
+                }
+                Some(MediaListTrailing::Progress(text)) if !text.is_empty() => {
+                    trailing_pieces.push((text.clone(), palette::TEXT_METADATA));
+                }
+                _ => {}
+            }
+            if let Some(pct) = progress {
+                trailing_pieces.push((pct, palette::TEXT_METADATA));
+            }
             // `Collection` rows never show a duration, even if one is
             // projected — one enforcement point so parents can't re-diverge.
             let duration = duration
@@ -123,11 +132,10 @@ pub(in crate::app) fn media_list_row<Target>(
                 .filter(|_| !matches!(kind, MediaKind::Collection));
 
             let content_w = row_content_w(inner_width, has_scrollbar);
-            let trailing_w = if trailing.is_empty() {
-                0
-            } else {
-                1 + trailing.width()
-            };
+            let trailing_w: usize = trailing_pieces
+                .iter()
+                .map(|(text, _)| 1 + text.width())
+                .sum();
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
             let paint_selected = selected && !gutter_accent;
@@ -203,12 +211,11 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::styled(icon, Style::default().fg(palette::ACCENT)));
             }
             spans.extend(title_spans);
-            if !trailing.is_empty() {
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
-                    trailing,
-                    Style::default().fg(palette::TEXT_METADATA),
-                ));
+            if !trailing_pieces.is_empty() {
+                for (text, color) in &trailing_pieces {
+                    spans.push(Span::raw(" "));
+                    spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                }
             }
             if let Some(dur) = duration {
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();

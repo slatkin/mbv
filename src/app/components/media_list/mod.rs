@@ -412,6 +412,16 @@ pub enum RowIntent<Target> {
     ContextSelection(Vec<Target>),
 }
 
+/// The left-aligned metadata a row paints after its `primary` title, with the
+/// text role baked in (one closed vocabulary: rows never carry raw colours).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MediaListTrailing {
+    /// The item's release year, painted in the green metadata role.
+    Year(String),
+    /// A progress badge (a percentage), painted in the FOAM metadata role.
+    Progress(String),
+}
+
 /// A closed, provider-neutral row vocabulary for embedded media lists.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListRow<Target> {
@@ -421,8 +431,12 @@ pub enum MediaListRow<Target> {
         /// Optional secondary title painted after `primary` in the yellow
         /// focus-accent role (the episode title of a series/show row).
         secondary: Option<String>,
-        /// Left-aligned FOAM metadata rendered right after `primary`.
-        trailing: Option<String>,
+        /// Left-aligned metadata rendered right after `primary`. The variant
+        /// carries its own text role: a release year paints in the green
+        /// (`STATUS_AVAILABLE`) metadata role, a progress badge in the FOAM
+        /// (`TEXT_METADATA`) one. Distinct from `duration`, the right-aligned
+        /// green time slot.
+        trailing: Option<MediaListTrailing>,
         /// A duration/time string. Rendered as a distinct right-aligned
         /// green (`STATUS_AVAILABLE`) element, never as FOAM `trailing`.
         duration: Option<String>,

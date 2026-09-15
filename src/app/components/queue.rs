@@ -10,8 +10,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTransition,
-    MediaSemanticState, Presentation, RowIntent,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
+    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
 };
 use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
@@ -776,7 +776,7 @@ fn queue_media_row_at(
         target: slot.slot_id,
         primary: title,
         secondary: None,
-        trailing,
+        trailing: trailing.map(MediaListTrailing::Progress),
         // The now-playing row shows its total duration in every state: a
         // pending selection is not playing yet, but it still has a known
         // runtime, and blanking the slot reads as a glitch.

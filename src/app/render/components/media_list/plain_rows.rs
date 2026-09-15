@@ -86,7 +86,7 @@ pub(in crate::app) fn render_plain_rows(f: &mut Frame, ctx: ListRenderCtx) -> us
 
                             // Compute name and duration as separate strings so they can be styled
                             // independently: name in the normal fg, duration in OVERLAY (no parens).
-                            let (item_name, dur_str) = if item.is_folder {
+                            let (item_name, year_str) = if item.is_folder {
                                 let name = if item.item_type == "Folder" && item.total_count > 0 {
                                     format!(
                                         "{} \u{b7} {} items",
@@ -118,11 +118,11 @@ pub(in crate::app) fn render_plain_rows(f: &mut Frame, ctx: ListRenderCtx) -> us
                             // background, a plain space otherwise), so titles
                             // align across rows.
                             let avail = cell_w.saturating_sub(2);
-                            let name_w = avail.saturating_sub(dur_str.width());
-                            let (title, dur_str) = if selected && detail_rows > 0 {
+                            let name_w = avail.saturating_sub(year_str.width());
+                            let (title, year_str) = if selected && detail_rows > 0 {
                                 (String::new(), String::new())
                             } else {
-                                (trunc_str(&item_name, name_w), dur_str)
+                                (trunc_str(&item_name, name_w), year_str)
                             };
                             let fg = focused_or_subtle(focused);
 
@@ -131,7 +131,7 @@ pub(in crate::app) fn render_plain_rows(f: &mut Frame, ctx: ListRenderCtx) -> us
                             } else {
                                 cell_w + LIBRARY_COLUMN_GAP as usize
                             };
-                            spans.extend(item_cell_spans(title, dur_str, selected, fg, pad_to));
+                            spans.extend(item_cell_spans(title, year_str, selected, fg, pad_to));
                         }
                         ListItem::new(Line::from(spans))
                     }

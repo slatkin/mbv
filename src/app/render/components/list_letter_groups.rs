@@ -128,7 +128,7 @@ pub(in crate::app) fn render_letter_grouped_rows(
                         Span::styled(
                             label.clone(),
                             Style::default()
-                                .fg(palette::TEXT_FOCUS_ACCENT)
+                                .fg(palette::TEXT_METADATA)
                                 .add_modifier(Modifier::BOLD),
                         ),
                     ])),
@@ -142,7 +142,7 @@ pub(in crate::app) fn render_letter_grouped_rows(
                         for (cell_idx, &idx) in idxs.iter().enumerate() {
                             let item = &items[idx];
                             let selected = idx == cursor;
-                            let (item_name, dur_str) = if item.is_folder {
+                            let (item_name, year_str) = if item.is_folder {
                                 let name = if item.item_type == "Folder" && item.total_count > 0 {
                                     format!(
                                         "{} \u{b7} {} items",
@@ -173,11 +173,11 @@ pub(in crate::app) fn render_letter_grouped_rows(
                             // cell's 1-column leading separator carries the
                             // highlight background rather than adding an indent.
                             let avail = normal_avail;
-                            let name_w = avail.saturating_sub(dur_str.width());
-                            let (title, dur_str) = if selected && detail_rows > 0 {
+                            let name_w = avail.saturating_sub(year_str.width());
+                            let (title, year_str) = if selected && detail_rows > 0 {
                                 (String::new(), String::new())
                             } else {
-                                (trunc_str(&item_name, name_w), dur_str)
+                                (trunc_str(&item_name, name_w), year_str)
                             };
                             let fg = focused_or_subtle(focused);
                             let pad_to = if cell_idx + 1 == idxs.len() {
@@ -185,7 +185,7 @@ pub(in crate::app) fn render_letter_grouped_rows(
                             } else {
                                 cell_w + LIBRARY_COLUMN_GAP as usize
                             };
-                            spans.extend(item_cell_spans(title, dur_str, selected, fg, pad_to));
+                            spans.extend(item_cell_spans(title, year_str, selected, fg, pad_to));
                         }
                         ListItem::new(Line::from(spans))
                     }

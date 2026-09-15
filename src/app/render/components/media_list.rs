@@ -14,8 +14,8 @@ mod wide_row_regression_tests {
     };
     use super::wide_row_regression_tests_helpers::{item, paint, row_of};
     use crate::app::components::media_list::{
-        MediaKind, MediaListRow, MediaSemanticState, WideMediaList, WideMediaListPaintPolicy,
-        ZebraStripe,
+        MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState, WideMediaList,
+        WideMediaListPaintPolicy, ZebraStripe,
     };
     use crate::app::palette;
     use ratatui::backend::TestBackend;
@@ -222,6 +222,57 @@ mod wide_row_regression_tests {
                 "only the selected row is filled (duration={duration:?})"
             );
         }
+    }
+
+    /// Group headings read as foam labels in every grouped list, and the
+    /// left-aligned trailing slot carries its own closed role: a release year
+    /// paints green, a progress badge stays foam.
+    #[test]
+    fn heading_labels_are_foam_and_year_metadata_is_green() {
+        let rect = Rect::new(0, 0, 40, 3);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Heading {
+                text: "Artist".into(),
+            },
+            MediaListRow::Item {
+                target: "album".into(),
+                primary: "Album".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Year("2001".into())),
+                duration: None,
+                kind: MediaKind::Collection,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "resume".into(),
+                primary: "Resume".into(),
+                secondary: None,
+                trailing: Some(MediaListTrailing::Progress("47%".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+
+        assert_eq!(buf[(2, 0)].symbol(), "A", "heading label at the indent");
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA);
+        assert!(buf[(2, 0)].modifier.contains(Modifier::BOLD));
+
+        let year_x = 2 + "Album ".len() as u16;
+        assert_eq!(buf[(year_x, 1)].symbol(), "2");
+        assert_eq!(buf[(year_x, 1)].fg, palette::STATUS_AVAILABLE);
+
+        let badge_x = 2 + "Resume ".len() as u16;
+        assert_eq!(buf[(badge_x, 2)].symbol(), "4");
+        assert_eq!(buf[(badge_x, 2)].fg, palette::TEXT_METADATA);
     }
 
     /// A framed parent may claim a full-width panel while reserving a
@@ -818,7 +869,7 @@ mod wide_row_regression_tests {
     #[test]
     fn now_playing_row_paints_duration_like_other_rows() {
         use crate::app::components::media_list::{
-            ActiveProgress, MediaListRow, MediaSemanticState,
+            ActiveProgress, MediaListRow, MediaListTrailing, MediaSemanticState,
         };
 
         let rect = Rect::new(0, 0, 52, 3);
@@ -828,7 +879,7 @@ mod wide_row_regression_tests {
                 target: "playing".into(),
                 primary: "Playing title".into(),
                 secondary: None,
-                trailing: Some("FOAM".into()),
+                trailing: Some(MediaListTrailing::Progress("FOAM".into())),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::NowPlaying {

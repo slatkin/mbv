@@ -21,8 +21,8 @@ use super::library_panel::{
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
-    Presentation, RowIntent, ViewportAnchor,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
+    MediaSemanticState, Presentation, RowIntent, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
@@ -225,7 +225,8 @@ impl TvContent {
                     target: item.id.clone(),
                     primary: item.display_name(),
                     secondary: None,
-                    trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
+                    trailing: (item.production_year > 0)
+                        .then(|| MediaListTrailing::Year(item.production_year.to_string())),
                     duration: None,
                     kind: MediaKind::Collection,
                     // Deliberate, known divergence (not a bug to unify away):

@@ -32,7 +32,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
-    MediaListSurfaceInput, MediaSemanticState, Presentation, RowIntent,
+    MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Presentation, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -84,7 +84,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
         primary,
         secondary: None,
         trailing: (!item.is_folder && item.production_year > 0)
-            .then(|| item.production_year.to_string()),
+            .then(|| MediaListTrailing::Year(item.production_year.to_string())),
         duration: None,
         kind: MediaKind::Collection,
         semantic_state: emby_semantic_state(item),

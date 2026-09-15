@@ -349,8 +349,12 @@ _Avoid_: active list, owner swap, second control, active carrier (for the
 owner-holding Presentation)
 
 **Media-list row**:
-The one painted row of a `MediaList` flow, shared by the Wide and Inline Presentations; the Inline Presentation only gates its highlight and reserves its detail block around it.
+The one painted row of a `MediaList` flow, shared by the Wide and Inline Presentations; the Inline Presentation only gates its highlight and reserves its detail block around it. Its left-aligned metadata slot carries one closed role: a release year in the green metadata role or a progress badge in the FOAM one; its right-aligned duration slot is green.
 _Avoid_: wide media row, wide_media_row
+
+**Group heading**:
+The non-selectable Heading row labelling a group of media-list Item rows (artist, feed age bucket, letter or surname bucket, season). Painted bold in the FOAM metadata role, unlike the focus-accent selected-row title; it is a visual label, never a selection or action target, and it takes its own place in the zebra alternation.
+_Avoid_: artist header, group title, section label
 
 **Inline Search**:
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. Browser, MusicWorkspace, or TvWorkspace is the sole owner and painter for the current presentation; TV transfers one snapshot between Narrow and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
@@ -443,8 +447,9 @@ The app-wide layout state, one of Mini, Narrow, or Wide:
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 **Zebra stripe**:
-The alternating-row secondary background on Wide media lists. Parity counts selectable
-Item rows only; structural Heading and Spacer rows are excluded. A selected row keeps
+The alternating-row secondary background on Wide media lists. Parity counts every visible row by
+screen-row order, so the window's first row is unstriped and the pattern runs unbroken through
+structural Heading and Spacer rows (a group never restarts it). A selected row keeps
 its stripe.
 _Avoid_: alternating row, striped background, row banding
 

@@ -22,7 +22,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibraryKey, LibrarySlotEv
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
+    MediaListTrailing, MediaListTransition, MediaSemanticState, Presentation, RowIntent,
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
@@ -214,7 +214,7 @@ impl HomeContent {
                     // by identity, not by a title that can collide across
                     // episodes.
                     target: item.id().to_owned(),
-                    trailing: home_progress_badge(item),
+                    trailing: home_progress_badge(item).map(MediaListTrailing::Progress),
                     duration: item
                         .duration()
                         .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64)),
