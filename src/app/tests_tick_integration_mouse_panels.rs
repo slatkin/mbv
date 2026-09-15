@@ -92,7 +92,7 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
                 msg,
                 Msg::Queue(crate::app::components::QueueRequest::ResizeColumnEnd(_))
             ) && !matches!(msg, Msg::Shell(ShellRequest::QueueRowClick { .. }))
-                && !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))
+                && !matches!(msg, Msg::Shell(ShellRequest::EmbyLibraryRowClick { .. }))
         }));
     }
     assert_eq!(harness.model().app.queue_column_width, width);
@@ -158,7 +158,7 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::EmbyLibraryRowClick { .. }))),
         "a blank wide-list click must not claim without a resolved target"
     );
     apply_outcome(&mut harness, outcome);
@@ -201,7 +201,7 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::EmbyLibraryRowClick { .. }))),
         "a click at the old wide-list position must not resolve through stale wide geometry \
          after the narrow repaint"
     );

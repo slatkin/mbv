@@ -50,7 +50,7 @@ fn browser_owner_slash_opens_inline_search_as_a_list_slot() {
 }
 
 /// While search is open, a character that is otherwise a list shortcut (`r`
-/// -> `BrowserRefresh`) is appended to the query instead of running the
+/// -> `EmbyLibraryRefresh`) is appended to the query instead of running the
 /// shortcut, and the owner returns immediately without an ordinary `Msg`
 /// (design.md D4).
 #[test]

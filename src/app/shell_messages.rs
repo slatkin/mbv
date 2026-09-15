@@ -110,7 +110,7 @@ impl Model {
                         }
                         // A group switch replaces the album level; re-anchor the
                         // workspace cursor at this nav event (mirrors the pill
-                        // click path in `ShellRequest::BrowserPillClick`).
+                        // click path in `ShellRequest::EmbyLibraryPillClick`).
                         self.music_workspace_reanchor = true;
                         self.push_music_workspace_content();
                     }
@@ -308,47 +308,27 @@ impl Model {
                     // browser effect decoupling): the component reports the
                     // explicit `EmbyItem` target; the shell forwards it
                     // straight to the App effect (no App-cursor re-read).
-                    request @ (ShellRequest::BrowserActivate { .. }
-                    | ShellRequest::BrowserPlay { .. }
-                    | ShellRequest::BrowserEnqueue { .. }
-                    | ShellRequest::BrowserToggleWatched { .. }
-                    | ShellRequest::BrowserShuffle { .. }
-                    | ShellRequest::BrowserRefresh
-                    | ShellRequest::BrowserRescan
-                    | ShellRequest::BrowserBack
-                    | ShellRequest::BrowserCycleLetterPill { .. }
-                    | ShellRequest::BrowserCycleGroup { .. }
+                    request @ (ShellRequest::EmbyLibraryActivate { .. }
                     | ShellRequest::EmbyLibraryPlay { .. }
                     | ShellRequest::EmbyLibraryEnqueue { .. }
                     | ShellRequest::EmbyLibraryToggleWatched { .. }
                     | ShellRequest::EmbyLibraryShuffle { .. }
                     | ShellRequest::EmbyLibraryRefresh
-                    | ShellRequest::EmbyLibraryRescan) => {
-                        // Keep the existing Browser projection for generic Emby
-                        // libraries, and also refresh the separately-mounted
-                        // Music/TV workspace when one issued an EmbyLibrary*
-                        // effect request.
-                        let reproject_workspace = matches!(
-                            &request,
-                            ShellRequest::EmbyLibraryPlay { .. }
-                                | ShellRequest::EmbyLibraryEnqueue { .. }
-                                | ShellRequest::EmbyLibraryToggleWatched { .. }
-                                | ShellRequest::EmbyLibraryShuffle { .. }
-                                | ShellRequest::EmbyLibraryRefresh
-                                | ShellRequest::EmbyLibraryRescan
-                        );
+                    | ShellRequest::EmbyLibraryRescan
+                    | ShellRequest::EmbyLibraryBack
+                    | ShellRequest::EmbyLibraryCycleLetterPill { .. }
+                    | ShellRequest::EmbyLibraryCycleGroup { .. }) => {
                         self.handle_browser_request(request);
-                        // Browser navigation/effects change library content; re-project (5.3d.15/M2).
+                        // Library navigation/effects change content; re-project all
+                        // destination owners. Inactive owners are no-ops.
                         self.push_active_browser_owner_content();
-                        if reproject_workspace {
-                            self.push_music_workspace_content();
-                            self.push_tv_workspace_content();
-                        }
+                        self.push_music_workspace_content();
+                        self.push_tv_workspace_content();
                     }
                     // Pure cursor movement: the component already resolved its own
                     // index, so apply the App-side nav effects but skip the content
                     // re-projection the effect requests above need.
-                    request @ ShellRequest::BrowserCursorIndex { .. } => {
+                    request @ ShellRequest::EmbyLibraryCursorIndex { .. } => {
                         self.handle_browser_request(request);
                     }
                     ShellRequest::OpenUrl(url) => {
@@ -399,7 +379,7 @@ impl Model {
                             }
                         }
                     }
-                    ShellRequest::BrowserPillClick { target } => {
+                    ShellRequest::EmbyLibraryPillClick { target } => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
                             self.app.handle_mouse_selector_click_emby(lib_idx, target);
                         }
@@ -408,7 +388,7 @@ impl Model {
                         self.music_workspace_reanchor = true;
                         self.push_active_browser_owner_content();
                     }
-                    ShellRequest::BrowserRowClick { target } => {
+                    ShellRequest::EmbyLibraryRowClick { target } => {
                         if let (Some(lib_idx), Some(target)) =
                             (self.app.tab.emby_library_index(), target)
                         {
@@ -416,7 +396,7 @@ impl Model {
                         }
                         self.push_active_browser_owner_content();
                     }
-                    ShellRequest::BrowserRowActivate { target } => {
+                    ShellRequest::EmbyLibraryRowActivate { target } => {
                         if let (Some(lib_idx), Some(target)) =
                             (self.app.tab.emby_library_index(), target)
                         {

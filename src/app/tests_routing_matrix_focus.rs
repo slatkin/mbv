@@ -20,7 +20,7 @@ fn queue_focus_routes_queue_chord_to_queue_owner() {
 }
 #[test]
 fn library_focus_routes_bracket_to_library_leaf() {
-    let leaf = Some(Msg::Shell(ShellRequest::BrowserCycleLetterPill {
+    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryCycleLetterPill {
         delta: -1,
     }));
     let out = fold_tick(
@@ -32,12 +32,12 @@ fn library_focus_routes_bracket_to_library_leaf() {
     assert_eq!(out.len(), 1);
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::BrowserCycleLetterPill { delta: -1 })
+        Msg::Shell(ShellRequest::EmbyLibraryCycleLetterPill { delta: -1 })
     ));
 }
 #[test]
 fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
-    let leaf = Some(Msg::Shell(ShellRequest::BrowserEnqueue {
+    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryEnqueue {
         item: crate::app::tests::make_item("item", "Movie"),
     }));
     let out = fold_tick(
@@ -53,7 +53,7 @@ fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
     );
     assert!(matches!(
         &out[0],
-        Msg::Shell(ShellRequest::BrowserEnqueue { .. })
+        Msg::Shell(ShellRequest::EmbyLibraryEnqueue { .. })
     ));
     // The playback command table's `'a'` arm is `!ctrl`-guarded; assert the
     // audio toggle does NOT resolve for Ctrl+a even with playback active.

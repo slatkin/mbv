@@ -59,7 +59,7 @@ impl TvContent {
 
     /// Move the shared owner by `item_rows` painted item rows (Narrow only)
     /// and report the resulting selection as a `context.list.items` index,
-    /// the position the shell's `BrowserCursorIndex` effect persists into
+    /// the position the shell's `EmbyLibraryCursorIndex` effect persists into
     /// the resting `BrowseLevel` cursor (mirrors `BrowserComponent::
     /// move_by_item_rows`).
     pub(super) fn move_by_item_rows_narrow(&mut self, item_rows: i64) -> usize {

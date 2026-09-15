@@ -628,7 +628,7 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     );
 
     // One wheel notch through the mounted panel: the control resolves its
-    // own new index and the typed `BrowserCursorIndex` echo persists it as
+    // own new index and the typed `EmbyLibraryCursorIndex` echo persists it as
     // the shell's resting `video_cursor` — the control is authoritative and
     // the shell follows, never the reverse.
     let wheel = model
@@ -645,7 +645,7 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     assert!(
         matches!(
             wheel,
-            Msg::Shell(ShellRequest::BrowserCursorIndex { index }) if index == total_rows - 2
+            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index }) if index == total_rows - 2
         ),
         "the wheel echo carries the control's resolved index: {wheel:?}"
     );

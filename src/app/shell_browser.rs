@@ -13,7 +13,7 @@ impl Model {
     /// component cursor into a `BrowseLevel.cursor` and re-reading it. The
     /// active library index is derived from the shell's own tab state (the
     /// browser is mounted only for the active generic/Movies/home-video
-    /// `EmbyLibrary` tab, same derivation as the `BrowserRow*`/`BrowserPillClick` mouse arms).
+    /// `EmbyLibrary` tab, same derivation as the `EmbyLibraryRow*`/`EmbyLibraryPillClick` mouse arms).
     /// A missing library index is a defensive no-op.
     pub(super) fn handle_browser_request(&mut self, request: ShellRequest) {
         let Some(lib_idx) = self.app.tab.emby_library_index() else {
@@ -26,7 +26,7 @@ impl Model {
             // season-selection modal instead of a flat drill-in. `false` means
             // it was not a Series (or had no id), so fall back to the normal
             // select-item path, including the folder scroll-persist.
-            ShellRequest::BrowserActivate { item } => {
+            ShellRequest::EmbyLibraryActivate { item } => {
                 if item.item_type == "Series"
                     && self.app.activate_selected_series_item(lib_idx, &item)
                 {
@@ -36,14 +36,11 @@ impl Model {
                     self.app.select_item(lib_idx, item);
                 }
             }
-            ShellRequest::BrowserPlay { item } | ShellRequest::EmbyLibraryPlay { item } => {
+            ShellRequest::EmbyLibraryPlay { item } => {
                 self.app.play_or_activate_lib_item(lib_idx, item)
             }
-            ShellRequest::BrowserEnqueue { item } | ShellRequest::EmbyLibraryEnqueue { item } => {
-                self.app.enqueue_lib_item(lib_idx, item)
-            }
-            ShellRequest::BrowserToggleWatched { item }
-            | ShellRequest::EmbyLibraryToggleWatched { item } => {
+            ShellRequest::EmbyLibraryEnqueue { item } => self.app.enqueue_lib_item(lib_idx, item),
+            ShellRequest::EmbyLibraryToggleWatched { item } => {
                 self.app.toggle_watched_item(lib_idx, item)
             }
             // Ctrl+S shuffles the supplied item with the preserved
@@ -52,22 +49,20 @@ impl Model {
             // (falling back to the library id). The folder target comes from
             // the component-resolved item, never a `BrowseLevel.cursor`
             // re-read.
-            ShellRequest::BrowserShuffle { item } | ShellRequest::EmbyLibraryShuffle { item } => {
+            ShellRequest::EmbyLibraryShuffle { item } => {
                 self.app.shuffle_play_selected(lib_idx, item)
             }
             // Bare `r` refreshes the active Emby library (task 5.3d,
             // Emby browser refresh): the shell derives the active library
             // index from its own tab state and runs `App::refresh_lib` on it,
             // the same call the legacy `handle_lib_key` `Char('r')` arm made.
-            ShellRequest::BrowserRefresh | ShellRequest::EmbyLibraryRefresh => {
-                self.app.refresh_lib(lib_idx)
-            }
+            ShellRequest::EmbyLibraryRefresh => self.app.refresh_lib(lib_idx),
             // Ctrl+`r` raises the Rescan Library confirmation (task 5.3d,
             // Emby browser rescan): same title/message/hint and
             // `ConfirmAction::RescanLibrary(lib_idx)` as the legacy
             // `handle_lib_key` CONTROL arm, derived from the shell's own tab
             // state (the library name comes from the active library).
-            ShellRequest::BrowserRescan | ShellRequest::EmbyLibraryRescan => {
+            ShellRequest::EmbyLibraryRescan => {
                 let name = self.app.libs[lib_idx].library.name.clone();
                 self.app.ask_confirm(ConfirmModal {
                     title: " Rescan Library ".into(),
@@ -83,7 +78,7 @@ impl Model {
             // made — preserving synthetic-group/root guards, parent-cursor
             // restoration, season-level skip, persistence, and stale-index
             // behavior.
-            ShellRequest::BrowserBack => {
+            ShellRequest::EmbyLibraryBack => {
                 self.app.go_back(lib_idx);
             }
             // `[`/`]` cycle the letter-range pill row (task 5.3d, Emby
@@ -94,7 +89,7 @@ impl Model {
             // `should_show_letter_pills` no-op guard and the existing
             // wrap/select behavior (the component's mount gate has already
             // excluded the Music and feed-home-video group branches).
-            ShellRequest::BrowserCycleLetterPill { delta } => {
+            ShellRequest::EmbyLibraryCycleLetterPill { delta } => {
                 self.app.cycle_letter_pill(lib_idx, delta)
             }
             // `[`/`]` on a feed/home-video group-picker library
@@ -104,14 +99,14 @@ impl Model {
             // shell derives the active library index from its own tab state
             // and runs `App::switch_feed_folder_group` (rem_euclid wrap over
             // "All" + every visible group).
-            ShellRequest::BrowserCycleGroup { delta } => {
+            ShellRequest::EmbyLibraryCycleGroup { delta } => {
                 self.app.switch_feed_folder_group(lib_idx, delta)
             }
             // Every local browser cursor key (arrows/hjkl, Page keys,
             // Home/End) resolves to an item index inside the component and
             // arrives here already resolved. Keep the resting-position write
             // and its navigation effects in this shell arm.
-            ShellRequest::BrowserCursorIndex { index } => {
+            ShellRequest::EmbyLibraryCursorIndex { index } => {
                 if lib_idx >= self.app.libs.len() {
                     return;
                 }
@@ -150,7 +145,7 @@ impl Model {
             }
             // unreachable: shell_messages.rs top-level dispatch routes only the
             // Browser* and EmbyLibrary* activate/effect groups plus
-            // BrowserCursorIndex into handle_browser_request; every one has
+            // EmbyLibraryCursorIndex into handle_browser_request; every one has
             // an arm above.
             _ => {}
         }

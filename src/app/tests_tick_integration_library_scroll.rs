@@ -106,7 +106,7 @@ fn library_panel_wheel_at_loaded_edge_fetches_next_page() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::BrowserCursorIndex { .. }))
+        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { .. }))
     }));
     apply(&mut harness, outcome);
     assert!(

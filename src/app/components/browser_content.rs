@@ -294,9 +294,9 @@ impl BrowserContent {
         }
         let item = self.inline_search.selected_item()?;
         let request = match key.code {
-            Key::Char('p') => ShellRequest::BrowserPlay { item },
-            Key::Char('s') => ShellRequest::BrowserShuffle { item },
-            Key::Char('a') => ShellRequest::BrowserEnqueue { item },
+            Key::Char('p') => ShellRequest::EmbyLibraryPlay { item },
+            Key::Char('s') => ShellRequest::EmbyLibraryShuffle { item },
+            Key::Char('a') => ShellRequest::EmbyLibraryEnqueue { item },
             _ => return None,
         };
         self.inline_search.close();
@@ -391,38 +391,38 @@ impl BrowserContent {
             Key::Up | Key::Char('k') => {
                 self.carrier
                     .delegate_operation(MediaListOperation::Move(-1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::Down | Key::Char('j') => {
                 self.carrier.delegate_operation(MediaListOperation::Move(1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::PageUp => {
                 self.carrier
                     .delegate_operation(MediaListOperation::Page(-1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::PageDown => {
                 self.carrier.delegate_operation(MediaListOperation::Page(1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::Home => {
                 self.carrier.delegate_operation(MediaListOperation::First);
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::End => {
                 self.carrier.delegate_operation(MediaListOperation::Last);
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
@@ -430,11 +430,13 @@ impl BrowserContent {
         }
         let selected = self.selected_effect_item();
         let request = match key.code {
-            Key::Enter => selected.map(|item| ShellRequest::BrowserActivate { item }),
-            Key::Char('p') if ctrl => selected.map(|item| ShellRequest::BrowserPlay { item }),
-            Key::Char('a') if ctrl => selected.map(|item| ShellRequest::BrowserEnqueue { item }),
+            Key::Enter => selected.map(|item| ShellRequest::EmbyLibraryActivate { item }),
+            Key::Char('p') if ctrl => selected.map(|item| ShellRequest::EmbyLibraryPlay { item }),
+            Key::Char('a') if ctrl => {
+                selected.map(|item| ShellRequest::EmbyLibraryEnqueue { item })
+            }
             Key::Char('w') if ctrl => {
-                selected.map(|item| ShellRequest::BrowserToggleWatched { item })
+                selected.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
             }
             Key::Char('.') if key.modifiers.is_empty() => match self
                 .carrier
@@ -451,16 +453,18 @@ impl BrowserContent {
                 )),
                 _ => None,
             },
-            Key::Char('s') if ctrl => selected.map(|item| ShellRequest::BrowserShuffle { item }),
-            Key::Char('r') if ctrl => Some(ShellRequest::BrowserRescan),
-            Key::Char('r') => Some(ShellRequest::BrowserRefresh),
-            Key::Esc | Key::Backspace => Some(ShellRequest::BrowserBack),
+            Key::Char('s') if ctrl => {
+                selected.map(|item| ShellRequest::EmbyLibraryShuffle { item })
+            }
+            Key::Char('r') if ctrl => Some(ShellRequest::EmbyLibraryRescan),
+            Key::Char('r') => Some(ShellRequest::EmbyLibraryRefresh),
+            Key::Esc | Key::Backspace => Some(ShellRequest::EmbyLibraryBack),
             Key::Char(c @ ('[' | ']')) if !ctrl && !alt => {
                 let delta = if c == '[' { -1 } else { 1 };
                 Some(if self.group_pills {
-                    ShellRequest::BrowserCycleGroup { delta }
+                    ShellRequest::EmbyLibraryCycleGroup { delta }
                 } else {
-                    ShellRequest::BrowserCycleLetterPill { delta }
+                    ShellRequest::EmbyLibraryCycleLetterPill { delta }
                 })
             }
             _ => None,
@@ -571,7 +575,9 @@ impl LibraryContentOwner for BrowserContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
-                Some(Msg::Shell(ShellRequest::BrowserPillClick { target: index }))
+                Some(Msg::Shell(ShellRequest::EmbyLibraryPillClick {
+                    target: index,
+                }))
             }
             LibrarySlotEvent::List(input) => {
                 if self.inline_search.is_active() {
@@ -603,7 +609,7 @@ impl LibraryContentOwner for BrowserContent {
                                 MediaListSurfaceInput::Wheel { delta, .. } => delta,
                                 _ => 0,
                             }));
-                        Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                        Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                             index: self.cursor(),
                         }))
                     }
@@ -614,7 +620,7 @@ impl LibraryContentOwner for BrowserContent {
                         self.carrier
                             .delegate_operation(input.into_operation(Some(target.clone()))?);
                         let _ = ();
-                        Some(Msg::Shell(ShellRequest::BrowserRowClick {
+                        Some(Msg::Shell(ShellRequest::EmbyLibraryRowClick {
                             target: Some(target),
                         }))
                     }
@@ -622,7 +628,7 @@ impl LibraryContentOwner for BrowserContent {
                         let target = target?;
                         self.carrier
                             .delegate_operation(MediaListOperation::Activate(target.clone()));
-                        Some(Msg::Shell(ShellRequest::BrowserRowActivate {
+                        Some(Msg::Shell(ShellRequest::EmbyLibraryRowActivate {
                             target: Some(target),
                         }))
                     }

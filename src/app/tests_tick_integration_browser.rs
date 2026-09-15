@@ -61,7 +61,7 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
+        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
     assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
@@ -111,7 +111,7 @@ fn browser_narrow_tick_click_uses_retained_geometry() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(ShellRequest::BrowserRowClick { target: Some(target) })
+            Msg::Shell(ShellRequest::EmbyLibraryRowClick { target: Some(target) })
                 if target == "movie-focused"
         )),
         "the painted inline hero block resolves to the selected row: {:?}", outcome.raw_messages
@@ -140,7 +140,7 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
+        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
 
