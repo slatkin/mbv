@@ -28,15 +28,12 @@ pub(in crate::app) fn render_queue_body(
 ) {
     match presentation {
         QueuePresentation::Wide(list) => {
-            list.set_paint_policy(
-                WideMediaListPaintPolicy::for_queue(focused)
-                    .with_zebra(ZebraStripe {
-                        focused: palette::surface_colors(palette::Surface::QueueColumn, true).fill,
-                        unfocused: palette::surface_colors(palette::Surface::QueueColumn, false)
-                            .fill,
-                    })
-                    .with_selected_gutter(),
-            );
+            list.set_paint_policy(WideMediaListPaintPolicy::for_queue(focused).with_zebra(
+                ZebraStripe {
+                    focused: palette::surface_colors(palette::Surface::QueueColumn, true).fill,
+                    unfocused: palette::surface_colors(palette::Surface::QueueColumn, false).fill,
+                },
+            ));
             Component::view(list, frame, area);
         }
     }

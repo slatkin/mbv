@@ -68,7 +68,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     focused: bool,
     selected_bg: Color,
     zebra_bg: Option<Color>,
-    selected_gutter: bool,
+    gutter_accent: bool,
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
     let selected_row = geometry.selected_row();
@@ -106,7 +106,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                 focused || multi_selected,
                 selected_bg,
                 alternate_bg,
-                selected_gutter,
+                gutter_accent,
                 inner_width,
                 scrollbar,
                 marquee
@@ -305,7 +305,9 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
         policy.zebra_bg(),
-        policy.selected_gutter(),
+        // Wide selection is always the gutter accent; `selected_bg` now only
+        // resolves the scrollbar backing for focused overflowing lists.
+        true,
     );
     list.finish_view(
         claim_rect,

@@ -121,12 +121,11 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
-/// 5.11): after the Wide panel skeleton paint the focused selected row's
-/// background is the list-backdrop surface — not the list panel's
-/// focus fill — and the rail-framing helper must not overpaint it.
-/// Unfocused: no bar.
+/// 5.11): after the Wide panel skeleton paint the focused selected row keeps
+/// its MainContentBox zebra stripe under the gutter accent. Unfocused rows
+/// keep the unfocused stripe value.
 #[test]
-fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
+fn wide_home_selected_row_keeps_its_stripe_under_the_accent() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {
@@ -147,16 +146,20 @@ fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
         )
     };
 
-    let (selected, body) = bgs(true);
+    let (selected, _body) = bgs(true);
+    // D1: the Browser-pane Wide arm stripes with the MainContentBox pair.
     assert_eq!(
         selected,
-        Some(palette::SURFACE_BACKDROP),
-        "the selected row punches through to the containing backdrop surface"
+        Some(palette::surface_colors(palette::Surface::MainContentBox, true).fill),
+        "the selected striped row keeps the MainContentBox fill under the gutter accent"
     );
-    assert_ne!(selected, body);
 
-    let (selected, body) = bgs(false);
-    assert_eq!(selected, body, "unfocused wide Home shows no selection bar");
+    let (selected, _body) = bgs(false);
+    assert_eq!(
+        selected,
+        Some(palette::surface_colors(palette::Surface::MainContentBox, false).fill),
+        "the unfocused striped row keeps the MainContentBox fill"
+    );
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task

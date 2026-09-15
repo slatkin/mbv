@@ -11,9 +11,19 @@ use tuirealm::component::Component;
 
 use crate::app::components::media_list::{
     InlineMediaBrowserPaintPolicy, MediaListCarrier, Presentation, WideMediaListPaintPolicy,
+    ZebraStripe,
 };
+use crate::app::palette::{self, Surface};
 
 use super::content::{PanelList, PanelListPaintPolicy};
+
+/// The zebra pair a surface resolves to for its focused and unfocused fills.
+fn zebra_stripe(surface: Surface) -> ZebraStripe {
+    ZebraStripe {
+        focused: palette::surface_colors(surface, true).fill,
+        unfocused: palette::surface_colors(surface, false).fill,
+    }
+}
 
 impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize) {
@@ -30,12 +40,16 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
             PanelListPaintPolicy::Wide { focused } => {
-                self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::new(focused));
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::new(focused)
+                        .with_zebra(zebra_stripe(Surface::MainContentBox)),
+                );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
-                self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::for_library_workspace(focused));
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::for_library_workspace(focused)
+                        .with_zebra(zebra_stripe(Surface::LibraryPanel)),
+                );
             }
             PanelListPaintPolicy::Inline {
                 focused,
@@ -84,9 +98,9 @@ mod panel_list_tests {
     use crate::app::components::media_list::{
         MediaKind, MediaListRow, MediaSemanticState, Presentation,
     };
-    use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
+    use ratatui::style::Color;
     use ratatui::Terminal;
 
     fn item(target: &str) -> MediaListRow<String> {
@@ -101,8 +115,12 @@ mod panel_list_tests {
         }
     }
 
+    /// The selected-row accent is intentionally identical across both Wide
+    /// arms; arm-specific stripe colours are owned by the Render Component
+    /// regressions planned in tasks 4.1 and 4.2, at
+    /// `src/app/render/components/media_list.rs` and its Wide-arm tests.
     #[test]
-    fn selected_row_surface_distinguishes_browser_and_workspace_slots() {
+    fn wide_selected_rows_use_the_gutter_accent_for_both_slots() {
         let mut carrier = MediaListCarrier::new(Presentation::Wide);
         carrier.set_content(vec![item("selected")]);
         let area = Rect::new(0, 0, 20, 1);
@@ -119,7 +137,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::surface_colors(palette::Surface::SelectedRow, true).fill
+            Color::Reset
         );
 
         terminal
@@ -133,7 +151,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::surface_colors(palette::Surface::SelectedRowOnLibraryPane, true).fill
+            Color::Reset
         );
     }
 
