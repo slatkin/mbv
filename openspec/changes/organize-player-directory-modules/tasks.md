@@ -14,7 +14,7 @@
 
 ## 3. Create `playback/` directory module
 
-- [ ] 3.1 Create `crates/mbv-core/src/playback/` directory. `git mv` `playback_queue.rs` → `playback/queue.rs`, `playback_queue_items.rs` → `playback/queue_items.rs`, `playback_execution_sequence.rs` → `playback/execution_sequence.rs`, `playback_transition.rs` → `playback/transition.rs`. Create `playback/mod.rs` with re-exports preserving `crate::playback_queue::*` etc. paths. Move test files (`playback_queue_tests*.rs`) into `playback/tests/`. Update `lib.rs`. Verify: `cargo check -p mbv-core && cargo nextest run -p mbv-core` — all playback tests pass.
+- [x] 3.1 Create `crates/mbv-core/src/playback/` directory. `git mv` `playback_queue.rs` → `playback/queue.rs`, `playback_queue_items.rs` → `playback/queue_items.rs`, `playback_execution_sequence.rs` → `playback/execution_sequence.rs`, `playback_transition.rs` → `playback/transition.rs`. Create `playback/mod.rs` with re-exports preserving `crate::playback_queue::*` etc. paths. Move test files (`playback_queue_tests*.rs`) into `playback/tests/`. Update `lib.rs`. Verify: `cargo check -p mbv-core && cargo nextest run -p mbv-core` — all playback tests pass.
 
 ## 4. Create `remote_player/` directory module
 
