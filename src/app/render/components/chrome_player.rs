@@ -563,5 +563,12 @@ fn marquee_spans(
     parts: &[(String, Color)],
     max_width: usize,
 ) -> Vec<Span<'static>> {
-    marquee::marquee_spans(parts, max_width, ctx.marquee_text, ctx.marquee_started_at)
+    let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
+    marquee::marquee_spans(
+        &key,
+        parts,
+        max_width,
+        ctx.marquee_text,
+        ctx.marquee_started_at,
+    )
 }

@@ -73,6 +73,36 @@ mod wide_row_regression_tests {
         assert!(restarted.trim_start().starts_with("A newly changed"));
     }
 
+    /// Regression: a two-tone (secondary-title) row must key its marquee
+    /// state on the same `primary` text the painter looks the state up with.
+    /// When the key drifted to the joined title parts, the start time reset
+    /// every frame and the Home marquee held at the start forever.
+    #[test]
+    fn two_tone_selected_row_marquees_on_the_primary_key() {
+        use crate::app::components::media_list::{MediaListRow, MediaSemanticState};
+
+        let mut list = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "ep".into(),
+            primary: "A very long series name that overflows".into(),
+            secondary: Some("Episode Title".into()),
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Ordinary,
+        }]);
+        let at_rest = title_row(&mut list, true);
+        list.set_marquee_started_at(
+            "A very long series name that overflows",
+            Instant::now() - Duration::from_millis(1_401),
+        );
+        let advanced = title_row(&mut list, true);
+        assert_ne!(
+            at_rest, advanced,
+            "two-tone row must advance its marquee, not restart it"
+        );
+    }
+
     #[test]
     fn non_marquee_rows_still_ellipsis_truncate() {
         let mut list = WideMediaList::new();

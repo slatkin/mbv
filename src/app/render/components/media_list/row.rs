@@ -129,7 +129,9 @@ pub(in crate::app) fn media_list_row<Target>(
             let title_spans = marquee
                 .take()
                 .filter(|_| selected && parts_width > title_width)
-                .map(|(text, started_at)| marquee_spans(&parts, title_width, text, started_at))
+                .map(|(text, started_at)| {
+                    marquee_spans(primary, &parts, title_width, text, started_at)
+                })
                 .unwrap_or_else(|| {
                     // Truncation priority: the secondary title keeps its width
                     // (up to the whole slot) and the primary title takes the

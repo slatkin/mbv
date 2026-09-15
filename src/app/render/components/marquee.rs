@@ -2,7 +2,12 @@ use ratatui::style::{Color, Style};
 use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 
+/// `key` is the stable state key. Must match the text the caller looked the
+/// marquee state up with (the media-list painter keys on the row's
+/// `primary`), or the start time resets every frame and the marquee never
+/// advances.
 pub(super) fn marquee_spans(
+    key: &str,
     parts: &[(String, Color)],
     max_width: usize,
     marquee_text: &mut String,
@@ -15,9 +20,9 @@ pub(super) fn marquee_spans(
             .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))
             .collect();
     }
-    let key: String = parts.iter().map(|(text, _)| text.as_str()).collect();
     if *marquee_text != key {
-        *marquee_text = key;
+        marquee_text.clear();
+        marquee_text.push_str(key);
         *marquee_started_at = std::time::Instant::now();
     }
     let overflow = total_width - max_width;
