@@ -90,23 +90,20 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     let overflows = total_rows > content_area.height as usize;
     let scrollbar = focused && overflows;
     let inner_width = paint_area.width.saturating_sub(u16::from(scrollbar)) as usize;
-    let mut stripe_index = 0;
     let list_items: Vec<ListItem> = (offset..total_rows)
         .take(content_area.height as usize)
-        .map(|row| {
+        .enumerate()
+        .map(|(visible_row, row)| {
             let source_row = geometry
                 .source_row(row)
                 .expect("wide geometry contains a source row");
             let row_target = rows[source_row].selectable_target();
-            let is_selectable = row_target.is_some();
-            if !is_selectable {
-                // A structural row (Heading/Spacer) ends the zebra sequence:
-                // the group below restarts at the primary fill, so a group's
-                // first row is never striped and a one-row group never is.
-                stripe_index = 0;
-            }
             let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
-            let alternate_bg = zebra_bg.filter(|_| stripe_index % 2 == 1);
+            // The stripe runs continuously down the visible window: group
+            // headings and spacers take their place in the alternation like
+            // any other row, so a group does not restart the sequence. The
+            // sequence opens on the primary fill.
+            let alternate_bg = zebra_bg.filter(|_| visible_row % 2 == 1);
             let item = media_list_row(
                 &rows[source_row],
                 Some(row) == selected_row || multi_selected,
@@ -121,9 +118,6 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                     .filter(|_| Some(row) == selected_row)
                     .map(|(text, started_at)| (text, started_at)),
             );
-            if is_selectable {
-                stripe_index += 1;
-            }
             item
         })
         .collect();

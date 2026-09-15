@@ -26,6 +26,12 @@ use unicode_width::UnicodeWidthStr;
 /// `gutter_accent` is set, the selected row keeps its default background
 /// treatment and paints its title in the bold focus-accent role.
 ///
+/// `alternate_bg` is the row's position in the list's zebra alternation. It
+/// paints every row type — selectable items, group headings and the blank
+/// spacers — within the same text-flow range, so the stripe bands run unbroken
+/// through a group boundary and the two-column gutters keep the parent
+/// background.
+///
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
 /// background fills the whole row via `List`'s row-style fill and bleeds to
@@ -42,16 +48,24 @@ pub(in crate::app) fn media_list_row<Target>(
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
 ) -> ListItem<'static> {
     match row {
-        MediaListRow::Spacer => ListItem::new(Line::default()),
-        MediaListRow::Heading { text } => ListItem::new(Line::from(vec![
-            Span::raw("  "),
-            Span::styled(
-                text.clone(),
-                Style::default()
-                    .fg(palette::TEXT_FOCUS_ACCENT)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ])),
+        MediaListRow::Spacer => ListItem::new(Line::from(stripe_spans(
+            vec![Span::raw("  ")],
+            alternate_bg,
+            row_content_w(inner_width, has_scrollbar),
+        ))),
+        MediaListRow::Heading { text } => ListItem::new(Line::from(stripe_spans(
+            vec![
+                Span::raw("  "),
+                Span::styled(
+                    text.clone(),
+                    Style::default()
+                        .fg(palette::TEXT_FOCUS_ACCENT)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ],
+            alternate_bg,
+            row_content_w(inner_width, has_scrollbar),
+        ))),
         MediaListRow::Item {
             primary,
             secondary,
@@ -92,7 +106,6 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
-            const RIGHT_INSET: usize = 2;
             let trailing = match (
                 trailing.as_deref().filter(|text| !text.is_empty()),
                 progress,
@@ -109,7 +122,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 .filter(|dur| !dur.is_empty())
                 .filter(|_| !matches!(kind, MediaKind::Collection));
 
-            let content_w = (inner_width + usize::from(has_scrollbar)).saturating_sub(RIGHT_INSET);
+            let content_w = row_content_w(inner_width, has_scrollbar);
             let trailing_w = if trailing.is_empty() {
                 0
             } else {
@@ -215,21 +228,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::raw(" ".repeat(inner_width.saturating_sub(used))));
             }
             if !paint_selected {
-                if let Some(bg) = alternate_bg {
-                    // Ratatui fills a ListItem's whole row allocation when its
-                    // style has a background. Keep the row style unstyled and
-                    // carry zebra paint only on the text-flow spans instead:
-                    // the two-column indent and right inset remain parent
-                    // background (and the scrollbar is painted separately).
-                    for span in spans.iter_mut().skip(1) {
-                        span.style = span.style.bg(bg);
-                    }
-                    let used = spans.iter().map(|span| span.content.width()).sum();
-                    spans.push(Span::styled(
-                        " ".repeat(content_w.saturating_sub(used)),
-                        Style::default().bg(bg),
-                    ));
-                }
+                spans = stripe_spans(spans, alternate_bg, content_w);
             }
             // Gutter-accent selection keeps the row background unchanged.
             ListItem::new(Line::from(spans)).style(if paint_selected {
@@ -239,4 +238,41 @@ pub(in crate::app) fn media_list_row<Target>(
             })
         }
     }
+}
+
+/// Columns the row's right inset reserves inside `inner_width`.
+const RIGHT_INSET: usize = 2;
+
+/// The row's text-flow content width: every row type (items, headings, the
+/// blank spacers) stripes within this same range.
+fn row_content_w(inner_width: usize, has_scrollbar: bool) -> usize {
+    (inner_width + usize::from(has_scrollbar)).saturating_sub(RIGHT_INSET)
+}
+
+/// Carries `alternate_bg` on the row's text-flow spans only: the two-column
+/// quiet indent and the right inset stay parent background (and the
+/// scrollbar is painted separately), so the stripe bands of items, group
+/// headings and blank spacers all cover the same columns. Ratatui fills a
+/// ListItem's whole row allocation when its style has a background, so the
+/// row style stays unstyled and the trailing padding span carries the stripe
+/// out to the content edge.
+fn stripe_spans(
+    mut spans: Vec<Span<'static>>,
+    alternate_bg: Option<Color>,
+    content_w: usize,
+) -> Vec<Span<'static>> {
+    let Some(bg) = alternate_bg else {
+        return spans;
+    };
+    for span in spans.iter_mut().skip(1) {
+        span.style = span.style.bg(bg);
+    }
+    let used: usize = spans.iter().map(|span| span.content.width()).sum();
+    if content_w > used {
+        spans.push(Span::styled(
+            " ".repeat(content_w - used),
+            Style::default().bg(bg),
+        ));
+    }
+    spans
 }

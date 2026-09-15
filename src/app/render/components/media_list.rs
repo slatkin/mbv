@@ -372,21 +372,24 @@ mod wide_row_regression_tests {
         assert_eq!(buf[(2, 1)].bg, Color::Rgb(60, 72, 65));
     }
 
+    /// One zebra sequence runs down the visible window: group headings and
+    /// blank spacers take their place in the alternation like any item, so a
+    /// group never restarts the pattern. The sequence opens on the primary
+    /// fill, and every row confines its stripe to the shared text-flow range
+    /// inside the two-column gutters.
     #[test]
-    fn library_wide_browser_restarts_the_stripe_at_each_group() {
-        let rect = Rect::new(0, 0, 40, 8);
+    fn library_wide_browser_stripes_through_group_headings_and_spacers() {
+        let rect = Rect::new(0, 0, 40, 6);
         let mut list = WideMediaList::new();
         list.set_content(vec![
             item("one", "One", None),
             MediaListRow::Heading {
-                text: "Solo".into(),
+                text: "Group".into(),
             },
             item("two", "Two", None),
-            item("three", "Three", None),
             MediaListRow::Spacer,
+            item("three", "Three", None),
             item("four", "Four", None),
-            item("five", "Five", None),
-            item("six", "Six", None),
         ]);
         let pair = stripe(palette::Surface::MainContentBox);
         let other = stripe(palette::Surface::LibraryPanel);
@@ -404,24 +407,24 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        // Each group's first row is the primary fill, so a one-row group
-        // (`One`, then `Four` after the Spacer) never stripes; structural
-        // rows carry no stripe at all.
+        // Rows 1 (the heading) and 3 (the spacer) are striped with the items.
         for (y, striped) in [
             (0, false),
-            (1, false),
+            (1, true),
             (2, false),
             (3, true),
             (4, false),
-            (5, false),
-            (6, true),
-            (7, false),
+            (5, true),
         ] {
             assert_eq!(
                 buffer[(2, y)].bg,
                 if striped { pair.focused } else { Color::Reset },
                 "row {y}"
             );
+            assert_eq!(buffer[(0, y)].bg, Color::Reset, "row {y} left gutter");
+            assert_eq!(buffer[(1, y)].bg, Color::Reset, "row {y} left gutter");
+            assert_eq!(buffer[(38, y)].bg, Color::Reset, "row {y} right inset");
+            assert_eq!(buffer[(39, y)].bg, Color::Reset, "row {y} right inset");
         }
     }
 

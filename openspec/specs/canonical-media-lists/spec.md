@@ -472,8 +472,8 @@ Each list owns an independent marquee clock (mirroring its ownership of cursor a
 ### Requirement: Library Wide lists stripe with their panel's contrasting pair
 
 Both library Wide lists SHALL paint zebra striping with the semantics the Queue list already ships:
-item-only screen-row alternation that opens on the primary fill and restarts after every `Heading`
-or `Spacer` row, `Heading` and `Spacer` rows never striped, and the selected row keeping
+screen-row alternation that opens on the primary fill and runs unbroken through `Heading` and
+`Spacer` rows (a group never restarts the sequence), and the selected row keeping
 its own parity under the gutter accent. Each arm SHALL resolve its secondary pair from the surface
 table identity of the panel body that surrounds it, never from a raw colour value:
 
@@ -490,8 +490,8 @@ list.
 #### Scenario: Browser-pane list stripes with the content-box pair
 
 - **WHEN** the Browser-pane Wide list renders focused
-- **THEN** the 2nd, 4th, and 6th visible selectable items carry the `MainContentBox` focused fill
-- **AND** the remaining visible items carry no secondary background
+- **THEN** the 2nd, 4th, and 6th visible rows carry the `MainContentBox` focused fill
+- **AND** the remaining visible rows carry no secondary background
 
 #### Scenario: Workspace list stripes with the library-panel pair
 
@@ -504,24 +504,22 @@ list.
 - **WHEN** either library Wide arm renders in either focus state
 - **THEN** its stripe colour differs from the fill its own list box is painted with in that state
 
-#### Scenario: Library headings never stripe
+#### Scenario: Library headings stripe with the sequence
 
 - **WHEN** a `Heading` or `Spacer` row appears between two library items
-- **THEN** it paints with no zebra background, and the stripe sequence restarts below it so the
-  following item paints with no secondary background
+- **THEN** it carries the stripe band of its position in the alternation, and the item below it takes
+  the next position rather than restarting the pattern
 
 ### Requirement: Wide presentation zebra striping
 
 The Wide presentation SHALL accept an optional zebra-stripe policy on its paint policy. The policy
 SHALL carry a focused and an unfocused secondary background colour. When zebra striping is enabled,
 the painter SHALL apply the secondary background colour to every second-and-each-following-alternate
-visible selectable
-`Item` row, counting only selectable `Item` rows in the visible window by screen-row order
-(zero-indexed, so the first visible item of a sequence is unstriped, the second is striped, etc.).
-A sequence SHALL open at the window's first visible selectable `Item` and SHALL restart at the first
-selectable `Item` below every `Heading` or `Spacer`, so the first row of each group never carries the
-secondary background and a group holding one selectable row never stripes. Headings and
-Spacers SHALL always paint with no zebra background regardless of the policy. When zebra striping is
+visible row, counting every visible row in the window by screen-row order
+(zero-indexed, so the window's first row is unstriped, the second is striped, etc.). `Heading` and
+`Spacer` rows SHALL take their place in that
+alternation like any `Item` row — a group boundary SHALL NOT restart the sequence — and SHALL carry
+the stripe in the same text-flow range the `Item` rows use. When zebra striping is
 disabled (the default), row backgrounds SHALL be unchanged from today's behaviour. Because every Wide
 list marks its selection with the gutter accent rather than a selected-row background (see
 *WideMediaList owns fixed-row mechanics*), the selected row SHALL keep its own zebra parity: a
@@ -538,25 +536,25 @@ width calculations, and hit geometry SHALL remain unchanged.
   gutters
 - **AND** the gutters and scrollbar column retain the parent background without changing row geometry
 
-#### Scenario: Zebra stripes alternate among selectable items
+#### Scenario: Zebra stripes alternate among visible rows
 
-- **WHEN** a Wide presentation has zebra striping enabled and renders five visible selectable `Item`
-  rows
-- **THEN** the 2nd and 4th visible items paint with the secondary background colour matching the
+- **WHEN** a Wide presentation has zebra striping enabled and renders five visible rows
+- **THEN** the 2nd and 4th visible rows paint with the secondary background colour matching the
   current focus state
-- **AND** the 1st, 3rd, and 5th visible items paint with no secondary background
+- **AND** the 1st, 3rd, and 5th visible rows paint with no secondary background
 
-#### Scenario: A one-row group never stripes
+#### Scenario: A group boundary does not restart the sequence
 
-- **WHEN** zebra striping is enabled and a group between two structural rows holds one selectable
-  `Item` row
-- **THEN** that row paints with no secondary background
+- **WHEN** a `Heading` or `Spacer` row sits between two `Item` rows
+- **THEN** the structural row carries the stripe its position in the alternation resolves to
+- **AND** the `Item` below it takes the following position, so the pattern runs unbroken across the
+  group boundary
 
-#### Scenario: Headings and spacers are excluded from zebra counting
+#### Scenario: Structural stripes stay inside the row gutters
 
-- **WHEN** a visible Heading or Spacer row appears between two selectable `Item` rows
-- **THEN** the Heading or Spacer has no zebra background
-- **AND** it restarts the sequence, so the item below it is unstriped
+- **WHEN** a visible Heading or Spacer row paints striped
+- **THEN** its stripe covers the same text-flow range as a striped `Item` row
+- **AND** the two-column gutters and any scrollbar column keep the parent background
 
 #### Scenario: Selected row keeps its stripe
 
@@ -567,7 +565,7 @@ width calculations, and hit geometry SHALL remain unchanged.
 #### Scenario: Zebra is screen-row-parity based
 
 - **WHEN** the list scrolls by one row
-- **THEN** the first visible selectable item of the window is unstriped and alternation follows
+- **THEN** the window's first visible row is unstriped and alternation follows
   screen-row order regardless of its source-row index
 
 #### Scenario: Zebra is disabled by default
