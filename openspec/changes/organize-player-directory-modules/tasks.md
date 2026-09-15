@@ -10,7 +10,7 @@
 
 ## 2. Split `player_runtime_controller.rs`
 
-- [ ] 2.1 Split into `player/controller.rs` (Player struct, construction, lifecycle, command forwarding, QuitHandle, WakeupWriter — everything through `headless_for`) and `player/submit.rs` (submit_queue, play, play_queue, queue_append, assign_slot_ids). Both are `impl Player` blocks. Verify: `cargo check -p mbv-core && cargo check -p mbv`.
+- [x] 2.1 Split into `player/controller.rs` (Player struct, construction, lifecycle, command forwarding, QuitHandle, WakeupWriter — everything through `headless_for`) and `player/submit.rs` (submit_queue, play, play_queue, queue_append, assign_slot_ids). Both are `impl Player` blocks. Verify: `cargo check -p mbv-core && cargo check -p mbv`.
 
 ## 3. Create `playback/` directory module
 
