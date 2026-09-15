@@ -42,7 +42,7 @@ pub(in crate::app) fn render_queue_body(
     }
 }
 
-/// Paint the `Queue` panel title: bold yellow, one row. The blank top-inset
+/// Paint the `Queue` panel title: bold foam, one row. The blank top-inset
 /// row stays above it and the list starts directly below it (geometry owned
 /// by `arrangements::queue`).
 pub(in crate::app) fn render_queue_title(frame: &mut Frame, area: Rect) {
@@ -54,7 +54,7 @@ pub(in crate::app) fn render_queue_title(frame: &mut Frame, area: Rect) {
         Paragraph::new(Line::from(Span::styled(
             "  Queue",
             Style::default()
-                .fg(palette::TEXT_HERO_TITLE)
+                .fg(palette::TEXT_METADATA)
                 .add_modifier(Modifier::BOLD),
         ))),
         area,
@@ -230,7 +230,7 @@ mod tests {
     use ratatui::Terminal;
 
     #[test]
-    fn title_reads_queue_bold_yellow() {
+    fn title_reads_queue_bold_foam() {
         let mut term = Terminal::new(TestBackend::new(30, 1)).unwrap();
         term.draw(|f| render_queue_title(f, Rect::new(0, 0, 30, 1)))
             .unwrap();
@@ -239,7 +239,7 @@ mod tests {
         assert_eq!(text, "  Queue");
         for x in 0..7 {
             let style = buf[(x, 0)].style();
-            assert_eq!(style.fg, Some(palette::TEXT_HERO_TITLE));
+            assert_eq!(style.fg, Some(palette::TEXT_METADATA));
             assert!(style.add_modifier.contains(Modifier::BOLD));
         }
     }
