@@ -695,9 +695,9 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     );
 }
 
-/// Gutter-accent selection: the marker is a yellow right half block
-/// painted OUTSIDE the recessed box's leading edge, on the selected row's
-/// screen row, only while the panel holds focus.
+/// Gutter-accent selection: the marker is a yellow Nerd Font glyph
+/// (U+F0BBA) painted OUTSIDE the recessed box's leading edge, on the
+/// selected row's screen row, only while the panel holds focus.
 #[test]
 fn queue_selection_marker_paints_outside_the_box_edge_when_focused() {
     let mut app = make_queue_app(3);
@@ -711,7 +711,7 @@ fn queue_selection_marker_paints_outside_the_box_edge_when_focused() {
     let marker_y = box_area.y + 1;
     assert_eq!(
         buf[(marker_x, marker_y)].symbol(),
-        "▐",
+        "\u{f0bba}",
         "the focused queue marks its selected row outside the box edge"
     );
     assert_eq!(buf[(marker_x, marker_y)].fg, palette::TEXT_FOCUS_ACCENT);

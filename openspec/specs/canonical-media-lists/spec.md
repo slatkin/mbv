@@ -48,7 +48,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 `WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
-The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. A paint policy MAY instead select a gutter-accent treatment for its selection: the selected row SHALL NOT paint a selected background (zebra striping SHALL apply to it as to any other row), its text SHALL keep the default row colours, and the owning panel SHALL mark it with a yellow right half-block glyph immediately outside the recessed panel's leading edge, on the selected row's screen row, while the panel holds focus.
+The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. A paint policy MAY instead select a gutter-accent treatment for its selection: the selected row SHALL NOT paint a selected background (zebra striping SHALL apply to it as to any other row), its text SHALL keep the default row colours, and the owning panel SHALL mark it with a yellow selection-marker glyph immediately outside the recessed panel's leading edge, on the selected row's screen row, while the panel holds focus.
 
 The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve it from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no selected/detail geometry.
 
@@ -58,7 +58,7 @@ It SHALL support Wide hero rails, provider workspace rows, and Queue fixed rows,
 
 - **WHEN** a Wide list's paint policy selects the gutter-accent treatment
 - **THEN** the selected row paints with the default row colours and no selected background
-- **AND** the owning panel paints a yellow right half-block marker immediately outside the recessed panel's leading edge, on the selected row's screen row, while the panel holds focus
+- **AND** the owning panel paints a yellow selection-marker glyph immediately outside the recessed panel's leading edge, on the selected row's screen row, while the panel holds focus
 
 #### Scenario: Wide TV rail composes the control
 
