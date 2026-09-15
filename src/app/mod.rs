@@ -369,6 +369,8 @@ pub(super) fn open_url(url: &str) -> std::io::Result<()> {
     {
         std::process::Command::new("cmd")
             .args(["/C", "start", "", url])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .map(|_| ())
     }
@@ -377,6 +379,8 @@ pub(super) fn open_url(url: &str) -> std::io::Result<()> {
     {
         std::process::Command::new("open")
             .arg(url)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .map(|_| ())
     }
@@ -385,6 +389,8 @@ pub(super) fn open_url(url: &str) -> std::io::Result<()> {
     {
         std::process::Command::new("xdg-open")
             .arg(url)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
             .spawn()
             .map(|_| ())
     }
