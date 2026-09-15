@@ -136,6 +136,8 @@ pub(in crate::app) fn paint_hero_pane_content(
     content: &HeroContent<'_>,
     hyperlink_capable: bool,
     overview_scroll: usize,
+    hovered_link: Option<usize>,
+    link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
 ) -> (u16, Option<Rect>, Option<OverviewPaint>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
@@ -163,7 +165,14 @@ pub(in crate::app) fn paint_hero_pane_content(
             ..area
         },
     };
-    let mut next_row = paint_title_and_meta(f, text_area, &content.facts, hyperlink_capable);
+    let mut next_row = paint_title_and_meta(
+        f,
+        text_area,
+        &content.facts,
+        hyperlink_capable,
+        hovered_link,
+        link_hits,
+    );
     // The header's painted bottom edge includes a right-side artwork box the
     // text block may not reach.
     if header.arm() != super::content::HeroHeaderArm::Landscape {
@@ -193,6 +202,8 @@ fn paint_title_and_meta(
     area: Rect,
     facts: &HeroFacts,
     hyperlink_capable: bool,
+    hovered_link: Option<usize>,
+    link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
 ) -> u16 {
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
@@ -207,7 +218,7 @@ fn paint_title_and_meta(
         });
     }
     let next_row = paint_wide_hero_text(f, area, &lines);
-    overview_box::overlay_links(f, area, facts, hyperlink_capable);
+    overview_box::overlay_links(f, area, facts, hyperlink_capable, hovered_link, link_hits);
     next_row
 }
 
@@ -270,7 +281,15 @@ mod hero_header_tests {
         let pane_area = area;
         terminal
             .draw(|f| {
-                paint_hero_pane_content(f, pane_area, pane, false, 0);
+                paint_hero_pane_content(
+                    f,
+                    pane_area,
+                    pane,
+                    false,
+                    0,
+                    None,
+                    &mut crate::app::components::mouse::hit::HitRegions::new(),
+                );
             })
             .unwrap();
         terminal.backend().buffer().clone()

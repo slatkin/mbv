@@ -10,6 +10,7 @@ use crate::app::render::components::widgets::render_right_scrollbar_inside;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::{paint_wide_hero_text, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y};
 
@@ -292,11 +293,17 @@ fn sanitize_label(label: &str) -> Option<&str> {
     (!contains_control(label)).then_some(label)
 }
 
-pub(in crate::app) fn hyperlinks_supported(term_program: Option<&str>, term: Option<&str>) -> bool {
-    matches!(
-        term_program,
-        Some("kitty" | "iTerm.app" | "WezTerm" | "Windows Terminal")
-    ) || matches!(term, Some(t) if t == "foot" || t.starts_with("xterm-kitty") || t.starts_with("vte-"))
+pub(in crate::app) fn hyperlinks_supported(
+    term_program: Option<&str>,
+    term: Option<&str>,
+    ghostty_resources_dir: bool,
+) -> bool {
+    ghostty_resources_dir
+        || matches!(
+            term_program,
+            Some("kitty" | "iTerm.app" | "WezTerm" | "Windows Terminal" | "ghostty")
+        )
+        || matches!(term, Some(t) if t == "foot" || t.starts_with("xterm-kitty") || t.starts_with("vte-") || t == "xterm-ghostty" || t.starts_with("xterm-ghostty"))
 }
 
 pub(in crate::app) fn overlay_links(
@@ -304,7 +311,10 @@ pub(in crate::app) fn overlay_links(
     area: Rect,
     facts: &HeroFacts,
     hyperlink_capable: bool,
+    hovered_link: Option<usize>,
+    link_hits: &mut HitRegions<usize>,
 ) {
+    link_hits.clear();
     if !hyperlink_capable {
         return;
     }
@@ -313,7 +323,7 @@ pub(in crate::app) fn overlay_links(
         .iter()
         .map(|l| l.name.as_str())
         .collect::<Vec<_>>()
-        .join("  ");
+        .join("|");
     if joined.is_empty() {
         return;
     }
@@ -332,7 +342,7 @@ pub(in crate::app) fn overlay_links(
                 return;
             }
             let mut offset = 0usize;
-            for link in &facts.links {
+            for (link_index, link) in facts.links.iter().enumerate() {
                 let label_width = UnicodeWidthStr::width(link.name.as_str());
                 if label_width > 0
                     && y < area.bottom()
@@ -341,16 +351,28 @@ pub(in crate::app) fn overlay_links(
                     if let (Some(url), Some(label)) =
                         (sanitize_url(&link.url), sanitize_label(&link.name))
                     {
-                        let symbol = format!("\x1b]8;;{url}\x1b\\{label}\x1b]8;;\x1b\\");
+                        let symbol = if hovered_link == Some(link_index) {
+                            let (r, g, b) = match palette::TEXT_METADATA {
+                                ratatui::style::Color::Rgb(r, g, b) => (r, g, b),
+                                _ => (0, 0, 0),
+                            };
+                            format!("\x1b]8;;{url}\x1b\\\x1b[4;38;2;{r};{g};{b}m{label}\x1b[24;39m\x1b]8;;\x1b\\")
+                        } else {
+                            format!("\x1b]8;;{url}\x1b\\{label}\x1b]8;;\x1b\\")
+                        };
                         if let Some(cell) = f.buffer_mut().cell_mut((area.x + offset as u16, y)) {
                             if let Some(width) = NonZeroU16::new(label_width as u16) {
                                 cell.set_symbol(&symbol)
                                     .set_diff_option(CellDiffOption::ForcedWidth(width));
+                                link_hits.push(
+                                    Rect::new(area.x + offset as u16, y, label_width as u16, 1),
+                                    link_index,
+                                );
                             }
                         }
                     }
                 }
-                offset += label_width + 2;
+                offset += label_width + 1;
             }
             return;
         }
@@ -419,7 +441,7 @@ mod tests {
         let area = Rect::new(0, 0, width, height);
         terminal
             .draw(|f| {
-                paint_hero_pane_content(f, area, pane, false, 0);
+                paint_hero_pane_content(f, area, pane, false, 0, None, &mut HitRegions::new());
             })
             .unwrap();
         terminal.backend().buffer().clone()
@@ -591,12 +613,24 @@ mod tests {
 
     #[test]
     fn hyperlink_capability_defaults_to_unsupported() {
-        assert!(hyperlinks_supported(Some("kitty"), None));
-        assert!(hyperlinks_supported(Some("WezTerm"), None));
-        assert!(hyperlinks_supported(None, Some("foot")));
-        assert!(hyperlinks_supported(None, Some("vte-256color")));
-        assert!(!hyperlinks_supported(None, None));
-        assert!(!hyperlinks_supported(Some("xterm"), Some("xterm-256color")));
+        assert!(hyperlinks_supported(Some("kitty"), None, false));
+        assert!(hyperlinks_supported(Some("WezTerm"), None, false));
+        assert!(hyperlinks_supported(None, Some("foot"), false));
+        assert!(hyperlinks_supported(None, Some("vte-256color"), false));
+        assert!(hyperlinks_supported(Some("ghostty"), None, false));
+        assert!(hyperlinks_supported(None, Some("xterm-ghostty"), false));
+        assert!(hyperlinks_supported(
+            None,
+            Some("xterm-ghostty-256color"),
+            false
+        ));
+        assert!(hyperlinks_supported(None, None, true));
+        assert!(!hyperlinks_supported(None, None, false));
+        assert!(!hyperlinks_supported(
+            Some("xterm"),
+            Some("xterm-256color"),
+            false
+        ));
     }
 
     #[test]
@@ -640,7 +674,14 @@ mod tests {
                         },
                     ],
                 );
-                overlay_links(f, Rect::new(0, 0, 30, 3), &facts, true);
+                overlay_links(
+                    f,
+                    Rect::new(0, 0, 30, 3),
+                    &facts,
+                    true,
+                    None,
+                    &mut HitRegions::new(),
+                );
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(0, 1)];
@@ -649,6 +690,92 @@ mod tests {
             cell.diff_option,
             CellDiffOption::ForcedWidth(NonZeroU16::new(4).unwrap())
         );
+    }
+
+    #[test]
+    fn hovered_link_uses_foam_underline_without_styling_neighbours() {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(30, 2)).unwrap();
+        let facts = HeroFacts {
+            title: "Title".into(),
+            meta_rows: vec!["IMDb|TheMovieDb".into()],
+            links: vec![
+                HeroLink {
+                    name: "IMDb".into(),
+                    url: "https://imdb.test".into(),
+                },
+                HeroLink {
+                    name: "TheMovieDb".into(),
+                    url: "https://tmdb.test".into(),
+                },
+            ],
+            artwork: HeroArtwork {
+                shape: super::super::content::ArtworkShape::Landscape,
+                source: None,
+                image: super::super::content::HeroImageState::None,
+            },
+        };
+        terminal
+            .draw(|f| {
+                paint_wide_hero_text(
+                    f,
+                    Rect::new(0, 0, 30, 2),
+                    &[
+                        WrappedHeroLine {
+                            text: "Title",
+                            style: Style::default(),
+                        },
+                        WrappedHeroLine {
+                            text: "IMDb|TheMovieDb",
+                            style: Style::default(),
+                        },
+                    ],
+                );
+                overlay_links(
+                    f,
+                    Rect::new(0, 0, 30, 2),
+                    &facts,
+                    true,
+                    Some(1),
+                    &mut HitRegions::new(),
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!(!buffer[(0, 1)].symbol().contains("\x1b[4;"));
+        assert!(buffer[(5, 1)].symbol().contains("\x1b[4;38;2;58;148;197m"));
+        assert!(buffer[(5, 1)].symbol().contains("\x1b[24;39m"));
+        assert!(!buffer[(15, 1)].symbol().contains("\x1b[4;"));
+
+        terminal
+            .draw(|f| {
+                paint_wide_hero_text(
+                    f,
+                    Rect::new(0, 0, 30, 2),
+                    &[
+                        WrappedHeroLine {
+                            text: "Title",
+                            style: Style::default(),
+                        },
+                        WrappedHeroLine {
+                            text: "IMDb|TheMovieDb",
+                            style: Style::default(),
+                        },
+                    ],
+                );
+                overlay_links(
+                    f,
+                    Rect::new(0, 0, 30, 2),
+                    &facts,
+                    true,
+                    None,
+                    &mut HitRegions::new(),
+                );
+            })
+            .unwrap();
+        assert!(!terminal.backend().buffer()[(5, 1)]
+            .symbol()
+            .contains("\x1b[4;"));
     }
 
     #[test]
@@ -669,7 +796,16 @@ mod tests {
             },
         };
         terminal
-            .draw(|f| overlay_links(f, Rect::new(0, 0, 30, 2), &facts, false))
+            .draw(|f| {
+                overlay_links(
+                    f,
+                    Rect::new(0, 0, 30, 2),
+                    &facts,
+                    false,
+                    None,
+                    &mut HitRegions::new(),
+                )
+            })
             .unwrap();
         assert_eq!(terminal.backend().buffer()[(0, 1)].symbol(), " ");
     }
@@ -983,7 +1119,16 @@ mod tests {
             },
         };
         terminal
-            .draw(|f| overlay_links(f, Rect::new(0, 0, 20, 1), &facts, true))
+            .draw(|f| {
+                overlay_links(
+                    f,
+                    Rect::new(0, 0, 20, 1),
+                    &facts,
+                    true,
+                    None,
+                    &mut HitRegions::new(),
+                )
+            })
             .unwrap();
         assert!(!terminal.backend().buffer()[(0, 0)]
             .symbol()

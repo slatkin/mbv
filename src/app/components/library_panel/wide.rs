@@ -60,6 +60,7 @@ pub(in crate::app) struct SkeletonHits {
     pub selector: HitRegions<usize>,
     pub controls: HitRegions<usize>,
     pub workspace_selector: HitRegions<usize>,
+    pub links: HitRegions<usize>,
 }
 
 /// The pill rows' sticky overflow windows (ADR 0024 retained paint-local
@@ -118,6 +119,7 @@ pub(in crate::app) struct WideSkeletonGeometry {
 /// `ListSlot::Search` is active, the search box paints in the Selector row's
 /// rect and the results in the list box, and the rest of the panel is
 /// unchanged.
+#[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn render_wide_skeleton(
     f: &mut Frame,
     area: Rect,
@@ -127,6 +129,7 @@ pub(in crate::app) fn render_wide_skeleton(
     hyperlink_capable: bool,
     overview_scroll: usize,
     hovered_selector: Option<usize>,
+    hovered_link: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
 ) -> Option<WideSkeletonGeometry> {
@@ -306,8 +309,15 @@ pub(in crate::app) fn render_wide_skeleton(
         // one title/meta painter, and the overview box when overview text
         // exists. Returns the first unpainted row and the projected image's
         // reserved box (task 5.10: `Ready` reserves; the shell paints).
-        let (next_row, image_box, overview) =
-            paint_hero_pane_content(f, hero_area, &*hero, hyperlink_capable, overview_scroll);
+        let (next_row, image_box, overview) = paint_hero_pane_content(
+            f,
+            hero_area,
+            &*hero,
+            hyperlink_capable,
+            overview_scroll,
+            hovered_link,
+            &mut hits.links,
+        );
         if let Some(overview) = overview {
             geometry.overview_box = Some(overview.rect);
             geometry.overview_content_length = overview.content_length;

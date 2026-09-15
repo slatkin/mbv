@@ -285,7 +285,7 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
                     .iter()
                     .map(|link| link.name.as_str())
                     .collect::<Vec<_>>()
-                    .join("  "),
+                    .join("|"),
             );
         }
         let mut credits = Vec::new();

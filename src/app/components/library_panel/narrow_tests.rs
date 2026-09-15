@@ -301,7 +301,15 @@ fn wide_and_narrow_render_the_same_title_meta_and_image() {
     let pane = Rect::new(0, 0, 70, 14);
     terminal
         .draw(|f| {
-            super::super::hero_header::paint_hero_pane_content(f, pane, &hero, false, 0);
+            super::super::hero_header::paint_hero_pane_content(
+                f,
+                pane,
+                &hero,
+                false,
+                0,
+                None,
+                &mut crate::app::components::mouse::hit::HitRegions::new(),
+            );
         })
         .unwrap();
     let wide_buf = terminal.backend().buffer().clone();

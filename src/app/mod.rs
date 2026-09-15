@@ -364,6 +364,7 @@ fn init_terminal() -> Result<(AppTerminal, bool), Box<dyn std::error::Error>> {
     let hyperlink_capable = crate::app::components::library_panel::hyperlinks_supported(
         std::env::var("TERM_PROGRAM").ok().as_deref(),
         std::env::var("TERM").ok().as_deref(),
+        std::env::var_os("GHOSTTY_RESOURCES_DIR").is_some(),
     );
     Ok((
         Terminal::new(CrosstermBackend::new(stdout))?,

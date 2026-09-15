@@ -96,6 +96,7 @@ fn draw_skeleton(
                 false,
                 0,
                 None,
+                None,
                 &mut hits,
                 &mut windows,
             );
@@ -586,6 +587,7 @@ fn sub_breakpoint_area_paints_nothing() {
                 None,
                 false,
                 0,
+                None,
                 None,
                 &mut hits,
                 &mut windows,

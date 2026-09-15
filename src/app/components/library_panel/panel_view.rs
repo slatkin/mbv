@@ -44,6 +44,7 @@ impl Component for LibraryPanel {
                 self.hyperlink_capable,
                 overview_scroll,
                 self.hovered_selector,
+                self.hovered_link,
                 &mut hits,
                 &mut windows,
             ) {

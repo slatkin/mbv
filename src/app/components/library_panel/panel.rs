@@ -53,6 +53,8 @@ pub struct LibraryPanel {
     /// The main Selector row's locally resolved hovered pill, independent of
     /// selection and the other pill surfaces owned by this panel.
     hovered_selector: Option<usize>,
+    /// The Wide hero provider-link label under the pointer, if any.
+    hovered_link: Option<usize>,
     /// Session-only Wide hero list-pane width override (shell-direct push;
     /// `None` = default ratio). Forwarded into the wide skeleton's shared
     /// split; never stored clamped.
@@ -112,6 +114,7 @@ impl LibraryPanel {
             owners: LibraryOwners::new(),
             focused: false,
             hovered_selector: None,
+            hovered_link: None,
             list_pane_width: None,
             hyperlink_capable: false,
             hits: SkeletonHits::default(),
@@ -242,6 +245,11 @@ impl LibraryPanel {
     #[cfg(test)]
     pub(in crate::app) fn test_hovered_selector(&self) -> Option<usize> {
         self.hovered_selector
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_hovered_link(&self) -> Option<usize> {
+        self.hovered_link
     }
 
     /// The List-controls row's retained hit regions, for the pill-row test
@@ -582,6 +590,7 @@ impl LibraryPanel {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             let at = Position::new(mouse.column, mouse.row);
             self.hovered_selector = self.hits.selector.resolve(at).copied();
+            self.hovered_link = self.hits.links.resolve(at).copied();
             return None;
         }
         // The panel resolves only geometry it painted; an unpainted frame
