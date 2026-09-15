@@ -79,16 +79,22 @@ column SHALL span the overview box's remaining width after the name column, whic
 longest name the table shows, and every role SHALL be right-aligned at the box's right edge. A role
 longer than the remaining width SHALL be truncated with an ellipsis at the box's edge. The table SHALL have
 no header row, and SHALL use the body text treatment the overview paragraph
-uses. A blank row SHALL sit under the overview text, followed by a separator line of `▁` (U+2581)
-block characters spanning the box's content width in the sage-green text role (#A7C080). Table rows
+uses. A separator line of `▁` (U+2581) block characters spanning the box's content width in the
+sage-green text role (#A7C080) SHALL sit directly under the overview text, with one blank row between
+the separator and the table's first row. Table rows
 SHALL be zebra-striped: alternate rows (by table position, first row unstriped) SHALL carry the
-darker surface tone #333c43 behind the body text, applied through a semantic theme role.
+darker surface tone #333c43 behind the body text, applied through a semantic theme role. The table's
+name column SHALL render in a yellow text role backed by the theme's `YELLOW` primitive (#dbbc7f).
 
 A person's role SHALL be the provider's role text for that person. When the provider supplies no role
 text, the person's provider type SHALL be shown instead.
 
-The table SHALL be clipped at the overview Main content box's bottom edge when the Hero pane offers
-fewer rows than the table needs; the Hero pane does not scroll. The table SHALL render only in the
+The cast and crew table SHALL scroll within the overview Main content box when it offers more rows
+than the box's height shows: the overview text and the separator line SHALL stay pinned at the box's
+top, the table rows SHALL shift under them, and a scrollbar indicator SHALL paint at the box's right
+edge only while the table overflows. The scroll offset SHALL be component-local (owned by the Library
+panel's destination owner), clamped at both ends, and reset when the shown item changes. The table
+SHALL render only in the
 Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
 
 #### Scenario: A Movie with one director and a full cast
