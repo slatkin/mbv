@@ -96,7 +96,6 @@ impl LibraryContentOwner for FixtureOwner {
                     artwork: crate::app::components::library_panel::HeroArtwork {
                         shape: crate::app::components::library_panel::ArtworkShape::Landscape,
                         source: None,
-                        decoration: None,
                         image: crate::app::components::library_panel::content::HeroImageState::None,
                     },
                 },

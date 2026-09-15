@@ -76,8 +76,6 @@ pub(super) struct CachedImage {
     /// keyed by the box, so a box change rebuilds the protocol at the new
     /// size. `None` for every non-hero cache entry (plain `Resize::Scale`).
     pub cover_box: Option<(u16, u16)>,
-    /// Cache key of the Logo applied to the retained hero protocol, if any.
-    pub applied_logo_cache_key: Option<String>,
 }
 
 impl CachedImage {
@@ -88,7 +86,6 @@ impl CachedImage {
             img: None,
             protocols: std::collections::HashMap::new(),
             cover_box: None,
-            applied_logo_cache_key: None,
         }
     }
 }
@@ -121,37 +118,6 @@ pub(in crate::app) fn cover_fill_hero_box(
 ) -> image::DynamicImage {
     let (w, h) = (box_w.max(1), box_h.max(1));
     source.resize_to_fill(w, h, image::imageops::FilterType::Lanczos3)
-}
-
-/// Contain-fit and alpha-composite a transparent Logo over a cover-fitted
-/// poster. The Logo is limited to the named poster-relative bounds and kept
-/// inside the rounded 5% insets.
-pub(in crate::app) fn composite_hero_logo(
-    poster: &image::DynamicImage,
-    logo: &image::DynamicImage,
-) -> image::DynamicImage {
-    let mut poster = poster.to_rgba8();
-    let logo = logo.to_rgba8();
-    let (pw, ph) = poster.dimensions();
-    let max_w = ((pw as f32 * 0.60).round() as u32).max(1);
-    let max_h = ((ph as f32 * 0.20).round() as u32).max(1);
-    let scale = (max_w as f32 / logo.width() as f32).min(max_h as f32 / logo.height() as f32);
-    let lw = ((logo.width() as f32 * scale).round() as u32)
-        .max(1)
-        .min(pw);
-    let lh = ((logo.height() as f32 * scale).round() as u32)
-        .max(1)
-        .min(ph);
-    let resized = image::imageops::resize(&logo, lw, lh, image::imageops::FilterType::Lanczos3);
-    let inset_x = ((pw as f32 * 0.05).round() as u32).min(pw.saturating_sub(lw));
-    let inset_y = ((ph as f32 * 0.05).round() as u32).min(ph.saturating_sub(lh));
-    image::imageops::overlay(
-        &mut poster,
-        &resized,
-        i64::from(inset_x),
-        i64::from(inset_y),
-    );
-    image::DynamicImage::ImageRgba8(poster)
 }
 
 impl App {
@@ -209,27 +175,6 @@ impl App {
         let Some(cache_key) = cache_key else {
             return State::None;
         };
-
-        // A Logo is an optional decoration. Reserve it only for the shared
-        // Wide Portrait Movie presentation, after the base source has been
-        // established. It deliberately uses the same bounded fetch pipeline
-        // as every other Emby image; its completion must never hold up the
-        // poster projection below.
-        let wide_portrait = artwork.shape
-            == crate::app::components::library_panel::ArtworkShape::Portrait
-            && crate::app::render::wide_hero_fits(panel_area);
-        if wide_portrait {
-            if let Some(ArtworkSource::Emby {
-                item_id,
-                series_id,
-                image_types,
-                cache_key: logo_key,
-            }) = artwork.decoration.as_ref()
-            {
-                let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
-                self.fetch_card_image(logo_key.clone(), item_id.clone(), series_id.clone(), &types);
-            }
-        }
         if self.card_image_loading.contains(&cache_key) {
             return State::Loading;
         }
@@ -259,33 +204,10 @@ impl App {
                         facts,
                         workspace_present,
                     );
-                let applied_logo_cache_key =
-                    artwork
-                        .decoration
-                        .as_ref()
-                        .and_then(|decoration| match decoration {
-                            ArtworkSource::Emby { cache_key, .. } => self
-                                .card_image_states
-                                .get(cache_key)
-                                .and_then(|entry| entry.img.as_ref().map(|_| cache_key.clone())),
-                            ArtworkSource::AudiobookshelfCover { .. } => None,
-                        });
-                if !self.ensure_hero_cover_protocol(
-                    &cache_key,
-                    (box_cells.width, box_cells.height),
-                    applied_logo_cache_key,
-                ) {
+                if !self.ensure_hero_cover_protocol(&cache_key, (box_cells.width, box_cells.height))
+                {
                     return State::Loading;
                 }
-            }
-        } else if let Some(entry) = self.card_image_states.get_mut(&cache_key) {
-            // Narrow paints the uncropped poster with the ordinary image
-            // protocol. Drop any Wide cover/composition so a breakpoint
-            // transition cannot reuse a portrait Movie's decorated protocol.
-            if entry.cover_box.is_some() || entry.applied_logo_cache_key.is_some() {
-                entry.protocols.clear();
-                entry.cover_box = None;
-                entry.applied_logo_cache_key = None;
             }
         }
         State::Ready { cache_key, decoded }
@@ -341,10 +263,7 @@ include!("image_protocol.rs");
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        composite_hero_logo, cover_fill_hero_box, series_image_cache_key,
-        NAV_IMAGE_FETCH_IDLE_DELAY,
-    };
+    use super::{cover_fill_hero_box, series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
     use crate::app::tests::make_app_stub;
     use std::time::{Duration, Instant};
 
@@ -381,30 +300,6 @@ mod tests {
     }
 
     #[test]
-    fn hero_logo_is_contained_positioned_blended_and_preserves_poster() {
-        let poster = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-            100,
-            100,
-            image::Rgba([0, 0, 200, 255]),
-        ));
-        let logo = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
-            2,
-            1,
-            image::Rgba([200, 0, 0, 128]),
-        ));
-        let result = composite_hero_logo(&poster, &logo);
-        use image::GenericImageView;
-        assert_eq!(result.dimensions(), (100, 100));
-        let rgba = result.as_rgba8().unwrap();
-        // 2:1 logo is 40x20 (within 60x20), at the rounded 5% inset.
-        assert_eq!(rgba.get_pixel(0, 0), &image::Rgba([0, 0, 200, 255]));
-        let blended = rgba.get_pixel(20, 15).0;
-        assert!(blended[0] > 90 && blended[0] < 110);
-        assert!(blended[2] > 90 && blended[2] < 110);
-        assert_eq!(rgba.get_pixel(99, 99), &image::Rgba([0, 0, 200, 255]));
-    }
-
-    #[test]
     fn wide_hero_projection_encodes_the_capped_box_height() {
         use crate::app::components::library_panel::content::HeroImageState as State;
         use crate::app::components::library_panel::{ArtworkShape, HeroArtwork, HeroFacts};
@@ -416,7 +311,6 @@ mod tests {
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,
-                decoration: None,
                 image: State::None,
             },
         };

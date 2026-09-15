@@ -39,7 +39,6 @@ fn facts(shape: ArtworkShape) -> HeroFacts {
         artwork: HeroArtwork {
             shape,
             source: None,
-            decoration: None,
             image: crate::app::components::library_panel::content::HeroImageState::None,
         },
     }
@@ -251,7 +250,6 @@ fn hovered_link_uses_foam_underline() {
         artwork: HeroArtwork {
             shape: super::super::content::ArtworkShape::Landscape,
             source: None,
-            decoration: None,
             image: super::super::content::HeroImageState::None,
         },
     };
@@ -336,7 +334,6 @@ fn link_outside_box_is_not_overlaid() {
         artwork: HeroArtwork {
             shape: super::super::content::ArtworkShape::Landscape,
             source: None,
-            decoration: None,
             image: super::super::content::HeroImageState::None,
         },
     };

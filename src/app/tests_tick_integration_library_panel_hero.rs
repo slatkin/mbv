@@ -242,104 +242,6 @@ fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
 /// task 3.4). The fixture has no Emby client, so `spawn_image_fetch`
 /// balances `image_fetches_active` synchronously; the reservation set pins
 /// the request count.
-fn cached_image(width: u32, height: u32) -> crate::app::images::CachedImage {
-    crate::app::images::CachedImage {
-        img: Some(image::DynamicImage::ImageRgba8(image::RgbaImage::new(width, height))),
-        protocols: std::collections::HashMap::new(),
-        cover_box: None,
-        applied_logo_cache_key: None,
-    }
-}
-
-#[test]
-fn wide_portrait_movie_paints_one_composited_box_and_narrow_drops_decoration() {
-    let mut movie = crate::app::tests::make_item("Hero", "Movie");
-    movie.id = "portrait-logo-paint".into();
-    movie.image_tags.primary = "poster-tag".into();
-    movie.image_tags.logo = "logo-tag".into();
-    let movie_for_projection = movie.clone();
-    let mut harness = migrated_movie_with_hero(movie);
-    harness.model_mut().app.image_protocol_enabled = true;
-    harness.model_mut().app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-    drop(draw_frame_sized(&mut harness));
-    harness.model_mut().sync_mounted_surfaces();
-
-    let app = &mut harness.model_mut().app;
-    app.card_image_loading.clear();
-    app.card_image_states.insert(
-        "portrait-logo-paint:Primary,Backdrop".into(),
-        cached_image(80, 120),
-    );
-    app.card_image_states.insert(
-        "portrait-logo-paint:Logo:logo-tag".into(),
-        cached_image(40, 10),
-    );
-    harness.model_mut().sync_mounted_surfaces();
-    drop(draw_frame_sized(&mut harness));
-    assert!(harness
-        .model()
-        .app
-        .card_image_states
-        .get("portrait-logo-paint:Primary,Backdrop")
-        .is_some_and(|entry| entry.cover_box.is_some()), "Wide projection must build a protocol");
-    let wide_protocol = harness
-        .model()
-        .app
-        .card_image_states
-        .get("portrait-logo-paint:Primary,Backdrop")
-        .expect("cached poster protocol");
-    assert!(wide_protocol.cover_box.is_some(), "Wide keeps the artwork box");
-    assert_eq!(
-        harness
-            .model()
-            .app
-            .card_image_states
-            .get("portrait-logo-paint:Primary,Backdrop")
-            .and_then(|entry| entry.applied_logo_cache_key.as_deref()),
-        Some("portrait-logo-paint:Logo:logo-tag")
-    );
-
-    let facts = hero_content_emby(&movie_for_projection).facts;
-    harness.model_mut().app.project_hero_image(
-        &facts,
-        false,
-        ratatui::layout::Rect::new(0, 0, 70, 40),
-        None,
-    );
-    assert!(harness
-        .model()
-        .app
-        .card_image_states
-        .get("portrait-logo-paint:Primary,Backdrop")
-        .is_some_and(|entry| entry.applied_logo_cache_key.is_none()),
-        "Narrow uses the undecorated poster protocol");
-}
-
-#[test]
-fn portrait_movie_hero_reserves_base_and_logo_only_at_wide() {
-    let mut movie = crate::app::tests::make_item("Hero", "Movie");
-    movie.id = "portrait-logo".into();
-    movie.image_tags.primary = "poster-tag".into();
-    movie.image_tags.logo = "logo-tag".into();
-    let mut harness = migrated_movie_with_hero(movie);
-    harness.model_mut().app.image_protocol_enabled = true;
-    harness.model_mut().app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-    drop(draw_frame_sized(&mut harness));
-    harness.model_mut().sync_mounted_surfaces();
-
-    assert!(harness
-        .model()
-        .app
-        .card_image_loading
-        .contains("portrait-logo:Primary,Backdrop"));
-    assert!(harness
-        .model()
-        .app
-        .card_image_loading
-        .contains("portrait-logo:Logo:logo-tag"));
-    assert_eq!(harness.model().app.card_image_fetch_calls, 2);
-}
-
 #[test]
 fn hero_projection_fetches_image_once_and_none_on_repaint() {
     let mut harness = migrated_home_with_hero(landscape_hero_item("hero-a"), 160);
@@ -347,7 +249,7 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
     drop(draw_frame_sized(&mut harness));
     harness.model_mut().sync_mounted_surfaces();
 
-    let key = "hero-a:Backdrop,Primary";
+    let key = "hero-a:Backdrop,Primary,Logo";
     assert!(
         harness.model().app.card_image_loading.contains(key),
         "the new hero key must be reserved by the projection"
@@ -397,5 +299,5 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
         .model()
         .app
         .card_image_loading
-        .contains("hero-b:Backdrop,Primary"));
+        .contains("hero-b:Backdrop,Primary,Logo"));
 }

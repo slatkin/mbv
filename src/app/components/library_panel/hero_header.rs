@@ -252,7 +252,6 @@ mod hero_header_tests {
             artwork: HeroArtwork {
                 shape,
                 source: None,
-                decoration: None,
                 image: crate::app::components::library_panel::content::HeroImageState::None,
             },
         }
@@ -435,7 +434,6 @@ mod hero_header_tests {
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,
-                decoration: None,
                 image: crate::app::components::library_panel::content::HeroImageState::None,
             },
         };

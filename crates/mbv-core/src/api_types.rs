@@ -288,9 +288,6 @@ pub struct EmbyImageTags {
     /// `ImageTags.Thumb`: a 16:9 landscape thumbnail is declared available.
     #[serde(default)]
     pub thumb: String,
-    /// `ImageTags.Logo`: an optional semantic logo decoration is declared available.
-    #[serde(default)]
-    pub logo: String,
     /// `ImageTags.Primary`: a primary (poster/square) image is declared
     /// available.
     #[serde(default)]

@@ -101,7 +101,6 @@ impl App {
             img,
             protocols: std::collections::HashMap::new(),
             cover_box: None,
-            applied_logo_cache_key: None,
         };
         if let Some(img) = entry.img.clone() {
             let suffix = self.current_protocol_suffix();
@@ -140,15 +139,7 @@ impl App {
             let img = match cover_box {
                 Some((w, h)) => {
                     let (px_w, px_h) = self.hero_box_pixels(w, h);
-                    let poster = super::images::cover_fill_hero_box(&img, px_w, px_h);
-                    self.card_image_states
-                        .get(bare_key)
-                        .and_then(|e| e.applied_logo_cache_key.as_ref())
-                        .and_then(|key| self.card_image_states.get(key))
-                        .and_then(|e| e.img.as_ref())
-                        .map_or(poster.clone(), |logo| {
-                            super::images::composite_hero_logo(&poster, logo)
-                        })
+                    super::images::cover_fill_hero_box(&img, px_w, px_h)
                 }
                 None => img,
             };
@@ -380,7 +371,6 @@ impl App {
         &mut self,
         cache_key: &str,
         box_cells: (u16, u16),
-        applied_logo_cache_key: Option<String>,
     ) -> bool {
         let Some(entry) = self.card_image_states.get(cache_key) else {
             return false;
@@ -388,10 +378,7 @@ impl App {
         let Some(source) = entry.img.clone() else {
             return false;
         };
-        if entry.cover_box == Some(box_cells)
-            && entry.applied_logo_cache_key == applied_logo_cache_key
-            && !entry.protocols.is_empty()
-        {
+        if entry.cover_box == Some(box_cells) && !entry.protocols.is_empty() {
             return true;
         }
         let Some((suffix, picker)) = self
@@ -402,18 +389,12 @@ impl App {
         };
         let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
         let cropped = cover_fill_hero_box(&source, px_w, px_h);
-        let composed = applied_logo_cache_key
-            .as_ref()
-            .and_then(|key| self.card_image_states.get(key))
-            .and_then(|entry| entry.img.as_ref())
-            .map_or(cropped.clone(), |logo| composite_hero_logo(&cropped, logo));
         let bare_key = cache_key.to_string();
-        let proto = self.build_protocol(&bare_key, suffix, &picker, composed);
+        let proto = self.build_protocol(&bare_key, suffix, &picker, cropped);
         if let Some(entry) = self.card_image_states.get_mut(cache_key) {
             entry.protocols.clear();
             entry.protocols.insert(suffix, proto);
             entry.cover_box = Some(box_cells);
-            entry.applied_logo_cache_key = applied_logo_cache_key;
         }
         true
     }
