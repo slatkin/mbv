@@ -65,35 +65,24 @@ mod tests {
     }
 
     #[test]
-    fn overlay_is_contained_at_small_and_tall_library_panes() {
+    fn overlay_is_centered_and_contained_by_library_pane() {
         for area in [
             Rect::new(3, 4, 38, 12),
             Rect::new(1, 1, 20, 8),
             Rect::new(2, 3, 60, 5),
-            Rect::new(0, 0, 120, 30),
+            Rect::new(7, 5, 80, 24),
         ] {
             let overlay = library_hero_overlay(area).expect("non-empty pane");
             assert!(contains(area, overlay));
+            assert_eq!(overlay.x - area.x, (area.width - overlay.width) / 2);
+            assert_eq!(overlay.y - area.y, (area.height - overlay.height) / 2);
         }
-    }
 
-    #[test]
-    fn overlay_is_centered_relationally() {
-        let area = Rect::new(7, 5, 80, 24);
-        let overlay = library_hero_overlay(area).unwrap();
-        assert_eq!(overlay.x - area.x, (area.width - overlay.width) / 2);
-        assert_eq!(overlay.y - area.y, (area.height - overlay.height) / 2);
-    }
-
-    #[test]
-    fn overlay_and_dim_backdrop_are_contained_by_library_when_queue_is_visible() {
         let library = Rect::new(2, 3, 72, 24);
         let queue = Rect::new(library.right(), library.y, 38, library.height);
         let overlay = library_hero_overlay(library).unwrap();
         assert!(contains(library, overlay));
-        assert!(overlay.right() <= queue.x);
-        let overlap = overlay.intersection(queue);
-        assert_eq!(overlap.width, 0);
+        assert_eq!(overlay.intersection(queue).width, 0);
     }
 
     #[test]

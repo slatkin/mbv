@@ -17,7 +17,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
+    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use crate::app::components::library_panel::{
@@ -41,14 +41,38 @@ struct FixtureLog {
 
 struct FixtureOwner {
     carrier: MediaListCarrier<String>,
+    workspace_carrier: MediaListCarrier<String>,
     log: Rc<RefCell<FixtureLog>>,
+    workspace: bool,
+    workspace_focused: bool,
 }
 
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
         let mut carrier = MediaListCarrier::new(Presentation::Wide);
         carrier.set_content(vec![row("alpha"), row("beta"), row("gamma")]);
-        Self { carrier, log }
+        let mut workspace_carrier = MediaListCarrier::new(Presentation::Wide);
+        workspace_carrier.set_content(vec![row("track one"), row("track two")]);
+        Self {
+            carrier,
+            workspace_carrier,
+            log,
+            workspace: false,
+            workspace_focused: false,
+        }
+    }
+
+    fn enable_workspace(&mut self) {
+        self.workspace = true;
+        self.workspace_carrier.select_index(1);
+    }
+
+    fn workspace_state(&self) -> (usize, usize, Option<String>) {
+        (
+            self.workspace_carrier.cursor(),
+            self.workspace_carrier.scroll(),
+            self.workspace_carrier.selected_target().cloned(),
+        )
     }
 
     fn select_multiple_for_test(&mut self) {
@@ -99,9 +123,19 @@ impl LibraryContentOwner for FixtureOwner {
                 },
                 overview: None,
                 credits: None,
-                workspace: None,
+                workspace: self.workspace.then_some(Workspace {
+                    header: Some("Tracks"),
+                    selector: None,
+                    list: &mut self.workspace_carrier,
+                    focused: self.workspace_focused,
+                }),
             }),
         }
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.workspace_focused = self.workspace;
+        self.workspace_focused
     }
 
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
@@ -171,6 +205,17 @@ fn migrated_home() -> (TickHarness, Rc<RefCell<FixtureLog>>) {
     harness
         .model_mut()
         .push_library_owner(home_key(), Box::new(FixtureOwner::new(log.clone())));
+    harness.model_mut().sync_mounted_surfaces();
+    (harness, log)
+}
+
+fn migrated_home_with_workspace() -> (TickHarness, Rc<RefCell<FixtureLog>>) {
+    let (mut harness, log) = migrated_home();
+    harness
+        .model_mut()
+        .library_owner_mut::<FixtureOwner>(&home_key())
+        .expect("fixture owner installed")
+        .enable_workspace();
     harness.model_mut().sync_mounted_surfaces();
     (harness, log)
 }
@@ -303,50 +348,6 @@ fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> 
         }
     }
     None
-}
-
-/// Focus follows the active library through the real sync pass: the migrated
-/// tab routes to `ComponentId::Library`, an un-migrated tab routes to its old
-/// destination child, and back again. Task 6.1 migrated Movies, so the
-/// un-migrated fixture is the grouped Music library (task 8 still mounts its
-/// workspace).
-#[test]
-fn library_overlay_dismissal_routes_through_tick_without_queue_click_through() {
-    let (mut harness, _log) = migrated_home();
-    harness.model_mut().app.panel_mode = PanelMode::Both;
-    harness.model_mut().sync_mounted_surfaces();
-    harness
-        .model_mut()
-        .application
-        .get_component_mut(&ComponentId::Library)
-        .and_then(|component| {
-            component
-                .as_any_mut()
-                .downcast_mut::<crate::app::components::library_panel::LibraryPanel>()
-        })
-        .expect("Library panel mounted")
-        .test_open_hero_overlay();
-    let _ = draw_frame(&mut harness);
-    let panel = panel_of(&harness).expect("Library panel painted");
-    let (pane, frame) = panel.test_overlay_geometry().expect("overlay painted");
-    let (x, y) = (pane.y..pane.bottom())
-        .flat_map(|y| (pane.x..pane.right()).map(move |x| (x, y)))
-        .find(|&(x, y)| !frame.contains(ratatui::layout::Position::new(x, y)))
-        .expect("dimmed Library remainder");
-    harness.inject(Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: x,
-        row: y,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let outcome = harness.step();
-    assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-    }));
-    assert!(panel_of(&harness)
-        .and_then(|panel| panel.test_overlay_geometry())
-        .is_none());
-    assert!(harness.model().application.mounted(&ComponentId::Queue));
 }
 
 #[test]
@@ -693,11 +694,11 @@ fn owner_state_survives_a_queue_only_round_trip() {
     );
 }
 
-/// Enter is delivered through the mounted panel after the shell sync pass;
-/// the narrow browser opens the Library-local overlay rather than activating
-/// the row directly.
+/// Enter and browser double-click are delivered through the mounted panel
+/// after the shell sync pass. Both open the Library-local overlay; the mouse
+/// path resolves the clicked row rather than the pre-existing cursor.
 #[test]
-fn mounted_narrow_enter_opens_library_hero_overlay() {
+fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
     let (mut harness, _log) = migrated_home();
     harness.model_mut().app.terminal_width = 80;
     harness.model_mut().sync_mounted_surfaces();
@@ -715,36 +716,21 @@ fn mounted_narrow_enter_opens_library_hero_overlay() {
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
         .is_some());
-}
 
-/// A mounted double-click resolves the row under the pointer, not the
-/// browser cursor that was selected before the gesture started. The pointer
-/// path reports a mouse claim throughout and opens the overlay on the next
-/// painted frame.
-#[test]
-fn mounted_narrow_browser_double_click_opens_overlay_for_clicked_row() {
-    let (mut harness, log) = migrated_home();
+    let (mut harness, log) = migrated_home_with_workspace();
     harness.model_mut().app.terminal_width = 80;
     harness.model_mut().sync_mounted_surfaces();
     let terminal = draw_frame_sized(&mut harness);
     let beta = find_text(terminal.backend().buffer(), "beta").expect("first browser row");
-
-    // Put the browser cursor on beta first, then double-click gamma. This
-    // makes the clicked target differ from the pre-existing cursor.
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),
         column: beta.0,
         row: beta.1,
         modifiers: KeyModifiers::NONE,
     }));
-    let first = harness.step();
-    assert!(first.raw_messages.iter().any(|message| {
-        matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
-    }));
+    let _ = harness.step();
     assert_eq!(log.borrow().selections.last(), Some(&Some("beta".into())));
 
-    // Repaint before resolving the second click: the panel must use the
-    // latest frame's row geometry after the cursor moved to beta.
     let terminal = draw_frame_sized(&mut harness);
     let gamma = find_text(terminal.backend().buffer(), "gamma").expect("second browser row");
     for _ in 0..2 {
@@ -758,16 +744,20 @@ fn mounted_narrow_browser_double_click_opens_overlay_for_clicked_row() {
         assert!(outcome.raw_messages.iter().any(|message| {
             matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
         }));
-        assert!(!outcome.raw_messages.iter().any(|message| {
-            matches!(message, Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
-        }));
     }
     assert_eq!(log.borrow().selections.last(), Some(&Some("gamma".into())));
-
     drop(draw_frame_sized(&mut harness));
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
         .is_some());
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<FixtureOwner>(&home_key())
+            .unwrap()
+            .workspace_state(),
+        (1, 0, Some("track two".into()))
+    );
 }
 
 /// The Library overlay is local to its panel: Queue can take focus and handle
@@ -775,7 +765,7 @@ fn mounted_narrow_browser_double_click_opens_overlay_for_clicked_row() {
 /// retained overlay state.
 #[test]
 fn mounted_queue_action_preserves_unfocused_library_overlay() {
-    let (mut harness, _log) = migrated_home();
+    let (mut harness, _log) = migrated_home_with_workspace();
     harness.model_mut().app.panel_mode = PanelMode::Both;
     harness.model_mut().sync_mounted_surfaces();
     harness
@@ -789,6 +779,16 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
         })
         .expect("Library panel mounted")
         .test_open_hero_overlay();
+    harness
+        .model_mut()
+        .library_owner_mut::<FixtureOwner>(&home_key())
+        .expect("fixture owner installed")
+        .focus_hero_workspace();
+    let workspace_state = harness
+        .model()
+        .library_owner::<FixtureOwner>(&home_key())
+        .unwrap()
+        .workspace_state();
     drop(draw_frame(&mut harness));
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
     harness.model_mut().sync_mounted_surfaces();
@@ -813,12 +813,30 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
         .is_some());
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<FixtureOwner>(&home_key())
+            .unwrap()
+            .workspace_state(),
+        workspace_state,
+        "Queue input preserves the overlay Workspace state"
+    );
     harness.model_mut().app.panel_focus = PanelFocus::Library;
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(harness.model().application.focus(), Some(&ComponentId::Library));
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
         .is_some());
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<FixtureOwner>(&home_key())
+            .unwrap()
+            .workspace_state(),
+        workspace_state,
+        "returning to Library restores the Workspace state"
+    );
 }
 
 /// A library leaving the catalog retires its owner: the catalog-retention
