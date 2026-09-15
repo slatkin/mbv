@@ -20,19 +20,24 @@
 
 ## 2. Make the gutter accent the unconditional Wide treatment
 
-- [ ] 2.1 Delete `with_selected_gutter`, the `selected_gutter` field, and its accessor from
+- [x] 2.1 Delete `with_selected_gutter`, the `selected_gutter` field, and its accessor from
   `WideMediaListPaintPolicy` (`src/app/components/media_list/mod.rs:217-268`). Rename
   `media_list_row`'s `gutter_glyph: bool` parameter to `gutter_accent` (there has been no glyph since
   #719) and update every call site: the Wide adapter passes `true` unconditionally
   (`render/components/media_list/wide.rs:300-308`), the Inline adapter and the `#[cfg(test)]` wrapper
   keep passing `false`. Verify: `cargo check -p mbv`.
-- [ ] 2.2 Drop the `.with_selected_gutter()` chain at the Queue call site
+  (Accepted: impl `006e04b1`; Standards+Spec PASS. Standards P2s overruled by spec —
+  multi-select accent parity is design D3 + gate 6.2; keeping the `bool` for Inline is design D2.)
+- [x] 2.2 Drop the `.with_selected_gutter()` chain at the Queue call site
   (`src/app/render/components/queue.rs:31-39`), keeping its `QueueColumn` zebra pair. Verify:
   `cargo check -p mbv` and `cargo nextest run -p mbv` pass (the Queue-side tests already pin the accent).
-- [ ] 2.3 Correct `row.rs`'s doc comment claiming the owning panel paints a marker outside the panel
+  (Accepted: impl `006e04b1`; orchestrator reran nextest: 1502/1502 clean — worker SIGABRT was the
+  known post-success teardown flake.)
+- [x] 2.3 Correct `row.rs`'s doc comment claiming the owning panel paints a marker outside the panel
   edge (`src/app/render/components/media_list/row.rs:22-29`), and add the design-D5 comment at the Wide
   call site that `selected_bg` now resolves the scrollbar backing only. Verify: comments match the
   as-built rendering (bold focus-accent title, no background, no glyph).
+  (Accepted: impl `006e04b1`; Spec review confirmed D5 comment accurate vs scrollbar block.)
 
 ## 3. Stripe both library Wide arms
 
