@@ -210,26 +210,6 @@ impl App {
                     series_id.clone(),
                     &types,
                 );
-                // Logo artwork is optional and must never delay the base image.
-                // Reserve it only for a real Movie Landscape hero at Wide
-                // geometry; all other presentations remain undecorated.
-                if wide_landscape_hero_eligible(artwork, panel_area) {
-                    if let Some(ArtworkSource::Emby {
-                        item_id,
-                        series_id,
-                        image_types,
-                        cache_key,
-                    }) = artwork.decoration.as_ref()
-                    {
-                        let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
-                        self.fetch_card_image(
-                            cache_key.clone(),
-                            item_id.clone(),
-                            series_id.clone(),
-                            &types,
-                        );
-                    }
-                }
                 Some(cache_key.clone())
             }
             ArtworkSource::AudiobookshelfCover {
@@ -272,14 +252,30 @@ impl App {
                         facts,
                         workspace_present,
                     );
+                // The optional Logo never delays the base image: it is
+                // reserved only here, once a decoded base exists to decorate,
+                // and only for a Movie Landscape hero at Wide geometry. A base
+                // that resolved empty, and every other presentation, stays
+                // undecorated and issues no Logo request.
                 let logo_cache_key = if wide_landscape_hero_eligible(artwork, panel_area) {
-                    artwork
-                        .decoration
-                        .as_ref()
-                        .and_then(|decoration| match decoration {
-                            ArtworkSource::Emby { cache_key, .. } => Some(cache_key.as_str()),
-                            ArtworkSource::AudiobookshelfCover { .. } => None,
-                        })
+                    match artwork.decoration.as_ref() {
+                        Some(ArtworkSource::Emby {
+                            item_id,
+                            series_id,
+                            image_types,
+                            cache_key,
+                        }) => {
+                            let types: Vec<&str> = image_types.iter().map(|s| s.as_str()).collect();
+                            self.fetch_card_image(
+                                cache_key.clone(),
+                                item_id.clone(),
+                                series_id.clone(),
+                                &types,
+                            );
+                            Some(cache_key.as_str())
+                        }
+                        _ => None,
+                    }
                 } else {
                     None
                 };

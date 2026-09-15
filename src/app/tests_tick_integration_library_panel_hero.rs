@@ -366,10 +366,43 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
     let mut landscape = landscape_hero_item("logo-wide");
     landscape.image_tags.logo = "logo-tag".into();
     let mut wide = migrated_home_with_hero(landscape, 160);
+    // The Logo is reserved only behind a decoded base, so a first pass with
+    // the base still in flight reserves nothing but the base itself.
     drop(draw_frame_sized(&mut wide));
+    wide.model_mut().sync_mounted_surfaces();
+    assert!(wide.model().app.card_image_loading.contains("logo-wide:Backdrop,Primary"));
+    assert!(!wide.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+    assert_eq!(wide.model().app.card_image_fetch_calls, 1);
+
+    // Once that base is decoded, the eligible Wide Landscape Movie reserves
+    // exactly its declared Logo.
+    seed_cached_hero_image(&mut wide, "logo-wide:Backdrop,Primary", [20, 40, 60, 255]);
     wide.model_mut().sync_mounted_surfaces();
     assert!(wide.model().app.card_image_loading.contains("logo-wide:Logo:logo-tag"));
     assert_eq!(wide.model().app.card_image_fetch_calls, 2);
+
+    // A base that resolved empty can never be decorated, so it reserves no
+    // Logo: the placeholder is final. Draw at the fixture's own dimensions so
+    // the seeded empty entry is not wiped by a resize reset.
+    let mut empty_base_item = landscape_hero_item("logo-empty-base");
+    empty_base_item.image_tags.logo = "logo-tag".into();
+    let mut empty_base = migrated_home_with_hero(empty_base_item, 160);
+    empty_base.model_mut().app.card_image_loading.remove("logo-empty-base:Backdrop,Primary");
+    empty_base.model_mut().app.card_image_states.insert(
+        "logo-empty-base:Backdrop,Primary".to_owned(),
+        crate::app::images::CachedImage::empty(),
+    );
+    let empty_base_calls_before = empty_base.model().app.card_image_fetch_calls;
+    let _empty_base_frame = settle_library_frame(&mut empty_base, 160, 40);
+    assert!(
+        !empty_base.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")),
+        "a resolved-empty base reserves no Logo"
+    );
+    assert_eq!(
+        empty_base.model().app.card_image_fetch_calls,
+        empty_base_calls_before,
+        "a resolved-empty base issues no further fetch after its own"
+    );
 
     let mut portrait = crate::app::tests::make_item("Portrait", "Movie");
     portrait.id = "logo-portrait".into();
