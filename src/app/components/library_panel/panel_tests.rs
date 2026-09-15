@@ -567,7 +567,10 @@ fn browser_double_click_opens_overlay_and_workspace_activation_stays_open() {
         point.0,
         point.1,
     ));
-    assert!(msg.is_some());
+    assert!(matches!(
+        msg,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
     let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
     assert!(panel.test_overlay_geometry().is_some());
     let frame = panel.test_overlay_geometry().unwrap().1;

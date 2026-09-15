@@ -293,9 +293,9 @@ fn draw_frame_sized(harness: &mut TickHarness) -> Terminal<TestBackend> {
 }
 
 fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> {
-    for row in 0..30 {
+    for row in 0..buf.area.height {
         let mut line = String::new();
-        for x in 0..120 {
+        for x in 0..buf.area.width {
             line.push_str(buf[(x, row)].symbol());
         }
         if let Some(offset) = line.find(needle) {
@@ -711,6 +711,59 @@ fn mounted_narrow_enter_opens_library_hero_overlay() {
         msg,
         Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
     )));
+    drop(draw_frame_sized(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+}
+
+/// A mounted double-click resolves the row under the pointer, not the
+/// browser cursor that was selected before the gesture started. The pointer
+/// path reports a mouse claim throughout and opens the overlay on the next
+/// painted frame.
+#[test]
+fn mounted_narrow_browser_double_click_opens_overlay_for_clicked_row() {
+    let (mut harness, log) = migrated_home();
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    let terminal = draw_frame_sized(&mut harness);
+    let beta = find_text(terminal.backend().buffer(), "beta").expect("first browser row");
+
+    // Put the browser cursor on beta first, then double-click gamma. This
+    // makes the clicked target differ from the pre-existing cursor.
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: beta.0,
+        row: beta.1,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let first = harness.step();
+    assert!(first.raw_messages.iter().any(|message| {
+        matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    }));
+    assert_eq!(log.borrow().selections.last(), Some(&Some("beta".into())));
+
+    // Repaint before resolving the second click: the panel must use the
+    // latest frame's row geometry after the cursor moved to beta.
+    let terminal = draw_frame_sized(&mut harness);
+    let gamma = find_text(terminal.backend().buffer(), "gamma").expect("second browser row");
+    for _ in 0..2 {
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: gamma.0,
+            row: gamma.1,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        assert!(outcome.raw_messages.iter().any(|message| {
+            matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+        }));
+        assert!(!outcome.raw_messages.iter().any(|message| {
+            matches!(message, Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        }));
+    }
+    assert_eq!(log.borrow().selections.last(), Some(&Some("gamma".into())));
+
     drop(draw_frame_sized(&mut harness));
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())

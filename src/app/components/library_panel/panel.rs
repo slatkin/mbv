@@ -506,7 +506,12 @@ impl LibraryPanel {
             owner.focus_hero_workspace();
         }
         self.open_hero_overlay();
-        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        let claim = if at.is_some() {
+            TerminalObserverEvent::MouseClaimed
+        } else {
+            TerminalObserverEvent::KeyClaimed
+        };
+        Some(Msg::TerminalEvent(claim))
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
