@@ -120,7 +120,9 @@ impl LibraryContentOwner for FixtureOwner {
                 if let Some(target) = &target {
                     self.carrier.select_target(target);
                 }
-                self.carrier.delegate_operation(input.into_operation(target).expect("resolved media-list pointer target"));
+                if let Some(operation) = input.into_operation(target) {
+                    self.carrier.delegate_operation(operation);
+                }
                 self.carrier.selected_target().cloned()
             }
             _ => self.carrier.selected_target().cloned(),
@@ -689,6 +691,81 @@ fn owner_state_survives_a_queue_only_round_trip() {
         Some(&Some("gamma".into())),
         "the wheel step continues from the selection made before the mode switch"
     );
+}
+
+/// Enter is delivered through the mounted panel after the shell sync pass;
+/// the narrow browser opens the Library-local overlay rather than activating
+/// the row directly.
+#[test]
+fn mounted_narrow_enter_opens_library_hero_overlay() {
+    let (mut harness, _log) = migrated_home();
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    drop(draw_frame_sized(&mut harness));
+    harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
+        code: tuirealm::event::Key::Enter,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|msg| matches!(
+        msg,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    drop(draw_frame_sized(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+}
+
+/// The Library overlay is local to its panel: Queue can take focus and handle
+/// a normal action without dismissing it, then Library focus restores the
+/// retained overlay state.
+#[test]
+fn mounted_queue_action_preserves_unfocused_library_overlay() {
+    let (mut harness, _log) = migrated_home();
+    harness.model_mut().app.panel_mode = PanelMode::Both;
+    harness.model_mut().sync_mounted_surfaces();
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any_mut()
+                .downcast_mut::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .expect("Library panel mounted")
+        .test_open_hero_overlay();
+    drop(draw_frame(&mut harness));
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Queue));
+    harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
+        code: tuirealm::event::Key::Down,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
+        code: tuirealm::event::Key::Esc,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some(), "Queue Esc must not dismiss Library overlay");
+    drop(draw_frame(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    harness.model_mut().app.panel_focus = PanelFocus::Library;
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Library));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
 }
 
 /// A library leaving the catalog retires its owner: the catalog-retention

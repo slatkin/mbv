@@ -2,9 +2,11 @@ use crate::app::components::library_panel::{
     LibraryContentOwner, LibraryKey, LibraryPanel, LibrarySlotEvent,
 };
 use crate::app::components::media_list::MediaListSurfaceInput;
+use crate::app::components::msg::LeafKeyResult;
 use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent, UserEvent};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use tuirealm::props::{AttrValue, Attribute};
 
 use crate::app::components::library_panel::content::{
     HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
@@ -17,7 +19,7 @@ use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::cell::RefCell;
 use std::rc::Rc;
-use tuirealm::event::{KeyModifiers, MouseButton};
+use tuirealm::event::MouseButton;
 
 fn item(target: &str) -> MediaListRow<String> {
     MediaListRow::Item {
@@ -51,6 +53,8 @@ struct FixtureOwner {
     log: Rc<RefCell<FixtureLog>>,
     link: bool,
     workspace: bool,
+    inline_search: bool,
+    workspace_focused: bool,
 }
 
 impl FixtureOwner {
@@ -65,7 +69,14 @@ impl FixtureOwner {
             log,
             link: false,
             workspace: false,
+            inline_search: false,
+            workspace_focused: false,
         }
+    }
+
+    fn with_inline_search(mut self) -> Self {
+        self.inline_search = true;
+        self
     }
 
     fn with_link(mut self) -> Self {
@@ -124,6 +135,28 @@ impl LibraryContentOwner for FixtureOwner {
         }
     }
 
+    fn inline_search_active(&self) -> bool {
+        self.inline_search
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.workspace_focused = self.workspace;
+        self.workspace_focused
+    }
+
+    fn clear_hero_workspace_focus(&mut self) {
+        self.workspace_focused = false;
+    }
+
+    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
+        if key.modifiers.is_empty() && key.code == Key::Enter && self.workspace_focused {
+            return LeafKeyResult::Consumed(Some(Msg::TerminalEvent(
+                TerminalObserverEvent::KeyClaimed,
+            )));
+        }
+        LeafKeyResult::Unhandled
+    }
+
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         let selection = match event {
             LibrarySlotEvent::List(input) => {
@@ -140,11 +173,9 @@ impl LibraryContentOwner for FixtureOwner {
                 if let Some(target) = &target {
                     self.carrier.select_target(target);
                 }
-                self.carrier.delegate_operation(
-                    input
-                        .into_operation(target)
-                        .expect("resolved media-list pointer target"),
-                );
+                if let Some(operation) = input.into_operation(target) {
+                    self.carrier.delegate_operation(operation);
+                }
                 self.carrier.selected_target().cloned()
             }
             _ => self.carrier.selected_target().cloned(),
@@ -467,6 +498,149 @@ fn overlay_buffer_covers_leaf_and_workspace_hero_content() {
             "Hero content inside the frame is not dimmed"
         );
     }
+}
+
+#[test]
+fn non_wide_enter_opens_overlay_but_inline_search_enter_does_not() {
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::new(RefCell::new(
+            FixtureLog::default(),
+        )))),
+    );
+    panel.attr(Attribute::Focus, AttrValue::Flag(true));
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
+    let msg = panel.on(&Event::Keyboard(KeyEvent::new(
+        Key::Enter,
+        KeyModifiers::NONE,
+    )));
+    assert!(matches!(
+        msg,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    ));
+    assert!(
+        panel.test_overlay_geometry().is_none(),
+        "geometry is painted on the next frame"
+    );
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
+    assert!(panel.test_overlay_geometry().is_some());
+
+    let mut search_panel = LibraryPanel::new();
+    search_panel.set_active(Some(LibraryKey::Home));
+    search_panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(
+            FixtureOwner::new(Rc::new(RefCell::new(FixtureLog::default()))).with_inline_search(),
+        ),
+    );
+    search_panel.attr(Attribute::Focus, AttrValue::Flag(true));
+    let _ = draw_panel_at(&mut search_panel, Rect::new(0, 0, 80, 30));
+    assert!(search_panel
+        .on(&Event::Keyboard(KeyEvent::new(
+            Key::Enter,
+            KeyModifiers::NONE
+        )))
+        .is_none());
+    assert!(search_panel.test_overlay_geometry().is_none());
+}
+
+#[test]
+fn browser_double_click_opens_overlay_and_workspace_activation_stays_open() {
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::new(RefCell::new(FixtureLog::default()))).with_workspace()),
+    );
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
+    let list = panel.test_list_rect().expect("narrow list painted");
+    let point = (list.x + 1, list.y + 1);
+    let _ = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        point.0,
+        point.1,
+    ));
+    let msg = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        point.0,
+        point.1,
+    ));
+    assert!(msg.is_some());
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
+    assert!(panel.test_overlay_geometry().is_some());
+    let frame = panel.test_overlay_geometry().unwrap().1;
+    let point = (frame.x + 2, frame.y + 2);
+    let _ = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        point.0,
+        point.1,
+    ));
+    let msg = panel.on(&mouse_event(
+        MouseEventKind::Down(MouseButton::Left),
+        point.0,
+        point.1,
+    ));
+    assert!(msg.is_some());
+    assert!(panel.test_overlay_geometry().is_some());
+}
+
+#[test]
+fn overlay_esc_dismisses_and_destination_change_or_missing_parent_dismisses() {
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::new(RefCell::new(
+            FixtureLog::default(),
+        )))),
+    );
+    panel.test_open_hero_overlay();
+    panel.attr(Attribute::Focus, AttrValue::Flag(true));
+    assert!(panel
+        .on(&Event::Keyboard(KeyEvent::new(
+            Key::Esc,
+            KeyModifiers::NONE
+        )))
+        .is_some());
+    assert!(panel.test_overlay_geometry().is_none());
+    panel.test_open_hero_overlay();
+    panel.set_active(Some(LibraryKey::Feeds));
+    assert!(panel.test_overlay_geometry().is_none());
+    panel.set_active(Some(LibraryKey::Home));
+    panel.test_open_hero_overlay();
+    panel.retain_owners(&[LibraryKey::Feeds]);
+    panel.sync_overlay_state();
+    assert!(panel.test_overlay_geometry().is_none());
+}
+
+#[test]
+fn overlay_chrome_click_is_claimed_without_browser_selection() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
+    panel.test_open_hero_overlay();
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
+    let frame = panel.test_overlay_geometry().unwrap().1;
+    let point = (frame.x..frame.right())
+        .flat_map(|x| (frame.y..frame.bottom()).map(move |y| (x, y)))
+        .find(|&(x, y)| {
+            x == frame.x || y == frame.y || x + 1 == frame.right() || y + 1 == frame.bottom()
+        })
+        .expect("overlay chrome");
+    let before = log.borrow().selections.clone();
+    assert!(matches!(
+        panel.on(&mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            point.0,
+            point.1
+        )),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+    assert_eq!(log.borrow().selections, before);
 }
 
 #[test]
