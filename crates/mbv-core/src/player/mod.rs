@@ -199,7 +199,11 @@ include!("runtime.rs");
 include!("report_worker.rs");
 include!("reporting.rs");
 include!("run/mod.rs");
-include!("runtime_controller.rs");
+// `run/` is included to keep the hot-loop files physically grouped while the
+// controller and submission concerns are wired as true submodules.
+mod controller;
+mod submit;
+pub use controller::*;
 include!("proxy.rs");
 
 #[cfg(test)]
