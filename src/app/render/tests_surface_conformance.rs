@@ -187,10 +187,18 @@ fn queue_only_strip_and_queue_follow_the_table() {
     );
     // Title band: one blank QueuePanel row above the title (the scope
     // pills paint in the QueueColumn footer — covered by the
-    // queue-component scope-pill tests), the bold-yellow `Queue` title,
-    // the list directly below it.
+    // queue-component scope-pill tests), the bold-foam `Queue` title, the
+    // block separator line, one blank row, then the list.
     let placement = model.app.queue_panel_placement();
-    let title_y = queue_view.content_area.y - 1;
+    let panel_box = super::arrangements::queue::queue_list_box(placement.panel_area);
+    let title_row = super::arrangements::queue::queue_panel_title_row(panel_box)
+        .expect("a roomy queue box reserves the title band");
+    assert_eq!(
+        queue_view.content_area.y,
+        title_row.y + 3,
+        "the list sits below the title, the separator and one blank row"
+    );
+    let title_y = title_row.y;
     let blank_y = title_y - 1;
     assert!(
         blank_y > placement.panel_area.y,
@@ -211,15 +219,37 @@ fn queue_only_strip_and_queue_follow_the_table() {
                 .to_owned()
         })
         .collect();
-    assert_eq!(title, "  Queue", "the list sits directly below the title");
+    assert_eq!(title, "  Queue", "the title sits above the separator");
     for i in 0..7 {
         let cell = &buffer[(queue_view.content_area.x + i, title_y)];
-        assert_eq!(cell.style().fg, Some(palette::TEXT_HERO_TITLE));
+        assert_eq!(cell.style().fg, Some(palette::TEXT_METADATA));
         assert!(
             cell.style()
                 .add_modifier
                 .contains(ratatui::style::Modifier::BOLD),
             "the title is bold"
+        );
+    }
+    // The separator line, then one blank row, separate the title from the
+    // first queue row. The separator is indented like the title text, so it
+    // starts and ends under the title rather than at the box's edges.
+    let separator = super::arrangements::queue::queue_panel_separator_row(panel_box)
+        .expect("the title band reserves a separator row");
+    assert_eq!(separator.x, title_row.x + 2);
+    assert_eq!(separator.right(), title_row.right() - 2);
+    let separator_y = separator.y;
+    for x in separator.left()..separator.right() {
+        let cell = &buffer[(x, separator_y)];
+        assert_eq!(cell.symbol(), "\u{2581}", "the separator spans the box");
+        assert_eq!(cell.style().fg, Some(palette::HERO_OVERVIEW_SEPARATOR));
+    }
+    for x in panel_box.left()..panel_box.right() {
+        let gap = &buffer[(x, separator_y + 1)];
+        assert_eq!(gap.symbol(), " ", "one blank row below the separator");
+        assert_eq!(
+            gap.bg,
+            palette::surface_colors(palette::Surface::QueuePanel, true).fill,
+            "the blank row carries the queue panel surface"
         );
     }
     // The strip: the shell's queue-only branch paints the panel body and its

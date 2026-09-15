@@ -74,6 +74,14 @@ fn content_exposes_tracks_as_the_workspace() {
         .as_ref()
         .is_some_and(|hero| hero.workspace.is_some());
     assert!(has_workspace);
+    // Grouped Music labels its Workspace with the `Tracks` header.
+    let header = owner
+        .content()
+        .hero
+        .as_ref()
+        .and_then(|hero| hero.workspace.as_ref())
+        .and_then(|workspace| workspace.header);
+    assert_eq!(header, Some("Tracks"));
     assert_eq!(owner.track_list.rows().len(), 1);
 }
 

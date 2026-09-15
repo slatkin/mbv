@@ -173,10 +173,14 @@ pub(in crate::app) enum ListSlot<'a> {
     Search(&'a mut InlineSearch),
 }
 
-/// The hero pane's Workspace (design D3): an optional selector row over one
-/// list. A hero with a Workspace is focusable; `focused` selects the
-/// focused surfaces (design D6).
+/// The hero pane's Workspace (design D3): an optional header row and
+/// selector row over one list. A hero with a Workspace is focusable;
+/// `focused` selects the focused surfaces (design D6).
 pub(in crate::app) struct Workspace<'a> {
+    /// One-row box title, painted in the foam metadata role with the Hero
+    /// separator line and one blank row below it, before the list (Grouped
+    /// Music's `Tracks`). Omitted when the box has no room for a list row.
+    pub header: Option<&'static str>,
     pub selector: Option<SelectorRow>,
     pub list: &'a mut dyn PanelList,
     pub focused: bool,

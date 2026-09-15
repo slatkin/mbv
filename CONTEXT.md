@@ -499,7 +499,8 @@ policy; a destination never chooses an arm.
 _Avoid_: hero variant
 
 **Workspace**:
-The optional Wide Hero pane slot for one Selector row and one constituent-item
+The optional Wide Hero pane slot for one optional header row, one optional Selector row, and
+one constituent-item
 list, such as tracks, episodes, or chapters. The Library panel owns its box,
 surface, and placement.
 _Avoid_: detail workspace

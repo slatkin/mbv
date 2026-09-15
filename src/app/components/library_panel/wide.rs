@@ -11,7 +11,7 @@
 
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::widgets::Block;
+use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
@@ -95,7 +95,8 @@ pub(in crate::app) struct WideSkeletonGeometry {
     pub list_area: Rect,
     /// The Hero pane's inset content rect.
     pub hero_area: Rect,
-    /// The Workspace box's (panel, content) rects, when one painted.
+    /// The Workspace box's panel and the rect its list was viewed into
+    /// (below the optional header rows), when one painted.
     pub workspace: Option<(Rect, Rect)>,
     /// The projected hero image's paint (task 5.10, design D9), when the
     /// header reserved a ready image's box.
@@ -351,12 +352,42 @@ pub(in crate::app) fn render_wide_skeleton(
     Some(geometry)
 }
 
-/// The Workspace (task 5.6, design D6): an optional Selector row over one
-/// Main content box holding the Workspace's `&mut dyn PanelList`. The box's
-/// surface is derived, not declared — accent-soft while the workspace list
-/// holds focus, backdrop otherwise (user decision: Music's behaviour for
-/// all) — and the list's selected row is fixed to the owning surface by the
-/// slot. Returns the (panel, content) rects.
+/// Rows a Workspace header occupies: the title, the Hero separator line,
+/// and the blank row below it.
+const WORKSPACE_HEADER_ROWS: u16 = 3;
+
+/// Paints a Workspace box's header: the title in bold foam, then the
+/// separator line the Movie hero's overview box uses under its overview text
+/// (same `▁` block characters and role) spanning the box's content width.
+fn paint_workspace_header(f: &mut Frame, content: Rect, header: &str) {
+    f.render_widget(
+        Paragraph::new(header).style(
+            Style::default()
+                .fg(palette::TEXT_METADATA)
+                .add_modifier(ratatui::style::Modifier::BOLD),
+        ),
+        Rect {
+            height: 1,
+            ..content
+        },
+    );
+    crate::app::render::components::widgets::render_block_separator(
+        f,
+        Rect {
+            y: content.y.saturating_add(1),
+            height: 1,
+            ..content
+        },
+    );
+}
+
+/// The Workspace (task 5.6, design D6): an optional header band and Selector
+/// row over one Main content box holding the Workspace's `&mut dyn PanelList`.
+/// The box's surface is derived, not declared — accent-soft while the
+/// workspace list holds focus, backdrop otherwise (user decision: Music's
+/// behaviour for all) — and the list's selected row is fixed to the owning
+/// surface by the slot. Returns the (panel, content) rects, where `content`
+/// is the rect the list was viewed into below the header band.
 fn paint_workspace_box(
     f: &mut Frame,
     workspace_rect: Rect,
@@ -407,6 +438,21 @@ fn paint_workspace_box(
         panel,
     );
     let content = padded_rect(panel, PANE_PAD_X, PANE_PAD_Y);
+    // The destination's box header (Grouped Music's `Tracks`): title, the
+    // Hero separator line, one blank row, then the list. Skipped when the
+    // box cannot keep a list row under it -- the same "omitted when no room"
+    // convention as the other slot arrangements.
+    let content = match workspace.header {
+        Some(header) if content.height > WORKSPACE_HEADER_ROWS => {
+            paint_workspace_header(f, content, header);
+            Rect {
+                y: content.y.saturating_add(WORKSPACE_HEADER_ROWS),
+                height: content.height.saturating_sub(WORKSPACE_HEADER_ROWS),
+                ..content
+            }
+        }
+        _ => content,
+    };
     // The owning-surface selected row is fixed by the slot (design D6): the
     // panel sets the paint policy, destinations pass none.
     workspace

@@ -229,6 +229,7 @@ fn workspace_selector_with_active_none_paints_no_active_pill() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
+                header: None,
                 selector: Some(SelectorRow {
                     pills: vec!["Seasons".into(), "Episodes".into()],
                     active: None,
@@ -280,6 +281,7 @@ fn focused_workspace_hero_pane_stays_resting() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
+                header: None,
                 selector: None,
                 list: &mut workspace_list,
                 focused: true,
@@ -318,6 +320,7 @@ fn focused_workspace_hero_pane_stays_resting() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
+                header: None,
                 selector: None,
                 list: &mut focused_workspace_list,
                 focused: true,
@@ -348,6 +351,7 @@ fn browser_focused_list_carries_the_focus_green() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
+                header: None,
                 selector: None,
                 list: &mut workspace_list,
                 focused: false,
@@ -385,6 +389,7 @@ fn unfocused_workspace_hero_renders_resting_surfaces() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
+                header: None,
                 selector: None,
                 list: &mut workspace_list,
                 focused: false,
@@ -416,6 +421,7 @@ fn workspace_box_sits_one_blank_row_below_the_hero_content() {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
+                header: None,
                 selector: None,
                 list: &mut workspace_list,
                 focused: false,
@@ -452,6 +458,73 @@ fn workspace_box_sits_one_blank_row_below_the_hero_content() {
     // The Workspace is the hero's bottom-most recessed box, so it reaches the
     // hero pane's content bottom: the panel less its one bottom padding row.
     assert_eq!(box_panel.bottom(), geo.hero_area.bottom());
+}
+
+#[test]
+fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut workspace_list = StubList::with_rows(vec!["Track 1"]);
+    let mut content = LibraryPanelContent {
+        selector: None,
+        controls: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Album"),
+            overview: None,
+            credits: None,
+            workspace: Some(Workspace {
+                header: Some("Tracks"),
+                selector: None,
+                list: &mut workspace_list,
+                focused: false,
+            }),
+        }),
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let (box_panel, list_rect) = geo.workspace.expect("workspace box painted");
+    let fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
+    // The box's own content top: `geo.workspace`'s second rect is the list
+    // rect below the header.
+    let content_y = box_panel.y + PANE_PAD_Y;
+    let content_x = box_panel.x + PANE_PAD_X;
+    let content_width = box_panel.width - PANE_PAD_X * 2;
+
+    // Header row: the title in foam, on the box's own surface.
+    let title_row: String = (content_x..content_x + content_width)
+        .map(|x| buf[(x, content_y)].symbol())
+        .collect();
+    assert!(
+        title_row.starts_with("Tracks"),
+        "header row reads {title_row:?}"
+    );
+    assert_eq!(
+        buf[(content_x, content_y)].style().fg,
+        Some(palette::TEXT_METADATA)
+    );
+    assert_eq!(buf[(content_x, content_y)].bg, fill);
+
+    // Separator: the Movie hero's own block-character line, directly below.
+    for x in content_x..content_x + content_width {
+        assert_eq!(buf[(x, content_y + 1)].symbol(), "\u{2581}");
+        assert_eq!(
+            buf[(x, content_y + 1)].style().fg,
+            Some(palette::HERO_OVERVIEW_SEPARATOR)
+        );
+    }
+
+    // One blank row between the separator and the list.
+    for x in content_x..content_x + content_width {
+        assert_eq!(buf[(x, content_y + 2)].symbol(), " ");
+        assert_eq!(buf[(x, content_y + 2)].bg, fill);
+    }
+
+    // The list starts below the three header rows and the box's bottom
+    // padding is unchanged by them.
+    assert_eq!(list_rect.y, content_y + 3);
+    assert!(text_in(&buf, list_rect, "Track 1"));
+    assert_eq!(list_rect.bottom(), box_panel.bottom() - PANE_PAD_Y);
+    assert_eq!(list_rect.x, content_x);
+    assert_eq!(list_rect.width, content_width);
 }
 
 #[test]

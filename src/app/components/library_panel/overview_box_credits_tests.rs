@@ -87,6 +87,7 @@ fn long_overview_is_clipped_to_inner_box_when_pane_is_short() {
             role: "Actor".into(),
         }]),
         workspace: Some(Workspace {
+            header: None,
             selector: None,
             list: &mut NoopList,
             focused: false,
@@ -122,6 +123,7 @@ fn pinned_overview_and_separator_stay_fixed_while_credits_scroll() {
         overview: Some("Overview text".into()),
         credits: Some(credits),
         workspace: Some(Workspace {
+            header: None,
             selector: None,
             list: &mut NoopList,
             focused: false,
@@ -163,6 +165,7 @@ fn credits_scrollbar_thumb_tracks_table_offset() {
         overview: Some("Overview".into()),
         credits: Some(credits),
         workspace: Some(Workspace {
+            header: None,
             selector: None,
             list: &mut NoopList,
             focused: false,

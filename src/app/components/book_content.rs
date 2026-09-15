@@ -423,6 +423,7 @@ impl BookContent {
                 overview: data.overview,
                 credits: data.credits,
                 workspace: Some(Workspace {
+                    header: None,
                     selector: None,
                     list: &mut self.chapter_list,
                     focused: focused && chapter_focused,

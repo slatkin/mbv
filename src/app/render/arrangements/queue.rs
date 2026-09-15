@@ -54,15 +54,39 @@ pub(in crate::app) fn queue_list_box(placement: Rect) -> Rect {
     box_area
 }
 
+/// Rows the recessed queue box's title band spends below its one blank
+/// top-inset row: the `Queue` title, the block separator line, and the
+/// blank row between the separator and the first queue row.
+pub(in crate::app) const QUEUE_TITLE_BAND_ROWS: u16 = 3;
+
+/// Columns the recessed queue box indents its title text and separator by:
+/// the same indent the queue rows' own text carries, so the separator starts
+/// and ends under the title rather than reaching the box's edges.
+pub(in crate::app) const QUEUE_TITLE_INDENT: u16 = 2;
+
 /// The `Queue` title row inside the recessed box: one blank top-inset row
-/// stays above it, the list starts directly below it. Reserved only when
-/// the box fits padding + title + at least one list row + bottom padding;
-/// smaller boxes keep the legacy title-less content.
+/// stays above it, then the separator line and one blank row, and the list
+/// starts below them. Reserved only when the box fits padding + band + at
+/// least one list row + bottom padding; smaller boxes keep the legacy
+/// title-less content.
 pub(in crate::app) fn queue_panel_title_row(panel_box: Rect) -> Option<Rect> {
-    (panel_box.height >= 4 && panel_box.width > 0).then(|| Rect {
+    (panel_box.height >= QUEUE_TITLE_BAND_ROWS + 3 && panel_box.width > 0).then(|| Rect {
         x: panel_box.x,
         y: panel_box.y + 1,
         width: panel_box.width,
+        height: 1,
+    })
+}
+
+/// The separator row directly below the title row: the same `▁` block line
+/// the Wide Hero's overview box paints under its overview text, indented
+/// [`QUEUE_TITLE_INDENT`] columns on each side like the title and the rows.
+/// `None` whenever no title row is reserved.
+pub(in crate::app) fn queue_panel_separator_row(panel_box: Rect) -> Option<Rect> {
+    queue_panel_title_row(panel_box).map(|title| Rect {
+        x: title.x.saturating_add(QUEUE_TITLE_INDENT),
+        y: title.y.saturating_add(1),
+        width: title.width.saturating_sub(QUEUE_TITLE_INDENT * 2),
         height: 1,
     })
 }
@@ -71,16 +95,19 @@ pub(in crate::app) fn queue_panel_title_row(panel_box: Rect) -> Option<Rect> {
 /// placement (`queue_panel_geometry`) and the mounted `QueuePanel`'s own
 /// view, which derives the same content from the placement it is handed
 /// (task 3.1) -- one source for the panel's internal geometry. With a title
-/// row present the list starts directly below the title and ends above the
-/// box's own blank bottom-padding row (one blank top-inset row stays above
-/// the title); without one (degenerate boxes) the list keeps the legacy
-/// top/bottom inset, and the status bar lives in the QueueColumn footer
-/// below the box. A degenerate box reserves nothing.
+/// band present the list starts below the title, separator and blank rows
+/// and ends above the box's own blank bottom-padding row (one blank
+/// top-inset row stays above the title); without one (degenerate boxes) the
+/// list keeps the legacy top/bottom inset, and the status bar lives in the
+/// QueueColumn footer below the box. A degenerate box reserves nothing.
 pub(in crate::app) fn queue_panel_subareas(panel_box: Rect) -> Rect {
     if queue_panel_title_row(panel_box).is_some() {
         return Rect {
-            y: panel_box.y + 2,
-            height: panel_box.height.saturating_sub(3),
+            y: panel_box.y + 1 + QUEUE_TITLE_BAND_ROWS,
+            height: panel_box
+                .height
+                .saturating_sub(QUEUE_TITLE_BAND_ROWS)
+                .saturating_sub(2),
             ..panel_box
         };
     }
@@ -176,25 +203,29 @@ mod tests {
         }
     }
 
-    /// The list content sits below the title row: one blank top-inset row,
-    /// the one-row title, the list, one blank bottom-padding row (no
-    /// in-panel status reservation: the status bar lives in the
-    /// QueueColumn footer below the box).
+    /// The list content sits below the title band: one blank top-inset row,
+    /// the one-row title, the separator line, one blank row, the list, one
+    /// blank bottom-padding row (no in-panel status reservation: the status
+    /// bar lives in the QueueColumn footer below the box).
     #[test]
     fn queue_panel_subareas_stay_inside_the_box() {
         let panel_box = Rect::new(2, 6, 30, 20);
         let title = queue_panel_title_row(panel_box).expect("roomy box reserves a title");
         assert_eq!((title.x, title.y, title.width, title.height), (2, 7, 30, 1));
+        let separator = queue_panel_separator_row(panel_box).expect("title band has a separator");
+        assert_eq!((separator.x, separator.y, separator.width), (4, 8, 26));
         let content = queue_panel_subareas(panel_box);
         assert!(panel_box.contains((content.x, content.y).into()));
-        assert_eq!(content.y, title.y + 1);
+        assert_eq!(content.y, separator.y + 2);
         assert_eq!(content.bottom(), panel_box.bottom() - 1);
-        assert_eq!(content.height, panel_box.height - 3);
+        assert_eq!(content.height, panel_box.height - 5);
 
-        // A title-less box keeps the legacy single inset (no title band).
-        let content = queue_panel_subareas(Rect::new(0, 0, 10, 3));
-        assert_eq!((content.y, content.height), (1, 1));
-        assert!(queue_panel_title_row(Rect::new(0, 0, 10, 3)).is_none());
+        // A box too short for the title band keeps the legacy single inset
+        // (no title, no separator).
+        let content = queue_panel_subareas(Rect::new(0, 0, 10, 5));
+        assert_eq!((content.y, content.height), (1, 3));
+        assert!(queue_panel_title_row(Rect::new(0, 0, 10, 5)).is_none());
+        assert!(queue_panel_separator_row(Rect::new(0, 0, 10, 5)).is_none());
 
         // A degenerate box reserves nothing.
         let content = queue_panel_subareas(Rect::new(0, 0, 10, 2));
@@ -235,7 +266,7 @@ mod tests {
     /// The idle queue-only pane-geometry chain (review of tasks 3.1-3.4,
     /// moved from the queue render test): with no visual slot or transport
     /// rows, the list content starts below the header row plus the panel's
-    /// one blank top-inset row plus the one-row title — all from the
+    /// one blank top-inset row plus the title band — all from the
     /// arrangement's own inputs, not pulled from a render-test buffer.
     #[test]
     fn idle_pane_starts_below_header_with_a_title_band() {
@@ -247,10 +278,14 @@ mod tests {
             card_height: 0,
         });
         // Header row plus the column inset row plus the recessed box's one
-        // blank top-inset row plus the one-row title; the list starts
-        // directly below the title. (The shell helper now resolves the same
-        // content the mounted panel paints, through the shared box helper.)
-        assert_eq!(geometry.content_area.y, left.y + header + 3);
+        // blank top-inset row plus the title band (title, separator, blank
+        // row); the list starts below the band. (The shell helper now
+        // resolves the same content the mounted panel paints, through the
+        // shared box helper.)
+        assert_eq!(
+            geometry.content_area.y,
+            left.y + header + 2 + QUEUE_TITLE_BAND_ROWS
+        );
         assert_eq!(geometry.panel_area.bottom(), 30);
     }
 }

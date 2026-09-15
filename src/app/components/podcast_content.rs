@@ -261,6 +261,7 @@ impl PodcastContent {
                     .filter(|s| !s.is_empty()),
                 credits: data.credits,
                 workspace: Some(Workspace {
+                    header: None,
                     selector: Some(SelectorRow {
                         pills: AudiobookshelfEpisodeFilter::ALL
                             .iter()

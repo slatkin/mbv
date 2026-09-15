@@ -406,6 +406,7 @@ impl TvContent {
             overview: data.overview,
             credits: data.credits,
             workspace: Some(Workspace {
+                header: None,
                 selector: workspace_selector,
                 list: &mut self.episodes,
                 focused: workspace_focused,

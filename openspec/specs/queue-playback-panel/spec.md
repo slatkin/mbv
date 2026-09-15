@@ -96,6 +96,22 @@ follow the queue scope being viewed.
 - **WHEN** the layout is library-only
 - **THEN** no header row SHALL be painted
 
+### Requirement: The queue panel carries a title band above its rows
+
+The recessed queue panel inside the queue column SHALL paint one title band: one blank top-inset
+row, the one-row `Queue` title in the foam metadata role, the `▁` block separator line in the
+sage-green separator role, and one blank row above the first queue row. The title and the separator
+SHALL be indented two columns from each side of the recessed box, matching the queue rows' own text
+indent, so the separator starts and ends under the title rather than at the box's edges. The band
+SHALL be reserved only when the box fits the band plus one queue row and the box's bottom padding;
+a box too short for it SHALL keep the title-less inset.
+
+#### Scenario: Title band separates the title from the rows
+
+- **WHEN** a queue-visible layout with a roomy queue panel is painted
+- **THEN** the panel reads `Queue` above a `▁` separator line indented two columns on each side
+- **AND** one blank row sits between the separator and the first queue row
+
 ### Requirement: The playback panel renders in the queue column
 
 In every queue-visible layout the playback panel (seekbar, title row, controls) SHALL render inside

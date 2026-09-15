@@ -467,6 +467,7 @@ mod hero_header_tests {
             overview: None,
             credits: None,
             workspace: Some(Workspace {
+                header: None,
                 selector: None,
                 list: &mut workspace_list,
                 focused: false,

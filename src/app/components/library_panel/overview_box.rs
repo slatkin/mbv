@@ -139,10 +139,8 @@ pub(in crate::app) fn paint_overview_box(
         // below it; both remain pinned while the table scrolls.
         let y = inner.y + text_rows as u16;
         if y < inner.bottom() {
-            let separator = "▁".repeat(inner.width as usize);
-            f.render_widget(
-                Paragraph::new(separator)
-                    .style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR)),
+            crate::app::render::components::widgets::render_block_separator(
+                f,
                 Rect {
                     x: inner.x,
                     y,

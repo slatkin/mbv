@@ -138,6 +138,7 @@ fn overview_box_presents_only_with_overview_text() {
         overview: Some("A very long overview.".into()),
         credits: None,
         workspace: Some(Workspace {
+            header: None,
             selector: None,
             list: &mut workspace_list,
             focused: true,
@@ -206,6 +207,7 @@ fn overview_box_fills_the_pane_when_no_workspace_follows_it() {
         overview: Some("A very long overview.".into()),
         credits: None,
         workspace: Some(Workspace {
+            header: None,
             selector: None,
             list: &mut workspace_list,
             focused: false,

@@ -171,6 +171,21 @@ pub(in crate::app) fn queue_panel_inset(area: Rect) -> Rect {
     }
 }
 
+/// The one-row block separator the Wide Hero's Main content box uses between
+/// its overview text and its cast and crew table, and that the Workspace and
+/// Queue panel headers reuse between their title and their rows: `▁` block
+/// characters spanning `area`'s full width in the sage-green separator role.
+pub(in crate::app) fn render_block_separator(f: &mut Frame, area: Rect) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    f.render_widget(
+        Paragraph::new("\u{2581}".repeat(area.width as usize))
+            .style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR)),
+        Rect { height: 1, ..area },
+    );
+}
+
 /// Fill `area` with `surface`'s resolved background, clearing it first.
 pub(in crate::app) fn fill_surface(
     f: &mut Frame,

@@ -357,19 +357,31 @@ hero SHALL render the provider-link row as plain text with no click handling.
 - **WHEN** a provider link's URL contains a control byte
 - **THEN** the name renders as ordinary body text and clicking it does nothing
 
-### Requirement: Wide Workspaces are one Selector row plus one list box
+### Requirement: Wide Workspaces are one header plus one Selector row plus one list box
 
 A destination whose item has constituent items (TV seasons and episodes, Music tracks, Audiobookshelf
 chapters, Audiobookshelf podcast episodes) SHALL present them in a Workspace below the overview: an
-optional Selector row (season pills, episode played-state filter) followed by one Main content box
+optional one-row header, an optional Selector row (season pills, episode played-state filter)
+followed by one Main content box
 holding the canonical list. The Workspace box SHALL render the accent-soft surface while its list holds
 focus and the backdrop surface otherwise. Its selected row SHALL use the owning-surface selected-row
 treatment. A Hero pane with a Workspace is focusable; a Hero pane without one is read-only and always
 renders the resting surface. No destination SHALL render a second Workspace box.
 
+Grouped Music's Workspace SHALL carry the header `Tracks` (user direction 2026-09-15): the title in the
+foam metadata role, then the same `▁` separator line and one blank row the Movie hero's overview box
+puts under its overview text, then the track rows — all inside the Workspace box, whose surface and
+bottom padding are unchanged. The header SHALL be omitted when the box has no room to keep a list row
+under it.
+
 #### Scenario: Track list takes focus
 - **WHEN** track selection becomes active in Wide grouped Music
 - **THEN** the track Workspace box renders the accent-soft surface
+
+#### Scenario: Grouped Music's track Workspace header
+- **WHEN** a Music album's tracks render in the Wide Workspace
+- **THEN** a `Tracks` header row paints above them in the foam metadata role
+- **AND** the `▁` separator line and one blank row paint between the header and the first track row
 
 #### Scenario: Episode list takes focus
 - **WHEN** episode selection becomes active in Wide TV shows
