@@ -23,5 +23,5 @@
 
 ## 5. Specs, gates, commit
 
-- [ ] 5.1 Apply the delta specs to `openspec/specs/mouse-input/spec.md` (wheel-verification table: plain-kinds row and Wide-TV row truth-aligned per design D4) and `openspec/specs/library-panel/spec.md` (requirement renamed to "The list pane …"), using the openspec-sync workflow. Verify: `openspec validate --strict` passes.
-- [ ] 5.2 Final gates: `cargo fmt` (accept all reflow), `cargo clippy --workspace --all-targets -- -D warnings`, full `cargo nextest run -p mbv` 0 failures. Stage only the rename's files (never the pre-existing dirty `crates/mbv-core` player files) and commit; never leave the staged set dirty.
+- [x] 5.1 Apply the delta specs to `openspec/specs/mouse-input/spec.md` (wheel-verification table: plain-kinds row and Wide-TV row truth-aligned per design D4) and `openspec/specs/library-panel/spec.md` (requirement renamed to "The list pane …"), using the openspec-sync workflow. Verify: `openspec validate --strict` passes.
+- [x] 5.2 Final gates: `cargo fmt` (accept all reflow), `cargo clippy --workspace --all-targets -- -D warnings`, full `cargo nextest run -p mbv` 0 failures. Stage only the rename's files (never the pre-existing dirty `crates/mbv-core` player files) and commit; never leave the staged set dirty.
