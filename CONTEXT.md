@@ -541,7 +541,8 @@ _Avoid_: external-links row, link list, clickable links
 
 **Cast and crew table**:
 The Wide Hero pane's table of Movie people inside the Main content box, with
-one name column and one shared role column and no header or separator. It lists
+one name column and one shared role column, right-aligned at the box's right edge, and no header or
+separator. It lists
 every Director in provider order, followed by at most nine Actors in provider
 order; directors do not consume cast places. An empty role falls back to the
 person's provider type. The table follows overview text after one blank row, or

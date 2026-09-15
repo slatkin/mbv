@@ -147,8 +147,11 @@ role-less director read as `Director` and a role-less actor as `Actor`.
 
 ### D8 — Two aligned columns, sized from the table's own content, clipped at the box
 
-The name column is the longest rendered name plus a gap, capped so a role column survives; every role
-starts at that one column and is truncated with an ellipsis at the box's edge. When the pane is shorter
+The name column is the longest rendered name plus a gap, capped so a role column survives; the role
+column spans the box's remaining width, and every role is right-aligned at the box's right edge so
+the table uses the whole panel (amended 2026-09-15 from the user's visual sweep). A role longer than
+the remaining width is truncated with an ellipsis at the box's edge and still painted right-aligned.
+When the pane is shorter
 than the box's content, the table clips at the box's bottom edge — the Hero pane does not scroll, and
 the alternative (shrinking the artwork further) would fight the existing text-starvation rule.
 

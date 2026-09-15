@@ -72,8 +72,9 @@ person the provider types as a director first, in provider order, followed by at
 provider types as an acting cast member, in provider order. Directors SHALL NOT consume cast places.
 
 Each row SHALL show the person's name in a first column and their role in a second column. The second
-column SHALL begin at one shared column for every row, sized from the longest name the table shows,
-and a role longer than the remaining width SHALL be truncated at the box's edge. The table SHALL have
+column SHALL span the overview box's remaining width after the name column, which is sized from the
+longest name the table shows, and every role SHALL be right-aligned at the box's right edge. A role
+longer than the remaining width SHALL be truncated with an ellipsis at the box's edge. The table SHALL have
 no header row and no separating rules, and SHALL use the body text treatment the overview paragraph
 uses.
 
