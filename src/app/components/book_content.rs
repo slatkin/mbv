@@ -134,6 +134,7 @@ impl BookContent {
         // carry a stale selected_id, but an open Hero must stay bound to the
         // same book when that target remains in the refreshed catalog.
         let prior_target = self.carrier.selected_target().cloned();
+        let projected_detail_loading = snapshot.detail_loading;
         let survived = self.initialized
             && prior_target.as_ref().is_some_and(|prior| {
                 snapshot
@@ -173,6 +174,9 @@ impl BookContent {
             .selected_bucket
             .min(self.state.buckets.len().saturating_sub(1));
         self.set_book_rows();
+        // `sync_book_from_owner` uses the ordinary selection seam. Preserve
+        // the provider's projected loading state after that re-anchor.
+        self.state.detail_loading = projected_detail_loading;
         self.initialized = true;
         self.images_enabled = images_enabled;
         self.project_chapter_rows();
@@ -570,6 +574,10 @@ impl LibraryContentOwner for BookContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
         self.chapter_list.clear_selection();
+    }
+
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.carrier.selected_target().is_some()
     }
 
     fn set_selection_origin(

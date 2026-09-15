@@ -69,6 +69,21 @@ fn narrow_enter_requests_album_activation() {
         .downcast_ref::<LibraryPanel>()
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
+    let mut track = make_item("Track One", "Audio");
+    track.id = "track-1".into();
+    model
+        .app
+        .album_tracks_cache
+        .insert("album-1".into(), vec![track]);
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_track_item()
+            .map(|item| item.id),
+        Some("track-1".into()),
+        "the overlay Workspace keeps its stable child target"
+    );
 }
 
 #[test]
@@ -719,6 +734,21 @@ fn music_album_folder_activation_branch_flips_on_resize_tick_before_repaint() {
         .downcast_ref::<LibraryPanel>()
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
+    let mut track = make_item("Track One", "Audio");
+    track.id = "track-1".into();
+    model
+        .app
+        .album_tracks_cache
+        .insert("album-1".into(), vec![track]);
+    model.sync_mounted_surfaces();
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_track_item()
+            .map(|item| item.id),
+        Some("track-1".into()),
+        "the overlay Workspace keeps its stable child target"
+    );
 
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(

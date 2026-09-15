@@ -536,6 +536,10 @@ impl LibraryContentOwner for TvContent {
         self.carrier.clear_selection();
     }
 
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.selected_item().is_some()
+    }
+
     fn set_selection_origin(
         &mut self,
         origin: crate::app::components::media_list::SelectionOrigin,

@@ -487,6 +487,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
         self.carrier.clear_selection();
     }
 
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.hero_item().is_some()
+    }
+
     fn set_selection_origin(
         &mut self,
         origin: crate::app::components::media_list::SelectionOrigin,

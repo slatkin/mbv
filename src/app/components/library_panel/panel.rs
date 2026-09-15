@@ -236,10 +236,9 @@ impl LibraryPanel {
     }
 
     pub(in crate::app) fn sync_overlay_state(&mut self) {
-        let hero_available = self
-            .owners
-            .active_mut()
-            .is_some_and(|owner| owner.hero_overlay_available());
+        let hero_available = self.owners.active_mut().is_some_and(|owner| {
+            owner.hero_overlay_available() || owner.hero_overlay_target_available()
+        });
         if self.hero_overlay_open && !hero_available {
             self.dismiss_hero_overlay();
         }
@@ -502,9 +501,10 @@ impl LibraryPanel {
     }
 
     fn can_open_hero_overlay(&mut self) -> bool {
-        self.owners
-            .active_mut()
-            .is_some_and(|owner| owner.hero_overlay_available() && !owner.inline_search_active())
+        self.owners.active_mut().is_some_and(|owner| {
+            !owner.inline_search_active()
+                && (owner.hero_overlay_available() || owner.hero_overlay_target_available())
+        })
     }
 
     fn open_hero_from_browser(&mut self, at: Option<Position>) -> Option<Msg> {

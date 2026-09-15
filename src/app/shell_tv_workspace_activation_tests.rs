@@ -1,4 +1,6 @@
 use super::*;
+use crate::app::tests::make_item;
+use crate::app::SeriesDetail;
 
 #[test]
 fn wide_tv_handoff_does_not_fetch_empty_series_id() {
@@ -64,6 +66,17 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
     model.app.libs[0].nav_stack[0].set_resting_cursor(0);
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-1".into();
+    model.app.series_detail_cache.insert(
+        "movie-focused".into(),
+        SeriesDetail {
+            seasons: vec![season],
+            episodes: [("season-1".into(), vec![episode])].into_iter().collect(),
+        },
+    );
     model.push_tv_workspace_content();
     model.sync_library_panel();
     let item = model
@@ -82,6 +95,14 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert_eq!(
         model.test_tv_owner().selected_item_id(),
         Some("movie-focused".into())
+    );
+    assert_eq!(
+        model
+            .test_tv_owner()
+            .selected_episode_item()
+            .map(|item| item.id),
+        Some("episode-1".into()),
+        "the overlay Workspace keeps its stable child target"
     );
 
     // Guard 1: a non-tvshows collection_type rejects.
@@ -141,6 +162,17 @@ fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
     let mut model = mounted_tv_model();
     model.app.terminal_width = 60;
     model.app.terminal_height = 24;
+    let mut season = make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let mut episode = make_item("Episode 1", "Episode");
+    episode.id = "episode-1".into();
+    model.app.series_detail_cache.insert(
+        "movie-focused".into(),
+        SeriesDetail {
+            seasons: vec![season],
+            episodes: [("season-1".into(), vec![episode])].into_iter().collect(),
+        },
+    );
     model.sync_tv_content();
     model.sync_active_destination();
     assert!(model.app.wide_tv_library_area(0).is_none());
@@ -161,6 +193,14 @@ fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
         .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
+    assert_eq!(
+        model
+            .test_tv_owner()
+            .selected_episode_item()
+            .map(|item| item.id),
+        Some("episode-1".into()),
+        "the overlay Workspace keeps its stable child target"
+    );
 
     let mut music_resize = false;
     let mut tv_resize = false;

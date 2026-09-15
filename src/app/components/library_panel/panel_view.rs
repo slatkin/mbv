@@ -93,8 +93,8 @@ impl Component for LibraryPanel {
             if let Some(overlay_rect) =
                 crate::app::render::arrangements::library::library_hero_overlay(area)
             {
+                let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, area, overlay_rect);
                 if let Some(hero) = content.hero.as_mut() {
-                    let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, area, overlay_rect);
                     let composition = super::super::hero_composition::paint_library_hero_content(
                         frame,
                         inner,
@@ -109,6 +109,22 @@ impl Component for LibraryPanel {
                         pane: area,
                         frame: overlay_rect,
                         hero: composition,
+                    });
+                } else {
+                    // A target may arrive one projection before its Hero
+                    // snapshot while provider detail is loading. Keep the
+                    // visible overlay/frame and its hit boundary alive rather
+                    // than silently falling back to the covered browser.
+                    self.overlay_geometry = Some(super::OverlayGeometry {
+                        pane: area,
+                        frame: overlay_rect,
+                        hero: super::super::hero_composition::HeroCompositionGeometry {
+                            workspace: None,
+                            hero_image: None,
+                            overview_box: None,
+                            overview_content_length: 0,
+                            overview_viewport: 0,
+                        },
                     });
                 }
             }

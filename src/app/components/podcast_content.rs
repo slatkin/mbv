@@ -83,6 +83,7 @@ impl PodcastContent {
         // snapshot's selected_id can lag a provider refresh, so do not use it
         // to decide whether the open Hero still represents the same show.
         let prior_target = self.carrier.selected_target().cloned();
+        let projected_detail_loading = snapshot.detail_loading;
         let survived = self.initialized
             && prior_target.as_ref().is_some_and(|prior| {
                 snapshot
@@ -127,6 +128,10 @@ impl PodcastContent {
             self.state.select(0);
             self.episode_list.select_first();
         }
+        // `sync_show_selection` uses the ordinary selection seam, which
+        // clears its local loading bit. Restore the provider projection so a
+        // delayed detail completion remains visible to the mounted owner.
+        self.state.detail_loading = projected_detail_loading;
         self.initialized = true;
         self.project_episode_rows();
     }
@@ -174,6 +179,9 @@ impl PodcastContent {
 
     pub(in crate::app) fn episode_focused(&self) -> bool {
         self.episode_focused
+    }
+    pub(in crate::app) fn episode_rows(&self) -> &[MediaListRow<String>] {
+        self.episode_list.rows()
     }
     pub(in crate::app) fn episode_filter(&self) -> AudiobookshelfEpisodeFilter {
         self.episode_filter
@@ -346,6 +354,10 @@ impl Default for PodcastContent {
 impl LibraryContentOwner for PodcastContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
+    }
+
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.carrier.selected_target().is_some()
     }
 
     fn set_selection_origin(

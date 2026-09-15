@@ -152,6 +152,14 @@ pub(in crate::app) trait LibraryContentOwner {
         self.content().hero.is_some()
     }
 
+    /// Whether the selected parent can own a Hero overlay before its Hero
+    /// snapshot has materialized (for example while provider detail is
+    /// loading). Owners with Hero-bearing browser rows override this so Enter
+    /// never disappears during that hand-off.
+    fn hero_overlay_target_available(&mut self) -> bool {
+        false
+    }
+
     fn inline_search_active(&self) -> bool {
         false
     }
