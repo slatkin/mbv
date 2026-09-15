@@ -12,7 +12,7 @@ mod wide_row_regression_tests {
     use super::wide::{render_wide_media_list, render_wide_media_list_with_zebra};
     use super::wide_row_regression_tests_helpers::{item, paint, row_of};
     use crate::app::components::media_list::{
-        MediaKind, MediaListRow, MediaSemanticState, SelectedRowStyle, WideMediaList,
+        MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
     };
     use crate::app::palette;
     use ratatui::backend::TestBackend;
@@ -241,7 +241,7 @@ mod wide_row_regression_tests {
                     true,
                     selected_bg,
                     Some(zebra_bg),
-                    None,
+                    false,
                 );
             })
             .unwrap();
@@ -294,7 +294,7 @@ mod wide_row_regression_tests {
                     true,
                     palette::SURFACE_RESTING,
                     Some(zebra_bg),
-                    None,
+                    false,
                 );
             })
             .unwrap();
@@ -313,9 +313,8 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn selected_style_overrides_focused_queue_row_over_zebra() {
+    fn selected_gutter_glyph_marks_selection_without_bg() {
         let rect = Rect::new(0, 0, 32, 2);
-        let selected_bg = palette::SURFACE_RESTING;
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
             item("other", "Other", None),
@@ -331,23 +330,23 @@ mod wide_row_regression_tests {
                     rect,
                     &mut list,
                     true,
-                    selected_bg,
+                    palette::SURFACE_RESTING,
                     Some(Color::Rgb(60, 72, 65)),
-                    Some(SelectedRowStyle {
-                        bg: palette::TEXT_FOCUS_ACCENT,
-                        title_fg: palette::QUEUE_SELECTED_ROW_BG,
-                        title_bg: palette::TEXT_FOCUS_ACCENT,
-                        duration_fg: palette::ACCENT,
-                    }),
+                    true,
                 );
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_eq!(buf[(0, 1)].bg, palette::TEXT_FOCUS_ACCENT);
-        assert_eq!(buf[(2, 1)].fg, palette::QUEUE_SELECTED_ROW_BG);
-        assert_eq!(buf[(2, 1)].bg, palette::TEXT_FOCUS_ACCENT);
-        assert_eq!(buf[(26, 1)].fg, palette::ACCENT);
-        assert_eq!(buf[(26, 1)].bg, palette::TEXT_FOCUS_ACCENT);
+        // The gutter glyph marks the selection; nothing else about the row
+        // changes from the default treatment.
+        assert_eq!(buf[(0, 1)].symbol(), "▎");
+        assert_eq!(buf[(0, 1)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(buf[(0, 1)].bg, Color::Reset);
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_EMPHASIS);
+        assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
+        assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);
+        // The unselected even item keeps its zebra stripe.
+        assert_eq!(buf[(2, 0)].bg, Color::Rgb(60, 72, 65));
     }
 
     #[test]

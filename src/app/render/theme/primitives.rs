@@ -49,7 +49,6 @@ pub(super) const SEEK_TRACK: Color = Color::Rgb(70, 84, 95); // unplayed seek tr
 pub(super) const DARK_BG: Color = Color::Rgb(30, 35, 38); // tab bar (Home, etc) background (#1e2326)
 pub(super) const LIBRARY_SIDE_BG: Color = Color::Rgb(45, 53, 59); // library-side background, reused for the queue column's unfocused/dim state (#2d353b)
 pub(super) const PLAYBACK_PANEL_BG: Color = Color::Rgb(51, 60, 67); // now-playing panel background (#333c43)
-pub(super) const QUEUE_SELECTED_ROW_BG: Color = Color::Rgb(69, 68, 60); // queue selected-row override (#45443c)
 pub(super) const PLAYBACK_CONTENT_FG: Color = Color::Rgb(131, 192, 146); // playback title/codec value (#83c092)
 pub(super) const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metadata captions/time (#859289)
 pub(super) const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey for detail/label text (#6c766c)

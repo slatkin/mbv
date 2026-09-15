@@ -48,17 +48,17 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 `WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
-The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. A paint policy MAY also carry a caller-supplied selected-row style (background, title foreground, title background, and duration foreground) applied to the selected row in place of the default selection colours.
+The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. A paint policy MAY instead select a gutter-accent treatment for its selection: the selected row SHALL NOT paint a selected background (zebra striping SHALL apply to it as to any other row), its text SHALL keep the default row colours, and the painter SHALL mark it with a yellow left quarter-block glyph in the row's leading gutter.
 
 The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve it from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no selected/detail geometry.
 
 It SHALL support Wide hero rails, provider workspace rows, and Queue fixed rows, but SHALL NOT implement Inline replacement or Grid placement. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use the shared canonical owner with Wide presentation in every panel mode.
 
-#### Scenario: A selected row uses its optional paint style
+#### Scenario: A gutter-accent selected row keeps default row painting
 
-- **WHEN** a Wide list's paint policy carries a selected-row style
-- **THEN** the selected row uses its supplied background, title foreground, title background, and duration foreground
-- **AND** rows without that override retain the default selection colours
+- **WHEN** a Wide list's paint policy selects the gutter-accent treatment
+- **THEN** the selected row paints with the default row colours and no selected background
+- **AND** a yellow left quarter-block glyph in the row's leading gutter marks the selection
 
 #### Scenario: Wide TV rail composes the control
 
@@ -426,7 +426,7 @@ Each list owns an independent marquee clock (mirroring its ownership of cursor a
 
 ### Requirement: Wide presentation supports optional zebra striping
 
-The Wide presentation SHALL accept an optional zebra-stripe policy on its paint policy. The policy SHALL carry a focused and an unfocused secondary background colour. When zebra striping is enabled, the painter SHALL apply the secondary background colour to every even-numbered visible selectable `Item` row, counting only selectable `Item` rows in the visible window by screen-row order (zero-indexed, so the first visible item is even and striped, the second is odd, etc.). Headings and Spacers SHALL always paint with no zebra background regardless of the policy. When zebra striping is disabled (the default), row backgrounds SHALL be unchanged from today's behaviour. The selected row SHALL always use the selected-row background, never the zebra background. For an unselected striped row, the secondary background SHALL be confined to the text-flow range inside the row's existing two-column left and right gutters; the parent background SHALL remain visible in those gutters and in any scrollbar column. Row geometry, width calculations, and hit geometry SHALL remain unchanged.
+The Wide presentation SHALL accept an optional zebra-stripe policy on its paint policy. The policy SHALL carry a focused and an unfocused secondary background colour. When zebra striping is enabled, the painter SHALL apply the secondary background colour to every even-numbered visible selectable `Item` row, counting only selectable `Item` rows in the visible window by screen-row order (zero-indexed, so the first visible item is even and striped, the second is odd, etc.). Headings and Spacers SHALL always paint with no zebra background regardless of the policy. When zebra striping is disabled (the default), row backgrounds SHALL be unchanged from today's behaviour. The selected row SHALL always use the selected-row background, never the zebra background — except on a list using the gutter-accent selection treatment, where the selected row takes the zebra background like any other row. For an unselected striped row, the secondary background SHALL be confined to the text-flow range inside the row's existing two-column left and right gutters; the parent background SHALL remain visible in those gutters and in any scrollbar column. Row geometry, width calculations, and hit geometry SHALL remain unchanged.
 
 #### Scenario: Zebra stripes are contained within existing row gutters
 - **WHEN** a Wide presentation renders an unselected striped row
@@ -444,7 +444,7 @@ The Wide presentation SHALL accept an optional zebra-stripe policy on its paint 
 - **AND** the item-only counter does not increment for the structural row
 
 #### Scenario: Selected row overrides zebra
-- **WHEN** the selected row falls on a zebra-striped position
+- **WHEN** the selected row falls on a zebra-striped position on a list that paints a selected-row background
 - **THEN** the selected-row background is used, not the zebra background
 
 #### Scenario: Zebra is screen-row-parity based

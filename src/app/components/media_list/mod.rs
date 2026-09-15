@@ -214,19 +214,11 @@ pub struct ZebraStripe {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SelectedRowStyle {
-    pub bg: Color,
-    pub title_fg: Color,
-    pub title_bg: Color,
-    pub duration_fg: Color,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WideMediaListPaintPolicy {
     focused: bool,
     selected_surface: SelectedRowSurface,
     zebra: Option<ZebraStripe>,
-    selected_style: Option<SelectedRowStyle>,
+    selected_gutter: bool,
 }
 
 impl WideMediaListPaintPolicy {
@@ -235,7 +227,7 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::ListBackdrop,
             zebra: None,
-            selected_style: None,
+            selected_gutter: false,
         }
     }
 
@@ -244,7 +236,7 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningQueueColumn,
             zebra: None,
-            selected_style: None,
+            selected_gutter: false,
         }
     }
 
@@ -253,7 +245,7 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
             zebra: None,
-            selected_style: None,
+            selected_gutter: false,
         }
     }
 
@@ -262,13 +254,13 @@ impl WideMediaListPaintPolicy {
         self
     }
 
-    pub const fn with_selected_style(mut self, style: SelectedRowStyle) -> Self {
-        self.selected_style = Some(style);
+    pub const fn with_selected_gutter(mut self) -> Self {
+        self.selected_gutter = true;
         self
     }
 
-    pub(crate) fn selected_style(self) -> Option<SelectedRowStyle> {
-        self.selected_style
+    pub(crate) const fn selected_gutter(self) -> bool {
+        self.selected_gutter
     }
 
     pub(crate) fn zebra_bg(self) -> Option<Color> {

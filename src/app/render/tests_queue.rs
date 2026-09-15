@@ -607,10 +607,7 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
                 .collect();
             let Some(x) = text.find(title) else { continue };
             let cell = &buf[(x as u16, y)];
-            if cell.style().fg == Some(palette::ACCENT)
-                || (cell.style().fg == Some(palette::QUEUE_SELECTED_ROW_BG)
-                    && cell.style().bg == Some(palette::TEXT_FOCUS_ACCENT))
-            {
+            if cell.style().fg == Some(palette::ACCENT) {
                 hits.push((x as u16, y));
             }
         }

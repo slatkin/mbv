@@ -39,7 +39,6 @@ pub const SURFACE_PLAYBACK: Color = primitives::PLAYBACK_PANEL_BG; // now-playin
 #[allow(dead_code)]
 pub const SURFACE_ACCENT_SOFT: Color = primitives::SOFT_CONTENT_BODY_BG;
 pub const SURFACE_ITEM_FOCUSED: Color = primitives::FOCUSED;
-pub const QUEUE_SELECTED_ROW_BG: Color = primitives::QUEUE_SELECTED_ROW_BG;
 pub const SURFACE_SIDEBAR: Color = primitives::PANEL_BG; // plain (non-hero) sidebar/panel background
                                                          // Transitional: retired from production by task 4.2 (`SURFACE_ARTWORK_PLACEHOLDER`
                                                          // was `SURFACE_BACKDROP`'s value alias); the name stays reachable only because

@@ -22,8 +22,10 @@ use unicode_width::UnicodeWidthStr;
 /// row (the library backdrop, even while the list panel itself is
 /// focus-green), while queue and nested workspace lists resolve their owning
 /// column's selected-row identity (`SelectedRowOnQueueColumn` /
-/// `SelectedRowOnLibraryPane`) so the row follows that column's focus. The
-/// policy's optional selected-row style may override that surface mapping.
+/// `SelectedRowOnLibraryPane`) so the row follows that column's focus. When
+/// `gutter_glyph` is set, the selected row keeps default row colours and no
+/// selected background; a yellow quarter-block glyph in the leading gutter
+/// marks the selection instead.
 ///
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
@@ -35,7 +37,7 @@ pub(in crate::app) fn media_list_row<Target>(
     focused: bool,
     selected_bg: Color,
     alternate_bg: Option<Color>,
-    selected_style: Option<crate::app::components::media_list::SelectedRowStyle>,
+    gutter_glyph: bool,
     inner_width: usize,
     has_scrollbar: bool,
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
@@ -106,18 +108,18 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
-            let selected_style = selected.then(|| selected_style).flatten();
+            let paint_selected = selected && !gutter_glyph;
             let secondary_separator_reserve =
                 usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
             let title_width = content_w.saturating_sub(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve,
             );
-            let title_color = if selected
+            let title_color = if paint_selected
                 && !matches!(
                     semantic_state,
                     MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
                 ) {
-                selected_style.map_or(palette::TEXT_EMPHASIS, |style| style.title_fg)
+                palette::TEXT_EMPHASIS
             } else {
                 fg
             };
@@ -134,7 +136,7 @@ pub(in crate::app) fn media_list_row<Target>(
                     None => vec![(primary.clone(), title_color)],
                 };
             let parts_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-            let mut title_spans = marquee
+            let title_spans = marquee
                 .take()
                 .filter(|_| selected && parts_width > title_width)
                 .map(|(text, started_at)| {
@@ -160,11 +162,6 @@ pub(in crate::app) fn media_list_row<Target>(
                     }
                     spans
                 });
-            if let Some(style) = selected_style {
-                for span in &mut title_spans {
-                    span.style = span.style.fg(style.title_fg).bg(style.title_bg);
-                }
-            }
 
             let mut spans = vec![Span::raw("  ")];
             spans.extend(title_spans);
@@ -181,20 +178,18 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::raw(" ".repeat(pad)));
                 spans.push(Span::styled(
                     dur.to_owned(),
-                    Style::default()
-                        .fg(selected_style
-                            .map_or(palette::STATUS_AVAILABLE, |style| style.duration_fg)),
+                    Style::default().fg(palette::STATUS_AVAILABLE),
                 ));
             }
             // Pad the selected row's spans out to the full row width (up to
             // the scrollbar column) so the highlighted background bar spans
             // the whole panel regardless of whether a duration string is
             // present — never just the width of the row text.
-            if selected {
+            if paint_selected {
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
                 spans.push(Span::raw(" ".repeat(inner_width.saturating_sub(used))));
             }
-            if !selected {
+            if !paint_selected {
                 if let Some(bg) = alternate_bg {
                     // Ratatui fills a ListItem's whole row allocation when its
                     // style has a background. Keep the row style unstyled and
@@ -211,8 +206,14 @@ pub(in crate::app) fn media_list_row<Target>(
                     ));
                 }
             }
-            ListItem::new(Line::from(spans)).style(if selected {
-                Style::default().bg(selected_style.map_or(selected_bg, |style| style.bg))
+            // Gutter-accent selection: swap the leading two-column indent for
+            // a yellow quarter-block glyph in the first column. Everything
+            // else on the row keeps the default treatment.
+            if selected && gutter_glyph {
+                spans[0] = Span::styled("▎ ", Style::default().fg(palette::TEXT_FOCUS_ACCENT));
+            }
+            ListItem::new(Line::from(spans)).style(if paint_selected {
+                Style::default().bg(selected_bg)
             } else {
                 Style::default()
             })
