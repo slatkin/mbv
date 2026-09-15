@@ -695,37 +695,37 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     );
 }
 
-/// Gutter-accent selection: the marker is a yellow Nerd Font glyph
-/// (U+F0BBA) painted OUTSIDE the recessed box's leading edge, on the
-/// selected row's screen row, only while the panel holds focus.
+/// Gutter-accent selection: the marker is a foam Nerd Font glyph
+/// (U+F0BBA) in the selected row's leading gutter inside the panel; the
+/// panel paints nothing outside the box edge.
 #[test]
-fn queue_selection_marker_paints_outside_the_box_edge_when_focused() {
+fn queue_selection_marker_is_inside_the_panel_gutter() {
     let mut app = make_queue_app(3);
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
     let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 40));
     let queue = chrome.root.queue.expect("queue panel placed");
     let box_area = super::arrangements::queue::queue_list_box(queue);
-    let marker_x = box_area.x - 1;
     // The cursor sits on item 0: the first content row of the box.
     let marker_y = box_area.y + 1;
+    // Nothing paints outside the recessed box edge.
     assert_eq!(
-        buf[(marker_x, marker_y)].symbol(),
-        "\u{f0bba}",
-        "the focused queue marks its selected row outside the box edge"
+        buf[(box_area.x - 1, marker_y)].symbol(),
+        " ",
+        "no marker may paint outside the box edge"
     );
-    assert_eq!(buf[(marker_x, marker_y)].fg, palette::TEXT_FOCUS_ACCENT);
-    // Unselected marker rows stay clean.
-    assert_eq!(buf[(marker_x, marker_y + 1)].symbol(), " ");
+    // The selected row's second indent column carries the foam icon.
+    assert_eq!(buf[(box_area.x + 1, marker_y)].symbol(), "\u{f054}");
+    assert_eq!(buf[(box_area.x + 1, marker_y)].fg, palette::TEXT_METADATA);
 
-    // Without panel focus the marker disappears.
+    // Without panel focus the icon disappears.
     app.panel_focus = crate::app::PanelFocus::Library;
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
     assert_eq!(
-        buf[(marker_x, marker_y)].symbol(),
+        buf[(box_area.x, marker_y)].symbol(),
         " ",
-        "the unfocused queue paints no selection marker"
+        "the unfocused queue paints no selection icon"
     );
 }
 

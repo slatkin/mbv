@@ -640,28 +640,6 @@ impl Component for QueueComponent {
             QueuePresentation::Wide(self.carrier.wide_mut()),
             self.focused,
         );
-        // Gutter-accent selection: the marker lives outside the recessed
-        // box, on the selected row's screen row. No background is set, so
-        // the QueueColumn fill the frame painted stays.
-        if self.focused {
-            let box_area = queue_list_box(area);
-            if let (Some(row_rect), true) = (
-                self.carrier.wide().current_selected_row_rect(),
-                box_area.x > 0 && box_area.width > 0,
-            ) {
-                frame.render_widget(
-                    // Nerd Font glyph (md-arrow-left-thick-ish, U+F0BBA).
-                    Paragraph::new('\u{f0bba}'.to_string())
-                        .style(Style::default().fg(palette::TEXT_FOCUS_ACCENT)),
-                    Rect {
-                        x: box_area.x - 1,
-                        y: row_rect.y,
-                        width: 1,
-                        height: 1,
-                    },
-                );
-            }
-        }
         if content_area.height < 1 {
             return;
         }

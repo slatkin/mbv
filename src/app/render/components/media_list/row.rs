@@ -114,12 +114,19 @@ pub(in crate::app) fn media_list_row<Target>(
             let title_width = content_w.saturating_sub(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve,
             );
-            let title_color = if paint_selected
+            let title_color = if selected
                 && !matches!(
                     semantic_state,
                     MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
                 ) {
-                palette::TEXT_EMPHASIS
+                // Gutter-accent lists mark the selection in the gutter and
+                // paint the selected title in the focus accent; other lists
+                // keep the emphasis title.
+                if gutter_glyph {
+                    palette::TEXT_FOCUS_ACCENT
+                } else {
+                    palette::TEXT_EMPHASIS
+                }
             } else {
                 fg
             };
@@ -209,6 +216,12 @@ pub(in crate::app) fn media_list_row<Target>(
             // Gutter-accent selection: the row itself keeps the default
             // treatment (the owning panel paints the marker outside the
             // panel edge); nothing changes inside the row.
+            // Gutter-accent selection: keep the leading indent column blank
+            // and put the selection glyph in the second column, right next
+            // to the title text.
+            if selected && gutter_glyph {
+                spans[0] = Span::styled(" \u{f054}", Style::default().fg(palette::TEXT_METADATA));
+            }
             ListItem::new(Line::from(spans)).style(if paint_selected {
                 Style::default().bg(selected_bg)
             } else {
