@@ -1,6 +1,7 @@
 use super::tests_route_state::stub_endpoint;
 use super::*;
 use crate::app::tests::*;
+use rstest::rstest;
 
 #[test]
 fn remote_slot_state_is_local_daemon_for_thin_client_mode() {
@@ -135,35 +136,24 @@ fn attached_session_state_wins_over_local_daemon_indicator() {
     assert!(app.can_disconnect_remote());
 }
 
-#[test]
-fn attached_session_advertising_audio_only_is_an_audio_only_owner() {
+#[rstest]
+#[case::advertises_audio_only(vec!["Audio"], true)]
+#[case::advertises_audio_and_video(vec!["Audio", "Video"], false)]
+#[case::advertises_nothing(Vec::new(), false)]
+fn attached_session_playable_media_capability(
+    #[case] playable_media_types: Vec<&str>,
+    #[case] expected_audio_only: bool,
+) {
     let mut app = make_app_stub();
     app.connected_session_id = Some("session-1".into());
     let mut session = make_session("remote-host", "Emby");
-    session.playable_media_types = vec!["Audio".into()];
+    session.playable_media_types = playable_media_types
+        .into_iter()
+        .map(str::to_string)
+        .collect();
     app.connected_session_state = Some(session);
 
-    assert!(app.session_owner_is_audio_only());
-}
-
-#[test]
-fn attached_session_advertising_audio_and_video_is_not_audio_only() {
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    let mut session = make_session("remote-host", "Emby");
-    session.playable_media_types = vec!["Audio".into(), "Video".into()];
-    app.connected_session_state = Some(session);
-
-    assert!(!app.session_owner_is_audio_only());
-}
-
-#[test]
-fn attached_session_without_playable_media_advertisement_is_not_audio_only() {
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    app.connected_session_state = Some(make_session("remote-host", "Emby"));
-
-    assert!(!app.session_owner_is_audio_only());
+    assert_eq!(app.session_owner_is_audio_only(), expected_audio_only);
 }
 
 #[test]

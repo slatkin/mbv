@@ -52,22 +52,21 @@ fn parse_session_playable_media_types(
         .playable_media_types
 }
 
-#[test]
-fn sessions_parse_playable_media_types_when_present() {
+#[rstest]
+#[case::present_audio_and_video(
+    Some(json!(["Audio", "Video"])),
+    vec!["Audio".to_string(), "Video".to_string()]
+)]
+#[case::absent(None, Vec::new())]
+#[case::empty(Some(json!([])), Vec::new())]
+fn sessions_parse_playable_media_types(
+    #[case] playable_media_types: Option<serde_json::Value>,
+    #[case] expected: Vec<String>,
+) {
     assert_eq!(
-        parse_session_playable_media_types(Some(json!(["Audio", "Video"]))),
-        vec!["Audio", "Video"]
+        parse_session_playable_media_types(playable_media_types),
+        expected
     );
-}
-
-#[test]
-fn sessions_default_playable_media_types_when_absent() {
-    assert!(parse_session_playable_media_types(None).is_empty());
-}
-
-#[test]
-fn sessions_default_playable_media_types_when_empty() {
-    assert!(parse_session_playable_media_types(Some(json!([]))).is_empty());
 }
 
 #[test]
