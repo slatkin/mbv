@@ -308,10 +308,10 @@ pub(in crate::app) fn render_wide_skeleton(
         // reserved box (task 5.10: `Ready` reserves; the shell paints).
         let (next_row, image_box, overview) =
             paint_hero_pane_content(f, hero_area, &*hero, hyperlink_capable, overview_scroll);
-        if let Some((box_rect, content_length, viewport)) = overview {
-            geometry.overview_box = Some(box_rect);
-            geometry.overview_content_length = content_length;
-            geometry.overview_viewport = viewport;
+        if let Some(overview) = overview {
+            geometry.overview_box = Some(overview.rect);
+            geometry.overview_content_length = overview.content_length;
+            geometry.overview_viewport = overview.viewport;
         }
         if let (HeroImageState::Ready { cache_key, .. }, Some(box_rect)) =
             (&hero.facts.artwork.image, image_box)

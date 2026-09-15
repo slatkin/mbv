@@ -15,6 +15,7 @@ use crate::app::render::{paint_wide_hero_text, render_artwork_placeholder, Wrapp
 
 use super::content::{HeroContent, HeroFacts, HeroHeader};
 use super::overview_box;
+use super::overview_box::OverviewPaint;
 
 /// Blank rows between the artwork box and the text block (the shared
 /// `wide_hero_slots` convention: metadata starts at `img_area.bottom() + 1`).
@@ -135,7 +136,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     content: &HeroContent<'_>,
     hyperlink_capable: bool,
     overview_scroll: usize,
-) -> (u16, Option<Rect>, Option<(Rect, usize, usize)>) {
+) -> (u16, Option<Rect>, Option<OverviewPaint>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
     let image_ready = matches!(
@@ -176,13 +177,9 @@ pub(in crate::app) fn paint_hero_pane_content(
     let overview = overview_box::paint_overview_box(f, area, next_row, content, overview_scroll);
     let next_row = overview
         .as_ref()
-        .map(|(bottom, _)| *bottom)
+        .map(|overview| overview.bottom)
         .unwrap_or(next_row);
-    (
-        next_row,
-        reserved_image,
-        overview.map(|(_, metrics)| metrics),
-    )
+    (next_row, reserved_image, overview)
 }
 
 /// The one title/meta painter for all three arms: the title in

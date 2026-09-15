@@ -15,13 +15,29 @@ use crate::app::render::{paint_wide_hero_text, WrappedHeroLine, PANE_PAD_X, PANE
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
 
+/// The painted Main content box and its scroll metrics, retained by the
+/// Library panel for interaction against the same geometry painted here.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::app) struct OverviewPaint {
+    pub bottom: u16,
+    pub rect: Rect,
+    pub content_length: usize,
+    pub viewport: usize,
+}
+
+const OVERVIEW_CREDITS_GAP_ROWS: usize = 2;
+
+fn has_overview_and_credits(overview: Option<&str>, credits: Option<&[HeroCredit]>) -> bool {
+    overview.is_some() && credits.is_some()
+}
+
 pub(in crate::app) fn paint_overview_box(
     f: &mut Frame,
     area: Rect,
     next_row: u16,
     content: &HeroContent<'_>,
     scroll_offset: usize,
-) -> Option<(u16, (Rect, usize, usize))> {
+) -> Option<OverviewPaint> {
     let overview = content
         .overview
         .as_deref()
@@ -43,9 +59,10 @@ pub(in crate::app) fn paint_overview_box(
         })
         .unwrap_or(0);
     let credit_rows = credits.map(|rows| rows.len()).unwrap_or(0);
+    let has_credits_gap = has_overview_and_credits(overview, credits);
     let inner_rows = text_rows
-        + if overview.is_some() && credits.is_some() {
-            2
+        + if has_credits_gap {
+            OVERVIEW_CREDITS_GAP_ROWS
         } else {
             0
         }
@@ -115,11 +132,12 @@ pub(in crate::app) fn paint_overview_box(
         }
         logical_row += text_rows;
     }
-    if overview.is_some() && credits.is_some() {
+    if has_credits_gap {
         // Keep one blank row below the overview, then paint the separator.
-        logical_row += 1;
-        if logical_row >= offset && logical_row - offset < inner.height as usize {
-            let y = inner.y + (logical_row - offset) as u16;
+        logical_row += OVERVIEW_CREDITS_GAP_ROWS;
+        let separator_row = logical_row - 1;
+        if separator_row >= offset && separator_row - offset < inner.height as usize {
+            let y = inner.y + (separator_row - offset) as u16;
             let separator = "▁".repeat(inner.width as usize);
             f.render_widget(
                 Paragraph::new(separator)
@@ -132,7 +150,6 @@ pub(in crate::app) fn paint_overview_box(
                 },
             );
         }
-        logical_row += 1;
     }
     if let Some(credits) = credits {
         let start = logical_row;
@@ -147,7 +164,7 @@ pub(in crate::app) fn paint_overview_box(
                         height: inner.bottom().saturating_sub(y),
                         ..inner
                     },
-                    &credits[skip.min(credits.len())..],
+                    credits,
                     skip,
                 );
             }
@@ -163,7 +180,12 @@ pub(in crate::app) fn paint_overview_box(
             palette::TEXT_METADATA,
         );
     }
-    Some((panel.bottom(), (panel, inner_rows, inner.height as usize)))
+    Some(OverviewPaint {
+        bottom: panel.bottom(),
+        rect: panel,
+        content_length: inner_rows,
+        viewport: inner.height as usize,
+    })
 }
 
 fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
@@ -171,6 +193,7 @@ fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
 }
 
 fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_offset: usize) {
+    // Column geometry is a property of the whole table, not the visible page.
     let name_width = credits
         .iter()
         .map(|c| UnicodeWidthStr::width(c.name.as_str()))
@@ -180,7 +203,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
     const MIN_ROLE_WIDTH: u16 = 8;
     let name_width = name_width.min(area.width.saturating_sub(MIN_ROLE_WIDTH));
     let role_start = area.x.saturating_add(name_width).saturating_add(2);
-    for (i, credit) in credits.iter().enumerate() {
+    for (i, credit) in credits.iter().skip(row_offset).enumerate() {
         let y = area.y.saturating_add(i as u16);
         if y >= area.bottom() {
             break;
@@ -703,12 +726,40 @@ mod tests {
         ];
         let mut terminal = Terminal::new(TestBackend::new(24, 1)).unwrap();
         terminal
-            .draw(|f| paint_credits_from(f, Rect::new(0, 0, 24, 1), &credits[1..], 1))
+            .draw(|f| paint_credits_from(f, Rect::new(0, 0, 24, 1), &credits, 1))
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(0, 0)].bg,
             palette::HERO_CREDITS_STRIPE
         );
+    }
+
+    #[test]
+    fn credits_column_geometry_uses_rows_before_scroll_offset() {
+        let credits = [
+            HeroCredit {
+                name: "The Longest Name".into(),
+                role: "Director".into(),
+            },
+            HeroCredit {
+                name: "X".into(),
+                role: "Actor".into(),
+            },
+        ];
+        let draw = |offset| {
+            let mut terminal = Terminal::new(TestBackend::new(32, 1)).unwrap();
+            terminal
+                .draw(|f| paint_credits_from(f, Rect::new(0, 0, 32, 1), &credits, offset))
+                .unwrap();
+            (0..32)
+                .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+                .collect::<String>()
+        };
+        let at_start = draw(0);
+        let after_scroll = draw(1);
+        assert_eq!(&at_start[24..32], "Director");
+        assert_eq!(&after_scroll[27..32], "Actor");
+        assert_eq!(&after_scroll[16..18], "  ");
     }
 
     #[test]
