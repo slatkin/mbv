@@ -285,7 +285,12 @@ pub enum CtrlCmd {
     /// Replace the entire queue with item-generic slots and optionally
     /// begin playback from `start_idx`.
     UnifiedQueueReplace {
+        /// Legacy item-only representation retained so older peers can still
+        /// decode a replacement. New peers use `slots` for stable identities.
         items: Vec<QueueItem>,
+        /// Owner-assigned slot identities. Absent on legacy payloads.
+        #[serde(default)]
+        slots: Vec<UnifiedQueueSlot>,
         start_idx: Option<usize>,
     },
     /// Append item-generic values to the tail of the queue.

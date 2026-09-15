@@ -184,6 +184,27 @@ fn admit_queue_items(
     (items, cursor)
 }
 
+pub(super) fn admit_queue_slots(
+    original: Vec<(crate::playback_queue::QueueSlotId, QueueItem)>,
+    requested_cursor: Option<usize>,
+    audio_only: bool,
+    has_emby: bool,
+    has_audiobookshelf: bool,
+) -> (Vec<(crate::playback_queue::QueueSlotId, QueueItem)>, usize) {
+    let requested = requested_cursor.unwrap_or(0);
+    let rebased = original
+        .iter()
+        .take(requested)
+        .filter(|(_, item)| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
+        .count();
+    let slots: Vec<_> = original
+        .into_iter()
+        .filter(|(_, item)| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
+        .collect();
+    let cursor = if slots.is_empty() { 0 } else { rebased.min(slots.len() - 1) };
+    (slots, cursor)
+}
+
 fn daemon_admits(
     item: &QueueItem,
     audio_only: bool,

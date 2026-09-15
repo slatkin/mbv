@@ -184,8 +184,16 @@ impl PlayerProxy {
                     return false;
                 }
                 let start_idx = start_idx.min(slots.len() - 1);
+                let slots: Vec<_> = slots
+                    .into_iter()
+                    .map(|slot| crate::ctrl::UnifiedQueueSlot {
+                        slot_id: slot.slot_id.raw(),
+                        item: slot.item,
+                    })
+                    .collect();
                 r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
-                    items: slots.into_iter().map(|slot| slot.item).collect(),
+                    items: slots.iter().map(|slot| slot.item.clone()).collect(),
+                    slots,
                     start_idx: Some(start_idx),
                 })
             }

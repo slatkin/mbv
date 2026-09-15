@@ -223,8 +223,13 @@ impl RemotePlayer {
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
+        let queue_item = QueueItem::Emby(Box::new(item.clone()));
         let sent = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
-            items: vec![QueueItem::Emby(Box::new(item.clone()))],
+            items: vec![queue_item.clone()],
+            slots: vec![crate::ctrl::UnifiedQueueSlot {
+                slot_id: 1,
+                item: queue_item,
+            }],
             start_idx: Some(0),
         });
         if sent {
@@ -247,8 +252,18 @@ impl RemotePlayer {
             .cloned()
             .map(|i| QueueItem::Emby(Box::new(i)))
             .collect();
+        let slots: Vec<_> = queue_items
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, item)| crate::ctrl::UnifiedQueueSlot {
+                slot_id: (index + 1) as u64,
+                item,
+            })
+            .collect();
         let sent = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
             items: queue_items,
+            slots,
             start_idx: Some(start_idx),
         });
         if sent {
