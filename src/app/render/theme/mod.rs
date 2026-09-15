@@ -50,6 +50,7 @@ pub const SURFACE_ARTWORK_PLACEHOLDER: Color = primitives::ARTWORK_PLACEHOLDER;
 // Hero surfaces
 pub const HERO_OVERVIEW_SEPARATOR: Color = primitives::IRIS; // overview/credits separator
 pub const HERO_CREDITS_STRIPE: Color = primitives::PLAYBACK_PANEL_BG; // alternating credits row
+pub const HERO_CREDITS_NAME: Color = primitives::YELLOW; // credits name column
 
 // Accents
 pub const ACCENT: Color = primitives::AQUA; // selection marker, watched, folders, Emby brand glyph
