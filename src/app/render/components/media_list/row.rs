@@ -33,6 +33,7 @@ pub(in crate::app) fn media_list_row<Target>(
     selected: bool,
     focused: bool,
     selected_bg: Color,
+    alternate_bg: Option<Color>,
     inner_width: usize,
     has_scrollbar: bool,
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
@@ -182,7 +183,7 @@ pub(in crate::app) fn media_list_row<Target>(
             ListItem::new(Line::from(spans)).style(if selected {
                 Style::default().bg(selected_bg)
             } else {
-                Style::default()
+                alternate_bg.map_or(Style::default(), |bg| Style::default().bg(bg))
             })
         }
     }

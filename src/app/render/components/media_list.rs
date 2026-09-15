@@ -9,12 +9,13 @@ pub(in crate::app) use wide::{
 
 #[cfg(test)]
 mod wide_row_regression_tests {
-    use super::wide::render_wide_media_list;
+    use super::wide::{render_wide_media_list, render_wide_media_list_with_zebra};
     use super::wide_row_regression_tests_helpers::{item, paint, row_of};
     use crate::app::components::media_list::{MediaKind, WideMediaList};
     use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
+    use ratatui::style::Color;
     use ratatui::Terminal;
     use std::time::{Duration, Instant};
 
@@ -214,6 +215,39 @@ mod wide_row_regression_tests {
     /// vertically offset row-flow rect. The row painter keeps its established
     /// full-width selection treatment, but rows and scrollbar must start at the
     /// content flow's y-coordinate and use its height.
+    #[test]
+    fn zebra_stripes_selectable_rows_and_selected_row_wins() {
+        let rect = Rect::new(0, 0, 32, 4);
+        let selected_bg = palette::SURFACE_RESTING;
+        let zebra_bg = Color::Rgb(60, 72, 65);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            item("one", "One", None),
+            item("two", "Two", None),
+            item("three", "Three", None),
+            item("four", "Four", None),
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_with_zebra(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    selected_bg,
+                    Some(zebra_bg),
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_ne!(buf[(0, 0)].bg, zebra_bg);
+        assert_eq!(buf[(0, 1)].bg, zebra_bg);
+        assert_ne!(buf[(0, 2)].bg, zebra_bg);
+        assert_eq!(buf[(0, 3)].bg, zebra_bg);
+    }
+
     #[test]
     fn non_adjacent_multi_selected_rows_and_unfocused_cursor_paint_selected_surface() {
         let rect = Rect::new(0, 0, 32, 4);

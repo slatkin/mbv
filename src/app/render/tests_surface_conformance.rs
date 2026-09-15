@@ -180,7 +180,7 @@ fn queue_only_strip_and_queue_follow_the_table() {
         true,
         Rect::new(
             queue_view.content_area.x + 1,
-            queue_view.content_area.y + 1,
+            queue_view.content_area.y + 2,
             1,
             1,
         ),
