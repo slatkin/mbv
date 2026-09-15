@@ -507,6 +507,13 @@ impl BookContent {
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::ControlPicked(_) => {
                 None
             }
+            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfBookIntent(if self.chapter_focused {
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_target())
+                } else {
+                    AudiobookshelfBookIntent::Activate
+                }),
+            )),
             LibrarySlotEvent::HeroPane(input) => match input {
                 MediaListSurfaceInput::Wheel { at, delta } => {
                     if self.chapter_list.claims_current_point(at) {

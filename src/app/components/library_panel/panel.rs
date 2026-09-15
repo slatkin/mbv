@@ -222,12 +222,11 @@ impl LibraryPanel {
     }
 
     pub(in crate::app) fn sync_overlay_state(&mut self) {
-        if self.hero_overlay_open
-            && self
-                .owners
-                .active_mut()
-                .is_some_and(|owner| !owner.hero_overlay_available())
-        {
+        let hero_available = self
+            .owners
+            .active_mut()
+            .is_some_and(|owner| owner.hero_overlay_available());
+        if self.hero_overlay_open && !hero_available {
             self.dismiss_hero_overlay();
         }
     }
@@ -235,6 +234,11 @@ impl LibraryPanel {
     #[cfg(test)]
     pub(in crate::app) fn test_open_hero_overlay(&mut self) {
         self.open_hero_overlay();
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_hero_overlay_open(&self) -> bool {
+        self.hero_overlay_open
     }
 
     #[cfg(test)]
@@ -496,11 +500,13 @@ impl LibraryPanel {
     }
 
     fn open_hero_from_browser(&mut self, at: Option<Position>) -> Option<Msg> {
-        if !self.can_open_hero_overlay() {
-            return None;
-        }
         if let Some(at) = at {
             let _ = self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(at)));
+        }
+        // Resolve the gate after the pointer click has moved the canonical
+        // browser selection to its post-click target.
+        if !self.can_open_hero_overlay() {
+            return None;
         }
         if let Some(owner) = self.owners.active_mut() {
             owner.focus_hero_workspace();
@@ -743,6 +749,12 @@ impl LibraryPanel {
                 .map(|owner| owner.activate_hero_selection())
                 .unwrap_or(LeafKeyResult::Unhandled);
             return match result {
+                // A pointer gesture always claims as mouse. Preserve a
+                // destination request, but never leak a keyboard claim from
+                // an owner's legacy leaf disposition.
+                LeafKeyResult::Consumed(Some(Msg::TerminalEvent(_))) => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                }
                 LeafKeyResult::Consumed(message) => message.or(Some(Msg::TerminalEvent(
                     TerminalObserverEvent::MouseClaimed,
                 ))),

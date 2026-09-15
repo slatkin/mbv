@@ -572,6 +572,15 @@ impl LibraryContentOwner for HomeContent {
             LibrarySlotEvent::ControlPicked(_)
             | LibrarySlotEvent::WorkspaceSelectorPicked(_)
             | LibrarySlotEvent::HeroPane(_) => None,
+            LibrarySlotEvent::HeroActivate => match self
+                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::HomePlay(
+                    self.home_row_target(Some(target)),
+                ))),
+                _ => None,
+            },
         }
     }
 

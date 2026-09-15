@@ -186,7 +186,12 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                     .active_mut()
                     .map(|owner| owner.on_key_result(key))
                     .unwrap_or(LeafKeyResult::Unhandled);
-                if self.hero_overlay_open && matches!(result, LeafKeyResult::Unhandled) {
+                let hero_overlay_resolvable = self.hero_overlay_open
+                    && self
+                        .owners
+                        .active_mut()
+                        .is_some_and(|owner| owner.hero_overlay_available());
+                if hero_overlay_resolvable && matches!(result, LeafKeyResult::Unhandled) {
                     return Some(Msg::TerminalEvent(
                         crate::app::components::msg::TerminalObserverEvent::KeyClaimed,
                     ));

@@ -115,6 +115,10 @@ pub(in crate::app) enum LibrarySlotEvent {
     /// stable target through its own carrier), in the pane but off every
     /// row, or nowhere it claims.
     HeroPane(MediaListSurfaceInput),
+    /// Activate the selected Hero parent through the destination's typed
+    /// intent. This is the semantic equivalent of the keyboard Enter path;
+    /// pointer delivery must not fabricate a raw key event.
+    HeroActivate,
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot
@@ -164,13 +168,10 @@ pub(in crate::app) trait LibraryContentOwner {
     /// destination intent. Pointer gestures call this semantic operation, not
     /// a fabricated keyboard event.
     fn activate_hero_selection(&mut self) -> LeafKeyResult {
-        // Destination owners already define the Enter activation semantics;
-        // this semantic hook keeps pointer delivery out of the panel's key
-        // interpreter while allowing unmigrated owners to opt in naturally.
-        self.on_key_result(&KeyEvent::new(
-            tuirealm::event::Key::Enter,
-            tuirealm::event::KeyModifiers::NONE,
-        ))
+        match self.on_slot_event(LibrarySlotEvent::HeroActivate) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     /// The current hero's content data for the shell's image projection

@@ -52,6 +52,14 @@ impl TvContent {
             }
             // The Browser pane's series list.
             LibrarySlotEvent::List(input) => self.series_list_event(input),
+            LibrarySlotEvent::HeroActivate => match self.pane {
+                Pane::Series => self
+                    .selected_item()
+                    .map(|item| Msg::Shell(ShellRequest::TvActivate { item })),
+                Pane::Episodes => self.selected_episode_item().map(|episode| {
+                    Msg::Shell(ShellRequest::TvEpisodeActivate { episode })
+                }),
+            },
             // The hero pane: the episode box's rows, or the pane itself.
             LibrarySlotEvent::HeroPane(input) => self.hero_pane_event(input),
             LibrarySlotEvent::ControlPicked(_) => None,

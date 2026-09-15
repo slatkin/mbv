@@ -442,6 +442,15 @@ impl LibraryContentOwner for PodcastContent {
                 }
                 None
             }
+            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    if self.episode_focused {
+                        self.episode_target()
+                    } else {
+                        None
+                    },
+                )),
+            )),
         }
     }
 

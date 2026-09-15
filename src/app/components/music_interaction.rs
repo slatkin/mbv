@@ -84,6 +84,19 @@ impl MusicContent {
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::ControlPicked(_) => {
                 None
             }
+            LibrarySlotEvent::HeroActivate => {
+                if self.track_focused {
+                    let track = self.selected_track_item()?;
+                    let album = self.selected_item()?;
+                    Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+                        album_id: album.id,
+                        track,
+                    }))
+                } else {
+                    self.selected_item()
+                        .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                }
+            }
             LibrarySlotEvent::HeroPane(input) => match input {
                 // The track owner is local to this workspace; the shell
                 // never recomputes a wheel step. Track-pane focus is not a

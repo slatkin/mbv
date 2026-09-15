@@ -572,6 +572,7 @@ impl LibraryContentOwner for FeedsContent {
             },
             // Feeds has no Workspace and no hero-pane input of its own.
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
+            LibrarySlotEvent::HeroActivate => None,
         }
     }
 

@@ -655,6 +655,9 @@ impl LibraryContentOwner for EmbyLibraryContent {
             LibrarySlotEvent::ControlPicked(_)
             | LibrarySlotEvent::WorkspaceSelectorPicked(_)
             | LibrarySlotEvent::HeroPane(_) => None,
+            LibrarySlotEvent::HeroActivate => self
+                .selected_effect_item()
+                .map(|item| Msg::Shell(ShellRequest::EmbyLibraryActivate { item })),
         }
     }
 

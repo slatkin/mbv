@@ -585,7 +585,10 @@ fn browser_double_click_opens_overlay_and_workspace_activation_stays_open() {
         point.0,
         point.1,
     ));
-    assert!(msg.is_some());
+    assert!(matches!(
+        msg,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
     assert!(panel.test_overlay_geometry().is_some());
 }
 
@@ -607,15 +610,38 @@ fn overlay_esc_dismisses_and_destination_change_or_missing_parent_dismisses() {
             KeyModifiers::NONE
         )))
         .is_some());
-    assert!(panel.test_overlay_geometry().is_none());
+    assert!(!panel.test_hero_overlay_open());
     panel.test_open_hero_overlay();
     panel.set_active(Some(LibraryKey::Feeds));
-    assert!(panel.test_overlay_geometry().is_none());
+    assert!(!panel.test_hero_overlay_open());
     panel.set_active(Some(LibraryKey::Home));
     panel.test_open_hero_overlay();
     panel.retain_owners(&[LibraryKey::Feeds]);
     panel.sync_overlay_state();
-    assert!(panel.test_overlay_geometry().is_none());
+    assert!(!panel.test_hero_overlay_open());
+}
+
+#[test]
+fn closed_overlay_does_not_swallow_local_keys() {
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::new(RefCell::new(
+            FixtureLog::default(),
+        )))),
+    );
+    panel.attr(Attribute::Focus, AttrValue::Flag(true));
+    let _ = draw_panel_at(&mut panel, Rect::new(0, 0, 80, 30));
+
+    for key in [Key::Down, Key::Char('x')] {
+        assert!(
+            panel
+                .on(&Event::Keyboard(KeyEvent::new(key, KeyModifiers::NONE)))
+                .is_none(),
+            "closed overlay must not claim {key:?}"
+        );
+    }
 }
 
 #[test]
