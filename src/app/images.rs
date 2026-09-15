@@ -278,6 +278,15 @@ impl App {
                     return State::Loading;
                 }
             }
+        } else if let Some(entry) = self.card_image_states.get_mut(&cache_key) {
+            // Narrow paints the uncropped poster with the ordinary image
+            // protocol. Drop any Wide cover/composition so a breakpoint
+            // transition cannot reuse a portrait Movie's decorated protocol.
+            if entry.cover_box.is_some() || entry.applied_logo_cache_key.is_some() {
+                entry.protocols.clear();
+                entry.cover_box = None;
+                entry.applied_logo_cache_key = None;
+            }
         }
         State::Ready { cache_key, decoded }
     }
