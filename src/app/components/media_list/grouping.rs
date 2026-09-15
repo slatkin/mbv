@@ -57,6 +57,7 @@ mod tests {
         MediaListRow::Item {
             target: target.into(),
             primary: primary.into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Collection,

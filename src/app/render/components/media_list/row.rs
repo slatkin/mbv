@@ -50,6 +50,7 @@ pub(in crate::app) fn media_list_row<Target>(
         ])),
         MediaListRow::Item {
             primary,
+            secondary,
             trailing,
             duration,
             kind,
@@ -112,22 +113,42 @@ pub(in crate::app) fn media_list_row<Target>(
             } else {
                 fg
             };
+            // Two-tone episode rows: an optional secondary title (the
+            // episode title) paints in the yellow focus-accent role after the
+            // primary title, with one separating space.
+            let parts: Vec<(String, Color)> =
+                match secondary.as_deref().filter(|sec| !sec.is_empty()) {
+                    Some(sec) => vec![
+                        (primary.clone(), title_color),
+                        (" ".into(), title_color),
+                        (sec.to_owned(), palette::TEXT_FOCUS_ACCENT),
+                    ],
+                    None => vec![(primary.clone(), title_color)],
+                };
+            let parts_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
             let title_spans = marquee
                 .take()
-                .filter(|_| selected && primary.width() > title_width)
-                .map(|(text, started_at)| {
-                    marquee_spans(
-                        &[(primary.clone(), title_color)],
-                        title_width,
-                        text,
-                        started_at,
-                    )
-                })
+                .filter(|_| selected && parts_width > title_width)
+                .map(|(text, started_at)| marquee_spans(&parts, title_width, text, started_at))
                 .unwrap_or_else(|| {
-                    vec![Span::styled(
-                        trunc_str(primary, title_width),
+                    // Truncation priority: the secondary title keeps its width
+                    // (up to the whole slot) and the primary title takes the
+                    // rest, so a long series name ellipsises before the
+                    // episode title is dropped.
+                    let sec = secondary.as_deref().filter(|sec| !sec.is_empty());
+                    let sec_w = sec.map_or(0, |text| text.width().min(title_width));
+                    let mut spans = vec![Span::styled(
+                        trunc_str(primary, title_width - sec_w),
                         Style::default().fg(title_color),
-                    )]
+                    )];
+                    if let Some(sec) = sec.filter(|_| sec_w > 0) {
+                        spans.push(Span::raw(" "));
+                        spans.push(Span::styled(
+                            trunc_str(sec, sec_w),
+                            Style::default().fg(palette::TEXT_FOCUS_ACCENT),
+                        ));
+                    }
+                    spans
                 });
 
             let mut spans = vec![Span::raw("  ")];

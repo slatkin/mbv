@@ -201,19 +201,26 @@ impl HomeContent {
         };
         let rows: Vec<MediaListRow<String>> = items
             .iter()
-            .map(|item| MediaListRow::Item {
-                primary: item.display_name(),
-                // Stable per-item identity (Emby id / feed guid / ABS episode
-                // id) — the same id the queue/shell treat as canonical — so an
-                // ordinary refresh retains the selection by identity, not by a
-                // title that can collide across episodes.
-                target: item.id().to_owned(),
-                trailing: home_progress_badge(item),
-                duration: item
-                    .duration()
-                    .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64)),
-                kind: MediaKind::Media,
-                semantic_state: MediaSemanticState::Ordinary,
+            .map(|item| {
+                // Episode rows split into a two-tone title: the series/show
+                // title paints soft white, the episode title yellow after it.
+                let (primary, secondary) = item.display_name_parts();
+                MediaListRow::Item {
+                    primary,
+                    secondary,
+                    // Stable per-item identity (Emby id / feed guid / ABS
+                    // episode id) — the same id the queue/shell treat as
+                    // canonical — so an ordinary refresh retains the selection
+                    // by identity, not by a title that can collide across
+                    // episodes.
+                    target: item.id().to_owned(),
+                    trailing: home_progress_badge(item),
+                    duration: item
+                        .duration()
+                        .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64)),
+                    kind: MediaKind::Media,
+                    semantic_state: MediaSemanticState::Ordinary,
+                }
             })
             .collect();
         self.carrier.set_content(rows);

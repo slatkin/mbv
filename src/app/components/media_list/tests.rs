@@ -15,6 +15,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
         MediaListRow::Item {
             target: "ordinary".into(),
             primary: "Ordinary".into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Media,
@@ -24,6 +25,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
         MediaListRow::Item {
             target: "active".into(),
             primary: "Active".into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Media,
@@ -32,6 +34,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
         MediaListRow::Item {
             target: "played".into(),
             primary: "Played".into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Media,
@@ -40,6 +43,7 @@ fn wide_list_maps_display_rows_to_selectable_indices_and_viewport() {
         MediaListRow::Item {
             target: "disabled".into(),
             primary: "Disabled".into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Media,
@@ -95,6 +99,7 @@ mod resolve_point {
         MediaListRow::Item {
             target: target.into(),
             primary: target.into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Media,
@@ -240,6 +245,7 @@ fn lifecycle_item(target: &str) -> MediaListRow<String> {
     MediaListRow::Item {
         target: target.into(),
         primary: target.into(),
+        secondary: None,
         trailing: None,
         duration: None,
         kind: MediaKind::Media,

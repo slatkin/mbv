@@ -346,6 +346,92 @@ mod wide_row_regression_tests {
         );
     }
 
+    /// Episode rows split into a two-tone title: the series title paints in
+    /// the ordinary emphasis role and the episode title after it in the
+    /// yellow focus-accent role, so the two are visually delineated. On a
+    /// slot too narrow for both, the episode title keeps its budget and the
+    /// series name ellipsises first.
+    #[test]
+    fn episode_row_paints_secondary_title_in_the_focus_accent_role() {
+        use crate::app::components::media_list::{MediaListRow, MediaSemanticState};
+
+        let rect = Rect::new(0, 0, 40, 1);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "ep".into(),
+            primary: "Severance".into(),
+            secondary: Some("Episode Title".into()),
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Ordinary,
+        }]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row_text: String = (0..rect.width)
+            .map(|x| buf[(x, 0)].symbol().to_string())
+            .collect();
+        assert!(
+            row_text.contains("Severance Episode Title"),
+            "both title parts paint: {row_text:?}"
+        );
+        // The series title is at the 2-column quiet indent; the episode
+        // title starts after it and the one separating space.
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
+        assert_eq!(
+            buf[(2 + "Severance ".len() as u16, 0)].fg,
+            palette::TEXT_FOCUS_ACCENT
+        );
+
+        // Narrow slot on an unselected row (the selected row marquees):
+        // the episode title survives, the series name ellipsises first.
+        let rect = Rect::new(0, 0, 20, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "first".into(),
+                primary: "First".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "ep".into(),
+                primary: "A Very Long Series Name".into(),
+                secondary: Some("Episode Title".into()),
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row_text: String = (0..rect.width)
+            .map(|x| buf[(x, 1)].symbol().to_string())
+            .collect();
+        assert!(
+            row_text.contains("Episode Title"),
+            "episode title survives a narrow slot: {row_text:?}"
+        );
+        assert!(
+            row_text.contains('\u{2026}'),
+            "long series name ellipsises first: {row_text:?}"
+        );
+    }
+
     /// Queue now-playing rows paint their total duration like every other
     /// row — no throbber slot — while resume rows retain their inline badge
     /// and duration. Keep both cases in one buffer regression so a painter
@@ -363,6 +449,7 @@ mod wide_row_regression_tests {
             MediaListRow::Item {
                 target: "playing".into(),
                 primary: "Playing title".into(),
+                secondary: None,
                 trailing: Some("FOAM".into()),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
@@ -373,6 +460,7 @@ mod wide_row_regression_tests {
             MediaListRow::Item {
                 target: "resume".into(),
                 primary: "Resume title".into(),
+                secondary: None,
                 trailing: None,
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
@@ -434,6 +522,7 @@ mod wide_row_regression_tests {
         list.set_content(vec![MediaListRow::Item {
             target: "playing".into(),
             primary: "A very long title that must be truncated".into(),
+            secondary: None,
             trailing: None,
             duration: Some("2:00".into()),
             kind: MediaKind::Media,
@@ -470,6 +559,7 @@ mod wide_row_regression_tests {
         list.set_content(vec![MediaListRow::Item {
             target: "playing".into(),
             primary: "Focused".into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Media,
@@ -561,6 +651,7 @@ mod wide_row_regression_tests_helpers {
         MediaListRow::Item {
             target: target.into(),
             primary: primary.into(),
+            secondary: None,
             trailing: None,
             duration,
             kind,

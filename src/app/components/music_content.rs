@@ -69,6 +69,7 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
             MediaListRow::Item {
                 target: track.id.clone(),
                 primary: format!("{number}. {}", track.name),
+                secondary: None,
                 trailing: None,
                 duration,
                 kind: MediaKind::Media,

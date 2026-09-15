@@ -93,6 +93,7 @@ mod panel_list_tests {
         MediaListRow::Item {
             target: target.into(),
             primary: target.into(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Media,

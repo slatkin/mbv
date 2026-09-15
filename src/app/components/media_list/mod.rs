@@ -392,6 +392,9 @@ pub enum MediaListRow<Target> {
     Item {
         target: Target,
         primary: String,
+        /// Optional secondary title painted after `primary` in the yellow
+        /// focus-accent role (the episode title of a series/show row).
+        secondary: Option<String>,
         /// Left-aligned FOAM metadata rendered right after `primary`.
         trailing: Option<String>,
         /// A duration/time string. Rendered as a distinct right-aligned

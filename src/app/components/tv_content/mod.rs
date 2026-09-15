@@ -119,6 +119,7 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
             MediaListRow::Item {
                 target: episode.id.clone(),
                 primary: format!("{number}. {}", episode.name),
+                secondary: None,
                 trailing: None,
                 duration: list_duration_secs(episode.runtime_ticks / TICKS_PER_SECOND),
                 kind: MediaKind::Media,
@@ -223,6 +224,7 @@ impl TvContent {
                 .chain(std::iter::once(MediaListRow::Item {
                     target: item.id.clone(),
                     primary: item.display_name(),
+                    secondary: None,
                     trailing: (item.production_year > 0).then(|| item.production_year.to_string()),
                     duration: None,
                     kind: MediaKind::Collection,

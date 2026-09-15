@@ -85,6 +85,7 @@ mod tests {
         MediaListRow::Item {
             target,
             primary: target.to_string(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: super::super::MediaKind::Media,

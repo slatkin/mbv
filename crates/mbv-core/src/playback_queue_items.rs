@@ -329,6 +329,23 @@ impl QueueItem {
         }
     }
 
+    /// The two-tone title parts for a list row: the series/show title and,
+    /// for episode rows, the episode title that paints after it in the
+    /// accent role. Items without a parent title return the display name
+    /// with no secondary part.
+    pub fn display_name_parts(&self) -> (String, Option<String>) {
+        match self {
+            QueueItem::Emby(item) => item.display_name_parts(),
+            QueueItem::Audiobookshelf(ep) => ep
+                .show_title
+                .as_deref()
+                .filter(|show| !show.is_empty())
+                .map(|show| (show.to_owned(), Some(ep.title.clone())))
+                .unwrap_or_else(|| (ep.title.clone(), None)),
+            other => (other.display_name(), None),
+        }
+    }
+
     pub fn display_name(&self) -> String {
         match self {
             QueueItem::Emby(item) => item.display_name(),

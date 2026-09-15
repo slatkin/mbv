@@ -32,6 +32,7 @@ pub(in crate::app) fn podcast_show_rows(
         .map(|show| MediaListRow::Item {
             target: show.library_item_id.clone(),
             primary: show.title.clone(),
+            secondary: None,
             trailing: None,
             duration: None,
             kind: MediaKind::Collection,
@@ -93,6 +94,7 @@ impl PodcastContent {
             .map(|show| MediaListRow::Item {
                 target: show.library_item_id.clone(),
                 primary: show.title.clone(),
+                secondary: None,
                 trailing: None,
                 duration: None,
                 kind: MediaKind::Collection,
@@ -125,6 +127,7 @@ impl PodcastContent {
             .map(|episode| MediaListRow::Item {
                 target: episode.episode_id.clone(),
                 primary: episode.title.clone(),
+                secondary: None,
                 trailing: None,
                 duration: episode.duration_seconds.and_then(|seconds| {
                     crate::app::ui_util::list_duration_secs(seconds.round() as i64)
