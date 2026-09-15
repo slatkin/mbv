@@ -227,15 +227,19 @@ impl App {
     }
 
     /// The playback projection the queue ROWS are painted from: like
-    /// `displayed_queue_playback_state`, but a local run whose sequence
-    /// generation differs from the viewed queue's may not claim a row — its
-    /// coordinate addresses a sequence this queue never held
+    /// `displayed_queue_playback_state`, but a bare in-process run whose
+    /// sequence generation differs from the viewed queue's may not claim a
+    /// row — its coordinate addresses a sequence this queue never held
     /// (unified-playback-queue: a new queue is never paired with the previous
-    /// active coordinate). Pending selections keep their claim: the
-    /// generation fence upgrades them to a full submit before minting.
+    /// active coordinate). Daemon owners (local or remote mbvd) publish
+    /// authoritative snapshots via `UnifiedQueueUpdated` and never stamp
+    /// the tab generation, so the fence would blank every remote row;
+    /// it applies to the bare run only. Pending selections keep their
+    /// claim: the generation fence upgrades them to a full submit before
+    /// minting.
     pub(super) fn queue_row_playback_state(&self) -> super::PlaybackState {
         let mut state = self.displayed_queue_playback_state();
-        if state.active {
+        if state.active && !self.player.is_remote() {
             let tab_generation = self.player_tab.sequence_generation;
             let owner_generation = self.player.status.lock().unwrap().sequence_generation;
             if tab_generation != owner_generation {
@@ -307,7 +311,7 @@ impl App {
 #[cfg(test)]
 mod now_playing_status_tests {
     use super::*;
-    use crate::app::tests::make_app_stub;
+    use crate::app::tests::{make_app_stub, make_items, make_remote_app_stub};
 
     fn app() -> App {
         make_app_stub()
@@ -391,5 +395,30 @@ mod now_playing_status_tests {
         );
         set_player(&app, false, false);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
+    }
+
+    /// Regression (0.19.3): the reseat generation fence blanked remote
+    /// (mbvd) queue rows. A daemon owner bumps `sequence_generation` on
+    /// every accepted submit but the client never stamps the tab for a
+    /// remote scope (`submit_tab_queue` skips it, `from_unified_state`
+    /// resets it to 0), so the fence saw a permanent mismatch and cleared
+    /// `active` — no play icon, no foam progress. The fence is for the
+    /// bare run only; daemon snapshots are authoritative.
+    #[test]
+    fn queue_row_playback_state_stays_active_for_direct_remote_queue() {
+        let app = make_remote_app_stub(make_items(1), make_items(3));
+        assert!(app.player.is_remote());
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 1;
+            status.position_ticks = 42;
+            status.runtime_ticks = 84;
+            // Owner advanced past the never-stamped tab generation.
+            status.sequence_generation = 7;
+        }
+        let state = app.queue_row_playback_state();
+        assert!(state.active);
+        assert_eq!(state.active_idx, Some(1));
     }
 }
