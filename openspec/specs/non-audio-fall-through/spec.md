@@ -1,9 +1,9 @@
 # non-audio-fall-through Specification
 
 ## Purpose
-Lets a client directly controlling an audio-only Player owner handle explicit
-non-audio actions locally without ending control of the owner or hiding its
-Bound queue.
+Lets a client attached to a Player owner that cannot play the selected media
+ask the user before playing that selection on the client's own Player, and stop
+and detach from that owner when the user accepts.
 ## Requirements
 ### Requirement: Eligible control relationships
 
