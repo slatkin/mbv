@@ -22,7 +22,7 @@ use std::time::{Duration, Instant};
 /// Bounded so selecting a cast target from the panel doesn't wait
 /// indefinitely for a slow/unreachable receiver -- this runs on a
 /// background thread (`App::connect_cast_receiver`), so it never blocks the
-/// UI loop regardless. Mirrors `cast_reattach::CAST_REATTACH_TIMEOUT`.
+/// UI loop regardless.
 const CAST_ATTACH_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How long a single cast discovery browse is allowed to run when the F3
@@ -625,6 +625,11 @@ mod tests {
     #[test]
     fn selecting_a_cast_target_severs_a_watched_session() {
         let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
+            Err("not reached by this test".to_string())
+        }
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
+
         let mut app = make_app_stub();
         app.connected_session_id = Some("sess-1".to_string());
         app.connected_session_state = Some(crate::app::tests::make_session("tv", "mbv"));
@@ -647,6 +652,11 @@ mod tests {
     #[test]
     fn selecting_a_cast_target_severs_the_previous_cast_attachment() {
         let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
+            Err("not reached by this test".to_string())
+        }
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
+
         let mut app = make_app_stub();
         app.attach_cast("device-old".to_string());
 

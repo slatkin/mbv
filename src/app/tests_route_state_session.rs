@@ -572,3 +572,18 @@ fn attached_session_playing_a_local_queue_item_keeps_its_slot() {
     assert!(playback.active);
     assert_eq!(playback.active_idx, Some(1));
 }
+
+#[test]
+fn switch_to_library_route_severs_an_attached_cast_target() {
+    // Regression guard: attachment slots are mutually exclusive, but
+    // `switch_to_library_route` is reachable via `apply_route_for_playback`
+    // without going through `connect_to_session`'s sever, so a cast
+    // attachment used to survive a library-route switch.
+    let mut app = make_app_stub();
+    app.attach_cast("device-1".to_string());
+
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
+
+    assert!(!app.is_cast_attached());
+}

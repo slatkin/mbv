@@ -64,10 +64,7 @@ impl App {
         if self.active_route.is_some() {
             self.restore_local_mode("Local playback restored before connecting");
         }
-        if self.connected_session_id.is_some()
-            || self.connected_session_state.is_some()
-            || self.direct_remote_connected
-        {
+        if self.can_disconnect_remote() {
             self.disconnect_remote();
         }
     }

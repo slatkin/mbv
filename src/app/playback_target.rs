@@ -132,14 +132,10 @@ impl App {
         // Same rule as `effective_playback_state`: an idle receiver's status
         // says nothing about the media actually playing; only an engaged cast
         // target owns the paused read.
-        if let Some(paused) = self
-            .cast_attachment
-            .as_ref()
-            .and_then(|a| a.status.as_ref())
-            .filter(|s| s.state != mbv_core::cast_client::CastPlaybackState::Idle)
-            .map(|s| s.state == mbv_core::cast_client::CastPlaybackState::Paused)
-        {
-            return paused;
+        if let Some(state) = self.cast_effective_playback_state() {
+            if state.active {
+                return state.paused;
+            }
         }
         if self.connected_session_state.is_some() {
             return self.remote_stalled_while_paused;
@@ -150,13 +146,13 @@ impl App {
     /// Returns the observed playback state for rendering.
     pub(super) fn effective_playback_state(&self) -> super::PlaybackState {
         // The attached cast target wins only while it actually reports (or is
-        // optimistically awaiting) media. An attached receiver that is idle,
-        // or one whose connection dropped before any status arrived, must not
-        // shadow real playback: reattach attaches at launch without
-        // dispatching, so an idle/disconnected attachment would otherwise
-        // collapse the now-playing panel for local and remote-session
-        // playback alike (cast-session-control's "receiver is idle" scenario
-        // governs the *cast* presentation, not every surface).
+        // optimistically awaiting) media. An attached receiver that is idle
+        // must not shadow real playback: attach-on-selection attaches
+        // optimistically before its status poll returns, so an idle
+        // attachment would otherwise collapse the now-playing panel for
+        // local and remote-session playback alike (cast-session-control's
+        // "receiver is idle" scenario governs the *cast* presentation, not
+        // every surface).
         match self.cast_effective_playback_state() {
             Some(state) if state.active => state,
             _ => self.non_cast_playback_state(),
