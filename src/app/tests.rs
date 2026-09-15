@@ -51,6 +51,7 @@ pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_core::api::Se
         user_name: "user".into(),
         host: "127.0.0.1".into(),
         supported_commands: Vec::new(),
+        playable_media_types: Vec::new(),
         now_playing: None,
         now_playing_item_id: None,
         position_s: 0,
@@ -245,6 +246,7 @@ pub(crate) fn make_app_stub() -> App {
         queue_source: crate::config::QueueSource::Unknown,
         queue_dirty: false,
         pending_queue_action: None,
+        pending_local_play: None,
         use_nerd_fonts: false,
         indicator_style: Default::default(),
         ws_send_tx: None,
@@ -552,6 +554,31 @@ pub(crate) fn make_remote_app_stub(local_items: Vec<EmbyItem>, remote_items: Vec
     // Default to "focused, past grace window" for mouse tests.
     app.refocus_at = Some(Instant::now() - Duration::from_secs(5));
     app
+}
+
+pub(crate) fn make_audio_only_remote_app_stub_with_cmd_rx(
+    local_items: Vec<EmbyItem>,
+    remote_items: Vec<EmbyItem>,
+) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+    use crate::config::Config;
+    use mbv_core::api::EmbyClient;
+
+    let (remote, player_rx, cmd_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_audio_only_with_command_rx(remote_items, 0);
+    let config = Config::default();
+    let mut app = App::new_remote_with_config(
+        EmbyClient::new(config.clone()),
+        remote,
+        player_rx,
+        mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+        config,
+    );
+    app.player_tab
+        .set_items(local_items, app.player_tab.queue_cursor);
+    app.player_tab.queue_cursor = 0;
+    while cmd_rx.try_recv().is_ok() {}
+    app.refocus_at = Some(Instant::now() - Duration::from_secs(5));
+    (app, cmd_rx)
 }
 
 pub(crate) fn make_remote_app_stub_with_cmd_rx(

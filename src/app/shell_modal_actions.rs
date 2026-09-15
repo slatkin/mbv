@@ -164,6 +164,15 @@ fn confirm_key_dismisses(action: &ConfirmAction, key: KeyCode) -> bool {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter | KeyCode::Esc
             )
         }
+        ConfirmAction::PlayLocallyInstead => matches!(
+            key,
+            KeyCode::Char('y')
+                | KeyCode::Char('Y')
+                | KeyCode::Enter
+                | KeyCode::Char('n')
+                | KeyCode::Char('N')
+                | KeyCode::Esc
+        ),
         ConfirmAction::DiscardOrSaveDirtyPlaylist => matches!(
             key,
             KeyCode::Char('s')

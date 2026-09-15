@@ -57,6 +57,9 @@ pub const CTRL_CAP_ABS_BOOK_QUEUE: &str = "abs-book-queue";
 /// Peer can receive the redacted provider-qualified Audiobookshelf book
 /// progress event. Additive — no protocol-version bump.
 pub const CTRL_CAP_ABS_BOOK_PROGRESS: &str = "abs-book-progress";
+/// Peer owner is configured audio-only and cannot play video. Additive — no
+/// protocol-version bump.
+pub const CTRL_CAP_AUDIO_ONLY: &str = "audio-only";
 
 pub type PlaybackRequestId = u64;
 pub type PlaybackGeneration = u64;
@@ -128,6 +131,12 @@ impl CtrlHello {
             .any(|cap| cap == CTRL_CAP_LIFECYCLE_SHUTDOWN)
     }
 
+    pub fn supports_audio_only(&self) -> bool {
+        self.capabilities
+            .iter()
+            .any(|cap| cap == CTRL_CAP_AUDIO_ONLY)
+    }
+
     pub fn supports_control_auth(&self) -> bool {
         self.capabilities
             .iter()
@@ -185,6 +194,7 @@ pub struct CtrlCompatibility {
     pub client_protocol_version: u32,
     pub supports_queue_append: bool,
     pub supports_lifecycle_shutdown: bool,
+    pub supports_audio_only: bool,
     pub supports_control_auth: bool,
     pub supports_abs_queue: bool,
     pub supports_abs_progress: bool,
@@ -200,6 +210,7 @@ impl CtrlCompatibility {
                 client_protocol_version: CTRL_PROTOCOL_VERSION,
                 supports_queue_append: true,
                 supports_lifecycle_shutdown: false,
+                supports_audio_only: false,
                 supports_control_auth: true,
                 supports_abs_queue: true,
                 supports_abs_progress: true,

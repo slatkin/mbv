@@ -178,3 +178,13 @@ application. Generic daemon admission already discards owner-inadmissible
 QueueItems. The proposed audio-only capability and mixed-submission semantics
 (`openspec/changes/audio-only-mixed-queue-admission`) and Client fall-through
 (`openspec/changes/audio-only-owner-fall-through`) remain unimplemented.
+
+## Correction (2026-09-15)
+
+The parked-owner fall-through described above is superseded by
+`play-locally-when-owner-cannot`. The parked-owner model was never implemented
+and is dropped in favor of check-before-submit plus a confirmation prompt and an
+ended attachment. On confirmation, the client stops the owner, ends the
+attachment, and plays locally; declining changes nothing. The argument above
+that `restore_local_mode` is not the path back no longer holds: fall-through
+now uses its extracted tail deliberately after preparing a local Player.

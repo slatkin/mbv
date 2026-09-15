@@ -213,6 +213,110 @@ impl App {
         );
     }
 
+    /// Prepare a local player without changing the current attachment. A
+    /// suspended player is preferred; otherwise this constructs the same
+    /// local player used by `new_independent`.
+    pub(super) fn prepare_local_player(&mut self) -> Result<Option<SuspendedLocalSession>, String> {
+        if !self.player.is_remote() && self.suspended_local.is_none() {
+            return Ok(None);
+        }
+        if let Some(suspended) = self.suspended_local.take() {
+            return Ok(Some(suspended));
+        }
+        self.construct_local_session().map(Some)
+    }
+
+    /// Install a prepared local session over the current attachment: swap
+    /// the player and its channel plumbing back in and drop the remote
+    /// endpoint baseline. Shared by the confirmed fall-through and ordinary
+    /// restoration so no path can half-install a suspended local Player.
+    fn install_suspended_local(&mut self, suspended: SuspendedLocalSession) {
+        self.player = suspended.player;
+        self.player_rx = suspended.player_rx;
+        self.ws_rx = suspended.ws_rx;
+        self.ws_send_tx = suspended.ws_send_tx;
+        self.audiobookshelf_socket_rx = suspended.audiobookshelf_socket_rx;
+        self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
+        self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
+        self.player_endpoint = None;
+        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+    }
+
+    fn rebind_mpris_to_current_player(&self) {
+        if let Some(handle) = &self.mpris {
+            let sender = self.player.command_sender();
+            crate::mpris::rebind(
+                handle,
+                self.player.status.clone(),
+                move |cmd| sender(cmd),
+                self.player.disconnected_flag(),
+            );
+        }
+    }
+
+    /// Clear attachment and route presentation after the local player is
+    /// ready. Both ordinary restoration and confirmed fall-through use this
+    /// tail so no path can leave the old owner presented or commandable.
+    fn finish_local_mode(
+        &mut self,
+        status: String,
+        reconnected_local_daemon: Option<(PlayerTab, crate::config::QueueSource)>,
+    ) {
+        if let Some((initial_tab, remote_queue_source)) = reconnected_local_daemon {
+            self.player_tab = initial_tab;
+            self.queue_source = remote_queue_source;
+        }
+        self.remote_player_tab = None;
+        self.set_queue_scope(QueueScope::Local);
+        self.connected_session_id = None;
+        self.connected_session_state = None;
+        self.advance_remote_queue_lineage();
+        self.direct_remote_connected = false;
+        self.direct_remote_label = None;
+        self.active_route = None;
+        self.session_miss_count = 0;
+        self.remote_pos_s = 0;
+        self.next_up_item = None;
+        self.rebind_mpris_to_current_player();
+        self.flash(status, ToastSeverity::Warning);
+    }
+
+    /// Execute a confirmed local fall-through. Local preparation happens
+    /// before the current owner is stopped or the attachment is changed.
+    pub(super) fn play_pending_local_play(&mut self) {
+        let Some(action) = self.pending_local_play.take() else {
+            return;
+        };
+        let prepared = match self.prepare_local_player() {
+            Ok(prepared) => prepared,
+            Err(error) => {
+                self.flash(
+                    format!("Cannot prepare local playback: {error}"),
+                    ToastSeverity::Warning,
+                );
+                return;
+            }
+        };
+        // Both owners must stop: a home local-daemon thin client that also
+        // controls an audio-only Emby session has `player.is_remote()` true
+        // while `connected_session_id` is set, so an either/or branch would
+        // leave one of them playing underneath the local item (and swap the
+        // ctrl proxy out without tearing down its reader thread).
+        if self.player.is_remote() {
+            self.player.stop();
+            self.player.disconnect_remote();
+        }
+        if self.connected_session_id.is_some() {
+            self.playback_target().stop(self);
+        }
+        if let Some(suspended) = prepared {
+            self.install_suspended_local(suspended);
+            self.sync_subtitle_prefs_to_player();
+        }
+        self.finish_local_mode("Playing locally".into(), None);
+        self.execute_pending_queue_action(action);
+    }
+
     pub(super) fn restore_local_mode(&mut self, status: &str) {
         let previous_route = self.active_route.clone();
         log::info!(target: "library_route", "restoring local playback previous_route={previous_route:?} reason={status:?}");
@@ -233,28 +337,7 @@ impl App {
         // from the reconnected route instead of the plain-local defaults.
         let mut reconnected_local_daemon = None;
         if let Some(suspended) = self.suspended_local.take() {
-            self.player = suspended.player;
-            self.player_rx = suspended.player_rx;
-            self.ws_rx = suspended.ws_rx;
-            self.ws_send_tx = suspended.ws_send_tx;
-            self.audiobookshelf_socket_rx = suspended.audiobookshelf_socket_rx;
-            self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
-            self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
-            self.player_endpoint = None;
-            debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
-            // Mirror `switch_to_direct_remote`'s rebind (#175): the suspended
-            // local `Player` is being restored as the ctrl-owning target
-            // again, so MPRIS (if registered) must follow it back rather
-            // than staying wired to the just-abandoned remote session.
-            if let Some(handle) = &self.mpris {
-                let sender = self.player.command_sender();
-                crate::mpris::rebind(
-                    handle,
-                    self.player.status.clone(),
-                    move |cmd| sender(cmd),
-                    self.player.disconnected_flag(),
-                );
-            }
+            self.install_suspended_local(suspended);
         } else if self.home_is_local_daemon {
             // This app's baseline was never a genuinely local in-process
             // player -- it was an `App::new_remote` thin client attached to
@@ -276,23 +359,8 @@ impl App {
                         PlayerTab::from_unified_state,
                     );
                     let always_play_next = self.config.lock().unwrap().always_play_next;
-                    // Cloned before `remote` is moved into `PlayerProxy::remote`
-                    // below, mirroring `switch_to_library_route`'s #175 MPRIS
-                    // rebind.
-                    let mpris_remote = remote.clone();
                     self.player = PlayerProxy::remote(remote, always_play_next);
                     self.player_rx = remote_rx;
-                    if let Some(handle) = &self.mpris {
-                        let disconnected = mpris_remote.disconnected_flag();
-                        crate::mpris::rebind(
-                            handle,
-                            mpris_remote.status.clone(),
-                            move |cmd| {
-                                mpris_remote.send_command(cmd);
-                            },
-                            Some(disconnected),
-                        );
-                    }
                     self.player_endpoint = Some(mbv_core::remote_player::DaemonEndpoint::Local);
                     debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
                     self.sync_subtitle_prefs_to_player();
@@ -316,25 +384,7 @@ impl App {
                 }
             }
         }
-        if let Some((initial_tab, remote_queue_source)) = reconnected_local_daemon {
-            // Mirror `App::new_remote`'s local-daemon baseline (`construct.rs`):
-            // adopt the daemon's live queue into the single unified `player_tab`
-            // -- no separate remote tab, no scope pill (#424).
-            self.player_tab = initial_tab;
-            self.queue_source = remote_queue_source;
-        }
-        self.remote_player_tab = None;
-        self.set_queue_scope(QueueScope::Local);
-        self.connected_session_id = None;
-        self.connected_session_state = None;
-        self.advance_remote_queue_lineage();
-        self.direct_remote_connected = false;
-        self.direct_remote_label = None;
-        self.active_route = None;
-        self.session_miss_count = 0;
-        self.remote_pos_s = 0;
-        self.next_up_item = None;
-        self.flash(status, ToastSeverity::Warning);
+        self.finish_local_mode(status, reconnected_local_daemon);
     }
 
     /// Applies the route resolved by `resolve_route_for_play` before a

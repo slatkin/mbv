@@ -110,9 +110,11 @@ Add `CTRL_CAP_AUDIO_ONLY`, a `CtrlHello::supports_audio_only()` reader, a
 like `supports_lifecycle_shutdown`, and `PlayerProxy::owner_is_audio_only()`
 (false for an in-process Player) modeled on `can_admit_audiobookshelf`.
 
-Additive only: `ctrl-protocol` already requires an audio-only daemon to
-advertise this capability and explicitly forbids a protocol-version bump for it
-alone. An older daemon that never advertises it reads as "able to play", which
+Additive only: `ctrl-protocol` already requires a packaged `mbvd --audio-only`
+to advertise this capability and explicitly forbids a protocol-version bump for
+it alone. (The ctrl path also terminates at the Local stay-alive daemon, but
+that daemon is never audio-only, so it simply never advertises the capability.)
+An older daemon that never advertises it reads as "able to play", which
 is exactly today's behavior.
 
 *Alternatives considered:* a required hello field or a version bump (rejected —

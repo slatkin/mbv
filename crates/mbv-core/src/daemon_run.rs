@@ -134,6 +134,7 @@ pub fn run_with_options(
                     control_credential.clone(),
                     player_status.clone(),
                     shared_queue.clone(),
+                    audio_only,
                 );
             }
         });
@@ -203,6 +204,7 @@ pub fn run_with_options(
                     control_credential.clone(),
                     player_status.clone(),
                     shared_queue.clone(),
+                    audio_only,
                 );
             }
         });

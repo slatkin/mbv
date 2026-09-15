@@ -10,6 +10,7 @@ pub(super) enum ConfirmAction {
     RescanLibrary(usize),
     SaveOverwritePlaylist { existing_id: String, name: String },
     DiscardOrSaveDirtyPlaylist,
+    PlayLocallyInstead,
     DeletePlaylist { id: String, name: String },
     RemoveFeedSubscription(usize),
     RemoveEmby,

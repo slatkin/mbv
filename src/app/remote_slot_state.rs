@@ -28,6 +28,23 @@ impl App {
         }
     }
 
+    /// Whether the attached Emby session advertises an audio-only playable
+    /// media set. An absent or empty advertisement is unknown and therefore
+    /// treated as able to play video.
+    pub(super) fn session_owner_is_audio_only(&self) -> bool {
+        self.connected_session_id.is_some()
+            && self
+                .connected_session_state
+                .as_ref()
+                .is_some_and(|session| {
+                    !session.playable_media_types.is_empty()
+                        && session
+                            .playable_media_types
+                            .iter()
+                            .all(|media_type| media_type.eq_ignore_ascii_case("Audio"))
+                })
+    }
+
     pub(super) fn can_disconnect_remote(&self) -> bool {
         self.connected_session_id.is_some()
             || self.connected_session_state.is_some()

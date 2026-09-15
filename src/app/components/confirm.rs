@@ -150,6 +150,11 @@ fn confirm_intent_for_key(action: &ConfirmAction, key: Key) -> Option<ConfirmInt
                 _ => None,
             }
         }
+        ConfirmAction::PlayLocallyInstead => match key {
+            Key::Char('y') | Key::Char('Y') | Key::Enter => Some(ConfirmIntent::Accept),
+            Key::Char('n') | Key::Char('N') | Key::Esc => Some(ConfirmIntent::Cancel),
+            _ => None,
+        },
         ConfirmAction::DiscardOrSaveDirtyPlaylist => match key {
             Key::Char('s') | Key::Char('S') => Some(ConfirmIntent::Save),
             Key::Char('d') | Key::Char('D') => Some(ConfirmIntent::Discard),
@@ -187,6 +192,24 @@ mod tests {
                 ConfirmIntent::Accept
             )))
         ));
+    }
+
+    #[test]
+    fn local_play_keys_accept_cancel_and_swallow() {
+        let action = ConfirmAction::PlayLocallyInstead;
+        for key in [Key::Char('y'), Key::Char('Y'), Key::Enter] {
+            assert_eq!(
+                confirm_intent_for_key(&action, key),
+                Some(ConfirmIntent::Accept)
+            );
+        }
+        for key in [Key::Char('n'), Key::Char('N'), Key::Esc] {
+            assert_eq!(
+                confirm_intent_for_key(&action, key),
+                Some(ConfirmIntent::Cancel)
+            );
+        }
+        assert_eq!(confirm_intent_for_key(&action, Key::Char('x')), None);
     }
 
     #[test]

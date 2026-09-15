@@ -1,8 +1,9 @@
 ## Why
 
-mbv can attach to a Player owner that cannot play video — a `mbvd --audio-only`
-reached over ctrl (direct daemon attach, Sessions-panel direct remote control, or
-the local daemon endpoint) or an Emby session that advertises audio media types
+mbv can attach to a Player owner that cannot play video — a packaged `mbvd
+--audio-only` reached over ctrl (direct daemon attach or Sessions-panel direct
+remote control; the Local stay-alive daemon is never audio-only) or an Emby
+session that advertises audio media types
 only. Pressing play on a movie there submits the item anyway:
 
 - over ctrl the owner refuses it and the client shows a generic 5-second error
@@ -41,8 +42,8 @@ cannot play the item, and offer to play it here, which ends the attachment.
   local Player — constructing one when this client was launched straight onto
   the daemon and has no suspended local Player.
 - On decline: submit nothing and leave the attachment and its queue untouched.
-- A mixed selection is not prompted: it submits as it does today and reports how
-  many items the owner cannot play.
+- A mixed selection is not prompted: it submits the selection to the owner
+  and reports how many items the owner cannot play.
 - Explicit enqueue keeps today's behaviour: no prompt, no staging on the
   client's own queue.
 - Rewrite `openspec/specs/non-audio-fall-through/` in place around

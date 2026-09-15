@@ -4,7 +4,7 @@ use super::types_settings::{PanelFocus, PanelMode};
 use super::types_tab_selection::TabSelection;
 use super::{
     bootstrap_local_daemon_queue, bootstrap_unified_queue, layout, render, spawn_resize_worker,
-    App, AppInit, SessionEvent, LEFT_WIDTH_DEFAULT,
+    App, AppInit, SessionEvent, SuspendedLocalSession, LEFT_WIDTH_DEFAULT,
 };
 use mbv_core::api::{EmbyClient, EmbyItem};
 use mbv_core::player::{Player, PlayerEvent, PlayerProxy};
@@ -15,6 +15,45 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 impl App {
+    /// Construct a local player and its worker channels through the ordinary
+    /// startup path. The fall-through path uses this before it tears down an
+    /// attached owner.
+    pub(super) fn construct_local_session(&self) -> Result<SuspendedLocalSession, String> {
+        #[cfg(test)]
+        if let Some(prepare) = *super::LOCAL_PLAYER_PREPARE_OVERRIDE.lock().unwrap() {
+            prepare()?;
+        }
+        let config = self.config.lock().unwrap().clone();
+        let (player_tx, player_rx) = mpsc::channel();
+        let raw_player = Player::new(
+            String::new(),
+            String::new(),
+            config.show_audio_window,
+            config.use_mpv_config,
+            config.no_scripts,
+            config.always_skip_intro,
+            mbv_core::player::SubtitlePrefs {
+                mode: config.subtitle_mode.clone(),
+                subtitle_lang: config.subtitle_lang.clone(),
+                audio_lang: config.audio_lang.clone(),
+            },
+            player_tx,
+            None,
+        )
+        .with_video_cache(config.video_cache_forward_mb, config.video_cache_back_mb);
+        let (_ws_tx, ws_rx) = mpsc::channel();
+        let (_abs_tx, abs_rx) = mpsc::channel();
+        Ok(SuspendedLocalSession {
+            player: PlayerProxy::local(raw_player, config.always_play_next),
+            player_rx,
+            ws_rx,
+            ws_send_tx: None,
+            audiobookshelf_socket_rx: abs_rx,
+            audiobookshelf_socket_tx: None,
+            audiobookshelf_socket_generation: None,
+        })
+    }
+
     pub(super) fn build(init: AppInit) -> Self {
         // Must run before `load_prefs()`: the guard redirects `config_dir()`/
         // `state_dir()` to an isolated tmpdir, and `load_prefs()` resolves
@@ -175,6 +214,7 @@ impl App {
             queue_source: crate::config::QueueSource::Unknown,
             queue_dirty: false,
             pending_queue_action: None,
+            pending_local_play: None,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
             connected_session_id: None,
