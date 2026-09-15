@@ -91,6 +91,15 @@ fn logo_decoration_requires_a_movie_and_is_absent_when_undeclared() {
         .decoration
         .is_none());
 
+    let landscape_movie_without_logo = emby_item(json!({
+        "Id": "m-no-logo-landscape", "Type": "Movie",
+        "ImageTags": { "Primary": "poster" },
+        "BackdropImageTags": ["backdrop"], "UserData": {}
+    }));
+    assert!(emby_artwork_policy(&landscape_movie_without_logo)
+        .decoration
+        .is_none());
+
     let series = emby_item(json!({
         "Id": "s-logo", "Type": "Series",
         "ImageTags": { "Thumb": "thumb", "Logo": "logo" }, "UserData": {}
