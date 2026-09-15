@@ -23,9 +23,9 @@
 
 ## 5. Migrate Destination Workspaces
 
-- [ ] 5.1 Route TV and grouped Music non-Wide parent opening and child activation through their existing Wide Workspace owners in the Library Hero overlay; verify their focused component and mounted tick integration tests cover loading/ready content and stable child targets.
-- [ ] 5.2 Route Audiobookshelf Podcast and Book non-Wide parent opening, filters/selectors, provider completion, and child activation through their existing Wide Workspace owners; verify focused component and mounted tick integration tests cover loading, empty, ready, and stable-target refresh without real Services or sleeps.
-- [ ] 5.3 Confirm Home, Movies, generic Emby catalogs, home videos, and Feeds use fixed browser rows and leaf Hero overlays without introducing destination painters; verify representative mounted and buffer tests cover one no-Workspace Hero and one destination change.
+- [x] 5.1 Route TV and grouped Music non-Wide parent opening and child activation through their existing Wide Workspace owners in the Library Hero overlay; verify their focused component and mounted tick integration tests cover loading/ready content and stable child targets.
+- [x] 5.2 Route Audiobookshelf Podcast and Book non-Wide parent opening, filters/selectors, provider completion, and child activation through their existing Wide Workspace owners; verify focused component and mounted tick integration tests cover loading, empty, ready, and stable-target refresh without real Services or sleeps.
+- [x] 5.3 Confirm Home, Movies, generic Emby catalogs, home videos, and Feeds use fixed browser rows and leaf Hero overlays without introducing destination painters; verify representative mounted and buffer tests cover one no-Workspace Hero and one destination change.
 
 ## 6. Remove the Superseded Modal and Finish Terminology
 
