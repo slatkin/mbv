@@ -1,14 +1,13 @@
 //! The TV embedded content owner (tasks 8.1–8.4,
 //! unify-screens-under-panel-components; design.md D12).
 //!
-//! One plain type owns TV at every breakpoint: the series list (Wide and
-//! Inline presentations over one shared `MediaListCarrier`), the episode
-//! list, the season cursor, and the Inline Search session. It is never
-//! mounted, focused, subscribed, or given a `ComponentId`: the mounted
-//! `LibraryPanel` hosts it under `LibraryKey::Service(TvShows)` and is the
-//! library area's one event boundary. Wide and Narrow both paint through the
-//! Library panel skeleton; a breakpoint flip is an ordinary
-//! `set_presentation` on the shared owner, not a component hand-off.
+//! One plain type owns TV at every breakpoint: the series list (one fixed-row
+//! Wide presentation over one shared `MediaListCarrier`), the episode list,
+//! the season cursor, and the Inline Search session. It is never mounted,
+//! focused, subscribed, or given a `ComponentId`: the mounted `LibraryPanel`
+//! hosts it under `LibraryKey::Service(TvShows)` and is the library area's one
+//! event boundary. Wide and Narrow both paint through the Library panel
+//! skeleton; geometry changes clamp the same owner's viewport in place.
 //!
 //! Pointer resolution moved into the panel with the registration: the panel
 //! resolves the letter pills, season pills, series rows and hero-pane input
@@ -42,10 +41,9 @@ enum Pane {
 }
 pub(in crate::app) struct TvContent {
     context: TvWideRenderCtx,
-    /// The one shared series-row owner, holding both the Wide and Inline
-    /// presentations (design.md D12): a breakpoint flip moves the same
-    /// owner between them, preserving only the outgoing selected-row
-    /// viewport offset.
+    /// The one shared series-row owner, kept in the fixed-row Wide
+    /// presentation at every breakpoint; geometry changes clamp its viewport
+    /// in place without transferring state to another presentation.
     carrier: MediaListCarrier<String>,
     season_cursor: usize,
     /// Embedded canonical control for the recessed episode media-list box
@@ -164,9 +162,9 @@ impl TvContent {
         self.context.list.list_pane_width = list_pane_width;
     }
     /// Records this frame's breakpoint (design.md D12): `true` selects the
-    /// Wide pane-based workspace, `false` the flat Narrow series list. Must
-    /// be pushed before `set_content` so the carrier's presentation switch
-    /// (`ensure_carrier`) sees the current frame's breakpoint.
+    /// Whether the current geometry uses the Wide pane-based workspace.
+    /// Must be pushed before `set_content` so viewport sizing uses the current
+    /// frame's geometry.
     pub(in crate::app) fn set_is_wide(&mut self, is_wide: bool) {
         self.is_wide = is_wide;
     }
@@ -174,10 +172,9 @@ impl TvContent {
     fn active_presentation(&self) -> Presentation {
         Presentation::Wide
     }
-    /// Move the shared owner into the active presentation when they diverge.
-    /// A responsive presentation change reads the same owner and preserves
-    /// only the outgoing selected-row viewport offset (design.md D12); no
-    /// cursor, scroll, or selection is ever copied between presentations.
+    /// Keep the shared owner in its fixed-row presentation and clamp its
+    /// viewport for the current geometry. No content or cursor state is copied
+    /// between adapters.
     fn ensure_carrier(&mut self) {
         let target = self.active_presentation();
         let viewport_height = self.painted_viewport_height();

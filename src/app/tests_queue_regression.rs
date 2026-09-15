@@ -201,7 +201,7 @@ fn mini_view_panel_does_not_overlay_queue_on_mode_switch() {
 /// used the app's left area as its paint area, but that field is only
 /// republished as the library content rect while the base frame renders the
 /// library; in queue-only mode it stayed the full queue column, so the Emby
-/// browser painted its rows and inline hero straight over the queue. Assert
+/// browser painted its rows straight over the queue. Assert
 /// the compact fixed-row queue paints and the library does not leak in.
 #[test]
 fn mini_view_queue_panel_paints_only_the_queue_not_the_library() {
@@ -244,6 +244,6 @@ fn mini_view_queue_panel_paints_only_the_queue_not_the_library() {
     );
     assert!(
         !queue_text.contains("compact movie banner"),
-        "the library inline hero must not leak into the queue mini view:\n{queue_text}"
+        "the library browser must not leak into the queue mini view:\n{queue_text}"
     );
 }

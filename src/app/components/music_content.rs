@@ -148,9 +148,9 @@ impl MusicContent {
             self.track_list.select_first();
         }
 
-        // The legacy library-search projection still reaches Music while its
-        // Narrow painter remains in place. Reuse the same InlineSearch owner
-        // for Wide rather than teaching the panel a Music-specific search arm.
+        // The library-search projection still reaches Music. Reuse the same
+        // InlineSearch owner for every geometry rather than teaching the panel
+        // a Music-specific search arm.
         if let Some(query) = self.context.list.search_query.clone() {
             if !self.inline_search.is_active() {
                 self.inline_search.open();

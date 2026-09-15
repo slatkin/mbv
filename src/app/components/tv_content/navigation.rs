@@ -51,8 +51,7 @@ impl TvContent {
     }
 
     /// Painted item rows the Narrow pager moves per PageUp/PageDown: the
-    /// Inline presentation is one-column, so it strides one selectable row
-    /// per painted row (mirrors the prior TV browse pager).
+    /// fixed-row list strides one selectable row per painted row.
     pub(super) fn narrow_page_rows(&self) -> i64 {
         self.painted_viewport_height().saturating_sub(1).max(1) as i64
     }
@@ -60,7 +59,7 @@ impl TvContent {
     /// Move the shared owner by `item_rows` painted item rows (Narrow only)
     /// and report the resulting selection as a `context.list.items` index,
     /// the position the shell's `EmbyLibraryCursorIndex` effect persists into
-    /// the resting `BrowseLevel` cursor (mirrors the prior TV browse row movement).
+    /// the resting `BrowseLevel` cursor.
     pub(super) fn move_by_item_rows_narrow(&mut self, item_rows: i64) -> usize {
         self.carrier.move_selection(item_rows);
         self.carrier.sync_viewport(self.painted_viewport_height());

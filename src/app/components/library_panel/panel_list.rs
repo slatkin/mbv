@@ -54,7 +54,6 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     }
 
     fn view(&mut self, frame: &mut Frame, rect: Rect) {
-        let _ = Presentation::Wide;
         self.wide_mut().view(frame, rect);
     }
 

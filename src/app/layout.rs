@@ -39,11 +39,9 @@ pub(crate) struct CardGeometry {
 /// owning component answers real requests (mouse-hit, context-menu anchor)
 /// from its own retained fields instead.
 #[cfg(test)]
-#[allow(dead_code)]
 #[derive(Clone, Default)]
 pub(crate) struct PaintedRowGeometry {
     pub left_area: Rect,
-    pub hero_area: Rect,
     pub selected_item_rect: Option<Rect>,
     pub selector_tabs: Vec<(Rect, usize)>,
 }

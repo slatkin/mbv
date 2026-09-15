@@ -53,20 +53,6 @@ pub(in crate::app) fn library_hero_overlay(area: Rect) -> Option<Rect> {
 }
 
 #[cfg(test)]
-pub(in crate::app) fn selected_detail_content_area(
-    hero_area: Rect,
-    side_padding: u16,
-    extra_rows: u16,
-) -> Rect {
-    Rect {
-        x: hero_area.x.saturating_add(side_padding),
-        y: hero_area.y.saturating_add(1),
-        width: hero_area.width.saturating_sub(side_padding * 2),
-        height: hero_area.height.saturating_sub(extra_rows),
-    }
-}
-
-#[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::render::arrangements::wide_hero::WIDE_HERO_MIN_AREA_HEIGHT;
@@ -131,26 +117,5 @@ mod tests {
             None,
         )
         .is_none());
-    }
-
-    #[test]
-    fn selected_detail_content_saturates_zero_area() {
-        assert_eq!(
-            selected_detail_content_area(
-                Rect {
-                    width: 3,
-                    height: 1,
-                    ..Rect::default()
-                },
-                2,
-                4
-            ),
-            Rect {
-                x: 2,
-                y: 1,
-                width: 0,
-                height: 0
-            },
-        );
     }
 }

@@ -110,7 +110,7 @@ fn browser_narrow_tick_click_uses_retained_geometry() {
             Msg::Shell(ShellRequest::EmbyLibraryRowClick { target: Some(target) })
                 if target == "movie-focused"
         )),
-        "the painted inline hero block resolves to the selected row: {:?}", outcome.raw_messages
+        "the painted fixed-row browser resolves to the selected row: {:?}", outcome.raw_messages
     );
     assert_eq!(browser_owner(&harness).cursor(), 0);
     assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);

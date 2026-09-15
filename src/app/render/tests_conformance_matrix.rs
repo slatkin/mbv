@@ -91,7 +91,6 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> PaintedRowGeometry {
     if let Some(wide) = panel.test_wide_geometry() {
         PaintedRowGeometry {
             left_area: wide.list_area,
-            hero_area: wide.hero_area,
             selected_item_rect: wide.selected,
             selector_tabs,
         }
@@ -101,7 +100,6 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> PaintedRowGeometry {
             .expect("the panel painted a Wide or Narrow skeleton");
         PaintedRowGeometry {
             left_area: narrow.list_area,
-            hero_area: Rect::default(),
             selected_item_rect: narrow.selected,
             selector_tabs,
         }
@@ -242,7 +240,6 @@ fn render_feeds_panel(
     let layout = if let Some(wide) = panel.test_wide_geometry() {
         PaintedRowGeometry {
             left_area: wide.list_area,
-            hero_area: wide.hero_area,
             selected_item_rect: wide.selected,
             selector_tabs,
         }
@@ -252,7 +249,6 @@ fn render_feeds_panel(
             .expect("the panel painted a Wide or Narrow skeleton");
         PaintedRowGeometry {
             left_area: narrow.list_area,
-            hero_area: Rect::default(),
             selected_item_rect: narrow.selected,
             selector_tabs,
         }
