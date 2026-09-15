@@ -18,7 +18,7 @@
 
 ## 4. Create `remote_player/` directory module
 
-- [ ] 4.1 Create `crates/mbv-core/src/remote_player/` directory. `git mv` `remote_player.rs` → `remote_player/mod.rs`, `remote_player_connect.rs` → `remote_player/connect.rs`, `remote_player_tests.rs` → `remote_player/tests.rs`. Update `lib.rs`. Verify: `cargo check -p mbv-core && cargo nextest run -p mbv-core`.
+- [x] 4.1 Create `crates/mbv-core/src/remote_player/` directory. `git mv` `remote_player.rs` → `remote_player/mod.rs`, `remote_player_connect.rs` → `remote_player/connect.rs`, `remote_player_tests.rs` → `remote_player/tests.rs`. Update `lib.rs`. Verify: `cargo check -p mbv-core && cargo nextest run -p mbv-core`.
 
 ## 5. Final verification
 
