@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use std::net::SocketAddr;
-    include!("remote_player_tests.rs");
+    include!("tests.rs");
 }
 
 use std::collections::HashMap;

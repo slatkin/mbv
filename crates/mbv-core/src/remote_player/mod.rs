@@ -51,17 +51,19 @@ pub struct RemotePlayer {
     pub(crate) shutdown_request_tx: Arc<Mutex<Option<mpsc::Sender<ShutdownResponse>>>>,
 }
 
-#[cfg(any(test, feature = "test-support"))]
-pub use crate::remote_player_connect::connect_stub_daemon_pair;
-pub use crate::remote_player_connect::signal_local_daemon_service_setup;
-pub use crate::remote_player_connect::DaemonEndpoint;
+pub(crate) mod connect;
+
 pub(crate) use crate::stream::SocketStream;
+#[cfg(any(test, feature = "test-support"))]
+pub use connect::connect_stub_daemon_pair;
+pub use connect::signal_local_daemon_service_setup;
+pub use connect::DaemonEndpoint;
 
 impl RemotePlayer {
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
-        super::remote_player_connect::connect_endpoint(endpoint)
+        connect::connect_endpoint(endpoint)
     }
 
     pub fn is_disconnected(&self) -> bool {
