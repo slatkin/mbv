@@ -1,12 +1,12 @@
 ## 1. Create `player/` directory module
 
-- [ ] 1.1 Create `crates/mbv-core/src/player/` directory. `git mv player.rs player/mod.rs`. Add submodule declarations for every `player_*.rs` file (stripping the `player_` prefix). Re-export all public items so `crate::player::*` paths remain valid. Update `lib.rs` module declarations. Verify: `cargo check -p mbv-core`.
+- [x] 1.1 Create `crates/mbv-core/src/player/` directory. `git mv player.rs player/mod.rs`. Add submodule declarations for every `player_*.rs` file (stripping the `player_` prefix). Re-export all public items so `crate::player::*` paths remain valid. Update `lib.rs` module declarations. Verify: `cargo check -p mbv-core`.
 
-- [ ] 1.2 `git mv` each `player_*.rs` into `player/` with its prefix stripped (e.g. `player_types.rs` → `player/types.rs`, `player_runtime.rs` → `player/runtime.rs`, `player_sources.rs` → `player/sources.rs`, etc.). Update all intra-crate `use` paths. Verify: `cargo check -p mbv-core && cargo check -p mbv`.
+- [x] 1.2 `git mv` each `player_*.rs` into `player/` with its prefix stripped (e.g. `player_types.rs` → `player/types.rs`, `player_runtime.rs` → `player/runtime.rs`, `player_sources.rs` → `player/sources.rs`, etc.). Update all intra-crate `use` paths. Verify: `cargo check -p mbv-core && cargo check -p mbv`.
 
-- [ ] 1.3 Create `player/run/` submodule. `git mv` `player_run_state.rs` → `player/run/mod.rs` (or `player/run/state.rs` with a new `mod.rs`), `player_run_run.rs` → `player/run/loop.rs`, `player_run_commands.rs` → `player/run/commands.rs`, `player_run_events.rs` → `player/run/events.rs`, `player_run_queue.rs` → `player/run/queue.rs`, `player_run_types.rs` → `player/run/types.rs`. Wire mod declarations. Verify: `cargo check -p mbv-core`.
+- [x] 1.3 Create `player/run/` submodule. `git mv` `player_run_state.rs` → `player/run/mod.rs` (or `player/run/state.rs` with a new `mod.rs`), `player_run_run.rs` → `player/run/loop.rs`, `player_run_commands.rs` → `player/run/commands.rs`, `player_run_events.rs` → `player/run/events.rs`, `player_run_queue.rs` → `player/run/queue.rs`, `player_run_types.rs` → `player/run/types.rs`. Wire mod declarations. Verify: `cargo check -p mbv-core`.
 
-- [ ] 1.4 Move test files: `git mv` `player_tests_*.rs` and `player_proxy_tests.rs` into `player/tests/`. Declare as `#[cfg(test)]` modules. Verify: `cargo nextest run -p mbv-core` passes all existing player tests.
+- [x] 1.4 Move test files: `git mv` `player_tests_*.rs` and `player_proxy_tests.rs` into `player/tests/`. Declare as `#[cfg(test)]` modules. Verify: `cargo nextest run -p mbv-core` passes all existing player tests.
 
 ## 2. Split `player_runtime_controller.rs`
 
