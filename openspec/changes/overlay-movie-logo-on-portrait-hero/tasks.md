@@ -10,8 +10,8 @@
 
 ## 3. Composite the Wide Landscape Hero
 
-- [ ] 3.1 Add the minimal image operation that contain-resizes a transparent Logo within the 60%-width/20%-height bounds, places it at the clamped 5% top-left inset, and alpha-composites it over already cover-fitted landscape artwork; verify one focused pixel/image test covers aspect preservation, placement, alpha blending, and unchanged pixels outside the Logo.
-- [ ] 3.2 Include the applied Logo cache identity beside the hero box in protocol validity, build one protocol from either the base or composited bitmap, and verify an arriving Logo rebuilds the base-only protocol once while an unchanged Logo, failed Logo, and unchanged box reuse the existing protocol.
+- [x] 3.1 Add the minimal image operation that contain-resizes a transparent Logo within the 60%-width/20%-height bounds, places it at the clamped 5% top-left inset, and alpha-composites it over already cover-fitted landscape artwork; verify one focused pixel/image test covers aspect preservation, placement, alpha blending, and unchanged pixels outside the Logo.
+- [x] 3.2 Include the applied Logo cache identity beside the hero box in protocol validity, build one protocol from either the base or composited bitmap, and verify an arriving Logo rebuilds the base-only protocol once while an unchanged Logo, failed Logo, and unchanged box reuse the existing protocol.
 
 ## 4. Presentation and Gates
 
