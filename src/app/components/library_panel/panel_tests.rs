@@ -1,9 +1,8 @@
-use super::*;
 use crate::app::components::library_panel::{
     LibraryContentOwner, LibraryKey, LibraryPanel, LibrarySlotEvent,
 };
 use crate::app::components::media_list::MediaListSurfaceInput;
-use crate::app::components::{Msg, UserEvent};
+use crate::app::components::{Msg, ShellRequest, UserEvent};
 use tuirealm::component::{AppComponent, Component};
 use tuirealm::event::{Event, MouseEvent, MouseEventKind};
 
@@ -48,13 +47,23 @@ struct FixtureLog {
 struct FixtureOwner {
     carrier: MediaListCarrier<String>,
     log: Rc<RefCell<FixtureLog>>,
+    link: bool,
 }
 
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
         let mut carrier = MediaListCarrier::new(Presentation::Wide);
         carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
-        Self { carrier, log }
+        Self {
+            carrier,
+            log,
+            link: false,
+        }
+    }
+
+    fn with_link(mut self) -> Self {
+        self.link = true;
+        self
     }
 }
 
@@ -70,8 +79,19 @@ impl LibraryContentOwner for FixtureOwner {
             hero: Some(HeroContent {
                 facts: crate::app::components::library_panel::HeroFacts {
                     title: "Dune".into(),
-                    meta_rows: vec!["2021".into()],
-                    links: Vec::new(),
+                    meta_rows: if self.link {
+                        vec!["2021".into(), "IMDb".into()]
+                    } else {
+                        vec!["2021".into()]
+                    },
+                    links: if self.link {
+                        vec![crate::app::components::library_panel::HeroLink {
+                            name: "IMDb".into(),
+                            url: "https://imdb.test/dune".into(),
+                        }]
+                    } else {
+                        Vec::new()
+                    },
                     artwork: crate::app::components::library_panel::HeroArtwork {
                         shape: crate::app::components::library_panel::ArtworkShape::Landscape,
                         source: None,
@@ -347,6 +367,44 @@ fn owner_retention_follows_the_catalog() {
 
 /// An unpainted frame (hidden library column, no owner) arms nothing:
 /// the panel resolves only geometry it painted.
+#[test]
+fn wide_hero_link_click_emits_open_url_request() {
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::new(RefCell::new(FixtureLog::default()))).with_link()),
+    );
+    let _ = draw_panel(&mut panel);
+    let point = (0..120)
+        .flat_map(|y| (0..30).map(move |x| (x, y)))
+        .find(|&(x, y)| {
+            panel
+                .test_link_hits()
+                .resolve(ratatui::layout::Position::new(x, y))
+                .is_some()
+        })
+        .expect("painted IMDb link label");
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            point.0,
+            point.1
+        )),
+        Some(Msg::Shell(ShellRequest::OpenUrl(
+            "https://imdb.test/dune".into()
+        )))
+    );
+    assert_eq!(
+        panel.on(&mouse_event(
+            MouseEventKind::Up(MouseButton::Left),
+            point.0,
+            point.1
+        )),
+        None
+    );
+}
+
 #[test]
 fn unpainted_frame_after_a_painted_one_arms_nothing() {
     let mut panel = LibraryPanel::new();

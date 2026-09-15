@@ -134,7 +134,6 @@ pub(in crate::app) fn paint_hero_pane_content(
     f: &mut Frame,
     area: Rect,
     content: &HeroContent<'_>,
-    hyperlink_capable: bool,
     overview_scroll: usize,
     hovered_link: Option<usize>,
     link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
@@ -165,14 +164,7 @@ pub(in crate::app) fn paint_hero_pane_content(
             ..area
         },
     };
-    let mut next_row = paint_title_and_meta(
-        f,
-        text_area,
-        &content.facts,
-        hyperlink_capable,
-        hovered_link,
-        link_hits,
-    );
+    let mut next_row = paint_title_and_meta(f, text_area, &content.facts, hovered_link, link_hits);
     // The header's painted bottom edge includes a right-side artwork box the
     // text block may not reach.
     if header.arm() != super::content::HeroHeaderArm::Landscape {
@@ -201,7 +193,6 @@ fn paint_title_and_meta(
     f: &mut Frame,
     area: Rect,
     facts: &HeroFacts,
-    hyperlink_capable: bool,
     hovered_link: Option<usize>,
     link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
 ) -> u16 {
@@ -218,7 +209,7 @@ fn paint_title_and_meta(
         });
     }
     let next_row = paint_wide_hero_text(f, area, &lines);
-    overview_box::overlay_links(f, area, facts, hyperlink_capable, hovered_link, link_hits);
+    overview_box::overlay_links(f, area, facts, hovered_link, link_hits);
     next_row
 }
 
@@ -285,7 +276,6 @@ mod hero_header_tests {
                     f,
                     pane_area,
                     pane,
-                    false,
                     0,
                     None,
                     &mut crate::app::components::mouse::hit::HitRegions::new(),

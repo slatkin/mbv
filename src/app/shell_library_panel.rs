@@ -237,7 +237,6 @@ impl Model {
         panel.retain_owners(&live);
         panel.set_active(active);
         panel.set_list_pane_width(list_pane_width);
-        panel.set_hyperlink_capable(self.hyperlink_capable);
         panel.sync_mouse_eligibility(mouse_eligible);
     }
 

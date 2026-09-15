@@ -28,6 +28,17 @@ impl Component for LibraryPanel {
         };
         let overview_scroll = owner.hero_scroll_offset();
         let mut content = owner.content();
+        self.painted_link_urls = content
+            .hero
+            .as_ref()
+            .map(|hero| {
+                hero.facts
+                    .links
+                    .iter()
+                    .map(|link| link.url.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut hits = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
         // One breakpoint predicate (design D4): `wide_hero_fits` stays the
@@ -41,7 +52,6 @@ impl Component for LibraryPanel {
                 &mut content,
                 self.focused,
                 self.list_pane_width,
-                self.hyperlink_capable,
                 overview_scroll,
                 self.hovered_selector,
                 self.hovered_link,

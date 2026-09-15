@@ -348,7 +348,7 @@ impl App {
 
 type AppTerminal = Terminal<CrosstermBackend<std::io::Stdout>>;
 
-fn init_terminal() -> Result<(AppTerminal, bool), Box<dyn std::error::Error>> {
+fn init_terminal() -> Result<AppTerminal, Box<dyn std::error::Error>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
@@ -361,15 +361,33 @@ fn init_terminal() -> Result<(AppTerminal, bool), Box<dyn std::error::Error>> {
             crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
         )
     );
-    let hyperlink_capable = crate::app::components::library_panel::hyperlinks_supported(
-        std::env::var("TERM_PROGRAM").ok().as_deref(),
-        std::env::var("TERM").ok().as_deref(),
-        std::env::var_os("GHOSTTY_RESOURCES_DIR").is_some(),
-    );
-    Ok((
-        Terminal::new(CrosstermBackend::new(stdout))?,
-        hyperlink_capable,
-    ))
+    Ok(Terminal::new(CrosstermBackend::new(stdout))?)
+}
+
+pub(super) fn open_url(url: &str) -> std::io::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", url])
+            .spawn()
+            .map(|_| ())
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+    }
 }
 
 fn set_shift_escape_mode<W: Write>(writer: &mut W, enabled: bool) -> std::io::Result<()> {

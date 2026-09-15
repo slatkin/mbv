@@ -305,7 +305,6 @@ fn wide_and_narrow_render_the_same_title_meta_and_image() {
                 f,
                 pane,
                 &hero,
-                false,
                 0,
                 None,
                 &mut crate::app::components::mouse::hit::HitRegions::new(),

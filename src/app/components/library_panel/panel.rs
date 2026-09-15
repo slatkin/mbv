@@ -55,11 +55,11 @@ pub struct LibraryPanel {
     hovered_selector: Option<usize>,
     /// The Wide hero provider-link label under the pointer, if any.
     hovered_link: Option<usize>,
+    painted_link_urls: Vec<String>,
     /// Session-only Wide hero list-pane width override (shell-direct push;
     /// `None` = default ratio). Forwarded into the wide skeleton's shared
     /// split; never stored clamped.
     list_pane_width: Option<u16>,
-    hyperlink_capable: bool,
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).
     hits: SkeletonHits,
@@ -115,8 +115,8 @@ impl LibraryPanel {
             focused: false,
             hovered_selector: None,
             hovered_link: None,
+            painted_link_urls: Vec::new(),
             list_pane_width: None,
-            hyperlink_capable: false,
             hits: SkeletonHits::default(),
             pill_windows: SkeletonPillWindows::default(),
             wide_geometry: None,
@@ -192,10 +192,6 @@ impl LibraryPanel {
         self.list_pane_width = list_pane_width;
     }
 
-    pub(in crate::app) fn set_hyperlink_capable(&mut self, capable: bool) {
-        self.hyperlink_capable = capable;
-    }
-
     /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears
     /// the split gesture state before the next delivery — the same reset
     /// the former boundary applied while it owned the gesture —
@@ -250,6 +246,13 @@ impl LibraryPanel {
     #[cfg(test)]
     pub(in crate::app) fn test_hovered_link(&self) -> Option<usize> {
         self.hovered_link
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_link_hits(
+        &self,
+    ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
+        &self.hits.links
     }
 
     /// The List-controls row's retained hit regions, for the pill-row test
@@ -531,6 +534,20 @@ impl LibraryPanel {
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
         }
+        // Link labels are ordinary painted text, but the panel retains their
+        // valid URL geometry and owns the click effect request.
+        if let MouseGesture::Click { .. } = gesture {
+            if let Some(&index) = self.hits.links.resolve(at) {
+                if let Some(url) = self
+                    .painted_link_urls
+                    .get(index)
+                    .cloned()
+                    .and_then(|url| super::overview_box::sanitize_url(&url).map(str::to_owned))
+                {
+                    return Some(Msg::Shell(ShellRequest::OpenUrl(url)));
+                }
+            }
+        }
         // The hero pane's own input (e.g. the Workspace box's episode rows)
         // resolves next: it is painted separately from the Browser pane's
         // list slot, and the owner decides what inside it it claims.
@@ -649,6 +666,7 @@ impl LibraryPanel {
         self.painted_area = None;
         self.split = None;
         self.image_paint = None;
+        self.painted_link_urls.clear();
     }
 }
 

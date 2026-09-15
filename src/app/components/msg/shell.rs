@@ -476,6 +476,8 @@ pub enum ShellRequest {
     BrowserCycleGroup {
         delta: i64,
     },
+    /// Open a provider URL resolved from the painted Library hero link label.
+    OpenUrl(String),
     /// A library list wheel movement resolved by the embedded owner. The
     /// stable library key and owner-resolved cursor/scroll cross the panel
     /// boundary; the shell persists the resting scroll without re-reading it.
