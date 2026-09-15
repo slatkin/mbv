@@ -259,7 +259,9 @@ impl App {
             );
             drop(c);
             if episodes.len() > 1 {
-                self.on_queue_replace_silent();
+                if !direct_remote {
+                    self.on_queue_replace_silent();
+                }
                 self.replace_playback_queue(episodes.clone(), 0);
                 self.queue_source = crate::config::QueueSource::Series;
                 self.submit_tab_queue(self.playing_queue_scope(), 0);
