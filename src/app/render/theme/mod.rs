@@ -51,6 +51,8 @@ pub const SURFACE_ARTWORK_PLACEHOLDER: Color = primitives::ARTWORK_PLACEHOLDER;
 pub const ACCENT: Color = primitives::AQUA; // selection marker, watched, folders, Emby brand glyph
 pub const ACCENT_ACTIVE: Color = primitives::IRIS; // active tab, focused pill/badge text, selected-row bg
 pub const ACCENT_AUDIOBOOKSHELF: Color = primitives::AMBER; // audiobookshelf brand glyph
+pub const HERO_OVERVIEW_SEPARATOR: Color = primitives::IRIS; // overview/credits separator
+pub const HERO_CREDITS_STRIPE: Color = primitives::PLAYBACK_PANEL_BG; // alternating credits row
 
 // Rules
 pub const BORDER_UNFOCUSED: Color = primitives::OVERLAY;

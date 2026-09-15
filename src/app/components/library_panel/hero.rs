@@ -266,7 +266,7 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
             .filter(|genre| !genre.is_empty())
             .cloned()
             .collect::<Vec<_>>()
-            .join("  ");
+            .join("/");
         if !genres.is_empty() {
             meta_rows.push(genres);
         }

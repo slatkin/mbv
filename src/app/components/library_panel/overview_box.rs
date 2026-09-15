@@ -43,7 +43,13 @@ pub(in crate::app) fn paint_overview_box(
         })
         .unwrap_or(0);
     let credit_rows = credits.map(|rows| rows.len()).unwrap_or(0);
-    let inner_rows = text_rows + usize::from(overview.is_some() && credits.is_some()) + credit_rows;
+    let inner_rows = text_rows
+        + if overview.is_some() && credits.is_some() {
+            2
+        } else {
+            0
+        }
+        + credit_rows;
     let box_y = next_row.saturating_add(1);
     let room = area.bottom().saturating_sub(box_y);
     let natural = (inner_rows.max(1) as u16).saturating_add(PANE_PAD_Y * 2);
@@ -110,11 +116,14 @@ pub(in crate::app) fn paint_overview_box(
         logical_row += text_rows;
     }
     if overview.is_some() && credits.is_some() {
+        // Keep one blank row below the overview, then paint the separator.
+        logical_row += 1;
         if logical_row >= offset && logical_row - offset < inner.height as usize {
             let y = inner.y + (logical_row - offset) as u16;
-            let separator = "▔".repeat(inner.width as usize);
+            let separator = "▁".repeat(inner.width as usize);
             f.render_widget(
-                Paragraph::new(separator).style(Style::default().fg(palette::TEXT_EMPHASIS)),
+                Paragraph::new(separator)
+                    .style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR)),
                 Rect {
                     x: inner.x,
                     y,
@@ -131,7 +140,7 @@ pub(in crate::app) fn paint_overview_box(
             let skip = offset.saturating_sub(start);
             let y = inner.y + start.saturating_sub(offset) as u16;
             if y < inner.bottom() {
-                paint_credits(
+                paint_credits_from(
                     f,
                     Rect {
                         y,
@@ -139,6 +148,7 @@ pub(in crate::app) fn paint_overview_box(
                         ..inner
                     },
                     &credits[skip.min(credits.len())..],
+                    skip,
                 );
             }
         }
@@ -157,6 +167,10 @@ pub(in crate::app) fn paint_overview_box(
 }
 
 fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
+    paint_credits_from(f, area, credits, 0);
+}
+
+fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_offset: usize) {
     let name_width = credits
         .iter()
         .map(|c| UnicodeWidthStr::width(c.name.as_str()))
@@ -170,6 +184,17 @@ fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
         let y = area.y.saturating_add(i as u16);
         if y >= area.bottom() {
             break;
+        }
+        if (row_offset + i) % 2 == 1 {
+            f.render_widget(
+                Paragraph::new("").style(Style::default().bg(palette::HERO_CREDITS_STRIPE)),
+                Rect {
+                    x: area.x,
+                    y,
+                    width: area.width,
+                    height: 1,
+                },
+            );
         }
         let name_width = role_start.saturating_sub(area.x).saturating_sub(2);
         f.render_widget(
@@ -624,6 +649,66 @@ mod tests {
             .draw(|f| overlay_links(f, Rect::new(0, 0, 30, 2), &facts, false))
             .unwrap();
         assert_eq!(terminal.backend().buffer()[(0, 1)].symbol(), " ");
+    }
+
+    #[test]
+    fn overview_credits_have_blank_row_separator_and_zebra_stripes() {
+        let content = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("Overview".into()),
+            credits: Some(vec![
+                HeroCredit {
+                    name: "One".into(),
+                    role: "Actor".into(),
+                },
+                HeroCredit {
+                    name: "Two".into(),
+                    role: "Writer".into(),
+                },
+                HeroCredit {
+                    name: "Three".into(),
+                    role: "Composer".into(),
+                },
+            ]),
+            workspace: None,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(32, 12)).unwrap();
+        terminal
+            .draw(|f| {
+                paint_overview_box(f, Rect::new(0, 0, 32, 12), 0, &content, 0);
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let separator = (0..12).find(|y| buffer[(2, *y)].symbol() == "▁").unwrap();
+        assert_eq!(buffer[(2, separator - 1)].symbol(), " ");
+        assert_eq!(buffer[(2, separator)].fg, palette::HERO_OVERVIEW_SEPARATOR);
+        assert_eq!(buffer[(3, separator)].symbol(), "▁");
+        let stripe = palette::HERO_CREDITS_STRIPE;
+        assert_ne!(buffer[(2, separator + 1)].bg, stripe);
+        assert_eq!(buffer[(2, separator + 2)].bg, stripe);
+        assert_ne!(buffer[(2, separator + 3)].bg, stripe);
+    }
+
+    #[test]
+    fn credits_zebra_stripe_follows_table_offset() {
+        let credits = [
+            HeroCredit {
+                name: "One".into(),
+                role: "Actor".into(),
+            },
+            HeroCredit {
+                name: "Two".into(),
+                role: "Writer".into(),
+            },
+        ];
+        let mut terminal = Terminal::new(TestBackend::new(24, 1)).unwrap();
+        terminal
+            .draw(|f| paint_credits_from(f, Rect::new(0, 0, 24, 1), &credits[1..], 1))
+            .unwrap();
+        assert_eq!(
+            terminal.backend().buffer()[(0, 0)].bg,
+            palette::HERO_CREDITS_STRIPE
+        );
     }
 
     #[test]

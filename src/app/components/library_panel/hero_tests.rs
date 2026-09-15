@@ -289,7 +289,7 @@ fn movie_meta_rows_append_genres_and_links_after_runtime() {
     let data = hero_content_emby(&item);
     assert_eq!(
         data.facts.meta_rows,
-        vec!["22 Oct 2021", "12m", "Action  Drama", "IMDb"]
+        vec!["22 Oct 2021", "12m", "Action/Drama", "IMDb"]
     );
     assert_eq!(
         data.facts.links,
