@@ -72,6 +72,7 @@ fn hero_facts(title: &str) -> HeroFacts {
         artwork: HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: None,
+            decoration: None,
             image: crate::app::components::library_panel::content::HeroImageState::None,
         },
     }

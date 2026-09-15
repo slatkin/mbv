@@ -317,6 +317,7 @@ fn parse_image_tags(raw: &Value) -> EmbyImageTags {
     };
     EmbyImageTags {
         thumb: raw["ImageTags"]["Thumb"].as_str().unwrap_or("").to_string(),
+        logo: raw["ImageTags"]["Logo"].as_str().unwrap_or("").to_string(),
         primary: raw["ImageTags"]["Primary"]
             .as_str()
             .unwrap_or("")

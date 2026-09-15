@@ -308,6 +308,7 @@ pub(crate) fn make_app_stub() -> App {
         feed_tab: super::types_feed_tab::FeedTabState::default(),
         feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::default(),
         card_image_fetch_calls: 0,
+        image_protocol_builds: std::cell::Cell::new(0),
     }
 }
 

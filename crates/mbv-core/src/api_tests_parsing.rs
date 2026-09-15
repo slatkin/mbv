@@ -132,16 +132,26 @@ fn parse_item_missing_fields_use_defaults() {
 // ── parse_item: declared image availability (task 5.3) ─────────────────
 
 #[test]
+fn image_tags_serde_defaults_logo_for_legacy_items() {
+    let tags: EmbyImageTags = serde_json::from_value(json!({"thumb": "thumb-tag"})).unwrap();
+    assert_eq!(tags.logo, "");
+    let serialized = serde_json::to_value(tags).unwrap();
+    assert_eq!(serialized["thumb"], "thumb-tag");
+    assert_eq!(serialized["logo"], "");
+}
+
+#[test]
 fn parse_item_image_tags_when_present() {
     let raw = json!({
         "Type": "Movie",
-        "ImageTags": { "Thumb": "thumb-tag", "Primary": "primary-tag" },
+        "ImageTags": { "Thumb": "thumb-tag", "Primary": "primary-tag", "Logo": "logo-tag" },
         "BackdropImageTags": ["backdrop-a", "backdrop-b"],
         "UserData": {}
     });
     let item = parse_item(&raw);
     assert_eq!(item.image_tags.thumb, "thumb-tag");
     assert_eq!(item.image_tags.primary, "primary-tag");
+    assert_eq!(item.image_tags.logo, "logo-tag");
     assert_eq!(item.image_tags.backdrops, vec!["backdrop-a", "backdrop-b"]);
 }
 
@@ -152,6 +162,7 @@ fn parse_item_image_tags_absent_members_default_empty() {
     let item = parse_item(&raw);
     assert_eq!(item.image_tags.thumb, "");
     assert_eq!(item.image_tags.primary, "primary-tag");
+    assert_eq!(item.image_tags.logo, "");
     assert!(item.image_tags.backdrops.is_empty());
     assert_eq!(item.image_tags.series_thumb, "");
     assert!(item.image_tags.series_backdrops.is_empty());

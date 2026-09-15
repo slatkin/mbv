@@ -229,6 +229,8 @@ impl App {
             feed_entry_state: mbv_core::feed_entry_state::FeedEntryStore::load(),
             #[cfg(test)]
             card_image_fetch_calls: 0,
+            #[cfg(test)]
+            image_protocol_builds: std::cell::Cell::new(0),
         };
         app.sync_feed_subscriptions();
         app

@@ -24,7 +24,7 @@ fn source(artwork: &HeroArtwork) -> &ArtworkSource {
 fn movie_with_backdrop_and_poster_is_landscape() {
     let item = emby_item(json!({
         "Id": "m1", "Name": "Dune", "Type": "Movie",
-        "ImageTags": { "Primary": "poster" },
+        "ImageTags": { "Primary": "poster", "Logo": "logo" },
         "BackdropImageTags": ["backdrop-a"], "UserData": {}
     }));
     let artwork = emby_artwork_policy(&item);
@@ -38,18 +38,27 @@ fn movie_with_backdrop_and_poster_is_landscape() {
         } => {
             assert_eq!(item_id, "m1");
             assert_eq!(series_id, "");
-            assert_eq!(image_types, &["Backdrop", "Primary", "Logo"]);
-            assert_eq!(cache_key, "m1:Backdrop,Primary,Logo");
+            assert_eq!(image_types, &["Backdrop", "Primary"]);
+            assert_eq!(cache_key, "m1:Backdrop,Primary");
         }
         _ => panic!("expected Emby source"),
     }
+    assert_eq!(
+        artwork.decoration,
+        Some(ArtworkSource::Emby {
+            item_id: "m1".into(),
+            series_id: String::new(),
+            image_types: vec!["Logo".into()],
+            cache_key: "m1:Logo:logo".into(),
+        })
+    );
 }
 
 #[test]
 fn movie_with_poster_only_is_portrait() {
     let item = emby_item(json!({
         "Id": "m2", "Name": "Poster only", "Type": "Movie",
-        "ImageTags": { "Primary": "poster" }, "UserData": {}
+        "ImageTags": { "Primary": "poster", "Logo": "logo" }, "UserData": {}
     }));
     let artwork = emby_artwork_policy(&item);
     assert_eq!(shape(&artwork), ArtworkShape::Portrait);
@@ -58,10 +67,44 @@ fn movie_with_poster_only_is_portrait() {
         &ArtworkSource::Emby {
             item_id: "m2".into(),
             series_id: String::new(),
-            image_types: vec!["Primary".into(), "Backdrop".into(), "Logo".into()],
-            cache_key: "m2:Primary,Backdrop,Logo".into(),
+            image_types: vec!["Primary".into(), "Backdrop".into()],
+            cache_key: "m2:Primary,Backdrop".into(),
         }
     );
+    assert!(artwork.decoration.is_none());
+}
+
+#[test]
+fn logo_decoration_requires_a_movie_and_is_absent_when_undeclared() {
+    let movie = emby_item(json!({
+        "Id": "m-logo", "Type": "Movie",
+        "ImageTags": { "Primary": "poster", "Logo": "logo" },
+        "BackdropImageTags": ["backdrop"], "UserData": {}
+    }));
+    assert!(emby_artwork_policy(&movie).decoration.is_some());
+
+    let movie_without_logo = emby_item(json!({
+        "Id": "m-no-logo", "Type": "Movie",
+        "ImageTags": { "Primary": "poster" }, "UserData": {}
+    }));
+    assert!(emby_artwork_policy(&movie_without_logo)
+        .decoration
+        .is_none());
+
+    let landscape_movie_without_logo = emby_item(json!({
+        "Id": "m-no-logo-landscape", "Type": "Movie",
+        "ImageTags": { "Primary": "poster" },
+        "BackdropImageTags": ["backdrop"], "UserData": {}
+    }));
+    assert!(emby_artwork_policy(&landscape_movie_without_logo)
+        .decoration
+        .is_none());
+
+    let series = emby_item(json!({
+        "Id": "s-logo", "Type": "Series",
+        "ImageTags": { "Thumb": "thumb", "Logo": "logo" }, "UserData": {}
+    }));
+    assert!(emby_artwork_policy(&series).decoration.is_none());
 }
 
 #[test]
