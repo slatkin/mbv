@@ -67,19 +67,25 @@ pub(in crate::app) fn media_list_row<Target>(
             // with the title at column 2 and a quiet gap before the right-aligned
             // duration.
 
-            let (fg, progress) = match semantic_state {
-                MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None),
-                MediaSemanticState::Played => (palette::TEXT_MUTED, None),
-                // Active and now-playing rows append the live progress
-                // percentage to the trailing text, in the same style; only
-                // the throbber glyph is gone.
+            let (fg, progress, live_icon) = match semantic_state {
+                // Live rows (active/now-playing) lose the accent colour: the
+                // aqua play glyph before the title marks them instead, so
+                // the row text keeps the ordinary role. Active and
+                // now-playing rows append the live progress percentage to
+                // the trailing text in the same style.
+                MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
+                MediaSemanticState::Played | MediaSemanticState::Disabled => {
+                    (palette::TEXT_MUTED, None, None)
+                }
                 MediaSemanticState::Active { progress }
                 | MediaSemanticState::NowPlaying { progress } => (
-                    palette::ACCENT,
+                    palette::TEXT_EMPHASIS,
                     (*progress).map(|value| format!("{}%", value.percent())),
+                    Some("▶ "),
                 ),
-                MediaSemanticState::Starting => (palette::ACCENT, Some("starting".into())),
-                MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
+                MediaSemanticState::Starting => {
+                    (palette::TEXT_EMPHASIS, Some("starting".into()), None)
+                }
             };
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
@@ -111,14 +117,11 @@ pub(in crate::app) fn media_list_row<Target>(
             let paint_selected = selected && !gutter_glyph;
             let secondary_separator_reserve =
                 usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
+            let icon_reserve = live_icon.map_or(0, UnicodeWidthStr::width);
             let title_width = content_w.saturating_sub(
-                LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve,
+                LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
             );
-            let title_color = if selected
-                && !matches!(
-                    semantic_state,
-                    MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
-                ) {
+            let title_color = if selected {
                 // Gutter-accent lists mark the selection in the gutter and
                 // paint the selected title in the focus accent; other lists
                 // keep the emphasis title.
@@ -170,15 +173,8 @@ pub(in crate::app) fn media_list_row<Target>(
                     spans
                 });
             // Gutter-accent selection: the selected title paints in the
-            // focus accent, bold; no icon, no background. Now-playing rows
-            // keep their accent colour (the established exclusion).
-            if selected
-                && gutter_glyph
-                && !matches!(
-                    semantic_state,
-                    MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
-                )
-            {
+            // focus accent, bold; no icon, no background.
+            if selected && gutter_glyph {
                 for span in &mut title_spans {
                     span.style = span
                         .style
@@ -188,6 +184,9 @@ pub(in crate::app) fn media_list_row<Target>(
             }
 
             let mut spans = vec![Span::raw("  ")];
+            if let Some(icon) = live_icon {
+                spans.push(Span::styled(icon, Style::default().fg(palette::ACCENT)));
+            }
             spans.extend(title_spans);
             if !trailing.is_empty() {
                 spans.push(Span::raw(" "));

@@ -7,7 +7,7 @@ Provide reusable embedded TuiRealm list controls with one owner for list interac
 ## Requirements
 
 ### Requirement: Shared rows are provider-neutral and bounded
-The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the episode title of a series/show row, painted after the primary text in the yellow focus-accent role while the primary stays in the ordinary title role), optional trailing text, a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string, and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Heading and Spacer SHALL be excluded from selectable-target indexing. When a duration is shown it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
+The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the episode title of a series/show row, painted after the primary text in the yellow focus-accent role while the primary stays in the ordinary title role), optional trailing text, a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string, and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Heading and Spacer SHALL be excluded from selectable-target indexing. When a duration is shown it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. Active and now-playing rows SHALL be marked by an aqua right-pointing play glyph before the title (one space from it) in place of any accent title colour; their title text SHALL keep the ordinary colour. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
 
 #### Scenario: Queue-like progress is presented safely
 - **WHEN** a parent supplies active progress
@@ -16,7 +16,8 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 #### Scenario: Now-playing renders like other rows
 - **WHEN** a row carries the now-playing state
-- **THEN** live progress renders inline next to the title exactly as resume progress does
+- **THEN** an aqua play glyph is painted one space before the title, and the title keeps the ordinary colour
+- **AND** live progress renders inline next to the title exactly as resume progress does
 - **AND** the duration slot shows the total duration
 - **AND** no throbber glyph appears anywhere in the row
 

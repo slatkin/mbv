@@ -599,16 +599,21 @@ fn queue_playback_panel_unmounts_in_library_only() {
 /// surfaces stay on the outgoing item until the owner confirms.
 #[test]
 fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
-    /// Screen positions of `title` painted in the now-playing or selected title role.
+    /// Screen positions of `title` painted on a live (now-playing) row,
+    /// located by the row's aqua play glyph.
     fn now_playing_cells(buf: &ratatui::buffer::Buffer, title: &str) -> Vec<(u16, u16)> {
         let mut hits = Vec::new();
         for y in 0..buf.area().height {
+            let has_icon = (0..buf.area().width).any(|x| {
+                buf[(x, y)].symbol() == "▶" && buf[(x, y)].style().fg == Some(palette::ACCENT)
+            });
+            if !has_icon {
+                continue;
+            }
             let text: String = (0..buf.area().width)
                 .map(|x| buf[(x, y)].symbol().to_string())
                 .collect();
-            let Some(x) = text.find(title) else { continue };
-            let cell = &buf[(x as u16, y)];
-            if cell.style().fg == Some(palette::ACCENT) {
+            if let Some(x) = text.find(title) {
                 hits.push((x as u16, y));
             }
         }
