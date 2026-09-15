@@ -87,12 +87,44 @@ impl Component for LibraryPanel {
             );
             self.narrow_geometry = Some(geometry.clone());
         }
+        // Paint the Library-local overlay after the ordinary skeleton. The
+        // shared Hero path therefore remains the sole content painter.
+        if self.hero_overlay_open {
+            if let Some(overlay_rect) =
+                crate::app::render::arrangements::library::library_hero_overlay(area)
+            {
+                if let Some(hero) = content.hero.as_mut() {
+                    let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, area, overlay_rect);
+                    let composition = super::super::hero_composition::paint_library_hero_content(
+                        frame,
+                        inner,
+                        hero,
+                        overview_scroll,
+                        self.hovered_link,
+                        &mut hits.links,
+                        &mut hits.workspace_selector,
+                        &mut windows.workspace_selector,
+                    );
+                    self.overlay_geometry = Some(super::OverlayGeometry {
+                        pane: area,
+                        frame: overlay_rect,
+                        inner,
+                        hero: composition,
+                    });
+                }
+            }
+        }
         // The projected hero image's reserved box (task 5.10, design D9): the
         // shell paints the protocol into it right after view returns.
         self.image_paint = self
-            .wide_geometry
+            .overlay_geometry
             .as_ref()
-            .and_then(|geometry| geometry.hero_image.clone())
+            .and_then(|geometry| geometry.hero.hero_image.clone())
+            .or_else(|| {
+                self.wide_geometry
+                    .as_ref()
+                    .and_then(|geometry| geometry.hero_image.clone())
+            })
             .or_else(|| {
                 self.narrow_geometry
                     .as_ref()

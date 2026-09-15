@@ -27,6 +27,7 @@ pub(super) mod home_feed;
 pub(super) mod home_video;
 pub mod indicators;
 pub(in crate::app) mod inline_search;
+pub(in crate::app) mod library_hero_overlay;
 pub(super) mod library_routes;
 pub(super) mod list;
 pub(super) mod list_context;

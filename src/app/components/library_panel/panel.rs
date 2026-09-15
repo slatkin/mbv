@@ -23,6 +23,7 @@ use crate::app::render::wide_hero_fits;
 
 use super::content::{HeroImageState, PanelHeroImagePaint};
 use super::hero::HeroContentData;
+use super::hero_composition::HeroCompositionGeometry;
 use super::narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
 use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
 use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry};
@@ -31,6 +32,14 @@ use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideS
 /// gesture's arming and resolution (the same facts the old
 /// the former boundary carried, now derived from the panel's
 /// own painted skeleton geometry).
+#[derive(Clone, Debug)]
+struct OverlayGeometry {
+    pane: ratatui::layout::Rect,
+    frame: ratatui::layout::Rect,
+    inner: ratatui::layout::Rect,
+    hero: HeroCompositionGeometry,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct SplitGeometry {
     /// The shared `WIDE_HERO_PANE_GAP` gutter between the panes.
@@ -86,6 +95,8 @@ pub struct LibraryPanel {
     /// secondary shell intent while returning the owner's cursor echo.
     deferred_msg: Option<Msg>,
     focused_summary: Option<SelectionSummary>,
+    hero_overlay_open: bool,
+    overlay_geometry: Option<OverlayGeometry>,
 }
 
 impl From<LibraryKey> for LibrarySelectionOrigin {
@@ -128,6 +139,8 @@ impl LibraryPanel {
             image_paint: None,
             deferred_msg: None,
             focused_summary: None,
+            hero_overlay_open: false,
+            overlay_geometry: None,
         }
     }
 
@@ -167,6 +180,7 @@ impl LibraryPanel {
     pub(in crate::app) fn set_active(&mut self, key: Option<LibraryKey>) {
         let identity_changed = self.owners.active_key() != key.as_ref();
         if identity_changed {
+            self.dismiss_hero_overlay();
             if let Some(previous) = self.owners.active_key().cloned() {
                 if let Some(owner) = self.owners.get_mut(&previous) {
                     owner.clear_selection();
@@ -188,6 +202,31 @@ impl LibraryPanel {
 
     /// Record the session-only Wide split width override for the next `view`.
     /// Pushed each sync pass by the shell beside the other per-frame facts.
+    /// Open the Library-local Hero overlay for the active Hero. Activation
+    /// policy is owned by the later routing task; this transition is local.
+    pub(in crate::app) fn open_hero_overlay(&mut self) {
+        self.hero_overlay_open = true;
+    }
+
+    pub(in crate::app) fn dismiss_hero_overlay(&mut self) {
+        self.hero_overlay_open = false;
+        self.overlay_geometry = None;
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_open_hero_overlay(&mut self) {
+        self.open_hero_overlay();
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_overlay_geometry(
+        &self,
+    ) -> Option<(ratatui::layout::Rect, ratatui::layout::Rect)> {
+        self.overlay_geometry
+            .as_ref()
+            .map(|geometry| (geometry.pane, geometry.frame))
+    }
+
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
         self.list_pane_width = list_pane_width;
     }
@@ -617,6 +656,27 @@ impl LibraryPanel {
         if !painted_area.contains(at) {
             return None;
         }
+        // The overlay owns the Library pane's current-frame gesture. A
+        // backdrop click dismisses and is consumed; covered browser geometry
+        // is never replayed into the list.
+        if self.hero_overlay_open {
+            if !matches!(mouse.kind, MouseEventKind::Moved)
+                && !self
+                    .overlay_geometry
+                    .as_ref()
+                    .is_some_and(|geometry| geometry.frame.contains(at))
+            {
+                self.dismiss_hero_overlay();
+                return Some(Msg::TerminalEvent(
+                    crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+                ));
+            }
+            if self.overlay_geometry.is_some() {
+                return Some(Msg::TerminalEvent(
+                    crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+                ));
+            }
+        }
         match mouse.kind {
             // A left press inside the painted gap arms only the split drag;
             // a press outside never arms it, so pane gestures are untouched.
@@ -663,6 +723,7 @@ impl LibraryPanel {
         self.hits = SkeletonHits::default();
         self.wide_geometry = None;
         self.narrow_geometry = None;
+        self.overlay_geometry = None;
         self.painted_area = None;
         self.split = None;
         self.image_paint = None;
