@@ -118,13 +118,13 @@ fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
     // Keep enough room for the role column even when one name is unusually long.
     const MIN_ROLE_WIDTH: u16 = 8;
     let name_width = name_width.min(area.width.saturating_sub(MIN_ROLE_WIDTH));
-    let role_x = area.x.saturating_add(name_width).saturating_add(2);
+    let role_start = area.x.saturating_add(name_width).saturating_add(2);
     for (i, credit) in credits.iter().enumerate() {
         let y = area.y.saturating_add(i as u16);
         if y >= area.bottom() {
             break;
         }
-        let name_width = role_x.saturating_sub(area.x).saturating_sub(2);
+        let name_width = role_start.saturating_sub(area.x).saturating_sub(2);
         f.render_widget(
             Paragraph::new(credit.name.as_str()).style(Style::default().fg(palette::TEXT_EMPHASIS)),
             Rect {
@@ -134,15 +134,17 @@ fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
                 height: 1,
             },
         );
-        if role_x < area.right() {
-            let role_width = area.right().saturating_sub(role_x) as usize;
-            let role = truncate_ellipsis(&credit.role, role_width);
+        if role_start < area.right() {
+            let available_width = area.right().saturating_sub(role_start) as usize;
+            let role = truncate_ellipsis(&credit.role, available_width);
+            let rendered_role_width = UnicodeWidthStr::width(role.as_str()) as u16;
+            let role_x = area.right().saturating_sub(rendered_role_width);
             f.render_widget(
                 Paragraph::new(role).style(Style::default().fg(palette::TEXT_EMPHASIS)),
                 Rect {
                     x: role_x,
                     y,
-                    width: area.right() - role_x,
+                    width: rendered_role_width,
                     height: 1,
                 },
             );
@@ -597,9 +599,75 @@ mod tests {
         let row = (0..24)
             .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
             .collect::<String>();
-        assert!(
-            row.contains("Actor"),
-            "role column survives long name: {row:?}"
+        assert_eq!(&row[19..24], "Actor", "role ends at the box edge: {row:?}");
+        assert_eq!(&row[16..18], "  ", "name/role gap is retained: {row:?}");
+    }
+
+    #[test]
+    fn credits_roles_use_the_full_remaining_width_and_right_align() {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(36, 2)).unwrap();
+        terminal
+            .draw(|f| {
+                paint_credits(
+                    f,
+                    Rect::new(2, 0, 30, 2),
+                    &[
+                        HeroCredit {
+                            name: "Ann".into(),
+                            role: "Lead".into(),
+                        },
+                        HeroCredit {
+                            name: "Alexandra".into(),
+                            role: "Cinematographer".into(),
+                        },
+                    ],
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let first = (2..32).map(|x| buf[(x, 0)].symbol()).collect::<String>();
+        let second = (2..32).map(|x| buf[(x, 1)].symbol()).collect::<String>();
+        assert_eq!(
+            &first[26..30],
+            "Lead",
+            "short role is right-aligned: {first:?}"
+        );
+        assert_eq!(
+            &second[15..30],
+            "Cinematographer",
+            "long role uses the remaining width: {second:?}"
+        );
+        assert_eq!(
+            &first[11..26],
+            "               ",
+            "gap spans to the edge: {first:?}"
+        );
+    }
+
+    #[test]
+    fn credits_truncate_roles_at_the_right_edge() {
+        let mut terminal =
+            ratatui::Terminal::new(ratatui::backend::TestBackend::new(24, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                paint_credits(
+                    f,
+                    Rect::new(0, 0, 24, 1),
+                    &[HeroCredit {
+                        name: "A very long credit name".into(),
+                        role: "Director of Photography".into(),
+                    }],
+                );
+            })
+            .unwrap();
+        let row = (0..24)
+            .map(|x| terminal.backend().buffer()[(x, 0)].symbol())
+            .collect::<String>();
+        let role = row.chars().skip(18).collect::<String>();
+        assert_eq!(
+            role, "Direc…",
+            "truncated role ends at the box edge: {row:?}"
         );
     }
 
