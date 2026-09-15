@@ -558,6 +558,10 @@ impl LibraryContentOwner for PodcastContent {
         true
     }
 
+    fn clear_hero_workspace_focus(&mut self) {
+        self.episode_focused = false;
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()
     }

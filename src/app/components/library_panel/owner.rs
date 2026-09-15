@@ -156,6 +156,23 @@ pub(in crate::app) trait LibraryContentOwner {
         false
     }
 
+    /// Release the destination-local workspace focus acquired for the Hero
+    /// overlay, without changing its retained cursor or scroll.
+    fn clear_hero_workspace_focus(&mut self) {}
+
+    /// Activate the currently selected Hero target through the owner's typed
+    /// destination intent. Pointer gestures call this semantic operation, not
+    /// a fabricated keyboard event.
+    fn activate_hero_selection(&mut self) -> LeafKeyResult {
+        // Destination owners already define the Enter activation semantics;
+        // this semantic hook keeps pointer delivery out of the panel's key
+        // interpreter while allowing unmigrated owners to opt in naturally.
+        self.on_key_result(&KeyEvent::new(
+            tuirealm::event::Key::Enter,
+            tuirealm::event::KeyModifiers::NONE,
+        ))
+    }
+
     /// The current hero's content data for the shell's image projection
     /// (task 5.10, design D9), or `None` when the owner shows no hero. The
     /// projection runs the artwork box and the fetch; painting reads the

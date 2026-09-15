@@ -663,6 +663,10 @@ impl LibraryContentOwner for MusicContent {
         true
     }
 
+    fn clear_hero_workspace_focus(&mut self) {
+        self.clear_track_focus();
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()
     }

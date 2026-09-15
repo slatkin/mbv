@@ -240,6 +240,7 @@ impl Model {
         // in every Panel mode so a hidden library's owners keep their state.
         panel.retain_owners(&live);
         panel.set_active(active);
+        panel.sync_overlay_state();
         panel.set_list_pane_width(list_pane_width);
         panel.sync_mouse_eligibility(mouse_eligible);
     }

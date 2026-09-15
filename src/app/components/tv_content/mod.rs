@@ -596,9 +596,12 @@ impl LibraryContentOwner for TvContent {
     }
 
     fn focus_hero_workspace(&mut self) -> bool {
-        self.episodes.select_first();
         self.pane = Pane::Episodes;
         true
+    }
+
+    fn clear_hero_workspace_focus(&mut self) {
+        self.pane = Pane::Series;
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

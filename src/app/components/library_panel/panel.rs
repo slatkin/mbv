@@ -212,8 +212,24 @@ impl LibraryPanel {
     }
 
     pub(in crate::app) fn dismiss_hero_overlay(&mut self) {
+        if self.hero_overlay_open {
+            if let Some(owner) = self.owners.active_mut() {
+                owner.clear_hero_workspace_focus();
+            }
+        }
         self.hero_overlay_open = false;
         self.overlay_geometry = None;
+    }
+
+    pub(in crate::app) fn sync_overlay_state(&mut self) {
+        if self.hero_overlay_open
+            && self
+                .owners
+                .active_mut()
+                .is_some_and(|owner| !owner.hero_overlay_available())
+        {
+            self.dismiss_hero_overlay();
+        }
     }
 
     #[cfg(test)]
@@ -479,9 +495,12 @@ impl LibraryPanel {
             .is_some_and(|owner| owner.hero_overlay_available() && !owner.inline_search_active())
     }
 
-    fn open_hero_from_browser(&mut self) -> Option<Msg> {
+    fn open_hero_from_browser(&mut self, at: Option<Position>) -> Option<Msg> {
         if !self.can_open_hero_overlay() {
             return None;
+        }
+        if let Some(at) = at {
+            let _ = self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(at)));
         }
         if let Some(owner) = self.owners.active_mut() {
             owner.focus_hero_workspace();
@@ -644,7 +663,7 @@ impl LibraryPanel {
             }
             MouseGesture::DoubleClick(at) if inside_list => {
                 if self.narrow_geometry.is_some() {
-                    if let Some(message) = self.open_hero_from_browser() {
+                    if let Some(message) = self.open_hero_from_browser(Some(at)) {
                         return Some(message);
                     }
                 }
@@ -713,14 +732,19 @@ impl LibraryPanel {
             };
         }
         if matches!(gesture, MouseGesture::DoubleClick(_)) {
-            return self.owners.active_mut().and_then(|owner| {
-                owner
-                    .on_key_result(&tuirealm::event::KeyEvent::new(
-                        tuirealm::event::Key::Enter,
-                        tuirealm::event::KeyModifiers::NONE,
-                    ))
-                    .into_option()
-            });
+            let result = self
+                .owners
+                .active_mut()
+                .map(|owner| owner.activate_hero_selection())
+                .unwrap_or(LeafKeyResult::Unhandled);
+            return match result {
+                LeafKeyResult::Consumed(message) => message.or(Some(Msg::TerminalEvent(
+                    TerminalObserverEvent::MouseClaimed,
+                ))),
+                LeafKeyResult::Unhandled => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                }
+            };
         }
         Some(Msg::TerminalEvent(
             crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
