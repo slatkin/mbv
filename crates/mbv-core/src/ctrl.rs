@@ -23,7 +23,13 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 /// source previously declared v7 while the archived v8 contract described v8;
 /// that pre-existing drift is reconciled here by shipping v9 and rejecting
 /// every other version.
-pub const CTRL_PROTOCOL_VERSION: u32 = 9;
+///
+/// Version 10 bumps for the EmbyItem wire-shape change: `director`/`genre`
+/// (required on v9 peers) were replaced by defaultable `genres`/`people`/
+/// `external_urls`. A v9 peer drops every UnifiedQueue* command from a v10
+/// client because the removed required fields fail deserialization — silently,
+/// since undeserializable ctrl lines are skipped without a log.
+pub const CTRL_PROTOCOL_VERSION: u32 = 10;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";

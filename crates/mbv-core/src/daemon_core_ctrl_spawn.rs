@@ -117,6 +117,15 @@ fn spawn_ctrl_client(
             }
             if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
                 let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, client_id, reply_tx.clone()));
+            } else {
+                // A drop here is silent playback loss for the client (e.g. a
+                // wire-shape drift this peer can't parse), so at least say why.
+                log::warn!(
+                    target: "daemon",
+                    "unparsable ctrl line from client {client_id} ({} bytes): {}",
+                    line.len(),
+                    &line[..line.len().min(200)]
+                );
             }
         }
         let _ = merged_tx.send(DaemonEvent::CtrlDisconnected(client_id));
