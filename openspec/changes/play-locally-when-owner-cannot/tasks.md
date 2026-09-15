@@ -117,16 +117,16 @@
 
 ## 7. Documentation and decisions
 
-- [ ] 7.1 Update the "Audio-only owner" entry in `CONTEXT.md` to describe the
+- [x] 7.1 Update the "Audio-only owner" entry in `CONTEXT.md` to describe the
       shipped behavior and reference this change instead of the parked plan
       (`CONTEXT.md:115-121`). Verification: the entry names the prompt, the
       owner stop, and the ended attachment, and points at this change.
-- [ ] 7.2 Add a dated correction to ADR 0017 recording that the parked-owner
+- [x] 7.2 Add a dated correction to ADR 0017 recording that the parked-owner
       fall-through is superseded by the prompt plus ended attachment, keeping
       the original decision text intact (`docs/adr/0017-*.md:55-66,124-131`).
       Verification: the annotation carries a date, names the superseding
       change, and states why parking was dropped.
-- [ ] 7.3 Confirm the `non-audio-fall-through` spec reads consistently: the
+- [x] 7.3 Confirm the `non-audio-fall-through` spec reads consistently: the
       Purpose already reflects the new behavior and the delta's REMOVED
       requirements are gone from the capability after archive. Verification:
       `openspec validate play-locally-when-owner-cannot --strict` passes and, at
