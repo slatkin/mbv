@@ -331,6 +331,15 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
         .and_then(|panel| panel.test_wide_geometry())
         .expect("the Portrait Movie paints the Wide skeleton");
     assert!(portrait_geometry.hero_image.is_some());
+    assert!(
+        portrait
+            .model()
+            .app
+            .card_image_states
+            .get("panel-portrait:Primary,Backdrop")
+            .is_some_and(|entry| !entry.protocols.is_empty()),
+        "the seeded portrait base resolves to a usable Wide protocol"
+    );
     assert_eq!(
         portrait
             .model()
