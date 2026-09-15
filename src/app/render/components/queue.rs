@@ -44,7 +44,7 @@ pub(in crate::app) fn render_queue_title(frame: &mut Frame, area: Rect) {
     let area = Rect { height: 1, ..area };
     frame.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "Queue",
+            "  Queue",
             Style::default()
                 .fg(palette::TEXT_HERO_TITLE)
                 .add_modifier(Modifier::BOLD),
@@ -227,9 +227,9 @@ mod tests {
         term.draw(|f| render_queue_title(f, Rect::new(0, 0, 30, 1)))
             .unwrap();
         let buf = term.backend().buffer();
-        let text: String = (0..5).map(|x| buf[(x, 0)].symbol().to_owned()).collect();
-        assert_eq!(text, "Queue");
-        for x in 0..5 {
+        let text: String = (0..7).map(|x| buf[(x, 0)].symbol().to_owned()).collect();
+        assert_eq!(text, "  Queue");
+        for x in 0..7 {
             let style = buf[(x, 0)].style();
             assert_eq!(style.fg, Some(palette::TEXT_HERO_TITLE));
             assert!(style.add_modifier.contains(Modifier::BOLD));

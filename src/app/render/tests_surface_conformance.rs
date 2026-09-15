@@ -204,15 +204,15 @@ fn queue_only_strip_and_queue_follow_the_table() {
         palette::surface_colors(palette::Surface::QueuePanel, true).fill,
         "the blank row carries the queue panel surface"
     );
-    let title: String = (0..5)
+    let title: String = (0..7)
         .map(|i| {
             buffer[(queue_view.content_area.x + i, title_y)]
                 .symbol()
                 .to_owned()
         })
         .collect();
-    assert_eq!(title, "Queue", "the list sits directly below the title");
-    for i in 0..5 {
+    assert_eq!(title, "  Queue", "the list sits directly below the title");
+    for i in 0..7 {
         let cell = &buffer[(queue_view.content_area.x + i, title_y)];
         assert_eq!(cell.style().fg, Some(palette::TEXT_HERO_TITLE));
         assert!(
