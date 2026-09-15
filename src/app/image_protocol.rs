@@ -101,6 +101,7 @@ impl App {
             img,
             protocols: std::collections::HashMap::new(),
             cover_box: None,
+            applied_logo_key: None,
         };
         if let Some(img) = entry.img.clone() {
             let suffix = self.current_protocol_suffix();
@@ -128,21 +129,26 @@ impl App {
             .get(bare_key)
             .is_some_and(|e| e.img.is_some() && !e.protocols.contains_key(suffix));
         if reencode {
-            let (img, cover_box) = self
+            let (img, cover_box, logo_key) = self
                 .card_image_states
                 .get(bare_key)
-                .and_then(|e| e.img.clone().map(|img| (img, e.cover_box)))
+                .and_then(|e| e.img.clone().map(|img| (img, e.cover_box, e.applied_logo_key.clone())))
                 .expect("img present, just checked");
             // A hero entry's protocols carry the cover-fit crop (task 5.10,
             // design D5): rebuild from the source through the same cover step
             // so a suffix switch keeps the cropped aspect.
-            let img = match cover_box {
+            let mut img = match cover_box {
                 Some((w, h)) => {
                     let (px_w, px_h) = self.hero_box_pixels(w, h);
                     super::images::cover_fill_hero_box(&img, px_w, px_h)
                 }
                 None => img,
             };
+            if let Some(logo_key) = logo_key {
+                if let Some(logo) = self.card_image_states.get(&logo_key).and_then(|e| e.img.as_ref()) {
+                    img = super::images::composite_landscape_logo(&img, logo);
+                }
+            }
             let proto = self.build_protocol(bare_key, suffix, picker, img);
             if let Some(entry) = self.card_image_states.get_mut(bare_key) {
                 entry.protocols.insert(suffix, proto);
@@ -371,6 +377,7 @@ impl App {
         &mut self,
         cache_key: &str,
         box_cells: (u16, u16),
+        logo_cache_key: Option<&str>,
     ) -> bool {
         let Some(entry) = self.card_image_states.get(cache_key) else {
             return false;
@@ -378,7 +385,13 @@ impl App {
         let Some(source) = entry.img.clone() else {
             return false;
         };
-        if entry.cover_box == Some(box_cells) && !entry.protocols.is_empty() {
+        let desired_logo_key = logo_cache_key
+            .filter(|key| self.card_image_states.get(*key).is_some_and(|e| e.img.is_some()))
+            .map(str::to_owned);
+        if entry.cover_box == Some(box_cells)
+            && entry.applied_logo_key == desired_logo_key
+            && !entry.protocols.is_empty()
+        {
             return true;
         }
         let Some((suffix, picker)) = self
@@ -388,13 +401,19 @@ impl App {
             return false;
         };
         let (px_w, px_h) = self.hero_box_pixels(box_cells.0, box_cells.1);
-        let cropped = cover_fill_hero_box(&source, px_w, px_h);
+        let mut cropped = cover_fill_hero_box(&source, px_w, px_h);
+        if let Some(logo_key) = desired_logo_key.as_deref() {
+            if let Some(logo) = self.card_image_states.get(logo_key).and_then(|e| e.img.as_ref()) {
+                cropped = super::images::composite_landscape_logo(&cropped, logo);
+            }
+        }
         let bare_key = cache_key.to_string();
         let proto = self.build_protocol(&bare_key, suffix, &picker, cropped);
         if let Some(entry) = self.card_image_states.get_mut(cache_key) {
             entry.protocols.clear();
             entry.protocols.insert(suffix, proto);
             entry.cover_box = Some(box_cells);
+            entry.applied_logo_key = desired_logo_key;
         }
         true
     }

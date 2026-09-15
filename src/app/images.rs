@@ -76,6 +76,10 @@ pub(super) struct CachedImage {
     /// keyed by the box, so a box change rebuilds the protocol at the new
     /// size. `None` for every non-hero cache entry (plain `Resize::Scale`).
     pub cover_box: Option<(u16, u16)>,
+    /// Cache identity of the Logo applied to the current hero protocols.
+    /// `None` means the base-only protocol is valid (including pending/failed
+    /// Logo fetches).
+    pub applied_logo_key: Option<String>,
 }
 
 impl CachedImage {
@@ -86,6 +90,7 @@ impl CachedImage {
             img: None,
             protocols: std::collections::HashMap::new(),
             cover_box: None,
+            applied_logo_key: None,
         }
     }
 }
@@ -118,6 +123,31 @@ pub(in crate::app) fn cover_fill_hero_box(
 ) -> image::DynamicImage {
     let (w, h) = (box_w.max(1), box_h.max(1));
     source.resize_to_fill(w, h, image::imageops::FilterType::Lanczos3)
+}
+
+/// Decorate an already cover-fitted landscape bitmap with a transparent Logo.
+/// The Logo is contain-fitted into the prescribed bounds, then source-over
+/// composited at the rounded, clamped inset.
+pub(in crate::app) fn composite_landscape_logo(
+    base: &image::DynamicImage,
+    logo: &image::DynamicImage,
+) -> image::DynamicImage {
+    use image::GenericImageView;
+    let mut base = base.to_rgba8();
+    let (base_w, base_h) = base.dimensions();
+    let max_w = ((base_w * 60) / 100).max(1);
+    let max_h = ((base_h * 20) / 100).max(1);
+    let logo = logo.resize(max_w, max_h, image::imageops::FilterType::Nearest);
+    let (logo_w, logo_h) = logo.dimensions();
+    let inset_x = ((base_w as f32 * 0.05).round() as u32).min(base_w.saturating_sub(logo_w));
+    let inset_y = ((base_h as f32 * 0.05).round() as u32).min(base_h.saturating_sub(logo_h));
+    image::imageops::overlay(
+        &mut base,
+        &logo.to_rgba8(),
+        i64::from(inset_x),
+        i64::from(inset_y),
+    );
+    image::DynamicImage::ImageRgba8(base)
 }
 
 impl App {
@@ -226,8 +256,19 @@ impl App {
                         facts,
                         workspace_present,
                     );
-                if !self.ensure_hero_cover_protocol(&cache_key, (box_cells.width, box_cells.height))
-                {
+                let logo_cache_key =
+                    artwork
+                        .decoration
+                        .as_ref()
+                        .and_then(|decoration| match decoration {
+                            ArtworkSource::Emby { cache_key, .. } => Some(cache_key.as_str()),
+                            ArtworkSource::AudiobookshelfCover { .. } => None,
+                        });
+                if !self.ensure_hero_cover_protocol(
+                    &cache_key,
+                    (box_cells.width, box_cells.height),
+                    logo_cache_key,
+                ) {
                     return State::Loading;
                 }
             }
@@ -285,7 +326,10 @@ include!("image_protocol.rs");
 
 #[cfg(test)]
 mod tests {
-    use super::{cover_fill_hero_box, series_image_cache_key, NAV_IMAGE_FETCH_IDLE_DELAY};
+    use super::{
+        composite_landscape_logo, cover_fill_hero_box, series_image_cache_key,
+        NAV_IMAGE_FETCH_IDLE_DELAY,
+    };
     use crate::app::tests::make_app_stub;
     use std::time::{Duration, Instant};
 
@@ -294,6 +338,31 @@ mod tests {
     /// source has white bands in its top and bottom eighths so a squashed or
     /// letterboxed fit would show white at the box edges; only the cover
     /// crop removes them.
+    #[test]
+    fn landscape_logo_preserves_aspect_inset_blends_and_leaves_outside_unchanged() {
+        let base = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            100,
+            50,
+            image::Rgba([20, 40, 60, 255]),
+        ));
+        let mut logo = image::RgbaImage::from_pixel(10, 20, image::Rgba([0, 0, 0, 0]));
+        for y in 0..20 {
+            for x in 0..5 {
+                logo.put_pixel(x, y, image::Rgba([220, 100, 20, 128]));
+            }
+        }
+        let composed = composite_landscape_logo(&base, &image::DynamicImage::ImageRgba8(logo));
+        let pixels = composed.as_rgba8().unwrap();
+        // 10:20 contains into 60:10 as 5:10; 5% insets round to (5, 3).
+        assert_eq!(pixels.get_pixel(5, 3).0, [120, 70, 39, 254]);
+        assert_eq!(pixels.get_pixel(6, 3).0, [120, 70, 39, 254]);
+        // The transparent half of the non-uniform Logo and the surrounding art
+        // remain the original pixels, pinning both the aspect fit and boundary.
+        assert_eq!(pixels.get_pixel(10, 3).0, [20, 40, 60, 255]);
+        assert_eq!(pixels.get_pixel(4, 2).0, [20, 40, 60, 255]);
+        assert_eq!(pixels.get_pixel(99, 49).0, [20, 40, 60, 255]);
+    }
+
     #[test]
     fn cover_fill_crops_a_4_3_source_into_a_16_9_box() {
         let (w, h) = (800u32, 600u32);
