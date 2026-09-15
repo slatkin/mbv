@@ -81,6 +81,7 @@ mod session_switch;
 mod settings;
 mod shell_draw;
 mod shuffle_folder_actions;
+mod text_safety;
 mod types_audiobookshelf_browse;
 mod types_browse;
 mod types_cast;
