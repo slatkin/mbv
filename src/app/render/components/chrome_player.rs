@@ -360,7 +360,22 @@ fn render_queue_title_rows(
     let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
     let (pos_ticks, rt_ticks, paused) = ctx.progress;
     let glyphs = control_glyphs(ctx, paused);
-    let pills = status_pill_spans(ctx);
+    // The pill's trailing pad mirrors its leading pad (`status_pill_spans`
+    // opens with one pill-background space): without it the value (e.g.
+    // FLAC) touches the panel fill on the right. `render_title_row` pads
+    // the same way after its own merge; this row owns its merge, so it
+    // pads here before measuring.
+    let mut pills = status_pill_spans(ctx);
+    if !pills.is_empty() {
+        pills.push(Span::styled(
+            " ",
+            Style::default().bg(palette::surface_colors(
+                palette::Surface::PlaybackStatusPill,
+                false,
+            )
+            .fill),
+        ));
+    }
     let pills_w: u16 = pills.iter().map(|span| span.content.width() as u16).sum();
     let glyph_text = format!("{} ", glyphs.play.0);
     let glyph_w = glyph_text.width() as u16;
@@ -571,4 +586,87 @@ fn marquee_spans(
         ctx.marquee_text,
         ctx.marquee_started_at,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    /// The queue column's split upper row pads the status pill on both
+    /// sides: the value (e.g. FLAC) must not touch the panel fill on the
+    /// right, mirroring the leading pad `status_pill_spans` opens with.
+    #[test]
+    fn split_upper_row_pads_the_status_pill_on_both_sides() {
+        let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
+        let panel_bg =
+            palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
+        assert_ne!(
+            pill_bg, panel_bg,
+            "the test locates the pill by its fill, so the fills must differ"
+        );
+        let mut playback = PlaybackStripAreas::default();
+        let mut marquee_text = String::new();
+        let mut marquee_started_at = std::time::Instant::now();
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 40, 2),
+            playback: &mut playback,
+            player_h: 3,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::QueueOnlyPlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: Some(vec![Span::raw("CODEC "), Span::raw("FLAC")]),
+            throbber: Span::raw(" "),
+            title_parts: Vec::new(),
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(40, 2)).unwrap();
+        terminal
+            .draw(|f| {
+                render_queue_title_rows(
+                    f,
+                    Rect::new(0, 0, 40, 1),
+                    Rect::new(0, 1, 40, 1),
+                    "Title",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let pill_cells = (0..40)
+            .filter(|&x| buf[(x, 0)].bg == pill_bg)
+            .collect::<Vec<_>>();
+        assert!(!pill_cells.is_empty(), "no pill painted on the upper row");
+        let row_text = (0..40)
+            .map(|x| buf[(x, 0)].symbol().to_string())
+            .collect::<String>();
+        assert!(
+            row_text.contains("FLAC"),
+            "expected the codec value: {row_text:?}"
+        );
+        assert_eq!(
+            buf[(pill_cells[0], 0)].symbol(),
+            " ",
+            "leading pill pad: {row_text:?}"
+        );
+        assert_eq!(
+            buf[(*pill_cells.last().unwrap(), 0)].symbol(),
+            " ",
+            "trailing pill pad: {row_text:?}"
+        );
+        assert_eq!(
+            *pill_cells.last().unwrap(),
+            39,
+            "the padded pill runs flush to the row edge: {row_text:?}"
+        );
+    }
 }
