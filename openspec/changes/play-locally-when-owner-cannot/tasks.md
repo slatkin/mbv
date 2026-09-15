@@ -106,7 +106,7 @@
 
 ## 6. Composition
 
-- [ ] 6.1 Add a shell tick-integration test for the prompt through
+- [x] 6.1 Add a shell tick-integration test for the prompt through
       `Application::tick()`: pressing play on a video while attached to an
       audio-only owner mounts the confirmation modal, and accepting it routes to
       local playback with the attachment gone
