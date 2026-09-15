@@ -131,6 +131,20 @@ impl QueueComponent {
             .set_content(queue_media_rows(&slots, playback, self.pending_slot));
     }
 
+    /// The semantic states of the projected rows, in row order (tick-test
+    /// evidence for the shell's now-playing claim projection).
+    pub(in crate::app) fn projected_row_states(&self) -> Vec<MediaSemanticState> {
+        self.carrier
+            .wide()
+            .rows()
+            .iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item { semantic_state, .. } => Some(semantic_state.clone()),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Patch one projected row by stable target without rebuilding the list.
     pub(in crate::app) fn set_row_patch(
         &mut self,

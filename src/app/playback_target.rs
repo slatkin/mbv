@@ -226,6 +226,25 @@ impl App {
             .or_else(|| self.bare_in_flight_slot())
     }
 
+    /// The playback projection the queue ROWS are painted from: like
+    /// `displayed_queue_playback_state`, but a local run whose sequence
+    /// generation differs from the viewed queue's may not claim a row — its
+    /// coordinate addresses a sequence this queue never held
+    /// (unified-playback-queue: a new queue is never paired with the previous
+    /// active coordinate). Pending selections keep their claim: the
+    /// generation fence upgrades them to a full submit before minting.
+    pub(super) fn queue_row_playback_state(&self) -> super::PlaybackState {
+        let mut state = self.displayed_queue_playback_state();
+        if state.active {
+            let tab_generation = self.player_tab.sequence_generation;
+            let owner_generation = self.player.status.lock().unwrap().sequence_generation;
+            if tab_generation != owner_generation {
+                state.active = false;
+            }
+        }
+        state
+    }
+
     /// The playhead presentation reads: the confirmed playback state, or --
     /// while a selected slot awaits the playback owner's report -- that slot
     /// with no progress. Presentation only: authority consumers (transport
