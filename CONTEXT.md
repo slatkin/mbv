@@ -449,8 +449,9 @@ its stripe.
 _Avoid_: alternating row, striped background, row banding
 
 **Gutter accent**:
-The unconditional Wide selected-row treatment: the selected title is bold in the
-focus-accent role, with no selected-row background and no marker glyph.
+The unconditional Wide selected-row treatment: while the list holds focus, the selected title is bold
+in the focus-accent role, with no selected-row background and no marker glyph; an unfocused list
+shows no accent.
 _Avoid_: gutter-selected style, gutter treatment, selection marker
 
 **Tab panel**:

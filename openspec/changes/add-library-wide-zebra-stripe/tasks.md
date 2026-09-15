@@ -98,9 +98,12 @@
 
 ## 5. Terms
 
-- [ ] 5.1 Add **Zebra stripe** and **Gutter accent** to `CONTEXT.md` under Presentation, with an `_Avoid_`
-  list documenting the first draft's drift. Verify: the change's spec, design, and code comments use
-  only the CONTEXT.md terms.
+- [x] 5.1 Add **Zebra stripe** and **Gutter accent** to `CONTEXT.md` under Presentation, with `_Avoid_`
+  synonyms naming the first draft's drift ("gutter-selected style", "gutter treatment", "selection
+  marker"). Verify: the change's spec, design, and code comments use only the CONTEXT.md terms.
+  (Accepted: impl `47526763`; docs review PASS. Review P2 applied: accent definition now states the
+  focus condition. Worker's tasks.md/design.md softenings reverted; theme `ACCENT` comment fix kept
+  as in-scope. Orchestrator reran nextest: 1505/1505 clean.)
 
 ## 6. Gates
 
