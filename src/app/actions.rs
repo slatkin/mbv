@@ -18,14 +18,18 @@ pub(super) enum PlaybackEligibility {
     WhollyPlayable,
 }
 
+fn unavailable_suffix(count: usize) -> String {
+    format!(
+        " ({} item{} unavailable to the audio-only owner)",
+        count,
+        if count == 1 { "" } else { "s" }
+    )
+}
+
 /// Format the existing playback request toast with the mixed-selection count.
 fn playback_request_message(label: &str, mixed_unplayable: Option<usize>) -> String {
     match mixed_unplayable {
-        Some(count) => format!(
-            "Requesting playback: {label} ({} item{} unavailable to the audio-only owner)",
-            count,
-            if count == 1 { "" } else { "s" }
-        ),
+        Some(count) => format!("Requesting playback: {label}{}", unavailable_suffix(count)),
         None => format!("Requesting playback: {label}"),
     }
 }
@@ -76,12 +80,22 @@ impl App {
         start_idx: usize,
         source: crate::config::QueueSource,
     ) {
+        let label = items
+            .get(start_idx)
+            .or_else(|| items.first())
+            .map(EmbyItem::playback_label)
+            .unwrap_or_default();
         self.pending_local_play = Some(PendingQueueAction::PlayItems {
             items,
             start_idx,
             source,
             autostart: true,
         });
+        // Section 5's confirmation modal will replace this intermediate feedback.
+        self.flash(
+            format!("Playback deferred: {label} (owner cannot play this item)"),
+            ToastSeverity::Neutral,
+        );
     }
 }
 
@@ -303,14 +317,12 @@ impl App {
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
         if let Some(count) = mixed_unplayable {
-            self.flash(
-                format!(
-                    "Playback started ({} item{} unavailable to the audio-only owner)",
-                    count,
-                    if count == 1 { "" } else { "s" }
-                ),
-                ToastSeverity::Neutral,
-            );
+            if !direct_remote {
+                self.flash(
+                    format!("Playback started{}", unavailable_suffix(count)),
+                    ToastSeverity::Neutral,
+                );
+            }
         }
     }
 

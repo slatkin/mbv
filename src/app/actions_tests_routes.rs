@@ -4,10 +4,13 @@ use super::*;
 use crate::app::library_browse_actions::{
     build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
 };
-use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_items, make_session};
+use crate::app::tests::{
+    install_test_emby, make_app_stub, make_audio_only_remote_app_stub_with_cmd_rx, make_item,
+    make_items, make_session,
+};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
-    FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
+    FeedHomeVideoState, LibEvent, LibraryTab, PanelFocus, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::mock_http::MockHttp;
@@ -22,6 +25,7 @@ fn selection(media_types: &[&str]) -> Vec<EmbyItem> {
         .enumerate()
         .map(|(index, media_type)| {
             let mut item = make_item(&format!("item-{index}"), "Movie");
+            item.id = format!("item-{index}");
             item.media_type = (*media_type).into();
             item
         })
@@ -56,12 +60,10 @@ fn playback_eligibility_classifies_owner_and_selection(
 
 #[test]
 fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    let mut session = make_session("audio-owner", "Emby");
-    session.playable_media_types = vec!["Audio".into()];
-    app.connected_session_state = Some(session);
-    let item = make_item("Movie", "Movie");
+    let (mut app, command_rx) =
+        make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));
+    let mut item = make_item("Movie", "Movie");
+    item.id = "movie-1".into();
 
     app.play_item(item.clone());
 
@@ -75,17 +77,16 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
         }) if items.len() == 1 && items[0].id == item.id
     ));
     assert!(app.player_tab.emby_items().is_empty());
-    assert!(app.status.is_empty());
+    assert!(app.status.contains("Movie"));
+    assert!(command_rx.try_recv().is_err());
 }
 
 #[test]
 fn mixed_play_submits_unchanged_and_reports_unplayable_count() {
-    let mut app = make_app_stub();
-    app.connected_session_id = Some("session-1".into());
-    let mut session = make_session("audio-owner", "Emby");
-    session.playable_media_types = vec!["Audio".into()];
-    app.connected_session_state = Some(session);
+    let (mut app, command_rx) =
+        make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));
     let items = selection(&["Audio", "Video"]);
+    app.replace_playback_queue(items.clone(), 0);
 
     app.play_items_routed(items.clone(), 0, crate::config::QueueSource::Album);
 
@@ -96,7 +97,21 @@ fn mixed_play_submits_unchanged_and_reports_unplayable_count() {
     );
     assert!(app.status.contains("1 item"));
     assert!(app.status.contains("unavailable"));
-    assert!(app.player_tab.emby_items().is_empty());
+    assert!(!app.status.contains("Playback started"));
+    let slots = command_rx
+        .try_iter()
+        .find_map(|command| match command {
+            mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(slots),
+            _ => None,
+        })
+        .expect("mixed play should submit the unchanged selection");
+    assert_eq!(
+        slots.iter().map(|slot| slot.item.id()).collect::<Vec<_>>(),
+        items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>()
+    );
 }
 
 #[test]
@@ -120,19 +135,62 @@ fn routed_wholly_unplayable_play_is_deferred_without_queue_replacement() {
         })
     ));
     assert!(app.player_tab.emby_items().is_empty());
-    assert!(app.status.is_empty());
+    assert!(app.status.contains("item-1"));
 }
 
 #[test]
 fn wholly_playable_play_keeps_the_existing_play_path() {
-    let mut app = make_app_stub();
-    let item = make_item("Song", "Audio");
+    let (mut app, command_rx) =
+        make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));
+    let mut item = make_item("Song", "Audio");
+    item.id = "song-1".into();
+    item.media_type = "Audio".into();
 
     app.play_item(item.clone());
 
     assert!(app.pending_local_play.is_none());
-    assert_eq!(app.player_tab.emby_items().len(), 1);
-    assert_eq!(app.player_tab.emby_items()[0].id, item.id);
+    let slots = command_rx
+        .try_iter()
+        .find_map(|command| match command {
+            mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(slots),
+            _ => None,
+        })
+        .expect("playable play should submit a queue replacement");
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].item.id(), item.id);
+}
+
+#[test]
+fn enqueue_unplayable_selection_keeps_append_submission_without_prompt() {
+    let (mut app, command_rx) =
+        make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));
+    app.panel_focus = PanelFocus::Queue;
+    let mut item = make_item("Movie", "Movie");
+    item.id = "movie-1".into();
+
+    app.execute_context_action(
+        Some(ContextAction::EnqueueSelection(vec![item.clone()])),
+        None,
+    );
+
+    assert!(app.pending_local_play.is_none());
+    assert!(app.pending_queue_action.is_none());
+    assert!(app.pending_overlay.is_none());
+    assert!(app.player_tab.emby_items().is_empty());
+    assert!(app
+        .remote_player_tab
+        .as_ref()
+        .unwrap()
+        .emby_items()
+        .iter()
+        .any(|queued| queued.id == item.id));
+    assert!(command_rx.try_iter().any(|command| {
+        matches!(
+            command,
+            mbv_core::ctrl::CtrlCmd::UnifiedQueueAppend { items }
+                if items.len() == 1 && items[0].id() == item.id
+        )
+    }));
 }
 
 fn folder(id: &str, name: &str) -> EmbyItem {

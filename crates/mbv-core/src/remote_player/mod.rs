@@ -378,4 +378,16 @@ impl RemotePlayer {
             cmd_rx,
         )
     }
+
+    /// Test-support stub whose advertised ctrl capability identifies an
+    /// audio-only playback owner.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn stub_audio_only_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_audio_only = true;
+        (remote, event_rx, cmd_rx)
+    }
 }
