@@ -180,10 +180,27 @@ pub(in crate::app) fn media_list_row<Target>(
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
                 spans.push(Span::raw(" ".repeat(inner_width.saturating_sub(used))));
             }
+            if !selected {
+                if let Some(bg) = alternate_bg {
+                    // Ratatui fills a ListItem's whole row allocation when its
+                    // style has a background. Keep the row style unstyled and
+                    // carry zebra paint only on the text-flow spans instead:
+                    // the two-column indent and right inset remain parent
+                    // background (and the scrollbar is painted separately).
+                    for span in spans.iter_mut().skip(1) {
+                        span.style = span.style.bg(bg);
+                    }
+                    let used = spans.iter().map(|span| span.content.width()).sum();
+                    spans.push(Span::styled(
+                        " ".repeat(content_w.saturating_sub(used)),
+                        Style::default().bg(bg),
+                    ));
+                }
+            }
             ListItem::new(Line::from(spans)).style(if selected {
                 Style::default().bg(selected_bg)
             } else {
-                alternate_bg.map_or(Style::default(), |bg| Style::default().bg(bg))
+                Style::default()
             })
         }
     }

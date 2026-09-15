@@ -144,7 +144,7 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
         let buf = term.backend().buffer();
         let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, 20));
         let queue = chrome.root.queue.expect("queue panel placement");
-        let cell = &buf[(queue.x + 2, layout.content_area.y + 2)];
+        let cell = &buf[(queue.x + 4, layout.content_area.y + 2)];
         assert_eq!(
             cell.style().bg,
             Some(Color::from_u32(0x003c4841)),
@@ -185,7 +185,7 @@ fn both_mode_focused_queue_keeps_focused_styling() {
 
     let (term, layout) = render_queue_view_to_terminal(&mut app, 80, 20);
     let buf = term.backend().buffer();
-    let cell = &buf[(layout.content_area.x + 1, layout.content_area.y + 2)];
+    let cell = &buf[(layout.content_area.x + 2, layout.content_area.y + 2)];
     assert_eq!(
         cell.style().bg,
         Some(Color::from_u32(0x003c4841)),

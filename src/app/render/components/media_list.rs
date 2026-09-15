@@ -216,7 +216,7 @@ mod wide_row_regression_tests {
     /// full-width selection treatment, but rows and scrollbar must start at the
     /// content flow's y-coordinate and use its height.
     #[test]
-    fn zebra_stripes_selectable_rows_and_selected_row_wins() {
+    fn zebra_stripes_are_contained_and_selected_row_still_wins() {
         let rect = Rect::new(0, 0, 32, 4);
         let selected_bg = palette::SURFACE_RESTING;
         let zebra_bg = Color::Rgb(60, 72, 65);
@@ -243,10 +243,23 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_eq!(buf[(0, 0)].bg, zebra_bg);
+        for y in [0, 2] {
+            assert_eq!(buf[(0, y)].bg, Color::Reset);
+            assert_eq!(buf[(1, y)].bg, Color::Reset);
+            assert_eq!(buf[(2, y)].bg, zebra_bg);
+            assert_eq!(buf[(29, y)].bg, zebra_bg);
+            assert_eq!(buf[(30, y)].bg, Color::Reset);
+            assert_eq!(buf[(31, y)].bg, Color::Reset);
+        }
         assert_ne!(buf[(0, 1)].bg, zebra_bg);
-        assert_eq!(buf[(0, 2)].bg, zebra_bg);
         assert_ne!(buf[(0, 3)].bg, zebra_bg);
+        for x in 0..rect.width {
+            assert_eq!(
+                buf[(x, 3)].bg,
+                selected_bg,
+                "selected row must remain full-bleed at x={x}"
+            );
+        }
     }
 
     #[test]
