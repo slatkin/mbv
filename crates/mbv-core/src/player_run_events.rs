@@ -302,7 +302,63 @@ impl PlaybackRun {
         true
     }
 
-    // Returns true if the event loop should `continue`.
+    /// Standalone origin: exactly one file, so any EndFile ends playback. The
+    /// run idles afterward (mpv stays up awaiting Shutdown), so the shared
+    /// status snapshot must stop advertising `active=true` here — unlike the
+    /// queue paths, no Shutdown or TrackChanged will refresh it. A daemon
+    /// client attaching later would otherwise inherit a "still playing"
+    /// now-playing panel frozen at the final position.
+    fn on_end_file_standalone(&mut self, reason: EndFileReason, progress: &mut ProgressGuard) -> bool {
+        if reason == mpv_end_file_reason::Quit {
+            self.stop_runtime = Some(self.active_item().map_or(0, |item| item.runtime_ticks()));
+        }
+        let runtime = self.status.lock().unwrap().runtime_ticks;
+        let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
+        let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+        let completed_slot_id = self.active_slot_id();
+
+        if reason == mpv_end_file_reason::Quit {
+            // Keep an external window close off the mpv event loop. Natural
+            // EOF still reports synchronously before its completion event.
+            self.report_stop_now_or_background(progress);
+        } else {
+            progress.stop_and_join(self.progress_join_budget());
+            self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
+        }
+
+        let lifecycle_pos = self.active_item().map_or(self.last_valid_pos, |item| {
+            provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
+        });
+        self.close_prepared_source_at(lifecycle_pos);
+        self.status.lock().unwrap().active = false;
+
+        if natural_end && self.reporter.has_session() {
+            let id = self.reporter.ids.lock().unwrap().0.clone();
+            if !completed_is_audio {
+                match self.reporter.client.mark_played(id.as_str()) {
+                    Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
+                    Err(e) => {
+                        log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
+                        self.mark_played_id = Some(id.clone());
+                    }
+                }
+            }
+        }
+        if !self.stopped_event_sent {
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                slot_id: completed_slot_id,
+                position_ticks: 0,
+                played: natural_end && !completed_is_audio && self.reporter.has_session(),
+                consume: false,
+                progress_report_accepted: self.stop_report.is_accepted(),
+                error: None,
+            });
+            self.stopped_event_sent = true;
+        }
+        false
+    }
+
+    /// Returns true if the event loop should `continue`.
     fn on_end_file(
         &mut self,
         reason: EndFileReason,
@@ -349,7 +405,6 @@ impl PlaybackRun {
         }
 
         let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
-        let runtime = self.status.lock().unwrap().runtime_ticks;
 
         if self.origin == PlaybackOrigin::Queue && reason == mpv_end_file_reason::Quit {
             let completed_runtime = self.active_item().map_or(0, |item| item.runtime_ticks());
@@ -380,49 +435,7 @@ impl PlaybackRun {
         }
 
         if self.origin == PlaybackOrigin::Standalone {
-            if reason == mpv_end_file_reason::Quit {
-                self.stop_runtime = Some(self.active_item().map_or(0, |item| item.runtime_ticks()));
-            }
-            let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
-
-            if reason == mpv_end_file_reason::Quit {
-                // Keep an external window close off the mpv event loop. Natural
-                // EOF still reports synchronously before its completion event.
-                self.report_stop_now_or_background(progress);
-            } else {
-                progress.stop_and_join(self.progress_join_budget());
-                self.stop_report = StopReport::mark_sent(self.report_stopped_for_end_file(reason));
-            }
-
-            let lifecycle_pos = self.active_item().map_or(self.last_valid_pos, |item| {
-                provider_lifecycle_close_pos(item, natural_end, runtime, self.last_valid_pos)
-            });
-            self.close_prepared_source_at(lifecycle_pos);
-
-            if natural_end && self.reporter.has_session() {
-                let id = self.reporter.ids.lock().unwrap().0.clone();
-                if !completed_is_audio {
-                    match self.reporter.client.mark_played(id.as_str()) {
-                        Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
-                        Err(e) => {
-                            log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
-                            self.mark_played_id = Some(id.clone());
-                        }
-                    }
-                }
-            }
-            if !self.stopped_event_sent {
-                let _ = self.event_tx.send(PlayerEvent::Stopped {
-                    slot_id: completed_slot_id,
-                    position_ticks: 0,
-                    played: natural_end && !completed_is_audio && self.reporter.has_session(),
-                    consume: false,
-                    progress_report_accepted: self.stop_report.is_accepted(),
-                    error: None,
-                });
-                self.stopped_event_sent = true;
-            }
-            return false;
+            return self.on_end_file_standalone(reason, progress);
         }
 
         let completed_idx = completed_slot_id.and_then(|slot_id| self.queue.slot_index(slot_id));
