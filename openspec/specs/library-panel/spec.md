@@ -329,39 +329,33 @@ Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
 - **THEN** the inline hero renders its title, metadata rows, overview and image with no cast and crew
   table
 
-### Requirement: A Movie hero's provider links are ctrl-clickable via OSC 8 hyperlinks
+### Requirement: The Movie hero's IMDb link opens the provider URL when clicked
 
-Each provider link name in a Movie hero's provider-link row SHALL be rendered as a clickable link
-using OSC 8 escape sequences when the terminal declares hyperlink support, so that ctrl-clicking the
-name opens that provider's URL in the user's browser. The provider-link row carries only the item's
-IMDb link.
+The provider-link name in a Movie hero's provider-link row SHALL open the provider's URL in the
+user's browser when clicked: mbv owns the captured mouse, so the link click SHALL be resolved by the
+Library panel against the label geometry it painted and handled by the same system-opener path the
+feed link uses (`xdg-open`/`open`/`start` per platform), not by terminal hyperlink escapes.
+(Reversed 2026-09-15 from the original OSC 8 design: terminal-side ctrl-click is unavailable while
+the application captures the mouse, and an application-owned handler works on every terminal.)
 
-A URL SHALL be embedded in an escape sequence only when it is an `http` or `https` URL containing no
-control bytes. A link whose URL fails that check SHALL render as plain text with no escape sequence.
+A URL SHALL be opened only when it is an `http` or `https` URL containing no control bytes. A link
+whose URL fails that check SHALL NOT open and SHALL render as ordinary body text. The Narrow inline
+hero SHALL render the provider-link row as plain text with no click handling.
 
-When the terminal does not declare hyperlink support, the row SHALL render as plain text with no
-escape sequences. The Narrow inline hero SHALL render the provider-link row as plain text.
+#### Scenario: Clicking the link name
 
-#### Scenario: A supported terminal
-
-- **WHEN** a Movie hero renders its provider-link row on a terminal declaring hyperlink support
-- **THEN** each link name is wrapped in an OSC 8 escape sequence carrying that provider's URL
-
-#### Scenario: An unsupported terminal
-
-- **WHEN** a Movie hero renders its provider-link row on a terminal that does not declare hyperlink
-  support
-- **THEN** the row renders as plain text with no escape sequences
+- **WHEN** the user clicks a Movie hero's IMDb link name at Wide geometry
+- **THEN** the provider URL opens in the user's browser
 
 #### Scenario: A link with a non-web URL
 
 - **WHEN** a provider link carries a URL that is not `http` or `https`
-- **THEN** that link name renders as plain text with no escape sequence
+- **THEN** the name renders as ordinary body text and clicking it does nothing
 
 #### Scenario: A link with control bytes in its URL
 
 - **WHEN** a provider link's URL contains a control byte
-- **THEN** that link name renders as plain text with no escape sequence
+- **THEN** the name renders as ordinary body text and clicking it does nothing
 
 ### Requirement: Wide Workspaces are one Selector row plus one list box
 
