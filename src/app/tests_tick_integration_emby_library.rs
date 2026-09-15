@@ -82,8 +82,7 @@ fn browser_narrow_tick_click_uses_retained_geometry() {
     let _terminal = draw(&mut harness, 60, 30);
 
     // The panel's own retained Narrow geometry is the painted truth: the
-    // admitted inline hero block is the Inline presentation's detail rect,
-    // so a click on it resolves to the retained selected target through the
+    // fixed-row selected rectangle resolves to the stable target through the
     // owner's carrier — never a stale-geometry row re-resolution.
     let geometry = harness
         .model()
@@ -95,10 +94,8 @@ fn browser_narrow_tick_click_uses_retained_geometry() {
         .expect("Library panel type")
         .test_narrow_geometry()
         .expect("the panel painted a Narrow skeleton");
-    let area = geometry
-        .inline_hero
-        .expect("selected detail retained geometry");
-    assert!(!area.is_empty(), "selected detail retained geometry");
+    let area = geometry.selected.expect("selected row retained geometry");
+    assert!(!area.is_empty(), "selected row retained geometry");
     let position = Position::new(area.x, area.y);
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::Down(MouseButton::Left),

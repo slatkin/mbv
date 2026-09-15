@@ -349,17 +349,14 @@ impl LibraryPanel {
             return crate::app::layout::PaintedRowGeometry {
                 left_area: wide.list_area,
                 hero_area: wide.hero_area,
-                inline_hero_area: wide.hero_area,
                 selected_item_rect: wide.selected,
                 selector_tabs: Vec::new(),
             };
         }
         if let Some(narrow) = self.narrow_geometry.as_ref() {
-            let inline_hero = narrow.inline_hero.unwrap_or_default();
             return crate::app::layout::PaintedRowGeometry {
                 left_area: narrow.list_area,
-                hero_area: inline_hero,
-                inline_hero_area: inline_hero,
+                hero_area: narrow.list_area,
                 selected_item_rect: narrow.selected,
                 selector_tabs: Vec::new(),
             };
@@ -480,8 +477,7 @@ impl LibraryPanel {
     }
 
     /// The hero pane's rect from the last painted Wide frame, when one
-    /// painted (the Narrow skeleton replaces the hero pane with the inline
-    /// hero inside the list, so there is no Narrow rect).
+    /// painted.
     fn hero_pane_rect(&self) -> Option<ratatui::layout::Rect> {
         self.wide_geometry.as_ref().map(|geometry| geometry.hero)
     }
@@ -500,13 +496,15 @@ impl LibraryPanel {
     }
 
     fn open_hero_from_browser(&mut self, at: Option<Position>) -> Option<Msg> {
-        if let Some(at) = at {
-            let _ = self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(at)));
-        }
+        let click_message = at.and_then(|at| {
+            self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(at)))
+        });
         // Resolve the gate after the pointer click has moved the canonical
-        // browser selection to its post-click target.
+        // browser selection to its post-click target. If the gate loses, the
+        // click message must survive: the component already mutated before
+        // the parent made this decision.
         if !self.can_open_hero_overlay() {
-            return None;
+            return click_message;
         }
         if let Some(owner) = self.owners.active_mut() {
             owner.focus_hero_workspace();

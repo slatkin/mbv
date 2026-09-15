@@ -127,9 +127,7 @@ impl App {
     /// content area; the Wide header's cover-fit box is keyed by the box
     /// `hero_artwork_box` derives from it, so a resize, split drag, or
     /// Workspace shrink re-encodes at the new box size on the next sync pass
-    /// and the placeholder shows for at most that one frame. The Narrow
-    /// inline hero is not cropped: it paints `Resize::Scale` into its own
-    /// box, sized from the projected decoded aspect (design D7).
+    /// and the placeholder shows for at most that one frame.
     pub(in crate::app) fn project_hero_image(
         &mut self,
         facts: &crate::app::components::library_panel::HeroFacts,

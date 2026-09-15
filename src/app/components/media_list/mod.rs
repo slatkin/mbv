@@ -1,9 +1,7 @@
 //! Provider-neutral embedded media-list controls (design.md D1/D2/D3).
 //!
-//! [`WideMediaList`] and [`InlineMediaBrowser`] are closed presentations over
-//! one [`MediaList`] owner. [`ViewportAnchor`] is retained only for explicit
-//! transitions between genuinely different owners. Painting
-//! lives in `crate::app::render::components::media_list`.
+//! [`WideMediaList`] is the fixed-row presentation over one [`MediaList`]
+//! owner. Painting lives in `crate::app::render::components::media_list`.
 
 use crate::app::components::library_panel::LibraryKey;
 use crate::app::ui_util::move_cursor;
@@ -14,7 +12,6 @@ use std::time::Instant;
 mod anchor;
 mod carrier;
 mod grouping;
-mod inline;
 mod selection;
 #[cfg(test)]
 mod tests;
@@ -23,14 +20,12 @@ mod wide;
 pub use anchor::ViewportAnchor;
 pub use carrier::{MediaListCarrier, Presentation};
 pub use grouping::letter_grouped_rows;
-pub use inline::{InlineLayout, InlineMediaBrowser};
 pub use wide::WideMediaList;
 
 /// Flow-space geometry for a painted media-list control.
 ///
 /// Rows contain the source-row lookup used by painters and an optional stable
-/// target for compatibility hit maps. Replacement continuation rows contain
-/// neither; the selected replacement row contains only the selected target.
+/// target for hit maps.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RowGeometry<Target> {
     offset: usize,
@@ -108,39 +103,6 @@ impl<Target: Clone> RowGeometry<Target> {
                 })
                 .collect(),
             selected_row,
-        }
-    }
-
-    fn replacement(
-        rows: &[MediaListRow<Target>],
-        selected_row: usize,
-        detail_rows: usize,
-        offset: usize,
-    ) -> Self {
-        let mut flow = Vec::with_capacity(rows.len() - 1 + detail_rows);
-        let mut selected_flow_row = None;
-        for (source_row, row) in rows.iter().enumerate() {
-            if source_row == selected_row {
-                selected_flow_row = Some(flow.len());
-                flow.extend((0..detail_rows).map(|detail_row| FlowRow {
-                    source_row: None,
-                    target: if detail_row == 0 {
-                        row.selectable_target().cloned()
-                    } else {
-                        None
-                    },
-                }));
-            } else {
-                flow.push(FlowRow {
-                    source_row: Some(source_row),
-                    target: row.selectable_target().cloned(),
-                });
-            }
-        }
-        Self {
-            offset,
-            rows: flow,
-            selected_row: selected_flow_row,
         }
     }
 }
@@ -266,36 +228,6 @@ impl WideMediaListPaintPolicy {
 
     pub(crate) const fn selected_surface(self) -> SelectedRowSurface {
         self.selected_surface
-    }
-}
-
-/// Semantic paint policy for one `InlineMediaBrowser` view.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct InlineMediaBrowserPaintPolicy {
-    focused: bool,
-    selected_surface: SelectedRowSurface,
-    desired_detail_rows: usize,
-}
-
-impl InlineMediaBrowserPaintPolicy {
-    pub const fn new(focused: bool, desired_detail_rows: usize) -> Self {
-        Self {
-            focused,
-            selected_surface: SelectedRowSurface::ListBackdrop,
-            desired_detail_rows,
-        }
-    }
-
-    pub(crate) const fn focused(self) -> bool {
-        self.focused
-    }
-
-    pub(crate) const fn selected_surface(self) -> SelectedRowSurface {
-        self.selected_surface
-    }
-
-    pub(crate) const fn desired_detail_rows(self) -> usize {
-        self.desired_detail_rows
     }
 }
 

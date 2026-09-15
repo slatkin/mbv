@@ -401,30 +401,6 @@ fn feed_snapshot(width: u16, height: u16) -> String {
     draw(&mut model, &mut term)
 }
 
-/// The mounted Library panel's admitted inline hero block, when the Narrow
-/// skeleton admitted one. Tests that must bound the detail block read this
-/// instead of the `▁`/`▔` frame rows the block no longer paints.
-fn mounted_inline_hero(model: &Model) -> Option<ratatui::layout::Rect> {
-    model
-        .application
-        .get_component(&ComponentId::Library)
-        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
-        .and_then(|panel| panel.test_narrow_geometry())
-        .and_then(|geometry| geometry.inline_hero)
-}
-
-/// The feed-group frame's painted output plus its admitted inline hero block.
-fn feed_snapshot_with_hero(width: u16, height: u16) -> (String, Option<ratatui::layout::Rect>) {
-    let mut app = feed_home_video_group_app();
-    app.terminal_width = width;
-    app.terminal_height = height;
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    let mut term = Terminal::new(TestBackend::new(width, height)).unwrap();
-    let output = draw(&mut model, &mut term);
-    (output, mounted_inline_hero(&model))
-}
-
 fn selected_feed_row_region(output: &str, title: &str) -> String {
     let lines: Vec<_> = output.lines().collect();
     // The selected ordinary row is identified by its 2-column selected inset.
@@ -433,52 +409,6 @@ fn selected_feed_row_region(output: &str, title: &str) -> String {
         .position(|line| line.starts_with("  ") && line.contains(title))
         .unwrap_or_else(|| panic!("selected feed row must be rendered: {output}"));
     lines[row..row + 1].join("\n")
-}
-
-#[test]
-fn feed_home_video_group_narrow_uses_shared_inline_hero() {
-    // Task 6.1 (design D7): the migrated feed-group picker paints through
-    // the mounted `LibraryPanel`'s one Narrow skeleton — a feed-group pill
-    // row, then the shared inline-hero replacement for the selected row
-    // (meta line and overview inside) — identical to a generic narrow
-    // home-video library. The taller fixture gives the D7 detail block room
-    // to fit the list viewport; when it would not, the skeleton falls back to
-    // the ordinary selected row by design.
-    let (output, hero) = feed_snapshot_with_hero(60, 30);
-    let hero = hero.expect("the narrow skeleton admitted the inline hero block");
-    assert!(
-        output.contains("All") && output.contains("Channel A"),
-        "feed-group pills missing:\n{output}"
-    );
-    // The detail block bounds the selected item's meta line and overview
-    // (design D5 producer: a Movie's meta rows are its release date and
-    // duration, not its genre).
-    let in_block = |row: usize| (hero.y as usize..hero.bottom() as usize).contains(&row);
-    // The D7 wrap splits text across the beside-image column, so collapse the
-    // block's whitespace before matching the unwrapped content.
-    let block = output
-        .lines()
-        .enumerate()
-        .filter(|(row, _)| in_block(*row))
-        .map(|(_, line)| line)
-        .collect::<Vec<_>>()
-        .join("\n");
-    let block_text = block.split_whitespace().collect::<Vec<_>>().join(" ");
-    assert!(
-        block_text.contains("Video One")
-            && block_text.contains("1h")
-            && block_text.contains("Distinctive wrapping overview fragment"),
-        "the selected item's title, meta and overview must paint inside the block:\n{block}"
-    );
-    assert_eq!(
-        output
-            .lines()
-            .enumerate()
-            .filter(|(row, line)| line.contains("Video Two") && !in_block(*row))
-            .count(),
-        1,
-        "Video Two paints once, outside the detail block:\n{output}"
-    );
 }
 
 #[test]
@@ -516,47 +446,6 @@ fn feed_home_video_group_paints_each_row_once() {
         });
         assert_eq!(rows.count(), 1, "feed {width}x{height} paints the row once");
     }
-}
-
-#[test]
-fn feed_home_video_group_metadata_bearing_hero_keeps_complete_detail_block() {
-    // Task 6.1 (design D7/D5): a metadata-bearing selected item's inline
-    // hero grows to fit its wrapped overview and the detail block closes
-    // below the last overview row — never clipping it. The D7 form wraps the
-    // overview to the beside-image column width, so the final overview words
-    // may split across rows (the deleted legacy painter kept the source
-    // line breaks).
-    let mut app = feed_home_video_group_app();
-    app.terminal_height = 30;
-    let overview = "First overview line with enough detail to wrap across the narrow hero.\nSecond overview line remains visible.\nFINAL OVERVIEW LINE";
-    let state = app.libs[0].feed_home_video.as_mut().unwrap();
-    state.groups[0].items[0].overview = overview.into();
-    state.all_items[0].overview = overview.into();
-    let mut model = Model::new(app);
-    model.sync_mounted_surfaces();
-    let mut term = Terminal::new(TestBackend::new(60, 30)).unwrap();
-    let output = draw(&mut model, &mut term);
-    let hero = mounted_inline_hero(&model).expect("the narrow skeleton admitted the inline hero block");
-    let block = output
-        .lines()
-        .skip(hero.y as usize)
-        .take(hero.height as usize)
-        .collect::<Vec<_>>()
-        .join("\n");
-    // The D7 wrap splits text across the beside-image column, so collapse the
-    // block's whitespace before matching the unwrapped overview lines.
-    let block_text = block.split_whitespace().collect::<Vec<_>>().join(" ");
-    for needle in [
-        "First overview line with enough detail to wrap across the narrow hero.",
-        "Second overview line remains visible.",
-        "FINAL OVERVIEW LINE",
-    ] {
-        assert!(
-            block_text.contains(needle),
-            "the detail block must keep the complete overview ({needle:?} clipped):\n{output}"
-        );
-    }
-    // The final overview line is inside the block the panel admitted.
 }
 
 #[test]

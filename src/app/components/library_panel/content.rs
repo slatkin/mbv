@@ -74,8 +74,7 @@ pub(in crate::app) enum HeroImageState {
     /// header's projected box); the painters reserve the box and the shell
     /// paints the protocol into it after view, showing the placeholder at
     /// most one frame while an encode completes. `decoded` is the cached
-    /// source image's pixel size — the Narrow inline hero sizes its box from
-    /// this aspect when present (design D7's decoded-size arm).
+    /// cached source image's pixel size for aspect-aware artwork placement.
     Ready {
         cache_key: String,
         decoded: Option<(u32, u32)>,
@@ -187,7 +186,7 @@ pub(in crate::app) struct Workspace<'a> {
 }
 
 /// One hero pane's content (design D3). Breakpoint-neutral: the Wide header
-/// and the Narrow inline hero both derive from it.
+/// and the Library Hero overlay both derive from it.
 pub(in crate::app) struct HeroContent<'a> {
     pub facts: HeroFacts,
     pub overview: Option<String>,
@@ -224,9 +223,8 @@ impl<'a> LibraryPanelContent<'a> {
 }
 
 /// The closed paint policy the panel sets on its lists (design D3/D6): the
-/// focus bit and presentation-specific inputs — the Inline detail height
-/// the panel computes from the hero content. Selected-row surfaces are fixed
-/// by the owning presentation policy; destinations pass none.
+/// focus bit and selected-row surface are fixed by the owning presentation
+/// policy; destinations pass none.
 pub(in crate::app) enum PanelListPaintPolicy {
     /// The Wide browser presentation's policy: focus only. Selected rows use
     /// the list backdrop surface.
@@ -234,28 +232,19 @@ pub(in crate::app) enum PanelListPaintPolicy {
     /// The Wide library Workspace presentation. Its selected row belongs to
     /// the owning library pane surface rather than the list backdrop.
     WideWorkspace { focused: bool },
-    /// The Inline presentation's policy: focus and the selected-row
-    /// replacement height the panel derived from the hero.
-    Inline {
-        focused: bool,
-        desired_detail_rows: usize,
-    },
 }
 
 /// Object-safe view over one canonical media-list presentation flow
 /// (design D3), implemented once by the shared media-list carrier for every
-/// `Target` (task 5.8). The panel drives the whole surface: it chooses the
-/// presentation from its own breakpoint (`set_presentation`), sets the paint
-/// policy, views the active presentation into the list slot's rect, and
-/// reads the retained geometry back (selected/detail rects, point claims).
+/// `Target` (task 5.8). The panel configures the fixed-row owner for its
+/// breakpoint geometry, sets the paint policy, views it into the list slot's
+/// rect, and reads retained selection geometry and point claims back.
 /// Resolving a point to a typed target stays with the owning carrier's typed
 /// surface — targets are erased here, so no per-destination `ListSlot` or
 /// `Workspace` arm can grow.
 pub(in crate::app) trait PanelList {
-    /// Move the shared owner into `presentation` when it diverges, preserving
-    /// the outgoing selection's viewport offset (design D3's
-    /// `set_presentation(Wide | Inline, anchor)`; the carrier derives the
-    /// anchor from its own retained selection).
+    /// Keep the shared fixed-row owner active and clamp its viewport to the
+    /// current geometry; selection state remains with the owner.
     fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize);
 
     /// Clear interaction selection when this owner is replaced as the active
@@ -277,12 +266,6 @@ pub(in crate::app) trait PanelList {
     /// destination that always paints one rect keeps the no-op default.
     fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
         let _ = (claim_rect, content_rect);
-    }
-
-    /// The admitted Inline detail block's rect from the current view — the
-    /// Narrow inline hero paints into it; `None` on fallback or Wide.
-    fn detail_rect(&self) -> Option<Rect> {
-        None
     }
 
     /// The selected row's rect from the current view, when one is visible.
@@ -311,7 +294,6 @@ pub(in crate::app) struct PanelHeroImagePaint {
     pub area: Rect,
     /// The projected cache key (`HeroImageState::Ready`'s key).
     pub cache_key: String,
-    /// `true` for the Wide header's artwork box (centred); the Narrow inline
-    /// hero's right-aligned box paints right-aligned.
+    /// `true` for a centered artwork box; `false` for right-aligned placement.
     pub centered: bool,
 }

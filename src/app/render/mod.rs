@@ -37,21 +37,17 @@ pub(in crate::app) use arrangements::wide_hero::{
     paint_wide_hero_text, place_media_list_below, wide_hero_browser_pane, wide_hero_fits,
     wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
-pub(in crate::app) use components::hero::{wrap_overview_lines, HERO_BLOCK_EXTRA_ROWS};
 pub(in crate::app) use components::inline_search::render_inline_search;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
 pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
-pub(in crate::app) use components::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 pub(in crate::app) use screens::feeds_model::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
-pub(in crate::app) use components::media_list::{
-    render_inline_media_browser_component, render_wide_media_list_component,
-};
+pub(in crate::app) use components::media_list::render_wide_media_list_component;
 pub(in crate::app) use components::multiselect::{
     render_multiselect_content, MultiSelectRenderModel,
 };
@@ -207,8 +203,6 @@ mod tests;
 mod tests_conformance_matrix;
 #[cfg(test)]
 mod tests_feeds;
-#[cfg(test)]
-mod tests_home_inline;
 #[cfg(test)]
 mod tests_selection_modal;
 #[cfg(test)]

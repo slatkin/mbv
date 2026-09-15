@@ -23,7 +23,7 @@ pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
         );
         0
     } else {
-        let row_ctx = ctx.rows(list_area, columns, focused, 0);
+        let row_ctx = ctx.rows(list_area, columns, focused);
         if !ctx.is_search_active() && (ctx.true_total() >= 50 || ctx.letter_filter.is_some()) {
             super::list_letter_groups::render_letter_grouped_rows(
                 f,

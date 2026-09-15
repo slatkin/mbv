@@ -1,8 +1,8 @@
 //! Task 1.3 characterization: grouped Music Wide re-anchor behavior at the
 //! feature-branch baseline `819dbd0c`, before the §2.1 canonical replacement.
 //!
-//! Grouped Music does NOT compose `WideMediaList`/`InlineMediaBrowser` today;
-//! the mounted `MusicWorkspaceComponent` owns `album_cursor`/`album_scroll`
+//! Grouped Music composes the canonical fixed-row owner today; the mounted
+//! `MusicWorkspaceComponent` owns its destination state and row presentation.
 //! and the wide rail is a bespoke row loop
 //! (`render_wide_right_album_browser_with_ctx`). There is no `ViewportAnchor`
 //! hand-off yet: a breakpoint flip keeps the component's local cursor/scroll,

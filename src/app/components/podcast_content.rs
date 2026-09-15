@@ -68,7 +68,7 @@ impl PodcastContent {
             episode_focused: false,
             initialized: false,
             focused: false,
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(Presentation::Wide),
             episode_list: MediaListCarrier::new(Presentation::Wide),
             hero_image: HeroImageState::None,
         }
@@ -681,10 +681,10 @@ mod tests {
         owner.set_content(&state(), false);
 
         let area = Rect::new(0, 0, 30, 1);
-        owner.carrier.inline_mut().set_geometry(area, area);
+        owner.carrier.wide_mut().set_geometry(area, area);
         let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
         terminal
-            .draw(|frame| owner.carrier.inline_mut().view(frame, area))
+            .draw(|frame| owner.carrier.wide_mut().view(frame, area))
             .unwrap();
 
         assert!(matches!(

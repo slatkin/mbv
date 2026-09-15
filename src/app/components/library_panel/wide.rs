@@ -258,8 +258,8 @@ pub(in crate::app) fn render_wide_skeleton(
     // still shows through its own content-box tint.
     let hero_area = wide_hero_hero_pane(f, area, false, override_width)?;
 
-    // The list slot's painted selection: the context-menu anchor's painted
-    // truth (the selected row's rect, or the admitted inline hero block).
+    // The list slot's painted selection is the context-menu anchor's painted
+    // truth.
     let selected = match &mut content.list {
         ListSlot::Media(list) => list.selected_row_rect(),
         _ => None,

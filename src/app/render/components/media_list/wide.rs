@@ -1,12 +1,10 @@
 use super::row::media_list_row;
 use crate::app::components::media_list::{
-    InlineLayout, InlineMediaBrowser, InlineMediaBrowserPaintPolicy, RowGeometry,
-    SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+    RowGeometry, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::palette;
 use ratatui::layout::Rect;
 use ratatui::style::*;
-use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
@@ -159,114 +157,6 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     }
 }
 
-/// Resolved paint output for [`render_inline_media_browser`]: the exact flow
-/// geometry used for painting and compatibility hit maps, plus the screen rect
-/// of the admitted detail block (the caller paints the hero into it), or `None`
-/// when the block did not fit and the ordinary selected row was painted.
-pub(super) struct InlinePaintResult<Target> {
-    pub row_geometry: crate::app::components::media_list::RowGeometry<Target>,
-    pub hero_area: Option<Rect>,
-}
-
-/// Paint entry point for the embedded plain `InlineMediaBrowser` (design.md
-/// D1): the one-column `render_wide_media_list` flow plus selected-row
-/// replacement. The component owns the fit admission, fallback, and geometry
-/// (`InlineMediaBrowser::resolve_inline_layout`); this function paints the
-/// ordinary rows around the reserved detail block, reusing the shared
-/// `media_list_row` primitive and `hero::inline_display_row` mapping.
-///
-fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
-    f: &mut Frame,
-    paint_area: Rect,
-    content_area: Rect,
-    list: &mut InlineMediaBrowser<Target>,
-    desired_detail_rows: usize,
-    focused: bool,
-    selected_bg: Color,
-) -> InlinePaintResult<Target> {
-    let layout: InlineLayout<Target> =
-        list.resolve_inline_layout(content_area.height as usize, desired_detail_rows);
-    let geometry = layout.row_geometry;
-    let offset = geometry.offset();
-    let total_rows = geometry.len();
-    let selected_row = geometry.selected_row();
-    let marquee_primary = (focused && layout.detail_rows == 0)
-        .then_some(selected_row)
-        .flatten()
-        .and_then(|row| geometry.source_row(row))
-        .and_then(|row| list.rows().get(row))
-        .and_then(|row| match row {
-            crate::app::components::media_list::MediaListRow::Item { primary, .. } => {
-                Some(primary.clone())
-            }
-            _ => None,
-        });
-    let mut marquee = marquee_primary.map(|primary| list.marquee_state(&primary));
-    let rows = list.rows();
-
-    let overflows = total_rows > content_area.height as usize;
-    let inner_width = paint_area
-        .width
-        .saturating_sub(u16::from(focused && overflows)) as usize;
-    let window = (offset..total_rows).take(content_area.height as usize);
-    let list_items: Vec<ListItem> = window
-        .map(|display_row| {
-            geometry
-                .source_row(display_row)
-                .map(|source_row| {
-                    let row_target = rows[source_row].selectable_target();
-                    let multi_selected =
-                        row_target.is_some_and(|target| list.is_selected_target(target));
-                    media_list_row(
-                        &rows[source_row],
-                        (Some(display_row) == selected_row && layout.detail_rows == 0) && focused
-                            || multi_selected,
-                        focused || multi_selected,
-                        selected_bg,
-                        None,
-                        false,
-                        inner_width,
-                        focused && overflows,
-                        marquee
-                            .as_mut()
-                            .filter(|_| {
-                                Some(display_row) == selected_row && layout.detail_rows == 0
-                            })
-                            .map(|(text, started_at)| (text, started_at)),
-                    )
-                })
-                .unwrap_or_else(|| ListItem::new(Line::default()))
-        })
-        .collect();
-    // Inline replacement uses the same claim-width/content-flow model as the
-    // fixed-row painter: ordinary rows keep the parent's full-width visual
-    // treatment while their vertical placement follows the retained flow.
-    let row_paint_area = row_paint_area(paint_area, content_area);
-    f.render_widget(List::new(list_items), row_paint_area);
-
-    if focused && overflows {
-        crate::app::render::render_right_scrollbar(
-            f,
-            row_paint_area,
-            total_rows.saturating_sub(content_area.height as usize),
-            offset,
-            palette::SCROLLBAR,
-        );
-    }
-
-    let hero_area = (layout.detail_rows > 0)
-        .then(|| geometry.selected_row_rect(content_area))
-        .flatten()
-        .map(|selected| Rect {
-            height: layout.detail_rows as u16,
-            ..selected
-        });
-    InlinePaintResult {
-        row_geometry: geometry,
-        hero_area,
-    }
-}
-
 fn row_paint_area(paint_area: Rect, content_area: Rect) -> Rect {
     Rect {
         y: content_area.y,
@@ -284,9 +174,7 @@ fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Col
     palette::surface_colors(surface, focused).fill
 }
 
-/// Component-view adapter for the retained-result seam. The compatibility
-/// painter above remains available to destinations that still own its legacy
-/// geometry contract.
+/// Component-view adapter for the retained-result seam.
 pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq>(
     f: &mut Frame,
     area: Rect,
@@ -315,36 +203,5 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq
         content_rect,
         paint.row_geometry,
         paint.selected_row_rect,
-    );
-}
-
-/// Component-view adapter for the Inline retained-result seam.
-pub(in crate::app) fn render_inline_media_browser_component<Target: Clone + PartialEq>(
-    f: &mut Frame,
-    area: Rect,
-    list: &mut InlineMediaBrowser<Target>,
-    policy: InlineMediaBrowserPaintPolicy,
-) {
-    list.begin_view();
-    let (claim_rect, content_rect) = list.view_geometry(area);
-    if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || list.is_empty() {
-        return;
-    }
-    let paint = render_inline_media_browser_with_geometry(
-        f,
-        claim_rect,
-        content_rect,
-        list,
-        policy.desired_detail_rows(),
-        policy.focused(),
-        selected_row_surface_color(policy.selected_surface(), policy.focused()),
-    );
-    let selected_row_rect = paint.row_geometry.selected_row_rect(content_rect);
-    list.finish_view(
-        claim_rect,
-        content_rect,
-        paint.row_geometry,
-        selected_row_rect,
-        paint.hero_area,
     );
 }

@@ -16,9 +16,6 @@ pub(super) mod confirm_modal;
 pub(super) mod context_menu;
 pub(super) mod daemon_lost_modal;
 pub(super) mod detail;
-#[cfg(test)]
-#[path = "detail_series_tests.rs"]
-mod detail_series_tests;
 pub(super) mod feeds_manage;
 pub(super) mod help;
 pub(super) mod hero;

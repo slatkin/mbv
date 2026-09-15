@@ -125,11 +125,6 @@ impl Component for LibraryPanel {
             self.wide_geometry
                 .as_ref()
                 .and_then(|geometry| geometry.hero_image.clone())
-                .or_else(|| {
-                    self.narrow_geometry
-                        .as_ref()
-                        .and_then(|geometry| geometry.inline_hero_image.clone())
-                })
         };
         self.hits = hits;
         self.pill_windows = windows;

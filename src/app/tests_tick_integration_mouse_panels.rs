@@ -98,9 +98,9 @@ fn tick_queue_boundary_drag_is_suppressed_by_blocking_overlay() {
     assert_eq!(harness.model().app.queue_column_width, width);
 }
 
-// --- Task 7.3 (breakpoint half): the Movies destination switches its
-// embedded canonical control (`WideMediaList` -> `InlineMediaBrowser`) when a
-// resize crosses the wide/narrow breakpoint. A click must resolve against the
+// --- Task 7.3 (breakpoint half): the Movies destination keeps its embedded
+// canonical fixed-row control when a resize crosses the wide/narrow breakpoint.
+// A click must resolve against the
 // `row_geometry` the CURRENT frame painted, never the rect a prior frame left
 // behind. The scroll half of this proof already lives in
 // `media_list::tests::resolve_point::wide_resolves_against_a_scrolled_viewport`.
@@ -163,9 +163,8 @@ fn browser_row_click_resolves_against_the_current_breakpoints_geometry_not_a_sta
     );
     apply_outcome(&mut harness, outcome);
 
-    // Resize below the two-column threshold: the destination switches to
-    // `InlineMediaBrowser`, and its list geometry starts far to the left of
-    // where the wide list used to live.
+    // Resize below the two-column threshold: the same fixed-row owner is
+    // painted in the new list geometry.
     let mut narrow_terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     narrow_terminal
         .draw(|f| harness.model_mut().draw_frame(f, false, false))

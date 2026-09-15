@@ -63,7 +63,7 @@ impl HomeContent {
         Self {
             continue_items: Vec::new(),
             latest: Vec::new(),
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(Presentation::Wide),
             loading: false,
             section: 0,
             hero_image: HeroImageState::None,

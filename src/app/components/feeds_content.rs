@@ -89,7 +89,7 @@ impl FeedsContent {
             entries: Vec::new(),
             all_entries: Vec::new(),
             visible_entries: Vec::new(),
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(Presentation::Wide),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
             loading: false,
@@ -175,14 +175,9 @@ impl FeedsContent {
     /// Move the shared owner into the presentation the painted breakpoint
     /// selects (the legacy `ensure_carrier`), preserving only the outgoing
     /// selected-row viewport offset.
-    pub(in crate::app) fn ensure_presentation(&mut self, wide: bool, viewport_height: usize) {
-        let target = if wide {
-            Presentation::Wide
-        } else {
-            Presentation::Inline
-        };
+    pub(in crate::app) fn ensure_presentation(&mut self, _wide: bool, viewport_height: usize) {
         self.carrier
-            .set_presentation(target, viewport_height.max(1));
+            .set_presentation(Presentation::Wide, viewport_height.max(1));
     }
 
     /// The entry whose stable `guid` the shared owner selected. Effect

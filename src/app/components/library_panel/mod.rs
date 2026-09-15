@@ -5,9 +5,9 @@
 //! only typed [`LibraryPanelContent`], and every row, pane, fill, border, gap
 //! and placeholder position is painted here.
 //!
-//! Tasks 5.1–5.6 built the content types and the Wide skeleton; 5.7 adds the
-//! Narrow skeleton and the inline hero; 5.8 formalizes `PanelList` over the
-//! shared media-list carrier; 5.9 mounts the panel as `ComponentId::Library`.
+//! Tasks 5.1–5.6 built the content types and the Wide skeleton; 5.8
+//! formalizes `PanelList` over the shared media-list carrier; 5.9 mounts the
+//! panel as `ComponentId::Library`.
 //! Destinations convert one per slice (5.11+); until then the panel paints
 //! only owners that have migrated.
 
@@ -36,7 +36,7 @@ pub(in crate::app) use hero::{
     HeroContentData,
 };
 #[allow(unused_imports)]
-pub(in crate::app) use narrow::{inline_hero_plan, render_narrow_skeleton, NarrowSkeletonGeometry};
+pub(in crate::app) use narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
 #[allow(unused_imports)]
 pub(in crate::app) use overview_box::sanitize_url;
 pub(in crate::app) use owner::{LibraryContentOwner, LibrarySlotEvent};

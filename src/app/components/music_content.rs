@@ -106,7 +106,7 @@ impl MusicContent {
                 Vec::new(),
                 None,
             ),
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(Presentation::Wide),
             track_list: MediaListCarrier::new(Presentation::Wide),
             track_focused: false,
             last_album_id: None,

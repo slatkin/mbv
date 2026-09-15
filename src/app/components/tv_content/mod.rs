@@ -170,13 +170,9 @@ impl TvContent {
     pub(in crate::app) fn set_is_wide(&mut self, is_wide: bool) {
         self.is_wide = is_wide;
     }
-    /// The presentation the shared owner holds for this frame's breakpoint.
+    /// The fixed-row presentation remains active at every breakpoint.
     fn active_presentation(&self) -> Presentation {
-        if self.is_wide {
-            Presentation::Wide
-        } else {
-            Presentation::Inline
-        }
+        Presentation::Wide
     }
     /// Move the shared owner into the active presentation when they diverge.
     /// A responsive presentation change reads the same owner and preserves

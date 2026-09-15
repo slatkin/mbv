@@ -172,7 +172,7 @@ pub enum ShellRequest {
     /// preference, resolved via the mounted component's `source_for_section`
     /// at the Model boundary (task 5.3d, numeric Home section deletion).
     HomeSectionSelected(usize),
-    /// A row the user single-clicked in the Home list or inline hero. The
+    /// A row the user single-clicked in the Home list or Library Hero overlay. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).
     HomeRowClick {
@@ -317,7 +317,7 @@ pub enum ShellRequest {
     TvSeasonMove {
         delta: i64,
     },
-    /// A row the user single-clicked in the browser list or inline hero,
+    /// A row the user single-clicked in the browser list or Library Hero overlay,
     /// resolved to an item index by the embedded control's `resolve_point`
     /// (design.md D4/D6). The shell applies focus-follows-click and sets the
     /// resting cursor.

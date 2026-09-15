@@ -113,7 +113,7 @@ impl BookContent {
             selected_bucket: 0,
             focused: false,
             images_enabled: false,
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(Presentation::Wide),
             chapter_list: MediaListCarrier::new(Presentation::Wide),
             hero_image: HeroImageState::None,
         }

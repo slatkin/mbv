@@ -67,7 +67,7 @@ impl MusicWideRenderCtx {
 
 impl MusicWideRenderCtx {
     /// Canonical row projection shared by the wide `WideMediaList` and the
-    /// narrow `InlineMediaBrowser`: one `Heading` per artist group, a `Spacer`
+    /// one-column fixed-row browser: one `Heading` per artist group, a `Spacer`
     /// between groups, and one selectable `Item` per album keyed by its stable
     /// id. Grouped Music album rows carry no played/active state (parity with
     /// the wide rail and the legacy painter).
