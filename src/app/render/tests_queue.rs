@@ -147,7 +147,7 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
         let cell = &buf[(queue.x + 4, layout.content_area.y + 2)];
         assert_eq!(
             cell.style().bg,
-            Some(Color::from_u32(0x00f3f5d9)),
+            Some(Color::from_u32(0x003c4841)),
             "queue-only with queue focus at width {width} must use the focused zebra stripe, got {:?}",
             cell.style().bg
         );
@@ -188,7 +188,7 @@ fn both_mode_focused_queue_keeps_focused_styling() {
     let cell = &buf[(layout.content_area.x + 2, layout.content_area.y + 2)];
     assert_eq!(
         cell.style().bg,
-        Some(Color::from_u32(0x00f3f5d9)),
+        Some(Color::from_u32(0x003c4841)),
         "focused queue in both mode must paint the focused zebra stripe, got {:?}",
         cell.style().bg
     );
