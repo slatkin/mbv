@@ -1,7 +1,7 @@
 ## 1. Protect and Extract Shared Hero Composition
 
-- [ ] 1.1 Consolidate the existing focused Wide Hero buffer coverage around header, overview, Workspace, and image-box output before extraction; verify the targeted Wide Hero and Library-panel render tests pass unchanged.
-- [ ] 1.2 Extract the Hero header, Main content box, Workspace placement, selector, and image geometry from the Wide skeleton into one shared Library-panel composition path; verify existing Wide Hero buffer tests and image-area integration assertions remain green.
+- [x] 1.1 Consolidate the existing focused Wide Hero buffer coverage around header, overview, Workspace, and image-box output before extraction; verify the targeted Wide Hero and Library-panel render tests pass unchanged.
+- [x] 1.2 Extract the Hero header, Main content box, Workspace placement, selector, and image geometry from the Wide skeleton into one shared Library-panel composition path; verify existing Wide Hero buffer tests and image-area integration assertions remain green.
 
 ## 2. Add the Library Hero Overlay
 
