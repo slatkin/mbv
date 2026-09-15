@@ -92,16 +92,18 @@ surfaces.
   stable-target selection, cursor/scroll, row-local behavior, and retained
   geometry. It is embedded, never mounted, focused, subscribed, or given a
   `ComponentId`; the destination retains Service content and typed translation.
-* `WideMediaList<Target>` is the fixed-row one-column Wide presentation over the
-  owner, including Queue. `InlineMediaBrowser<Target>` is the one-column Narrow
-  selected-row replacement presentation and is not Inline Search.
-* The Library panel derives Wide/Narrow from shared geometry; a destination
-  cannot choose a presentation arm or add a slot.
+* `WideMediaList<Target>` is the fixed-row one-column presentation over the
+  owner, including Queue. The Library panel keeps this one canonical fixed-row
+  presentation active in every geometry; its `MediaListCarrier<Target>` never
+  switches presentation owners, and geometry changes clamp the viewport in place.
+* The Library panel derives its skeleton from shared geometry; a destination
+  cannot choose a presentation arm or add a slot. In non-Wide geometry, a
+  hero-bearing browser opens a Library Hero overlay on demand.
 * Rows are provider-neutral selectable `Item`s with stable opaque targets plus
   non-selectable `Heading`/`Spacer`; parents retain provider content, workspaces,
   effects, persistence, and message translation.
-* Wide/Inline transitions reuse the owner; only discrete transitions use one
-  `ViewportAnchor`, while ordinary refresh preserves and clamps local state.
+* Geometry transitions reuse the canonical owner; ordinary refresh preserves and
+  clamps local state.
 
 1 owner, 1 painter per surface per breakpoint; no second loop or fallback
 painter. Contract: `openspec/specs/canonical-media-lists/spec.md`.

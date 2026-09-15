@@ -96,13 +96,12 @@ impl App {
     pub(super) fn handle_mouse_double_click_emby(&mut self, lib_idx: usize, target: String) {
         self.handle_mouse_single_click_emby(lib_idx, target.clone());
         if self.is_viewing_album_folders(lib_idx) {
-            let album = self.libs[lib_idx]
-                .nav_stack
-                .last()
-                .and_then(|level| level.items.iter().find(|item| item.id == target))
-                .cloned();
-            self.activate_album_folder_row(album);
-        } else if !self.activate_selected_series(lib_idx) {
+            // The mounted Music owner handles album-folder activation through
+            // its Library Hero overlay; this legacy Emby mouse path is a
+            // documented no-op for that owner.
+            return;
+        }
+        if !self.activate_selected_series(lib_idx) {
             // The double-click already landed `target` as the level cursor;
             // resolve the item at it and activate via the item-taking tail
             // (task 4.3, R1: `select`'s cursor read is gone).

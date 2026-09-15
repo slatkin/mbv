@@ -167,27 +167,6 @@ impl App {
         true
     }
 
-    /// Activation for a row in the album-folder listing
-    /// (`is_viewing_album_folders` level). Shared by the Enter key and mouse
-    /// click so the two paths cannot drift (see #145 / mouse-click parity fix).
-    /// Precondition: caller has confirmed `is_viewing_album_folders(lib_idx)`.
-    ///
-    /// Wide track-focus entry is owned by `MusicWorkspaceComponent` (Enter on
-    /// an album row is component-local), so the wide arm is a no-op that only
-    /// exists because the Enter key may still fall through to legacy while the
-    /// album's tracks are loading. Non-Wide activation is handled by the
-    /// mounted Music owner through the Library Hero overlay.
-    pub(super) fn activate_album_folder_row(&mut self, album: Option<EmbyItem>) {
-        // Outcome 3 reader: the caller resolves the selected album (from the
-        // mounted component's cursor, or the clicked row index for mouse).
-        if self.is_right_panel_wide() {
-            return;
-        }
-        // The mounted Music owner opens the Library Hero overlay after it
-        // resolves the row. This legacy App entry point has no UI side effect.
-        let _ = album;
-    }
-
     pub(super) fn go_back(&mut self, lib_idx: usize) {
         // Defensive bounds check; see `move_lib_cursor_rows` in
         // `lib_cursor_actions.rs` for the stale index contract. Never

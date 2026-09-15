@@ -451,11 +451,12 @@ _Avoid_: destination panel, library screen
 **Library Hero overlay**:
 A Library-panel-local detail surface opened for a selected hero-bearing browser
 row in non-Wide geometry. It is centered within and confined to 85% of the
-visible Library pane, reuses the shared Hero header, overview, artwork, and
-optional Workspace content, and leaves a visible Queue independently operable.
-Library focus can dismiss it with Esc or a click on the dimmed Library
-remainder; changing destination dismisses it. It is distinct from application
-popups and from the four anchored Sidebars.
+visible Library pane, reuses the shared Hero header, overview (including cast
+and crew), artwork, and optional Workspace content, while its provider-link row
+remains plain text. It leaves a visible Queue independently operable. Library
+focus can dismiss it with Esc or a click on the dimmed Library remainder;
+changing destination dismisses it. It is distinct from application popups and
+from the four anchored Sidebars.
 _Avoid_: application popup, Sidebar, full-window overlay, separate detail block
 
 **Library playback panel**:
@@ -535,8 +536,7 @@ provider order regardless of type; nothing is capped. An empty role falls back t
 person's provider type. A blank row, then a line of ▁ block characters in sage green, separates the
 overview text from the table's first row. The table starts at the box's first content row when there
 is no overview, and the box scrolls
-when the content exceeds its height. The Library Hero overlay reuses this
-same content when it is open.
+when the content exceeds its height.
 _Avoid_: credits list, cast list, detail table
 
 **Render Component**:
