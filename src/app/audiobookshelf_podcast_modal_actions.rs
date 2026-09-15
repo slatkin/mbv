@@ -7,6 +7,7 @@ use super::types_selection_modal::{
 use crate::app::ui_util::fmt_duration_approx;
 
 impl Model {
+    #[allow(dead_code)]
     pub(super) fn open_podcast_selection_modal(&mut self) {
         let Some(index) = self.app.tab.audiobookshelf_index() else {
             return;
@@ -133,6 +134,7 @@ fn podcast_episode_modal_rows(
         .collect()
 }
 
+#[allow(dead_code)]
 pub(super) fn podcast_modal_state(
     state: &AudiobookshelfBrowseState,
     filter: AudiobookshelfEpisodeFilter,

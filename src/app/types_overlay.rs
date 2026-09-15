@@ -16,6 +16,7 @@ pub(super) enum OverlayRequest {
     Confirm(ConfirmModal),
     DaemonLost(DaemonLostModal),
     SavePlaylist(SavePlaylistDialog),
+    #[allow(dead_code)]
     SelectionModal(SelectionModal),
     RefreshSelectionModal {
         source: SelectionModalSource,

@@ -61,7 +61,14 @@ fn narrow_enter_requests_album_activation() {
         &mut music_resize,
         &mut tv_resize,
     );
-    assert!(model.app.pending_overlay.is_some());
+    let panel = model
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel");
+    assert!(panel.test_hero_overlay_open());
 }
 
 #[test]
@@ -692,15 +699,26 @@ fn music_album_folder_activation_branch_flips_on_resize_tick_before_repaint() {
     let album = make_item("First Album", "MusicAlbum");
     assert!(!model.app.is_right_panel_wide());
 
-    model.app.activate_album_folder_row(Some(album.clone()));
-    assert!(
-        matches!(
-            model.app.pending_overlay,
-            Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
-        ),
-        "narrow activation must open the album selection modal"
+    model.app.panel_focus = PanelFocus::Library;
+    model.sync_mounted_surfaces();
+    let message = model.test_music_owner_mut().on_key(&KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    });
+    let (mut music_resize, mut tv_resize) = (false, false);
+    model.handle_terminal_message(
+        message.expect("narrow album activation request"),
+        &mut music_resize,
+        &mut tv_resize,
     );
-    model.app.pending_overlay = None;
+    let panel = model
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel");
+    assert!(panel.test_hero_overlay_open());
 
     let (mut music_resize, mut tv_resize) = (false, false);
     model.handle_terminal_message(
@@ -717,6 +735,6 @@ fn music_album_folder_activation_branch_flips_on_resize_tick_before_repaint() {
     model.app.activate_album_folder_row(Some(album));
     assert!(
         model.app.pending_overlay.is_none(),
-        "wide activation right after the resize tick must not open the album modal"
+        "wide activation right after the resize tick must not open a constituent modal"
     );
 }

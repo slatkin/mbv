@@ -4,6 +4,7 @@ use super::types_selection_modal::{
 };
 use super::App;
 
+#[allow(dead_code)]
 pub(super) fn book_modal_state(
     state: &AudiobookshelfBookBrowseState,
     book_id: &str,
@@ -45,23 +46,26 @@ pub(super) fn book_modal_state(
 }
 
 impl App {
-    /// Non-Wide parent activation opens the chapter modal; Wide activation
-    /// plays the selected book directly. The narrow/wide discriminator comes
-    /// from the component-reported geometry mirror (2.1j).
+    /// Wide parent activation plays the selected book directly. Non-Wide
+    /// activation is handled by the mounted Books owner and Library panel;
+    /// this compatibility entry point intentionally has no modal side effect.
+    #[allow(dead_code)]
     pub(super) fn activate_audiobookshelf_book_parent(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        if !self.is_right_panel_wide() {
-            self.open_audiobookshelf_book_selection_modal();
-        } else {
+        if self.is_right_panel_wide() {
             self.play_selected_audiobookshelf_book(index);
         }
+        // The mounted Books owner opens the Library Hero overlay on the
+        // non-Wide path; this legacy App entry point must not construct a
+        // constituent selection modal.
     }
 
     /// Opens the narrow book chapter modal. Rows reuse the same chapter or
     /// audio-file fallback data and duration metadata as the persistent book
     /// list; the modal only changes the interaction surface.
+    #[allow(dead_code)]
     pub(super) fn open_audiobookshelf_book_selection_modal(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;

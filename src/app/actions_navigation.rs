@@ -184,9 +184,10 @@ impl App {
         if self.is_right_panel_wide() {
             return;
         }
-        if let Some(album) = album {
-            self.open_album_selection_modal(&album);
-        }
+        // The mounted Music owner opens the Library Hero overlay after it
+        // resolves the row. This legacy App entry point must not construct a
+        // constituent selection modal.
+        let _ = album;
     }
 
     pub(super) fn go_back(&mut self, lib_idx: usize) {

@@ -5,6 +5,7 @@ use crate::app::types_selection_modal::SelectionModalItem;
 use crate::app::ui_util::fmt_duration_approx;
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 
+#[allow(dead_code)]
 pub(super) fn series_season_pill_labels(detail: &super::SeriesDetail) -> Vec<String> {
     detail
         .seasons
@@ -21,6 +22,7 @@ pub(super) fn series_season_pill_labels(detail: &super::SeriesDetail) -> Vec<Str
         .collect()
 }
 
+#[allow(dead_code)]
 pub(super) fn series_modal_state_for_season(
     detail: &super::SeriesDetail,
     season_index: usize,
@@ -87,6 +89,7 @@ impl App {
     /// detail is fetched, mirroring `enter_series_selection`; if it hasn't
     /// landed in `series_detail_cache` yet, opens with a loading placeholder
     /// instead of episode rows.
+    #[allow(dead_code)]
     pub(super) fn open_series_selection_modal(&mut self, item: &EmbyItem) {
         let season_index = 0;
         if self.series_detail_cache.contains_key(&item.id) {

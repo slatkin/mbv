@@ -113,17 +113,12 @@ impl PodcastContent {
                 self.carrier.select_target(&id);
             }
         } else if survived {
-            if let Some(target) = prior_target {
-                if self
-                    .state
-                    .shows
-                    .iter()
-                    .any(|show| show.library_item_id == target)
-                {
-                    self.state.selected_id = Some(target.clone());
-                    self.state.episodes = self.state.detail_cache.get(&target).cloned();
-                    self.carrier.select_target(&target);
-                }
+            // Re-anchor through the same target-to-state selection seam used
+            // by list movement; it resets the episode workspace only when the
+            // show identity actually changes.
+            self.sync_show_selection();
+            if let Some(target) = self.carrier.selected_target() {
+                self.state.episodes = self.state.detail_cache.get(target).cloned();
             }
         } else {
             self.episode_filter = AudiobookshelfEpisodeFilter::All;

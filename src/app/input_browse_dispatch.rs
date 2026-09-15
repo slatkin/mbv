@@ -37,9 +37,9 @@ impl App {
         }
         if self.wide_tv_library_area(lib_idx).is_some() {
             self.enter_series_selection(lib_idx, item);
-        } else {
-            self.open_series_selection_modal(item);
         }
+        // Non-Wide activation is handled by the mounted Library panel, whose
+        // owner can open the Hero overlay without constructing a modal.
         true
     }
 }

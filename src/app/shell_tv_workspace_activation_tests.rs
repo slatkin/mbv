@@ -59,29 +59,30 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert_eq!(wide_target.id, "movie-focused");
     assert!(model.app.activate_selected_series(0));
 
-    // Narrow layout => open_series_selection_modal targets the same
-    // Series, proven by the modal's Series source id.
+    // Narrow layout => the shell routes the resolved Series through the
+    // mounted owner's Library Hero overlay, not a constituent selection modal.
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
     model.app.libs[0].nav_stack[0].set_resting_cursor(0);
-    model.app.activate_selected_series(0);
-    match model.app.pending_overlay.as_ref() {
-        Some(crate::app::types_overlay::OverlayRequest::SelectionModal(modal)) => {
-            if let crate::app::types_selection_modal::SelectionModalSource::Series { series_id } =
-                &modal.source
-            {
-                assert_eq!(
-                    series_id.as_str(),
-                    "movie-focused",
-                    "narrow activation must target the component's selected Series"
-                );
-            } else {
-                panic!("narrow activation must open a Series selection modal");
-            }
-        }
-        _ => panic!("narrow layout must open the series selection modal"),
-    }
-    model.app.pending_overlay = None;
+    model.push_tv_workspace_content();
+    model.sync_library_panel();
+    let item = model
+        .test_tv_owner()
+        .selected_item()
+        .expect("component-selected Series");
+    model.handle_tv_request(crate::app::components::ShellRequest::TvActivate { item });
+    let panel = model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("Library panel");
+    assert!(panel.test_hero_overlay_open());
+    assert_eq!(
+        model.test_tv_owner().selected_item_id(),
+        Some("movie-focused".into())
+    );
 
     // Guard 1: a non-tvshows collection_type rejects.
     model.app.libs[0].library.collection_type = "movies".into();
@@ -144,17 +145,22 @@ fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
     model.sync_active_destination();
     assert!(model.app.wide_tv_library_area(0).is_none());
 
-    // Narrow: activation opens the Series selection modal, never the
-    // persistent workspace fetch.
-    assert!(model.app.activate_selected_series(0));
-    assert!(
-        matches!(
-            model.app.pending_overlay,
-            Some(crate::app::types_overlay::OverlayRequest::SelectionModal(_))
-        ),
-        "narrow activation must open the series selection modal"
-    );
-    model.app.pending_overlay = None;
+    // Narrow: route the component-resolved Series through the Library Hero
+    // overlay, never the constituent selection modal.
+    model.sync_library_panel();
+    let item = model
+        .test_tv_owner()
+        .selected_item()
+        .expect("component-selected Series");
+    model.handle_tv_request(crate::app::components::ShellRequest::TvActivate { item });
+    let panel = model
+        .application
+        .get_component(&crate::app::components::ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("Library panel");
+    assert!(panel.test_hero_overlay_open());
 
     let mut music_resize = false;
     let mut tv_resize = false;

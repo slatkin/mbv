@@ -205,8 +205,22 @@ impl LibraryPanel {
         self.list_pane_width = list_pane_width;
     }
 
-    /// Open the Library-local Hero overlay for the active Hero. Activation
-    /// policy is owned by the later routing task; this transition is local.
+    /// Open the Library-local Hero overlay for the active Hero, retaining the
+    /// destination owner's workspace focus just as browser Enter does.
+    pub(in crate::app) fn open_hero_overlay_for_active(&mut self) -> bool {
+        if !self.can_open_hero_overlay() {
+            return false;
+        }
+        if let Some(owner) = self.owners.active_mut() {
+            owner.focus_hero_workspace();
+        }
+        self.hero_overlay_open = true;
+        true
+    }
+
+    /// Open the Library-local Hero overlay for tests that construct a panel
+    /// without an active owner.
+    #[cfg(test)]
     pub(in crate::app) fn open_hero_overlay(&mut self) {
         self.hero_overlay_open = true;
     }
@@ -501,13 +515,9 @@ impl LibraryPanel {
         // browser selection to its post-click target. If the gate loses, the
         // click message must survive: the component already mutated before
         // the parent made this decision.
-        if !self.can_open_hero_overlay() {
+        if !self.open_hero_overlay_for_active() {
             return click_message;
         }
-        if let Some(owner) = self.owners.active_mut() {
-            owner.focus_hero_workspace();
-        }
-        self.open_hero_overlay();
         let claim = if at.is_some() {
             TerminalObserverEvent::MouseClaimed
         } else {

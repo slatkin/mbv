@@ -93,7 +93,7 @@ impl Model {
                             self.app.play_selected_audiobookshelf_book(index);
                         }
                     } else {
-                        self.app.activate_audiobookshelf_book_parent();
+                        self.open_library_hero_overlay();
                     }
                 }
                 AudiobookshelfBookIntent::Enqueue => {
@@ -105,7 +105,7 @@ impl Model {
                     if self.app.is_right_panel_wide() {
                         self.update_abs_book_owner(|owner| owner.enter_chapter_focus());
                     } else {
-                        self.app.activate_audiobookshelf_book_parent();
+                        self.open_library_hero_overlay();
                     }
                 }
                 AudiobookshelfBookIntent::ActivateChapter(target) => {

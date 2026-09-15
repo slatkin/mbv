@@ -138,6 +138,16 @@ impl Model {
         self.library_owner_mut(&key).map(f)
     }
 
+    /// Open the active owner's Hero through the Library panel's local overlay
+    /// contract. Destination actions use this instead of constructing the
+    /// retired constituent selection modal.
+    pub(super) fn open_library_hero_overlay(&mut self) -> bool {
+        self.application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .is_some_and(LibraryPanel::open_hero_overlay_for_active)
+    }
+
     /// Push one content owner into the panel, addressed by `LibraryKey`
     /// (design D2). Production callers are the per-destination conversion
     /// slices (tasks 5.11+); the test harness pushes fixture owners to prove

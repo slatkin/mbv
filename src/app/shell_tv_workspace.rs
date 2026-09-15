@@ -46,7 +46,15 @@ impl Model {
             | ShellRequest::TvCycleLetterPill { .. } => {
                 match request {
                     ShellRequest::TvActivate { item } => {
-                        self.app.activate_selected_series_item(lib_idx, &item);
+                        let owner_has_target = self
+                            .tv_owner()
+                            .and_then(TvContent::selected_item)
+                            .is_some_and(|selected| selected.id == item.id);
+                        if self.app.wide_tv_library_area(lib_idx).is_some() {
+                            self.app.activate_selected_series_item(lib_idx, &item);
+                        } else if owner_has_target {
+                            self.open_library_hero_overlay();
+                        }
                     }
                     ShellRequest::TvBack => self.app.go_back(lib_idx),
                     ShellRequest::TvCycleLetterPill { delta } => {

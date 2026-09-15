@@ -142,10 +142,20 @@ impl BookContent {
                     .any(|book| &book.library_item_id == prior)
             });
         self.state = snapshot.clone();
-        let identity_changed = self.initialized && !survived;
-        if identity_changed {
+        if !self.initialized {
+            if let Some(target) = self.state.selected_id.clone() {
+                self.carrier.select_target(&target);
+            }
+        } else if survived {
+            // Resolve the retained target through the same state-selection seam
+            // used by ordinary owner movement. This keeps cursor, selected_id,
+            // detail-loading state, and identity-gated chapter reset coherent.
+            self.sync_book_from_owner();
+        } else {
             self.chapter_focused = false;
+            self.carrier.select_first();
             self.state.select(0);
+            self.chapter_list.select_first();
         }
         // Re-anchor the surname-bucket pill onto the selected book
         // (book-browsing spec: refresh/paging preserves the selected book
@@ -163,32 +173,9 @@ impl BookContent {
             .selected_bucket
             .min(self.state.buckets.len().saturating_sub(1));
         self.set_book_rows();
-        if !self.initialized {
-            if let Some(target) = self.state.selected_id.clone() {
-                self.carrier.select_target(&target);
-            }
-        } else if survived {
-            if let Some(target) = prior_target {
-                if self
-                    .state
-                    .books
-                    .iter()
-                    .any(|book| book.library_item_id == target)
-                {
-                    self.state.selected_id = Some(target.clone());
-                    self.state.detail_loading = self.state.detail_loading_ids.contains(&target);
-                    self.carrier.select_target(&target);
-                }
-            }
-        } else if identity_changed {
-            self.carrier.select_first();
-        }
         self.initialized = true;
         self.images_enabled = images_enabled;
         self.project_chapter_rows();
-        if identity_changed {
-            self.chapter_list.select_first();
-        }
     }
 
     /// Whether the parent-owned chapter pane currently has focus (design.md

@@ -50,10 +50,15 @@ impl Model {
                         self.clear_multi_selection_from_origin(origin);
                     }
                     ShellRequest::MusicAlbumActivate { item } => {
+                        let owner_has_target = self
+                            .music_owner()
+                            .and_then(|owner| owner.selected_item())
+                            .is_some_and(|selected| selected.id == item.id);
                         if self.app.tab.emby_library_index().is_some()
                             && !self.app.is_right_panel_wide()
+                            && owner_has_target
                         {
-                            self.app.open_album_selection_modal(&item);
+                            self.open_library_hero_overlay();
                         }
                         self.push_music_workspace_content();
                     }

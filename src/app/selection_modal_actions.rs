@@ -77,6 +77,7 @@ pub(crate) fn album_track_title(item: &EmbyItem) -> String {
 }
 
 impl App {
+    #[allow(dead_code)]
     pub(crate) fn open_selection_modal(
         &mut self,
         source: SelectionModalSource,
@@ -111,6 +112,7 @@ impl App {
     /// the track list is fetched, mirroring `open_series_selection_modal`;
     /// if it hasn't landed in `album_tracks_cache` yet, opens with a loading
     /// placeholder instead of track rows.
+    #[allow(dead_code)]
     pub(crate) fn open_album_selection_modal(&mut self, album: &EmbyItem) {
         self.fetch_album_tracks(album.id.clone());
         let state = match self.album_tracks_cache.get(&album.id) {

@@ -603,7 +603,7 @@ impl LibraryContentOwner for FeedsContent {
     // overlay and the overlay's subsequent activation uses the same typed
     // playback request as the browser row.
     fn hero_overlay_available(&mut self) -> bool {
-        self.content().hero.is_some()
+        self.selected_entry().is_some()
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
