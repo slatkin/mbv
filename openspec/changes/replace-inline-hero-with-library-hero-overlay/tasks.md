@@ -29,10 +29,10 @@
 
 ## 6. Remove the Superseded Modal and Finish Terminology
 
-- [ ] 6.1 Remove constituent `SelectionModal` construction and dispatch from TV, Music, Audiobookshelf Podcast, and Book, then delete selection-modal component/render/type code only if no unrelated caller remains; verify structural search and compilation show no obsolete constituent-modal path while shared modal-frame users remain intact.
-- [ ] 6.2 Update `CONTEXT.md` to define Library Hero overlay and remove Inline hero, selected-row replacement, InlineMediaBrowser, Presentation, and Carrier claims that no longer describe the implementation; verify terminology agrees with the change specs and introduces no collision with application popup or Sidebar terms.
+- [x] 6.1 Remove constituent `SelectionModal` construction and dispatch from TV, Music, Audiobookshelf Podcast, and Book, then delete selection-modal component/render/type code only if no unrelated caller remains; verify structural search and compilation show no obsolete constituent-modal path while shared modal-frame users remain intact.
+- [x] 6.2 Update `CONTEXT.md` to define Library Hero overlay and remove Inline hero, selected-row replacement, InlineMediaBrowser, Presentation, and Carrier claims that no longer describe the implementation; verify terminology agrees with the change specs and introduces no collision with application popup or Sidebar terms.
 
 ## 7. Verification
 
-- [ ] 7.1 Run `cargo fmt`, `cargo check -p mbv`, and the narrowest affected component, render, and mounted tick integration suites with `cargo nextest run -p mbv`; verify Wide, Narrow, Mini, short-height, keyboard, mouse, and Queue-coexistence coverage is green without live externals, sleeps, snapshots, or whole-frame assertions.
-- [ ] 7.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run -p mbv --no-fail-fast`; verify the workspace is clean and all mbv tests pass before review.
+- [x] 7.1 Run `cargo fmt`, `cargo check -p mbv`, and the narrowest affected component, render, and mounted tick integration suites with `cargo nextest run -p mbv`; verify Wide, Narrow, Mini, short-height, keyboard, mouse, and Queue-coexistence coverage is green without live externals, sleeps, snapshots, or whole-frame assertions.
+- [x] 7.2 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo nextest run -p mbv --no-fail-fast`; verify the workspace is clean and all mbv tests pass before review.
