@@ -1,7 +1,9 @@
 // Cast attachment lifecycle (5.1, 5.6) and dispatching a played selection to
 // the attached receiver instead of the local player (5.3, 5.4). Transport-key
 // routing lives in `playback_target_cast.rs`; status polling and progress
-// reporting live in `cast_status_actions.rs`.
+// reporting live in `cast_status_actions.rs`; the shared
+// resolve-and-connect primitive (`connect_cast_receiver`) that attach-on-
+// selection uses lives here too.
 
 use super::notify_actions::ToastSeverity;
 use super::panel_targets::PanelTarget;
@@ -20,7 +22,7 @@ use std::time::{Duration, Instant};
 /// Bounded so selecting a cast target from the panel doesn't wait
 /// indefinitely for a slow/unreachable receiver -- this runs on a
 /// background thread (`App::connect_cast_receiver`), so it never blocks the
-/// UI loop regardless. Mirrors `cast_reattach::CAST_REATTACH_TIMEOUT`.
+/// UI loop regardless.
 const CAST_ATTACH_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// How long a single cast discovery browse is allowed to run when the F3
@@ -77,16 +79,18 @@ impl App {
         self.stop_visualizer_worker();
     }
 
-    /// Selecting a target from the F3 panel (8.3): an Emby target reuses
-    /// the existing `connect_to_session` path unchanged; a cast target
-    /// attaches optimistically before its connect completes (matching this
-    /// codebase's optimistic-attach convention -- see `types_cast.rs`'s doc
-    /// comment on `CastAttachment.client`), then reuses 7.3's shared
-    /// resolve-and-connect primitive.
+    /// Selecting a target from the F3 panel (8.3): the previously connected
+    /// target is severed first (attachment slots are mutually exclusive),
+    /// then an Emby target reuses the existing `connect_to_session` path
+    /// unchanged; a cast target attaches optimistically before its connect
+    /// completes (matching this codebase's optimistic-attach convention --
+    /// see `types_cast.rs`'s doc comment on `CastAttachment.client`), then
+    /// reuses the shared resolve-and-connect primitive below.
     pub(super) fn select_panel_target(&mut self, target: PanelTarget) {
         match target {
             PanelTarget::Emby(session) => self.connect_to_session(&session),
             PanelTarget::Cast(receiver) => {
+                self.sever_active_connection();
                 self.attach_cast(receiver.id.clone());
                 self.connect_cast_receiver(receiver.id, CAST_ATTACH_TIMEOUT);
             }
@@ -195,6 +199,32 @@ impl App {
         })
     }
 
+    /// Resolves `id`'s current address via a fresh discovery browse,
+    /// connects, and hands the connected transport to a new cast worker
+    /// (`types_cast::spawn_cast_worker`), reporting the outcome back over
+    /// `cast_tx` as `CastEvent::Connected`/`ConnectFailed`. Runs entirely on
+    /// a background thread: both the discovery browse and `CastClient::connect`
+    /// are blocking network calls (mirrors `try_daemon_route_connect`'s
+    /// blocking-network style), and neither may run on the caller's thread.
+    /// Shared by attach-on-selection from the discovery panel (8.3).
+    pub(super) fn connect_cast_receiver(&mut self, id: String, timeout: Duration) {
+        let tx = self.cast_tx.clone();
+        let connect = cast_connect_fn();
+        std::thread::spawn(move || {
+            let event = match connect(&id, timeout) {
+                Ok(client) => CastEvent::Connected {
+                    receiver_id: id,
+                    client,
+                },
+                Err(error) => CastEvent::ConnectFailed {
+                    receiver_id: id,
+                    error,
+                },
+            };
+            let _ = tx.send(event);
+        });
+    }
+
     pub(super) fn handle_cast_event(&mut self, event: CastEvent) {
         match event {
             CastEvent::Dispatched {
@@ -297,6 +327,34 @@ impl App {
             }
         }));
     }
+}
+
+/// Resolves `id` by identifier via a fresh discovery browse -- `None` (no
+/// address, no attempt to connect) is treated as unavailable rather than
+/// a stale address -- then connects and spawns the worker thread that
+/// owns the resulting `CastClient` for the rest of this attachment's life.
+/// `spawn_cast_worker`'s fallible `build` (see its doc comment) is what
+/// lets `CastClient::connect`'s real failure mode surface here as an `Err`
+/// instead of only being discoverable once a job is submitted.
+fn resolve_and_connect_cast_receiver(
+    id: &str,
+    timeout: Duration,
+) -> Result<Sender<CastJob>, String> {
+    let receiver = mbv_core::cast_discovery::resolve_cast_receiver(id, timeout)
+        .ok_or_else(|| "receiver not found".to_string())?;
+    super::types_cast::spawn_cast_worker(move || {
+        mbv_core::cast_client::CastClient::connect(&receiver.host, receiver.port)
+    })
+}
+
+#[cfg(test)]
+fn cast_connect_fn() -> super::CastConnectFn {
+    (*super::CAST_CONNECT_OVERRIDE.lock().unwrap()).unwrap_or(resolve_and_connect_cast_receiver)
+}
+
+#[cfg(not(test))]
+fn cast_connect_fn() -> fn(&str, Duration) -> Result<Sender<CastJob>, String> {
+    resolve_and_connect_cast_receiver
 }
 
 fn resolve_cast_dispatch_item(
@@ -562,6 +620,72 @@ mod tests {
             "a failed connect should clear the optimistic attachment"
         );
         assert!(app.status.contains("Couldn't connect to cast receiver"));
+    }
+
+    #[test]
+    fn selecting_a_cast_target_severs_a_watched_session() {
+        let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
+            Err("not reached by this test".to_string())
+        }
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
+
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("sess-1".to_string());
+        app.connected_session_state = Some(crate::app::tests::make_session("tv", "mbv"));
+
+        let receiver = mbv_core::cast_discovery::CastReceiver {
+            id: "device-1".to_string(),
+            friendly_name: "Living Room".to_string(),
+            host: "192.168.0.5".to_string(),
+            port: 8009,
+        };
+        app.select_panel_target(PanelTarget::Cast(receiver));
+
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        assert!(app.is_cast_attached());
+        assert!(app.connected_session_id.is_none());
+        assert!(app.connected_session_state.is_none());
+    }
+
+    #[test]
+    fn selecting_a_cast_target_severs_the_previous_cast_attachment() {
+        let _connect_guard = super::super::CAST_CONNECT_TEST_LOCK.lock().unwrap();
+        fn connect_stub(_id: &str, _timeout: Duration) -> Result<Sender<CastJob>, String> {
+            Err("not reached by this test".to_string())
+        }
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = Some(connect_stub);
+
+        let mut app = make_app_stub();
+        app.attach_cast("device-old".to_string());
+
+        let receiver = mbv_core::cast_discovery::CastReceiver {
+            id: "device-1".to_string(),
+            friendly_name: "Living Room".to_string(),
+            host: "192.168.0.5".to_string(),
+            port: 8009,
+        };
+        app.select_panel_target(PanelTarget::Cast(receiver));
+
+        *super::super::CAST_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        assert_eq!(
+            app.cast_attachment.as_ref().unwrap().receiver_id,
+            "device-1"
+        );
+    }
+
+    #[test]
+    fn connecting_to_a_session_severs_an_attached_cast_target() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string());
+        let sess = crate::app::tests::make_session("tv", "mbv");
+
+        app.connect_to_session(&sess);
+
+        assert!(!app.is_cast_attached());
+        assert_eq!(app.connected_session_id.as_deref(), Some(sess.id.as_str()));
     }
 
     #[test]

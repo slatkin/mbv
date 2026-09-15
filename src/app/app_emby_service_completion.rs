@@ -90,11 +90,6 @@ impl App {
                 // that also flows through this branch.
                 if self.player_endpoint.is_none() {
                     self.try_auto_reconnect();
-                    // Cast reattach doesn't depend on Emby readiness (7.3),
-                    // but this is its only synchronous-construction-time
-                    // opportunity for `App::new_independent` too, so it
-                    // shares this same fires-once-per-launch guard.
-                    self.try_cast_auto_reconnect();
                 }
                 Some(content)
             }

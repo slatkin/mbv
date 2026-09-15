@@ -185,7 +185,7 @@ fn disconnect_remote_restores_local_for_sessions_panel_direct_remote() {
 }
 
 #[test]
-fn disconnecting_attached_session_preserves_sessions_panel_direct_remote() {
+fn connecting_to_a_session_severs_the_sessions_panel_direct_remote() {
     let mut app = make_app_stub();
     let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
     let direct_session = make_session("music", "mbv");
@@ -194,19 +194,16 @@ fn disconnecting_attached_session_preserves_sessions_panel_direct_remote() {
     app.switch_to_direct_remote(&direct_session, remote, remote_rx, &stub_endpoint());
     app.connect_to_session(&attached_session);
 
-    assert!(app.direct_remote_connected);
+    // The new connect severs the direct remote (mutually exclusive targets):
+    // mbv holds only the watched session afterwards.
+    assert!(!app.direct_remote_connected);
     assert!(app.connected_session_id.is_some());
-
-    app.disconnect_remote();
-
-    assert!(app.player.is_remote());
-    assert!(app.direct_remote_connected);
-    assert!(app.can_disconnect_remote());
 
     app.disconnect_remote();
 
     assert!(!app.player.is_remote());
     assert!(!app.direct_remote_connected);
+    assert!(app.connected_session_id.is_none());
 }
 
 #[test]
@@ -574,4 +571,19 @@ fn attached_session_playing_a_local_queue_item_keeps_its_slot() {
     let playback = app.effective_playback_state();
     assert!(playback.active);
     assert_eq!(playback.active_idx, Some(1));
+}
+
+#[test]
+fn switch_to_library_route_severs_an_attached_cast_target() {
+    // Regression guard: attachment slots are mutually exclusive, but
+    // `switch_to_library_route` is reachable via `apply_route_for_playback`
+    // without going through `connect_to_session`'s sever, so a cast
+    // attachment used to survive a library-route switch.
+    let mut app = make_app_stub();
+    app.attach_cast("device-1".to_string());
+
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    app.switch_to_library_route("music", remote, remote_rx, &stub_endpoint());
+
+    assert!(!app.is_cast_attached());
 }

@@ -129,13 +129,13 @@ impl App {
     /// always report `IsPaused=true` (some Emby Web builds), the
     /// position-advance observation each poll keeps this returning false.
     pub(super) fn playback_transport_paused(&self) -> bool {
-        if let Some(paused) = self
-            .cast_attachment
-            .as_ref()
-            .and_then(|a| a.status.as_ref())
-            .map(|s| s.state == mbv_core::cast_client::CastPlaybackState::Paused)
-        {
-            return paused;
+        // Same rule as `effective_playback_state`: an idle receiver's status
+        // says nothing about the media actually playing; only an engaged cast
+        // target owns the paused read.
+        if let Some(state) = self.cast_effective_playback_state() {
+            if state.active {
+                return state.paused;
+            }
         }
         if self.connected_session_state.is_some() {
             return self.remote_stalled_while_paused;
@@ -145,9 +145,22 @@ impl App {
 
     /// Returns the observed playback state for rendering.
     pub(super) fn effective_playback_state(&self) -> super::PlaybackState {
-        if let Some(state) = self.cast_effective_playback_state() {
-            state
-        } else if let Some(ref remote) = self.connected_session_state {
+        // The attached cast target wins only while it actually reports (or is
+        // optimistically awaiting) media. An attached receiver that is idle
+        // must not shadow real playback: attach-on-selection attaches
+        // optimistically before its status poll returns, so an idle
+        // attachment would otherwise collapse the now-playing panel for
+        // local and remote-session playback alike (cast-session-control's
+        // "receiver is idle" scenario governs the *cast* presentation, not
+        // every surface).
+        match self.cast_effective_playback_state() {
+            Some(state) if state.active => state,
+            _ => self.non_cast_playback_state(),
+        }
+    }
+
+    fn non_cast_playback_state(&self) -> super::PlaybackState {
+        if let Some(ref remote) = self.connected_session_state {
             // The observed item is only a *local* playhead when the queue
             // holds it. A watched remote Session may be playing anything
             // (another device's own selection), so `active` follows the
@@ -303,5 +316,61 @@ mod now_playing_status_tests {
         // Paused counts as active.
         set_player(&app, true, true);
         assert_eq!(app.now_playing_status(), NowPlayingStatus::Paused);
+    }
+
+    fn idle_cast_status() -> mbv_core::cast_client::CastStatus {
+        mbv_core::cast_client::CastStatus {
+            position_seconds: None,
+            duration_seconds: None,
+            playback_rate: 1.0,
+            state: mbv_core::cast_client::CastPlaybackState::Idle,
+            playing_content_id: None,
+        }
+    }
+
+    /// Regression: a cast receiver reattached at launch is attached but idle
+    /// (and its status poll may fail outright, leaving no status at all).
+    /// That attachment must not shadow real local playback -- the now-playing
+    /// panel collapsed to Idle a few seconds into every video until this was
+    /// split.
+    #[test]
+    fn attached_but_idle_cast_does_not_shadow_local_playback() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string());
+
+        // Receiver reports no active media.
+        app.apply_cast_status("device-1".to_string(), Ok(idle_cast_status()));
+        set_player(&app, true, false);
+        assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
+
+        // Connection lost before any status arrived (the observed failure:
+        // "cast get_status returned no entries"), status stays None.
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string());
+        app.apply_cast_status(
+            "device-1".to_string(),
+            Err("get_status returned no entries".into()),
+        );
+        set_player(&app, true, false);
+        assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
+    }
+
+    /// An engaged cast target keeps priority over the local player.
+    #[test]
+    fn playing_cast_still_wins_over_the_local_player() {
+        let mut app = make_app_stub();
+        app.attach_cast("device-1".to_string());
+        app.apply_cast_status(
+            "device-1".to_string(),
+            Ok(mbv_core::cast_client::CastStatus {
+                position_seconds: Some(1.0),
+                duration_seconds: Some(100.0),
+                playback_rate: 1.0,
+                state: mbv_core::cast_client::CastPlaybackState::Playing,
+                playing_content_id: None,
+            }),
+        );
+        set_player(&app, false, false);
+        assert_eq!(app.now_playing_status(), NowPlayingStatus::Playing);
     }
 }

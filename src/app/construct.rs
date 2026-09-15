@@ -576,11 +576,6 @@ impl App {
         if endpoint.is_local() {
             app.try_auto_reconnect();
         }
-        // Cast reattach doesn't depend on Emby readiness (7.3), so unlike
-        // the Emby restore above it isn't gated on `endpoint.is_local()`:
-        // cast discovery/connect run on this machine's own LAN regardless
-        // of which daemon this launch's player talks to.
-        app.try_cast_auto_reconnect();
         let generation = app.audiobookshelf_runtime.generation();
         app.audiobookshelf_startup_request = (audiobookshelf_configured
             && audiobookshelf_credential_present)

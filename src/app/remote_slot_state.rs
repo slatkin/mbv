@@ -50,4 +50,22 @@ impl App {
             self.flash("No session selected".to_string(), ToastSeverity::Neutral);
         }
     }
+
+    /// Connecting to a new target severs the current one: the cast
+    /// attachment, watched session, direct remote, and library-route slots
+    /// are mutually exclusive, so a new connect tears the old target down
+    /// instead of holding both. The severed cast receiver is left as it is
+    /// ("the receiver owns what it plays"); the dropped transport ends
+    /// mbv's connection to it. No-op when nothing is connected.
+    pub(super) fn sever_active_connection(&mut self) {
+        if self.cast_attachment.take().is_some() {
+            self.stop_visualizer_worker();
+        }
+        if self.active_route.is_some() {
+            self.restore_local_mode("Local playback restored before connecting");
+        }
+        if self.can_disconnect_remote() {
+            self.disconnect_remote();
+        }
+    }
 }

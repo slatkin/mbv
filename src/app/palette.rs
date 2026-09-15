@@ -9,6 +9,10 @@ pub(crate) use crate::app::render::{
     TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT, TEXT_METADATA, TEXT_MUTED, TEXT_ON_ACCENT,
     TEXT_PRIMARY, TEXT_SECONDARY, TEXT_STRONG,
 };
+
+// Hero-title role, kept off the main list above to mark it as a late addition
+// (wide + narrow hero header title).
+pub(crate) use crate::app::render::TEXT_HERO_TITLE;
 // Task 4.2: the retired role names and the value-aliased resolver survive only
 // as test-fed re-exports — each is pinned by a frozen pre-existing test file
 // the neutrality rule forbids editing, so a minimal named re-export stays for

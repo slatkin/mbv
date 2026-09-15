@@ -176,7 +176,7 @@ fn inline_hero_lines(
         Vec::with_capacity(1 + hero.facts.meta_rows.len() + usize::from(hero.overview.is_some()));
     segments.push((
         hero.facts.title.clone(),
-        Style::default().fg(palette::TEXT_STRONG),
+        Style::default().fg(palette::TEXT_HERO_TITLE),
     ));
     for (index, row) in hero.facts.meta_rows.iter().enumerate() {
         segments.push((
