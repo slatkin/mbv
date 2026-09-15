@@ -127,6 +127,10 @@ impl PlayerOwnerState {
         self.transitions.expire(now)
     }
 
+    pub fn clear_unconfirmable_transition(&mut self) {
+        self.transitions.clear_unconfirmable();
+    }
+
     pub fn reset_local_transitions(&mut self) {
         self.transitions.reset();
     }

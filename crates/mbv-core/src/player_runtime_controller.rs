@@ -306,9 +306,10 @@ impl Player {
         client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
     }
 
-    /// Play a freshly fetched Emby sequence with no canonical queue behind it.
-    /// Ids are pinned to 1..=len because the controlling app rebuilds its own
-    /// queue for these paths with exactly those ids (`replace_playback_queue`).
+    /// Play a freshly fetched Emby sequence with no pre-existing canonical
+    /// queue. Callers that already own a queue must use `submit_queue_slots`
+    /// with that queue's slot pairs so owner and client address the same
+    /// occurrences.
     fn sequential_slot_ids(items: Vec<QueueItem>) -> Vec<ExecSlot> {
         items
             .into_iter()

@@ -140,9 +140,9 @@ impl App {
                 queue.set_items(items, cursor);
             }
         }
-        // A full replacement regenerates slot ids: a preserved prior selection
-        // could collide with an unrelated new slot, so force a re-anchor to
-        // the replacement's start index rather than relying on `Preserve`.
+        // A full replacement changes the queue occurrence sequence. A preserved
+        // prior selection could refer to an unrelated slot, so force a re-anchor
+        // to the replacement's start index rather than relying on `Preserve`.
         self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
     }
 

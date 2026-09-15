@@ -2,7 +2,6 @@ use super::{notify_actions::ToastSeverity, App, LibEvent, PanelFocus};
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;
-use std::sync::Arc;
 
 impl App {
     pub(super) fn handle_ws_event(&mut self, ev: WsEvent) {
@@ -48,18 +47,8 @@ impl App {
                     }
                     self.player_tab.set_items(vec![item.clone()], 0);
                     self.flash(item.playback_label(), ToastSeverity::Neutral);
-                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
-                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                        return;
-                    };
-                    self.player
-                        .play(&item, self.queue_source.clone(), c, self.ui_volume);
+                    self.submit_tab_queue(self.playing_queue_scope(), 0);
                 } else {
-                    self.player_tab.set_items(items.clone(), start_idx);
-                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
-                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                        return;
-                    };
                     log::info!(target: "ws", "Play multi: count={}, start_idx={start_idx}", items.len());
                     // Always hand the whole list to play_queue (not just the clicked
                     // item) so the remote-controlled queue continues past start_idx.
@@ -69,13 +58,10 @@ impl App {
                     if start_position_ticks > 0 {
                         items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
                     }
-                    self.player.play_queue(
-                        items_with_pos,
-                        start_idx,
-                        self.queue_source.clone(),
-                        c,
-                        self.ui_volume,
-                    );
+                    self.player_tab.set_items(items_with_pos, start_idx);
+                    // Keep the tab's canonical slot identities when starting
+                    // this replacement; do not mint a fresh sequential run.
+                    self.submit_tab_queue(self.playing_queue_scope(), start_idx);
                 }
                 self.save_queue_state();
             }

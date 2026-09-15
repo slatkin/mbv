@@ -291,6 +291,15 @@ impl PlayerProxy {
         }
     }
 
+    /// Update the source metadata associated with a canonical submission.
+    /// Local owners keep this in the shell; remote stubs expose it for the
+    /// same source bookkeeping as the legacy play_queue path.
+    pub fn set_queue_source(&self, source: crate::config::QueueSource) {
+        if let PlayerProxyInner::Remote(remote) = &self.inner {
+            *remote.queue_source.lock().unwrap() = source;
+        }
+    }
+
     /// Remove a slot by stable identity on a remote peer that supports
     /// unified queue.  Returns `false` for local players.
     pub fn queue_remove_slot(&self, slot_id: u64) -> bool {

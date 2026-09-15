@@ -440,11 +440,12 @@ impl App {
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
-                // A local jump can be rejected before any owner report; do
-                // not leave its optimistic playhead transition ghosted until
-                // the five-second timeout.
+                // CommandRejected carries no request identity. Only the
+                // queued local transition is unconfirmable; keep the
+                // in-flight transition so a stale rejection cannot erase a
+                // legitimate optimistic playhead.
                 if !self.player.is_remote() {
-                    self.reset_bare_transitions();
+                    self.bare_owner.clear_unconfirmable_transition();
                 }
                 self.flash(reason, ToastSeverity::Neutral);
             }
