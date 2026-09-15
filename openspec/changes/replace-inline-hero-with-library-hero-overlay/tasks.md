@@ -11,10 +11,10 @@
 
 ## 3. Route Focus and Activation
 
-- [ ] 3.1 Make non-Wide Enter and browser-row double-click open the selected item's Library Hero overlay while leaving Inline Search unchanged; verify mounted tick and latest-frame mouse tests cover one parent with a Workspace, one leaf, and one Inline Search result.
-- [ ] 3.2 Give a present Workspace its existing destination-owned focus on open, preserve its cursor and scroll across Queue focus, and keep the overlay open after Enter or double-click activation; verify mounted Music or TV integration coverage proves child activation and focus restoration through the shell sync pass.
-- [ ] 3.3 Implement leaf second-Enter and in-overlay double-click activation, Library-focused Esc dismissal, destination-change dismissal, and missing-parent dismissal; verify focused component tests prove browser target/scroll preservation and that Queue-focused Esc does not close the overlay.
-- [ ] 3.4 Preserve independent Queue keyboard and mouse operation while the overlay remains visible and unfocused; verify mounted routing and mouse integration tests cover Queue focus, one Queue action, return to Library, and retained overlay Workspace state.
+- [x] 3.1 Make non-Wide Enter and browser-row double-click open the selected item's Library Hero overlay while leaving Inline Search unchanged; verify mounted tick and latest-frame mouse tests cover one parent with a Workspace, one leaf, and one Inline Search result.
+- [x] 3.2 Give a present Workspace its existing destination-owned focus on open, preserve its cursor and scroll across Queue focus, and keep the overlay open after Enter or double-click activation; verify mounted Music or TV integration coverage proves child activation and focus restoration through the shell sync pass.
+- [x] 3.3 Implement leaf second-Enter and in-overlay double-click activation, Library-focused Esc dismissal, destination-change dismissal, and missing-parent dismissal; verify focused component tests prove browser target/scroll preservation and that Queue-focused Esc does not close the overlay.
+- [x] 3.4 Preserve independent Queue keyboard and mouse operation while the overlay remains visible and unfocused; verify mounted routing and mouse integration tests cover Queue focus, one Queue action, return to Library, and retained overlay Workspace state.
 
 ## 4. Replace the Inline Presentation
 
