@@ -15,56 +15,13 @@ use crate::app::render::{paint_wide_hero_text, WrappedHeroLine, PANE_PAD_X, PANE
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
 
-pub(in crate::app) fn overview_scroll_metrics(
-    area: Rect,
-    next_row: u16,
-    content: &HeroContent<'_>,
-) -> Option<(Rect, usize, usize)> {
-    let overview = content
-        .overview
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
-    let credits = content.credits.as_deref().filter(|rows| !rows.is_empty());
-    if overview.is_none() && credits.is_none() {
-        return None;
-    }
-    let width = (area.width.saturating_sub(PANE_PAD_X * 2) as usize)
-        .saturating_sub(1)
-        .max(1);
-    let text_rows = overview
-        .map(|text| textwrap::wrap(text, width).len())
-        .unwrap_or(0);
-    let inner_rows = text_rows
-        + usize::from(overview.is_some() && credits.is_some())
-        + credits.map_or(0, |r| r.len());
-    let box_y = next_row.saturating_add(1);
-    let room = area.bottom().saturating_sub(box_y);
-    let natural = (inner_rows.max(1) as u16).saturating_add(PANE_PAD_Y * 2);
-    let box_height = if content.workspace.is_some() {
-        natural.min(room)
-    } else {
-        room
-    };
-    if box_height <= PANE_PAD_Y * 2 {
-        return None;
-    }
-    let panel = Rect {
-        y: box_y,
-        height: box_height,
-        ..area
-    };
-    let viewport = box_height.saturating_sub(PANE_PAD_Y * 2) as usize;
-    Some((panel, inner_rows, viewport))
-}
-
 pub(in crate::app) fn paint_overview_box(
     f: &mut Frame,
     area: Rect,
     next_row: u16,
     content: &HeroContent<'_>,
     scroll_offset: usize,
-) -> Option<u16> {
+) -> Option<(u16, (Rect, usize, usize))> {
     let overview = content
         .overview
         .as_deref()
@@ -196,7 +153,7 @@ pub(in crate::app) fn paint_overview_box(
             palette::TEXT_METADATA,
         );
     }
-    Some(panel.bottom())
+    Some((panel.bottom(), (panel, inner_rows, inner.height as usize)))
 }
 
 fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {

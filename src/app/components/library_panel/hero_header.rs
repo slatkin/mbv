@@ -135,7 +135,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     content: &HeroContent<'_>,
     hyperlink_capable: bool,
     overview_scroll: usize,
-) -> (u16, Option<Rect>) {
+) -> (u16, Option<Rect>, Option<(Rect, usize, usize)>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
     let image_ready = matches!(
@@ -173,9 +173,16 @@ pub(in crate::app) fn paint_hero_pane_content(
 
     // The overview Main content box only when overview text exists (design
     // D5); without it the Workspace moves up.
-    let next_row = overview_box::paint_overview_box(f, area, next_row, content, overview_scroll)
+    let overview = overview_box::paint_overview_box(f, area, next_row, content, overview_scroll);
+    let next_row = overview
+        .as_ref()
+        .map(|(bottom, _)| *bottom)
         .unwrap_or(next_row);
-    (next_row, reserved_image)
+    (
+        next_row,
+        reserved_image,
+        overview.map(|(_, metrics)| metrics),
+    )
 }
 
 /// The one title/meta painter for all three arms: the title in

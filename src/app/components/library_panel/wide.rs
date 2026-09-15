@@ -25,7 +25,6 @@ use crate::app::render::{
 
 use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroImagePaint};
 use super::hero_header::paint_hero_pane_content;
-use super::overview_box;
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
     SELECTOR_ROW_PREFIX,
@@ -307,11 +306,9 @@ pub(in crate::app) fn render_wide_skeleton(
         // one title/meta painter, and the overview box when overview text
         // exists. Returns the first unpainted row and the projected image's
         // reserved box (task 5.10: `Ready` reserves; the shell paints).
-        let (next_row, image_box) =
+        let (next_row, image_box, overview) =
             paint_hero_pane_content(f, hero_area, &*hero, hyperlink_capable, overview_scroll);
-        if let Some((box_rect, content_length, viewport)) =
-            overview_box::overview_scroll_metrics(hero_area, next_row, &*hero)
-        {
+        if let Some((box_rect, content_length, viewport)) = overview {
             geometry.overview_box = Some(box_rect);
             geometry.overview_content_length = content_length;
             geometry.overview_viewport = viewport;

@@ -305,6 +305,15 @@ impl LibraryPanel {
         self.narrow_geometry.clone()
     }
 
+    #[cfg(test)]
+    pub(in crate::app) fn test_hero_scroll_offset(&self) -> usize {
+        self.owners
+            .active_key()
+            .and_then(|key| self.owners.get(key))
+            .map(|owner| owner.hero_scroll_offset())
+            .unwrap_or_default()
+    }
+
     // ── Shell-directed owner projection (task 5.10, design D9) ───────────
 
     /// The active owner's current hero content data, for the shell's image
