@@ -13,6 +13,7 @@
 
 pub mod content;
 pub mod hero;
+pub mod hero_content;
 pub mod hero_header;
 pub mod narrow;
 pub mod overview_box;
