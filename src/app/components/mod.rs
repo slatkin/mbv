@@ -43,13 +43,14 @@ pub mod tab_panel;
 pub mod tv_content;
 pub mod user_event;
 
-pub use self::component_id::{BrowserKey, BrowserKind, ComponentId, ModalId, OverlayId, PopupId};
+pub use self::component_id::{ComponentId, ModalId, OverlayId, PopupId};
 pub use self::confirm::ConfirmComponent;
 pub use self::context_menu::ContextMenuComponent;
 pub use self::daemon_lost::DaemonLostComponent;
 pub use self::feeds_manage::FeedsManageComponent;
 pub use self::help::HelpComponent;
 pub(in crate::app) use self::inline_search::{InlineSearchHost, SearchPool};
+pub use self::library_panel::{LibraryKey, LibraryKind};
 pub(in crate::app) use self::library_playback_panel::{LibraryPlaybackPanel, PlaybackProjection};
 pub use self::library_routes::LibraryRoutesComponent;
 pub use self::mouse::{mouse_event_clause, mouse_sub};

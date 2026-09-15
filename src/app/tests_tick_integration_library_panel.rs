@@ -27,7 +27,7 @@ use crate::app::components::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, MediaListSurfaceInput,
 };
 use crate::app::components::msg::{Msg, TerminalObserverEvent};
-use crate::app::components::{BrowserKind, ComponentId};
+use crate::app::components::{LibraryKind, ComponentId};
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode};
 
@@ -145,11 +145,11 @@ fn home_key() -> LibraryKey {
 }
 
 fn movies_key() -> LibraryKey {
-    LibraryKey::Service(crate::app::components::BrowserKey {
+    LibraryKey::Service {
         service: mbv_core::config::ServiceKind::Emby,
         library_id: "lib-movies".into(),
-        kind: BrowserKind::Movies,
-    })
+        kind: LibraryKind::Movies,
+    }
 }
 
 /// A Home tab whose owner has migrated: the fixture owner is pushed into the

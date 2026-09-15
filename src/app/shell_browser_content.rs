@@ -1,7 +1,7 @@
 //! Shell wiring for the Movies/HomeVideos/Generic embedded content owner
 //! (`BrowserContent`, task 6.1, design D2). Mirrors `shell_home_content.rs`'s
 //! shape: the owner lives inside the mounted `LibraryPanel`, addressed by
-//! `LibraryKey::Service(BrowserKey)`, and the shell projects Model-owned
+//! `LibraryKey::Service(LibraryKey)`, and the shell projects Model-owned
 //! browse snapshots into it at the same writer seams `shell_browser.rs`
 //! already calls for TV's still-mounted `BrowserComponent`
 //! (the former standalone browser lifecycle) — this file supplies the
@@ -16,8 +16,7 @@
 
 use super::components::browser_content::BrowserIdentity;
 use super::components::browser_content::{BrowserContent, BrowserOwnerPush};
-use super::components::library_panel::LibraryKey;
-use super::components::{BrowserKey, BrowserKind};
+use super::components::{LibraryKey, LibraryKind};
 use super::shell::Model;
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -28,23 +27,23 @@ impl Model {
     /// `LibraryKey::Service`). `None` for every other tab, including a TV or
     /// Music library (still served by their own mounted components) or a
     /// non-`EmbyLibrary` tab.
-    pub(super) fn active_migrated_browser_owner(&self) -> Option<(usize, LibraryKey, BrowserKind)> {
+    pub(super) fn active_migrated_browser_owner(&self) -> Option<(usize, LibraryKey, LibraryKind)> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
         let library = self.app.libs.get(index)?;
-        let kind = BrowserKind::from_collection_type(&library.library.collection_type);
+        let kind = LibraryKind::from_collection_type(&library.library.collection_type);
         if !matches!(
             kind,
-            BrowserKind::Generic | BrowserKind::Movies | BrowserKind::HomeVideos
+            LibraryKind::Generic | LibraryKind::Movies | LibraryKind::HomeVideos
         ) {
             return None;
         }
-        let key = LibraryKey::Service(BrowserKey {
+        let key = LibraryKey::Service {
             service: ServiceKind::Emby,
             library_id: library.library.id.clone(),
             kind,
-        });
+        };
         Some((index, key, kind))
     }
 
@@ -54,7 +53,7 @@ impl Model {
     fn update_browser_owner<R>(
         &mut self,
         key: &LibraryKey,
-        kind: BrowserKind,
+        kind: LibraryKind,
         f: impl FnOnce(&mut BrowserContent) -> R,
     ) -> Option<R> {
         self.update_library_owner(key.clone(), || Box::new(BrowserContent::new(kind)), f)
@@ -93,7 +92,7 @@ impl Model {
         &mut self,
         index: usize,
         key: &LibraryKey,
-        kind: BrowserKind,
+        kind: LibraryKind,
     ) {
         // Group-level loading belongs to the shell projection seam, not the
         // render path: ensure the owner receives complete content before it

@@ -1,7 +1,7 @@
 //! Shell wiring for the TV embedded content owner (`TvContent`, tasks
 //! 8.1–8.4, design D2/D12). Mirrors `shell_browser_content.rs`: the owner
 //! lives inside the mounted `LibraryPanel`, addressed by
-//! `LibraryKey::Service(BrowserKey{TvShows})`, and the shell projects
+//! `LibraryKey::Service(LibraryKey{TvShows})`, and the shell projects
 //! Model-owned browse snapshots into it. Task 8.4 deleted the last mounted TV
 //! component, so there is no TV-specific `ComponentId`, no mount/unmount pass
 //! and no shell render step — the panel paints the owner and resolves its
@@ -18,7 +18,7 @@ use super::components::library_panel::LibraryPanel;
 use super::components::tv_content::TvContent;
 #[cfg(test)]
 use super::components::ComponentId;
-use super::components::{BrowserKey, BrowserKind, ShellRequest};
+use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
 use super::TabSelection;
@@ -78,7 +78,7 @@ impl Model {
     }
 
     /// The active TV library's owner key (design D2's
-    /// `LibraryKey::Service(BrowserKey)`), or `None` for every other tab.
+    /// `LibraryKey::Service(LibraryKey)`), or `None` for every other tab.
     fn tv_owner_key(&self) -> Option<LibraryKey> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
@@ -87,11 +87,11 @@ impl Model {
         if library.library.collection_type != "tvshows" {
             return None;
         }
-        Some(LibraryKey::Service(BrowserKey {
+        Some(LibraryKey::Service {
             service: ServiceKind::Emby,
             library_id: library.library.id.clone(),
-            kind: BrowserKind::TvShows,
-        }))
+            kind: LibraryKind::TvShows,
+        })
     }
 
     /// The TV owner installed for the active library, whether or not its tab
@@ -122,11 +122,11 @@ impl Model {
     /// for a non-TV library).
     #[cfg(test)]
     pub(super) fn test_tv_owner_key_at(&self, index: usize) -> LibraryKey {
-        LibraryKey::Service(BrowserKey {
+        LibraryKey::Service {
             service: ServiceKind::Emby,
             library_id: self.app.libs[index].library.id.clone(),
-            kind: BrowserKind::TvShows,
-        })
+            kind: LibraryKind::TvShows,
+        }
     }
 
     /// Test-only: the mounted panel's last painted role rects, for the

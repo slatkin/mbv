@@ -9,8 +9,7 @@ use super::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
 use super::media_list::MediaSemanticState;
 use super::msg::{Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use super::tv_content::TvContent;
-use crate::app::components::BrowserKey;
-use crate::app::components::BrowserKind;
+use crate::app::components::LibraryKind;
 use crate::app::render::{LibraryListRenderCtx, TvWideRenderCtx};
 use crate::app::tests::make_item;
 use mbv_core::config::ServiceKind;
@@ -26,11 +25,11 @@ use tuirealm::props::{AttrValue, Attribute};
 /// The TV owner's `LibraryKey` under the mounted panel: one `Service` key for
 /// a `tvshows` library (task 8.4, design D2).
 fn tv_key() -> LibraryKey {
-    LibraryKey::Service(BrowserKey {
+    LibraryKey::Service {
         service: ServiceKind::Emby,
         library_id: "lib-tv".into(),
-        kind: BrowserKind::TvShows,
-    })
+        kind: LibraryKind::TvShows,
+    }
 }
 
 /// A mounted-panel harness hosting one TV owner: the shape production uses

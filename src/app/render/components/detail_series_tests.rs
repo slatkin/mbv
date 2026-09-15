@@ -1,6 +1,6 @@
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{BrowserKey, BrowserKind};
+use crate::app::components::LibraryKind;
 use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use crate::app::render::test_helpers::buffer_to_string;
 use crate::app::render::TvWideRenderCtx;
@@ -30,11 +30,11 @@ fn narrow_series_detail_is_painted_by_the_shared_panel_skeleton() {
         None,
         false,
     ));
-    let key = LibraryKey::Service(BrowserKey {
+    let key = LibraryKey::Service {
         service: ServiceKind::Emby,
         library_id: "lib".into(),
-        kind: BrowserKind::TvShows,
-    });
+        kind: LibraryKind::TvShows,
+    };
     let mut panel = LibraryPanel::new();
     panel.insert_owner(key.clone(), Box::new(owner));
     panel.set_active(Some(key));

@@ -7,7 +7,7 @@
 use super::test_helpers::buffer_to_string;
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{BrowserKey, BrowserKind};
+use crate::app::components::LibraryKind;
 use crate::app::render::arrangements::library::wide_library_panes;
 use crate::app::render::arrangements::wide_hero::{
     wide_hero_split, WIDE_HERO_MIN_PANE_WIDTH, WIDE_HERO_PANE_GAP,
@@ -43,11 +43,11 @@ fn render_tv_wide(override_width: Option<u16>) -> String {
         None,
         true,
     ));
-    let key = LibraryKey::Service(BrowserKey {
+    let key = LibraryKey::Service {
         service: ServiceKind::Emby,
         library_id: "lib".into(),
-        kind: BrowserKind::TvShows,
-    });
+        kind: LibraryKind::TvShows,
+    };
     let mut panel = LibraryPanel::new();
     panel.insert_owner(key.clone(), Box::new(owner));
     panel.set_active(Some(key));

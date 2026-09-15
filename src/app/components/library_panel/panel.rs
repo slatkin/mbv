@@ -93,7 +93,7 @@ impl From<LibraryKey> for LibrarySelectionOrigin {
         match key {
             LibraryKey::Home => Self::Home,
             LibraryKey::Feeds => Self::Feeds,
-            LibraryKey::Service(key) => Self::Service(key),
+            key @ LibraryKey::Service { .. } => Self::Service(key),
         }
     }
 }
@@ -103,7 +103,7 @@ impl From<LibrarySelectionOrigin> for LibraryKey {
         match origin {
             LibrarySelectionOrigin::Home => Self::Home,
             LibrarySelectionOrigin::Feeds => Self::Feeds,
-            LibrarySelectionOrigin::Service(key) => Self::Service(key),
+            LibrarySelectionOrigin::Service(key) => key,
         }
     }
 }
@@ -463,7 +463,7 @@ impl LibraryPanel {
             .active_mut()
             .and_then(|owner| owner.on_slot_event(event));
         if is_wheel {
-            if let (Some(LibraryKey::Service(key)), Some((index, scroll))) = (
+            if let (Some(key @ LibraryKey::Service { .. }), Some((index, scroll))) = (
                 self.owners.active_key().cloned(),
                 self.owners
                     .active_mut()

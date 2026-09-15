@@ -366,16 +366,14 @@ impl Model {
                         let active_key = self
                             .active_migrated_browser_owner()
                             .map(|(_, active, _)| active);
-                        if active_key.as_ref()
-                            == Some(&crate::app::components::library_panel::LibraryKey::Service(
-                                key.clone(),
-                            ))
-                        {
+                        if active_key.as_ref() == Some(&key) {
                             let Some(lib_idx) = self
                                 .app
                                 .libs
                                 .iter()
-                                .position(|lib| lib.library.id == key.library_id)
+                                .position(|lib| {
+                                    matches!(&key, crate::app::components::library_panel::LibraryKey::Service { library_id, .. } if lib.library.id == *library_id)
+                                })
                             else {
                                 return quit;
                             };

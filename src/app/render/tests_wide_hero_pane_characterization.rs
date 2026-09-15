@@ -11,7 +11,7 @@ use super::test_helpers::buffer_to_string;
 use crate::app::components::feeds_content::{FeedsContent, FeedsOwnerPush};
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{BrowserKey, BrowserKind};
+use crate::app::components::LibraryKind;
 use crate::app::palette;
 use crate::app::render::arrangements::library::wide_library_panes;
 use crate::app::render::arrangements::wide_hero::{PANE_PAD_X, PANE_PAD_Y};
@@ -54,11 +54,11 @@ fn tv_wide_left_pane_unconditional_fill_shared_inset() {
         None,
         false,
     ));
-    let key = LibraryKey::Service(BrowserKey {
+    let key = LibraryKey::Service {
         service: ServiceKind::Emby,
         library_id: "lib".into(),
-        kind: BrowserKind::TvShows,
-    });
+        kind: LibraryKind::TvShows,
+    };
     let mut panel = LibraryPanel::new();
     panel.insert_owner(key.clone(), Box::new(owner));
     panel.set_active(Some(key));

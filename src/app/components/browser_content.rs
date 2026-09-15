@@ -22,7 +22,6 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use mbv_core::api::EmbyItem;
 
-use super::component_id::BrowserKind;
 use super::inline_search::{InlineSearch, InlineSearchAction, InlineSearchHost};
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListControls, ListSlot, SelectorRow,
@@ -30,6 +29,7 @@ use super::library_panel::content::{
 use super::library_panel::hero::hero_content_emby;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
+use super::library_panel::LibraryKind;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
     MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Presentation, RowIntent,
@@ -116,7 +116,7 @@ pub(in crate::app) struct BrowserOwnerPush {
 /// libraries (design D2, task 6.1). Plain type; the mounted `LibraryPanel`
 /// borrows it for content and slot events.
 pub(in crate::app) struct BrowserContent {
-    kind: BrowserKind,
+    kind: LibraryKind,
     items: Vec<EmbyItem>,
     total_count: usize,
     library_total: Option<usize>,
@@ -150,7 +150,7 @@ pub(in crate::app) struct BrowserContent {
 }
 
 impl BrowserContent {
-    pub(in crate::app) fn new(kind: BrowserKind) -> Self {
+    pub(in crate::app) fn new(kind: LibraryKind) -> Self {
         Self {
             kind,
             items: Vec::new(),
@@ -265,7 +265,7 @@ impl BrowserContent {
     /// selected item to actually be a `Movie`, not e.g. a BoxSet folder).
     fn hero_item(&self) -> Option<&EmbyItem> {
         let item = self.items.get(self.cursor())?;
-        (!item.is_folder && (self.kind != BrowserKind::Movies || item.item_type == "Movie"))
+        (!item.is_folder && (self.kind != LibraryKind::Movies || item.item_type == "Movie"))
             .then_some(item)
     }
 

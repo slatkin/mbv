@@ -122,23 +122,19 @@ fn tv_workspace_renders_the_wide_workspace_without_app() {
     ));
     let mut panel = crate::app::components::library_panel::LibraryPanel::new();
     panel.insert_owner(
-        crate::app::components::library_panel::LibraryKey::Service(
-            crate::app::components::BrowserKey {
-                service: mbv_core::config::ServiceKind::Emby,
-                library_id: "lib".into(),
-                kind: crate::app::components::BrowserKind::TvShows,
-            },
-        ),
+        crate::app::components::library_panel::LibraryKey::Service {
+            service: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib".into(),
+            kind: crate::app::components::LibraryKind::TvShows,
+        },
         Box::new(component),
     );
     panel.set_active(Some(
-        crate::app::components::library_panel::LibraryKey::Service(
-            crate::app::components::BrowserKey {
-                service: mbv_core::config::ServiceKind::Emby,
-                library_id: "lib".into(),
-                kind: crate::app::components::BrowserKind::TvShows,
-            },
-        ),
+        crate::app::components::library_panel::LibraryKey::Service {
+            service: mbv_core::config::ServiceKind::Emby,
+            library_id: "lib".into(),
+            kind: crate::app::components::LibraryKind::TvShows,
+        },
     ));
     let mut terminal = Terminal::new(TestBackend::new(100, 20)).unwrap();
     terminal
@@ -164,13 +160,11 @@ fn tv_workspace_renders_the_narrow_series_list_without_app() {
         None,
         false,
     ));
-    let key = crate::app::components::library_panel::LibraryKey::Service(
-        crate::app::components::BrowserKey {
-            service: mbv_core::config::ServiceKind::Emby,
-            library_id: "lib".into(),
-            kind: crate::app::components::BrowserKind::TvShows,
-        },
-    );
+    let key = crate::app::components::library_panel::LibraryKey::Service {
+        service: mbv_core::config::ServiceKind::Emby,
+        library_id: "lib".into(),
+        kind: crate::app::components::LibraryKind::TvShows,
+    };
     let mut panel = crate::app::components::library_panel::LibraryPanel::new();
     panel.insert_owner(key.clone(), Box::new(component));
     panel.set_active(Some(key));

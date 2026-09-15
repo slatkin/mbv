@@ -1,8 +1,8 @@
 use crate::app::components::browser_content::{BrowserContent as BrowserOwner, BrowserOwnerPush};
-use crate::app::components::component_id::BrowserKind;
 use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
 use crate::app::components::library_panel::content::ListSlot;
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+use crate::app::components::library_panel::LibraryKind;
 use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::tests::{make_item, make_items};
@@ -37,7 +37,7 @@ fn owner_push(items: Vec<mbv_core::api::EmbyItem>) -> BrowserOwnerPush {
 /// media list; the shell-side `OpenInlineSearch` load request is unchanged.
 #[test]
 fn browser_owner_slash_opens_inline_search_as_a_list_slot() {
-    let mut owner = BrowserOwner::new(BrowserKind::Movies);
+    let mut owner = BrowserOwner::new(LibraryKind::Movies);
     owner.set_content(owner_push(make_items(3)));
     assert!(matches!(owner.content().list, ListSlot::Media(_)));
 
@@ -55,7 +55,7 @@ fn browser_owner_slash_opens_inline_search_as_a_list_slot() {
 /// (design.md D4).
 #[test]
 fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
-    let mut owner = BrowserOwner::new(BrowserKind::Generic);
+    let mut owner = BrowserOwner::new(LibraryKind::Generic);
     owner.set_content(owner_push(make_items(3)));
     owner.on_key(&TuiKeyEvent {
         code: Key::Char('/'),
@@ -83,7 +83,7 @@ fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
 /// (documented deviation, task 6.1 report).
 #[test]
 fn browser_owner_search_pointer_resolves_against_painted_rows() {
-    let mut owner = BrowserOwner::new(BrowserKind::Movies);
+    let mut owner = BrowserOwner::new(LibraryKind::Movies);
     owner.set_content(owner_push(vec![make_item("Focused Movie", "Movie")]));
     owner.on_key(&TuiKeyEvent {
         code: Key::Char('/'),

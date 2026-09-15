@@ -12,39 +12,39 @@ use ratatui::layout::Rect;
 
 use super::components::book_content::BookContent;
 use super::components::library_panel::content::HeroImageState;
-use super::components::library_panel::{LibraryContentOwner, LibraryKey, LibraryPanel};
+use super::components::library_panel::{LibraryContentOwner, LibraryPanel};
 use super::components::podcast_content::PodcastContent;
-use super::components::{BrowserKey, BrowserKind, ComponentId};
+use super::components::{ComponentId, LibraryKey, LibraryKind};
 use super::shell::Model;
 use super::{PanelMode, TabSelection};
 use mbv_core::config::ServiceKind;
 
 impl Model {
     /// The active library's [`LibraryKey`] from the resolved tab: the owner
-    /// map's addressing key (design D2: `Home | Feeds | Service(BrowserKey)`).
+    /// map's addressing key (design D2: `Home | Feeds | Service(LibraryKey)`).
     pub(super) fn active_library_key(&self) -> Option<LibraryKey> {
         match self.app.tab {
             TabSelection::Home => Some(LibraryKey::Home),
             TabSelection::Feeds => Some(LibraryKey::Feeds),
             TabSelection::EmbyLibrary(index) => {
                 let library = self.app.libs.get(index)?;
-                Some(LibraryKey::Service(BrowserKey {
+                Some(LibraryKey::Service {
                     service: ServiceKind::Emby,
                     library_id: library.library.id.clone(),
-                    kind: BrowserKind::from_collection_type(&library.library.collection_type),
-                }))
+                    kind: LibraryKind::from_collection_type(&library.library.collection_type),
+                })
             }
             TabSelection::AudiobookshelfLibrary(index) => {
                 let library = self.app.audiobookshelf_libraries.get(index)?;
                 let kind = match self.app.audiobookshelf_kind_at(index)? {
-                    AudiobookshelfBrowseKind::Podcast => BrowserKind::AudiobookshelfPodcast,
-                    AudiobookshelfBrowseKind::Book => BrowserKind::AudiobookshelfBook,
+                    AudiobookshelfBrowseKind::Podcast => LibraryKind::AudiobookshelfPodcast,
+                    AudiobookshelfBrowseKind::Book => LibraryKind::AudiobookshelfBook,
                 };
-                Some(LibraryKey::Service(BrowserKey {
+                Some(LibraryKey::Service {
                     service: ServiceKind::Audiobookshelf,
                     library_id: library.id.clone(),
                     kind,
-                }))
+                })
             }
         }
     }
@@ -68,25 +68,23 @@ impl Model {
     /// drops owners whose key is not here (design D2's retention rule).
     pub(super) fn live_library_keys(&self) -> Vec<LibraryKey> {
         let mut keys = vec![LibraryKey::Home, LibraryKey::Feeds];
-        keys.extend(self.app.libs.iter().map(|tab| {
-            LibraryKey::Service(super::components::BrowserKey {
-                service: ServiceKind::Emby,
-                library_id: tab.library.id.clone(),
-                kind: BrowserKind::from_collection_type(&tab.library.collection_type),
-            })
+        keys.extend(self.app.libs.iter().map(|tab| LibraryKey::Service {
+            service: ServiceKind::Emby,
+            library_id: tab.library.id.clone(),
+            kind: LibraryKind::from_collection_type(&tab.library.collection_type),
         }));
         keys.extend(self.app.audiobookshelf_libraries.iter().map(|library| {
             // `from_media_type` maps every ABS media type to exactly one of
             // Book | Podcast (same rule the browse surfaces apply).
             let kind = match AudiobookshelfBrowseKind::from_media_type(&library.media_type) {
-                AudiobookshelfBrowseKind::Podcast => BrowserKind::AudiobookshelfPodcast,
-                AudiobookshelfBrowseKind::Book => BrowserKind::AudiobookshelfBook,
+                AudiobookshelfBrowseKind::Podcast => LibraryKind::AudiobookshelfPodcast,
+                AudiobookshelfBrowseKind::Book => LibraryKind::AudiobookshelfBook,
             };
-            LibraryKey::Service(BrowserKey {
+            LibraryKey::Service {
                 service: ServiceKind::Audiobookshelf,
                 library_id: library.id.clone(),
                 kind,
-            })
+            }
         }));
         keys
     }
@@ -193,9 +191,11 @@ impl Model {
         let register_book = active.as_ref().is_some_and(|key| {
             matches!(
                 key,
-                LibraryKey::Service(browser)
-                    if browser.service == ServiceKind::Audiobookshelf
-                        && browser.kind == BrowserKind::AudiobookshelfBook
+                LibraryKey::Service {
+                    service: ServiceKind::Audiobookshelf,
+                    kind: LibraryKind::AudiobookshelfBook,
+                    ..
+                }
             ) && !self.library_panel_has_owner(key)
         });
         if register_book {
@@ -205,10 +205,14 @@ impl Model {
             }
         }
         let register_podcast = active.as_ref().is_some_and(|key| {
-            matches!(key, LibraryKey::Service(browser)
-                if browser.service == ServiceKind::Audiobookshelf
-                    && browser.kind == BrowserKind::AudiobookshelfPodcast)
-                && !self.library_panel_has_owner(key)
+            matches!(
+                key,
+                LibraryKey::Service {
+                    service: ServiceKind::Audiobookshelf,
+                    kind: LibraryKind::AudiobookshelfPodcast,
+                    ..
+                }
+            ) && !self.library_panel_has_owner(key)
         });
         if register_podcast {
             if let Some(key) = active.clone() {

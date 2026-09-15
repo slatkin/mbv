@@ -5,7 +5,7 @@
 //! transitions between genuinely different owners. Painting
 //! lives in `crate::app::render::components::media_list`.
 
-use crate::app::components::component_id::BrowserKey;
+use crate::app::components::library_panel::LibraryKey;
 use crate::app::ui_util::move_cursor;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
@@ -375,7 +375,7 @@ pub enum SelectionOrigin {
 pub enum LibrarySelectionOrigin {
     Home,
     Feeds,
-    Service(BrowserKey),
+    Service(LibraryKey),
 }
 
 /// Read-only presentation projection of a MediaList selection. Membership is

@@ -482,7 +482,7 @@ pub enum ShellRequest {
     /// stable library key and owner-resolved cursor/scroll cross the panel
     /// boundary; the shell persists the resting scroll without re-reading it.
     LibraryScroll {
-        key: crate::app::components::component_id::BrowserKey,
+        key: crate::app::components::library_panel::LibraryKey,
         index: usize,
         scroll: usize,
     },

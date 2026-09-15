@@ -38,8 +38,9 @@ pub(in crate::app) use hero::{
 pub(in crate::app) use narrow::{inline_hero_plan, render_narrow_skeleton, NarrowSkeletonGeometry};
 #[allow(unused_imports)]
 pub(in crate::app) use overview_box::sanitize_url;
+pub(in crate::app) use owner::{LibraryContentOwner, LibrarySlotEvent};
 #[allow(unused_imports)]
-pub(in crate::app) use owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
+pub use owner::{LibraryKey, LibraryKind};
 #[allow(unused_imports)]
 pub(in crate::app) use panel::LibraryPanel;
 #[allow(unused_imports)]
