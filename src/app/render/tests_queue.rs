@@ -713,8 +713,9 @@ fn queue_selection_title_is_bold_focus_accent_no_outside_marker() {
     let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 40));
     let queue = chrome.root.queue.expect("queue panel placed");
     let box_area = super::arrangements::queue::queue_list_box(queue);
-    // The cursor sits on item 0: the first content row of the box.
-    let marker_y = box_area.y + 1;
+    // The cursor sits on item 0: the first content row (below the title
+    // row when the box reserves one).
+    let marker_y = super::arrangements::queue::queue_panel_subareas(box_area).y;
     // Nothing paints outside the recessed box edge.
     assert_eq!(
         buf[(box_area.x - 1, marker_y)].symbol(),

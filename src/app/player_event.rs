@@ -447,7 +447,7 @@ impl App {
                 if !self.player.is_remote() {
                     self.bare_owner.clear_unconfirmable_transition();
                 }
-                self.flash(reason, ToastSeverity::Neutral);
+                self.flash(reason, ToastSeverity::Error);
             }
             PlayerEvent::PlaybackIntent(event) => {
                 use mbv_core::ctrl::PlaybackIntentOutcome;

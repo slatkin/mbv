@@ -115,8 +115,27 @@ fn spawn_ctrl_client(
             if line.is_empty() {
                 continue;
             }
-            if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
-                let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, client_id, reply_tx.clone()));
+            match serde_json::from_str::<CtrlCmd>(&line) {
+                Ok(cmd) => {
+                    let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, client_id, reply_tx.clone()));
+                }
+                Err(e) => {
+                    // A drop here is silent playback loss for the client (e.g.
+                    // a wire-shape drift this peer can't parse), so surface it
+                    // on both ends: the log for operators, CommandRejected for
+                    // the client's toast — the serde error names the
+                    // field/variant that drifted.
+                    log::warn!(
+                        target: "daemon",
+                        "unparsable ctrl line from client {client_id} ({} bytes): {e}",
+                        line.len(),
+                    );
+                    if let Ok(json) = serde_json::to_string(&CtrlEvent::CommandRejected(
+                        format!("mbvd ignored an unparsable control command: {e}"),
+                    )) {
+                        reply_tx.send(CtrlOutbound::Event(json)).ok();
+                    }
+                }
             }
         }
         let _ = merged_tx.send(DaemonEvent::CtrlDisconnected(client_id));

@@ -185,23 +185,43 @@ fn queue_only_strip_and_queue_follow_the_table() {
             1,
         ),
     );
-    // No title band: one blank QueuePanel row sits above the list (the
-    // scope pills paint in the QueueColumn footer — covered by the
-    // queue-component scope-pill tests).
+    // Title band: one blank QueuePanel row above the title (the scope
+    // pills paint in the QueueColumn footer — covered by the
+    // queue-component scope-pill tests), the bold-yellow `Queue` title,
+    // the list directly below it.
     let placement = model.app.queue_panel_placement();
-    let blank_y = queue_view.content_area.y - 1;
+    let title_y = queue_view.content_area.y - 1;
+    let blank_y = title_y - 1;
     assert!(
         blank_y > placement.panel_area.y,
         "the blank row sits inside the panel"
     );
     let buffer = term.backend().buffer();
     let blank = &buffer[(queue_view.content_area.x, blank_y)];
-    assert_eq!(blank.symbol(), " ", "the row above the list is blank");
+    assert_eq!(blank.symbol(), " ", "the row above the title is blank");
     assert_eq!(
         blank.bg,
         palette::surface_colors(palette::Surface::QueuePanel, true).fill,
         "the blank row carries the queue panel surface"
     );
+    let title: String = (0..7)
+        .map(|i| {
+            buffer[(queue_view.content_area.x + i, title_y)]
+                .symbol()
+                .to_owned()
+        })
+        .collect();
+    assert_eq!(title, "  Queue", "the list sits directly below the title");
+    for i in 0..7 {
+        let cell = &buffer[(queue_view.content_area.x + i, title_y)];
+        assert_eq!(cell.style().fg, Some(palette::TEXT_HERO_TITLE));
+        assert!(
+            cell.style()
+                .add_modifier
+                .contains(ratatui::style::Modifier::BOLD),
+            "the title is bold"
+        );
+    }
     // The strip: the shell's queue-only branch paints the panel body and its
     // recess rows as one fixed chrome band.
     painted.expect(
