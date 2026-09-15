@@ -78,6 +78,42 @@ fn daemon_endpoint_parses_local_and_unix_paths() {
 }
 
 #[test]
+fn handshake_records_audio_only_capability_and_ignores_unknown_capability() {
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+
+    let (client, daemon) = UnixStream::pair().unwrap();
+    let peer = std::thread::spawn(move || {
+        let mut writer = daemon.try_clone().unwrap();
+        let mut reader = BufReader::new(daemon);
+        let mut hello = CtrlHello::current();
+        hello.capabilities.push(crate::ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
+        hello.capabilities.push("future-capability".to_string());
+        writeln!(writer, "{}", serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()).unwrap();
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+        let state = CtrlEvent::UnifiedQueueState(UnifiedQueueStateData {
+            status: PlayerStatus::default(),
+            slots: Vec::new(),
+            active_slot: None,
+            revision: 0,
+            source: QueueSource::Unknown,
+            in_flight_transition: None,
+            queued_latest_transition: None,
+        });
+        writeln!(writer, "{}", serde_json::to_string(&state).unwrap()).unwrap();
+    });
+
+    let (_reader, _state, compatibility) = perform_handshake(
+        SocketStream::Unix(client),
+        || Ok("unused".to_string()),
+    )
+    .unwrap();
+    assert!(compatibility.supports_audio_only);
+    peer.join().unwrap();
+}
+
+#[test]
 fn daemon_endpoint_rejects_unsupported_schemes() {
     assert_eq!(
         DaemonEndpoint::parse("tcp://10.0.0.1:1234").unwrap(),

@@ -7,6 +7,7 @@ use crate::stream::SocketStream;
 
 fn start_ctrl_auth_test_peer(
     control_credential: Option<&str>,
+    audio_only: bool,
 ) -> (UnixStream, std::sync::mpsc::Receiver<DaemonEvent>) {
     let (client, peer) = UnixStream::pair().unwrap();
     let (merged_tx, merged_rx) = std::sync::mpsc::channel();
@@ -21,6 +22,7 @@ fn start_ctrl_auth_test_peer(
         control_credential.map(str::to_owned),
         player.status,
         shared_queue_state(),
+        audio_only,
     );
     (client, merged_rx)
 }
@@ -33,7 +35,7 @@ fn read_ctrl_event(reader: &mut BufReader<UnixStream>) -> CtrlEvent {
 
 #[test]
 fn local_ctrl_socket_accepts_valid_control_credential_without_emby() {
-    let (client, _events) = start_ctrl_auth_test_peer(Some("owner-control"));
+    let (client, _events) = start_ctrl_auth_test_peer(Some("owner-control"), false);
     client
         .set_read_timeout(Some(std::time::Duration::from_secs(1)))
         .unwrap();
@@ -58,7 +60,7 @@ fn local_ctrl_socket_accepts_valid_control_credential_without_emby() {
 
 #[test]
 fn local_ctrl_socket_rejects_wrong_control_credential_without_emby_fallback() {
-    let (client, _events) = start_ctrl_auth_test_peer(Some("owner-control"));
+    let (client, _events) = start_ctrl_auth_test_peer(Some("owner-control"), false);
     client
         .set_read_timeout(Some(std::time::Duration::from_secs(1)))
         .unwrap();
@@ -79,8 +81,19 @@ fn local_ctrl_socket_rejects_wrong_control_credential_without_emby_fallback() {
 }
 
 #[test]
+fn audio_only_daemon_advertises_capability_in_ctrl_hello() {
+    let (client, _events) = start_ctrl_auth_test_peer(None, true);
+    let mut reader = BufReader::new(client);
+    let hello = read_ctrl_event(&mut reader);
+    let CtrlEvent::Hello(hello) = hello else {
+        panic!("expected daemon hello");
+    };
+    assert!(hello.supports_audio_only());
+}
+
+#[test]
 fn packaged_ctrl_socket_accepts_compatible_client_without_credentials() {
-    let (client, _events) = start_ctrl_auth_test_peer(None);
+    let (client, _events) = start_ctrl_auth_test_peer(None, false);
     client
         .set_read_timeout(Some(std::time::Duration::from_secs(1)))
         .unwrap();
@@ -90,6 +103,7 @@ fn packaged_ctrl_socket_accepts_compatible_client_without_credentials() {
         panic!("expected daemon hello");
     };
     assert!(!hello.supports_control_auth());
+    assert!(!hello.supports_audio_only());
 
     let mut writer = reader.get_mut().try_clone().unwrap();
     writeln!(

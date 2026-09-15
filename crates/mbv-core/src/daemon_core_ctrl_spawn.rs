@@ -6,6 +6,7 @@ fn spawn_ctrl_client(
     control_credential: Option<String>,
     player_status: Arc<Mutex<crate::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
+    audio_only: bool,
 ) {
     let Ok(writer_stream) = stream.try_clone() else {
         return;
@@ -17,6 +18,11 @@ fn spawn_ctrl_client(
         daemon_hello
             .capabilities
             .retain(|cap| cap != crate::ctrl::CTRL_CAP_CONTROL_AUTH);
+    }
+    if audio_only {
+        daemon_hello
+            .capabilities
+            .push(crate::ctrl::CTRL_CAP_AUDIO_ONLY.to_string());
     }
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(daemon_hello)) {
         ev_tx.send(CtrlOutbound::Event(hello_json)).ok();

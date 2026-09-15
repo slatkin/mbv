@@ -64,6 +64,7 @@ where
             info.validate_peer()?;
             let mut compatibility = info.compatibility()?;
             compatibility.supports_lifecycle_shutdown = info.supports_lifecycle_shutdown();
+            compatibility.supports_audio_only = info.supports_audio_only();
             compatibility.supports_control_auth = info.supports_control_auth();
             log::info!(
                 target: "remote",

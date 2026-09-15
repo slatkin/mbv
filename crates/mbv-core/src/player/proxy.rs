@@ -89,6 +89,16 @@ impl PlayerProxy {
         }
     }
 
+    /// Whether the owner is known to be configured audio-only. An in-process
+    /// Player is always able to play video, while an older ctrl peer that did
+    /// not advertise the capability is treated as audio-capable.
+    pub fn owner_is_audio_only(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(remote) => remote.supports_audio_only(),
+        }
+    }
+
     #[cfg(any(test, feature = "test-support"))]
     pub fn audiobookshelf_generation(&self) -> Option<crate::service_runtime::SetupGeneration> {
         match &self.inner {

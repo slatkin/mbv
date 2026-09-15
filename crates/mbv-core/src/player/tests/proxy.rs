@@ -50,6 +50,19 @@ fn capable_ctrl_owner_admits_audiobookshelf_and_forwards_commands() {
 }
 
 #[test]
+fn owner_audio_only_reflects_remote_capability_and_local_player_is_capable() {
+    let local = PlayerProxy::stub(std::sync::Arc::new(std::sync::Mutex::new(
+        crate::player::PlayerStatus::default(),
+    )));
+    assert!(!local.owner_is_audio_only());
+
+    let (mut remote, _event_rx, _cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
+    assert!(!PlayerProxy::remote(remote.clone(), false).owner_is_audio_only());
+    remote.ctrl_compatibility.supports_audio_only = true;
+    assert!(PlayerProxy::remote(remote, false).owner_is_audio_only());
+}
+
+#[test]
 fn incapable_peer_rejects_audiobookshelf_without_command_or_queue_mutation() {
     let (mut remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(vec![], 0);
     remote.ctrl_compatibility = capability_abs_disabled();

@@ -295,6 +295,10 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_lifecycle_shutdown
     }
 
+    pub fn supports_audio_only(&self) -> bool {
+        self.ctrl_compatibility.supports_audio_only
+    }
+
     pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
     }
