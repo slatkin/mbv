@@ -121,30 +121,38 @@ pub(in crate::app) fn paint_overview_box(
                 style: Style::default().fg(palette::TEXT_EMPHASIS),
             })
             .collect();
-        paint_wide_hero_text(
-            f,
-            Rect {
-                y: inner.y,
-                height: text_rows as u16,
-                ..inner
-            },
-            &lines,
-        );
+        // Keep pinned overview content inside the box when the pane is too
+        // short to show the whole overview (and its table, if present).
+        let visible_rows = (lines.len() as u16).min(inner.height);
+        if visible_rows > 0 {
+            paint_wide_hero_text(
+                f,
+                Rect {
+                    y: inner.y,
+                    height: visible_rows,
+                    ..inner
+                },
+                &lines,
+            );
+        }
     }
     if has_credits_gap {
         // The separator is directly below the overview, with one blank row
         // below it; both remain pinned while the table scrolls.
         let y = inner.y + text_rows as u16;
-        let separator = "▁".repeat(inner.width as usize);
-        f.render_widget(
-            Paragraph::new(separator).style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR)),
-            Rect {
-                x: inner.x,
-                y,
-                width: inner.width,
-                height: 1,
-            },
-        );
+        if y < inner.bottom() {
+            let separator = "▁".repeat(inner.width as usize);
+            f.render_widget(
+                Paragraph::new(separator)
+                    .style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR)),
+                Rect {
+                    x: inner.x,
+                    y,
+                    width: inner.width,
+                    height: 1,
+                },
+            );
+        }
     }
     if let Some(credits) = credits {
         let y = inner.y + pinned_rows as u16;
@@ -703,6 +711,116 @@ mod tests {
         assert_ne!(buffer[(2, separator + 4)].bg, stripe);
         assert_eq!(buffer[(2, separator + 2)].fg, palette::HERO_CREDITS_NAME);
         assert_eq!(buffer[(2, separator + 3)].fg, palette::HERO_CREDITS_NAME);
+    }
+
+    #[test]
+    fn long_overview_is_clipped_to_inner_box_when_pane_is_short() {
+        let content = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("one two three four five six seven eight nine ten eleven twelve".into()),
+            credits: Some(vec![HeroCredit {
+                name: "Person".into(),
+                role: "Actor".into(),
+            }]),
+            workspace: Some(Workspace {
+                selector: None,
+                list: &mut NoopList,
+                focused: false,
+            }),
+        };
+        let mut terminal = Terminal::new(TestBackend::new(32, 6)).unwrap();
+        let mut metrics = None;
+        terminal
+            .draw(|f| metrics = paint_overview_box(f, Rect::new(0, 0, 32, 6), 0, &content, 0))
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let inner = Rect::new(2, 2, 28, 3);
+        assert_eq!(metrics.unwrap().viewport, 0);
+        assert!(
+            (inner.bottom()..6).all(|y| {
+                (inner.left()..inner.right()).all(|x| buffer[(x, y)].symbol() != "▁")
+                    && (inner.left()..inner.right()).all(|x| buffer[(x, y)].symbol() != "Person")
+            }),
+            "separator and table never paint below inner bottom"
+        );
+    }
+
+    #[test]
+    fn pinned_overview_and_separator_stay_fixed_while_credits_scroll() {
+        let credits = (0..12)
+            .map(|i| HeroCredit {
+                name: format!("Person {i}"),
+                role: format!("Role {i}"),
+            })
+            .collect::<Vec<_>>();
+        let content = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("Overview text".into()),
+            credits: Some(credits),
+            workspace: Some(Workspace {
+                selector: None,
+                list: &mut NoopList,
+                focused: false,
+            }),
+        };
+        let draw = |offset| {
+            let mut terminal = Terminal::new(TestBackend::new(32, 14)).unwrap();
+            let mut paint = None;
+            terminal
+                .draw(|f| {
+                    paint = paint_overview_box(f, Rect::new(0, 0, 32, 14), 0, &content, offset)
+                })
+                .unwrap();
+            (terminal.backend().buffer().clone(), paint.unwrap())
+        };
+        let (at_start, metrics) = draw(0);
+        let (at_end, _) = draw(metrics.content_length.saturating_sub(metrics.viewport));
+        let separator_y = 3;
+        assert_eq!(metrics.viewport, 8);
+        for y in 2..=separator_y {
+            for x in 0..31 {
+                assert_eq!(at_start[(x, y)].symbol(), at_end[(x, y)].symbol());
+            }
+        }
+        let row = |buffer: &ratatui::buffer::Buffer, y| {
+            (0..32).map(|x| buffer[(x, y)].symbol()).collect::<String>()
+        };
+        assert_ne!(row(&at_start, 5), row(&at_end, 5));
+    }
+
+    #[test]
+    fn credits_scrollbar_thumb_tracks_table_offset() {
+        let credits = (0..12)
+            .map(|i| HeroCredit {
+                name: format!("Person {i}"),
+                role: "Actor".into(),
+            })
+            .collect::<Vec<_>>();
+        let content = HeroContent {
+            facts: facts(ArtworkShape::Landscape),
+            overview: Some("Overview".into()),
+            credits: Some(credits),
+            workspace: Some(Workspace {
+                selector: None,
+                list: &mut NoopList,
+                focused: false,
+            }),
+        };
+        let draw = |offset| {
+            let mut terminal = Terminal::new(TestBackend::new(32, 14)).unwrap();
+            terminal
+                .draw(|f| {
+                    paint_overview_box(f, Rect::new(0, 0, 32, 14), 0, &content, offset);
+                })
+                .unwrap();
+            (2..14)
+                .filter(|y| terminal.backend().buffer()[(31, *y)].symbol() != " ")
+                .collect::<Vec<_>>()
+        };
+        let at_start = draw(0);
+        let at_end = draw(12);
+        assert_ne!(at_start, at_end);
+        assert!(at_start.iter().copied().max() < at_end.iter().copied().max());
     }
 
     #[test]
