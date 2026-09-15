@@ -440,7 +440,7 @@ impl App {
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
-                self.flash(reason, ToastSeverity::Neutral);
+                self.flash(reason, ToastSeverity::Error);
             }
             PlayerEvent::PlaybackIntent(event) => {
                 use mbv_core::ctrl::PlaybackIntentOutcome;
