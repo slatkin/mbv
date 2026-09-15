@@ -273,9 +273,8 @@ impl App {
                 return;
             }
         }
-        if !direct_remote {
-            self.replace_playback_queue(vec![item.clone()], 0);
-        } else {
+        self.replace_playback_queue(vec![item.clone()], 0);
+        if direct_remote {
             self.flash(
                 format!("Requesting playback: {label}"),
                 ToastSeverity::Neutral,

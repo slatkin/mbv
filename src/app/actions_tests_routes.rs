@@ -233,6 +233,36 @@ fn play_item_skips_library_routing_when_attached_to_a_session() {
 }
 
 #[test]
+fn play_item_submits_selected_item_to_direct_remote_owner() {
+    let mut app = make_app_stub();
+    let stale_item = make_item("Stale", "Movie");
+    let (remote, remote_rx, command_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(vec![stale_item], 0);
+    let sess = crate::app::tests::make_session("remote-mbv", "mbv");
+    app.switch_to_direct_remote(
+        &sess,
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+
+    let mut selected = make_item("Selected", "Movie");
+    selected.id = "selected-id".into();
+    app.play_item(selected);
+
+    let mut replacement = None;
+    for command in command_rx.try_iter() {
+        if let mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } = command {
+            replacement = Some(slots);
+            break;
+        }
+    }
+    let slots = replacement.expect("play should submit a queue");
+    assert_eq!(slots.len(), 1);
+    assert_eq!(slots[0].item.id(), "selected-id");
+}
+
+#[test]
 fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel() {
     // Regression guard for the gap `connected_session_id.is_none()`
     // alone misses: a Sessions-panel "Direct Remote" ctrl-socket
