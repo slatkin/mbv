@@ -70,6 +70,7 @@ pub const TEXT_MUTED: Color = primitives::MUTED; // dim text, icons, unfocused s
 pub const TEXT_STRONG: Color = primitives::WHITE; // bold titles/headings
 pub const TEXT_EMPHASIS: Color = primitives::SOFT_WHITE; // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = primitives::YELLOW; // focused-row title accent
+pub const TEXT_HERO_TITLE: Color = primitives::YELLOW; // hero header title (the first metadata line)
 pub const TEXT_ON_ACCENT: Color = primitives::BASE; // near-black text painted on a colored surface
 pub const TEXT_ACCENT_MUTED: Color = primitives::BG_GREEN; // "loaded"/"playing"/confirmed value text; deliberately
                                                            // not the focused surface's `SURFACE_FOCUSED_BG` (task 4.2)

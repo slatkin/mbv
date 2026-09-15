@@ -605,7 +605,7 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
                 .map(|x| buf[(x, y)].symbol().to_string())
                 .collect();
             let Some(x) = text.find(title) else { continue };
-            if buf[(x as u16, y)].style().fg == Some(palette::TEXT_FOCUS_ACCENT) {
+            if buf[(x as u16, y)].style().fg == Some(palette::ACCENT) {
                 hits.push((x as u16, y));
             }
         }

@@ -69,12 +69,10 @@ pub(in crate::app) fn media_list_row<Target>(
                 // the throbber glyph is gone.
                 MediaSemanticState::Active { progress }
                 | MediaSemanticState::NowPlaying { progress } => (
-                    palette::TEXT_FOCUS_ACCENT,
+                    palette::ACCENT,
                     (*progress).map(|value| format!("{}%", value.percent())),
                 ),
-                MediaSemanticState::Starting => {
-                    (palette::TEXT_FOCUS_ACCENT, Some("starting".into()))
-                }
+                MediaSemanticState::Starting => (palette::ACCENT, Some("starting".into())),
                 MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
             };
             const LEFT_INSET: usize = 2;

@@ -264,7 +264,7 @@ pub(in crate::app) fn paint_hero_pane_content(
 }
 
 /// The one title/meta painter for all three arms: the title in
-/// [`palette::TEXT_STRONG`], then meta row *n* in `HERO_META_ROLES[n % 3]`,
+/// [`palette::TEXT_HERO_TITLE`], then meta row *n* in `HERO_META_ROLES[n % 3]`,
 /// wrapped to the text block's width (truncation and wrapping owned here,
 /// design D5). Returns the first unpainted row. The un-migrated legacy
 /// `Hero` painters style the same Emby meta rows by meaning instead
@@ -273,7 +273,7 @@ fn paint_title_and_meta(f: &mut Frame, area: Rect, facts: &HeroFacts) -> u16 {
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
-        style: ratatui::style::Style::default().fg(palette::TEXT_STRONG),
+        style: ratatui::style::Style::default().fg(palette::TEXT_HERO_TITLE),
     });
     for (index, row) in facts.meta_rows.iter().enumerate() {
         lines.push(WrappedHeroLine {
