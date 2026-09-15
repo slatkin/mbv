@@ -174,9 +174,9 @@ impl TvContent {
         request.map(Msg::Shell)
     }
 
-    /// Narrow flat-list keyboard handling (mirrors `BrowserComponent::
-    /// handle_tui_key` before the merge, task 8.1): movement persists the
-    /// resting `BrowseLevel` cursor via `BrowserCursorIndex` (pagination and
+    /// Narrow flat-list keyboard handling (mirrors the prior TV browse
+    /// key handling before the merge, task 8.1): movement persists the
+    /// resting `BrowseLevel` cursor via `EmbyLibraryCursorIndex` (pagination and
     /// position restore keep working exactly as before), while activation,
     /// effects, refresh/rescan, context menu, search and letter-pill cycling
     /// reuse the same requests Wide already emits.
@@ -189,29 +189,29 @@ impl TvContent {
         let request = match key.code {
             Key::Up | Key::Char('k') => {
                 let index = self.move_by_item_rows_narrow(-1);
-                Some(ShellRequest::BrowserCursorIndex { index })
+                Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
             Key::Down | Key::Char('j') => {
                 let index = self.move_by_item_rows_narrow(1);
-                Some(ShellRequest::BrowserCursorIndex { index })
+                Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
             Key::PageUp => {
                 let rows = -self.narrow_page_rows();
                 let index = self.move_by_item_rows_narrow(rows);
-                Some(ShellRequest::BrowserCursorIndex { index })
+                Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
             Key::PageDown => {
                 let rows = self.narrow_page_rows();
                 let index = self.move_by_item_rows_narrow(rows);
-                Some(ShellRequest::BrowserCursorIndex { index })
+                Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
             Key::Home => {
                 let index = self.jump_cursor_narrow(false);
-                Some(ShellRequest::BrowserCursorIndex { index })
+                Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
             Key::End => {
                 let index = self.jump_cursor_narrow(true);
-                Some(ShellRequest::BrowserCursorIndex { index })
+                Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
             Key::Enter => self
                 .selected_item()

@@ -167,7 +167,7 @@ impl TvContent {
         }
     }
 
-    /// Inline Search pointer handling (mirrors `BrowserContent::
+    /// Inline Search pointer handling (mirrors `EmbyLibraryContent::
     /// handle_search_pointer`): the panel's own recognizer already collapsed
     /// the raw event into a normalized `MediaListSurfaceInput`, so click /
     /// double-click / right-click / wheel against a painted result row are
@@ -268,7 +268,7 @@ impl TvContent {
         &mut self.inline_search
     }
 
-    /// Test-only cursor seed (mirrors `BrowserComponent::set_cursor_for_test`):
+    /// Test-only cursor seed for the embedded TV content owner:
     /// seeds the shared owner's stable target from a raw `context.list.items`
     /// index, for tests driving the merged component directly.
     #[cfg(test)]

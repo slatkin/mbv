@@ -15,13 +15,16 @@ pub mod id_types;
 pub use id_types::{EmbySessionId, ItemId, MediaSourceId};
 #[cfg(any(test, feature = "test-support"))]
 pub mod mock_http;
-pub mod playback_execution_sequence;
-pub mod playback_queue;
-pub mod playback_transition;
+pub mod playback;
+pub use playback::execution_sequence as playback_execution_sequence;
+pub use playback::queue as playback_queue;
+pub use playback::transition as playback_transition;
 pub mod player;
-pub mod player_owner_state;
+/// Compatibility re-export for callers that used the former flat module path.
+pub mod player_owner_state {
+    pub use crate::player::owner_state::*;
+}
 pub mod remote_player;
-pub(crate) mod remote_player_connect;
 pub mod service_runtime;
 pub(crate) mod stream;
 pub mod ws;

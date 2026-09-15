@@ -73,7 +73,7 @@ pub(in crate::app) struct TvContent {
     /// the double-click window and wheel throttle. Not a shared clock.
     mouse_gestures: MouseGestureState,
     /// The embedded Inline Search control (design.md D1). See
-    /// `BrowserContent::inline_search` for the migration-phase notes.
+    /// `EmbyLibraryContent::inline_search` for the migration-phase notes.
     inline_search: InlineSearch,
     /// The breakpoint the shell pushed for this frame (`App::
     /// wide_tv_library_area`): `true` paints the pane-based Wide workspace,
@@ -83,7 +83,7 @@ pub(in crate::app) struct TvContent {
     is_wide: bool,
 }
 /// Derives the Emby-specific semantic state for a Narrow series row (mirrors
-/// `browser::emby_semantic_state`/`browser_content::emby_semantic_state`; the
+/// `browser::emby_semantic_state`/`emby_library_content::emby_semantic_state`; the
 /// provider-neutral `media_list` layer deliberately stays free of `EmbyItem`,
 /// so each projection site carries its own copy).
 fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
@@ -233,7 +233,7 @@ impl TvContent {
                     // Wide's series rail never dimmed on watched/played state
                     // pre-merge (legacy rail parity), so it stays
                     // `Ordinary` here. Narrow was painted by
-                    // `BrowserComponent::project_rows` pre-merge, which did
+                    // the prior TV browse row projection, which did
                     // dim watched/in-progress rows via `emby_semantic_state`
                     // (legacy detail-list parity); this reproduces that.
                     semantic_state: if is_wide {
@@ -432,7 +432,7 @@ impl TvContent {
     /// (raw, shell-projected order) rather than the active presentation's
     /// displayed (natural-sorted, grouped) row order. Used for the Narrow
     /// shell effects that persist a resting `BrowseLevel` cursor
-    /// (`App::narrow_browse_extras`), mirroring `BrowserComponent::cursor`
+    /// (`App::narrow_browse_extras`), mirroring the prior TV browse cursor
     /// before the merge.
     pub(in crate::app) fn browse_cursor(&self) -> usize {
         self.carrier

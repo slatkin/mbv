@@ -373,15 +373,15 @@ the listed painted region, and retains only the stated semantic boundary:
 
 | Surface | Local owner and painted claim | Breakpoint evidence | Semantic boundary |
 | --- | --- | --- | --- |
-| Browser, including narrow TV | `BrowserComponent`; `WideMediaList` in Wide or `InlineMediaBrowser` in Normal/Narrow | Wide and Normal/Narrow component paths; narrow mounted-owner tick coverage | resolved `BrowserCursorIndex` for persistence only |
-| Wide TV | `TvWorkspaceComponent`; painted series rail claimed by its embedded list | Wide workspace tests; narrow ownership is Browser | none for wheel; no relay |
+| Emby library (plain kinds: Movies / Home videos / Generic) | `EmbyLibraryContent` over the Library panel's canonical list; `WideMediaList` in Wide or `InlineMediaBrowser` in Normal/Narrow | Wide and Normal/Narrow owner paths; panel tick coverage | resolved `EmbyLibraryCursorIndex` for persistence only |
+| Wide TV | `TvContent`; painted series rail claimed by its embedded list | Wide workspace tests; narrow ownership is TV's own content owner | none for wheel; no relay |
 | Home | `HomeComponent`; canonical list or inline-hero claim | Wide and Normal/Narrow | resolved Continue Watching cursor effect only |
 | Queue | `QueueComponent`; painted `WideMediaList` queue region | Wide and narrow | none for wheel |
 | Music | `MusicWorkspaceComponent`; Wide rail or Normal/Narrow inline list | Wide and Normal/Narrow | resolved album cursor request |
 | Feeds | `FeedsComponent`; active canonical list region | Wide and Normal/Narrow | none for wheel |
 | Audiobookshelf podcast | `AudiobookshelfPodcastComponent`; painted show-row geometry | Wide and Normal/Narrow | resolved show selection |
 | Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | resolved book/chapter selection or focus |
-| Inline Search | active host component; painted results `left_area`, first refusal | Browser, Music, and TV host paths | local result selection only |
+| Inline Search | active host component; painted results `left_area`, first refusal | Emby library, Music, and TV host paths | local result selection only |
 | Global Search sidebar | `SearchSidebarComponent`; painter-published result-row hit regions | fixed overlay geometry (breakpoint-invariant) | local result selection only |
 | Settings | `SettingsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
 | Help | `HelpComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |

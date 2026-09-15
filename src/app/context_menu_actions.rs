@@ -332,7 +332,7 @@ impl App {
     /// `toggle_watched`'s cursor-resolving wrapper has been deleted (task
     /// 4.3, R1): the live path is the item-taking
     /// `toggle_watched_item(lib_idx, item)` the shell routes
-    /// `BrowserToggleWatched` through. Folder/audio guards, mark played/
+    /// `EmbyLibraryToggleWatched` through. Folder/audio guards, mark played/
     /// unplayed API behavior, unplayed-only/feed-home-video removal, refresh,
     /// and unavailable-Service/error toasts are preserved exactly. The
     /// unplayed-only removal previously used `lvl.cursor` (the App cursor,

@@ -191,27 +191,28 @@ fn send_ep_info(mpv: &Mpv, item: &crate::api::EmbyItem) {
     let _ = mpv.set_property("user-data/mbv/ep-tag", val.as_str());
 }
 
-include!("player_types.rs");
-include!("player_sources.rs");
-include!("player_runtime.rs");
-include!("player_report_worker.rs");
-include!("player_reporting.rs");
-include!("player_run_state.rs");
-include!("player_run_types.rs");
-include!("player_run_queue.rs");
-include!("player_run_commands.rs");
-include!("player_run_events.rs");
-include!("player_run_run.rs");
-include!("player_runtime_controller.rs");
-include!("player_proxy.rs");
+pub mod owner_state;
+pub use owner_state::*;
+include!("types.rs");
+include!("sources.rs");
+include!("runtime.rs");
+include!("report_worker.rs");
+include!("reporting.rs");
+include!("run/mod.rs");
+// `run/` is included to keep the hot-loop files physically grouped while the
+// controller and submission concerns are wired as true submodules.
+mod controller;
+mod submit;
+pub use controller::*;
+include!("proxy.rs");
 
 #[cfg(test)]
 mod tests {
-    include!("player_tests_basic.rs");
-    include!("player_tests_session.rs");
-    include!("player_tests_session_feed.rs");
-    include!("player_tests_status.rs");
-    include!("player_tests_submit.rs");
-    include!("player_tests_active_file.rs");
-    include!("player_proxy_tests.rs");
+    include!("tests/basic.rs");
+    include!("tests/session.rs");
+    include!("tests/session_feed.rs");
+    include!("tests/status.rs");
+    include!("tests/submit.rs");
+    include!("tests/active_file.rs");
+    include!("tests/proxy.rs");
 }

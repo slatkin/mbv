@@ -4,7 +4,7 @@
 
 use super::components::library_panel::LibraryKey;
 use super::components::music_content::MusicContent;
-use super::components::{BrowserKey, BrowserKind, InlineSearchHost};
+use super::components::{InlineSearchHost, LibraryKind};
 use super::shell::{Model, MusicTrackFocusRequest};
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -18,12 +18,10 @@ impl Model {
         (library.library.collection_type == "music"
             && self.app.is_music_group_view(index)
             && self.app.is_viewing_album_folders(index))
-        .then(|| {
-            LibraryKey::Service(BrowserKey {
-                service: ServiceKind::Emby,
-                library_id: library.library.id.clone(),
-                kind: BrowserKind::Music,
-            })
+        .then(|| LibraryKey::Service {
+            service: ServiceKind::Emby,
+            library_id: library.library.id.clone(),
+            kind: LibraryKind::Music,
         })
     }
 

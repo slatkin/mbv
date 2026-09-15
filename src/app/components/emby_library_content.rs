@@ -1,12 +1,13 @@
 //! The Movies/HomeVideos/Generic Emby destinations' embedded content owner
-//! (task 6.1, design D2/D3). A plain type — never mounted, focused,
+//! (task 6.1, design D2/D3). This owner serves Generic, Movies, and HomeVideos;
+//! TV and Music have their own owners. A plain type — never mounted, focused,
 //! subscribed, or given a `ComponentId` — that keeps the shell-projected
 //! browse rows, the letter/feed-group pill state, the one shared canonical
 //! `MediaList` owner of the active level's rows, and the embedded Inline
 //! Search session. It produces the panel's [`LibraryPanelContent`] per frame
 //! and translates the panel's slot events and forwarded chords into the same
-//! typed `Msg`s the mounted `BrowserComponent` emitted for these three kinds
-//! (`shell_browser.rs::handle_browser_request` and `shell_messages.rs`'s
+//! typed `Msg`s the former BrowserComponent emitted for these three kinds
+//! (`shell_emby_library.rs::handle_emby_library_request` and `shell_messages.rs`'s
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
 //!
@@ -22,7 +23,6 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use mbv_core::api::EmbyItem;
 
-use super::component_id::BrowserKind;
 use super::inline_search::{InlineSearch, InlineSearchAction, InlineSearchHost};
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListControls, ListSlot, SelectorRow,
@@ -30,6 +30,7 @@ use super::library_panel::content::{
 use super::library_panel::hero::hero_content_emby;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
+use super::library_panel::LibraryKind;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
     MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Presentation, RowIntent,
@@ -39,7 +40,7 @@ use crate::app::render::{effective_sort_str, LetterFilter};
 
 /// Browse identity used to decide when a projected position should be applied.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub(in crate::app) struct BrowserIdentity {
+pub(in crate::app) struct EmbyLibraryIdentity {
     pub(in crate::app) depth: usize,
     pub(in crate::app) parent_id: String,
     pub(in crate::app) letter_filter: Option<usize>,
@@ -50,9 +51,9 @@ pub(in crate::app) struct BrowserIdentity {
 }
 
 /// Derives the Emby-specific semantic state for a browse row (mirrors
-/// `browser::emby_semantic_state`; the provider-neutral `media_list` layer
+/// the prior Emby semantic-state helper; the provider-neutral `media_list` layer
 /// deliberately stays free of `EmbyItem`, so both projection sites — this
-/// owner's and TV's still-mounted `BrowserComponent` — carry their own copy).
+/// owner and TV's `TvContent` — carry their own copy).
 fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
     if item.playback_position_ticks > 0 && !item.played {
         let progress = if item.runtime_ticks > 0 {
@@ -91,7 +92,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
     }
 }
 
-/// One shell content push (mirrors `browser::BrowserContent`, plus the
+/// One shell content push (mirrors the Emby library owner's content push, plus the
 /// letter/feed-group pill and home-video-count facts the old
 /// `NarrowBrowseExtras`/wide-Movies pill row carried separately; task 6.1
 /// unifies them into the Selector row and List controls row, design D8).
@@ -115,8 +116,8 @@ pub(in crate::app) struct BrowserOwnerPush {
 /// The embedded content owner for Movies, HomeVideos and Generic Emby
 /// libraries (design D2, task 6.1). Plain type; the mounted `LibraryPanel`
 /// borrows it for content and slot events.
-pub(in crate::app) struct BrowserContent {
-    kind: BrowserKind,
+pub(in crate::app) struct EmbyLibraryContent {
+    kind: LibraryKind,
     items: Vec<EmbyItem>,
     total_count: usize,
     library_total: Option<usize>,
@@ -131,7 +132,7 @@ pub(in crate::app) struct BrowserContent {
     /// drives its Wide/Inline presentation from its own breakpoint (design
     /// D3/D4) — this owner never chooses a presentation itself.
     carrier: MediaListCarrier<String>,
-    last_identity: Option<BrowserIdentity>,
+    last_identity: Option<EmbyLibraryIdentity>,
     /// The rows the last `feed_owner` projection produced: identical
     /// projections skip `carrier.set_content`, so an ordinary no-op sync
     /// never invalidates the presentation's painted frame (design D6 — a
@@ -149,8 +150,8 @@ pub(in crate::app) struct BrowserContent {
     inline_search: InlineSearch,
 }
 
-impl BrowserContent {
-    pub(in crate::app) fn new(kind: BrowserKind) -> Self {
+impl EmbyLibraryContent {
+    pub(in crate::app) fn new(kind: LibraryKind) -> Self {
         Self {
             kind,
             items: Vec::new(),
@@ -191,7 +192,7 @@ impl BrowserContent {
     }
 
     /// Explicit, identity-gated resting-position re-seed (mirrors
-    /// `BrowserComponent::apply_position`): the shell calls this only when
+    /// the former BrowserComponent's position application): the shell calls this only when
     /// `note_browse_identity` reports a real identity change (drill-in,
     /// go-back, letter-filter reset, sort change, feed/home-video group
     /// switch). Within one identity no position crosses the boundary.
@@ -208,8 +209,8 @@ impl BrowserContent {
 
     /// Records the browse identity of the current shell content push and
     /// reports whether it differs from the previous push (mirrors
-    /// `BrowserComponent::note_browse_identity`).
-    pub(in crate::app) fn note_browse_identity(&mut self, identity: BrowserIdentity) -> bool {
+    /// the former BrowserComponent's identity tracking).
+    pub(in crate::app) fn note_browse_identity(&mut self, identity: EmbyLibraryIdentity) -> bool {
         let changed = self.last_identity.as_ref() != Some(&identity);
         self.last_identity = Some(identity);
         if changed {
@@ -219,8 +220,7 @@ impl BrowserContent {
     }
 
     /// The authoritative selection of the shared owner, as an `items` index
-    /// (mirrors `BrowserComponent::cursor`; the owner is the only cursor
-    /// store).
+    /// (the owner is the only cursor store).
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier
             .selected_target()
@@ -239,7 +239,7 @@ impl BrowserContent {
     /// Project the mirrored items into provider-neutral rows: letter-grouped
     /// `Heading`/`Spacer`/`Item` rows for a large library (or an active
     /// letter pill), natural-sorted plain rows otherwise (mirrors
-    /// `BrowserComponent::project_rows`).
+    /// the former BrowserComponent's row projection).
     fn feed_owner(&mut self) {
         let grouped = self.true_total() >= 50 || self.letter_filter.is_some();
         let rows: Vec<MediaListRow<String>> = if grouped {
@@ -265,7 +265,7 @@ impl BrowserContent {
     /// selected item to actually be a `Movie`, not e.g. a BoxSet folder).
     fn hero_item(&self) -> Option<&EmbyItem> {
         let item = self.items.get(self.cursor())?;
-        (!item.is_folder && (self.kind != BrowserKind::Movies || item.item_type == "Movie"))
+        (!item.is_folder && (self.kind != LibraryKind::Movies || item.item_type == "Movie"))
             .then_some(item)
     }
 
@@ -273,7 +273,7 @@ impl BrowserContent {
         self.items.get(self.cursor()).cloned()
     }
 
-    /// Test-only cursor seed, mirroring `BrowserComponent::set_cursor_for_test`:
+    /// Test-only cursor seed, mirroring the embedded owner's test cursor seed:
     /// tests position the authoritative owner selection directly before
     /// exercising navigation.
     #[cfg(test)]
@@ -285,7 +285,7 @@ impl BrowserContent {
     }
 
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors
-    /// `BrowserComponent::inline_search_result_action`): reuses the ordinary
+    /// the former BrowserComponent's inline-search result action): reuses the ordinary
     /// result-row shell effects, resolved against the search cursor rather
     /// than the ordinary browse cursor.
     fn inline_search_result_action(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -294,9 +294,9 @@ impl BrowserContent {
         }
         let item = self.inline_search.selected_item()?;
         let request = match key.code {
-            Key::Char('p') => ShellRequest::BrowserPlay { item },
-            Key::Char('s') => ShellRequest::BrowserShuffle { item },
-            Key::Char('a') => ShellRequest::BrowserEnqueue { item },
+            Key::Char('p') => ShellRequest::EmbyLibraryPlay { item },
+            Key::Char('s') => ShellRequest::EmbyLibraryShuffle { item },
+            Key::Char('a') => ShellRequest::EmbyLibraryEnqueue { item },
             _ => return None,
         };
         self.inline_search.close();
@@ -348,7 +348,7 @@ impl BrowserContent {
     }
 
     /// This owner's local key interpretation, forwarded by the focused panel
-    /// (the mounted `BrowserComponent::handle_tui_key` contract, unchanged —
+    /// (the embedded owner's local key-handling contract, unchanged —
     /// the router owns every global chord and keeps precedence).
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.inline_search.is_active() {
@@ -381,7 +381,7 @@ impl BrowserContent {
             return None;
         }
         // Local keyboard navigation routes through the same typed
-        // `ShellRequest` the mounted `BrowserComponent` emitted
+        // `ShellRequest` the embedded owner emits
         // (`browser/keyboard.rs`): this owner mutates only its own selection,
         // then returns the resolved index in place of the raw key so the
         // shell drives persistence/pagination through the same arm as TV's
@@ -391,38 +391,38 @@ impl BrowserContent {
             Key::Up | Key::Char('k') => {
                 self.carrier
                     .delegate_operation(MediaListOperation::Move(-1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::Down | Key::Char('j') => {
                 self.carrier.delegate_operation(MediaListOperation::Move(1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::PageUp => {
                 self.carrier
                     .delegate_operation(MediaListOperation::Page(-1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::PageDown => {
                 self.carrier.delegate_operation(MediaListOperation::Page(1));
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::Home => {
                 self.carrier.delegate_operation(MediaListOperation::First);
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
             Key::End => {
                 self.carrier.delegate_operation(MediaListOperation::Last);
-                return Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                     index: self.cursor(),
                 }));
             }
@@ -430,11 +430,13 @@ impl BrowserContent {
         }
         let selected = self.selected_effect_item();
         let request = match key.code {
-            Key::Enter => selected.map(|item| ShellRequest::BrowserActivate { item }),
-            Key::Char('p') if ctrl => selected.map(|item| ShellRequest::BrowserPlay { item }),
-            Key::Char('a') if ctrl => selected.map(|item| ShellRequest::BrowserEnqueue { item }),
+            Key::Enter => selected.map(|item| ShellRequest::EmbyLibraryActivate { item }),
+            Key::Char('p') if ctrl => selected.map(|item| ShellRequest::EmbyLibraryPlay { item }),
+            Key::Char('a') if ctrl => {
+                selected.map(|item| ShellRequest::EmbyLibraryEnqueue { item })
+            }
             Key::Char('w') if ctrl => {
-                selected.map(|item| ShellRequest::BrowserToggleWatched { item })
+                selected.map(|item| ShellRequest::EmbyLibraryToggleWatched { item })
             }
             Key::Char('.') if key.modifiers.is_empty() => match self
                 .carrier
@@ -451,16 +453,18 @@ impl BrowserContent {
                 )),
                 _ => None,
             },
-            Key::Char('s') if ctrl => selected.map(|item| ShellRequest::BrowserShuffle { item }),
-            Key::Char('r') if ctrl => Some(ShellRequest::BrowserRescan),
-            Key::Char('r') => Some(ShellRequest::BrowserRefresh),
-            Key::Esc | Key::Backspace => Some(ShellRequest::BrowserBack),
+            Key::Char('s') if ctrl => {
+                selected.map(|item| ShellRequest::EmbyLibraryShuffle { item })
+            }
+            Key::Char('r') if ctrl => Some(ShellRequest::EmbyLibraryRescan),
+            Key::Char('r') => Some(ShellRequest::EmbyLibraryRefresh),
+            Key::Esc | Key::Backspace => Some(ShellRequest::EmbyLibraryBack),
             Key::Char(c @ ('[' | ']')) if !ctrl && !alt => {
                 let delta = if c == '[' { -1 } else { 1 };
                 Some(if self.group_pills {
-                    ShellRequest::BrowserCycleGroup { delta }
+                    ShellRequest::EmbyLibraryCycleGroup { delta }
                 } else {
-                    ShellRequest::BrowserCycleLetterPill { delta }
+                    ShellRequest::EmbyLibraryCycleLetterPill { delta }
                 })
             }
             _ => None,
@@ -469,7 +473,7 @@ impl BrowserContent {
     }
 }
 
-impl InlineSearchHost for BrowserContent {
+impl InlineSearchHost for EmbyLibraryContent {
     fn inline_search(&self) -> &InlineSearch {
         &self.inline_search
     }
@@ -479,7 +483,7 @@ impl InlineSearchHost for BrowserContent {
     }
 }
 
-impl LibraryContentOwner for BrowserContent {
+impl LibraryContentOwner for EmbyLibraryContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
     }
@@ -571,13 +575,15 @@ impl LibraryContentOwner for BrowserContent {
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
             LibrarySlotEvent::SelectorPicked(index) => {
-                Some(Msg::Shell(ShellRequest::BrowserPillClick { target: index }))
+                Some(Msg::Shell(ShellRequest::EmbyLibraryPillClick {
+                    target: index,
+                }))
             }
             LibrarySlotEvent::List(input) => {
                 if self.inline_search.is_active() {
                     return self.handle_search_pointer(input);
                 }
-                // Row-local claim gate (mirrors `BrowserComponent::claim_list_point`):
+                // Row-local claim gate (mirrors the owner's list-point claim):
                 // only a point that resolves to a painted selectable row claims the
                 // click — the inline hero block resolves to the retained selected
                 // target (the detail block replaces the selected row), empty list
@@ -597,13 +603,13 @@ impl LibraryContentOwner for BrowserContent {
                         // The resolved wheel echo drives the shell's
                         // `video_cursor`/resting-cursor write and pagination
                         // through the same typed arm as keyboard movement
-                        // (`shell_browser.rs::handle_browser_request`).
+                        // (`shell_emby_library.rs::handle_emby_library_request`).
                         self.carrier
                             .delegate_operation(MediaListOperation::Move(match input {
                                 MediaListSurfaceInput::Wheel { delta, .. } => delta,
                                 _ => 0,
                             }));
-                        Some(Msg::Shell(ShellRequest::BrowserCursorIndex {
+                        Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
                             index: self.cursor(),
                         }))
                     }
@@ -614,7 +620,7 @@ impl LibraryContentOwner for BrowserContent {
                         self.carrier
                             .delegate_operation(input.into_operation(Some(target.clone()))?);
                         let _ = ();
-                        Some(Msg::Shell(ShellRequest::BrowserRowClick {
+                        Some(Msg::Shell(ShellRequest::EmbyLibraryRowClick {
                             target: Some(target),
                         }))
                     }
@@ -622,7 +628,7 @@ impl LibraryContentOwner for BrowserContent {
                         let target = target?;
                         self.carrier
                             .delegate_operation(MediaListOperation::Activate(target.clone()));
-                        Some(Msg::Shell(ShellRequest::BrowserRowActivate {
+                        Some(Msg::Shell(ShellRequest::EmbyLibraryRowActivate {
                             target: Some(target),
                         }))
                     }

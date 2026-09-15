@@ -15,7 +15,7 @@
 //! - `wide_podcast_*`: wide Audiobookshelf podcast body snapshot/paint.
 
 use super::*;
-use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::shell::Model;
@@ -180,8 +180,7 @@ fn draw(model: &mut Model, term: &mut Terminal<TestBackend>) -> String {
 /// mounted `LibraryPanel` (task 6.1: the panel is the library surface's one
 /// event boundary; the owner is never a component).
 fn owner_cursor(model: &mut Model) -> usize {
-    let (_, key, _) = model
-        .active_migrated_browser_owner()
+    let (_, key, _) = model.active_emby_library_owner()
         .expect("the active library's owner has migrated");
     model
         .application
@@ -321,7 +320,7 @@ fn narrow_grouped_music_j_moves_painted_selection() {
 }
 
 /// Regression (task 3.4 template step d): narrow Emby TV paints each visible
-/// series/season row exactly once — the mounted `BrowserComponent` is the sole
+/// series/season row exactly once — the mounted `EmbyLibraryContent` owner is the sole
 /// painter now that the legacy `render_list` narrow branch early-returns for
 /// `tvshows` too.
 #[test]
@@ -628,7 +627,7 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     );
 
     // One wheel notch through the mounted panel: the control resolves its
-    // own new index and the typed `BrowserCursorIndex` echo persists it as
+    // own new index and the typed `EmbyLibraryCursorIndex` echo persists it as
     // the shell's resting `video_cursor` — the control is authoritative and
     // the shell follows, never the reverse.
     let wheel = model
@@ -645,7 +644,7 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     assert!(
         matches!(
             wheel,
-            Msg::Shell(ShellRequest::BrowserCursorIndex { index }) if index == total_rows - 2
+            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index }) if index == total_rows - 2
         ),
         "the wheel echo carries the control's resolved index: {wheel:?}"
     );
@@ -694,7 +693,7 @@ fn feed_home_video_group_metadata_free_selected_row_stays_ordinary() {
 }
 
 /// Regression 5: narrow Movies paints each browse row exactly once (currently
-/// double-painted by legacy `render_list` + `BrowserComponent::view`).
+/// double-painted by legacy `render_list` + `EmbyLibraryContent` view).
 #[test]
 fn narrow_movies_paints_each_browse_row_once() {
     let mut app = crate::app::render::make_movie_app();

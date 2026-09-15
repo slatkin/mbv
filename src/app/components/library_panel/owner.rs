@@ -12,23 +12,85 @@ use std::collections::HashMap;
 
 use tuirealm::event::KeyEvent;
 
-use crate::app::components::component_id::BrowserKey;
 use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::msg::{LeafKeyResult, Msg};
+use mbv_core::config::ServiceKind;
 
 use super::content::{HeroImageState, LibraryPanelContent};
 use super::hero::HeroContentData;
 
-/// The identity of one library destination, keying the panel's owner map
-/// (design D2: `Home | Feeds | Service(BrowserKey)`). Stable across
-/// re-renders so an inactive owner keeps its private state across tab
-/// changes; `Service` keys are the `BrowserKey` the shell already derives
-/// for every mounted destination.
+/// The behavioural category of one service library.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub enum LibraryKind {
+    Generic,
+    Movies,
+    TvShows,
+    Music,
+    HomeVideos,
+    AudiobookshelfPodcast,
+    AudiobookshelfBook,
+}
+
+impl LibraryKind {
+    pub fn from_collection_type(collection_type: &str) -> Self {
+        match collection_type {
+            "movies" => Self::Movies,
+            "tvshows" => Self::TvShows,
+            "music" => Self::Music,
+            "homevideos" => Self::HomeVideos,
+            _ => Self::Generic,
+        }
+    }
+}
+
+#[cfg(test)]
+mod library_kind_tests {
+    use super::LibraryKind;
+
+    #[test]
+    fn maps_known_collection_types() {
+        assert_eq!(
+            LibraryKind::from_collection_type("movies"),
+            LibraryKind::Movies
+        );
+        assert_eq!(
+            LibraryKind::from_collection_type("tvshows"),
+            LibraryKind::TvShows
+        );
+        assert_eq!(
+            LibraryKind::from_collection_type("music"),
+            LibraryKind::Music
+        );
+        assert_eq!(
+            LibraryKind::from_collection_type("homevideos"),
+            LibraryKind::HomeVideos
+        );
+    }
+
+    #[test]
+    fn unrecognized_collection_types_fall_back_to_generic() {
+        assert_eq!(
+            LibraryKind::from_collection_type("boxsets"),
+            LibraryKind::Generic
+        );
+        assert_eq!(
+            LibraryKind::from_collection_type("mixed"),
+            LibraryKind::Generic
+        );
+        assert_eq!(LibraryKind::from_collection_type(""), LibraryKind::Generic);
+    }
+}
+
+/// The identity of one library destination, keying the panel's owner map.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub(in crate::app) enum LibraryKey {
+pub enum LibraryKey {
     Home,
     Feeds,
-    Service(BrowserKey),
+    Service {
+        service: ServiceKind,
+        library_id: String,
+        kind: LibraryKind,
+    },
 }
 
 /// A semantic slot event the panel resolved from pointer input against its

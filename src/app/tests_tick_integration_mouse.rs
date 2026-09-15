@@ -641,7 +641,7 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::EmbyLibraryRowClick { .. }))),
         "the click on Queue must not also resolve through Library"
     );
     apply_outcome(&mut harness, outcome);
@@ -664,7 +664,7 @@ fn simultaneous_queue_and_library_clicks_resolve_to_the_painting_component() {
         outcome
             .raw_messages
             .iter()
-            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::BrowserRowClick { .. }))),
+            .all(|msg| !matches!(msg, Msg::Shell(ShellRequest::EmbyLibraryRowClick { .. }))),
         "a blank Library click must not claim without a resolved target"
     );
     assert!(

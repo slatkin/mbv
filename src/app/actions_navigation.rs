@@ -11,7 +11,7 @@ impl App {
     /// through the collection queue source and save the queue, non-folder
     /// items activate via `select_item`. Extracted verbatim from the legacy
     /// `handle_lib_key` Ctrl+P arm (the legacy arm resolves
-    /// `current_lib_item` and calls this; the `BrowserComponent` resolves its
+    /// `current_lib_item` and calls this; the `EmbyLibraryContent` resolves its
     /// own selected item and routes it through the same tail) so the two
     /// paths share one body — the effect acts on the supplied item directly,
     /// never on a re-read App cursor.

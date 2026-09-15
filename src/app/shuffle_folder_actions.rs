@@ -6,7 +6,7 @@ use rand::seq::SliceRandom;
 
 impl App {
     /// Shuffle from the generic Emby browser's component-resolved selected
-    /// item (task 5.3d, Emby browser shuffle decoupling). `BrowserComponent`
+    /// item (task 5.3d, Emby browser shuffle decoupling). `EmbyLibraryContent`
     /// resolved the item at its component-local cursor; when that item is a
     /// folder the folder itself is shuffled, otherwise the current browse
     /// level's parent is shuffled (falling back to the library id exactly as

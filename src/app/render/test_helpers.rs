@@ -4,7 +4,7 @@ use super::*;
 use crate::app::components::library_panel::LibraryKey;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::tv_content::TvContent;
-use crate::app::components::{BrowserKey, BrowserKind};
+use crate::app::components::LibraryKind;
 use crate::app::components::{ComponentId, QueueComponent};
 use crate::app::layout::AppLayout;
 use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
@@ -40,11 +40,11 @@ fn tv_owner_key(model: &crate::app::shell::Model) -> LibraryKey {
         .tab
         .emby_library_index()
         .expect("Emby library tab");
-    LibraryKey::Service(BrowserKey {
+    LibraryKey::Service {
         service: ServiceKind::Emby,
         library_id: model.app.libs[index].library.id.clone(),
-        kind: BrowserKind::TvShows,
-    })
+        kind: LibraryKind::TvShows,
+    }
 }
 
 /// Seed the TV owner's authoritative selection directly (mirrors

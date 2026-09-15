@@ -3,7 +3,7 @@ use ratatui::layout::Position;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
@@ -17,8 +17,7 @@ use crate::app::tests_tick_harness::TickHarness;
 /// these kinds).
 fn browser_owner(harness: &TickHarness) -> &BrowserOwner {
     let (_, key, _) = harness
-        .model()
-        .active_migrated_browser_owner()
+        .model().active_emby_library_owner()
         .expect("the active library's owner has migrated");
     harness
         .model()
@@ -61,7 +60,7 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
+        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
     assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
@@ -111,7 +110,7 @@ fn browser_narrow_tick_click_uses_retained_geometry() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(ShellRequest::BrowserRowClick { target: Some(target) })
+            Msg::Shell(ShellRequest::EmbyLibraryRowClick { target: Some(target) })
                 if target == "movie-focused"
         )),
         "the painted inline hero block resolves to the selected row: {:?}", outcome.raw_messages
@@ -140,7 +139,7 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     }));
     let outcome = harness.step();
     assert!(outcome.raw_messages.iter().any(|message| {
-        matches!(message, Msg::Shell(ShellRequest::BrowserCursorIndex { index: 1 }))
+        matches!(message, Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index: 1 }))
     }));
     assert_eq!(browser_owner(&harness).cursor(), 1);
 

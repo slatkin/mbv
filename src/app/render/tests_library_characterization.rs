@@ -8,7 +8,7 @@ use crate::app::components::ComponentId;
 use crate::app::tests::make_item;
 use crate::app::TabSelection;
 
-/// The mounted `LibraryPanel` (the migrated `BrowserContent` owner's host
+/// The mounted `LibraryPanel` (the migrated `EmbyLibraryContent` owner's host
 /// since task 6.1, mirroring the Home precedent).
 fn panel(model: &crate::app::shell::Model) -> &LibraryPanel {
     model
@@ -24,7 +24,7 @@ fn panel(model: &crate::app::shell::Model) -> &LibraryPanel {
 fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_states() {
     // Note: width 120 triggers the Wide skeleton, and narrow width the
     // Narrow skeleton, both painted by the mounted `LibraryPanel`'s embedded
-    // `BrowserContent` owner (task 6.1). Route through the real
+    // `EmbyLibraryContent` owner (task 6.1). Route through the real
     // `Model::draw_frame` path.
     let states = [(60, 20, 0), (60, 20, 1)];
     for (width, height, cursor) in states {
@@ -41,7 +41,7 @@ fn library_buffer_characterization_covers_wide_unfocused_narrow_and_selected_sta
 
 // movies_pill_row_and_targets_are_characterized_end_to_end deleted. It
 // tested the legacy wide Movies layout, which is now handled by the
-// embedded `BrowserContent` owner (task 6.1). Component rendering is tested
+// embedded `EmbyLibraryContent` owner (task 6.1). Component rendering is tested
 // separately.
 
 fn tv_letter_grouped_app(scroll: usize) -> App {

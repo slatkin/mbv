@@ -297,7 +297,7 @@ impl Model {
                 // mirror deletion).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_browser_owner_content();
+                self.push_active_emby_library_owner_content();
                 // Player events can reconcile ABS podcast progress; re-project (5.3d.11 U6).
                 self.push_audiobookshelf_podcast_content();
                 // Player events can reconcile ABS book progress; re-project (5.3d).
@@ -388,7 +388,7 @@ impl Model {
                 self.push_home_content();
                 self.push_audiobookshelf_podcast_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_browser_owner_content();
+                self.push_active_emby_library_owner_content();
                 // ABS book async completions (BooksFetched / BookDetailFetched)
                 // and saved-position restore arrive via lib events; re-project (5.3d).
                 self.push_audiobookshelf_book_content();
@@ -428,7 +428,7 @@ impl Model {
                 had_events = true;
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_browser_owner_content();
+                self.push_active_emby_library_owner_content();
             }
 
             had_events |= self.drain_feed_add_results();
@@ -462,7 +462,7 @@ impl Model {
                 // `UserDataChanged` refetches Home inside the handler; re-project (5.3d).
                 self.push_home_content();
                 // Emby browser content may have changed (5.3d.15/M2).
-                self.push_active_browser_owner_content();
+                self.push_active_emby_library_owner_content();
                 self.push_music_workspace_content();
             }
 

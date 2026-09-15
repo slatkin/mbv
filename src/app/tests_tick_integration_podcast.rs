@@ -1,6 +1,6 @@
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
 use crate::app::components::podcast_content::PodcastContent;
-use crate::app::components::{BrowserKey, BrowserKind, ComponentId, Msg, ShellRequest, TerminalObserverEvent};
+use crate::app::components::{LibraryKind, ComponentId, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::tests_podcast::audiobookshelf_app;
 use crate::app::tests_tick_harness::TickHarness;
 use mbv_core::config::ServiceKind;
@@ -9,7 +9,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 fn podcast(harness: &mut TickHarness) -> &mut PodcastContent {
-    let key = LibraryKey::Service(BrowserKey { service: ServiceKind::Audiobookshelf, library_id: "abs-podcasts".into(), kind: BrowserKind::AudiobookshelfPodcast });
+    let key = LibraryKey::Service { service: ServiceKind::Audiobookshelf, library_id: "abs-podcasts".into(), kind: LibraryKind::AudiobookshelfPodcast };
     harness.model_mut().application.get_component_mut(&ComponentId::Library)
         .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>()).and_then(|p| p.owner_mut(&key))
         .and_then(|o| o.as_any_mut().downcast_mut::<PodcastContent>()).expect("podcast owner")

@@ -284,7 +284,7 @@ fn narrow_and_wide_tv_library_both_route_to_the_library_panel() {
 /// configured home-video feed-view library — is a migrated kind whose
 /// surface routes through the mounted `LibraryPanel` at every width. Both
 /// take TuiRealm focus on `ComponentId::Library`, narrow and wide, with the
-/// embedded `BrowserContent` owner installed.
+/// embedded `EmbyLibraryContent` owner installed.
 #[test]
 fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
     let build = |wide: bool| {
@@ -338,7 +338,7 @@ fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
     for wide in [false, true] {
         let model = build(wide);
         assert!(
-            model.active_migrated_browser_owner().is_some(),
+            model.active_emby_library_owner().is_some(),
             "wide={wide}: the feed-group library is a migrated kind"
         );
         assert_eq!(
@@ -632,7 +632,7 @@ fn mounted_but_inactive_library_owner_paints_nothing() {
     model.app.panel_mode = PanelMode::Both;
     model.sync_mounted_surfaces();
     let key = model
-        .active_migrated_browser_owner()
+        .active_emby_library_owner()
         .map(|(_, key, _)| key)
         .expect("the Movies owner has migrated");
 

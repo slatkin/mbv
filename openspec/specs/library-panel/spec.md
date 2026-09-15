@@ -46,9 +46,9 @@ change a slot, and SHALL NOT remain as a destination-only difference.
 - **WHEN** an Audiobookshelf destination renders a slot differently from the Emby destinations
 - **THEN** the Audiobookshelf destination is non-conforming and renders the Emby presentation
 
-### Requirement: The Browser pane has one Selector row and one optional List controls row
+### Requirement: The list pane has one Selector row and one optional List controls row
 
-The Browser pane (the Wide panel's left pane, and the whole Narrow panel) SHALL present, top to bottom:
+The list pane (the Wide panel's left pane, and the whole Narrow panel) SHALL present, top to bottom:
 at most one Selector row (a single pill bar followed by the panel's spacer row), at most one List
 controls row, and the list box. The Selector row carries destination browse selectors, including the
 Feeds All / Played / Unplayed watched filter followed by its feed-group pills. The List controls row

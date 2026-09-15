@@ -269,11 +269,11 @@ fn music_library_app_with_three_albums() -> crate::app::App {
 }
 
 fn music_key() -> LibraryKey {
-    LibraryKey::Service(BrowserKey {
+    LibraryKey::Service {
         service: ServiceKind::Emby,
         library_id: "lib-music".into(),
-        kind: BrowserKind::Music,
-    })
+        kind: LibraryKind::Music,
+    }
 }
 
 /// keep-destination-components-mounted / task 9.4: the Music owner stays

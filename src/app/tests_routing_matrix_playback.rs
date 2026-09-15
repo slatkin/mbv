@@ -23,7 +23,7 @@ fn playback_gating_space_first_press_falls_through() {
 }
 #[test]
 fn playback_gating_esc_first_press_falls_through() {
-    let leaf = Some(Msg::Shell(ShellRequest::BrowserBack));
+    let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryBack));
     let out = fold_tick(
         leaf,
         key(KeyCode::Esc),
@@ -31,7 +31,7 @@ fn playback_gating_esc_first_press_falls_through() {
         active_snapshot(),
     );
     assert_eq!(out.len(), 1);
-    assert!(matches!(&out[0], Msg::Shell(ShellRequest::BrowserBack)));
+    assert!(matches!(&out[0], Msg::Shell(ShellRequest::EmbyLibraryBack)));
 }
 #[test]
 fn playback_gating_space_second_press_claims_toggle() {

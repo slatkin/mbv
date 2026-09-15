@@ -17,7 +17,7 @@
 //! token. Actual token injection is wired per-surface as components appear
 //! (tasks 3.x/4.x); during CP1 no receiver emits a token yet.
 
-use super::component_id::BrowserKey;
+use super::library_panel::LibraryKey;
 use std::time::Instant;
 
 /// TuiRealm user-event type (design D5). `Application` requires `UserEvent:
@@ -26,7 +26,7 @@ use std::time::Instant;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum UserEvent {
     Startup(StartupTick),
-    LibraryReady(BrowserKey, Generation),
+    LibraryReady(LibraryKey, Generation),
     SearchReady(SearchGen),
     Session(SessionGen),
     Cast(CastGen),

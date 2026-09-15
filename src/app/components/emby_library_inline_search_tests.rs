@@ -1,8 +1,10 @@
-use crate::app::components::browser_content::{BrowserContent as BrowserOwner, BrowserOwnerPush};
-use crate::app::components::component_id::BrowserKind;
+use crate::app::components::emby_library_content::{
+    BrowserOwnerPush, EmbyLibraryContent as BrowserOwner,
+};
 use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
 use crate::app::components::library_panel::content::ListSlot;
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
+use crate::app::components::library_panel::LibraryKind;
 use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::tests::{make_item, make_items};
@@ -10,8 +12,8 @@ use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers};
 
 // The wide-Movies right-rail Inline Search painting this file used to cover
-// through `BrowserComponent` moved with Movies/HomeVideos/Generic to the
-// embedded `BrowserContent` owner (task 6.1): the panel's Wide/Narrow
+// through the former standalone browser moved with Movies/HomeVideos/Generic to the
+// embedded `EmbyLibraryContent` owner (task 6.1): the panel's Wide/Narrow
 // skeletons already prove `ListSlot::Search` painting generically
 // (`library_panel::wide`/`narrow` tests), so the owner-level tests below
 // prove only this owner's translation of the slot/key events into `Msg`s.
@@ -37,7 +39,7 @@ fn owner_push(items: Vec<mbv_core::api::EmbyItem>) -> BrowserOwnerPush {
 /// media list; the shell-side `OpenInlineSearch` load request is unchanged.
 #[test]
 fn browser_owner_slash_opens_inline_search_as_a_list_slot() {
-    let mut owner = BrowserOwner::new(BrowserKind::Movies);
+    let mut owner = BrowserOwner::new(LibraryKind::Movies);
     owner.set_content(owner_push(make_items(3)));
     assert!(matches!(owner.content().list, ListSlot::Media(_)));
 
@@ -50,12 +52,12 @@ fn browser_owner_slash_opens_inline_search_as_a_list_slot() {
 }
 
 /// While search is open, a character that is otherwise a list shortcut (`r`
-/// -> `BrowserRefresh`) is appended to the query instead of running the
+/// -> `EmbyLibraryRefresh`) is appended to the query instead of running the
 /// shortcut, and the owner returns immediately without an ordinary `Msg`
 /// (design.md D4).
 #[test]
 fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
-    let mut owner = BrowserOwner::new(BrowserKind::Generic);
+    let mut owner = BrowserOwner::new(LibraryKind::Generic);
     owner.set_content(owner_push(make_items(3)));
     owner.on_key(&TuiKeyEvent {
         code: Key::Char('/'),
@@ -77,13 +79,13 @@ fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
 /// Pointer input against a painted search result row (design D3): the
 /// owner's `handle_search_pointer` translation resolves click/double-click/
 /// right-click/wheel through the embedded control's own retained geometry,
-/// exactly as the mounted `BrowserComponent` did for TV/Movies before this
+/// exactly as the prior TV/Movies browse owner did before this
 /// task, minus the raw-event "press in the bar, release on a row"
 /// cross-region gesture the panel's normalized `MediaListSurfaceInput` cannot carry
 /// (documented deviation, task 6.1 report).
 #[test]
 fn browser_owner_search_pointer_resolves_against_painted_rows() {
-    let mut owner = BrowserOwner::new(BrowserKind::Movies);
+    let mut owner = BrowserOwner::new(LibraryKind::Movies);
     owner.set_content(owner_push(vec![make_item("Focused Movie", "Movie")]));
     owner.on_key(&TuiKeyEvent {
         code: Key::Char('/'),

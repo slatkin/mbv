@@ -321,48 +321,26 @@ pub enum ShellRequest {
     /// resolved to an item index by the embedded control's `resolve_point`
     /// (design.md D4/D6). The shell applies focus-follows-click and sets the
     /// resting cursor.
-    BrowserRowClick {
+    EmbyLibraryRowClick {
         target: Option<String>,
     },
     /// A row the user double-clicked; `target` is the resolved item index and
     /// the shell activates it (design.md D3/D4).
-    BrowserRowActivate {
+    EmbyLibraryRowActivate {
         target: Option<String>,
     },
 
     /// A selector pill (letter filter / feed-folder / music group) the user
     /// clicked; `target` is the pill index the component resolved from its
     /// `HitRegions` (design.md D4/D6).
-    BrowserPillClick {
+    EmbyLibraryPillClick {
         target: usize,
     },
-    /// Ctrl+P/A/W/S/R and bare `r` requests from an Emby Music or TV
-    /// workspace. These mirror the corresponding `Browser*` requests while
-    /// reserving the `EmbyLibrary*` prefix because `LibraryRoutes*` already
-    /// occupies the `Library*` namespace.
-    ///
-    /// Equivalent to [`BrowserPlay`].
-    EmbyLibraryPlay {
-        item: EmbyItem,
-    },
-    /// Equivalent to [`BrowserEnqueue`] for an Emby Music or TV workspace.
-    EmbyLibraryEnqueue {
-        item: EmbyItem,
-    },
-    /// Equivalent to [`BrowserToggleWatched`] for an Emby Music or TV
-    /// workspace.
-    EmbyLibraryToggleWatched {
-        item: EmbyItem,
-    },
-    /// Equivalent to [`BrowserShuffle`] for an Emby Music or TV workspace.
-    EmbyLibraryShuffle {
-        item: EmbyItem,
-    },
-    /// Equivalent to [`BrowserRefresh`] for an Emby Music or TV workspace.
-    EmbyLibraryRefresh,
-    /// Equivalent to [`BrowserRescan`] for an Emby Music or TV workspace.
-    EmbyLibraryRescan,
-    /// Enter on the mounted generic/Movies/home-video `BrowserComponent`
+    /// Ctrl+P/A/W/S/R and bare `r` requests from an Emby library workspace or
+    /// the generic/Movies/home-video library owner. These requests carry the
+    /// component-resolved target while the shell owns the corresponding App
+    /// effect.
+    /// Enter on the embedded generic/Movies/home-video `EmbyLibraryContent`
     /// (task 5.3d, Emby browser effect decoupling): the component resolved
     /// its own selected `EmbyItem` from its component-local cursor/content,
     /// and the shell runs `App::select_item` on that supplied item directly
@@ -370,29 +348,29 @@ pub enum ShellRequest {
     /// by copying the component cursor into a `BrowseLevel.cursor` and
     /// re-reading it. The shell derives the active library index from its own
     /// tab state (the browser is mounted only for that tab).
-    BrowserActivate {
+    EmbyLibraryActivate {
         item: EmbyItem,
     },
-    /// Ctrl+P on the mounted generic/Movies/home-video `BrowserComponent`
+    /// Ctrl+P on the mounted generic/Movies/home-video library component
     /// (task 5.3d, Emby browser effect decoupling): the component resolves
     /// its selected item and the shell applies the preserved Ctrl+P tail to
     /// it — folder items play the folder through the collection queue source
     /// (`play_folder` + `save_queue_state`), non-folder items activate via
     /// `select_item` — acting on the supplied item, never an App cursor
     /// re-read.
-    BrowserPlay {
+    EmbyLibraryPlay {
         item: EmbyItem,
     },
-    /// Ctrl+A on the mounted generic/Movies/home-video `BrowserComponent`
+    /// Ctrl+A on the mounted generic/Movies/home-video library component
     /// (task 5.3d, Emby browser effect decoupling): the component resolves
     /// its selected item and the shell enqueues that supplied item through
     /// the existing item-targeted seam (`App::enqueue_lib_item`), preserving
     /// the folder/non-playable guards, route-conflict, local/remote queue,
     /// and reconciliation behavior.
-    BrowserEnqueue {
+    EmbyLibraryEnqueue {
         item: EmbyItem,
     },
-    /// Ctrl+W on the mounted generic/Movies/home-video `BrowserComponent`
+    /// Ctrl+W on the mounted generic/Movies/home-video library component
     /// (task 5.3d, Emby browser effect decoupling): the component resolves
     /// its selected item and the shell toggles that supplied item's watched
     /// state through `App::toggle_watched_item` — folder/audio guards, the
@@ -400,10 +378,10 @@ pub enum ShellRequest {
     /// refresh, and unavailable-Service/error toasts all preserved, acting
     /// on the supplied item identity (not the legacy `BrowseLevel.cursor`
     /// re-read).
-    BrowserToggleWatched {
+    EmbyLibraryToggleWatched {
         item: EmbyItem,
     },
-    /// '.' on the mounted generic/Movies/home-video `BrowserComponent`
+    /// '.' on the mounted generic/Movies/home-video library component
     /// (task 5.3d, Emby browser context-menu decoupling): the component
     /// resolves its own selected `EmbyItem` from its component-local
     /// cursor/content, and the shell opens the context menu for that supplied
@@ -412,36 +390,36 @@ pub enum ShellRequest {
     /// and re-reading it. The library/podcast menu content (mark-watched vs
     /// mark-played labels, bulk actions) derives from the shell's own tab
     /// state (the browser is mounted only for that tab).
-    /// Ctrl+S on the mounted generic/Movies/home-video `BrowserComponent`
+    /// Ctrl+S on the embedded generic/Movies/home-video `EmbyLibraryContent`
     /// (task 5.3d, Emby browser shuffle decoupling): the component resolves
     /// its own selected `EmbyItem` from its component-local cursor/content,
     /// and the shell shuffles that supplied item — the folder itself when it
     /// is a folder, otherwise the current browse level's parent (falling back
     /// to the library id) — via the preserved `shuffle_play` tail, never by
     /// re-reading `BrowseLevel.cursor`.
-    BrowserShuffle {
+    EmbyLibraryShuffle {
         item: EmbyItem,
     },
     /// Bare or Alt+`r` on the mounted generic/Movies/home-video
-    /// `BrowserComponent` (task 5.3d, Emby browser refresh): the component
+    /// library component (task 5.3d, Emby browser refresh): the component
     /// reports that the focused browser wants a metadata refresh, and the
     /// shell derives the active Emby library index from its own tab state and
     /// runs `App::refresh_lib` on it — preserving the bare-`r` *and* legacy
     /// Alt+`r` behavior (both reach the legacy arm without a CONTROL
     /// modifier). No item is carried: the effect targets the whole active
     /// library, not a selected row.
-    BrowserRefresh,
-    /// Ctrl+`r` on the mounted generic/Movies/home-video `BrowserComponent`
+    EmbyLibraryRefresh,
+    /// Ctrl+`r` on the mounted generic/Movies/home-video library component
     /// (task 5.3d, Emby browser rescan): the component reports that the
     /// focused browser wants a metadata rescan, and the shell raises the same
     /// Rescan Library confirmation the legacy `handle_lib_key` arm did
     /// (identical title/message/hint and `ConfirmAction::RescanLibrary(lib_idx)`
     /// derived from the shell's own tab state). No item is carried: the rescan
     /// confirmation covers the whole active library.
-    BrowserRescan,
+    EmbyLibraryRescan,
     /// Esc or Backspace on the focused generic/Movies/home-video
-    /// `BrowserComponent` (task 5.3d, Emby browser back): back-navigation
-    /// moves off raw terminal forwarding. The component emits `BrowserBack` for
+    /// library component (task 5.3d, Emby browser back): back-navigation
+    /// moves off raw terminal forwarding. The component emits `EmbyLibraryBack` for
     /// `KeyCode::Esc`/`KeyCode::Backspace` with any modifier (matching the
     /// legacy `handle_lib_key` arm, which guarded neither), and the shell
     /// derives the active Emby library index from its own tab state and runs
@@ -449,8 +427,8 @@ pub enum ShellRequest {
     /// parent-cursor restoration, season-level skip, persistence, and
     /// stale-index behavior. No item is carried: back targets the browse
     /// history, not a selected row.
-    BrowserBack,
-    /// `[`/`]` on the focused generic/Movies/home-video `BrowserComponent`
+    EmbyLibraryBack,
+    /// `[`/`]` on the focused generic/Movies/home-video library component
     /// (task 5.3d, Emby browser selector cycling): the component reports the
     /// letter-range-pill cycle delta (-1 for `[`, +1 for `]`) with neither
     /// CONTROL nor ALT — exactly the legacy `handle_key_emby_library` guard —
@@ -461,19 +439,19 @@ pub enum ShellRequest {
     /// keeps its `should_show_letter_pills` no-op guard and wrap/select
     /// behavior. No item is carried: the pill row is a whole-library control,
     /// not a selected row.
-    BrowserCycleLetterPill {
+    EmbyLibraryCycleLetterPill {
         delta: i64,
     },
-    /// `[`/`]` on a focused `BrowserComponent` whose projected content is a
+    /// `[`/`]` on a focused library component whose projected content is a
     /// feed/home-video group picker (`is_feed_home_video_group_view`;
     /// migrate-narrow-browse task 2.2). The component reports the cycle delta
     /// (-1 for `[`, +1 for `]`) with neither CONTROL nor ALT — the same guard
-    /// as `BrowserCycleLetterPill`, which the two are mutually exclusive with
+    /// as `EmbyLibraryCycleLetterPill`, which the two are mutually exclusive with
     /// (the projected `group_pills` flag selects one or the other). The shell
     /// derives the active Emby library index from its own tab state and runs
     /// `App::switch_feed_folder_group`. No item is carried: the pill row is a
     /// whole-surface control.
-    BrowserCycleGroup {
+    EmbyLibraryCycleGroup {
         delta: i64,
     },
     /// Open a provider URL resolved from the painted Library hero link label.
@@ -482,12 +460,12 @@ pub enum ShellRequest {
     /// stable library key and owner-resolved cursor/scroll cross the panel
     /// boundary; the shell persists the resting scroll without re-reading it.
     LibraryScroll {
-        key: crate::app::components::component_id::BrowserKey,
+        key: crate::app::components::library_panel::LibraryKey,
         index: usize,
         scroll: usize,
     },
     /// Every local browser cursor key (arrows/hjkl, Page keys, Home/End) on
-    /// the focused generic/Movies/home-video `BrowserComponent` (task 5.3d,
+    /// the focused generic/Movies/home-video library component (task 5.3d,
     /// Emby browser local navigation): the component resolves the target item
     /// index against its own painted geometry and reports it here. The shell
     /// applies the resolved index through the App nav level only to retain
@@ -495,7 +473,7 @@ pub enum ShellRequest {
     /// `mark_library_navigation` / `maybe_fetch_next_page` / `last_nav_at`);
     /// it never recomputes the movement from a delta. The legacy season-grid
     /// branch is unreachable here: the Browser mount gate excludes TV.
-    BrowserCursorIndex {
+    EmbyLibraryCursorIndex {
         index: usize,
     },
 }

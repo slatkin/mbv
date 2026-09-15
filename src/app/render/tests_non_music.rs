@@ -1,6 +1,6 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::ComponentId;
 use crate::app::tests::{make_app_stub, make_item};
@@ -8,11 +8,11 @@ use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 
 /// Seed the migrated Movies/HomeVideos/Generic owner's authoritative
 /// selection directly (mirrors `set_browser_cursor_for_test`'s old
-/// `BrowserComponent` contract, now against the embedded owner).
+/// the former BrowserComponent's contract, now against the embedded owner).
 fn set_home_video_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
     model.sync_mounted_surfaces();
     let (_, key, _) = model
-        .active_migrated_browser_owner()
+        .active_emby_library_owner()
         .expect("a migrated browser owner is active");
     model
         .application
@@ -39,7 +39,7 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
 
     assert!(
         out.contains("Birthday Clip"),
-        "expected the mounted BrowserComponent to paint the home-video list:\n{out}"
+        "expected the embedded EmbyLibraryContent owner to paint the home-video list:\n{out}"
     );
     assert!(
         model.app.album_tracks_cache.is_empty(),
@@ -77,13 +77,13 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
 }
 
 // wide_home_video_uses_a_left_detail_and_right_rail deleted (task 6.1):
-// HomeVideos' Wide hero geometry moved to the embedded `BrowserContent`
+// HomeVideos' Wide hero geometry moved to the embedded `EmbyLibraryContent`
 // owner painted through the mounted `LibraryPanel`; the equivalent coverage
 // now lives in `tests_library_characterization.rs` against the panel's
 // `test_wide_geometry()`.
 
 /// `remove-migrated-surface-underpaint` 3.2 (D4): at the wide Wide hero
-/// breakpoint the mounted `BrowserComponent` owns the Movies / home-video
+/// breakpoint the embedded `EmbyLibraryContent` owner owns the Movies / home-video
 /// picture. Post task 3.8 the legacy `render_library` `EmbyLibrary` arm only
 /// reserves the destination `left_area` and paints no row, banner, or hero —
 /// the `movies_wide_*` split geometry hand-off is now published by the
@@ -207,8 +207,8 @@ fn narrow_series_inline_hero_shows_only_hero_content_no_season_or_episode_list()
     );
 
     // Below `TWO_COLUMN_THRESHOLD` so the narrow single-column presentation
-    // renders instead of `render_wide_tv`. Painted by the mounted
-    // `BrowserComponent` (task 3.8).
+    // renders instead of `render_wide_tv`. Painted by the embedded
+    // content owner (task 3.8).
     let mut model = mounted_model_at(app, 70, 30);
     let output = draw_mounted_frame(&mut model, 70, 30);
 

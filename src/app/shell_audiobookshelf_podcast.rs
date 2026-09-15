@@ -1,7 +1,7 @@
 use super::components::library_panel::LibraryKey;
 use super::components::msg::PodcastEpisodeIntent;
 use super::components::podcast_content::PodcastContent;
-use super::components::{BrowserKey, BrowserKind};
+use super::components::LibraryKind;
 use super::shell::Model;
 use super::types_audiobookshelf_browse::AudiobookshelfBrowseKind;
 use super::TabSelection;
@@ -18,11 +18,11 @@ impl Model {
         ))
         .then(|| {
             let library = self.app.audiobookshelf_libraries.get(index)?;
-            Some(LibraryKey::Service(BrowserKey {
+            Some(LibraryKey::Service {
                 service: ServiceKind::Audiobookshelf,
                 library_id: library.id.clone(),
-                kind: BrowserKind::AudiobookshelfPodcast,
-            }))
+                kind: LibraryKind::AudiobookshelfPodcast,
+            })
         })?
     }
 
