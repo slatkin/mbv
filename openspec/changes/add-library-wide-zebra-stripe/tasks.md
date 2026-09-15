@@ -113,11 +113,13 @@
   Verify: all pass.
   (Accepted: orchestrator ran the full matrix at `1a2ec7ad` — fmt clean, check clean, clippy clean,
   nextest 1506/1506, release 1506/1506.)
-- [ ] 6.2 Run the app and confirm: the Browser rail stripes lighter than its panel and the Workspace
+- [x] 6.2 Run the app and confirm: the Browser rail stripes lighter than its panel and the Workspace
   list stripes darker than its box, in both focus states; the selected row in each is bold focus-accent
   and keeps its stripe; Ctrl+Click/Visual rows match the selected row; the Queue is unchanged; Narrow
   is visually unchanged; the selected title reading like a `Heading` is acceptable at real widths.
   Verify: manual check recorded in this change before archiving.
+  (Accepted: user ran the app 2026-09-15 and confirmed all visual states good, incl. §7
+  now-playing-only `▶`.)
 
 ## 7. Play icon only on the now-playing row (folded in per user decision 2026-09-15)
 
