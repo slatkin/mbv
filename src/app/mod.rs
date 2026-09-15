@@ -190,6 +190,14 @@ type DirectConnectFn = fn(
 #[cfg(test)]
 static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> = Mutex::new(None);
 
+/// Test seam for local-player preparation. Production construction is still
+/// the ordinary `Player::new` path; tests can inject a construction failure
+/// without creating an mpv handle.
+#[cfg(test)]
+type LocalPlayerPrepareFn = fn() -> Result<(), String>;
+#[cfg(test)]
+static LOCAL_PLAYER_PREPARE_OVERRIDE: Mutex<Option<LocalPlayerPrepareFn>> = Mutex::new(None);
+
 // Separate from DIRECT_CONNECT_OVERRIDE above (Sessions-panel "Direct
 // Remote" upgrade, keyed off a discovered SessionInfo): this is issue
 // #222's lazy daemon-route connect primitive, targeting a statically

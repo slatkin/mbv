@@ -91,11 +91,23 @@ impl App {
             source,
             autostart: true,
         });
-        // Section 5's confirmation modal will replace this intermediate feedback.
-        self.flash(
-            format!("Playback deferred: {label} (owner cannot play this item)"),
-            ToastSeverity::Neutral,
-        );
+        let owner = self
+            .connected_session_state
+            .as_ref()
+            .map(|session| session.device_name.clone())
+            .or_else(|| self.direct_remote_label.clone())
+            .or_else(|| {
+                self.player_endpoint
+                    .as_ref()
+                    .map(|endpoint| format!("{endpoint:?}"))
+            })
+            .unwrap_or_else(|| "attached owner".into());
+        self.ask_confirm(crate::app::types_confirm::ConfirmModal {
+            title: format!(" Play locally instead of {owner} "),
+            message: format!("Play \"{label}\" on this machine instead?"),
+            hint: "[y] Play here    [n] Cancel".into(),
+            on_confirm: crate::app::types_confirm::ConfirmAction::PlayLocallyInstead,
+        });
     }
 }
 
