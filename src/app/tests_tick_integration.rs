@@ -283,7 +283,7 @@ fn full_sync_sequence_leaves_focus_on_queue_or_library_destination() {
     let mut library_harness = TickHarness::new(library_app);
     library_harness.model_mut().sync_mounted_surfaces();
     // Task 6.1: Movies moved into the mounted `LibraryPanel` as the
-    // `BrowserContent` owner, so its library tab routes to the panel (the
+    // `EmbyLibraryContent` owner, so its library tab routes to the panel (the
     // old-destination-child focus for un-migrated libraries is covered by
     // `tests_tick_integration_library_panel::library_panel_focus_follows_the_active_library`).
     assert_eq!(

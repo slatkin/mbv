@@ -1,8 +1,8 @@
 //! Shell wiring for the Movies/HomeVideos/Generic embedded content owner
-//! (`BrowserContent`, task 6.1, design D2). Mirrors `shell_home_content.rs`'s
+//! (`EmbyLibraryContent`, task 6.1, design D2). Mirrors `shell_home_content.rs`'s
 //! shape: the owner lives inside the mounted `LibraryPanel`, addressed by
 //! `LibraryKey::Service(LibraryKey)`, and the shell projects Model-owned
-//! browse snapshots into it at the same writer seams `shell_browser.rs`
+//! browse snapshots into it at the same writer seams `shell_emby_library.rs`
 //! already calls for TV's still-mounted `BrowserComponent`
 //! (the former standalone browser lifecycle) — this file supplies the
 //! three functions take for the three migrated kinds, so every existing
@@ -10,12 +10,12 @@
 //!
 //! Typed effects need no new dispatch: this owner emits the same
 //! `ShellRequest::Browser*`/`EmbyLibrary*` messages the mounted
-//! `BrowserComponent` did, and `shell_browser.rs::handle_browser_request` /
+//! `BrowserComponent` did, and `shell_emby_library.rs::handle_emby_library_request` /
 //! `shell_messages.rs`'s dispatch are keyed only by the active tab, not by
 //! which component or owner sent the message.
 
-use super::components::browser_content::BrowserIdentity;
-use super::components::browser_content::{BrowserContent, BrowserOwnerPush};
+use super::components::emby_library_content::EmbyLibraryIdentity;
+use super::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
 use super::components::{LibraryKey, LibraryKind};
 use super::shell::Model;
 use super::TabSelection;
@@ -27,7 +27,7 @@ impl Model {
     /// `LibraryKey::Service`). `None` for every other tab, including a TV or
     /// Music library (still served by their own mounted components) or a
     /// non-`EmbyLibrary` tab.
-    pub(super) fn active_migrated_browser_owner(&self) -> Option<(usize, LibraryKey, LibraryKind)> {
+    pub(super) fn active_emby_library_owner(&self) -> Option<(usize, LibraryKey, LibraryKind)> {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return None;
         };
@@ -50,22 +50,22 @@ impl Model {
     /// Mutably borrow the owner installed for `key` inside the mounted
     /// `LibraryPanel`, creating it with `kind` on first reach (mirrors
     /// `update_home_owner`).
-    fn update_browser_owner<R>(
+    fn update_emby_library_owner<R>(
         &mut self,
         key: &LibraryKey,
         kind: LibraryKind,
-        f: impl FnOnce(&mut BrowserContent) -> R,
+        f: impl FnOnce(&mut EmbyLibraryContent) -> R,
     ) -> Option<R> {
-        self.update_library_owner(key.clone(), || Box::new(BrowserContent::new(kind)), f)
+        self.update_library_owner(key.clone(), || Box::new(EmbyLibraryContent::new(kind)), f)
     }
 
     /// The browse identity of library `index`'s current level (mirrors
-    /// `shell_browser.rs::browse_identity`, reused verbatim as the shared
-    /// `BrowserIdentity` shape).
-    fn browser_owner_identity(&self, index: usize) -> BrowserIdentity {
+    /// `shell_emby_library.rs::browse_identity`, reused verbatim as the shared
+    /// `EmbyLibraryIdentity` shape).
+    fn emby_library_owner_identity(&self, index: usize) -> EmbyLibraryIdentity {
         let lib = &self.app.libs[index];
         let level = lib.nav_stack.last();
-        BrowserIdentity {
+        EmbyLibraryIdentity {
             depth: lib.nav_stack.len(),
             parent_id: level.map(|l| l.parent_id.clone()).unwrap_or_default(),
             letter_filter: level.and_then(|l| l.letter_filter.as_ref().map(|f| f.index)),
@@ -88,7 +88,7 @@ impl Model {
     /// `App::fetch_nearby_movie_posters`, moved here from
     /// the old draw path since that call no longer
     /// runs for these three kinds).
-    pub(super) fn push_browser_owner_content(
+    pub(super) fn push_emby_library_owner_content(
         &mut self,
         index: usize,
         key: &LibraryKey,
@@ -161,8 +161,8 @@ impl Model {
             feed_groups,
             feed_group_cursor,
         };
-        let identity = self.browser_owner_identity(index);
-        let landed_cursor = self.update_browser_owner(key, kind, |owner| {
+        let identity = self.emby_library_owner_identity(index);
+        let landed_cursor = self.update_emby_library_owner(key, kind, |owner| {
             owner.set_content(push);
             if owner.note_browse_identity(identity) {
                 owner.apply_position(cursor, scroll);
@@ -174,9 +174,9 @@ impl Model {
         }
     }
 
-    pub(super) fn push_active_browser_owner_content(&mut self) {
-        if let Some((index, key, kind)) = self.active_migrated_browser_owner() {
-            self.push_browser_owner_content(index, &key, kind);
+    pub(super) fn push_active_emby_library_owner_content(&mut self) {
+        if let Some((index, key, kind)) = self.active_emby_library_owner() {
+            self.push_emby_library_owner_content(index, &key, kind);
         }
     }
 }

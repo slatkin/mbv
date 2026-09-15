@@ -196,8 +196,8 @@ mod tests_tick_integration_music_mouse;
 mod tests_tick_integration_home; // Home ownership tick coverage
 
 #[cfg(test)]
-#[path = "tests_tick_integration_browser.rs"]
-mod tests_tick_integration_browser; // Browser ownership tick coverage
+#[path = "tests_tick_integration_emby_library.rs"]
+mod tests_tick_integration_emby_library; // Emby library ownership tick coverage
 
 #[cfg(test)]
 #[path = "tests_tick_integration_tv.rs"]

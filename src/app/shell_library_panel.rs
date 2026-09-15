@@ -182,7 +182,7 @@ impl Model {
         }
         // Embedded owners are installed/projected after the panel is mounted
         // so the first painted frame has a current owner and geometry.
-        self.push_active_browser_owner_content();
+        self.push_active_emby_library_owner_content();
         self.push_music_workspace_content();
         let active = self.active_library_key();
         // Register the Books owner as part of panel/catalog reconciliation,

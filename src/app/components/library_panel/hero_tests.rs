@@ -349,7 +349,7 @@ fn movie_credits_are_grouped_without_cap(
 
 #[test]
 fn movie_credits_reach_library_panel_content_through_browser_owner() {
-    use crate::app::components::browser_content::{BrowserContent, BrowserOwnerPush};
+    use crate::app::components::emby_library_content::{BrowserOwnerPush, EmbyLibraryContent};
     use crate::app::components::library_panel::LibraryContentOwner;
     use crate::app::components::library_panel::LibraryKind;
 
@@ -358,7 +358,7 @@ fn movie_credits_reach_library_panel_content_through_browser_owner() {
         "People": [{"Name": "Denis Villeneuve", "Type": "Director"}],
         "UserData": {}
     }));
-    let mut owner = BrowserContent::new(LibraryKind::Movies);
+    let mut owner = EmbyLibraryContent::new(LibraryKind::Movies);
     owner.set_content(BrowserOwnerPush {
         items: vec![movie],
         total_count: 1,

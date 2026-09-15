@@ -52,10 +52,10 @@ fn render_browse_component(
     let mut model = crate::app::shell::Model::new(app);
     model.sync_mounted_surfaces();
     // Generic/Movies/HomeVideos (task 6.1) route through the embedded
-    // `BrowserContent` owner inside the mounted `LibraryPanel` instead of a
+    // `EmbyLibraryContent` owner inside the mounted `LibraryPanel` instead of a
     // mounted `BrowserComponent`; seed its cursor there when that owner is
     // the active one.
-    if let Some((_, key, _)) = model.active_migrated_browser_owner() {
+    if let Some((_, key, _)) = model.active_emby_library_owner() {
         if let Some(owner) = model
             .application
             .get_component_mut(&ComponentId::Library)
@@ -64,7 +64,7 @@ fn render_browse_component(
             .and_then(|owner| {
                 owner
                     .as_any_mut()
-                    .downcast_mut::<crate::app::components::browser_content::BrowserContent>()
+                    .downcast_mut::<crate::app::components::emby_library_content::EmbyLibraryContent>()
             })
         {
             owner.set_cursor_for_test(seed_cursor);
@@ -78,7 +78,7 @@ fn render_browse_component(
     (terminal, layout)
 }
 
-/// The migrated `BrowserContent` owner's painted geometry, surfaced as a
+/// The migrated `EmbyLibraryContent` owner's painted geometry, surfaced as a
 /// `PaintedRowGeometry` so the shared conformance assertions still hold
 /// (mirrors `render_browse_component`'s old-path shape).
 fn panel_browse_layout(model: &crate::app::shell::Model) -> PaintedRowGeometry {

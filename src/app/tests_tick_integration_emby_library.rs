@@ -3,7 +3,7 @@ use ratatui::layout::Position;
 use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
-use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
@@ -17,8 +17,7 @@ use crate::app::tests_tick_harness::TickHarness;
 /// these kinds).
 fn browser_owner(harness: &TickHarness) -> &BrowserOwner {
     let (_, key, _) = harness
-        .model()
-        .active_migrated_browser_owner()
+        .model().active_emby_library_owner()
         .expect("the active library's owner has migrated");
     harness
         .model()

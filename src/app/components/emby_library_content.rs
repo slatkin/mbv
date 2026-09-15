@@ -1,12 +1,13 @@
 //! The Movies/HomeVideos/Generic Emby destinations' embedded content owner
-//! (task 6.1, design D2/D3). A plain type — never mounted, focused,
+//! (task 6.1, design D2/D3). This owner serves Generic, Movies, and HomeVideos;
+//! TV and Music have their own owners. A plain type — never mounted, focused,
 //! subscribed, or given a `ComponentId` — that keeps the shell-projected
 //! browse rows, the letter/feed-group pill state, the one shared canonical
 //! `MediaList` owner of the active level's rows, and the embedded Inline
 //! Search session. It produces the panel's [`LibraryPanelContent`] per frame
 //! and translates the panel's slot events and forwarded chords into the same
 //! typed `Msg`s the mounted `BrowserComponent` emitted for these three kinds
-//! (`shell_browser.rs::handle_browser_request` and `shell_messages.rs`'s
+//! (`shell_emby_library.rs::handle_emby_library_request` and `shell_messages.rs`'s
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
 //!
@@ -39,7 +40,7 @@ use crate::app::render::{effective_sort_str, LetterFilter};
 
 /// Browse identity used to decide when a projected position should be applied.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub(in crate::app) struct BrowserIdentity {
+pub(in crate::app) struct EmbyLibraryIdentity {
     pub(in crate::app) depth: usize,
     pub(in crate::app) parent_id: String,
     pub(in crate::app) letter_filter: Option<usize>,
@@ -91,7 +92,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
     }
 }
 
-/// One shell content push (mirrors `browser::BrowserContent`, plus the
+/// One shell content push (mirrors `browser::EmbyLibraryContent`, plus the
 /// letter/feed-group pill and home-video-count facts the old
 /// `NarrowBrowseExtras`/wide-Movies pill row carried separately; task 6.1
 /// unifies them into the Selector row and List controls row, design D8).
@@ -115,7 +116,7 @@ pub(in crate::app) struct BrowserOwnerPush {
 /// The embedded content owner for Movies, HomeVideos and Generic Emby
 /// libraries (design D2, task 6.1). Plain type; the mounted `LibraryPanel`
 /// borrows it for content and slot events.
-pub(in crate::app) struct BrowserContent {
+pub(in crate::app) struct EmbyLibraryContent {
     kind: LibraryKind,
     items: Vec<EmbyItem>,
     total_count: usize,
@@ -131,7 +132,7 @@ pub(in crate::app) struct BrowserContent {
     /// drives its Wide/Inline presentation from its own breakpoint (design
     /// D3/D4) — this owner never chooses a presentation itself.
     carrier: MediaListCarrier<String>,
-    last_identity: Option<BrowserIdentity>,
+    last_identity: Option<EmbyLibraryIdentity>,
     /// The rows the last `feed_owner` projection produced: identical
     /// projections skip `carrier.set_content`, so an ordinary no-op sync
     /// never invalidates the presentation's painted frame (design D6 — a
@@ -149,7 +150,7 @@ pub(in crate::app) struct BrowserContent {
     inline_search: InlineSearch,
 }
 
-impl BrowserContent {
+impl EmbyLibraryContent {
     pub(in crate::app) fn new(kind: LibraryKind) -> Self {
         Self {
             kind,
@@ -209,7 +210,7 @@ impl BrowserContent {
     /// Records the browse identity of the current shell content push and
     /// reports whether it differs from the previous push (mirrors
     /// `BrowserComponent::note_browse_identity`).
-    pub(in crate::app) fn note_browse_identity(&mut self, identity: BrowserIdentity) -> bool {
+    pub(in crate::app) fn note_browse_identity(&mut self, identity: EmbyLibraryIdentity) -> bool {
         let changed = self.last_identity.as_ref() != Some(&identity);
         self.last_identity = Some(identity);
         if changed {
@@ -473,7 +474,7 @@ impl BrowserContent {
     }
 }
 
-impl InlineSearchHost for BrowserContent {
+impl InlineSearchHost for EmbyLibraryContent {
     fn inline_search(&self) -> &InlineSearch {
         &self.inline_search
     }
@@ -483,7 +484,7 @@ impl InlineSearchHost for BrowserContent {
     }
 }
 
-impl LibraryContentOwner for BrowserContent {
+impl LibraryContentOwner for EmbyLibraryContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
     }
@@ -603,7 +604,7 @@ impl LibraryContentOwner for BrowserContent {
                         // The resolved wheel echo drives the shell's
                         // `video_cursor`/resting-cursor write and pagination
                         // through the same typed arm as keyboard movement
-                        // (`shell_browser.rs::handle_browser_request`).
+                        // (`shell_emby_library.rs::handle_emby_library_request`).
                         self.carrier
                             .delegate_operation(MediaListOperation::Move(match input {
                                 MediaListSurfaceInput::Wheel { delta, .. } => delta,

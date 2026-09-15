@@ -1,4 +1,6 @@
-use crate::app::components::browser_content::{BrowserContent as BrowserOwner, BrowserOwnerPush};
+use crate::app::components::emby_library_content::{
+    BrowserOwnerPush, EmbyLibraryContent as BrowserOwner,
+};
 use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
 use crate::app::components::library_panel::content::ListSlot;
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
@@ -11,7 +13,7 @@ use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers};
 
 // The wide-Movies right-rail Inline Search painting this file used to cover
 // through `BrowserComponent` moved with Movies/HomeVideos/Generic to the
-// embedded `BrowserContent` owner (task 6.1): the panel's Wide/Narrow
+// embedded `EmbyLibraryContent` owner (task 6.1): the panel's Wide/Narrow
 // skeletons already prove `ListSlot::Search` painting generically
 // (`library_panel::wide`/`narrow` tests), so the owner-level tests below
 // prove only this owner's translation of the slot/key events into `Msg`s.

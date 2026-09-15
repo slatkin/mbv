@@ -15,7 +15,7 @@ impl Model {
     /// browser is mounted only for the active generic/Movies/home-video
     /// `EmbyLibrary` tab, same derivation as the `EmbyLibraryRow*`/`EmbyLibraryPillClick` mouse arms).
     /// A missing library index is a defensive no-op.
-    pub(super) fn handle_browser_request(&mut self, request: ShellRequest) {
+    pub(super) fn handle_emby_library_request(&mut self, request: ShellRequest) {
         let Some(lib_idx) = self.app.tab.emby_library_index() else {
             return;
         };
@@ -144,8 +144,8 @@ impl Model {
                 }
             }
             // unreachable: shell_messages.rs top-level dispatch routes only the
-            // Browser* and EmbyLibrary* activate/effect groups plus
-            // EmbyLibraryCursorIndex into handle_browser_request; every one has
+            // EmbyLibrary* activate/effect group plus
+            // EmbyLibraryCursorIndex into handle_emby_library_request; every one has
             // an arm above.
             _ => {}
         }

@@ -164,8 +164,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     );
     let library_cursor_before = {
         let (_, key, _) = harness
-            .model()
-            .active_migrated_browser_owner()
+            .model().active_emby_library_owner()
             .expect("the Movies owner has migrated");
         let panel = harness
             .model_mut()
@@ -177,7 +176,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
             .downcast_mut::<LibraryPanel>()
             .unwrap()
             .owner(&key)
-            .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::browser_content::BrowserContent>())
+            .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::emby_library_content::EmbyLibraryContent>())
             .map(|owner| owner.cursor())
             .expect("browser owner installed")
     };
@@ -218,7 +217,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         {
             let (_, key, _) = harness
                 .model()
-                .active_migrated_browser_owner()
+                .active_emby_library_owner()
                 .expect("the Movies owner has migrated");
             let panel = harness
                 .model_mut()
@@ -230,7 +229,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
                 .downcast_mut::<LibraryPanel>()
                 .unwrap()
                 .owner(&key)
-                .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::browser_content::BrowserContent>())
+                .and_then(|owner| owner.as_any().downcast_ref::<crate::app::components::emby_library_content::EmbyLibraryContent>())
                 .map(|owner| owner.cursor())
                 .expect("browser owner installed")
         },

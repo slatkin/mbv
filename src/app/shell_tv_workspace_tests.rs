@@ -367,7 +367,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
     let Some(Msg::Shell(request)) = up else {
         panic!("narrow Up must emit a typed shell request");
     };
-    model.handle_browser_request(request);
+    model.handle_emby_library_request(request);
     let narrow_return_target = model
         .test_tv_owner()
         .selected_item_id()

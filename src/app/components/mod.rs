@@ -9,11 +9,11 @@
 #![allow(dead_code)]
 
 pub mod book_content;
-pub mod browser_content;
 pub mod component_id;
 pub mod confirm;
 pub mod context_menu;
 pub mod daemon_lost;
+pub mod emby_library_content;
 pub mod feeds_content;
 pub mod feeds_manage;
 pub mod help;
@@ -80,8 +80,8 @@ pub use self::tab_panel::TabPanel;
 pub use self::user_event::UserEvent;
 
 #[cfg(test)]
-#[path = "browser_inline_search_tests.rs"]
-mod browser_inline_search_tests;
+#[path = "emby_library_inline_search_tests.rs"]
+mod emby_library_inline_search_tests;
 #[cfg(test)]
 #[path = "feeds_component_tests.rs"]
 mod feeds_component_tests;

@@ -1,6 +1,6 @@
 use super::test_helpers::*;
 use super::*;
-use crate::app::components::browser_content::BrowserContent as BrowserOwner;
+use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::ComponentId;
 use crate::app::tests::{make_app_stub, make_item};
@@ -12,7 +12,7 @@ use crate::app::{BrowseLevel, LibraryTab, TabSelection};
 fn set_home_video_cursor_for_test(model: &mut crate::app::shell::Model, cursor: usize) {
     model.sync_mounted_surfaces();
     let (_, key, _) = model
-        .active_migrated_browser_owner()
+        .active_emby_library_owner()
         .expect("a migrated browser owner is active");
     model
         .application
@@ -77,7 +77,7 @@ fn narrow_home_video_selected_item_retains_inline_detail() {
 }
 
 // wide_home_video_uses_a_left_detail_and_right_rail deleted (task 6.1):
-// HomeVideos' Wide hero geometry moved to the embedded `BrowserContent`
+// HomeVideos' Wide hero geometry moved to the embedded `EmbyLibraryContent`
 // owner painted through the mounted `LibraryPanel`; the equivalent coverage
 // now lives in `tests_library_characterization.rs` against the panel's
 // `test_wide_geometry()`.

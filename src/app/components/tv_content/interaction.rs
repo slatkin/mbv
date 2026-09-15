@@ -167,7 +167,7 @@ impl TvContent {
         }
     }
 
-    /// Inline Search pointer handling (mirrors `BrowserContent::
+    /// Inline Search pointer handling (mirrors `EmbyLibraryContent::
     /// handle_search_pointer`): the panel's own recognizer already collapsed
     /// the raw event into a normalized `MediaListSurfaceInput`, so click /
     /// double-click / right-click / wheel against a painted result row are
