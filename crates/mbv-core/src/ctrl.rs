@@ -321,6 +321,18 @@ pub enum CtrlCmd {
     },
 }
 
+impl CtrlCmd {
+    /// Builds `UnifiedQueueReplace`, deriving the legacy `items` payload from
+    /// `slots` so callers don't each re-project the same list.
+    pub fn unified_queue_replace(slots: Vec<UnifiedQueueSlot>, start_idx: Option<usize>) -> Self {
+        CtrlCmd::UnifiedQueueReplace {
+            items: slots.iter().map(|slot| slot.item.clone()).collect(),
+            slots,
+            start_idx,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct PlaybackIntent {
     pub request_id: PlaybackRequestId,

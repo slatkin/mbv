@@ -42,6 +42,13 @@ impl App {
         }
     }
 
+    /// Stamps `scope`'s queue with the playback owner's current sequence
+    /// generation, after a submit the owner accepted at that generation.
+    pub(super) fn stamp_queue_generation(&mut self, scope: QueueScope) {
+        let generation = self.player.status.lock().unwrap().sequence_generation;
+        self.queue_for_scope_mut(scope).sequence_generation = generation;
+    }
+
     pub(super) fn undo_stack_for_scope_mut(&mut self, scope: QueueScope) -> &mut Vec<UndoEntry> {
         match scope {
             QueueScope::Local => &mut self.queue_undo_stack,

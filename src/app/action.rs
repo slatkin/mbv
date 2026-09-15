@@ -571,8 +571,7 @@ impl App {
                         headless,
                         self.ui_volume,
                     );
-                    let generation = self.player.status.lock().unwrap().sequence_generation;
-                    self.queue_for_scope_mut(scope).sequence_generation = generation;
+                    self.stamp_queue_generation(scope);
                 }
             }
 

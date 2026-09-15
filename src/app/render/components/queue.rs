@@ -2,7 +2,7 @@ use crate::app::components::media_list::{WideMediaList, WideMediaListPaintPolicy
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
@@ -31,8 +31,9 @@ pub(in crate::app) fn render_queue_body(
             list.set_paint_policy(
                 WideMediaListPaintPolicy::for_queue(focused)
                     .with_zebra(ZebraStripe {
-                        focused: Color::from_u32(0x003c4841),
-                        unfocused: Color::from_u32(0x00333c43),
+                        focused: palette::surface_colors(palette::Surface::QueueColumn, true).fill,
+                        unfocused: palette::surface_colors(palette::Surface::QueueColumn, false)
+                            .fill,
                     })
                     .with_selected_gutter(),
             );

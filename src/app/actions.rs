@@ -74,8 +74,7 @@ impl App {
             self.player.set_queue_source(self.queue_source.clone());
         }
         if sent && matches!(scope, super::QueueScope::Local) && !self.player.is_remote() {
-            let generation = self.player.status.lock().unwrap().sequence_generation;
-            self.queue_for_scope_mut(scope).sequence_generation = generation;
+            self.stamp_queue_generation(scope);
         }
         sent
     }

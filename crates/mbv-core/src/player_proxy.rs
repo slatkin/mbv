@@ -191,11 +191,10 @@ impl PlayerProxy {
                         item: slot.item,
                     })
                     .collect();
-                r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
-                    items: slots.iter().map(|slot| slot.item.clone()).collect(),
+                r.send_ctrl_cmd(crate::ctrl::CtrlCmd::unified_queue_replace(
                     slots,
-                    start_idx: Some(start_idx),
-                })
+                    Some(start_idx),
+                ))
             }
         }
     }

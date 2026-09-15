@@ -159,6 +159,41 @@ fn broadcast_queue_state(
     *shared_queue.source.lock().unwrap() = source.clone();
 }
 
+/// Filters `original` to the entries the daemon admits, in one pass, and
+/// rebases `requested_cursor` past any entries dropped ahead of it.
+/// `item_of` projects each entry to the `QueueItem` `daemon_admits` judges,
+/// so the same admission/rebase logic serves both bare-item and slot-tagged
+/// callers without evaluating the admission predicate twice per entry.
+fn admit_queue<T>(
+    original: Vec<T>,
+    requested_cursor: Option<usize>,
+    audio_only: bool,
+    has_emby: bool,
+    has_audiobookshelf: bool,
+    item_of: impl Fn(&T) -> &QueueItem,
+) -> (Vec<T>, usize) {
+    let requested = requested_cursor.unwrap_or(0);
+    let mut rebased = 0;
+    let admitted: Vec<T> = original
+        .into_iter()
+        .enumerate()
+        .filter(|(index, entry)| {
+            let admitted = daemon_admits(item_of(entry), audio_only, has_emby, has_audiobookshelf);
+            if admitted && *index < requested {
+                rebased += 1;
+            }
+            admitted
+        })
+        .map(|(_, entry)| entry)
+        .collect();
+    let cursor = if admitted.is_empty() {
+        0
+    } else {
+        rebased.min(admitted.len() - 1)
+    };
+    (admitted, cursor)
+}
+
 fn admit_queue_items(
     original: Vec<QueueItem>,
     requested_cursor: Option<usize>,
@@ -166,22 +201,14 @@ fn admit_queue_items(
     has_emby: bool,
     has_audiobookshelf: bool,
 ) -> (Vec<QueueItem>, usize) {
-    let requested = requested_cursor.unwrap_or(0);
-    let rebased = original
-        .iter()
-        .take(requested)
-        .filter(|item| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
-        .count();
-    let items: Vec<_> = original
-        .into_iter()
-        .filter(|item| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
-        .collect();
-    let cursor = if items.is_empty() {
-        0
-    } else {
-        rebased.min(items.len() - 1)
-    };
-    (items, cursor)
+    admit_queue(
+        original,
+        requested_cursor,
+        audio_only,
+        has_emby,
+        has_audiobookshelf,
+        |item| item,
+    )
 }
 
 pub(super) fn admit_queue_slots(
@@ -191,18 +218,14 @@ pub(super) fn admit_queue_slots(
     has_emby: bool,
     has_audiobookshelf: bool,
 ) -> (Vec<(crate::playback_queue::QueueSlotId, QueueItem)>, usize) {
-    let requested = requested_cursor.unwrap_or(0);
-    let rebased = original
-        .iter()
-        .take(requested)
-        .filter(|(_, item)| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
-        .count();
-    let slots: Vec<_> = original
-        .into_iter()
-        .filter(|(_, item)| daemon_admits(item, audio_only, has_emby, has_audiobookshelf))
-        .collect();
-    let cursor = if slots.is_empty() { 0 } else { rebased.min(slots.len() - 1) };
-    (slots, cursor)
+    admit_queue(
+        original,
+        requested_cursor,
+        audio_only,
+        has_emby,
+        has_audiobookshelf,
+        |(_, item)| item,
+    )
 }
 
 fn daemon_admits(
