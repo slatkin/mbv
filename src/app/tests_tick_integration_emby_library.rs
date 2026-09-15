@@ -219,12 +219,15 @@ fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
     }
     harness.model_mut().sync_mounted_surfaces();
 
+    assert!(harness.model().application.get_component(&confirm_id).is_none());
     assert!(!harness.model().app.player.is_remote());
+    assert!(harness.model().app.player.status.lock().unwrap().active);
     assert!(!harness.model().app.direct_remote_connected);
     assert!(harness.model().app.remote_player_tab.is_none());
     assert_eq!(harness.model().app.queue_scope, crate::app::QueueScope::Local);
+    let local_items = harness.model().app.player_tab.emby_items();
     assert_eq!(
-        harness.model().app.player_tab.emby_items()[0].id,
+        local_items.first().expect("local playback queue is non-empty").id,
         "movie-focused"
     );
     assert!(command_rx.try_iter().any(|command| {
