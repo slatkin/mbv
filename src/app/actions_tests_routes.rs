@@ -4,12 +4,13 @@ use super::*;
 use crate::app::library_browse_actions::{
     build_album_index_with, full_library_fetch_limit, recursive_album_search_eligible,
 };
-use crate::app::tests::{make_app_stub, make_item, make_items};
+use crate::app::tests::{install_test_emby, make_app_stub, make_item, make_items};
 use crate::app::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, BrowseLevel, ContextAction,
     FeedHomeVideoState, LibEvent, LibraryTab, QueueScope, TabSelection,
 };
 use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::mock_http::MockHttp;
 use mbv_core::player::PlayerEvent;
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -260,6 +261,61 @@ fn play_item_submits_selected_item_to_direct_remote_owner() {
     let slots = replacement.expect("play should submit a queue");
     assert_eq!(slots.len(), 1);
     assert_eq!(slots[0].item.id(), "selected-id");
+}
+
+#[test]
+fn series_play_submits_selected_episodes_to_direct_remote_owner() {
+    let mut app = make_app_stub();
+    let http = MockHttp::new();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone();
+    let client = client.with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    let stale_item = make_item("Stale", "Movie");
+    let (remote, remote_rx, command_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_with_command_rx(vec![stale_item], 0);
+    let sess = crate::app::tests::make_session("remote-mbv", "mbv");
+    app.switch_to_direct_remote(
+        &sess,
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+    app.player.always_play_next = true;
+
+    http.respond(
+        200,
+        r#"{"Items":[
+            {"Id":"episode-1","Name":"Episode 1","Type":"Episode","MediaType":"Video"},
+            {"Id":"episode-2","Name":"Episode 2","Type":"Episode","MediaType":"Video"}
+        ]}"#,
+    );
+    let mut selected = make_item("Episode 1", "Episode");
+    selected.id = "episode-1".into();
+    selected.series_id = "series-1".into();
+    app.play_item(selected);
+
+    let slots = command_rx
+        .try_iter()
+        .find_map(|command| match command {
+            mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(slots),
+            _ => None,
+        })
+        .expect("series play should submit a queue");
+    let ids: Vec<_> = slots.iter().map(|slot| slot.item.id()).collect();
+    assert_eq!(ids, ["episode-1", "episode-2"]);
 }
 
 #[test]
