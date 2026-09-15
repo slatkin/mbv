@@ -38,12 +38,12 @@
 //! | `WideSplitGutter` | yes (boundary component view) | — (pinned only here at buffer level) |
 //! | `HeroPane` | yes (LibraryOnly Movies, bit `false`) | `tests_wide_hero_pane_characterization.rs` (resting fill) |
 //! | `SelectedRow` | yes (LibraryOnly library rail) | `components/tv_wide_tests.rs::wide_tv_left_focus_drops_the_right_rail_to_the_resting_surface` |
-//! | `SelectedRowOnQueueColumn` | yes (wide Both, both bits) | — |
-//! | `SelectedRowOnLibraryPane` | — | `components/tv_wide_tests.rs::wide_tv_episode_selected_row_uses_the_shared_focused_surface` |
+//! | `SelectedRowOnQueueColumn` | yes (wide scrollbar backing, both bits) | — |
+//! | `SelectedRowOnLibraryPane` | yes (library Wide scrollbar backing, both bits) | library Wide arm stripe regressions in `components/media_list.rs` |
 //! | `ContextMenuSelectedRow` | yes (context-menu popup, component view) | — |
 //! | `LibraryPanel` | yes (Both, LibraryOnly, wide music) | `tests_library_characterization.rs` rail-body suites |
 //! | `QueuePanel` | yes (wide Both, both bools) | — |
-//! | `MainContentBox` | — | `components/tv_wide_tests.rs` (focused soft fill), `components/music_workspace_cursor_tests.rs` |
+//! | `MainContentBox` | yes (library Browser-pane Wide stripe, both bits) | `components/music_workspace_cursor_tests.rs` |
 //! | `InlineHero` | yes (selected detail, component view, both bits) | — |
 //! | `PlaybackPanel` | yes (Both, mini library) | `tests.rs` panel suites |
 //! | `QueueOnlyPlaybackPanel` | yes (wide QueueOnly, mini queue) | — (pinned only here at buffer level) |

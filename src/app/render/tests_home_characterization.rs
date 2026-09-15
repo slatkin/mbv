@@ -121,11 +121,11 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
-/// 5.11): after the Wide panel skeleton paint the focused selected row's
-/// Wide selection uses the gutter accent: the row keeps its panel background
-/// rather than painting a selected-row bar. Unfocused: no bar.
+/// 5.11): after the Wide panel skeleton paint the focused selected row keeps
+/// its MainContentBox zebra stripe under the gutter accent. Unfocused rows
+/// keep the unfocused stripe value.
 #[test]
-fn wide_home_selected_row_keeps_the_library_panel_background() {
+fn wide_home_selected_row_keeps_its_stripe_under_the_accent() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {

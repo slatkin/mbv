@@ -9,10 +9,13 @@ pub(in crate::app) use wide::{
 
 #[cfg(test)]
 mod wide_row_regression_tests {
-    use super::wide::{render_wide_media_list, render_wide_media_list_with_zebra};
+    use super::wide::{
+        render_wide_media_list, render_wide_media_list_component, render_wide_media_list_with_zebra,
+    };
     use super::wide_row_regression_tests_helpers::{item, paint, row_of};
     use crate::app::components::media_list::{
-        MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+        MediaKind, MediaListRow, MediaSemanticState, WideMediaList, WideMediaListPaintPolicy,
+        ZebraStripe,
     };
     use crate::app::palette;
     use ratatui::backend::TestBackend;
@@ -351,9 +354,152 @@ mod wide_row_regression_tests {
     }
 
     #[test]
+    fn library_wide_browser_stripes_items_not_structural_rows() {
+        let rect = Rect::new(0, 0, 40, 6);
+        let mut list = WideMediaList::new();
+        list.set_content(vec![
+            item("one", "One", None),
+            MediaListRow::Heading {
+                text: "Group".into(),
+            },
+            item("two", "Two", None),
+            MediaListRow::Spacer,
+            item("three", "Three", None),
+            item("four", "Four", None),
+        ]);
+        let pair = ZebraStripe {
+            focused: palette::surface_colors(palette::Surface::MainContentBox, true).fill,
+            unfocused: palette::surface_colors(palette::Surface::MainContentBox, false).fill,
+        };
+        assert_ne!(
+            pair.focused,
+            palette::surface_colors(palette::Surface::LibraryPanel, true).fill
+        );
+        assert_ne!(
+            pair.unfocused,
+            palette::surface_colors(palette::Surface::LibraryPanel, false).fill
+        );
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_component(
+                    f,
+                    rect,
+                    &mut list,
+                    WideMediaListPaintPolicy::new(true).with_zebra(pair),
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        for (y, striped) in [
+            (0, true),
+            (1, false),
+            (2, false),
+            (3, false),
+            (4, true),
+            (5, false),
+        ] {
+            assert_eq!(
+                buffer[(2, y)].bg,
+                if striped { pair.focused } else { Color::Reset },
+                "row {y}"
+            );
+        }
+    }
+
+    #[test]
+    fn library_wide_workspace_stripes_with_library_panel_pair() {
+        let rect = Rect::new(0, 0, 40, 4);
+        let mut list = WideMediaList::new();
+        list.set_content(vec![
+            item("one", "One", None),
+            item("two", "Two", None),
+            item("three", "Three", None),
+            item("four", "Four", None),
+        ]);
+        let pair = ZebraStripe {
+            focused: palette::surface_colors(palette::Surface::LibraryPanel, true).fill,
+            unfocused: palette::surface_colors(palette::Surface::LibraryPanel, false).fill,
+        };
+        assert_ne!(
+            pair.focused,
+            palette::surface_colors(palette::Surface::MainContentBox, true).fill
+        );
+        assert_ne!(
+            pair.unfocused,
+            palette::surface_colors(palette::Surface::MainContentBox, false).fill
+        );
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_component(
+                    f,
+                    rect,
+                    &mut list,
+                    WideMediaListPaintPolicy::for_library_workspace(true).with_zebra(pair),
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer[(2, 0)].bg, pair.focused);
+        assert_eq!(buffer[(2, 1)].bg, Color::Reset);
+        assert_eq!(buffer[(2, 2)].bg, pair.focused);
+        assert_eq!(buffer[(2, 3)].bg, Color::Reset);
+    }
+
+    #[test]
+    fn library_wide_accent_keeps_selected_stripe_and_unfocused_rows_plain() {
+        let rect = Rect::new(0, 0, 40, 4);
+        let pair = ZebraStripe {
+            focused: palette::surface_colors(palette::Surface::MainContentBox, true).fill,
+            unfocused: palette::surface_colors(palette::Surface::MainContentBox, false).fill,
+        };
+        let mut selected = WideMediaList::new();
+        selected.set_content(vec![item("one", "One", None), item("two", "Two", None)]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_component(
+                    f,
+                    rect,
+                    &mut selected,
+                    WideMediaListPaintPolicy::new(true).with_zebra(pair),
+                );
+            })
+            .unwrap();
+        let cell = &terminal.backend().buffer()[(2, 0)];
+        assert_eq!(cell.fg, palette::TEXT_FOCUS_ACCENT);
+        assert!(cell.modifier.contains(Modifier::BOLD));
+        assert_eq!(cell.bg, pair.focused);
+        assert_eq!(terminal.backend().buffer()[(0, 0)].bg, Color::Reset);
+
+        let mut unfocused = WideMediaList::new();
+        unfocused.set_content(vec![item("one", "One", None), item("two", "Two", None)]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_component(
+                    f,
+                    rect,
+                    &mut unfocused,
+                    WideMediaListPaintPolicy::new(false).with_zebra(pair),
+                );
+            })
+            .unwrap();
+        for y in 0..2 {
+            let cell = &terminal.backend().buffer()[(2, y)];
+            assert_ne!(cell.fg, palette::TEXT_FOCUS_ACCENT);
+        }
+        assert_eq!(terminal.backend().buffer()[(2, 0)].bg, pair.unfocused);
+    }
+
+    #[test]
     fn non_adjacent_multi_selected_rows_and_unfocused_cursor_paint_selected_surface() {
         let rect = Rect::new(0, 0, 32, 4);
-        let selected_bg = palette::SURFACE_RESTING;
+        let pair = ZebraStripe {
+            focused: palette::surface_colors(palette::Surface::MainContentBox, true).fill,
+            unfocused: palette::surface_colors(palette::Surface::MainContentBox, false).fill,
+        };
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
             item("one", "One", None),
@@ -367,34 +513,25 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(f, rect, rect, &mut list, false, selected_bg);
-            })
-            .unwrap();
-        let buf = terminal.backend().buffer();
-        assert_eq!(buf[(0, 0)].bg, selected_bg);
-        assert_ne!(buf[(0, 1)].bg, selected_bg);
-        assert_eq!(buf[(0, 2)].bg, selected_bg);
-        assert_ne!(buf[(0, 3)].bg, selected_bg);
-
-        let mut single = WideMediaList::new();
-        single.set_content(vec![
-            item("cursor", "Cursor", None),
-            item("other", "Other", None),
-        ]);
-        let mut terminal = Terminal::new(TestBackend::new(rect.width, 2)).unwrap();
-        terminal
-            .draw(|f| {
-                render_wide_media_list(
+                render_wide_media_list_component(
                     f,
-                    Rect::new(0, 0, 32, 2),
-                    Rect::new(0, 0, 32, 2),
-                    &mut single,
-                    false,
-                    selected_bg,
+                    rect,
+                    &mut list,
+                    WideMediaListPaintPolicy::new(false).with_zebra(pair),
                 );
             })
             .unwrap();
-        assert_ne!(terminal.backend().buffer()[(0, 0)].bg, selected_bg);
+        let buf = terminal.backend().buffer();
+        for y in [0, 2] {
+            assert_eq!(buf[(2, y)].fg, palette::TEXT_FOCUS_ACCENT);
+            assert!(buf[(2, y)].modifier.contains(Modifier::BOLD));
+            assert_eq!(buf[(2, y)].bg, pair.unfocused);
+            assert_eq!(buf[(0, y)].bg, Color::Reset);
+        }
+        for y in [1, 3] {
+            assert_ne!(buf[(2, y)].fg, palette::TEXT_FOCUS_ACCENT);
+            assert_eq!(buf[(2, y)].bg, Color::Reset);
+        }
     }
 
     #[test]
