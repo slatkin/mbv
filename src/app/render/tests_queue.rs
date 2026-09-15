@@ -4,6 +4,7 @@ use crate::app::tests::make_session;
 use crate::App;
 use ratatui::layout::Rect;
 use ratatui::style::Color;
+use ratatui::style::Modifier;
 
 /// Task 4.1 (D10): the right column reserves the playback strip's
 /// `PLAYER_BOX_HEIGHT` rows only in library-only. `both` reserves none — the
@@ -697,9 +698,10 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
 
 /// Gutter-accent selection: the marker is a foam Nerd Font glyph
 /// (U+F0BBA) in the selected row's leading gutter inside the panel; the
-/// panel paints nothing outside the box edge.
+/// panel paints no marker outside the box edge; the selected title is
+/// bold focus-accent text inside the panel.
 #[test]
-fn queue_selection_marker_is_inside_the_panel_gutter() {
+fn queue_selection_title_is_bold_focus_accent_no_outside_marker() {
     let mut app = make_queue_app(3);
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
@@ -714,22 +716,21 @@ fn queue_selection_marker_is_inside_the_panel_gutter() {
         " ",
         "no marker may paint outside the box edge"
     );
-    // The selected row's second indent column carries the icon.
-    assert_eq!(buf[(box_area.x + 1, marker_y)].symbol(), "\u{f101}");
-    assert_eq!(
-        buf[(box_area.x + 1, marker_y)].fg,
-        palette::PILL_SELECTED_FG
-    );
+    // The selected title paints bold in the focus accent.
+    let title_x = box_area.x + 2;
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_FOCUS_ACCENT);
+    assert!(buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 
-    // Without panel focus the icon disappears.
+    // Without panel focus the title is neither accent nor bold.
     app.panel_focus = crate::app::PanelFocus::Library;
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
-    assert_eq!(
-        buf[(box_area.x, marker_y)].symbol(),
-        " ",
-        "the unfocused queue paints no selection icon"
+    assert_ne!(
+        buf[(title_x, marker_y)].fg,
+        palette::TEXT_FOCUS_ACCENT,
+        "the unfocused queue title keeps the default colour"
     );
+    assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 }
 
 /// The QueueColumn footer: the status bar sits outside the recessed

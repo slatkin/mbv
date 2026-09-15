@@ -17,7 +17,7 @@ mod wide_row_regression_tests {
     use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
-    use ratatui::style::Color;
+    use ratatui::style::{Color, Modifier};
     use ratatui::Terminal;
     use std::time::{Duration, Instant};
 
@@ -313,7 +313,7 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn gutter_policy_marks_selection_with_foam_icon_and_yellow_title() {
+    fn gutter_policy_selected_title_is_bold_focus_accent() {
         let rect = Rect::new(0, 0, 32, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -337,13 +337,11 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        // The second indent column carries the foam selection icon; the
-        // title paints in the focus accent. No selected background, and the
-        // duration keeps the default colour.
+        // The selected title paints in the focus accent, bold; no icon and
+        // no selected background; the duration keeps the default colour.
         assert_eq!(buf[(0, 1)].symbol(), " ");
-        assert_eq!(buf[(1, 1)].symbol(), "\u{f101}");
-        assert_eq!(buf[(1, 1)].fg, palette::PILL_SELECTED_FG);
         assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert!(buf[(2, 1)].modifier.contains(Modifier::BOLD));
         assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
         assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);
         // The unselected even item keeps its zebra stripe, and the selected

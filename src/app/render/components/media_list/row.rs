@@ -143,7 +143,7 @@ pub(in crate::app) fn media_list_row<Target>(
                     None => vec![(primary.clone(), title_color)],
                 };
             let parts_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-            let title_spans = marquee
+            let mut title_spans = marquee
                 .take()
                 .filter(|_| selected && parts_width > title_width)
                 .map(|(text, started_at)| {
@@ -169,6 +169,23 @@ pub(in crate::app) fn media_list_row<Target>(
                     }
                     spans
                 });
+            // Gutter-accent selection: the selected title paints in the
+            // focus accent, bold; no icon, no background. Now-playing rows
+            // keep their accent colour (the established exclusion).
+            if selected
+                && gutter_glyph
+                && !matches!(
+                    semantic_state,
+                    MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
+                )
+            {
+                for span in &mut title_spans {
+                    span.style = span
+                        .style
+                        .fg(palette::TEXT_FOCUS_ACCENT)
+                        .add_modifier(Modifier::BOLD);
+                }
+            }
 
             let mut spans = vec![Span::raw("  ")];
             spans.extend(title_spans);
@@ -216,13 +233,6 @@ pub(in crate::app) fn media_list_row<Target>(
             // Gutter-accent selection: the row itself keeps the default
             // treatment (the owning panel paints the marker outside the
             // panel edge); nothing changes inside the row.
-            // Gutter-accent selection: keep the leading indent column blank
-            // and put the selection glyph in the second column, right next
-            // to the title text.
-            if selected && gutter_glyph {
-                spans[0] =
-                    Span::styled(" \u{f101}", Style::default().fg(palette::PILL_SELECTED_FG));
-            }
             ListItem::new(Line::from(spans)).style(if paint_selected {
                 Style::default().bg(selected_bg)
             } else {
