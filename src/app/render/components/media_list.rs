@@ -313,7 +313,7 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn selected_gutter_glyph_marks_selection_without_bg() {
+    fn gutter_policy_selected_row_paints_default_inside_the_panel() {
         let rect = Rect::new(0, 0, 32, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -337,16 +337,18 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        // The gutter glyph marks the selection; nothing else about the row
-        // changes from the default treatment.
-        assert_eq!(buf[(0, 1)].symbol(), "▎");
-        assert_eq!(buf[(0, 1)].fg, palette::TEXT_FOCUS_ACCENT);
-        assert_eq!(buf[(0, 1)].bg, Color::Reset);
+        // The row painter paints no marker and no selected background; the
+        // selected row reads exactly like any other row. The outside marker
+        // is the owning panel's output (panel-level test).
+        assert_eq!(buf[(0, 1)].symbol(), " ");
+        assert_eq!(buf[(0, 1)].fg, Color::Reset);
         assert_eq!(buf[(2, 1)].fg, palette::TEXT_EMPHASIS);
         assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
         assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);
-        // The unselected even item keeps its zebra stripe.
+        // The unselected even item keeps its zebra stripe, and the selected
+        // odd item is unstriped.
         assert_eq!(buf[(2, 0)].bg, Color::Rgb(60, 72, 65));
+        assert_eq!(buf[(2, 1)].bg, Color::Reset);
     }
 
     #[test]

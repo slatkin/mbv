@@ -24,8 +24,8 @@ use unicode_width::UnicodeWidthStr;
 /// column's selected-row identity (`SelectedRowOnQueueColumn` /
 /// `SelectedRowOnLibraryPane`) so the row follows that column's focus. When
 /// `gutter_glyph` is set, the selected row keeps default row colours and no
-/// selected background; a yellow quarter-block glyph in the leading gutter
-/// marks the selection instead.
+/// selected background; the owning panel marks the selection outside the
+/// panel edge, so nothing changes inside the row.
 ///
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
@@ -206,12 +206,9 @@ pub(in crate::app) fn media_list_row<Target>(
                     ));
                 }
             }
-            // Gutter-accent selection: swap the leading two-column indent for
-            // a yellow quarter-block glyph in the first column. Everything
-            // else on the row keeps the default treatment.
-            if selected && gutter_glyph {
-                spans[0] = Span::styled("▎ ", Style::default().fg(palette::TEXT_FOCUS_ACCENT));
-            }
+            // Gutter-accent selection: the row itself keeps the default
+            // treatment (the owning panel paints the marker outside the
+            // panel edge); nothing changes inside the row.
             ListItem::new(Line::from(spans)).style(if paint_selected {
                 Style::default().bg(selected_bg)
             } else {

@@ -695,6 +695,40 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     );
 }
 
+/// Gutter-accent selection: the marker is a yellow right quarter block
+/// painted OUTSIDE the recessed box's leading edge, on the selected row's
+/// screen row, only while the panel holds focus.
+#[test]
+fn queue_selection_marker_paints_outside_the_box_edge_when_focused() {
+    let mut app = make_queue_app(3);
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let buf = term.backend().buffer();
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 40));
+    let queue = chrome.root.queue.expect("queue panel placed");
+    let box_area = super::arrangements::queue::queue_list_box(queue);
+    let marker_x = box_area.x - 1;
+    // The cursor sits on item 0: the first content row of the box.
+    let marker_y = box_area.y + 1;
+    assert_eq!(
+        buf[(marker_x, marker_y)].symbol(),
+        "▕",
+        "the focused queue marks its selected row outside the box edge"
+    );
+    assert_eq!(buf[(marker_x, marker_y)].fg, palette::TEXT_FOCUS_ACCENT);
+    // Unselected marker rows stay clean.
+    assert_eq!(buf[(marker_x, marker_y + 1)].symbol(), " ");
+
+    // Without panel focus the marker disappears.
+    app.panel_focus = crate::app::PanelFocus::Library;
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let buf = term.backend().buffer();
+    assert_eq!(
+        buf[(marker_x, marker_y)].symbol(),
+        " ",
+        "the unfocused queue paints no selection marker"
+    );
+}
+
 /// The QueueColumn footer: the status bar sits outside the recessed
 /// queue-list box, with one gap row above and below it, as wide as the
 /// QueueColumn header — on the QueueColumn surface, not the recessed panel.
