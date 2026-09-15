@@ -41,16 +41,21 @@
 
 ## 3. Stripe both library Wide arms
 
-- [ ] 3.1 In `PanelList::set_paint_policy`
+- [x] 3.1 In `PanelList::set_paint_policy`
   (`src/app/components/library_panel/panel_list.rs:31-49`), chain a `ZebraStripe` built from
   `palette::surface_colors(Surface::MainContentBox, focused)` onto the `Wide` arm and one built from
   `palette::surface_colors(Surface::LibraryPanel, focused)` onto `WideWorkspace` (design D1). No raw
   colour value anywhere on either arm. Verify: `cargo check -p mbv`.
-- [ ] 3.2 Re-pin `selected_row_surface_distinguishes_browser_and_workspace_slots`
+  (Accepted: impl `08cfa72c`; Standards+Spec PASS. Standards P1 investigated and dismissed as
+  false positive — `wide.rs:207-212` fills the Browser RAIL box, not the Workspace box
+  (`wide.rs:403-404` `MainContentBox`); both stripes contrast their own box. Constructor P2 declined:
+  matches #719 Queue precedent, out of scope.)
+- [x] 3.2 Re-pin `selected_row_surface_distinguishes_browser_and_workspace_slots`
   (`src/app/components/library_panel/panel_list.rs:104-140`) to the accent treatment. That test is
   currently the only proof separating the two arms and the accent makes their selected rows identical,
   so rename it to what it now proves and name the surviving owner proof for the arm distinction: the
   per-arm stripe tests from 4.1/4.2 (AGENTS "deletion evidence"). Verify: `cargo nextest run -p mbv`.
+  (Accepted: impl `08cfa72c`; renamed in §2 unit, doc comment naming 4.1/4.2 added here; Spec PASS.)
 
 ## 4. Test
 
