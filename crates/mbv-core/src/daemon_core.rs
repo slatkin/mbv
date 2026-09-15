@@ -338,7 +338,7 @@ impl PlaybackIntentState {
     }
 }
 
-use crate::player_owner_state::PlayerOwnerState;
+use crate::player::PlayerOwnerState;
 
 /// The daemon's Player owner: the reusable [`PlayerOwnerState`] core plus the
 /// daemon-only guarded direct-playback lifecycle coordinator. The daemon event
