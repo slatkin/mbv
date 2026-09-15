@@ -693,22 +693,16 @@ mod tests {
     }
 
     #[test]
-    fn hovered_link_uses_foam_underline_without_styling_neighbours() {
+    fn hovered_link_uses_foam_underline() {
         let mut terminal =
             ratatui::Terminal::new(ratatui::backend::TestBackend::new(30, 2)).unwrap();
         let facts = HeroFacts {
             title: "Title".into(),
-            meta_rows: vec!["IMDb|TheMovieDb".into()],
-            links: vec![
-                HeroLink {
-                    name: "IMDb".into(),
-                    url: "https://imdb.test".into(),
-                },
-                HeroLink {
-                    name: "TheMovieDb".into(),
-                    url: "https://tmdb.test".into(),
-                },
-            ],
+            meta_rows: vec!["IMDb".into()],
+            links: vec![HeroLink {
+                name: "IMDb".into(),
+                url: "https://imdb.test".into(),
+            }],
             artwork: HeroArtwork {
                 shape: super::super::content::ArtworkShape::Landscape,
                 source: None,
@@ -726,7 +720,7 @@ mod tests {
                             style: Style::default(),
                         },
                         WrappedHeroLine {
-                            text: "IMDb|TheMovieDb",
+                            text: "IMDb",
                             style: Style::default(),
                         },
                     ],
@@ -736,16 +730,15 @@ mod tests {
                     Rect::new(0, 0, 30, 2),
                     &facts,
                     true,
-                    Some(1),
+                    Some(0),
                     &mut HitRegions::new(),
                 );
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        assert!(!buffer[(0, 1)].symbol().contains("\x1b[4;"));
-        assert!(buffer[(5, 1)].symbol().contains("\x1b[4;38;2;58;148;197m"));
-        assert!(buffer[(5, 1)].symbol().contains("\x1b[24;39m"));
-        assert!(!buffer[(15, 1)].symbol().contains("\x1b[4;"));
+        assert!(buffer[(0, 1)].symbol().contains("\x1b[4;38;2;58;148;197m"));
+        assert!(buffer[(0, 1)].symbol().contains("\x1b[24;39m"));
+        assert!(!buffer[(5, 1)].symbol().contains("\x1b[4;"));
 
         terminal
             .draw(|f| {
@@ -758,7 +751,7 @@ mod tests {
                             style: Style::default(),
                         },
                         WrappedHeroLine {
-                            text: "IMDb|TheMovieDb",
+                            text: "IMDb",
                             style: Style::default(),
                         },
                     ],

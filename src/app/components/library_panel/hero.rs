@@ -273,7 +273,8 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
         let links = item
             .external_urls
             .iter()
-            .filter(|link| !link.name.is_empty())
+            .filter(|link| link.name == "IMDb")
+            .take(1)
             .map(|link| HeroLink {
                 name: link.name.clone(),
                 url: link.url.clone(),

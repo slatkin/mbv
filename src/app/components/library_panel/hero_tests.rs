@@ -283,7 +283,10 @@ fn movie_meta_rows_append_genres_and_links_after_runtime() {
         "Id": "m1", "Name": "Dune", "Type": "Movie",
         "PremiereDate": "2021-10-22", "RunTimeTicks": 7_200_000_000i64,
         "Genres": ["Action", "Drama"],
-        "ExternalUrls": [{"Name": "IMDb", "Url": "https://imdb.test/dune"}],
+        "ExternalUrls": [
+            {"Name": "IMDb", "Url": "https://imdb.test/dune"},
+            {"Name": "TheMovieDb", "Url": "https://tmdb.test/dune"}
+        ],
         "UserData": {}
     }));
     let data = hero_content_emby(&item);
