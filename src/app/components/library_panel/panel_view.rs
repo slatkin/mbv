@@ -26,6 +26,7 @@ impl Component for LibraryPanel {
         let Some(owner) = self.owners.active_mut() else {
             return;
         };
+        let overview_scroll = owner.hero_scroll_offset();
         let mut content = owner.content();
         let mut hits = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
@@ -41,6 +42,7 @@ impl Component for LibraryPanel {
                 self.focused,
                 self.list_pane_width,
                 self.hyperlink_capable,
+                overview_scroll,
                 self.hovered_selector,
                 &mut hits,
                 &mut windows,

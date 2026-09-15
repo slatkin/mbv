@@ -5,6 +5,8 @@ use ratatui::buffer::CellDiffOption;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::{Block, Paragraph};
+
+use crate::app::render::components::widgets::render_right_scrollbar_inside;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -13,11 +15,55 @@ use crate::app::render::{paint_wide_hero_text, WrappedHeroLine, PANE_PAD_X, PANE
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
 
+pub(in crate::app) fn overview_scroll_metrics(
+    area: Rect,
+    next_row: u16,
+    content: &HeroContent<'_>,
+) -> Option<(Rect, usize, usize)> {
+    let overview = content
+        .overview
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let credits = content.credits.as_deref().filter(|rows| !rows.is_empty());
+    if overview.is_none() && credits.is_none() {
+        return None;
+    }
+    let width = (area.width.saturating_sub(PANE_PAD_X * 2) as usize)
+        .saturating_sub(1)
+        .max(1);
+    let text_rows = overview
+        .map(|text| textwrap::wrap(text, width).len())
+        .unwrap_or(0);
+    let inner_rows = text_rows
+        + usize::from(overview.is_some() && credits.is_some())
+        + credits.map_or(0, |r| r.len());
+    let box_y = next_row.saturating_add(1);
+    let room = area.bottom().saturating_sub(box_y);
+    let natural = (inner_rows.max(1) as u16).saturating_add(PANE_PAD_Y * 2);
+    let box_height = if content.workspace.is_some() {
+        natural.min(room)
+    } else {
+        room
+    };
+    if box_height <= PANE_PAD_Y * 2 {
+        return None;
+    }
+    let panel = Rect {
+        y: box_y,
+        height: box_height,
+        ..area
+    };
+    let viewport = box_height.saturating_sub(PANE_PAD_Y * 2) as usize;
+    Some((panel, inner_rows, viewport))
+}
+
 pub(in crate::app) fn paint_overview_box(
     f: &mut Frame,
     area: Rect,
     next_row: u16,
     content: &HeroContent<'_>,
+    scroll_offset: usize,
 ) -> Option<u16> {
     let overview = content
         .overview
@@ -80,30 +126,74 @@ pub(in crate::app) fn paint_overview_box(
         width: panel.width.saturating_sub(PANE_PAD_X * 2),
         height: panel.height.saturating_sub(PANE_PAD_Y * 2),
     };
-    let mut row = inner.y;
+    let max_offset = inner_rows.saturating_sub(inner.height as usize);
+    let offset = scroll_offset.min(max_offset);
+    let mut logical_row = 0usize;
     if let Some(text) = overview {
-        paint_wide_hero_text(
-            f,
-            Rect { y: row, ..inner },
-            &[WrappedHeroLine {
-                text,
+        let wrapped = textwrap::wrap(text, (inner.width as usize).saturating_sub(1).max(1));
+        let lines: Vec<WrappedHeroLine<'_>> = wrapped[offset.min(text_rows)..]
+            .iter()
+            .map(|line| WrappedHeroLine {
+                text: line.as_ref(),
                 style: Style::default().fg(palette::TEXT_EMPHASIS),
-            }],
-        );
-        row = row.saturating_add(text_rows as u16);
+            })
+            .collect();
+        let visible = lines.len().min(inner.height as usize);
+        if visible > 0 {
+            paint_wide_hero_text(
+                f,
+                Rect {
+                    y: inner.y,
+                    height: visible as u16,
+                    ..inner
+                },
+                &lines[..visible],
+            );
+        }
+        logical_row += text_rows;
     }
     if overview.is_some() && credits.is_some() {
-        row = row.saturating_add(1);
+        if logical_row >= offset && logical_row - offset < inner.height as usize {
+            let y = inner.y + (logical_row - offset) as u16;
+            let separator = "▔".repeat(inner.width as usize);
+            f.render_widget(
+                Paragraph::new(separator).style(Style::default().fg(palette::TEXT_EMPHASIS)),
+                Rect {
+                    x: inner.x,
+                    y,
+                    width: inner.width,
+                    height: 1,
+                },
+            );
+        }
+        logical_row += 1;
     }
     if let Some(credits) = credits {
-        paint_credits(
+        let start = logical_row;
+        if start < inner_rows {
+            let skip = offset.saturating_sub(start);
+            let y = inner.y + start.saturating_sub(offset) as u16;
+            if y < inner.bottom() {
+                paint_credits(
+                    f,
+                    Rect {
+                        y,
+                        height: inner.bottom().saturating_sub(y),
+                        ..inner
+                    },
+                    &credits[skip.min(credits.len())..],
+                );
+            }
+        }
+    }
+    if max_offset > 0 {
+        render_right_scrollbar_inside(
             f,
-            Rect {
-                y: row,
-                height: inner.bottom().saturating_sub(row),
-                ..inner
-            },
-            credits,
+            panel,
+            inner_rows,
+            inner.height as usize,
+            offset,
+            palette::TEXT_METADATA,
         );
     }
     Some(panel.bottom())
@@ -324,7 +414,7 @@ mod tests {
         let area = Rect::new(0, 0, width, height);
         terminal
             .draw(|f| {
-                paint_hero_pane_content(f, area, pane, false);
+                paint_hero_pane_content(f, area, pane, false, 0);
             })
             .unwrap();
         terminal.backend().buffer().clone()

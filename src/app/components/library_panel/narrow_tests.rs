@@ -301,7 +301,7 @@ fn wide_and_narrow_render_the_same_title_meta_and_image() {
     let pane = Rect::new(0, 0, 70, 14);
     terminal
         .draw(|f| {
-            super::super::hero_header::paint_hero_pane_content(f, pane, &hero, false);
+            super::super::hero_header::paint_hero_pane_content(f, pane, &hero, false, 0);
         })
         .unwrap();
     let wide_buf = terminal.backend().buffer().clone();

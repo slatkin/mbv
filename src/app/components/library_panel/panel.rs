@@ -416,6 +416,24 @@ impl LibraryPanel {
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
+        if let LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel { at, delta }) = event {
+            if let Some(geometry) = self.wide_geometry.as_ref() {
+                if let Some(rect) = geometry.overview_box {
+                    if rect.contains(at)
+                        && geometry.overview_content_length > geometry.overview_viewport
+                    {
+                        let max = geometry.overview_content_length - geometry.overview_viewport;
+                        return self.owners.active_mut().map(|owner| {
+                            owner.hero_scroll(delta as i16, max);
+                            Msg::TerminalEvent(
+                                crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+                            )
+                        });
+                    }
+                }
+            }
+            // Otherwise preserve the owner's existing HeroPane behavior.
+        }
         let is_wheel = matches!(
             event,
             LibrarySlotEvent::List(MediaListSurfaceInput::Wheel { .. })

@@ -313,12 +313,13 @@ fn movie_without_genres_or_links_keeps_only_existing_rows() {
 
 #[rstest]
 #[case(vec![("Director", "", "A")], vec![("A", "Director")])]
-#[case(vec![("Director", "", "Director"), ("Actor", "Actor 0", "Actor 0"), ("Actor", "Actor 1", "Actor 1"), ("Actor", "Actor 2", "Actor 2"), ("Actor", "Actor 3", "Actor 3"), ("Actor", "Actor 4", "Actor 4"), ("Actor", "Actor 5", "Actor 5"), ("Actor", "Actor 6", "Actor 6"), ("Actor", "Actor 7", "Actor 7"), ("Actor", "Actor 8", "Actor 8"), ("Actor", "Actor 9", "Actor 9"), ("Actor", "Actor 10", "Actor 10"), ("Actor", "Actor 11", "Actor 11"), ("Actor", "Actor 12", "Actor 12"), ("Actor", "Actor 13", "Actor 13")], vec![("Director", "Director"), ("Actor 0", "Actor 0"), ("Actor 1", "Actor 1"), ("Actor 2", "Actor 2"), ("Actor 3", "Actor 3"), ("Actor 4", "Actor 4"), ("Actor 5", "Actor 5"), ("Actor 6", "Actor 6"), ("Actor 7", "Actor 7"), ("Actor 8", "Actor 8")])]
+#[case(vec![("Director", "", "Director"), ("Actor", "Actor 0", "Actor 0"), ("Actor", "Actor 1", "Actor 1"), ("Actor", "Actor 2", "Actor 2"), ("Actor", "Actor 3", "Actor 3"), ("Actor", "Actor 4", "Actor 4"), ("Actor", "Actor 5", "Actor 5"), ("Actor", "Actor 6", "Actor 6"), ("Actor", "Actor 7", "Actor 7"), ("Actor", "Actor 8", "Actor 8"), ("Actor", "Actor 9", "Actor 9"), ("Actor", "Actor 10", "Actor 10"), ("Actor", "Actor 11", "Actor 11"), ("Actor", "Actor 12", "Actor 12"), ("Actor", "Actor 13", "Actor 13")], vec![("Director", "Director"), ("Actor 0", "Actor 0"), ("Actor 1", "Actor 1"), ("Actor 2", "Actor 2"), ("Actor 3", "Actor 3"), ("Actor 4", "Actor 4"), ("Actor 5", "Actor 5"), ("Actor 6", "Actor 6"), ("Actor 7", "Actor 7"), ("Actor 8", "Actor 8"), ("Actor 9", "Actor 9"), ("Actor 10", "Actor 10"), ("Actor 11", "Actor 11"), ("Actor 12", "Actor 12"), ("Actor 13", "Actor 13")])]
+#[case(vec![("Director", "", "D"), ("Actor", "A", "A"), ("Writer", "W", "W"), ("Producer", "P", "P"), ("Composer", "C", "C")], vec![("D", "Director"), ("A", "A"), ("W", "W"), ("P", "P"), ("C", "C")])]
 #[case(vec![("Director", "", "A"), ("Director", "Dir", "B"), ("Actor", "C1", "C"), ("Actor", "C2", "D")], vec![("A", "Director"), ("B", "Dir"), ("C", "C1"), ("D", "C2")])]
 #[case(vec![("Actor", "C1", "C")], vec![("C", "C1")])]
 #[case(vec![("Director", "Dir", "A"), ("Actor", "C1", "B"), ("Actor", "C2", "C")], vec![("A", "Dir"), ("B", "C1"), ("C", "C2")])]
 #[case(Vec::<(&str, &str, &str)>::new(), Vec::<(&str, &str)>::new())]
-fn movie_credits_are_grouped_and_capped(
+fn movie_credits_are_grouped_without_cap(
     #[case] people: Vec<(&str, &str, &str)>,
     #[case] expected: Vec<(&str, &str)>,
 ) {

@@ -25,6 +25,7 @@ use crate::app::render::{
 
 use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroImagePaint};
 use super::hero_header::paint_hero_pane_content;
+use super::overview_box;
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
     SELECTOR_ROW_PREFIX,
@@ -99,6 +100,9 @@ pub(in crate::app) struct WideSkeletonGeometry {
     /// The projected hero image's paint (task 5.10, design D9), when the
     /// header reserved a ready image's box.
     pub hero_image: Option<PanelHeroImagePaint>,
+    pub overview_box: Option<Rect>,
+    pub overview_content_length: usize,
+    pub overview_viewport: usize,
     /// The selected row's rect from the list slot's view, when one painted
     /// (the context-menu anchor's painted truth).
     pub selected: Option<Rect>,
@@ -122,6 +126,7 @@ pub(in crate::app) fn render_wide_skeleton(
     browser_focused: bool,
     override_width: Option<u16>,
     hyperlink_capable: bool,
+    overview_scroll: usize,
     hovered_selector: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
@@ -291,6 +296,9 @@ pub(in crate::app) fn render_wide_skeleton(
         hero_area,
         workspace: None,
         hero_image: None,
+        overview_box: None,
+        overview_content_length: 0,
+        overview_viewport: 0,
         selected,
     };
 
@@ -300,7 +308,14 @@ pub(in crate::app) fn render_wide_skeleton(
         // exists. Returns the first unpainted row and the projected image's
         // reserved box (task 5.10: `Ready` reserves; the shell paints).
         let (next_row, image_box) =
-            paint_hero_pane_content(f, hero_area, &*hero, hyperlink_capable);
+            paint_hero_pane_content(f, hero_area, &*hero, hyperlink_capable, overview_scroll);
+        if let Some((box_rect, content_length, viewport)) =
+            overview_box::overview_scroll_metrics(hero_area, next_row, &*hero)
+        {
+            geometry.overview_box = Some(box_rect);
+            geometry.overview_content_length = content_length;
+            geometry.overview_viewport = viewport;
+        }
         if let (HeroImageState::Ready { cache_key, .. }, Some(box_rect)) =
             (&hero.facts.artwork.image, image_box)
         {

@@ -134,6 +134,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     area: Rect,
     content: &HeroContent<'_>,
     hyperlink_capable: bool,
+    overview_scroll: usize,
 ) -> (u16, Option<Rect>) {
     let header = HeroHeader::from(content.facts.artwork.shape);
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
@@ -172,7 +173,8 @@ pub(in crate::app) fn paint_hero_pane_content(
 
     // The overview Main content box only when overview text exists (design
     // D5); without it the Workspace moves up.
-    let next_row = overview_box::paint_overview_box(f, area, next_row, content).unwrap_or(next_row);
+    let next_row = overview_box::paint_overview_box(f, area, next_row, content, overview_scroll)
+        .unwrap_or(next_row);
     (next_row, reserved_image)
 }
 
@@ -264,7 +266,7 @@ mod hero_header_tests {
         let pane_area = area;
         terminal
             .draw(|f| {
-                paint_hero_pane_content(f, pane_area, pane, false);
+                paint_hero_pane_content(f, pane_area, pane, false, 0);
             })
             .unwrap();
         terminal.backend().buffer().clone()

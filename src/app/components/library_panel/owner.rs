@@ -116,6 +116,13 @@ pub(in crate::app) trait LibraryContentOwner {
         None
     }
 
+    fn hero_scroll_offset(&self) -> usize {
+        0
+    }
+    fn hero_scroll(&mut self, _delta: i16, _max_offset: usize) -> bool {
+        false
+    }
+
     /// Downcast support for the shell's per-destination pushes (the shell
     /// projects destination-specific content into a typed owner it knows
     /// by name, addressed through the panel's `LibraryKey` map).

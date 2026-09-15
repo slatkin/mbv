@@ -305,8 +305,7 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
         credits.extend(
             item.people
                 .iter()
-                .filter(|person| person.kind == "Actor")
-                .take(9)
+                .filter(|person| person.kind != "Director")
                 .map(|person| HeroCredit {
                     name: person.name.clone(),
                     role: if person.role.is_empty() {
