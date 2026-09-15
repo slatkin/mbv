@@ -107,10 +107,12 @@
 
 ## 6. Gates
 
-- [ ] 6.1 Run `cargo fmt`, `cargo check -p mbv`,
+- [x] 6.1 Run `cargo fmt`, `cargo check -p mbv`,
   `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv`, and
   `cargo test --release -p mbv` (CI runs the release profile, where a debug-only guard proves nothing).
   Verify: all pass.
+  (Accepted: orchestrator ran the full matrix at `1a2ec7ad` — fmt clean, check clean, clippy clean,
+  nextest 1506/1506, release 1506/1506.)
 - [ ] 6.2 Run the app and confirm: the Browser rail stripes lighter than its panel and the Workspace
   list stripes darker than its box, in both focus states; the selected row in each is bold focus-accent
   and keeps its stripe; Ctrl+Click/Visual rows match the selected row; the Queue is unchanged; Narrow
