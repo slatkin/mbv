@@ -30,8 +30,9 @@ content row when the item has no overview text.
 ### Requirement: A Movie hero's metadata rows carry genres and provider links
 
 A Movie hero's metadata rows SHALL carry, in order, the item's release date, its runtime, one row
-joining every genre the item declares, and one row joining the item's provider link names. Genres come
-from the provider's genre list, not from the first genre alone. A row SHALL NOT render when its
+joining every genre the item declares (delimited by a single `/` with no spacing), and one row
+joining the item's provider link names. Genres come from
+the provider's genre list, not from the first genre alone. A row SHALL NOT render when its
 content is empty.
 
 Only items the provider types as a Movie SHALL carry the genre and provider-link rows. Every other

@@ -82,7 +82,8 @@
   cap removed and the role fallback (provider type when role text is empty) unchanged. Verify: the
   `rstest` `#[case]` table updated so the cap case proves NO cap (a payload with more than 9 actors
   yields all of them), a mixed-type payload (writer/producer/composer) appears after the actors in
-  provider order, and the existing no-people / no-role cases still pass.
+  provider order, the genre row reads `Action/Drama` for two genres (single `/`, no spacing — user
+  direction 2026-09-15), and the existing no-people / no-role cases still pass.
 - [ ] 6.2 Replace the blank gap row under the overview text with a separator: one blank row under the
   overview text, then a separator line of `▁` (U+2581) block characters spanning the box's content
   width, in the sage-green text role (#A7C080, the theme's existing `IRIS` primitive — via a semantic
