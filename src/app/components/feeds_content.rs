@@ -567,7 +567,10 @@ impl LibraryContentOwner for FeedsContent {
             },
             // Feeds has no Workspace and no hero-pane input of its own.
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
-            LibrarySlotEvent::HeroActivate => None,
+            LibrarySlotEvent::HeroActivate => self
+                .selected_entry()
+                .cloned()
+                .map(|entry| Msg::Shell(ShellRequest::FeedsPlay(vec![entry]))),
         }
     }
 
@@ -596,10 +599,11 @@ impl LibraryContentOwner for FeedsContent {
         }
     }
 
-    // Feed-entry activation remains the existing direct path until the
-    // destination migration task routes Feeds through the Library Hero overlay.
+    // Feed entries are leaf Heroes: the first Enter opens the Library Hero
+    // overlay and the overlay's subsequent activation uses the same typed
+    // playback request as the browser row.
     fn hero_overlay_available(&mut self) -> bool {
-        false
+        self.content().hero.is_some()
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

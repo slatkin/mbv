@@ -130,8 +130,12 @@ impl BookContent {
         // save and restore (split-browse-state-interaction-fields task 2.2).
         // Whether the book the component was showing survived the new content
         // decides if its derived local state still means anything.
+        // The carrier owns the stable book target. A provider completion can
+        // carry a stale selected_id, but an open Hero must stay bound to the
+        // same book when that target remains in the refreshed catalog.
+        let prior_target = self.carrier.selected_target().cloned();
         let survived = self.initialized
-            && self.state.selected_id.as_ref().is_some_and(|prior| {
+            && prior_target.as_ref().is_some_and(|prior| {
                 snapshot
                     .books
                     .iter()
@@ -162,6 +166,19 @@ impl BookContent {
         if !self.initialized {
             if let Some(target) = self.state.selected_id.clone() {
                 self.carrier.select_target(&target);
+            }
+        } else if survived {
+            if let Some(target) = prior_target {
+                if self
+                    .state
+                    .books
+                    .iter()
+                    .any(|book| book.library_item_id == target)
+                {
+                    self.state.selected_id = Some(target.clone());
+                    self.state.detail_loading = self.state.detail_loading_ids.contains(&target);
+                    self.carrier.select_target(&target);
+                }
             }
         } else if identity_changed {
             self.carrier.select_first();

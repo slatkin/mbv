@@ -79,8 +79,12 @@ impl PodcastContent {
         snapshot: &AudiobookshelfBrowseState,
         _images_enabled: bool,
     ) {
+        // The carrier owns the authoritative stable target. The projected
+        // snapshot's selected_id can lag a provider refresh, so do not use it
+        // to decide whether the open Hero still represents the same show.
+        let prior_target = self.carrier.selected_target().cloned();
         let survived = self.initialized
-            && self.state.selected_id.as_ref().is_some_and(|prior| {
+            && prior_target.as_ref().is_some_and(|prior| {
                 snapshot
                     .shows
                     .iter()
@@ -108,7 +112,20 @@ impl PodcastContent {
             if let Some(id) = self.state.selected_id.clone() {
                 self.carrier.select_target(&id);
             }
-        } else if !survived {
+        } else if survived {
+            if let Some(target) = prior_target {
+                if self
+                    .state
+                    .shows
+                    .iter()
+                    .any(|show| show.library_item_id == target)
+                {
+                    self.state.selected_id = Some(target.clone());
+                    self.state.episodes = self.state.detail_cache.get(&target).cloned();
+                    self.carrier.select_target(&target);
+                }
+            }
+        } else {
             self.episode_filter = AudiobookshelfEpisodeFilter::All;
             self.episode_focused = false;
             self.carrier.select_first();
