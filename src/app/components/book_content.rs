@@ -672,6 +672,11 @@ impl LibraryContentOwner for BookContent {
         }
     }
 
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.enter_chapter_focus();
+        true
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()
     }

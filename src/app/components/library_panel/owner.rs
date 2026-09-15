@@ -144,6 +144,18 @@ pub(in crate::app) trait LibraryContentOwner {
             .unwrap_or(LeafKeyResult::Unhandled)
     }
 
+    fn hero_overlay_available(&mut self) -> bool {
+        self.content().hero.is_some()
+    }
+
+    fn inline_search_active(&self) -> bool {
+        false
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        false
+    }
+
     /// The current hero's content data for the shell's image projection
     /// (task 5.10, design D9), or `None` when the owner shows no hero. The
     /// projection runs the artwork box and the fetch; painting reads the

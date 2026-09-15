@@ -17,7 +17,7 @@ use crate::app::components::media_list::{
     LibrarySelectionOrigin, MediaListSurfaceInput, SelectionOrigin, SelectionSummary,
 };
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
-use crate::app::components::msg::{Msg, ShellRequest};
+use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::list_pane_width::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
 
@@ -473,6 +473,23 @@ impl LibraryPanel {
         self.slot_event(LibrarySlotEvent::List(input))
     }
 
+    fn can_open_hero_overlay(&mut self) -> bool {
+        self.owners
+            .active_mut()
+            .is_some_and(|owner| owner.hero_overlay_available() && !owner.inline_search_active())
+    }
+
+    fn open_hero_from_browser(&mut self) -> Option<Msg> {
+        if !self.can_open_hero_overlay() {
+            return None;
+        }
+        if let Some(owner) = self.owners.active_mut() {
+            owner.focus_hero_workspace();
+        }
+        self.open_hero_overlay();
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    }
+
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         if let LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel { at, delta }) = event {
             if let Some(geometry) = self.wide_geometry.as_ref() {
@@ -625,9 +642,16 @@ impl LibraryPanel {
                 };
                 self.slot_event(LibrarySlotEvent::List(input))
             }
-            MouseGesture::DoubleClick(at) if inside_list => self.slot_event(
-                LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(at)),
-            ),
+            MouseGesture::DoubleClick(at) if inside_list => {
+                if self.narrow_geometry.is_some() {
+                    if let Some(message) = self.open_hero_from_browser() {
+                        return Some(message);
+                    }
+                }
+                self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
+                    at,
+                )))
+            }
             MouseGesture::RightClick(at) if inside_list => self.slot_event(LibrarySlotEvent::List(
                 MediaListSurfaceInput::ContextClick(at),
             )),
@@ -687,6 +711,16 @@ impl LibraryPanel {
                 }
                 _ => None,
             };
+        }
+        if matches!(gesture, MouseGesture::DoubleClick(_)) {
+            return self.owners.active_mut().and_then(|owner| {
+                owner
+                    .on_key_result(&tuirealm::event::KeyEvent::new(
+                        tuirealm::event::Key::Enter,
+                        tuirealm::event::KeyModifiers::NONE,
+                    ))
+                    .into_option()
+            });
         }
         Some(Msg::TerminalEvent(
             crate::app::components::msg::TerminalObserverEvent::MouseClaimed,

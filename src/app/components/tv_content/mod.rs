@@ -591,6 +591,16 @@ impl LibraryContentOwner for TvContent {
             None => LeafKeyResult::Unhandled,
         }
     }
+    fn inline_search_active(&self) -> bool {
+        self.inline_search.is_active()
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.episodes.select_first();
+        self.pane = Pane::Episodes;
+        true
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.context.selected_series.as_ref().map(hero_content_emby)
     }

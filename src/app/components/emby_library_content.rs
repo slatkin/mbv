@@ -685,6 +685,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
         }
     }
 
+    fn inline_search_active(&self) -> bool {
+        self.inline_search.is_active()
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_item().map(hero_content_emby)
     }

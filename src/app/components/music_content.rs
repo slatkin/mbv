@@ -654,6 +654,15 @@ impl LibraryContentOwner for MusicContent {
         }
     }
 
+    fn inline_search_active(&self) -> bool {
+        self.inline_search.is_active()
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.enter_track_focus();
+        true
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()
     }

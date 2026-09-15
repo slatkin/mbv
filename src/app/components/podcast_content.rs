@@ -553,6 +553,11 @@ impl LibraryContentOwner for PodcastContent {
         }
     }
 
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.enter_episode_focus();
+        true
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.hero_data()
     }

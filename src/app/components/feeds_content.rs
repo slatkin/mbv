@@ -600,6 +600,12 @@ impl LibraryContentOwner for FeedsContent {
         }
     }
 
+    // Feed-entry activation remains the existing direct path until the
+    // destination migration task routes Feeds through the Library Hero overlay.
+    fn hero_overlay_available(&mut self) -> bool {
+        false
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.selected_entry().map(hero_content_feed)
     }

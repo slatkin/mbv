@@ -23,6 +23,14 @@ impl Component for LibraryPanel {
         // a Wide→Narrow resize leaves neither the vanished split's gap armed
         // nor the stale Wide list rect claiming clicks.
         self.reset_frame();
+        let overlay_parent_missing = self.hero_overlay_open
+            && self
+                .owners
+                .active_mut()
+                .is_some_and(|owner| !owner.hero_overlay_available());
+        if overlay_parent_missing {
+            self.dismiss_hero_overlay();
+        }
         let Some(owner) = self.owners.active_mut() else {
             return;
         };
@@ -165,8 +173,22 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
             // mounted destination did. The router keeps precedence — this is
             // not a second resolution site, only delivery.
             Event::Keyboard(key) if self.focused => {
-                // Focus is panel-owned; keep the embedded owner's derived
-                // focus bit aligned before translating its local chord.
+                if key.modifiers.is_empty()
+                    && key.code == tuirealm::event::Key::Esc
+                    && self.hero_overlay_open
+                {
+                    self.dismiss_hero_overlay();
+                    return LeafKeyResult::Consumed(None).into_option();
+                }
+                if key.modifiers.is_empty()
+                    && key.code == tuirealm::event::Key::Enter
+                    && !self.hero_overlay_open
+                    && self.narrow_geometry.is_some()
+                {
+                    if let Some(message) = self.open_hero_from_browser() {
+                        return Some(message);
+                    }
+                }
                 self.owners
                     .active_mut()
                     .map(|owner| owner.on_key_result(key).into_option())
