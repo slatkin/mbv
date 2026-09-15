@@ -94,6 +94,10 @@ no production reader today and `genre` has exactly one (the Series meta row, whi
 
 ### D4 — The links row is a typed row rendered last by the painter, not a new meta-row enum
 
+*Superseded 2026-09-15 (see D4a/D5a/D6a below):* the row now carries only the item's IMDb link, and
+D5's OSC 8 escape-cell mechanism was reversed in favour of an app-owned click handler. This section is
+kept for the row-shape rationale (`meta_rows` vs. a typed row), which still holds.
+
 `meta_rows: Vec<String>` stays the ordered plain-text list; `HeroFacts` gains
 `links: Vec<HeroLink>` and the painter paints it as one more row after `meta_rows`. This keeps ~20
 `HeroFacts { .. }` sites and both painters untouched while giving the painter the labels it must
@@ -162,14 +166,43 @@ When the pane is shorter
 than the box's content, the table clips at the box's bottom edge — the Hero pane does not scroll, and
 the alternative (shrinking the artwork further) would fight the existing text-starvation rule.
 
+### D4a — Links row narrows to the IMDb link only (2026-09-15)
+
+By user direction on the visual sweep, the provider-link row carries only the item's IMDb link, when
+one is declared; other providers' links (TMDb, TheTVDB, Trakt) are parsed into `external_urls` but not
+shown. The row still does not render when there is no IMDb link.
+
+### D5a — Clicking resolves through the Library panel's own hit geometry, not an OSC 8 escape cell
+
+D5's forced-width escape cell is reversed: terminal-side ctrl-click never fires while mbv holds the
+captured mouse, so no terminal could act on the escape regardless of its declared hyperlink support.
+Instead the link name is an ordinary painted label; the Library panel resolves a click against the
+label's geometry (the same per-surface hit-resolution the panel already owns for its other rows, per
+ADR 0024 — no second routing site) and opens the URL through the same system-opener path
+(`xdg-open`/`open`/`start`) the feed link already uses (`feed_actions::open_url`), rather than spawning
+a new one.
+
+*Consequence:* D5's buffer-level analysis of ratatui's `ForcedWidth` cell and the crossterm backend's
+raw `Print` path is moot for this feature — no escape cell is ever painted. mbv still ships no
+hyperlink escape sequence anywhere in `src/`; `idle-feed-rotation`'s OSC 8 feed-title requirement
+remains unimplemented and unaffected by this reversal.
+
+### D6a — Sanitization gate drops the terminal-capability check, keeps the URL check
+
+D6's terminal hyperlink-support gate no longer applies (there is no escape to gate). The URL check
+survives unchanged: a link opens only when it is `http`/`https` with no control byte; anything else
+renders as plain text and does nothing when clicked.
+
 ## Risks / Trade-offs
 
-- **[A forced-width escape cell is not re-emitted when unchanged]** → the escape is self-closing inside
-  the label's span, so a skipped redraw is correct; if a future renderer (image protocol) clears the
-  region outside ratatui's knowledge, the row must be repainted, and `AlwaysUpdate` is ratatui's lever
-  (mutually exclusive with `ForcedWidth`, so it would need the split-cell form).
-- **[Hyperlink support detection is a heuristic]** → the failure mode is a lost click on an unknown
-  terminal, never visible garbage; the row renders as plain text.
+- **[A forced-width escape cell is not re-emitted when unchanged]** *(moot per D5a — no escape cell is
+  painted; kept for history)* → the escape is self-closing inside the label's span, so a skipped
+  redraw is correct; if a future renderer (image protocol) clears the region outside ratatui's
+  knowledge, the row must be repainted, and `AlwaysUpdate` is ratatui's lever (mutually exclusive with
+  `ForcedWidth`, so it would need the split-cell form).
+- **[Hyperlink support detection is a heuristic]** *(moot per D6a — there is no escape to gate; kept for
+  history)* → the failure mode is a lost click on an unknown terminal, never visible garbage; the row
+  renders as plain text.
 - **[The table competes with the overview for a short pane]** → clipping at the box bottom is the
   specified behaviour, and the existing artwork-starvation rule still shrinks the Landscape artwork
   first, so the box gets its rows before the pane runs out.

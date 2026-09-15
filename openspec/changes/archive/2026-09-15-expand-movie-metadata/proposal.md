@@ -12,12 +12,15 @@ change keeps it and renders it.
   two aligned columns, no header row and no rules, every director first, then the top 9 cast, each row
   a name and a role. Roles come from Emby's `People`; when the provider leaves `Role` empty the person
   type is shown instead.
-- The Movie hero's metadata rows gain **Genres** (every genre, not just the first) and **Links**
-  (provider names only, e.g. `IMDb  TMDb  Trakt`), after the existing release-date and runtime rows.
-- Link names are ctrl-clickable, opening the URL in the user's browser. mbv has no hyperlink
-  implementation today: link labels are painted with an OSC 8 escape in the cell (the mechanism
-  `idle-feed-rotation` already specifies for feed titles), gated on the terminal declaring hyperlink
-  support and on the URL being a sanitized `http`/`https` URL with no control bytes.
+- The Movie hero's metadata rows gain **Genres** (every genre, not just the first) and a **Link** row
+  carrying the item's IMDb provider link only (**reversed 2026-09-15**: originally every provider name,
+  e.g. `IMDb  TMDb  Trakt` — narrowed to IMDb-only by user direction, other providers' links are not
+  shown), after the existing release-date and runtime rows.
+- The link name opens the provider URL in the user's browser when clicked (**reversed 2026-09-15** from
+  the original OSC 8 design below: terminal-side ctrl-click is unavailable while the application
+  captures the mouse, so the click is resolved by the Library panel against the label geometry it
+  painted and handled by the same system-opener path the feed link uses, `xdg-open`/`open`/`start` per
+  platform). The URL is opened only when it is a sanitized `http`/`https` URL with no control bytes.
 - `EmbyItem` carries `people`, `genres`, and `external_urls`. The first-genre-only `genre` field is
   replaced by `genres`, and the unused `director` field is replaced by `people`.
 
