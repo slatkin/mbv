@@ -68,22 +68,22 @@
 
 ## 5. Prompt and confirmed fall-through
 
-- [ ] 5.1 Add `ConfirmAction::PlayLocallyInstead` (unit variant) and
+- [x] 5.1 Add `ConfirmAction::PlayLocallyInstead` (unit variant) and
       `App::pending_local_play: Option<PendingQueueAction>`, and raise the modal
       with the owner and selection named, following the
       `DiscardOrSaveDirtyPlaylist` shape (`src/app/types_confirm.rs`,
       `src/app/queue_actions.rs:247`). Verification: a unit test asserts the
       deferred play is stored and a confirmation modal is requested.
-- [ ] 5.2 Bind the prompt's keys: `y`/`Y`/Enter accept, `n`/`N`/Esc decline,
+- [x] 5.2 Bind the prompt's keys: `y`/`Y`/Enter accept, `n`/`N`/Esc decline,
       other keys act on nothing and leave the modal open
       (`src/app/components/confirm.rs:123`,
       `src/app/shell_modal_actions.rs:146`). Verification: component tests for
       each key class.
-- [ ] 5.3 Handle decline in `apply_confirm_action`: clear the pending play and
+- [x] 5.3 Handle decline in `apply_confirm_action`: clear the pending play and
       change nothing else (`src/app/input_confirm_keys.rs:15`). Verification: a
       unit test asserts no command is sent, the attachment is intact, queue
       scope is unchanged, and no toast is raised.
-- [ ] 5.4 Separate local-player preparation from attachment teardown: extract
+- [x] 5.4 Separate local-player preparation from attachment teardown: extract
       the shared tail of `App::restore_local_mode`
       (`src/app/session_switch.rs:280`) and add a preparation step that restores
       a suspended local player or constructs one through the ordinary local
@@ -93,12 +93,12 @@
       path leaves the attachment, its queue, and playback untouched. Use a test
       seam through the existing override pattern
       (`src/app/session_connect.rs:71`) so no live mpv handle is constructed.
-- [ ] 5.5 Run the confirmed effect in order: prepare, stop the owner, end the
+- [x] 5.5 Run the confirmed effect in order: prepare, stop the owner, end the
       attachment, rebind MPRIS, then run the deferred local play. Verification:
       a unit test asserts the stop command precedes the local submission, the
       attachment state is cleared, the media-key target is rebound, and no
       transport or queue command reaches the former owner afterward.
-- [ ] 5.6 Cover the Emby-session owner variant: stop that session, end the
+- [x] 5.6 Cover the Emby-session owner variant: stop that session, end the
       control relationship, then play locally instead of issuing the session
       play request. Verification: a unit test asserts the session stop command
       is issued, the session state is cleared, and no session play request is
