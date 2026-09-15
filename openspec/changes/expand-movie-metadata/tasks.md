@@ -97,3 +97,9 @@
   and absent when fitting, content offset applied to overview + table rows, clamped at both ends, and
   the wheel routing test through the mounted Library panel (real `Application::tick()` integration
   per AGENTS.md).
+- [ ] 6.4 Zebra-stripe the credits table rows: alternate rows (by table position, first row
+  unstriped) carry the darker surface tone #333c43 behind the body text, applied through a semantic
+  theme role (the raw primitive exists as `PLAYBACK_PANEL_BG`; give the stripe its own role or reuse
+  a fitting one — never a raw Rgb in the painter). Zebra follows the table's own rows, so it scrolls
+  with the content. Verify: buffer tests for the striped/unstriped alternation across the first three
+  rows, and that the stripe honours the scroll offset (moves with its row).

@@ -80,7 +80,9 @@ longest name the table shows, and every role SHALL be right-aligned at the box's
 longer than the remaining width SHALL be truncated with an ellipsis at the box's edge. The table SHALL have
 no header row, and SHALL use the body text treatment the overview paragraph
 uses. A blank row SHALL sit under the overview text, followed by a separator line of `▁` (U+2581)
-block characters spanning the box's content width in the sage-green text role (#A7C080).
+block characters spanning the box's content width in the sage-green text role (#A7C080). Table rows
+SHALL be zebra-striped: alternate rows (by table position, first row unstriped) SHALL carry the
+darker surface tone #333c43 behind the body text, applied through a semantic theme role.
 
 A person's role SHALL be the provider's role text for that person. When the provider supplies no role
 text, the person's provider type SHALL be shown instead.
