@@ -108,7 +108,6 @@ impl Component for LibraryPanel {
                     self.overlay_geometry = Some(super::OverlayGeometry {
                         pane: area,
                         frame: overlay_rect,
-                        inner,
                         hero: composition,
                     });
                 }
@@ -116,20 +115,22 @@ impl Component for LibraryPanel {
         }
         // The projected hero image's reserved box (task 5.10, design D9): the
         // shell paints the protocol into it right after view returns.
-        self.image_paint = self
-            .overlay_geometry
-            .as_ref()
-            .and_then(|geometry| geometry.hero.hero_image.clone())
-            .or_else(|| {
-                self.wide_geometry
-                    .as_ref()
-                    .and_then(|geometry| geometry.hero_image.clone())
-            })
-            .or_else(|| {
-                self.narrow_geometry
-                    .as_ref()
-                    .and_then(|geometry| geometry.inline_hero_image.clone())
-            });
+        self.image_paint = if self.hero_overlay_open {
+            // The overlay owns the covered Hero surface while open; never
+            // project the underlying browser image into its dimmed frame.
+            self.overlay_geometry
+                .as_ref()
+                .and_then(|geometry| geometry.hero.hero_image.clone())
+        } else {
+            self.wide_geometry
+                .as_ref()
+                .and_then(|geometry| geometry.hero_image.clone())
+                .or_else(|| {
+                    self.narrow_geometry
+                        .as_ref()
+                        .and_then(|geometry| geometry.inline_hero_image.clone())
+                })
+        };
         self.hits = hits;
         self.pill_windows = windows;
         self.painted_area = Some(area);

@@ -59,6 +59,7 @@ pub(in crate::app) fn selected_detail_content_area(
 ) -> Rect {
     Rect {
         x: hero_area.x.saturating_add(side_padding),
+        // One row down: the block's top spacer row, above the content.
         y: hero_area.y.saturating_add(1),
         width: hero_area.width.saturating_sub(side_padding * 2),
         height: hero_area.height.saturating_sub(extra_rows),

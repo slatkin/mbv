@@ -407,6 +407,23 @@ fn wide_hero_link_click_emits_open_url_request() {
 }
 
 #[test]
+fn overlay_paints_and_retains_library_geometry() {
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(
+        LibraryKey::Home,
+        Box::new(FixtureOwner::new(Rc::new(RefCell::new(
+            FixtureLog::default(),
+        )))),
+    );
+    panel.test_open_hero_overlay();
+    let _ = draw_panel(&mut panel);
+    let (pane, frame) = panel.test_overlay_geometry().expect("overlay was painted");
+    assert!(frame.x >= pane.x && frame.right() <= pane.right());
+    assert!(frame.y >= pane.y && frame.bottom() <= pane.bottom());
+}
+
+#[test]
 fn unpainted_frame_after_a_painted_one_arms_nothing() {
     let mut panel = LibraryPanel::new();
     panel.set_active(Some(LibraryKey::Home));

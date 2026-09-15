@@ -4,6 +4,7 @@ use ratatui::text::Span;
 use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use ratatui::Frame;
 
+use super::backdrop::dim_backdrop_in;
 use crate::app::palette;
 
 /// Paint the Library-local overlay chrome and return the inset Hero rectangle.
@@ -13,15 +14,7 @@ pub(in crate::app) fn paint_library_hero_overlay(
     library_area: Rect,
     overlay: Rect,
 ) -> Rect {
-    let buffer = f.buffer_mut();
-    for y in library_area.y..library_area.bottom() {
-        for x in library_area.x..library_area.right() {
-            if let Some(cell) = buffer.cell_mut((x, y)) {
-                cell.fg = dim(cell.fg);
-                cell.bg = dim(cell.bg);
-            }
-        }
-    }
+    dim_backdrop_in(f, library_area);
     f.render_widget(Clear, overlay);
     let block = Block::default()
         .title(Span::styled(
@@ -48,16 +41,9 @@ pub(in crate::app) fn paint_library_hero_overlay(
             },
         );
     }
-    inner
-}
-
-fn dim(color: ratatui::style::Color) -> ratatui::style::Color {
-    match color {
-        ratatui::style::Color::White => ratatui::style::Color::Rgb(127, 127, 127),
-        ratatui::style::Color::Black | ratatui::style::Color::Reset => {
-            ratatui::style::Color::Rgb(0, 0, 0)
-        }
-        ratatui::style::Color::Rgb(r, g, b) => ratatui::style::Color::Rgb(r / 2, g / 2, b / 2),
-        other => other,
+    // The hint owns the final inner row; shared Hero content must not repaint it.
+    Rect {
+        height: inner.height.saturating_sub(1),
+        ..inner
     }
 }

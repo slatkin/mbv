@@ -36,7 +36,6 @@ use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideS
 struct OverlayGeometry {
     pane: ratatui::layout::Rect,
     frame: ratatui::layout::Rect,
-    inner: ratatui::layout::Rect,
     hero: HeroCompositionGeometry,
 }
 
@@ -202,6 +201,10 @@ impl LibraryPanel {
 
     /// Record the session-only Wide split width override for the next `view`.
     /// Pushed each sync pass by the shell beside the other per-frame facts.
+    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
+        self.list_pane_width = list_pane_width;
+    }
+
     /// Open the Library-local Hero overlay for the active Hero. Activation
     /// policy is owned by the later routing task; this transition is local.
     pub(in crate::app) fn open_hero_overlay(&mut self) {
@@ -225,10 +228,6 @@ impl LibraryPanel {
         self.overlay_geometry
             .as_ref()
             .map(|geometry| (geometry.pane, geometry.frame))
-    }
-
-    pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
-        self.list_pane_width = list_pane_width;
     }
 
     /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears
@@ -642,6 +641,58 @@ impl LibraryPanel {
         }
     }
 
+    fn overlay_gesture(&mut self, mouse: &MouseEvent, at: Position) -> Option<Msg> {
+        let geometry = self.overlay_geometry.as_ref()?;
+        let gesture = self.gestures.recognize(mouse)?;
+        if let Some(&index) = self.hits.workspace_selector.resolve(at) {
+            return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
+        }
+        if let MouseGesture::Click { .. } = gesture {
+            if let Some(&index) = self.hits.links.resolve(at) {
+                if let Some(url) = self
+                    .painted_link_urls
+                    .get(index)
+                    .cloned()
+                    .and_then(|url| super::overview_box::sanitize_url(&url).map(str::to_owned))
+                {
+                    return Some(Msg::Shell(ShellRequest::OpenUrl(url)));
+                }
+            }
+        }
+        if geometry
+            .hero
+            .workspace
+            .is_some_and(|(panel, _)| panel.contains(at))
+        {
+            return match gesture {
+                MouseGesture::Click { at, modifier } => {
+                    let input = match modifier {
+                        ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                        ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                        ClickModifier::None => MediaListSurfaceInput::Click(at),
+                    };
+                    self.slot_event(LibrarySlotEvent::HeroPane(input))
+                }
+                MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::DoubleClick(at),
+                )),
+                MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::ContextClick(at),
+                )),
+                MouseGesture::Scroll { at, delta } => {
+                    self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
+                        at,
+                        delta,
+                    }))
+                }
+                _ => None,
+            };
+        }
+        Some(Msg::TerminalEvent(
+            crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+        ))
+    }
+
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
         if matches!(mouse.kind, MouseEventKind::Moved) {
             let at = Position::new(mouse.column, mouse.row);
@@ -671,10 +722,12 @@ impl LibraryPanel {
                     crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
                 ));
             }
-            if self.overlay_geometry.is_some() {
-                return Some(Msg::TerminalEvent(
-                    crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
-                ));
+            if self
+                .overlay_geometry
+                .as_ref()
+                .is_some_and(|geometry| geometry.frame.contains(at))
+            {
+                return self.overlay_gesture(mouse, at);
             }
         }
         match mouse.kind {
