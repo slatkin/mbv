@@ -13,19 +13,19 @@
 
 ## 2. ctrl audio-only capability (core)
 
-- [ ] 2.1 Add the audio-only capability constant, a `CtrlHello` reader for it,
+- [x] 2.1 Add the audio-only capability constant, a `CtrlHello` reader for it,
       the matching `CtrlCompatibility` flag, and its assignment during the
       handshake on the client side
       (`crates/mbv-core/src/ctrl.rs`, `remote_player/connect.rs`). Verification:
       unit tests assert the flag is set when the peer advertises the capability,
       clear when it does not, and that an unrecognized advertised capability
       still connects.
-- [ ] 2.2 Construct the daemon's hello from its audio-only configuration and
+- [x] 2.2 Construct the daemon's hello from its audio-only configuration and
       send it from every ctrl listener (local Unix and TCP)
       (`crates/mbv-core/src/daemon_run.rs` / `daemon_core*`). Verification: a
       test asserts a client of an audio-only daemon receives the capability and
       a client of an audio-capable daemon does not.
-- [ ] 2.3 Expose the fact to the client: `RemotePlayer` accessor plus
+- [x] 2.3 Expose the fact to the client: `RemotePlayer` accessor plus
       `PlayerProxy::owner_is_audio_only()`, false for an in-process player,
       modeled on `can_admit_audiobookshelf`
       (`crates/mbv-core/src/player/proxy.rs:82`). Verification: unit tests for
