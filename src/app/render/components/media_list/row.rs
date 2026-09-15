@@ -22,7 +22,8 @@ use unicode_width::UnicodeWidthStr;
 /// row (the library backdrop, even while the list panel itself is
 /// focus-green), while queue and nested workspace lists resolve their owning
 /// column's selected-row identity (`SelectedRowOnQueueColumn` /
-/// `SelectedRowOnLibraryPane`) so the row follows that column's focus.
+/// `SelectedRowOnLibraryPane`) so the row follows that column's focus. The
+/// policy's optional selected-row style may override that surface mapping.
 ///
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
@@ -106,7 +107,11 @@ pub(in crate::app) fn media_list_row<Target>(
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
             let selected_style = selected.then(|| selected_style).flatten();
-            let title_width = content_w.saturating_sub(LEFT_INSET + trailing_w + slot_reserve);
+            let secondary_separator_reserve =
+                usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
+            let title_width = content_w.saturating_sub(
+                LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve,
+            );
             let title_color = if selected
                 && !matches!(
                     semantic_state,

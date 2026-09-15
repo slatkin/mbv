@@ -11,7 +11,9 @@ pub(in crate::app) use wide::{
 mod wide_row_regression_tests {
     use super::wide::{render_wide_media_list, render_wide_media_list_with_zebra};
     use super::wide_row_regression_tests_helpers::{item, paint, row_of};
-    use crate::app::components::media_list::{MediaKind, SelectedRowStyle, WideMediaList};
+    use crate::app::components::media_list::{
+        MediaKind, MediaListRow, MediaSemanticState, SelectedRowStyle, WideMediaList,
+    };
     use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -264,6 +266,53 @@ mod wide_row_regression_tests {
     }
 
     #[test]
+    fn two_tone_zebra_stripe_stays_inside_right_inset_without_duration() {
+        let rect = Rect::new(0, 0, 32, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "two-tone".into(),
+                primary: "Series".into(),
+                secondary: Some("Episode".into()),
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            item("selected", "Selected", None),
+        ]);
+        list.select_last();
+        let zebra_bg = Color::Rgb(60, 72, 65);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_with_zebra(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    palette::SURFACE_RESTING,
+                    Some(zebra_bg),
+                    None,
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(29, 0)].bg, zebra_bg, "stripe reaches the content edge");
+        assert_eq!(
+            buf[(30, 0)].bg,
+            Color::Reset,
+            "right inset remains unstriped"
+        );
+        assert_eq!(
+            buf[(31, 0)].bg,
+            Color::Reset,
+            "outer edge remains unstriped"
+        );
+    }
+
+    #[test]
     fn selected_style_overrides_focused_queue_row_over_zebra() {
         let rect = Rect::new(0, 0, 32, 2);
         let selected_bg = palette::SURFACE_RESTING;
@@ -285,7 +334,7 @@ mod wide_row_regression_tests {
                     selected_bg,
                     Some(Color::Rgb(60, 72, 65)),
                     Some(SelectedRowStyle {
-                        bg: Color::from_u32(0x0045443c),
+                        bg: palette::QUEUE_SELECTED_ROW_BG,
                         title_fg: palette::TEXT_FOCUS_ACCENT,
                         duration_fg: palette::ACCENT,
                     }),

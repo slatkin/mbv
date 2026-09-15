@@ -240,9 +240,9 @@ fn resting_queue_selected_row_paints_no_hole() {
     let panel_body = palette::surface_colors(palette::Surface::QueuePanel, false).fill;
     let focused_hole =
         palette::surface_colors(palette::Surface::SelectedRowOnQueueColumn, true).fill;
-    // The selected row is the first selectable item and is intentionally
-    // zebra-striped now; probe the following unstriped item instead.
-    let actual = painted.buffer[(row.x, row.y + 1)].bg;
+    // Probe the selected row itself: its resting selected treatment must
+    // still use the queue panel backdrop rather than the focused-row hole.
+    let actual = painted.buffer[(row.x, row.y)].bg;
     assert_eq!(
         actual,
         panel_body,
