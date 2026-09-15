@@ -90,7 +90,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     let overflows = total_rows > content_area.height as usize;
     let scrollbar = focused && overflows;
     let inner_width = paint_area.width.saturating_sub(u16::from(scrollbar)) as usize;
-    let mut visible_item_index = 0;
+    let mut stripe_index = 0;
     let list_items: Vec<ListItem> = (offset..total_rows)
         .take(content_area.height as usize)
         .map(|row| {
@@ -98,8 +98,15 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                 .source_row(row)
                 .expect("wide geometry contains a source row");
             let row_target = rows[source_row].selectable_target();
+            let is_selectable = row_target.is_some();
+            if !is_selectable {
+                // A structural row (Heading/Spacer) ends the zebra sequence:
+                // the group below restarts at the primary fill, so a group's
+                // first row is never striped and a one-row group never is.
+                stripe_index = 0;
+            }
             let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
-            let alternate_bg = zebra_bg.filter(|_| visible_item_index % 2 == 0);
+            let alternate_bg = zebra_bg.filter(|_| stripe_index % 2 == 1);
             let item = media_list_row(
                 &rows[source_row],
                 Some(row) == selected_row || multi_selected,
@@ -114,8 +121,8 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                     .filter(|_| Some(row) == selected_row)
                     .map(|(text, started_at)| (text, started_at)),
             );
-            if rows[source_row].selectable_target().is_some() {
-                visible_item_index += 1;
+            if is_selectable {
+                stripe_index += 1;
             }
             item
         })

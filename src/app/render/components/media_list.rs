@@ -257,15 +257,19 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
+        // The sequence's first row is the primary fill; the second row
+        // carries the stripe. The selected row (fourth, index 3) is painted
+        // full-bleed with `selected_bg` regardless of its stripe parity.
         for y in [0, 2] {
-            assert_eq!(buf[(0, y)].bg, Color::Reset);
-            assert_eq!(buf[(1, y)].bg, Color::Reset);
-            assert_eq!(buf[(2, y)].bg, zebra_bg);
-            assert_eq!(buf[(29, y)].bg, zebra_bg);
-            assert_eq!(buf[(30, y)].bg, Color::Reset);
-            assert_eq!(buf[(31, y)].bg, Color::Reset);
+            assert_eq!(buf[(2, y)].bg, Color::Reset, "row {y} is unstriped");
         }
-        assert_ne!(buf[(0, 1)].bg, zebra_bg);
+        let y = 1;
+        assert_eq!(buf[(0, y)].bg, Color::Reset);
+        assert_eq!(buf[(1, y)].bg, Color::Reset);
+        assert_eq!(buf[(2, y)].bg, zebra_bg);
+        assert_eq!(buf[(29, y)].bg, zebra_bg);
+        assert_eq!(buf[(30, y)].bg, Color::Reset);
+        assert_eq!(buf[(31, y)].bg, Color::Reset);
         assert_ne!(buf[(0, 3)].bg, zebra_bg);
         for x in 0..rect.width {
             assert_eq!(
@@ -280,7 +284,10 @@ mod wide_row_regression_tests {
     fn two_tone_zebra_stripe_stays_inside_right_inset_without_duration() {
         let rect = Rect::new(0, 0, 32, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
+        // The sequence's second row carries the stripe, so the two-tone row
+        // is the one under test (the plain first row is unstriped).
         list.set_content(vec![
+            item("first", "First", None),
             MediaListRow::Item {
                 target: "two-tone".into(),
                 primary: "Series".into(),
@@ -290,9 +297,7 @@ mod wide_row_regression_tests {
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             },
-            item("selected", "Selected", None),
         ]);
-        list.select_last();
         let zebra_bg = Color::Rgb(60, 72, 65);
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
@@ -310,14 +315,19 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_eq!(buf[(29, 0)].bg, zebra_bg, "stripe reaches the content edge");
         assert_eq!(
-            buf[(30, 0)].bg,
+            buf[(2, 0)].bg,
+            palette::SURFACE_RESTING,
+            "the selected first row keeps the selected fill"
+        );
+        assert_eq!(buf[(29, 1)].bg, zebra_bg, "stripe reaches the content edge");
+        assert_eq!(
+            buf[(30, 1)].bg,
             Color::Reset,
             "right inset remains unstriped"
         );
         assert_eq!(
-            buf[(31, 0)].bg,
+            buf[(31, 1)].bg,
             Color::Reset,
             "outer edge remains unstriped"
         );
@@ -355,25 +365,28 @@ mod wide_row_regression_tests {
         assert!(buf[(2, 1)].modifier.contains(Modifier::BOLD));
         assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
         assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);
-        // The unselected even item keeps its zebra stripe, and the selected
-        // odd item is unstriped.
-        assert_eq!(buf[(2, 0)].bg, Color::Rgb(60, 72, 65));
-        assert_eq!(buf[(2, 1)].bg, Color::Reset);
+        // The unselected first item keeps the primary fill (a one-row group
+        // never stripes), and the selected second item keeps its zebra stripe
+        // under the gutter accent.
+        assert_eq!(buf[(2, 0)].bg, Color::Reset);
+        assert_eq!(buf[(2, 1)].bg, Color::Rgb(60, 72, 65));
     }
 
     #[test]
-    fn library_wide_browser_stripes_items_not_structural_rows() {
-        let rect = Rect::new(0, 0, 40, 6);
+    fn library_wide_browser_restarts_the_stripe_at_each_group() {
+        let rect = Rect::new(0, 0, 40, 8);
         let mut list = WideMediaList::new();
         list.set_content(vec![
             item("one", "One", None),
             MediaListRow::Heading {
-                text: "Group".into(),
+                text: "Solo".into(),
             },
             item("two", "Two", None),
-            MediaListRow::Spacer,
             item("three", "Three", None),
+            MediaListRow::Spacer,
             item("four", "Four", None),
+            item("five", "Five", None),
+            item("six", "Six", None),
         ]);
         let pair = stripe(palette::Surface::MainContentBox);
         let other = stripe(palette::Surface::LibraryPanel);
@@ -391,13 +404,18 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
+        // Each group's first row is the primary fill, so a one-row group
+        // (`One`, then `Four` after the Spacer) never stripes; structural
+        // rows carry no stripe at all.
         for (y, striped) in [
-            (0, true),
+            (0, false),
             (1, false),
             (2, false),
-            (3, false),
-            (4, true),
+            (3, true),
+            (4, false),
             (5, false),
+            (6, true),
+            (7, false),
         ] {
             assert_eq!(
                 buffer[(2, y)].bg,
@@ -433,10 +451,12 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        assert_eq!(buffer[(2, 0)].bg, pair.focused);
-        assert_eq!(buffer[(2, 1)].bg, Color::Reset);
-        assert_eq!(buffer[(2, 2)].bg, pair.focused);
-        assert_eq!(buffer[(2, 3)].bg, Color::Reset);
+        // The sequence opens on the primary fill: rows 1 and 3 carry the
+        // stripe.
+        assert_eq!(buffer[(2, 0)].bg, Color::Reset);
+        assert_eq!(buffer[(2, 1)].bg, pair.focused);
+        assert_eq!(buffer[(2, 2)].bg, Color::Reset);
+        assert_eq!(buffer[(2, 3)].bg, pair.focused);
     }
 
     #[test]
@@ -445,6 +465,9 @@ mod wide_row_regression_tests {
         let pair = stripe(palette::Surface::MainContentBox);
         let mut selected = WideMediaList::new();
         selected.set_content(vec![item("one", "One", None), item("two", "Two", None)]);
+        // The sequence's second row carries the stripe, so the accent has to
+        // leave that stripe in place.
+        selected.select_last();
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
@@ -456,11 +479,12 @@ mod wide_row_regression_tests {
                 );
             })
             .unwrap();
-        let cell = &terminal.backend().buffer()[(2, 0)];
+        let cell = &terminal.backend().buffer()[(2, 1)];
         assert_eq!(cell.fg, palette::TEXT_FOCUS_ACCENT);
         assert!(cell.modifier.contains(Modifier::BOLD));
         assert_eq!(cell.bg, pair.focused);
-        assert_eq!(terminal.backend().buffer()[(0, 0)].bg, Color::Reset);
+        assert_eq!(terminal.backend().buffer()[(0, 1)].bg, Color::Reset);
+        assert_eq!(terminal.backend().buffer()[(2, 0)].bg, Color::Reset);
 
         let mut unfocused = WideMediaList::new();
         unfocused.set_content(vec![item("one", "One", None), item("two", "Two", None)]);
@@ -479,11 +503,12 @@ mod wide_row_regression_tests {
             let cell = &terminal.backend().buffer()[(2, y)];
             assert_ne!(cell.fg, palette::TEXT_FOCUS_ACCENT);
         }
-        assert_eq!(terminal.backend().buffer()[(2, 0)].bg, pair.unfocused);
+        assert_eq!(terminal.backend().buffer()[(2, 1)].bg, pair.unfocused);
+        assert_eq!(terminal.backend().buffer()[(2, 0)].bg, Color::Reset);
     }
 
     #[test]
-    fn non_adjacent_multi_selected_rows_take_accent_with_own_parity() {
+    fn non_adjacent_multi_selected_rows_take_accent_with_own_stripe() {
         let rect = Rect::new(0, 0, 32, 4);
         let pair = stripe(palette::Surface::MainContentBox);
         let mut list: WideMediaList<String> = WideMediaList::new();
@@ -493,8 +518,8 @@ mod wide_row_regression_tests {
             item("three", "Three", None),
             item("four", "Four", None),
         ]);
-        list.toggle_selection(&"one".to_string());
-        list.toggle_selection(&"three".to_string());
+        list.toggle_selection(&"two".to_string());
+        list.toggle_selection(&"four".to_string());
 
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
@@ -508,16 +533,19 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        for y in [0, 2] {
+        // Every accented row keeps the fill its own stripe parity resolves to:
+        // rows 1 and 3 are the sequence's striped rows, while the first row
+        // (the initial selection) is the sequence's primary fill.
+        for y in [1, 3] {
             assert_eq!(buf[(2, y)].fg, palette::TEXT_FOCUS_ACCENT);
             assert!(buf[(2, y)].modifier.contains(Modifier::BOLD));
             assert_eq!(buf[(2, y)].bg, pair.unfocused);
             assert_eq!(buf[(0, y)].bg, Color::Reset);
         }
-        for y in [1, 3] {
-            assert_ne!(buf[(2, y)].fg, palette::TEXT_FOCUS_ACCENT);
-            assert_eq!(buf[(2, y)].bg, Color::Reset);
-        }
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(buf[(2, 0)].bg, Color::Reset);
+        assert_ne!(buf[(2, 2)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(buf[(2, 2)].bg, Color::Reset);
     }
 
     #[test]

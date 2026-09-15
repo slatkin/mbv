@@ -43,7 +43,7 @@
 //! | `ContextMenuSelectedRow` | yes (context-menu popup, component view) | — |
 //! | `LibraryPanel` | yes (Both, LibraryOnly, wide music) | `tests_library_characterization.rs` rail-body suites |
 //! | `QueuePanel` | yes (wide Both, both bools) | — |
-//! | `MainContentBox` | — | `render/components/media_list.rs::library_wide_browser_stripes_items_not_structural_rows` (browser-pane stripe) |
+//! | `MainContentBox` | — | `render/components/media_list.rs::library_wide_browser_restarts_the_stripe_at_each_group` (browser-pane stripe) |
 //! | `InlineHero` | yes (selected detail, component view, both bits) | — |
 //! | `PlaybackPanel` | yes (Both, mini library) | `tests.rs` panel suites |
 //! | `QueueOnlyPlaybackPanel` | yes (wide QueueOnly, mini queue) | — (pinned only here at buffer level) |

@@ -121,19 +121,23 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
-/// 5.11): after the Wide panel skeleton paint the focused selected row keeps
-/// its MainContentBox zebra stripe under the gutter accent. Unfocused rows
-/// keep the unfocused stripe value.
+/// 5.11): after the Wide panel skeleton paint the zebra alternates from the
+/// primary fill, so the selected first row is unstriped and the row below it
+/// carries the MainContentBox stripe. Unfocused rows keep the unfocused
+/// stripe value.
 #[test]
-fn wide_home_selected_row_keeps_its_stripe_under_the_accent() {
+fn wide_home_stripes_alternate_rows_under_the_gutter_accent() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {
             app.panel_focus = PanelFocus::Queue;
         }
         let cw_item = emby_cw_item();
+        let mut second = cw_item.clone();
+        second.id = "cw-second".into();
+        second.name = "Second Continue".into();
         let (model, terminal) = render_home_shell_with(app, 160, 40, |m| {
-            m.home_content.continue_items = vec![cw_item];
+            m.home_content.continue_items = vec![cw_item, second];
         });
         let (_, selected) = panel(&model)
             .menu_geometry()
@@ -146,19 +150,30 @@ fn wide_home_selected_row_keeps_its_stripe_under_the_accent() {
         )
     };
 
-    let (selected, _body) = bgs(true);
-    // D1: the Browser-pane Wide arm stripes with the MainContentBox pair.
+    // D1: the Browser-pane Wide arm stripes with the MainContentBox pair, on
+    // the sequence's second row; the selected first row keeps the pane fill.
+    let (selected, striped) = bgs(true);
     assert_eq!(
         selected,
+        Some(palette::surface_colors(palette::Surface::LibraryPanel, true).fill),
+        "the selected first row is the sequence's primary fill"
+    );
+    assert_eq!(
+        striped,
         Some(palette::surface_colors(palette::Surface::MainContentBox, true).fill),
-        "the selected striped row keeps the MainContentBox fill under the gutter accent"
+        "the row below the selected one carries the MainContentBox stripe"
     );
 
-    let (selected, _body) = bgs(false);
+    let (selected, striped) = bgs(false);
     assert_eq!(
         selected,
+        Some(palette::surface_colors(palette::Surface::LibraryPanel, false).fill),
+        "the unfocused first row keeps the pane fill"
+    );
+    assert_eq!(
+        striped,
         Some(palette::surface_colors(palette::Surface::MainContentBox, false).fill),
-        "the unfocused striped row keeps the MainContentBox fill"
+        "the unfocused stripe keeps the MainContentBox fill"
     );
 }
 
