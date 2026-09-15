@@ -135,12 +135,12 @@
 
 ## 8. Gates
 
-- [ ] 8.1 Run the repo gates on the touched packages: `cargo fmt --all`, then
+- [x] 8.1 Run the repo gates on the touched packages: `cargo fmt --all`, then
       `cargo check -p mbv-core --all-targets`, `cargo clippy --workspace
       --all-targets -- -D warnings`, `cargo nextest run -p mbv-core` and
       `cargo nextest run -p mbv`. Verification: every command exits zero with no
       warnings.
-- [ ] 8.2 If any new `debug_assert!` lands in this change, also run
+- [x] 8.2 If any new `debug_assert!` lands in this change, also run
       `cargo test --release -p <pkg>` (CI runs the release profile, where
       debug assertions are compiled out). Verification: the release-profile run
       of the affected package exits zero.
