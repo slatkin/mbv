@@ -116,3 +116,22 @@
   and keeps its stripe; Ctrl+Click/Visual rows match the selected row; the Queue is unchanged; Narrow
   is visually unchanged; the selected title reading like a `Heading` is acceptable at real widths.
   Verify: manual check recorded in this change before archiving.
+
+## 7. Play icon only on the now-playing row (folded in per user decision 2026-09-15)
+
+User report: library rows that are merely "in progress" (resume progress) show a `▶` icon that
+should appear only in front of the now-playing item. Scout verdict: pre-existing defect from #719
+(`Active|NowPlaying => Some("▶ ")` in `media_list/row.rs:69-87`, painted at `:186`; `Active` =
+resume progress per `browser_content.rs:56-72`, `tv_content/mod.rs:89-105`, `feeds_content.rs:380-395`;
+`NowPlaying` = live queue playback only). This change's design Non-Goals scoped glyph work out; this
+section lifts that scope at user direction.
+
+- [ ] 7.1 Amend the change's spec/design first: the `▶` marker SHALL paint only for `NowPlaying`,
+  never for `Active`. Update the design.md Non-Goals line that scopes glyph re-litigation out, and
+  add the requirement + scenario to `specs/canonical-media-lists/spec.md`. Verify:
+  `openspec validate --strict` passes.
+- [ ] 7.2 Split the `Active|NowPlaying` match arm in `src/app/render/components/media_list/row.rs`
+  (scout: gate at `:69-87`, painted at `:186` — verify against the tree) so only `NowPlaying`
+  yields the glyph. Verify: `cargo check -p mbv`, `cargo nextest run -p mbv`.
+- [ ] 7.3 Add a regression test: a row with resume progress (`Active`) but not now-playing paints no
+  glyph; the now-playing row paints `▶ `. Verify: `cargo nextest run -p mbv`.
