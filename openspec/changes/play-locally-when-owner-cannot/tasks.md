@@ -34,11 +34,11 @@
 
 ## 3. Emby session playable-media fact
 
-- [ ] 3.1 Parse the session's advertised playable media types into
+- [x] 3.1 Parse the session's advertised playable media types into
       `SessionInfo` alongside `supported_commands`
       (`crates/mbv-core/src/api_types.rs`, `api_client_sessions.rs:98`).
       Verification: parsing tests for present, absent, and empty values.
-- [ ] 3.2 Add the `App`-level query that reads the attached session's fact
+- [x] 3.2 Add the `App`-level query that reads the attached session's fact
       (unknown or empty means able to play) and treats the attached owner as
       audio-only only when the session advertises audio media types only.
       Verification: unit tests over an attached session state advertising audio
