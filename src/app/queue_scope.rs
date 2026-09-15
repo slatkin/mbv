@@ -126,6 +126,11 @@ impl App {
         match self.playing_queue_scope() {
             QueueScope::Local => {
                 self.player_tab.set_items(items, cursor);
+                // Keep the client queue fenced from the owner's last
+                // accepted submission until the next explicit play submits
+                // this replacement.
+                let owner_generation = self.player.status.lock().unwrap().sequence_generation;
+                self.player_tab.sequence_generation = owner_generation.saturating_add(1);
             }
             QueueScope::Remote => {
                 let queue = self

@@ -17,6 +17,9 @@ pub struct PlayerStatus {
     pub current_idx: usize,
     #[serde(default)]
     pub queue_len: usize,
+    /// Monotonic identity for the owner's current queue submission.
+    #[serde(default)]
+    pub sequence_generation: u64,
     pub active: bool,
     pub title: String,
     #[serde(default)]
@@ -156,6 +159,7 @@ impl Default for PlayerStatus {
             volume_max: 130,
             current_idx: 0,
             queue_len: 0,
+            sequence_generation: 0,
             active: false,
             title: String::new(),
             artist: String::new(),
@@ -254,10 +258,9 @@ pub enum PlayerEvent {
     SkipIntroPlay,
     /// mpv exited on its own (user pressed q inside mpv, or mpv crashed).
     MpvQuit,
-    /// Emitted by RemotePlayer when the daemon reports (via
-    /// `CtrlEvent::CommandRejected`) that it didn't act on a ctrl-socket
-    /// command. The reason string is server-computed and shown to the user
-    /// as-is (e.g. via the transient status toast). See #90.
+    /// Emitted when a Player owner cannot act on a command, including local
+    /// slot-addressed commands and daemon ctrl-socket commands. The reason
+    /// string is owner-computed and shown to the user as-is.
     CommandRejected(String),
     /// Correlated lifecycle update for a guarded direct-daemon playback
     /// intent. The confirmed PlayerStatus remains authoritative separately.

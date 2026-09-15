@@ -440,6 +440,12 @@ impl App {
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
+                // A local jump can be rejected before any owner report; do
+                // not leave its optimistic playhead transition ghosted until
+                // the five-second timeout.
+                if !self.player.is_remote() {
+                    self.reset_bare_transitions();
+                }
                 self.flash(reason, ToastSeverity::Neutral);
             }
             PlayerEvent::PlaybackIntent(event) => {

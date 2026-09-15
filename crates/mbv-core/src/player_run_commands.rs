@@ -33,7 +33,9 @@ impl PlaybackRun {
                 // ordinal; a stale slot (gone here) is rejected, never
                 // repaired by position (design D6).
                 let Some(idx) = self.queue.slot_index(slot_id) else {
-                    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; discarded");
+                    let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
+                    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
+                    let _ = self.event_tx.send(PlayerEvent::CommandRejected(reason));
                     return cancel_stop;
                 };
                 self.forced_transition =

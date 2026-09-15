@@ -376,6 +376,13 @@ impl Player {
             return false;
         }
         let start_idx = start_idx.min(items.len() - 1);
+        // Every accepted submission establishes a new queue identity. The
+        // generation is serialized in PlayerStatus so clients can fence
+        // slot-addressed commands against a locally replaced queue.
+        {
+            let mut st = self.status.lock().unwrap();
+            st.sequence_generation = st.sequence_generation.saturating_add(1);
+        }
 
         // Fast path: reuse existing mpv window when headless state matches.
         if self.status.lock().unwrap().active
