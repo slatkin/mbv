@@ -15,5 +15,5 @@
 
 ## 4. Presentation and Gates
 
-- [ ] 4.1 Extend the narrowest existing Library panel/hero characterization to verify that a Wide Portrait Movie paints the composited single image without changing its artwork box, while the same Movie in Narrow and a Wide Landscape Movie remain undecorated; keep the Wide hero read-only and add no hit geometry.
-- [ ] 4.2 Run `cargo fmt`, `cargo check -p mbv-core -p mbv`, `cargo nextest run -p mbv-core --no-fail-fast`, `cargo nextest run -p mbv --no-fail-fast`, and `cargo clippy --workspace --all-targets -- -D warnings`; then manually inspect one cold and warm portrait Movie Logo in Wide plus the same Movie below the Wide breakpoint under the configured portable image protocols available locally.
+- [x] 4.1 Extend the narrowest existing Library panel/hero characterization to verify that a Wide Portrait Movie paints the composited single image without changing its artwork box, while the same Movie in Narrow and a Wide Landscape Movie remain undecorated; keep the Wide hero read-only and add no hit geometry.
+- [x] 4.2 Run `cargo fmt`, `cargo check -p mbv-core -p mbv`, `cargo nextest run -p mbv-core --no-fail-fast`, `cargo nextest run -p mbv --no-fail-fast`, and `cargo clippy --workspace --all-targets -- -D warnings`; then manually inspect one cold and warm portrait Movie Logo in Wide plus the same Movie below the Wide breakpoint under the configured portable image protocols available locally.
