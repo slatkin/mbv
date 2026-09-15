@@ -226,6 +226,22 @@ impl App {
         self.construct_local_session().map(Some)
     }
 
+    /// Install a prepared local session over the current attachment: swap
+    /// the player and its channel plumbing back in and drop the remote
+    /// endpoint baseline. Shared by the confirmed fall-through and ordinary
+    /// restoration so no path can half-install a suspended local Player.
+    fn install_suspended_local(&mut self, suspended: SuspendedLocalSession) {
+        self.player = suspended.player;
+        self.player_rx = suspended.player_rx;
+        self.ws_rx = suspended.ws_rx;
+        self.ws_send_tx = suspended.ws_send_tx;
+        self.audiobookshelf_socket_rx = suspended.audiobookshelf_socket_rx;
+        self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
+        self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
+        self.player_endpoint = None;
+        debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+    }
+
     fn rebind_mpris_to_current_player(&self) {
         if let Some(handle) = &self.mpris {
             let sender = self.player.command_sender();
@@ -281,21 +297,20 @@ impl App {
                 return;
             }
         };
-        if self.connected_session_id.is_some() {
-            self.playback_target().stop(self);
-        } else if self.player.is_remote() {
+        // Both owners must stop: a home local-daemon thin client that also
+        // controls an audio-only Emby session has `player.is_remote()` true
+        // while `connected_session_id` is set, so an either/or branch would
+        // leave one of them playing underneath the local item (and swap the
+        // ctrl proxy out without tearing down its reader thread).
+        if self.player.is_remote() {
             self.player.stop();
             self.player.disconnect_remote();
         }
+        if self.connected_session_id.is_some() {
+            self.playback_target().stop(self);
+        }
         if let Some(suspended) = prepared {
-            self.player = suspended.player;
-            self.player_rx = suspended.player_rx;
-            self.ws_rx = suspended.ws_rx;
-            self.ws_send_tx = suspended.ws_send_tx;
-            self.audiobookshelf_socket_rx = suspended.audiobookshelf_socket_rx;
-            self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
-            self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
-            self.player_endpoint = None;
+            self.install_suspended_local(suspended);
             self.sync_subtitle_prefs_to_player();
         }
         self.finish_local_mode("Playing locally".into(), None);
@@ -322,15 +337,7 @@ impl App {
         // from the reconnected route instead of the plain-local defaults.
         let mut reconnected_local_daemon = None;
         if let Some(suspended) = self.suspended_local.take() {
-            self.player = suspended.player;
-            self.player_rx = suspended.player_rx;
-            self.ws_rx = suspended.ws_rx;
-            self.ws_send_tx = suspended.ws_send_tx;
-            self.audiobookshelf_socket_rx = suspended.audiobookshelf_socket_rx;
-            self.audiobookshelf_socket_tx = suspended.audiobookshelf_socket_tx;
-            self.audiobookshelf_socket_generation = suspended.audiobookshelf_socket_generation;
-            self.player_endpoint = None;
-            debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
+            self.install_suspended_local(suspended);
         } else if self.home_is_local_daemon {
             // This app's baseline was never a genuinely local in-process
             // player -- it was an `App::new_remote` thin client attached to

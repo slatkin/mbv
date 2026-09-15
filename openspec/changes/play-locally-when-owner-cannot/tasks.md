@@ -56,8 +56,9 @@
       ahead of any queue replacement, scope change, focus change, or status
       flash (`src/app/actions.rs:221`, `:257`). Verification: unit tests assert
       a wholly unplayable selection on an eligible owner raises the prompt and
-      sends no command, while a wholly playable selection submits exactly what
-      it submits today.
+      sends no command, while a wholly playable selection submits the
+      selection as the post-1.1 boundary submits it (the selection itself,
+      not a stale owner-queue mirror).
 - [x] 4.3 Report the mixed-selection count in a Neutral toast and submit that
       selection unchanged. Verification: a unit test asserts one toast naming
       the count and the same submission as before the change.

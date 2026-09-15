@@ -31,8 +31,6 @@ impl App {
     /// Whether the attached Emby session advertises an audio-only playable
     /// media set. An absent or empty advertisement is unknown and therefore
     /// treated as able to play video.
-    // This query is introduced ahead of the explicit-play guard that consumes
-    // it in the next implementation unit.
     pub(super) fn session_owner_is_audio_only(&self) -> bool {
         self.connected_session_id.is_some()
             && self

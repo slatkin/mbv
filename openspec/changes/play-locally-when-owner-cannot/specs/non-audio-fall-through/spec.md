@@ -45,16 +45,16 @@ queue presentation unchanged.
 #### Scenario: Mixed selection
 - **WHEN** an eligible explicit selection contains items the owner can play and items it cannot
 - **THEN** the client SHALL NOT raise the prompt
-- **THEN** the client SHALL submit the selection as it does today
+- **THEN** the client SHALL submit the selection to the owner
 - **THEN** the client SHALL report the number of items in it that the owner cannot play
 
 #### Scenario: Wholly audio selection
 - **WHEN** an eligible explicit selection contains only items the owner can play
-- **THEN** the client SHALL submit the selection to the owner as it does today
+- **THEN** the client SHALL submit the selection to the owner
 
 #### Scenario: Peer without the capability
 - **WHEN** the attached owner's playable-media capability is unknown to the client
-- **THEN** the client SHALL submit the selection as it does today
+- **THEN** the client SHALL submit the selection to the owner
 - **THEN** the client SHALL NOT raise the local-playback prompt
 
 #### Scenario: Declined prompt

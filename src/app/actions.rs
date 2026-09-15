@@ -115,6 +115,19 @@ impl App {
             on_confirm: crate::app::types_confirm::ConfirmAction::PlayLocallyInstead,
         });
     }
+
+    /// Fetch the episodes of `item`'s series starting at `item`. `None` when
+    /// Emby is unavailable; a short list means the caller's path decides what
+    /// that means (the guard falls back to the single item, the play path
+    /// reports it and stops).
+    fn series_episodes_from(&self, item: &EmbyItem) -> Option<Vec<EmbyItem>> {
+        let client = self.emby_client()?;
+        let episodes = client.lock().unwrap().get_episodes_from(
+            &ItemId::new(item.series_id.as_str()),
+            &ItemId::new(item.id.as_str()),
+        );
+        Some(episodes)
+    }
 }
 
 /// Where playback should resume within a restored queue. Prefers locating
@@ -350,6 +363,22 @@ impl App {
             self.playback_eligibility(std::slice::from_ref(&item)),
             PlaybackEligibility::WhollyUnplayable { .. }
         ) {
+            // The deferred play must carry what the ordinary path would
+            // submit: session control plays the single item, but the
+            // direct-remote/local path expands the series continuation
+            // first, so deferring one episode would drop the rest of the
+            // series on confirmation.
+            if self.connected_session_id.is_none()
+                && !item.series_id.is_empty()
+                && self.player.always_play_next
+            {
+                if let Some(episodes) = self.series_episodes_from(&item) {
+                    if episodes.len() > 1 {
+                        self.defer_local_play(episodes, 0, crate::config::QueueSource::Series);
+                        return;
+                    }
+                }
+            }
             self.defer_local_play(vec![item], 0, self.queue_source.clone());
             return;
         }
@@ -381,16 +410,10 @@ impl App {
             return;
         }
         if !item.series_id.is_empty() && self.player.always_play_next {
-            let Some(client) = self.emby_client() else {
+            let Some(episodes) = self.series_episodes_from(&item) else {
                 self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
                 return;
             };
-            let c = client.lock().unwrap();
-            let episodes = c.get_episodes_from(
-                &ItemId::new(item.series_id.as_str()),
-                &ItemId::new(item.id.as_str()),
-            );
-            drop(c);
             if episodes.len() > 1 {
                 if !direct_remote {
                     self.on_queue_replace_silent();

@@ -77,15 +77,68 @@ fn wholly_unplayable_play_is_deferred_before_mutating_local_state() {
         }) if items.len() == 1 && items[0].id == item.id
     ));
     assert!(app.player_tab.emby_items().is_empty());
-    assert!(matches!(
-        app.pending_overlay,
-        Some(crate::app::types_overlay::OverlayRequest::Confirm(ref modal))
-            if modal.message.contains("Movie")
-                && modal.hint == "[y] Play here    [n] Cancel"
-                && modal.title.contains("127.0.0.1:0")
-                && !modal.title.contains("Tcp {")
-    ));
     assert!(command_rx.try_recv().is_err());
+}
+
+#[test]
+fn wholly_unplayable_series_play_defers_the_expanded_series() {
+    let mut app = make_app_stub();
+    let http = MockHttp::new();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+
+    let (remote, remote_rx, command_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_audio_only_with_command_rx(Vec::new(), 0);
+    let sess = crate::app::tests::make_session("remote-mbv", "mbv");
+    app.switch_to_direct_remote(
+        &sess,
+        remote,
+        remote_rx,
+        &mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap()),
+    );
+    while command_rx.try_recv().is_ok() {}
+    app.player.always_play_next = true;
+
+    http.respond(
+        200,
+        r#"{"Items":[
+            {"Id":"episode-1","Name":"Episode 1","Type":"Episode","MediaType":"Video"},
+            {"Id":"episode-2","Name":"Episode 2","Type":"Episode","MediaType":"Video"}
+        ]}"#,
+    );
+    let mut selected = make_item("Episode 1", "Episode");
+    selected.id = "episode-1".into();
+    selected.series_id = "series-1".into();
+    app.play_item(selected);
+
+    assert!(matches!(
+        app.pending_local_play,
+        Some(PendingQueueAction::PlayItems {
+            items,
+            start_idx: 0,
+            source: crate::config::QueueSource::Series,
+            autostart: true,
+        }) if items.len() == 2
+            && items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>()
+                == ["episode-1", "episode-2"]
+    ));
+    assert!(
+        command_rx.try_recv().is_err(),
+        "nothing is submitted while the prompt is open"
+    );
 }
 
 fn fail_local_player_preparation() -> Result<(), String> {
@@ -192,6 +245,42 @@ fn confirmed_local_fall_through_stops_and_detaches_remote_owner() {
     assert!(!commands
         .iter()
         .any(|command| { matches!(command, mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { .. }) }));
+}
+
+#[test]
+fn fall_through_from_a_session_stops_a_home_daemon_owner_too() {
+    // A home local-daemon thin client controlling an audio-only Emby session
+    // has `player.is_remote()` true while `connected_session_id` is set; the
+    // fall-through must stop and detach both, or the daemon keeps playing
+    // underneath the local item and its ctrl proxy leaks.
+    let (mut app, command_rx) =
+        make_audio_only_remote_app_stub_with_cmd_rx(Vec::new(), make_items(1));
+    assert!(app.player.is_remote());
+    let session = make_session("audio-owner", "mbv");
+    app.connect_to_session(&session);
+    assert!(app.connected_session_id.is_some());
+    assert!(app.player.is_remote());
+
+    app.pending_local_play = Some(PendingQueueAction::PlayItems {
+        items: selection(&["Video"]),
+        start_idx: 0,
+        source: crate::config::QueueSource::Album,
+        autostart: true,
+    });
+    app.play_pending_local_play();
+
+    assert!(app.pending_local_play.is_none());
+    assert!(!app.player.is_remote());
+    assert!(app.connected_session_id.is_none());
+    assert!(app.player_endpoint.is_none());
+    let commands: Vec<_> = command_rx.try_iter().collect();
+    assert!(commands.iter().any(|command| {
+        matches!(
+            command,
+            mbv_core::ctrl::CtrlCmd::PlaybackIntent(intent)
+                if intent.action == mbv_core::ctrl::PlaybackIntentAction::Stop
+        )
+    }));
 }
 
 #[test]

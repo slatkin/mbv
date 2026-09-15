@@ -42,8 +42,8 @@ cannot play the item, and offer to play it here, which ends the attachment.
   local Player — constructing one when this client was launched straight onto
   the daemon and has no suspended local Player.
 - On decline: submit nothing and leave the attachment and its queue untouched.
-- A mixed selection is not prompted: it submits as it does today and reports how
-  many items the owner cannot play.
+- A mixed selection is not prompted: it submits the selection to the owner
+  and reports how many items the owner cannot play.
 - Explicit enqueue keeps today's behaviour: no prompt, no staging on the
   client's own queue.
 - Rewrite `openspec/specs/non-audio-fall-through/` in place around
