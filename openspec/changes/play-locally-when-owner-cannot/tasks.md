@@ -46,22 +46,22 @@
 
 ## 4. Eligibility and the play guard
 
-- [ ] 4.1 Add the eligibility + selection classification helper: attached,
+- [x] 4.1 Add the eligibility + selection classification helper: attached,
       non-Library-route owner known to be audio-only, and the selection
       classified wholly unplayable, mixed, or wholly playable. Verification:
       table-driven `#[case]` tests covering ctrl-attached, Emby-session,
       Library-route, unknown-capability, wholly unplayable, mixed, and wholly
       playable inputs.
-- [ ] 4.2 Wire the guard into `App::play_items_routed` and `App::play_item`
+- [x] 4.2 Wire the guard into `App::play_items_routed` and `App::play_item`
       ahead of any queue replacement, scope change, focus change, or status
       flash (`src/app/actions.rs:221`, `:257`). Verification: unit tests assert
       a wholly unplayable selection on an eligible owner raises the prompt and
       sends no command, while a wholly playable selection submits exactly what
       it submits today.
-- [ ] 4.3 Report the mixed-selection count in a Neutral toast and submit that
+- [x] 4.3 Report the mixed-selection count in a Neutral toast and submit that
       selection unchanged. Verification: a unit test asserts one toast naming
       the count and the same submission as before the change.
-- [ ] 4.4 Pin the enqueue behavior the change deliberately keeps: an explicit
+- [x] 4.4 Pin the enqueue behavior the change deliberately keeps: an explicit
       enqueue of an unplayable selection on an eligible owner raises no prompt
       and does not append to the client's own queue. Verification: a unit test
       asserts no prompt state and the existing append submission.
