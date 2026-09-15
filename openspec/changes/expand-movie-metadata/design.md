@@ -137,11 +137,13 @@ WezTerm, Windows Terminal, plus VTE-based terminals), defaulting to *not support
 prints escape bytes into the frame. The escape is a new trust boundary — the URL comes from the media
 server's metadata, and mbv already strips OSC 8 out of feed text for exactly this reason.
 
-### D7 — Every director, then at most 9 actors, in provider order
+### D7 — Every person, directors first, in provider order (amended 2026-09-15)
 
-Directors do not consume cast places, so the table is 10 rows with one director, 11 with two and 9 with
-none — the data supports all three (2/60 movies had no director, 6/60 had two). People typed as neither
-`Director` nor `Actor` are omitted: the "crew" in *Cast & Crew* is the directors. A person's role is the
+Originally every director then at most 9 actors; the user's visual sweep removed the cap and widened
+the table to every person in the provider's `People` list. Directors are moved to the front (in
+provider order) and every remaining person follows in provider order regardless of type — writers,
+producers and composers included. No other re-ordering: the provider's order is preserved within each
+group, so mbv never invents a ranking Emby did not send. A person's role is the
 provider's role text, falling back to the provider type when it is empty, which is what makes a
 role-less director read as `Director` and a role-less actor as `Actor`.
 

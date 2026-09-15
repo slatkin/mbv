@@ -67,16 +67,19 @@ or wrapped.
 
 ### Requirement: A Movie hero carries a cast and crew table
 
-A Movie hero whose item declares people SHALL render a cast and crew table. The table SHALL list every
-person the provider types as a director first, in provider order, followed by at most 9 people the
-provider types as an acting cast member, in provider order. Directors SHALL NOT consume cast places.
+A Movie hero whose item declares people SHALL render a cast and crew table. The table SHALL list
+every person in the item's people list: every person the provider types as a director first, in
+provider order, followed by every remaining person in provider order regardless of the provider's
+type for them. The table SHALL NOT cap or reorder the provider's people beyond moving directors to
+the front. (Amended 2026-09-15 from the user's visual sweep; the former 9-actor cap is removed.)
 
 Each row SHALL show the person's name in a first column and their role in a second column. The second
 column SHALL span the overview box's remaining width after the name column, which is sized from the
 longest name the table shows, and every role SHALL be right-aligned at the box's right edge. A role
 longer than the remaining width SHALL be truncated with an ellipsis at the box's edge. The table SHALL have
-no header row and no separating rules, and SHALL use the body text treatment the overview paragraph
-uses.
+no header row, and SHALL use the body text treatment the overview paragraph
+uses. A separator line of block characters SHALL sit between the overview text and the table's first
+row, spanning the box's content width.
 
 A person's role SHALL be the provider's role text for that person. When the provider supplies no role
 text, the person's provider type SHALL be shown instead.
@@ -88,19 +91,24 @@ Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
 #### Scenario: A Movie with one director and a full cast
 
 - **WHEN** a Movie declares one director and 14 acting cast members
-- **THEN** the table renders the director's row first followed by 9 cast rows, 10 rows in total
+- **THEN** the table renders the director's row first followed by all 14 cast rows, 15 rows in total
 
 #### Scenario: A Movie with two directors
 
-- **WHEN** a Movie declares two directors
-- **THEN** both director rows render first, followed by 9 cast rows
+- **WHEN** a Movie declares two directors and 12 acting cast members
+- **THEN** both director rows render first, followed by all 12 cast rows
 
 #### Scenario: A Movie with no director
 
 - **WHEN** a Movie declares acting cast members but no director
 - **THEN** the table renders cast rows only, with no director row
 
-#### Scenario: A Movie with fewer cast members than the table's limit
+#### Scenario: People of other provider types
+
+- **WHEN** a Movie's people include a writer and a composer alongside its director and cast
+- **THEN** the writer and composer rows render after the cast rows, in provider order
+
+#### Scenario: A Movie with a director and 2 acting cast members
 
 - **WHEN** a Movie declares a director and 2 acting cast members
 - **THEN** the table renders 3 rows and no empty row

@@ -74,3 +74,22 @@
 - [ ] 5.3 At archive, sync the deltas into `openspec/specs/library-panel/spec.md`. Verify:
   `openspec validate --specs` is clean and the modified overview requirement plus the three added
   requirements are present in the main spec.
+
+## 6. Visual-sweep amendments (user-directed 2026-09-15)
+
+- [ ] 6.1 Select credits as every person in the item's `people` list — every `Director` first in
+  provider order, then every remaining person in provider order regardless of type — with the 9-actor
+  cap removed and the role fallback (provider type when role text is empty) unchanged. Verify: the
+  `rstest` `#[case]` table updated so the cap case proves NO cap (a payload with more than 9 actors
+  yields all of them), a mixed-type payload (writer/producer/composer) appears after the actors in
+  provider order, and the existing no-people / no-role cases still pass.
+- [ ] 6.2 Replace the blank gap row under the overview text with a separator line of block characters
+  spanning the box's content width. Verify: a buffer test asserting the separator's presence and span
+  when both overview and table render, and its absence when there is no overview.
+- [ ] 6.3 Make the overview box's content interactively scrollable when it exceeds the box's height:
+  mouse-wheel over the box scrolls the content (component-local scroll offset owned by the Library
+  panel, clamped to the content, reset on item change), and a scrollbar indicator paints at the box's
+  right edge only when content overflows. Verify: buffer tests for the scrollbar shown when overflowing
+  and absent when fitting, content offset applied to overview + table rows, clamped at both ends, and
+  the wheel routing test through the mounted Library panel (real `Application::tick()` integration
+  per AGENTS.md).

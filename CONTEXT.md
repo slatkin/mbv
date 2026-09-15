@@ -543,11 +543,11 @@ _Avoid_: external-links row, link list, clickable links
 The Wide Hero pane's table of Movie people inside the Main content box, with
 one name column and one shared role column, right-aligned at the box's right edge, and no header or
 separator. It lists
-every Director in provider order, followed by at most nine Actors in provider
-order; directors do not consume cast places. An empty role falls back to the
-person's provider type. The table follows overview text after one blank row, or
-starts at the box's first content row when there is no overview, and clips at
-the box's bottom edge. The Narrow inline hero does not render it.
+every person the server reports: every Director in provider order, then every remaining person in
+provider order regardless of type; nothing is capped. An empty role falls back to the
+person's provider type. A line of block characters separates the overview text from the table's first
+row. The table starts at the box's first content row when there is no overview, and the box scrolls
+when the content exceeds its height. The Narrow inline hero does not render it.
 _Avoid_: credits list, cast list, detail table
 
 **Render Component**:
