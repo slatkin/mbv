@@ -1,17 +1,22 @@
 ## 1. Confirm the #719 baseline
 
-- [ ] 1.1 Verify the tree is at or past `8a9132c2` (#719 merged, released in v0.19.3) and re-read the
+- [x] 1.1 Verify the tree is at or past `8a9132c2` (#719 merged, released in v0.19.3) and re-read the
   inherited facts against design.md Context: parity is `visible_item_index % 2 == 0` → 1st/3rd/5th
   (`src/app/render/components/media_list/wide.rs:97-98`); a selected row keeps its stripe under the
   accent (`media_list/row.rs:117`, `:215-233`); the Queue pair resolves through
   `palette::surface_colors(Surface::QueueColumn, focused)`, not raw hex
   (`src/app/render/components/queue.rs:31-39`). Verify: design.md Context matches the tree; if any
   behaviour differs, update design.md before coding.
-- [ ] 1.2 Confirm the synced main spec already carries both facts
+  (Accepted: scout-confirmed at `032bd69d` — `8a9132c2` is an ancestor, all behaviours MATCH;
+  actual refs: parity `wide.rs:102`/`118`, stripe-under-accent `row.rs`, Queue chain
+  `queue.rs:35-43`, policy `mod.rs:211-274`, `set_paint_policy` `panel_list.rs:30-52`.)
+- [x] 1.2 Confirm the synced main spec already carries both facts
   (`openspec/specs/canonical-media-lists/spec.md:52`, `:430`, `:437-440`). The archived delta's
   2nd/4th and "selected row always uses the selected-row background" wording is frozen history, not a
   gap this change must close — the first draft's "719 must correct its spec" precondition is already
   satisfied. Verify: no code change; record the confirmation in this change.
+  (Accepted: confirmed — spec `:52` gutter-accent sentence, `:430` zebra requirement, `:439`
+  1st/3rd/5th, `:447` selected-overrides-zebra; no code change.)
 
 ## 2. Make the gutter accent the unconditional Wide treatment
 
