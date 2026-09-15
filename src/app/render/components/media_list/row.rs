@@ -23,9 +23,8 @@ use unicode_width::UnicodeWidthStr;
 /// focus-green), while queue and nested workspace lists resolve their owning
 /// column's selected-row identity (`SelectedRowOnQueueColumn` /
 /// `SelectedRowOnLibraryPane`) so the row follows that column's focus. When
-/// `gutter_glyph` is set, the selected row keeps default row colours and no
-/// selected background; the owning panel marks the selection outside the
-/// panel edge, so nothing changes inside the row.
+/// `gutter_accent` is set, the selected row keeps its default background
+/// treatment and paints its title in the bold focus-accent role.
 ///
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
@@ -37,7 +36,7 @@ pub(in crate::app) fn media_list_row<Target>(
     focused: bool,
     selected_bg: Color,
     alternate_bg: Option<Color>,
-    gutter_glyph: bool,
+    gutter_accent: bool,
     inner_width: usize,
     has_scrollbar: bool,
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
@@ -114,7 +113,7 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
-            let paint_selected = selected && !gutter_glyph;
+            let paint_selected = selected && !gutter_accent;
             let secondary_separator_reserve =
                 usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
             let icon_reserve = live_icon.map_or(0, UnicodeWidthStr::width);
@@ -122,10 +121,10 @@ pub(in crate::app) fn media_list_row<Target>(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
             );
             let title_color = if selected {
-                // Gutter-accent lists mark the selection in the gutter and
-                // paint the selected title in the focus accent; other lists
+                // Gutter-accent lists paint the selected title in the focus
+                // accent; other lists
                 // keep the emphasis title.
-                if gutter_glyph {
+                if gutter_accent {
                     palette::TEXT_FOCUS_ACCENT
                 } else {
                     palette::TEXT_EMPHASIS
@@ -174,7 +173,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 });
             // Gutter-accent selection: the selected title paints in the
             // focus accent, bold; no icon, no background.
-            if selected && gutter_glyph {
+            if selected && gutter_accent {
                 for span in &mut title_spans {
                     span.style = span
                         .style
@@ -229,9 +228,7 @@ pub(in crate::app) fn media_list_row<Target>(
                     ));
                 }
             }
-            // Gutter-accent selection: the row itself keeps the default
-            // treatment (the owning panel paints the marker outside the
-            // panel edge); nothing changes inside the row.
+            // Gutter-accent selection keeps the row background unchanged.
             ListItem::new(Line::from(spans)).style(if paint_selected {
                 Style::default().bg(selected_bg)
             } else {

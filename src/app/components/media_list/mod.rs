@@ -218,7 +218,6 @@ pub struct WideMediaListPaintPolicy {
     focused: bool,
     selected_surface: SelectedRowSurface,
     zebra: Option<ZebraStripe>,
-    selected_gutter: bool,
 }
 
 impl WideMediaListPaintPolicy {
@@ -227,7 +226,6 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::ListBackdrop,
             zebra: None,
-            selected_gutter: false,
         }
     }
 
@@ -236,7 +234,6 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningQueueColumn,
             zebra: None,
-            selected_gutter: false,
         }
     }
 
@@ -245,22 +242,12 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
             zebra: None,
-            selected_gutter: false,
         }
     }
 
     pub const fn with_zebra(mut self, zebra: ZebraStripe) -> Self {
         self.zebra = Some(zebra);
         self
-    }
-
-    pub const fn with_selected_gutter(mut self) -> Self {
-        self.selected_gutter = true;
-        self
-    }
-
-    pub(crate) const fn selected_gutter(self) -> bool {
-        self.selected_gutter
     }
 
     pub(crate) fn zebra_bg(self) -> Option<Color> {

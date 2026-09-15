@@ -84,9 +84,9 @@ mod panel_list_tests {
     use crate::app::components::media_list::{
         MediaKind, MediaListRow, MediaSemanticState, Presentation,
     };
-    use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
+    use ratatui::style::Color;
     use ratatui::Terminal;
 
     fn item(target: &str) -> MediaListRow<String> {
@@ -102,7 +102,7 @@ mod panel_list_tests {
     }
 
     #[test]
-    fn selected_row_surface_distinguishes_browser_and_workspace_slots() {
+    fn wide_selected_rows_use_the_gutter_accent_for_both_slots() {
         let mut carrier = MediaListCarrier::new(Presentation::Wide);
         carrier.set_content(vec![item("selected")]);
         let area = Rect::new(0, 0, 20, 1);
@@ -119,7 +119,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::surface_colors(palette::Surface::SelectedRow, true).fill
+            Color::Reset
         );
 
         terminal
@@ -133,7 +133,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::surface_colors(palette::Surface::SelectedRowOnLibraryPane, true).fill
+            Color::Reset
         );
     }
 

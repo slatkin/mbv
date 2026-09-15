@@ -122,11 +122,10 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
 /// 5.11): after the Wide panel skeleton paint the focused selected row's
-/// background is the list-backdrop surface — not the list panel's
-/// focus fill — and the rail-framing helper must not overpaint it.
-/// Unfocused: no bar.
+/// Wide selection uses the gutter accent: the row keeps its panel background
+/// rather than painting a selected-row bar. Unfocused: no bar.
 #[test]
-fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
+fn wide_home_selected_row_keeps_the_library_panel_background() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {
@@ -149,11 +148,9 @@ fn wide_home_selected_row_punches_through_to_the_library_backdrop() {
 
     let (selected, body) = bgs(true);
     assert_eq!(
-        selected,
-        Some(palette::SURFACE_BACKDROP),
-        "the selected row punches through to the containing backdrop surface"
+        selected, body,
+        "the selected row keeps the panel background"
     );
-    assert_ne!(selected, body);
 
     let (selected, body) = bgs(false);
     assert_eq!(selected, body, "unfocused wide Home shows no selection bar");
