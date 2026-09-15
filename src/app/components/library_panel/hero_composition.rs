@@ -1,8 +1,8 @@
 //! Shared Library-panel Hero content composition.
 //!
 //! This path owns the Hero header, overview box, optional Workspace selector,
-//! Workspace box, and the paint-local geometry returned to the panel. Wide and
-//! the Library Hero overlay use the same supplied-rectangle contract.
+//! Workspace box, and the paint-local geometry returned to the panel. A future
+//! Library Hero overlay can use the same supplied-rectangle contract as Wide.
 
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -19,8 +19,18 @@ use crate::app::palette;
 use crate::app::render::arrangements::padded_rect;
 use crate::app::render::{place_media_list_below, PillBarWindow, PANE_PAD_X, PANE_PAD_Y};
 
+/// Blank rows between the header/overview content's painted bottom edge and
+/// the Workspace box (design D3: the Workspace sits below the overview).
 const WORKSPACE_GAP_ROWS: u16 = 1;
+
+/// Rows a Workspace header occupies: the title, the Hero separator line, and
+/// the blank row below it.
 const WORKSPACE_HEADER_ROWS: u16 = 3;
+
+/// The Workspace selector's leading label: TV season pills retain the
+/// pre-migration `tv_wide.rs` prefix, distinct from the Selector row's `⌘`
+/// glyph (which identifies the general Selector row).
+const WORKSPACE_SELECTOR_PREFIX: &str = " Series: ";
 
 /// Geometry produced by painting shared Hero content.
 #[derive(Clone, Debug)]
@@ -36,7 +46,7 @@ pub(in crate::app) struct HeroCompositionGeometry {
 /// geometry for the owning Library panel.
 pub(in crate::app) fn paint_library_hero_content(
     f: &mut Frame,
-    area: Rect,
+    hero_area: Rect,
     hero: &mut HeroContent<'_>,
     overview_scroll: usize,
     hovered_link: Option<usize>,
@@ -44,8 +54,14 @@ pub(in crate::app) fn paint_library_hero_content(
     workspace_selector_hits: &mut HitRegions<usize>,
     workspace_selector_window: &mut PillBarWindow,
 ) -> HeroCompositionGeometry {
-    let (next_row, image_box, overview) =
-        paint_hero_pane_content(f, area, &*hero, overview_scroll, hovered_link, link_hits);
+    let (next_row, image_box, overview) = paint_hero_pane_content(
+        f,
+        hero_area,
+        &*hero,
+        overview_scroll,
+        hovered_link,
+        link_hits,
+    );
     let mut geometry = HeroCompositionGeometry {
         workspace: None,
         hero_image: None,
@@ -53,18 +69,21 @@ pub(in crate::app) fn paint_library_hero_content(
         overview_content_length: overview.as_ref().map_or(0, |value| value.content_length),
         overview_viewport: overview.as_ref().map_or(0, |value| value.viewport),
     };
-    if let (HeroImageState::Ready { cache_key, .. }, Some(area)) =
+    if let (HeroImageState::Ready { cache_key, .. }, Some(image_area)) =
         (&hero.facts.artwork.image, image_box)
     {
         geometry.hero_image = Some(PanelHeroImagePaint {
-            area,
+            area: image_area,
             cache_key: cache_key.clone(),
             centered: true,
         });
     }
     if let Some(workspace) = hero.workspace.as_mut() {
+        // `next_row` is the first unpainted row. The shared placement helper
+        // reserves WORKSPACE_GAP_ROWS above the box, leaving the required
+        // blank row between Hero content and Workspace (design D3).
         if let Some(workspace_rect) =
-            place_media_list_below(area, next_row, WORKSPACE_GAP_ROWS, area.height)
+            place_media_list_below(hero_area, next_row, WORKSPACE_GAP_ROWS, hero_area.height)
         {
             geometry.workspace = Some(paint_workspace_box(
                 f,
@@ -100,7 +119,9 @@ fn paint_workspace_header(f: &mut Frame, content: Rect, header: &str) {
     );
 }
 
-fn full_width_claim(panel: Rect, content: Rect) -> Rect {
+/// Claim the full panel width for selected-row backgrounds while preserving
+/// the inset content rows used for list flow and hit geometry.
+pub(in crate::app) fn full_width_claim(panel: Rect, content: Rect) -> Rect {
     Rect {
         x: panel.x,
         width: panel.width,
@@ -128,7 +149,7 @@ fn paint_workspace_box(
                 &selector.pills,
                 selector.active,
                 None,
-                Some(" Series: "),
+                Some(WORKSPACE_SELECTOR_PREFIX),
                 hits,
                 window,
             );

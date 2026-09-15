@@ -22,22 +22,11 @@ use crate::app::render::{
 };
 
 use super::content::{LibraryPanelContent, ListSlot};
-use super::hero_content::paint_library_hero_content;
+use super::hero_composition::{full_width_claim, paint_library_hero_content};
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
     SELECTOR_ROW_PREFIX,
 };
-
-/// A full-width claim rect over `content`'s rows, reaching `panel`'s left/
-/// right edges: the canonical rail's selected-row background extends to the
-/// panel border while row flow/hit geometry stays on the inset `content`.
-fn full_width_claim(panel: Rect, content: Rect) -> Rect {
-    Rect {
-        x: panel.x,
-        width: panel.width,
-        ..content
-    }
-}
 
 /// The skeleton's retained irregular-chrome hit registries, one per painted
 /// pill row (ADR 0024: the mounted panel owns gesture state and resolves the
