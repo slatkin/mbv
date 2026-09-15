@@ -214,6 +214,26 @@ fn settle_library_frame(
     draw_library_at(harness, width, height)
 }
 
+/// A Logo reservation is visible as a `:Logo:` key in the pending set, so its
+/// presence is the whole question for every ineligible hero.
+fn logo_reserved(harness: &TickHarness) -> bool {
+    harness
+        .model()
+        .app
+        .card_image_loading
+        .iter()
+        .any(|key| key.contains(":Logo:"))
+}
+
+/// A negative leg: draw one frame, run the real sync pass, and assert this
+/// ineligible hero reserved no Logo.
+fn assert_no_logo_reserved(label: &str, item: mbv_core::api::EmbyItem, width: u16) {
+    let mut harness = migrated_home_with_hero(item, width);
+    drop(draw_frame_sized(&mut harness));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!logo_reserved(&harness), "{label} reserves no Logo");
+}
+
 #[test]
 fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated() {
     let mut decorated_item = landscape_hero_item("panel-logo");
@@ -307,15 +327,7 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
             .is_some_and(|entry| !entry.protocols.is_empty()),
         "the Narrow draw resolves a usable protocol from the re-seeded base"
     );
-    assert!(
-        decorated
-            .model()
-            .app
-            .card_image_loading
-            .iter()
-            .all(|key| !key.contains(":Logo:")),
-        "Narrow does not reserve the Wide-only Logo"
-    );
+    assert!(!logo_reserved(&decorated), "Narrow does not reserve the Wide-only Logo");
 
     // Explicit negative leg: a Wide Portrait Movie with a declared Logo is
     // still a single undecorated base protocol.
@@ -350,15 +362,7 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
         None,
         "a Wide Portrait Movie remains undecorated"
     );
-    assert!(
-        portrait
-            .model()
-            .app
-            .card_image_loading
-            .iter()
-            .all(|key| !key.contains(":Logo:")),
-        "a Wide Portrait Movie does not reserve a Logo"
-    );
+    assert!(!logo_reserved(&portrait), "a Wide Portrait Movie does not reserve a Logo");
 }
 
 #[test]
@@ -371,7 +375,7 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
     drop(draw_frame_sized(&mut wide));
     wide.model_mut().sync_mounted_surfaces();
     assert!(wide.model().app.card_image_loading.contains("logo-wide:Backdrop,Primary"));
-    assert!(!wide.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+    assert!(!logo_reserved(&wide));
     assert_eq!(wide.model().app.card_image_fetch_calls, 1);
 
     // Once that base is decoded, the eligible Wide Landscape Movie reserves
@@ -394,10 +398,7 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
     );
     let empty_base_calls_before = empty_base.model().app.card_image_fetch_calls;
     let _empty_base_frame = settle_library_frame(&mut empty_base, 160, 40);
-    assert!(
-        !empty_base.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")),
-        "a resolved-empty base reserves no Logo"
-    );
+    assert!(!logo_reserved(&empty_base), "a resolved-empty base reserves no Logo");
     assert_eq!(
         empty_base.model().app.card_image_fetch_calls,
         empty_base_calls_before,
@@ -408,33 +409,21 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
     portrait.id = "logo-portrait".into();
     portrait.image_tags.primary = "poster".into();
     portrait.image_tags.logo = "logo-tag".into();
-    let mut portrait_harness = migrated_home_with_hero(portrait, 160);
-    drop(draw_frame_sized(&mut portrait_harness));
-    portrait_harness.model_mut().sync_mounted_surfaces();
-    assert!(!portrait_harness.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+    assert_no_logo_reserved("a Wide Portrait Movie", portrait, 160);
 
     let mut narrow_item = landscape_hero_item("logo-narrow");
     narrow_item.image_tags.logo = "logo-tag".into();
-    let mut narrow = migrated_home_with_hero(narrow_item, 80);
-    drop(draw_frame_sized(&mut narrow));
-    narrow.model_mut().sync_mounted_surfaces();
-    assert!(!narrow.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+    assert_no_logo_reserved("a Narrow Landscape Movie", narrow_item, 80);
 
     let mut non_movie = crate::app::tests::make_item("Series", "Series");
     non_movie.id = "logo-series".into();
     non_movie.image_tags.thumb = "thumb".into();
     non_movie.image_tags.logo = "logo-tag".into();
-    let mut non_movie_harness = migrated_home_with_hero(non_movie, 160);
-    drop(draw_frame_sized(&mut non_movie_harness));
-    non_movie_harness.model_mut().sync_mounted_surfaces();
-    assert!(!non_movie_harness.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+    assert_no_logo_reserved("a non-Movie hero", non_movie, 160);
 
     let mut placeholder = crate::app::tests::make_item("Placeholder", "Movie");
     placeholder.id = "logo-placeholder".into();
-    let mut placeholder_harness = migrated_home_with_hero(placeholder, 160);
-    drop(draw_frame_sized(&mut placeholder_harness));
-    placeholder_harness.model_mut().sync_mounted_surfaces();
-    assert!(!placeholder_harness.model().app.card_image_loading.iter().any(|key| key.contains(":Logo:")));
+    assert_no_logo_reserved("a placeholder hero", placeholder, 160);
 }
 
 #[test]
