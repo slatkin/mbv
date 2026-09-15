@@ -134,6 +134,11 @@ impl App {
                 .get(bare_key)
                 .and_then(|e| e.img.clone().map(|img| (img, e.cover_box, e.applied_logo_key.clone())))
                 .expect("img present, just checked");
+            let logo_key = logo_key.filter(|key| {
+                self.card_image_states
+                    .get(key)
+                    .is_some_and(|entry| entry.img.is_some())
+            });
             // A hero entry's protocols carry the cover-fit crop (task 5.10,
             // design D5): rebuild from the source through the same cover step
             // so a suffix switch keeps the cropped aspect.
@@ -144,14 +149,15 @@ impl App {
                 }
                 None => img,
             };
-            if let Some(logo_key) = logo_key {
-                if let Some(logo) = self.card_image_states.get(&logo_key).and_then(|e| e.img.as_ref()) {
+            if let Some(logo_key) = logo_key.as_deref() {
+                if let Some(logo) = self.card_image_states.get(logo_key).and_then(|e| e.img.as_ref()) {
                     img = super::images::composite_landscape_logo(&img, logo);
                 }
             }
             let proto = self.build_protocol(bare_key, suffix, picker, img);
             if let Some(entry) = self.card_image_states.get_mut(bare_key) {
                 entry.protocols.insert(suffix, proto);
+                entry.applied_logo_key = logo_key;
             }
         }
         self.card_image_states
@@ -167,6 +173,9 @@ impl App {
         picker: &Picker,
         img: image::DynamicImage,
     ) -> ratatui_image::thread::ThreadProtocol {
+        #[cfg(test)]
+        self.image_protocol_builds
+            .set(self.image_protocol_builds.get() + 1);
         let mem_key = mem_key(bare_key, suffix);
         let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
         let _ = self.resize_register_tx.send((mem_key, req_rx));
@@ -461,5 +470,143 @@ impl App {
             )),
             paint.area,
         );
+    }
+}
+
+#[cfg(test)]
+mod protocol_tests {
+    use super::CachedImage;
+    use super::super::tests::make_app_stub;
+    use super::super::App;
+    use ratatui_image::picker::{Picker, ProtocolType};
+
+    const BASE_KEY: &str = "hero-base";
+    const LOGO_KEY: &str = "hero-logo";
+    const BOX: (u16, u16) = (8, 4);
+
+    fn image(width: u32, height: u32) -> image::DynamicImage {
+        image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            width,
+            height,
+            image::Rgba([20, 40, 60, 255]),
+        ))
+    }
+
+    fn cached(img: Option<image::DynamicImage>) -> CachedImage {
+        CachedImage {
+            img,
+            protocols: std::collections::HashMap::new(),
+            cover_box: None,
+            applied_logo_key: None,
+        }
+    }
+
+    fn app_with_base() -> App {
+        let mut app = make_app_stub();
+        app.image_protocol_enabled = true;
+        let mut picker = Picker::halfblocks();
+        picker.set_protocol_type(ProtocolType::Kitty);
+        app.image_picker = Some(picker);
+        app.halfblock_picker = Some(Picker::halfblocks());
+        app.card_image_states
+            .insert(BASE_KEY.to_owned(), cached(Some(image(4, 2))));
+        app
+    }
+
+    fn build_count(app: &App) -> u32 {
+        app.image_protocol_builds.get()
+    }
+
+    #[test]
+    fn arriving_logo_rebuilds_base_only_protocol_once() {
+        let mut app = app_with_base();
+
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
+        assert_eq!(build_count(&app), 1);
+
+        app.card_image_states
+            .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&app), 2);
+        assert_eq!(
+            app.card_image_states
+                .get(BASE_KEY)
+                .and_then(|entry| entry.applied_logo_key.as_deref()),
+            Some(LOGO_KEY)
+        );
+
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&app), 2);
+    }
+
+    #[test]
+    fn unchanged_logo_reuses_protocol() {
+        let mut app = app_with_base();
+        app.card_image_states
+            .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
+
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&app), 1);
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&app), 1);
+    }
+
+    #[test]
+    fn failed_or_absent_logo_keeps_base_only_protocol_valid() {
+        let mut absent = app_with_base();
+        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
+        assert!(absent.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&absent), 1);
+        assert!(absent
+            .card_image_states
+            .get(BASE_KEY)
+            .is_some_and(|entry| entry.applied_logo_key.is_none()));
+
+        let mut failed = app_with_base();
+        failed
+            .card_image_states
+            .insert(LOGO_KEY.to_owned(), CachedImage::empty());
+        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert!(failed.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&failed), 1);
+        assert!(failed
+            .card_image_states
+            .get(BASE_KEY)
+            .is_some_and(|entry| entry.applied_logo_key.is_none()));
+    }
+
+    #[test]
+    fn unchanged_hero_box_reuses_protocol() {
+        let mut app = app_with_base();
+
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
+        assert_eq!(build_count(&app), 1);
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, None));
+        assert_eq!(build_count(&app), 1);
+    }
+
+    #[test]
+    fn suffix_reencode_clears_stale_applied_logo_key() {
+        let mut app = app_with_base();
+        app.card_image_states
+            .insert(LOGO_KEY.to_owned(), cached(Some(image(2, 1))));
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&app), 1);
+
+        let initial_suffix = app.current_protocol_suffix();
+        app.dim_backdrop_active = true;
+        let reencoded_suffix = app.current_protocol_suffix();
+        assert_ne!(initial_suffix, reencoded_suffix);
+        app.card_image_states
+            .insert(LOGO_KEY.to_owned(), CachedImage::empty());
+
+        assert!(app.cached_image_protocol_mut(BASE_KEY).is_some());
+        assert_eq!(build_count(&app), 2);
+        assert!(app
+            .card_image_states
+            .get(BASE_KEY)
+            .is_some_and(|entry| entry.applied_logo_key.is_none()));
+        assert!(app.ensure_hero_cover_protocol(BASE_KEY, BOX, Some(LOGO_KEY)));
+        assert_eq!(build_count(&app), 2);
     }
 }

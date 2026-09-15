@@ -374,6 +374,10 @@ pub struct App {
     /// case, hiding a redundant reservation from the other counters).
     #[cfg(test)]
     pub(super) card_image_fetch_calls: u32,
+    /// Test-only instrumentation: counts protocol construction so hero cache
+    /// validity tests can distinguish reuse from a rebuild.
+    #[cfg(test)]
+    pub(super) image_protocol_builds: std::cell::Cell<u32>,
 }
 
 impl App {

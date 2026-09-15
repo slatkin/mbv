@@ -8,6 +8,14 @@ use std::time::{Duration, Instant};
 
 pub(super) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
 
+fn wide_landscape_hero_eligible(
+    artwork: &crate::app::components::library_panel::HeroArtwork,
+    panel_area: ratatui::layout::Rect,
+) -> bool {
+    artwork.shape == crate::app::components::library_panel::ArtworkShape::Landscape
+        && crate::app::render::wide_hero_fits(panel_area)
+}
+
 pub(super) fn mem_key(cache_key: &str, suffix: &str) -> String {
     format!("{cache_key}@{suffix}")
 }
@@ -195,9 +203,7 @@ impl App {
                 // Logo artwork is optional and must never delay the base image.
                 // Reserve it only for a real Movie Landscape hero at Wide
                 // geometry; all other presentations remain undecorated.
-                if artwork.shape == crate::app::components::library_panel::ArtworkShape::Landscape
-                    && crate::app::render::wide_hero_fits(panel_area)
-                {
+                if wide_landscape_hero_eligible(artwork, panel_area) {
                     if let Some(ArtworkSource::Emby {
                         item_id,
                         series_id,
@@ -256,14 +262,17 @@ impl App {
                         facts,
                         workspace_present,
                     );
-                let logo_cache_key =
+                let logo_cache_key = if wide_landscape_hero_eligible(artwork, panel_area) {
                     artwork
                         .decoration
                         .as_ref()
                         .and_then(|decoration| match decoration {
                             ArtworkSource::Emby { cache_key, .. } => Some(cache_key.as_str()),
                             ArtworkSource::AudiobookshelfCover { .. } => None,
-                        });
+                        })
+                } else {
+                    None
+                };
                 if !self.ensure_hero_cover_protocol(
                     &cache_key,
                     (box_cells.width, box_cells.height),
