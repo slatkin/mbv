@@ -7,8 +7,9 @@ content box directly below the Hero header, at the shared padding, for every hea
 item has neither, no overview box SHALL render and the Workspace (if any) SHALL move up.
 
 The box SHALL hold the item's overview text when it has one. A Movie hero with credits SHALL render
-its cast and crew table in the same box, one blank row under the overview text, or at the box's first
-content row when the item has no overview text.
+its cast and crew table in the same box: the table follows the overview text through the separator
+line and blank row the cast and crew table requirement defines, or starts at the box's first content
+row when the item has no overview text.
 
 #### Scenario: A Movie with an overview
 
