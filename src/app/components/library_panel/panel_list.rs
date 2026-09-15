@@ -17,6 +17,14 @@ use crate::app::palette::{self, Surface};
 
 use super::content::{PanelList, PanelListPaintPolicy};
 
+/// The zebra pair a surface resolves to for its focused and unfocused fills.
+fn zebra_stripe(surface: Surface) -> ZebraStripe {
+    ZebraStripe {
+        focused: palette::surface_colors(surface, true).fill,
+        unfocused: palette::surface_colors(surface, false).fill,
+    }
+}
+
 impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize) {
         // Path syntax prefers the inherent method, so this forwards to the
@@ -33,20 +41,14 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
         match policy {
             PanelListPaintPolicy::Wide { focused } => {
                 self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::new(focused).with_zebra(ZebraStripe {
-                        focused: palette::surface_colors(Surface::MainContentBox, true).fill,
-                        unfocused: palette::surface_colors(Surface::MainContentBox, false).fill,
-                    }),
+                    WideMediaListPaintPolicy::new(focused)
+                        .with_zebra(zebra_stripe(Surface::MainContentBox)),
                 );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
                 self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::for_library_workspace(focused).with_zebra(
-                        ZebraStripe {
-                            focused: palette::surface_colors(Surface::LibraryPanel, true).fill,
-                            unfocused: palette::surface_colors(Surface::LibraryPanel, false).fill,
-                        },
-                    ),
+                    WideMediaListPaintPolicy::for_library_workspace(focused)
+                        .with_zebra(zebra_stripe(Surface::LibraryPanel)),
                 );
             }
             PanelListPaintPolicy::Inline {

@@ -24,6 +24,14 @@ mod wide_row_regression_tests {
     use ratatui::Terminal;
     use std::time::{Duration, Instant};
 
+    /// The zebra pair a surface resolves to for its focused and unfocused fills.
+    fn stripe(surface: palette::Surface) -> ZebraStripe {
+        ZebraStripe {
+            focused: palette::surface_colors(surface, true).fill,
+            unfocused: palette::surface_colors(surface, false).fill,
+        }
+    }
+
     fn title_row_at(list: &mut WideMediaList<String>, focused: bool, y: u16) -> String {
         let mut terminal = Terminal::new(TestBackend::new(80, 4)).unwrap();
         terminal
@@ -367,18 +375,10 @@ mod wide_row_regression_tests {
             item("three", "Three", None),
             item("four", "Four", None),
         ]);
-        let pair = ZebraStripe {
-            focused: palette::surface_colors(palette::Surface::MainContentBox, true).fill,
-            unfocused: palette::surface_colors(palette::Surface::MainContentBox, false).fill,
-        };
-        assert_ne!(
-            pair.focused,
-            palette::surface_colors(palette::Surface::LibraryPanel, true).fill
-        );
-        assert_ne!(
-            pair.unfocused,
-            palette::surface_colors(palette::Surface::LibraryPanel, false).fill
-        );
+        let pair = stripe(palette::Surface::MainContentBox);
+        let other = stripe(palette::Surface::LibraryPanel);
+        assert_ne!(pair.focused, other.focused);
+        assert_ne!(pair.unfocused, other.unfocused);
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
@@ -417,18 +417,10 @@ mod wide_row_regression_tests {
             item("three", "Three", None),
             item("four", "Four", None),
         ]);
-        let pair = ZebraStripe {
-            focused: palette::surface_colors(palette::Surface::LibraryPanel, true).fill,
-            unfocused: palette::surface_colors(palette::Surface::LibraryPanel, false).fill,
-        };
-        assert_ne!(
-            pair.focused,
-            palette::surface_colors(palette::Surface::MainContentBox, true).fill
-        );
-        assert_ne!(
-            pair.unfocused,
-            palette::surface_colors(palette::Surface::MainContentBox, false).fill
-        );
+        let pair = stripe(palette::Surface::LibraryPanel);
+        let other = stripe(palette::Surface::MainContentBox);
+        assert_ne!(pair.focused, other.focused);
+        assert_ne!(pair.unfocused, other.unfocused);
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
@@ -450,10 +442,7 @@ mod wide_row_regression_tests {
     #[test]
     fn library_wide_accent_keeps_selected_stripe_and_unfocused_rows_plain() {
         let rect = Rect::new(0, 0, 40, 4);
-        let pair = ZebraStripe {
-            focused: palette::surface_colors(palette::Surface::MainContentBox, true).fill,
-            unfocused: palette::surface_colors(palette::Surface::MainContentBox, false).fill,
-        };
+        let pair = stripe(palette::Surface::MainContentBox);
         let mut selected = WideMediaList::new();
         selected.set_content(vec![item("one", "One", None), item("two", "Two", None)]);
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
@@ -496,10 +485,7 @@ mod wide_row_regression_tests {
     #[test]
     fn non_adjacent_multi_selected_rows_take_accent_with_own_parity() {
         let rect = Rect::new(0, 0, 32, 4);
-        let pair = ZebraStripe {
-            focused: palette::surface_colors(palette::Surface::MainContentBox, true).fill,
-            unfocused: palette::surface_colors(palette::Surface::MainContentBox, false).fill,
-        };
+        let pair = stripe(palette::Surface::MainContentBox);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
             item("one", "One", None),
@@ -737,9 +723,7 @@ mod wide_row_regression_tests {
 
     #[test]
     fn play_marker_only_paints_for_now_playing_rows() {
-        use crate::app::components::media_list::{
-            ActiveProgress, MediaListRow, MediaSemanticState,
-        };
+        use crate::app::components::media_list::ActiveProgress;
 
         let rect = Rect::new(0, 0, 40, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();

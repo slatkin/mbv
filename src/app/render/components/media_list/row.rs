@@ -126,8 +126,7 @@ pub(in crate::app) fn media_list_row<Target>(
             );
             let title_color = if selected {
                 // Gutter-accent lists paint the selected title in the focus
-                // accent; other lists
-                // keep the emphasis title.
+                // accent; other lists keep the emphasis title.
                 if gutter_accent {
                     palette::TEXT_FOCUS_ACCENT
                 } else {
