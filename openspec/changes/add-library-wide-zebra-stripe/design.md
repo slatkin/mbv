@@ -122,9 +122,8 @@ distinguish the two columns' scrollbar tints; revisit if a later change unifies 
 
 ### D6 — Domain terms get written down with the change
 
-`CONTEXT.md` (Presentation) gains **Zebra stripe** and **Gutter accent**, with the *Avoid* list naming the
-draft's synonyms ("gutter-selected style", "gutter treatment", "selection marker"), per AGENTS.md
-"add new terms with the change".
+`CONTEXT.md` (Presentation) gains **Zebra stripe** and **Gutter accent**, with an *Avoid* list documenting
+the first draft's terminology, per AGENTS.md "add new terms with the change".
 
 ## Risks / Trade-offs
 

@@ -53,7 +53,7 @@ pub const HERO_CREDITS_STRIPE: Color = primitives::PLAYBACK_PANEL_BG; // alterna
 pub const HERO_CREDITS_NAME: Color = primitives::YELLOW; // credits name column
 
 // Accents
-pub const ACCENT: Color = primitives::AQUA; // selection marker, watched, folders, Emby brand glyph
+pub const ACCENT: Color = primitives::AQUA; // focus accent, watched, folders, Emby brand glyph
 pub const ACCENT_ACTIVE: Color = primitives::IRIS; // active tab, focused pill/badge text, selected-row bg
 pub const ACCENT_AUDIOBOOKSHELF: Color = primitives::AMBER; // audiobookshelf brand glyph
 

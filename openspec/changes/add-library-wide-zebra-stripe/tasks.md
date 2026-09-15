@@ -98,9 +98,9 @@
 
 ## 5. Terms
 
-- [ ] 5.1 Add **Zebra stripe** and **Gutter accent** to `CONTEXT.md` under Presentation, with `_Avoid_`
-  synonyms naming the first draft's drift ("gutter-selected style", "gutter treatment", "selection
-  marker"). Verify: the change's spec, design, and code comments use only the CONTEXT.md terms.
+- [ ] 5.1 Add **Zebra stripe** and **Gutter accent** to `CONTEXT.md` under Presentation, with an `_Avoid_`
+  list documenting the first draft's drift. Verify: the change's spec, design, and code comments use
+  only the CONTEXT.md terms.
 
 ## 6. Gates
 
