@@ -5,8 +5,8 @@
 
 ## 2. Fetch Eligible Logo Images
 
-- [ ] 2.1 Route an independently tagged Movie Logo cache key through the existing bounded Emby image fetch pipeline, and verify with existing test instrumentation that only a Wide Landscape Movie projection reserves it while Portrait, Narrow, placeholder, non-Movie, and absent-Logo projections do not.
-- [ ] 2.2 Preserve base-artwork readiness while the optional Logo is pending, empty, or failed, and verify the projection reports the ready base image before Logo completion and reconsiders decoration after a successful completion.
+- [x] 2.1 Route an independently tagged Movie Logo cache key through the existing bounded Emby image fetch pipeline, and verify with existing test instrumentation that only a Wide Landscape Movie projection reserves it while Portrait, Narrow, placeholder, non-Movie, and absent-Logo projections do not.
+- [x] 2.2 Preserve base-artwork readiness while the optional Logo is pending, empty, or failed, and verify the projection reports the ready base image before Logo completion and reconsiders decoration after a successful completion.
 
 ## 3. Composite the Wide Landscape Hero
 
