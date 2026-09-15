@@ -1,4 +1,4 @@
-//! Daemon endpoint parsing and connection. Split out of `remote_player_connect`
+//! Daemon endpoint parsing and connection. Split out of `remote_player/connect.rs`
 //! so that module stays under the size bar.
 
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
