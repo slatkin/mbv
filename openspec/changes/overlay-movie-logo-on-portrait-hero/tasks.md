@@ -1,7 +1,7 @@
 ## 1. Declare Movie Logo Artwork
 
-- [ ] 1.1 Extend `EmbyImageTags` parsing and compatible serialization with `ImageTags.Logo`, and update the existing image-tag parsing cases to verify present and absent Logo declarations without constructing a live Service.
-- [ ] 1.2 Extend the provider-neutral Hero artwork content with an optional decoration source, populate it only for Movies with a declared Logo, remove Logo from the Movie base-image fallback chain, and extend the existing hero policy table to verify Movie/non-Movie and declared/absent cases.
+- [x] 1.1 Extend `EmbyImageTags` parsing and compatible serialization with `ImageTags.Logo`, and update the existing image-tag parsing cases to verify present and absent Logo declarations without constructing a live Service.
+- [x] 1.2 Extend the provider-neutral Hero artwork content with an optional decoration source, populate it only for Movies with a declared Logo, remove Logo from the Movie base-image fallback chain, and extend the existing hero policy table to verify Movie/non-Movie and declared/absent cases.
 
 ## 2. Fetch Eligible Logo Images
 
