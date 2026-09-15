@@ -91,8 +91,14 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
 }
 
 fn movie_logo_source(item: &EmbyItem) -> Option<ArtworkSource> {
-    (item.item_type == "Movie" && !item.image_tags.logo.is_empty())
-        .then(|| emby_source(item, &["Logo"]))
+    (item.item_type == "Movie" && !item.image_tags.logo.is_empty()).then(|| ArtworkSource::Emby {
+        item_id: item.id.clone(),
+        series_id: String::new(),
+        image_types: vec!["Logo".into()],
+        // Logo is optional decoration, so its declared tag is part of its
+        // identity rather than sharing the base-artwork key.
+        cache_key: format!("{}:Logo:{}", item.id, item.image_tags.logo),
+    })
 }
 
 /// The artwork policy for one queue item: dispatches to the item kind's

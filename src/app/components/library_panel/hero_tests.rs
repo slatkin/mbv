@@ -49,7 +49,7 @@ fn movie_with_backdrop_and_poster_is_landscape() {
             item_id: "m1".into(),
             series_id: String::new(),
             image_types: vec!["Logo".into()],
-            cache_key: "m1:Logo".into(),
+            cache_key: "m1:Logo:logo".into(),
         })
     );
 }
@@ -80,7 +80,15 @@ fn logo_decoration_requires_a_movie_and_is_absent_when_undeclared() {
         "Id": "m-logo", "Type": "Movie",
         "ImageTags": { "Primary": "poster", "Logo": "logo" }, "UserData": {}
     }));
-    assert!(emby_artwork_policy(&movie).decoration.is_some());
+    assert_eq!(
+        emby_artwork_policy(&movie).decoration,
+        Some(ArtworkSource::Emby {
+            item_id: "m-logo".into(),
+            series_id: String::new(),
+            image_types: vec!["Logo".into()],
+            cache_key: "m-logo:Logo:logo".into(),
+        })
+    );
 
     let movie_without_logo = emby_item(json!({
         "Id": "m-no-logo", "Type": "Movie",

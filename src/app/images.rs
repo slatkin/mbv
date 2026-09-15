@@ -175,6 +175,27 @@ impl App {
         let Some(cache_key) = cache_key else {
             return State::None;
         };
+
+        // A Logo is an optional decoration. Reserve it only for the shared
+        // Wide Portrait Movie presentation, after the base source has been
+        // established. It deliberately uses the same bounded fetch pipeline
+        // as every other Emby image; its completion must never hold up the
+        // poster projection below.
+        let wide_portrait = artwork.shape
+            == crate::app::components::library_panel::ArtworkShape::Portrait
+            && crate::app::render::wide_hero_fits(panel_area);
+        if wide_portrait {
+            if let Some(ArtworkSource::Emby {
+                item_id,
+                series_id,
+                image_types,
+                cache_key: logo_key,
+            }) = artwork.decoration.as_ref()
+            {
+                let types: Vec<&str> = image_types.iter().map(String::as_str).collect();
+                self.fetch_card_image(logo_key.clone(), item_id.clone(), series_id.clone(), &types);
+            }
+        }
         if self.card_image_loading.contains(&cache_key) {
             return State::Loading;
         }

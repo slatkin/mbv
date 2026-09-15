@@ -243,6 +243,31 @@ fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
 /// balances `image_fetches_active` synchronously; the reservation set pins
 /// the request count.
 #[test]
+fn portrait_movie_hero_reserves_base_and_logo_only_at_wide() {
+    let mut movie = crate::app::tests::make_item("Hero", "Movie");
+    movie.id = "portrait-logo".into();
+    movie.image_tags.primary = "poster-tag".into();
+    movie.image_tags.logo = "logo-tag".into();
+    let mut harness = migrated_movie_with_hero(movie);
+    harness.model_mut().app.image_protocol_enabled = true;
+    harness.model_mut().app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+    drop(draw_frame_sized(&mut harness));
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(harness
+        .model()
+        .app
+        .card_image_loading
+        .contains("portrait-logo:Primary,Backdrop"));
+    assert!(harness
+        .model()
+        .app
+        .card_image_loading
+        .contains("portrait-logo:Logo:logo-tag"));
+    assert_eq!(harness.model().app.card_image_fetch_calls, 2);
+}
+
+#[test]
 fn hero_projection_fetches_image_once_and_none_on_repaint() {
     let mut harness = migrated_home_with_hero(landscape_hero_item("hero-a"), 160);
     // Establishes `root_frame.library` before the first projection reads it.
