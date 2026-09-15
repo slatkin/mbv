@@ -311,6 +311,7 @@ mod tests {
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
                 source: None,
+                decoration: None,
                 image: State::None,
             },
         };

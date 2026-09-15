@@ -249,7 +249,7 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
     drop(draw_frame_sized(&mut harness));
     harness.model_mut().sync_mounted_surfaces();
 
-    let key = "hero-a:Backdrop,Primary,Logo";
+    let key = "hero-a:Backdrop,Primary";
     assert!(
         harness.model().app.card_image_loading.contains(key),
         "the new hero key must be reserved by the projection"
@@ -299,5 +299,5 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
         .model()
         .app
         .card_image_loading
-        .contains("hero-b:Backdrop,Primary,Logo"));
+        .contains("hero-b:Backdrop,Primary"));
 }
