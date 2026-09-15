@@ -330,19 +330,21 @@ pub(in crate::app) fn overlay_links(
                     && sanitize_url(&link.url).is_some()
                     && sanitize_label(&link.name).is_some()
                 {
-                    if let Some(cell) = f.buffer_mut().cell_mut((area.x + offset as u16, y)) {
-                        if hovered_link == Some(link_index) {
-                            cell.set_style(
-                                cell.style()
-                                    .fg(palette::TEXT_METADATA)
-                                    .add_modifier(ratatui::style::Modifier::UNDERLINED),
-                            );
+                    if hovered_link == Some(link_index) {
+                        for x in offset..offset + label_width {
+                            if let Some(cell) = f.buffer_mut().cell_mut((area.x + x as u16, y)) {
+                                cell.set_style(
+                                    cell.style()
+                                        .fg(palette::TEXT_METADATA)
+                                        .add_modifier(ratatui::style::Modifier::UNDERLINED),
+                                );
+                            }
                         }
-                        link_hits.push(
-                            Rect::new(area.x + offset as u16, y, label_width as u16, 1),
-                            link_index,
-                        );
                     }
+                    link_hits.push(
+                        Rect::new(area.x + offset as u16, y, label_width as u16, 1),
+                        link_index,
+                    );
                 }
                 offset += label_width + 1;
             }
@@ -608,6 +610,7 @@ mod tests {
                 image: super::super::content::HeroImageState::None,
             },
         };
+        let mut link_hits = HitRegions::new();
         terminal
             .draw(|f| {
                 paint_wide_hero_text(
@@ -624,25 +627,26 @@ mod tests {
                         },
                     ],
                 );
-                overlay_links(
-                    f,
-                    Rect::new(0, 0, 30, 2),
-                    &facts,
-                    Some(0),
-                    &mut HitRegions::new(),
-                );
+                overlay_links(f, Rect::new(0, 0, 30, 2), &facts, Some(0), &mut link_hits);
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        assert_eq!(buffer[(0, 1)].style().fg, Some(palette::TEXT_METADATA));
-        assert!(buffer[(0, 1)]
-            .style()
-            .add_modifier
-            .contains(ratatui::style::Modifier::UNDERLINED));
-        assert!(!buffer[(5, 1)]
-            .style()
-            .add_modifier
-            .contains(ratatui::style::Modifier::UNDERLINED));
+        for x in 0..4 {
+            assert_eq!(buffer[(x, 1)].style().fg, Some(palette::TEXT_METADATA));
+            assert!(buffer[(x, 1)]
+                .style()
+                .add_modifier
+                .contains(ratatui::style::Modifier::UNDERLINED));
+        }
+        assert_eq!(link_hits.regions(), &[(Rect::new(0, 1, 4, 1), 0)]);
+        assert_eq!(
+            link_hits.resolve(ratatui::layout::Position { x: 2, y: 1 }),
+            Some(&0)
+        );
+        assert_eq!(
+            link_hits.resolve(ratatui::layout::Position { x: 4, y: 1 }),
+            None
+        );
 
         terminal
             .draw(|f| {
