@@ -22,4 +22,4 @@
 
 ## 5. Final verification
 
-- [ ] 5.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`. Fix any lint or format issues introduced by the moves. Verify: both commands exit 0.
+- [x] 5.1 Run `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check`. Fix any lint or format issues introduced by the moves. Verify: both commands exit 0.
