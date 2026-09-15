@@ -32,6 +32,7 @@ fn library_items_request_includes_external_urls_field() {
         .unwrap();
     assert!(http.requests()[0].contains("Fields="));
     assert!(http.requests()[0].contains("ExternalUrls"));
+    assert!(http.requests()[0].contains("ProviderIds"));
 }
 
 #[test]
@@ -42,6 +43,7 @@ fn playlist_items_request_includes_external_urls_field() {
     client.get_playlist_items("playlist").unwrap();
     assert!(http.requests()[0].contains("Fields="));
     assert!(http.requests()[0].contains("ExternalUrls"));
+    assert!(http.requests()[0].contains("ProviderIds"));
 }
 
 #[test]
