@@ -340,7 +340,7 @@ pub enum ShellRequest {
     /// the generic/Movies/home-video library owner. These requests carry the
     /// component-resolved target while the shell owns the corresponding App
     /// effect.
-    /// Enter on the mounted generic/Movies/home-video `BrowserComponent`
+    /// Enter on the mounted generic/Movies/home-video `EmbyLibraryContent`
     /// (task 5.3d, Emby browser effect decoupling): the component resolved
     /// its own selected `EmbyItem` from its component-local cursor/content,
     /// and the shell runs `App::select_item` on that supplied item directly
@@ -390,7 +390,7 @@ pub enum ShellRequest {
     /// and re-reading it. The library/podcast menu content (mark-watched vs
     /// mark-played labels, bulk actions) derives from the shell's own tab
     /// state (the browser is mounted only for that tab).
-    /// Ctrl+S on the mounted generic/Movies/home-video `BrowserComponent`
+    /// Ctrl+S on the mounted generic/Movies/home-video `EmbyLibraryContent`
     /// (task 5.3d, Emby browser shuffle decoupling): the component resolves
     /// its own selected `EmbyItem` from its component-local cursor/content,
     /// and the shell shuffles that supplied item — the folder itself when it

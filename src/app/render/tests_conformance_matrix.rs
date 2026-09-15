@@ -32,7 +32,7 @@ fn render_reserved_library_area(
 }
 
 /// Render an Emby browse surface (Movies / TV / grouped Music) through the real
-/// `Model::draw_frame` shell path — the mounted `BrowserComponent` /
+/// `Model::draw_frame` shell path — the mounted Emby/TV content owner /
 /// `MusicWorkspaceComponent` is the sole painter after task 3.8 — and surface
 /// the active component's own painted geometry as a `PaintedRowGeometry` so
 /// the shared conformance assertions still hold (mirrors
@@ -53,7 +53,7 @@ fn render_browse_component(
     model.sync_mounted_surfaces();
     // Generic/Movies/HomeVideos (task 6.1) route through the embedded
     // `EmbyLibraryContent` owner inside the mounted `LibraryPanel` instead of a
-    // mounted `BrowserComponent`; seed its cursor there when that owner is
+    // mounted Emby library owner; seed its cursor there when that owner is
     // the active one.
     if let Some((_, key, _)) = model.active_emby_library_owner() {
         if let Some(owner) = model

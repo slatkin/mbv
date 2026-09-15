@@ -6,7 +6,7 @@
 //! `MediaList` owner of the active level's rows, and the embedded Inline
 //! Search session. It produces the panel's [`LibraryPanelContent`] per frame
 //! and translates the panel's slot events and forwarded chords into the same
-//! typed `Msg`s the mounted `BrowserComponent` emitted for these three kinds
+//! typed `Msg`s the embedded EmbyLibraryContent owner emits for these three kinds
 //! (`shell_emby_library.rs::handle_emby_library_request` and `shell_messages.rs`'s
 //! `Browser*`/`EmbyLibrary*` dispatch are unchanged and keyed only by the
 //! active tab, so they apply unmodified to messages this owner emits).
@@ -51,9 +51,9 @@ pub(in crate::app) struct EmbyLibraryIdentity {
 }
 
 /// Derives the Emby-specific semantic state for a browse row (mirrors
-/// `browser::emby_semantic_state`; the provider-neutral `media_list` layer
+/// the prior Emby semantic-state helper; the provider-neutral `media_list` layer
 /// deliberately stays free of `EmbyItem`, so both projection sites — this
-/// owner's and TV's still-mounted `BrowserComponent` — carry their own copy).
+/// owner and TV's `TvContent` — carry their own copy).
 fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
     if item.playback_position_ticks > 0 && !item.played {
         let progress = if item.runtime_ticks > 0 {
@@ -92,7 +92,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
     }
 }
 
-/// One shell content push (mirrors `browser::EmbyLibraryContent`, plus the
+/// One shell content push (mirrors the Emby library owner's content push, plus the
 /// letter/feed-group pill and home-video-count facts the old
 /// `NarrowBrowseExtras`/wide-Movies pill row carried separately; task 6.1
 /// unifies them into the Selector row and List controls row, design D8).
@@ -192,7 +192,7 @@ impl EmbyLibraryContent {
     }
 
     /// Explicit, identity-gated resting-position re-seed (mirrors
-    /// `BrowserComponent::apply_position`): the shell calls this only when
+    /// the prior Emby library owner's position application): the shell calls this only when
     /// `note_browse_identity` reports a real identity change (drill-in,
     /// go-back, letter-filter reset, sort change, feed/home-video group
     /// switch). Within one identity no position crosses the boundary.
@@ -209,7 +209,7 @@ impl EmbyLibraryContent {
 
     /// Records the browse identity of the current shell content push and
     /// reports whether it differs from the previous push (mirrors
-    /// `BrowserComponent::note_browse_identity`).
+    /// the prior Emby library owner's identity tracking).
     pub(in crate::app) fn note_browse_identity(&mut self, identity: EmbyLibraryIdentity) -> bool {
         let changed = self.last_identity.as_ref() != Some(&identity);
         self.last_identity = Some(identity);
@@ -220,8 +220,7 @@ impl EmbyLibraryContent {
     }
 
     /// The authoritative selection of the shared owner, as an `items` index
-    /// (mirrors `BrowserComponent::cursor`; the owner is the only cursor
-    /// store).
+    /// (the owner is the only cursor store).
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier
             .selected_target()
@@ -240,7 +239,7 @@ impl EmbyLibraryContent {
     /// Project the mirrored items into provider-neutral rows: letter-grouped
     /// `Heading`/`Spacer`/`Item` rows for a large library (or an active
     /// letter pill), natural-sorted plain rows otherwise (mirrors
-    /// `BrowserComponent::project_rows`).
+    /// the prior Emby library owner's row projection).
     fn feed_owner(&mut self) {
         let grouped = self.true_total() >= 50 || self.letter_filter.is_some();
         let rows: Vec<MediaListRow<String>> = if grouped {
@@ -274,7 +273,7 @@ impl EmbyLibraryContent {
         self.items.get(self.cursor()).cloned()
     }
 
-    /// Test-only cursor seed, mirroring `BrowserComponent::set_cursor_for_test`:
+    /// Test-only cursor seed, mirroring the embedded owner's test cursor seed:
     /// tests position the authoritative owner selection directly before
     /// exercising navigation.
     #[cfg(test)]
@@ -286,7 +285,7 @@ impl EmbyLibraryContent {
     }
 
     /// Ctrl+P/S/A on the selected Inline Search result (mirrors
-    /// `BrowserComponent::inline_search_result_action`): reuses the ordinary
+    /// the prior Emby library owner's inline-search result action): reuses the ordinary
     /// result-row shell effects, resolved against the search cursor rather
     /// than the ordinary browse cursor.
     fn inline_search_result_action(&mut self, key: &KeyEvent) -> Option<Msg> {
@@ -349,7 +348,7 @@ impl EmbyLibraryContent {
     }
 
     /// This owner's local key interpretation, forwarded by the focused panel
-    /// (the mounted `BrowserComponent::handle_tui_key` contract, unchanged —
+    /// (the embedded owner's local key-handling contract, unchanged —
     /// the router owns every global chord and keeps precedence).
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.inline_search.is_active() {
@@ -382,7 +381,7 @@ impl EmbyLibraryContent {
             return None;
         }
         // Local keyboard navigation routes through the same typed
-        // `ShellRequest` the mounted `BrowserComponent` emitted
+        // `ShellRequest` the embedded owner emits
         // (`browser/keyboard.rs`): this owner mutates only its own selection,
         // then returns the resolved index in place of the raw key so the
         // shell drives persistence/pagination through the same arm as TV's
@@ -584,7 +583,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 if self.inline_search.is_active() {
                     return self.handle_search_pointer(input);
                 }
-                // Row-local claim gate (mirrors `BrowserComponent::claim_list_point`):
+                // Row-local claim gate (mirrors the owner's list-point claim):
                 // only a point that resolves to a painted selectable row claims the
                 // click — the inline hero block resolves to the retained selected
                 // target (the detail block replaces the selected row), empty list

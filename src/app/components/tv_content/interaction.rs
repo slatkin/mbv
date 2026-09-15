@@ -268,7 +268,7 @@ impl TvContent {
         &mut self.inline_search
     }
 
-    /// Test-only cursor seed (mirrors `BrowserComponent::set_cursor_for_test`):
+    /// Test-only cursor seed for the embedded TV content owner:
     /// seeds the shared owner's stable target from a raw `context.list.items`
     /// index, for tests driving the merged component directly.
     #[cfg(test)]

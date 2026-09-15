@@ -14,7 +14,7 @@ use ratatui::Terminal;
 
 /// Build a `Model` at an explicit terminal size with the library pane focused.
 /// Characterization tests whose surface is now painted by a mounted component
-/// (`BrowserComponent` / `MusicWorkspaceComponent` / embedded `TvContent`)
+/// (`EmbyLibraryContent` / `MusicWorkspaceComponent` / embedded `TvContent`)
 /// instead of the legacy library dispatch start here, then draw with
 /// `draw_mounted_frame` and read geometry via `mounted_*_layout`.
 pub fn mounted_model_at(mut app: App, width: u16, height: u16) -> Model {

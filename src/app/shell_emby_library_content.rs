@@ -1,16 +1,16 @@
 //! Shell wiring for the Movies/HomeVideos/Generic embedded content owner
 //! (`EmbyLibraryContent`, task 6.1, design D2). Mirrors `shell_home_content.rs`'s
 //! shape: the owner lives inside the mounted `LibraryPanel`, addressed by
-//! `LibraryKey::Service(LibraryKey)`, and the shell projects Model-owned
+//! `LibraryKey::Service { .. }`, and the shell projects Model-owned
 //! browse snapshots into it at the same writer seams `shell_emby_library.rs`
-//! already calls for TV's still-mounted `BrowserComponent`
+//! already calls for TV's still-mounted `TvContent`
 //! (the former standalone browser lifecycle) — this file supplies the
 //! three functions take for the three migrated kinds, so every existing
 //! writer call site keeps working unchanged for both paths.
 //!
 //! Typed effects need no new dispatch: this owner emits the same
 //! `ShellRequest::Browser*`/`EmbyLibrary*` messages the mounted
-//! `BrowserComponent` did, and `shell_emby_library.rs::handle_emby_library_request` /
+//! `EmbyLibraryContent` did, and `shell_emby_library.rs::handle_emby_library_request` /
 //! `shell_messages.rs`'s dispatch are keyed only by the active tab, not by
 //! which component or owner sent the message.
 

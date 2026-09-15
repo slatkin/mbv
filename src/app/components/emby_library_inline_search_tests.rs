@@ -12,7 +12,7 @@ use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers};
 
 // The wide-Movies right-rail Inline Search painting this file used to cover
-// through `BrowserComponent` moved with Movies/HomeVideos/Generic to the
+// through the former standalone browser moved with Movies/HomeVideos/Generic to the
 // embedded `EmbyLibraryContent` owner (task 6.1): the panel's Wide/Narrow
 // skeletons already prove `ListSlot::Search` painting generically
 // (`library_panel::wide`/`narrow` tests), so the owner-level tests below
@@ -79,7 +79,7 @@ fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
 /// Pointer input against a painted search result row (design D3): the
 /// owner's `handle_search_pointer` translation resolves click/double-click/
 /// right-click/wheel through the embedded control's own retained geometry,
-/// exactly as the mounted `BrowserComponent` did for TV/Movies before this
+/// exactly as the prior TV/Movies browse owner did before this
 /// task, minus the raw-event "press in the bar, release on a row"
 /// cross-region gesture the panel's normalized `MediaListSurfaceInput` cannot carry
 /// (documented deviation, task 6.1 report).

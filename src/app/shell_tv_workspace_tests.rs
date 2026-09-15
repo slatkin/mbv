@@ -391,7 +391,7 @@ fn tv_breakpoint_resize_round_trip_keeps_selected_series() {
 
 /// Entering a wide TV library must route straight to the TV owner
 /// on the *first* `sync_mounted_surfaces()` after the tab flips — no
-/// one-frame narrow `BrowserComponent` flash. `App::wide_tv_library_area`
+/// one-frame narrow `TvContent` flash. `App::wide_tv_library_area`
 /// alone is a previous-frame paint signal; `prime_wide_tv_geometry` publishes
 /// the wide geometry synchronously from terminal size so the mount gate is
 /// correct immediately.

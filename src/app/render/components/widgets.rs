@@ -583,7 +583,7 @@ impl App {
             }
             TabSelection::EmbyLibrary(lib_idx) => {
                 if self.is_feed_home_video_group_view(lib_idx) {
-                    // BrowserComponent owns feed group presentation at every
+                    // EmbyLibraryContent owns feed group presentation at every
                     // width; publish only the full browser area.
                     *layout = area;
                     return;
@@ -595,7 +595,7 @@ impl App {
                     // frame reserves only the destination area here and
                     // paints no workspace.
                     //
-                    // BrowserComponent owns the browse body at every width;
+                    // The active Emby/TV content owner owns the browse body at every width;
                     // reserve only the destination area here.
                     *layout = area;
                 }

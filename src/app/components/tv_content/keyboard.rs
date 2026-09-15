@@ -174,8 +174,8 @@ impl TvContent {
         request.map(Msg::Shell)
     }
 
-    /// Narrow flat-list keyboard handling (mirrors `BrowserComponent::
-    /// handle_tui_key` before the merge, task 8.1): movement persists the
+    /// Narrow flat-list keyboard handling (mirrors the prior TV browse
+    /// key handling before the merge, task 8.1): movement persists the
     /// resting `BrowseLevel` cursor via `EmbyLibraryCursorIndex` (pagination and
     /// position restore keep working exactly as before), while activation,
     /// effects, refresh/rescan, context menu, search and letter-pill cycling

@@ -7,7 +7,7 @@ use std::time::Instant;
 impl Model {
     /// Route the generic Emby browser's selected-item typed effects (task
     /// 5.3d, Emby browser effect decoupling) to their `App` handlers with the
-    /// component-resolved owned target. `BrowserComponent` resolves its own
+    /// component-resolved owned target. `EmbyLibraryContent` resolves its own
     /// selected `EmbyItem` from its component-local cursor/content; the
     /// effect acts on that supplied item directly — never by copying the
     /// component cursor into a `BrowseLevel.cursor` and re-reading it. The
@@ -22,7 +22,7 @@ impl Model {
         match request {
             // A `Series` item routes through the shared Series-activation gate
             // first (task 3.4a): at narrow TV width — the only layout where
-            // `BrowserComponent` is mounted for a TV library — that reopens the
+            // `TvContent` is mounted for a TV library — that reopens the
             // season-selection modal instead of a flat drill-in. `false` means
             // it was not a Series (or had no id), so fall back to the normal
             // select-item path, including the folder scroll-persist.
