@@ -48,11 +48,17 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 `WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
-The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
+The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect. A paint policy MAY also carry a caller-supplied selected-row style (background, title foreground, and duration foreground) applied to the selected row in place of the default selection colours.
 
 The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve it from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no selected/detail geometry.
 
 It SHALL support Wide hero rails, provider workspace rows, and Queue fixed rows, but SHALL NOT implement Inline replacement or Grid placement. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use the shared canonical owner with Wide presentation in every panel mode.
+
+#### Scenario: A selected row uses its optional paint style
+
+- **WHEN** a Wide list's paint policy carries a selected-row style
+- **THEN** the selected row uses its supplied background, title foreground, and duration foreground
+- **AND** rows without that override retain the default selection colours
 
 #### Scenario: Wide TV rail composes the control
 

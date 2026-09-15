@@ -1,6 +1,6 @@
 use super::row::media_list_row;
 use crate::app::components::media_list::{
-    InlineLayout, InlineMediaBrowser, InlineMediaBrowserPaintPolicy, RowGeometry,
+    InlineLayout, InlineMediaBrowser, InlineMediaBrowserPaintPolicy, RowGeometry, SelectedRowStyle,
     SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::palette;
@@ -56,6 +56,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
         focused,
         selected_bg,
         None,
+        None,
     )
 }
 
@@ -67,6 +68,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     focused: bool,
     selected_bg: Color,
     zebra_bg: Option<Color>,
+    selected_style: Option<SelectedRowStyle>,
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
     let selected_row = geometry.selected_row();
@@ -104,6 +106,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                 focused || multi_selected,
                 selected_bg,
                 alternate_bg,
+                selected_style,
                 inner_width,
                 scrollbar,
                 marquee
@@ -220,6 +223,7 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
                         focused || multi_selected,
                         selected_bg,
                         None,
+                        None,
                         inner_width,
                         focused && overflows,
                         marquee
@@ -301,6 +305,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
         policy.zebra_bg(),
+        policy.selected_style(),
     );
     list.finish_view(
         claim_rect,

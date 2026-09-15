@@ -34,6 +34,7 @@ pub(in crate::app) fn media_list_row<Target>(
     focused: bool,
     selected_bg: Color,
     alternate_bg: Option<Color>,
+    selected_style: Option<crate::app::components::media_list::SelectedRowStyle>,
     inner_width: usize,
     has_scrollbar: bool,
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
@@ -104,13 +105,14 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
+            let selected_style = selected.then(|| selected_style).flatten();
             let title_width = content_w.saturating_sub(LEFT_INSET + trailing_w + slot_reserve);
             let title_color = if selected
                 && !matches!(
                     semantic_state,
                     MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
                 ) {
-                palette::TEXT_EMPHASIS
+                selected_style.map_or(palette::TEXT_EMPHASIS, |style| style.title_fg)
             } else {
                 fg
             };
@@ -169,7 +171,9 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::raw(" ".repeat(pad)));
                 spans.push(Span::styled(
                     dur.to_owned(),
-                    Style::default().fg(palette::STATUS_AVAILABLE),
+                    Style::default()
+                        .fg(selected_style
+                            .map_or(palette::STATUS_AVAILABLE, |style| style.duration_fg)),
                 ));
             }
             // Pad the selected row's spans out to the full row width (up to
@@ -198,7 +202,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 }
             }
             ListItem::new(Line::from(spans)).style(if selected {
-                Style::default().bg(selected_bg)
+                Style::default().bg(selected_style.map_or(selected_bg, |style| style.bg))
             } else {
                 Style::default()
             })

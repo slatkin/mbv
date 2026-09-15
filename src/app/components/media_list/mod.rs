@@ -214,10 +214,18 @@ pub struct ZebraStripe {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SelectedRowStyle {
+    pub bg: Color,
+    pub title_fg: Color,
+    pub duration_fg: Color,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WideMediaListPaintPolicy {
     focused: bool,
     selected_surface: SelectedRowSurface,
     zebra: Option<ZebraStripe>,
+    selected_style: Option<SelectedRowStyle>,
 }
 
 impl WideMediaListPaintPolicy {
@@ -226,6 +234,7 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::ListBackdrop,
             zebra: None,
+            selected_style: None,
         }
     }
 
@@ -234,6 +243,7 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningQueueColumn,
             zebra: None,
+            selected_style: None,
         }
     }
 
@@ -242,12 +252,22 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
             zebra: None,
+            selected_style: None,
         }
     }
 
     pub const fn with_zebra(mut self, zebra: ZebraStripe) -> Self {
         self.zebra = Some(zebra);
         self
+    }
+
+    pub const fn with_selected_style(mut self, style: SelectedRowStyle) -> Self {
+        self.selected_style = Some(style);
+        self
+    }
+
+    pub(crate) fn selected_style(self) -> Option<SelectedRowStyle> {
+        self.selected_style
     }
 
     pub(crate) fn zebra_bg(self) -> Option<Color> {

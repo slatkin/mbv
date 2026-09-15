@@ -11,7 +11,7 @@ pub(in crate::app) use wide::{
 mod wide_row_regression_tests {
     use super::wide::{render_wide_media_list, render_wide_media_list_with_zebra};
     use super::wide_row_regression_tests_helpers::{item, paint, row_of};
-    use crate::app::components::media_list::{MediaKind, WideMediaList};
+    use crate::app::components::media_list::{MediaKind, SelectedRowStyle, WideMediaList};
     use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -239,6 +239,7 @@ mod wide_row_regression_tests {
                     true,
                     selected_bg,
                     Some(zebra_bg),
+                    None,
                 );
             })
             .unwrap();
@@ -260,6 +261,41 @@ mod wide_row_regression_tests {
                 "selected row must remain full-bleed at x={x}"
             );
         }
+    }
+
+    #[test]
+    fn selected_style_overrides_focused_queue_row_over_zebra() {
+        let rect = Rect::new(0, 0, 32, 2);
+        let selected_bg = palette::SURFACE_RESTING;
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            item("other", "Other", None),
+            item("selected", "Selected", Some("1:05".into())),
+        ]);
+        list.select_last();
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_with_zebra(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    selected_bg,
+                    Some(Color::Rgb(60, 72, 65)),
+                    Some(SelectedRowStyle {
+                        bg: Color::from_u32(0x0045443c),
+                        title_fg: palette::TEXT_FOCUS_ACCENT,
+                        duration_fg: palette::ACCENT,
+                    }),
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(0, 1)].bg, Color::from_u32(0x0045443c));
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(buf[(26, 1)].fg, palette::ACCENT);
     }
 
     #[test]
