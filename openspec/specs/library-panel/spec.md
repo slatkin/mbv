@@ -220,7 +220,8 @@ row when the item has no overview text.
 
 A Movie hero's metadata rows SHALL carry, in order, the item's release date, its runtime, one row
 joining every genre the item declares (delimited by a single `/` with no spacing), and one row
-joining the item's provider link names. Genres come
+joining the item's IMDb provider link, when the item declares one (user direction 2026-09-15: only
+IMDb — other providers' links are not shown). Genres come
 from the provider's genre list, not from the first genre alone. A row SHALL NOT render when its
 content is empty.
 
@@ -232,16 +233,16 @@ Metadata rows remain an ordered list of plain-text rows coloured by position (se
 has three types chosen by the artwork policy*), so adding rows does not change how any row is coloured
 or wrapped.
 
-#### Scenario: A Movie with genres and links
+#### Scenario: A Movie with genres and an IMDb link
 
 - **WHEN** a Movie declaring `Action` and `Drama` plus IMDb and TheMovieDb links is selected at Wide
   geometry
 - **THEN** its metadata rows show the release date, the runtime, a row carrying both genres, and a
-  row carrying both link names, in that order
+  row carrying the IMDb link name only, in that order
 
-#### Scenario: A Movie with no provider links
+#### Scenario: A Movie with no IMDb link
 
-- **WHEN** a Movie declares no provider links
+- **WHEN** a Movie declares other providers' links but no IMDb link
 - **THEN** no provider-link row renders and the rows above it are unchanged
 
 #### Scenario: A TV Series is unaffected
@@ -332,11 +333,11 @@ Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
 
 Each provider link name in a Movie hero's provider-link row SHALL be rendered as a clickable link
 using OSC 8 escape sequences when the terminal declares hyperlink support, so that ctrl-clicking the
-name opens that provider's URL in the user's browser.
+name opens that provider's URL in the user's browser. The provider-link row carries only the item's
+IMDb link.
 
 A URL SHALL be embedded in an escape sequence only when it is an `http` or `https` URL containing no
-control bytes. A link whose URL fails that check SHALL render as plain text with no escape sequence,
-and the other links in the row SHALL still render as clickable.
+control bytes. A link whose URL fails that check SHALL render as plain text with no escape sequence.
 
 When the terminal does not declare hyperlink support, the row SHALL render as plain text with no
 escape sequences. The Narrow inline hero SHALL render the provider-link row as plain text.
