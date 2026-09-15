@@ -146,14 +146,20 @@ fn wide_home_selected_row_keeps_the_library_panel_background() {
         )
     };
 
-    let (selected, body) = bgs(true);
+    let (selected, _body) = bgs(true);
+    // D1: the Browser-pane Wide arm stripes with the MainContentBox pair.
     assert_eq!(
-        selected, body,
-        "the selected row keeps the panel background"
+        selected,
+        Some(palette::surface_colors(palette::Surface::MainContentBox, true).fill),
+        "the selected striped row keeps the MainContentBox fill under the gutter accent"
     );
 
-    let (selected, body) = bgs(false);
-    assert_eq!(selected, body, "unfocused wide Home shows no selection bar");
+    let (selected, _body) = bgs(false);
+    assert_eq!(
+        selected,
+        Some(palette::surface_colors(palette::Surface::MainContentBox, false).fill),
+        "the unfocused striped row keeps the MainContentBox fill"
+    );
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task

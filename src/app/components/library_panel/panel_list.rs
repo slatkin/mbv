@@ -11,7 +11,9 @@ use tuirealm::component::Component;
 
 use crate::app::components::media_list::{
     InlineMediaBrowserPaintPolicy, MediaListCarrier, Presentation, WideMediaListPaintPolicy,
+    ZebraStripe,
 };
+use crate::app::palette::{self, Surface};
 
 use super::content::{PanelList, PanelListPaintPolicy};
 
@@ -30,12 +32,22 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
             PanelListPaintPolicy::Wide { focused } => {
-                self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::new(focused));
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::new(focused).with_zebra(ZebraStripe {
+                        focused: palette::surface_colors(Surface::MainContentBox, true).fill,
+                        unfocused: palette::surface_colors(Surface::MainContentBox, false).fill,
+                    }),
+                );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
-                self.wide_mut()
-                    .set_paint_policy(WideMediaListPaintPolicy::for_library_workspace(focused));
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::for_library_workspace(focused).with_zebra(
+                        ZebraStripe {
+                            focused: palette::surface_colors(Surface::LibraryPanel, true).fill,
+                            unfocused: palette::surface_colors(Surface::LibraryPanel, false).fill,
+                        },
+                    ),
+                );
             }
             PanelListPaintPolicy::Inline {
                 focused,
@@ -101,6 +113,10 @@ mod panel_list_tests {
         }
     }
 
+    /// The selected-row accent is intentionally identical across both Wide
+    /// arms; arm-specific stripe colours are owned by the Render Component
+    /// regressions planned in tasks 4.1 and 4.2, at
+    /// `src/app/render/components/media_list.rs` and its Wide-arm tests.
     #[test]
     fn wide_selected_rows_use_the_gutter_accent_for_both_slots() {
         let mut carrier = MediaListCarrier::new(Presentation::Wide);
