@@ -37,7 +37,7 @@ pub(in crate::app) fn render_queue_body(
                         unfocused: Color::from_u32(0x00333c43),
                     })
                     .with_selected_style(SelectedRowStyle {
-                        bg: palette::QUEUE_SELECTED_ROW_BG,
+                        bg: palette::TEXT_FOCUS_ACCENT,
                         title_fg: palette::QUEUE_SELECTED_ROW_BG,
                         title_bg: palette::TEXT_FOCUS_ACCENT,
                         duration_fg: palette::ACCENT,
