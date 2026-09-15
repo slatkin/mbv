@@ -162,7 +162,7 @@ impl QueueComponent {
         }
         self.scope = scope;
         self.empty_text = if scope == QueueScope::Local {
-            "  Add items with p from Home or library tabs".into()
+            "  ¯\\_(ツ)_/¯".into()
         } else {
             "  Remote queue is empty".into()
         };
@@ -647,11 +647,16 @@ impl Component for QueueComponent {
         if content_area.height < 1 {
             return;
         }
-        if self.carrier.is_empty() {
+        if self.carrier.is_empty() && content_area.height > 1 {
+            let empty_area = Rect {
+                y: content_area.y + 1,
+                height: content_area.height - 1,
+                ..content_area
+            };
             frame.render_widget(
                 Paragraph::new(self.empty_text.clone())
-                    .style(Style::default().fg(palette::TEXT_MUTED)),
-                content_area,
+                    .style(Style::default().fg(palette::TEXT_EMPHASIS)),
+                empty_area,
             );
         }
         // The persistent canonical child is the sole Queue body painter and
