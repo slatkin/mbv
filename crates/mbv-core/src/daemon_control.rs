@@ -295,15 +295,30 @@ fn handle_ctrl(
         }
         CtrlCmd::ApplyServiceSetup { .. } => {}
         // ── Unified queue commands ──────────────────────────────────────
-        CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
+        CtrlCmd::UnifiedQueueReplace { items, slots, start_idx } => {
+            let submitted_slots: Vec<(crate::playback_queue::QueueSlotId, QueueItem)> = if slots.is_empty() {
+                items
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, item)| (crate::playback_queue::QueueSlotId::from_raw((index + 1) as u64), item))
+                    .collect()
+            } else {
+                slots
+                    .into_iter()
+                    .map(|slot| (crate::playback_queue::QueueSlotId::from_raw(slot.slot_id), slot.item))
+                    .collect()
+            };
+            let submitted_items: Vec<QueueItem> = submitted_slots.iter().map(|(_, item)| item.clone()).collect();
             let supports_abs_queue = ctrl_clients.lock().unwrap().supports_abs_queue(client_id);
             let supports_abs_book_queue = ctrl_clients
                 .lock()
                 .unwrap()
                 .supports_abs_book_queue(client_id);
-            if let Some(reason) =
-                abs_queue_transport_rejection(&items, supports_abs_queue, supports_abs_book_queue)
-            {
+            if let Some(reason) = abs_queue_transport_rejection(
+                &submitted_items,
+                supports_abs_queue,
+                supports_abs_book_queue,
+            ) {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -315,9 +330,14 @@ fn handle_ctrl(
                 );
                 return;
             }
-            let (items, next_cursor) =
-                admit_queue_items(items, start_idx, audio_only, has_emby, has_audiobookshelf);
-            if items.is_empty() {
+            let (slots, next_cursor) = admit_queue_slots(
+                submitted_slots,
+                start_idx,
+                audio_only,
+                has_emby,
+                has_audiobookshelf,
+            );
+            if slots.is_empty() {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -331,7 +351,9 @@ fn handle_ctrl(
             }
             // Audio-only admission: reject if the daemon is in audio-only
             // mode and any item is non-audio.
-            if let Some(reason) = audio_only_rejection(audio_only, &items) {
+            let admitted_items: Vec<QueueItem> =
+                slots.iter().map(|(_, item)| item.clone()).collect();
+            if let Some(reason) = audio_only_rejection(audio_only, &admitted_items) {
                 reject_command(
                     request.reply_tx,
                     ctrl_clients,
@@ -343,7 +365,12 @@ fn handle_ctrl(
                 );
                 return;
             }
-            *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
+            let active_slot = slots.get(next_cursor).map(|(slot_id, _)| *slot_id);
+            *queue = PlaybackQueue::from_slot_items(
+                slots,
+                active_slot,
+                crate::playback_queue::QueueRevision::default(),
+            );
             reset_slot_jumps(transitions, queued_transition_origin);
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // `send_command` alone only reaches an already-running mpv

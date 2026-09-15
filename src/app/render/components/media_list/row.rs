@@ -22,7 +22,10 @@ use unicode_width::UnicodeWidthStr;
 /// row (the library backdrop, even while the list panel itself is
 /// focus-green), while queue and nested workspace lists resolve their owning
 /// column's selected-row identity (`SelectedRowOnQueueColumn` /
-/// `SelectedRowOnLibraryPane`) so the row follows that column's focus.
+/// `SelectedRowOnLibraryPane`) so the row follows that column's focus. When
+/// `gutter_glyph` is set, the selected row keeps default row colours and no
+/// selected background; the owning panel marks the selection outside the
+/// panel edge, so nothing changes inside the row.
 ///
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
@@ -33,6 +36,8 @@ pub(in crate::app) fn media_list_row<Target>(
     selected: bool,
     focused: bool,
     selected_bg: Color,
+    alternate_bg: Option<Color>,
+    gutter_glyph: bool,
     inner_width: usize,
     has_scrollbar: bool,
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
@@ -62,19 +67,25 @@ pub(in crate::app) fn media_list_row<Target>(
             // with the title at column 2 and a quiet gap before the right-aligned
             // duration.
 
-            let (fg, progress) = match semantic_state {
-                MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None),
-                MediaSemanticState::Played => (palette::TEXT_MUTED, None),
-                // Active and now-playing rows append the live progress
-                // percentage to the trailing text, in the same style; only
-                // the throbber glyph is gone.
+            let (fg, progress, live_icon) = match semantic_state {
+                // Live rows (active/now-playing) lose the accent colour: the
+                // aqua play glyph before the title marks them instead, so
+                // the row text keeps the ordinary role. Active and
+                // now-playing rows append the live progress percentage to
+                // the trailing text in the same style.
+                MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
+                MediaSemanticState::Played | MediaSemanticState::Disabled => {
+                    (palette::TEXT_MUTED, None, None)
+                }
                 MediaSemanticState::Active { progress }
                 | MediaSemanticState::NowPlaying { progress } => (
-                    palette::ACCENT,
+                    palette::TEXT_EMPHASIS,
                     (*progress).map(|value| format!("{}%", value.percent())),
+                    Some("▶ "),
                 ),
-                MediaSemanticState::Starting => (palette::ACCENT, Some("starting".into())),
-                MediaSemanticState::Disabled => (palette::TEXT_MUTED, None),
+                MediaSemanticState::Starting => {
+                    (palette::TEXT_EMPHASIS, Some("starting".into()), None)
+                }
             };
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
@@ -103,13 +114,22 @@ pub(in crate::app) fn media_list_row<Target>(
             };
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
-            let title_width = content_w.saturating_sub(LEFT_INSET + trailing_w + slot_reserve);
-            let title_color = if selected
-                && !matches!(
-                    semantic_state,
-                    MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. }
-                ) {
-                palette::TEXT_EMPHASIS
+            let paint_selected = selected && !gutter_glyph;
+            let secondary_separator_reserve =
+                usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
+            let icon_reserve = live_icon.map_or(0, UnicodeWidthStr::width);
+            let title_width = content_w.saturating_sub(
+                LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
+            );
+            let title_color = if selected {
+                // Gutter-accent lists mark the selection in the gutter and
+                // paint the selected title in the focus accent; other lists
+                // keep the emphasis title.
+                if gutter_glyph {
+                    palette::TEXT_FOCUS_ACCENT
+                } else {
+                    palette::TEXT_EMPHASIS
+                }
             } else {
                 fg
             };
@@ -126,7 +146,7 @@ pub(in crate::app) fn media_list_row<Target>(
                     None => vec![(primary.clone(), title_color)],
                 };
             let parts_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-            let title_spans = marquee
+            let mut title_spans = marquee
                 .take()
                 .filter(|_| selected && parts_width > title_width)
                 .map(|(text, started_at)| {
@@ -152,8 +172,21 @@ pub(in crate::app) fn media_list_row<Target>(
                     }
                     spans
                 });
+            // Gutter-accent selection: the selected title paints in the
+            // focus accent, bold; no icon, no background.
+            if selected && gutter_glyph {
+                for span in &mut title_spans {
+                    span.style = span
+                        .style
+                        .fg(palette::TEXT_FOCUS_ACCENT)
+                        .add_modifier(Modifier::BOLD);
+                }
+            }
 
             let mut spans = vec![Span::raw("  ")];
+            if let Some(icon) = live_icon {
+                spans.push(Span::styled(icon, Style::default().fg(palette::ACCENT)));
+            }
             spans.extend(title_spans);
             if !trailing.is_empty() {
                 spans.push(Span::raw(" "));
@@ -175,11 +208,31 @@ pub(in crate::app) fn media_list_row<Target>(
             // the scrollbar column) so the highlighted background bar spans
             // the whole panel regardless of whether a duration string is
             // present — never just the width of the row text.
-            if selected {
+            if paint_selected {
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
                 spans.push(Span::raw(" ".repeat(inner_width.saturating_sub(used))));
             }
-            ListItem::new(Line::from(spans)).style(if selected {
+            if !paint_selected {
+                if let Some(bg) = alternate_bg {
+                    // Ratatui fills a ListItem's whole row allocation when its
+                    // style has a background. Keep the row style unstyled and
+                    // carry zebra paint only on the text-flow spans instead:
+                    // the two-column indent and right inset remain parent
+                    // background (and the scrollbar is painted separately).
+                    for span in spans.iter_mut().skip(1) {
+                        span.style = span.style.bg(bg);
+                    }
+                    let used = spans.iter().map(|span| span.content.width()).sum();
+                    spans.push(Span::styled(
+                        " ".repeat(content_w.saturating_sub(used)),
+                        Style::default().bg(bg),
+                    ));
+                }
+            }
+            // Gutter-accent selection: the row itself keeps the default
+            // treatment (the owning panel paints the marker outside the
+            // panel edge); nothing changes inside the row.
+            ListItem::new(Line::from(spans)).style(if paint_selected {
                 Style::default().bg(selected_bg)
             } else {
                 Style::default()

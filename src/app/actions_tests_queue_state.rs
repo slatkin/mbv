@@ -114,8 +114,8 @@ fn assert_context_selection_replaces_nonsequential_queue(action: ContextAction) 
             .iter()
             .map(|slot| slot.slot_id.raw())
             .collect::<Vec<_>>(),
-        vec![1, 2],
-        "context playback must give the run the replacement queue's slot identities"
+        vec![901, 902],
+        "context playback must preserve monotonic replacement slot identities"
     );
     assert!(slots.iter().all(|slot| {
         matches!(&slot.item, QueueItem::Emby(item) if item.name == "selected" || item.name == "selected-2")

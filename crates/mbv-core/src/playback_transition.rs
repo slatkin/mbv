@@ -160,6 +160,13 @@ impl OwnerTransitionState {
         }
     }
 
+    /// Drop only the queued transition when a rejection has no request
+    /// identity. It has not been dispatched and cannot be confirmed; retain
+    /// the in-flight transition, which may be a legitimate optimistic jump.
+    pub fn clear_unconfirmable(&mut self) {
+        self.queued_latest = None;
+    }
+
     /// Drop both transitions: a queue-replacing command deliberately
     /// interrupts anything in flight or queued behind it.
     pub fn reset(&mut self) {
@@ -227,6 +234,24 @@ fn transition_summary(t: Transition) -> crate::ctrl::TransitionSummary {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identityless_rejection_clears_only_unconfirmable_queued_jump() {
+        let mut state = OwnerTransitionState::default();
+        let in_flight = Transition::new(1, 1, QueueSlotId::from_raw(1));
+        let queued = Transition::new(2, 2, QueueSlotId::from_raw(2));
+        assert!(matches!(
+            state.accept(in_flight),
+            DispatchDecision::DispatchNow(_)
+        ));
+        assert!(matches!(
+            state.accept(queued),
+            DispatchDecision::Queued { .. }
+        ));
+        state.clear_unconfirmable();
+        assert_eq!(state.in_flight(), Some(in_flight));
+        assert_eq!(state.queued_latest(), None);
+    }
 
     // A -> B -> A: the first and last request target the same slot but are
     // distinct requests. Neither the in-flight nor the queued-latest holder

@@ -184,10 +184,17 @@ impl PlayerProxy {
                     return false;
                 }
                 let start_idx = start_idx.min(slots.len() - 1);
-                r.send_ctrl_cmd(crate::ctrl::CtrlCmd::UnifiedQueueReplace {
-                    items: slots.into_iter().map(|slot| slot.item).collect(),
-                    start_idx: Some(start_idx),
-                })
+                let slots: Vec<_> = slots
+                    .into_iter()
+                    .map(|slot| crate::ctrl::UnifiedQueueSlot {
+                        slot_id: slot.slot_id.raw(),
+                        item: slot.item,
+                    })
+                    .collect();
+                r.send_ctrl_cmd(crate::ctrl::CtrlCmd::unified_queue_replace(
+                    slots,
+                    Some(start_idx),
+                ))
             }
         }
     }
@@ -288,6 +295,15 @@ impl PlayerProxy {
                 }
                 r.queue_append(slots.into_iter().map(|slot| slot.item).collect())
             }
+        }
+    }
+
+    /// Update the source metadata associated with a canonical submission.
+    /// Local owners keep this in the shell; remote stubs expose it for the
+    /// same source bookkeeping as the legacy play_queue path.
+    pub fn set_queue_source(&self, source: crate::config::QueueSource) {
+        if let PlayerProxyInner::Remote(remote) = &self.inner {
+            *remote.queue_source.lock().unwrap() = source;
         }
     }
 

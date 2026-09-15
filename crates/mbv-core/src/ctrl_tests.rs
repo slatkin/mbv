@@ -412,18 +412,41 @@ fn unified_queue_replace_cmd_round_trips() {
         QueueItem::Feed(stub_feed_entry()),
     ];
     let cmd = CtrlCmd::UnifiedQueueReplace {
+        slots: items
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(index, item)| UnifiedQueueSlot { slot_id: (index + 7) as u64, item })
+            .collect(),
         items,
         start_idx: Some(0),
     };
     let json = serde_json::to_string(&cmd).unwrap();
     let decoded: CtrlCmd = serde_json::from_str(&json).unwrap();
     match decoded {
-        CtrlCmd::UnifiedQueueReplace { items, start_idx } => {
+        CtrlCmd::UnifiedQueueReplace { items, slots, start_idx } => {
             assert_eq!(items.len(), 2);
+            assert_eq!(slots.iter().map(|slot| slot.slot_id).collect::<Vec<_>>(), vec![7, 8]);
             assert_eq!(start_idx, Some(0));
         }
         _ => panic!("expected UnifiedQueueReplace"),
     }
+
+    // A pre-slot-identity peer omitted the additive field and remains readable.
+    let mut legacy: serde_json::Value = serde_json::from_str(&json).unwrap();
+    legacy
+        .get_mut("UnifiedQueueReplace")
+        .and_then(serde_json::Value::as_object_mut)
+        .unwrap()
+        .remove("slots");
+    let CtrlCmd::UnifiedQueueReplace { items, slots, start_idx } =
+        serde_json::from_value(legacy).unwrap()
+    else {
+        panic!("expected legacy UnifiedQueueReplace")
+    };
+    assert_eq!(items.len(), 2);
+    assert!(slots.is_empty());
+    assert_eq!(start_idx, Some(0));
 }
 
 #[test]

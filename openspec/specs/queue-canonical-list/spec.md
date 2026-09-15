@@ -202,3 +202,18 @@ SHALL be told to make the same move addressed by slot identity.
 - **WHEN** the user drags the currently playing Queue entry to a new position
 - **THEN** playback continues on that entry uninterrupted
 - **AND** the playing position tracks the entry's new index
+
+### Requirement: Prediction is cleared by reconciliation
+
+When a local owner rejects a slot-addressed playback command, it SHALL emit `CommandRejected`. The Client SHALL clear the in-flight bare playhead transition on that event; rejection SHALL NOT wait for the blind transition timeout. A replacement that has not been explicitly submitted SHALL not reseat or claim a new now-playing row.
+
+#### Scenario: A rejected jump clears its prediction immediately
+
+- **WHEN** the local owner reports `CommandRejected` for a slot-addressed command
+- **THEN** the Client clears the in-flight bare playhead transition at once
+- **AND** no now-playing prediction survives on the timeout alone
+
+#### Scenario: A populate-only replacement claims nothing
+
+- **WHEN** a queue replacement has not been explicitly submitted to the playing owner
+- **THEN** no slot of that replacement is presented as the playing row

@@ -39,6 +39,7 @@ pub(super) struct MediaListPaint<Target> {
 /// The painter resolves the scroll offset and stores it back into `list` via
 /// [`WideMediaList::set_scroll`] before returning, so the offset persists across
 /// frames without the caller threading a `usize` back.
+#[cfg(test)]
 pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     f: &mut Frame,
     paint_area: Rect,
@@ -46,6 +47,28 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     list: &mut WideMediaList<Target>,
     focused: bool,
     selected_bg: Color,
+) -> MediaListPaint<Target> {
+    render_wide_media_list_with_zebra(
+        f,
+        paint_area,
+        content_area,
+        list,
+        focused,
+        selected_bg,
+        None,
+        false,
+    )
+}
+
+pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
+    f: &mut Frame,
+    paint_area: Rect,
+    content_area: Rect,
+    list: &mut WideMediaList<Target>,
+    focused: bool,
+    selected_bg: Color,
+    zebra_bg: Option<Color>,
+    selected_gutter: bool,
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
     let selected_row = geometry.selected_row();
@@ -67,6 +90,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     let overflows = total_rows > content_area.height as usize;
     let scrollbar = focused && overflows;
     let inner_width = paint_area.width.saturating_sub(u16::from(scrollbar)) as usize;
+    let mut visible_item_index = 0;
     let list_items: Vec<ListItem> = (offset..total_rows)
         .take(content_area.height as usize)
         .map(|row| {
@@ -75,18 +99,25 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
                 .expect("wide geometry contains a source row");
             let row_target = rows[source_row].selectable_target();
             let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
-            media_list_row(
+            let alternate_bg = zebra_bg.filter(|_| visible_item_index % 2 == 0);
+            let item = media_list_row(
                 &rows[source_row],
                 Some(row) == selected_row || multi_selected,
                 focused || multi_selected,
                 selected_bg,
+                alternate_bg,
+                selected_gutter,
                 inner_width,
                 scrollbar,
                 marquee
                     .as_mut()
                     .filter(|_| Some(row) == selected_row)
                     .map(|(text, started_at)| (text, started_at)),
-            )
+            );
+            if rows[source_row].selectable_target().is_some() {
+                visible_item_index += 1;
+            }
+            item
         })
         .collect();
     // Keep the established full-width row treatment, but take the vertical
@@ -191,6 +222,8 @@ fn render_inline_media_browser_with_geometry<Target: Clone + PartialEq>(
                             || multi_selected,
                         focused || multi_selected,
                         selected_bg,
+                        None,
+                        false,
                         inner_width,
                         focused && overflows,
                         marquee
@@ -264,13 +297,15 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq
     if area.is_empty() || claim_rect.is_empty() || content_rect.is_empty() || list.is_empty() {
         return;
     }
-    let paint = render_wide_media_list(
+    let paint = render_wide_media_list_with_zebra(
         f,
         claim_rect,
         content_rect,
         list,
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
+        policy.zebra_bg(),
+        policy.selected_gutter(),
     );
     list.finish_view(
         claim_rect,

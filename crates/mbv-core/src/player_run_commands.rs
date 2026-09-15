@@ -1,3 +1,9 @@
+fn reject_stale_jump(event_tx: &mpsc::Sender<PlayerEvent>, slot_id: QueueSlotId) {
+    let reason = format!("Playback selection rejected: stale slot {slot_id:?}");
+    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; rejected");
+    let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
+}
+
 impl PlaybackRun {
     fn handle_command(
         &mut self,
@@ -33,7 +39,7 @@ impl PlaybackRun {
                 // ordinal; a stale slot (gone here) is rejected, never
                 // repaired by position (design D6).
                 let Some(idx) = self.queue.slot_index(slot_id) else {
-                    log::debug!(target: "player", "jump-to: stale slot {slot_id:?} absent; discarded");
+                    reject_stale_jump(&self.event_tx, slot_id);
                     return cancel_stop;
                 };
                 self.forced_transition =

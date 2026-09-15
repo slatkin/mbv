@@ -8,6 +8,7 @@
 use crate::app::components::component_id::BrowserKey;
 use crate::app::ui_util::move_cursor;
 use ratatui::layout::{Position, Rect};
+use ratatui::style::Color;
 use std::time::Instant;
 
 mod anchor;
@@ -207,9 +208,17 @@ pub enum SelectedRowSurface {
 
 /// Semantic paint policy for one `WideMediaList` view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ZebraStripe {
+    pub focused: Color,
+    pub unfocused: Color,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WideMediaListPaintPolicy {
     focused: bool,
     selected_surface: SelectedRowSurface,
+    zebra: Option<ZebraStripe>,
+    selected_gutter: bool,
 }
 
 impl WideMediaListPaintPolicy {
@@ -217,6 +226,8 @@ impl WideMediaListPaintPolicy {
         Self {
             focused,
             selected_surface: SelectedRowSurface::ListBackdrop,
+            zebra: None,
+            selected_gutter: false,
         }
     }
 
@@ -224,6 +235,8 @@ impl WideMediaListPaintPolicy {
         Self {
             focused,
             selected_surface: SelectedRowSurface::OwningQueueColumn,
+            zebra: None,
+            selected_gutter: false,
         }
     }
 
@@ -231,7 +244,33 @@ impl WideMediaListPaintPolicy {
         Self {
             focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
+            zebra: None,
+            selected_gutter: false,
         }
+    }
+
+    pub const fn with_zebra(mut self, zebra: ZebraStripe) -> Self {
+        self.zebra = Some(zebra);
+        self
+    }
+
+    pub const fn with_selected_gutter(mut self) -> Self {
+        self.selected_gutter = true;
+        self
+    }
+
+    pub(crate) const fn selected_gutter(self) -> bool {
+        self.selected_gutter
+    }
+
+    pub(crate) fn zebra_bg(self) -> Option<Color> {
+        self.zebra.map(|zebra| {
+            if self.focused {
+                zebra.focused
+            } else {
+                zebra.unfocused
+            }
+        })
     }
 
     pub(crate) const fn focused(self) -> bool {

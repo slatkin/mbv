@@ -53,6 +53,32 @@ pub(crate) fn queue_restore_cursor(
 }
 
 impl App {
+    /// Submit the already-replaced tab queue without re-minting slot ids.
+    /// The tab's canonical pairs are the identity source for both local and
+    /// direct-remote owners; fresh `play_queue` projections would diverge
+    /// from monotonic tab ids after a replacement.
+    pub(super) fn submit_tab_queue(&mut self, scope: super::QueueScope, start_idx: usize) -> bool {
+        let slots = self.queue_for_scope(scope).all_queue_slots();
+        if slots.is_empty() {
+            return false;
+        }
+        let headless = slots.iter().all(|slot| slot.item.is_audio());
+        let sent = self.player.submit_queue_slots(
+            slots,
+            start_idx,
+            self.emby_snapshot().map(Arc::new),
+            headless,
+            self.ui_volume,
+        );
+        if sent {
+            self.player.set_queue_source(self.queue_source.clone());
+        }
+        if sent && matches!(scope, super::QueueScope::Local) && !self.player.is_remote() {
+            self.stamp_queue_generation(scope);
+        }
+        sent
+    }
+
     /// Cast takes priority over an attached Emby session: the two are
     /// mutually exclusive attachment slots (see `remote_slot_state.rs`), but
     /// this ordering keeps the seam correct even if that invariant is ever
@@ -179,10 +205,6 @@ impl App {
             self.submit_attached_sequence(&id, &items, start_idx);
             return;
         }
-        let Some(c) = self.emby_snapshot().map(Arc::new) else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
         if direct_remote {
             if let Some(item) = items.get(start_idx) {
                 self.flash(
@@ -191,13 +213,7 @@ impl App {
                 );
             }
         }
-        self.player.play_queue(
-            items,
-            start_idx,
-            self.queue_source.clone(),
-            c,
-            self.ui_volume,
-        );
+        self.submit_tab_queue(self.playing_queue_scope(), start_idx);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
@@ -243,17 +259,12 @@ impl App {
             );
             drop(c);
             if episodes.len() > 1 {
-                let Some(c) = self.emby_snapshot().map(Arc::new) else {
-                    self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                    return;
-                };
                 if !direct_remote {
                     self.on_queue_replace_silent();
                     self.replace_playback_queue(episodes.clone(), 0);
                 }
                 self.queue_source = crate::config::QueueSource::Series;
-                self.player
-                    .play_queue(episodes, 0, self.queue_source.clone(), c, self.ui_volume);
+                self.submit_tab_queue(self.playing_queue_scope(), 0);
                 self.player
                     .send_command(PlayerCommand::SetMute(self.mute_on));
                 if !self.has_direct_remote_queue() {
@@ -262,10 +273,6 @@ impl App {
                 return;
             }
         }
-        let Some(c) = self.emby_snapshot().map(Arc::new) else {
-            self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-            return;
-        };
         if !direct_remote {
             self.replace_playback_queue(vec![item.clone()], 0);
         } else {
@@ -274,8 +281,7 @@ impl App {
                 ToastSeverity::Neutral,
             );
         }
-        self.player
-            .play(&item, self.queue_source.clone(), c, self.ui_volume);
+        self.submit_tab_queue(self.playing_queue_scope(), 0);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }

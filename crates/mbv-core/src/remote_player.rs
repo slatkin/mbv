@@ -223,10 +223,14 @@ impl RemotePlayer {
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
-        let sent = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
-            items: vec![QueueItem::Emby(Box::new(item.clone()))],
-            start_idx: Some(0),
-        });
+        let queue_item = QueueItem::Emby(Box::new(item.clone()));
+        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(
+            vec![crate::ctrl::UnifiedQueueSlot {
+                slot_id: 1,
+                item: queue_item,
+            }],
+            Some(0),
+        ));
         if sent {
             *self.items.lock().unwrap() = vec![item.clone()];
             *self.queue_source.lock().unwrap() = source;
@@ -242,15 +246,17 @@ impl RemotePlayer {
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) -> bool {
-        let queue_items: Vec<QueueItem> = items
+        let slots: Vec<_> = items
             .iter()
             .cloned()
             .map(|i| QueueItem::Emby(Box::new(i)))
+            .enumerate()
+            .map(|(index, item)| crate::ctrl::UnifiedQueueSlot {
+                slot_id: (index + 1) as u64,
+                item,
+            })
             .collect();
-        let sent = self.send_ctrl_cmd(CtrlCmd::UnifiedQueueReplace {
-            items: queue_items,
-            start_idx: Some(start_idx),
-        });
+        let sent = self.send_ctrl_cmd(CtrlCmd::unified_queue_replace(slots, Some(start_idx)));
         if sent {
             *self.items.lock().unwrap() = items;
             *self.queue_source.lock().unwrap() = source;

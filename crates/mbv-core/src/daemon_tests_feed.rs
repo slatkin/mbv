@@ -95,6 +95,10 @@ fn replace_queue_succeeds_unconditionally() {
     handle_ctrl(
         CtrlCmd::UnifiedQueueReplace {
             items: vec![QueueItem::Emby(Box::new(item("replacement", "Video", "Movie")))],
+            slots: vec![crate::ctrl::UnifiedQueueSlot {
+                slot_id: 44,
+                item: QueueItem::Emby(Box::new(item("replacement", "Video", "Movie"))),
+            }],
             start_idx: Some(0),
         },
         sender_id,
@@ -116,5 +120,6 @@ fn replace_queue_succeeds_unconditionally() {
     // Queue was replaced — Feed slot is gone, Emby item is present.
     assert_eq!(queue.len(), 1);
     assert_eq!(queue.slots()[0].item.id(), "replacement");
+    assert_eq!(queue.slots()[0].slot_id.raw(), 44);
     assert!(matches!(queue.slots()[0].item, QueueItem::Emby(_)));
 }

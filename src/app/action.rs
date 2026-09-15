@@ -486,8 +486,14 @@ impl App {
                 let st = self.player.status.lock().unwrap();
                 let active = st.active;
                 let current_idx = st.current_idx;
+                let sequence_generation = st.sequence_generation;
                 drop(st);
-                if active && self.queue_scope_is_playback(scope) {
+                let queue_generation = self.queue_for_scope(scope).sequence_generation;
+                if active
+                    && self.queue_scope_is_playback(scope)
+                    && (scope != super::QueueScope::Local
+                        || queue_generation <= sequence_generation)
+                {
                     let is_audio = item.is_audio();
                     if t == current_idx && is_audio {
                         self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
@@ -565,6 +571,7 @@ impl App {
                         headless,
                         self.ui_volume,
                     );
+                    self.stamp_queue_generation(scope);
                 }
             }
 

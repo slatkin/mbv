@@ -11,6 +11,9 @@ pub(super) struct PlayerTab {
     pub(super) queue: PlaybackQueue,
     /// The newest desired playback slot from the owner snapshot, if any.
     pub(super) pending_playback_slot: Option<QueueSlotId>,
+    /// Generation of the queue represented by this tab, compared with the
+    /// owner's status before issuing slot-addressed playback commands.
+    pub(super) sequence_generation: u64,
 }
 
 impl PlayerTab {
@@ -24,6 +27,7 @@ impl PlayerTab {
             queue_cursor,
             queue,
             pending_playback_slot: None,
+            sequence_generation: 0,
         }
     }
 
@@ -49,6 +53,7 @@ impl PlayerTab {
                 .as_ref()
                 .or(state.in_flight_transition.as_ref())
                 .map(|transition| QueueSlotId::from_raw(transition.target_slot)),
+            sequence_generation: 0,
         }
     }
 
@@ -76,8 +81,8 @@ impl PlayerTab {
     /// persisted queue that may contain Feed entries — `set_items` would
     /// silently drop them.
     pub(super) fn set_queue_items(&mut self, items: Vec<QueueItem>, queue_cursor: usize) {
-        let revision = self.queue.revision();
-        self.queue = PlaybackQueue::from_queue_items_with_revision(Vec::new(), None, revision);
+        // Replace in place so PlaybackQueue's allocator remains monotonic;
+        // a new queue must never reuse an old occurrence's slot identity.
         self.queue.replace(items);
         self.queue_cursor = queue_cursor;
         self.pending_playback_slot = None;

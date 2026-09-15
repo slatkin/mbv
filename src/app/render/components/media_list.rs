@@ -9,12 +9,15 @@ pub(in crate::app) use wide::{
 
 #[cfg(test)]
 mod wide_row_regression_tests {
-    use super::wide::render_wide_media_list;
+    use super::wide::{render_wide_media_list, render_wide_media_list_with_zebra};
     use super::wide_row_regression_tests_helpers::{item, paint, row_of};
-    use crate::app::components::media_list::{MediaKind, WideMediaList};
+    use crate::app::components::media_list::{
+        MediaKind, MediaListRow, MediaSemanticState, WideMediaList,
+    };
     use crate::app::palette;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
+    use ratatui::style::{Color, Modifier};
     use ratatui::Terminal;
     use std::time::{Duration, Instant};
 
@@ -214,6 +217,139 @@ mod wide_row_regression_tests {
     /// vertically offset row-flow rect. The row painter keeps its established
     /// full-width selection treatment, but rows and scrollbar must start at the
     /// content flow's y-coordinate and use its height.
+    #[test]
+    fn zebra_stripes_are_contained_and_selected_row_still_wins() {
+        let rect = Rect::new(0, 0, 32, 4);
+        let selected_bg = palette::SURFACE_RESTING;
+        let zebra_bg = Color::Rgb(60, 72, 65);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            item("one", "One", None),
+            item("two", "Two", None),
+            item("three", "Three", None),
+            item("four", "Four", None),
+        ]);
+        list.select_last();
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_with_zebra(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    selected_bg,
+                    Some(zebra_bg),
+                    false,
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        for y in [0, 2] {
+            assert_eq!(buf[(0, y)].bg, Color::Reset);
+            assert_eq!(buf[(1, y)].bg, Color::Reset);
+            assert_eq!(buf[(2, y)].bg, zebra_bg);
+            assert_eq!(buf[(29, y)].bg, zebra_bg);
+            assert_eq!(buf[(30, y)].bg, Color::Reset);
+            assert_eq!(buf[(31, y)].bg, Color::Reset);
+        }
+        assert_ne!(buf[(0, 1)].bg, zebra_bg);
+        assert_ne!(buf[(0, 3)].bg, zebra_bg);
+        for x in 0..rect.width {
+            assert_eq!(
+                buf[(x, 3)].bg,
+                selected_bg,
+                "selected row must remain full-bleed at x={x}"
+            );
+        }
+    }
+
+    #[test]
+    fn two_tone_zebra_stripe_stays_inside_right_inset_without_duration() {
+        let rect = Rect::new(0, 0, 32, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "two-tone".into(),
+                primary: "Series".into(),
+                secondary: Some("Episode".into()),
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            item("selected", "Selected", None),
+        ]);
+        list.select_last();
+        let zebra_bg = Color::Rgb(60, 72, 65);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_with_zebra(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    palette::SURFACE_RESTING,
+                    Some(zebra_bg),
+                    false,
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(29, 0)].bg, zebra_bg, "stripe reaches the content edge");
+        assert_eq!(
+            buf[(30, 0)].bg,
+            Color::Reset,
+            "right inset remains unstriped"
+        );
+        assert_eq!(
+            buf[(31, 0)].bg,
+            Color::Reset,
+            "outer edge remains unstriped"
+        );
+    }
+
+    #[test]
+    fn gutter_policy_selected_title_is_bold_focus_accent() {
+        let rect = Rect::new(0, 0, 32, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            item("other", "Other", None),
+            item("selected", "Selected", Some("1:05".into())),
+        ]);
+        list.select_last();
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_with_zebra(
+                    f,
+                    rect,
+                    rect,
+                    &mut list,
+                    true,
+                    palette::SURFACE_RESTING,
+                    Some(Color::Rgb(60, 72, 65)),
+                    true,
+                );
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        // The selected title paints in the focus accent, bold; no icon and
+        // no selected background; the duration keeps the default colour.
+        assert_eq!(buf[(0, 1)].symbol(), " ");
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert!(buf[(2, 1)].modifier.contains(Modifier::BOLD));
+        assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
+        assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);
+        // The unselected even item keeps its zebra stripe, and the selected
+        // odd item is unstriped.
+        assert_eq!(buf[(2, 0)].bg, Color::Rgb(60, 72, 65));
+        assert_eq!(buf[(2, 1)].bg, Color::Reset);
+    }
+
     #[test]
     fn non_adjacent_multi_selected_rows_and_unfocused_cursor_paint_selected_surface() {
         let rect = Rect::new(0, 0, 32, 4);

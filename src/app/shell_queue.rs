@@ -82,7 +82,7 @@ impl Model {
         }
 
         let scope = self.app.viewed_queue_scope();
-        let playback = self.app.displayed_queue_playback_state();
+        let playback = self.app.queue_row_playback_state();
         // An optimistic selection counts only while its slot is still in the
         // viewed queue: a stale target (removed by an edit or the owner) must
         // not move the now-playing state off the row that is really playing.

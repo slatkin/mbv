@@ -440,6 +440,13 @@ impl App {
             }
             PlayerEvent::CommandRejected(reason) => {
                 self.pending_remote_move_cursor = None;
+                // CommandRejected carries no request identity. Only the
+                // queued local transition is unconfirmable; keep the
+                // in-flight transition so a stale rejection cannot erase a
+                // legitimate optimistic playhead.
+                if !self.player.is_remote() {
+                    self.bare_owner.clear_unconfirmable_transition();
+                }
                 self.flash(reason, ToastSeverity::Error);
             }
             PlayerEvent::PlaybackIntent(event) => {

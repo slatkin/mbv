@@ -230,6 +230,7 @@ fn direct_remote_feed_play_submits_the_selected_entry() {
         mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace {
             items,
             start_idx: Some(1),
+            ..
         } => assert!(matches!(
             &items[1],
             mbv_core::playback_queue::QueueItem::Feed(entry)

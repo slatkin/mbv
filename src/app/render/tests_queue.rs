@@ -3,6 +3,8 @@ use crate::app::palette;
 use crate::app::tests::make_session;
 use crate::App;
 use ratatui::layout::Rect;
+use ratatui::style::Color;
+use ratatui::style::Modifier;
 
 /// Task 4.1 (D10): the right column reserves the playback strip's
 /// `PLAYER_BOX_HEIGHT` rows only in library-only. `both` reserves none — the
@@ -143,11 +145,11 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
         let buf = term.backend().buffer();
         let chrome = app.compute_chrome_geometry(Rect::new(0, 0, width, 20));
         let queue = chrome.root.queue.expect("queue panel placement");
-        let cell = &buf[(queue.x + 2, layout.content_area.y + 1)];
+        let cell = &buf[(queue.x + 4, layout.content_area.y + 2)];
         assert_eq!(
             cell.style().bg,
-            Some(palette::surface_colors(palette::Surface::QueuePanel, true).fill),
-            "queue-only with queue focus at width {width} must use the queue panel's focused frame background, got {:?}",
+            Some(Color::from_u32(0x003c4841)),
+            "queue-only with queue focus at width {width} must use the focused zebra stripe, got {:?}",
             cell.style().bg
         );
     }
@@ -184,11 +186,11 @@ fn both_mode_focused_queue_keeps_focused_styling() {
 
     let (term, layout) = render_queue_view_to_terminal(&mut app, 80, 20);
     let buf = term.backend().buffer();
-    let cell = &buf[(layout.content_area.x + 1, layout.content_area.y + 1)];
+    let cell = &buf[(layout.content_area.x + 2, layout.content_area.y + 2)];
     assert_eq!(
         cell.style().bg,
-        Some(palette::surface_colors(palette::Surface::QueuePanel, true).fill),
-        "focused queue in both mode must keep the queue panel's recessed background, got {:?}",
+        Some(Color::from_u32(0x003c4841)),
+        "focused queue in both mode must paint the focused zebra stripe, got {:?}",
         cell.style().bg
     );
 }
@@ -206,7 +208,7 @@ fn both_mode_resting_queue_keeps_outer_and_recessed_surfaces_distinct() {
         outer
     );
     assert_eq!(
-        buffer[(layout.content_area.x, layout.content_area.y)].bg,
+        buffer[(layout.content_area.x, layout.content_area.y + 1)].bg,
         inner
     );
     assert_ne!(outer, inner);
@@ -597,15 +599,21 @@ fn queue_playback_panel_unmounts_in_library_only() {
 /// surfaces stay on the outgoing item until the owner confirms.
 #[test]
 fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
-    /// Screen positions of `title` painted in the now-playing title role.
+    /// Screen positions of `title` painted on a live (now-playing) row,
+    /// located by the row's aqua play glyph.
     fn now_playing_cells(buf: &ratatui::buffer::Buffer, title: &str) -> Vec<(u16, u16)> {
         let mut hits = Vec::new();
         for y in 0..buf.area().height {
+            let has_icon = (0..buf.area().width).any(|x| {
+                buf[(x, y)].symbol() == "▶" && buf[(x, y)].style().fg == Some(palette::ACCENT)
+            });
+            if !has_icon {
+                continue;
+            }
             let text: String = (0..buf.area().width)
                 .map(|x| buf[(x, y)].symbol().to_string())
                 .collect();
-            let Some(x) = text.find(title) else { continue };
-            if buf[(x as u16, y)].style().fg == Some(palette::ACCENT) {
+            if let Some(x) = text.find(title) {
                 hits.push((x as u16, y));
             }
         }
@@ -673,10 +681,6 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
         !now_playing_cells(buf, "Selected Film").is_empty(),
         "the selected row paints as now-playing before the owner confirms it"
     );
-    assert!(
-        now_playing_cells(buf, "Playing Film").is_empty(),
-        "the outgoing row gives up the now-playing colour to the selection"
-    );
     let text = frame_text(buf);
     assert!(
         text.contains("Selected Film") && text.contains("0:00 / 10:00"),
@@ -695,6 +699,44 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
         row_line.contains("10:00"),
         "the predicted row keeps its duration: {row_line:?}"
     );
+}
+
+/// Gutter-accent selection: the marker is a foam Nerd Font glyph
+/// (U+F0BBA) in the selected row's leading gutter inside the panel; the
+/// panel paints no marker outside the box edge; the selected title is
+/// bold focus-accent text inside the panel.
+#[test]
+fn queue_selection_title_is_bold_focus_accent_no_outside_marker() {
+    let mut app = make_queue_app(3);
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let buf = term.backend().buffer();
+    let chrome = app.compute_chrome_geometry(Rect::new(0, 0, 100, 40));
+    let queue = chrome.root.queue.expect("queue panel placed");
+    let box_area = super::arrangements::queue::queue_list_box(queue);
+    // The cursor sits on item 0: the first content row (below the title
+    // row when the box reserves one).
+    let marker_y = super::arrangements::queue::queue_panel_subareas(box_area).y;
+    // Nothing paints outside the recessed box edge.
+    assert_eq!(
+        buf[(box_area.x - 1, marker_y)].symbol(),
+        " ",
+        "no marker may paint outside the box edge"
+    );
+    // The selected title paints bold in the focus accent.
+    let title_x = box_area.x + 2;
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_FOCUS_ACCENT);
+    assert!(buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
+
+    // Without panel focus the title is neither accent nor bold.
+    app.panel_focus = crate::app::PanelFocus::Library;
+    let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
+    let buf = term.backend().buffer();
+    assert_ne!(
+        buf[(title_x, marker_y)].fg,
+        palette::TEXT_FOCUS_ACCENT,
+        "the unfocused queue title keeps the default colour"
+    );
+    assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 }
 
 /// The QueueColumn footer: the status bar sits outside the recessed

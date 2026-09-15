@@ -7,7 +7,7 @@ Provide reusable embedded TuiRealm list controls with one owner for list interac
 ## Requirements
 
 ### Requirement: Shared rows are provider-neutral and bounded
-The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the episode title of a series/show row, painted after the primary text in the yellow focus-accent role while the primary stays in the ordinary title role), optional trailing text, a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string, and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Heading and Spacer SHALL be excluded from selectable-target indexing. When a duration is shown it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
+The controls SHALL accept selectable item rows with stable opaque targets, primary text, an optional secondary title (the episode title of a series/show row, painted after the primary text in the yellow focus-accent role while the primary stays in the ordinary title role), optional trailing text, a media kind (`Collection` for navigable containers, `Media` for playable leaves), an optional duration string, and semantic state (ordinary, played, active with optional bounded integer progress `0..=100`, now-playing with optional bounded integer progress `0..=100`, or disabled), plus non-selectable Heading and Spacer rows. Heading and Spacer SHALL be excluded from selectable-target indexing. When a duration is shown it SHALL use the precise `M:SS`/`H:MM:SS` form (queue format, e.g. `4:32`, `1:02:03`); `Collection` rows SHALL NOT carry a duration. `Active` SHALL keep its existing meaning of stored resume progress rendered inline as trailing metadata; `NowPlaying` SHALL mean live playback, rendering its live progress inline as trailing metadata and its total duration like every other row — no throbber glyph appears in any row. Active and now-playing rows SHALL be marked by an aqua right-pointing play glyph before the title (one space from it) in place of any accent title colour; their title text SHALL keep the ordinary colour. The model SHALL contain no provider client, `App`, source/header, raw style, callback, breakpoint, or effect.
 
 #### Scenario: Queue-like progress is presented safely
 - **WHEN** a parent supplies active progress
@@ -16,7 +16,8 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 #### Scenario: Now-playing renders like other rows
 - **WHEN** a row carries the now-playing state
-- **THEN** live progress renders inline next to the title exactly as resume progress does
+- **THEN** an aqua play glyph is painted one space before the title, and the title keeps the ordinary colour
+- **AND** live progress renders inline next to the title exactly as resume progress does
 - **AND** the duration slot shows the total duration
 - **AND** no throbber glyph appears anywhere in the row
 
@@ -48,11 +49,17 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 `WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
-The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
+The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. A paint policy MAY instead select a gutter-accent treatment for its selection: the selected row SHALL NOT paint a selected background (zebra striping SHALL apply to it as to any other row), and its title SHALL paint bold in the focus accent while the row holds focus.
 
 The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve it from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no selected/detail geometry.
 
 It SHALL support Wide hero rails, provider workspace rows, and Queue fixed rows, but SHALL NOT implement Inline replacement or Grid placement. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use the shared canonical owner with Wide presentation in every panel mode.
+
+#### Scenario: A gutter-accent selected row keeps default painting otherwise
+
+- **WHEN** a Wide list's paint policy selects the gutter-accent treatment
+- **THEN** the selected row paints with no selected background and a title in bold focus accent
+- **AND** its other text keeps the default row colours
 
 #### Scenario: Wide TV rail composes the control
 
@@ -417,3 +424,34 @@ Each list owns an independent marquee clock (mirroring its ownership of cursor a
 
 - **WHEN** the cursor moves to a different row, or the selected row's title text itself changes
 - **THEN** that row's marquee begins again from its held starting position rather than resuming mid-cycle
+
+### Requirement: Wide presentation supports optional zebra striping
+
+The Wide presentation SHALL accept an optional zebra-stripe policy on its paint policy. The policy SHALL carry a focused and an unfocused secondary background colour. When zebra striping is enabled, the painter SHALL apply the secondary background colour to every even-numbered visible selectable `Item` row, counting only selectable `Item` rows in the visible window by screen-row order (zero-indexed, so the first visible item is even and striped, the second is odd, etc.). Headings and Spacers SHALL always paint with no zebra background regardless of the policy. When zebra striping is disabled (the default), row backgrounds SHALL be unchanged from today's behaviour. The selected row SHALL always use the selected-row background, never the zebra background — except on a list using the gutter-accent selection treatment, where the selected row takes the zebra background like any other row. For an unselected striped row, the secondary background SHALL be confined to the text-flow range inside the row's existing two-column left and right gutters; the parent background SHALL remain visible in those gutters and in any scrollbar column. Row geometry, width calculations, and hit geometry SHALL remain unchanged.
+
+#### Scenario: Zebra stripes are contained within existing row gutters
+- **WHEN** a Wide presentation renders an unselected striped row
+- **THEN** its secondary background spans only the text-flow range inside the existing two-column gutters
+- **AND** the gutters and scrollbar column retain the parent background without changing row geometry
+
+#### Scenario: Zebra stripes alternate among selectable items
+- **WHEN** a Wide presentation has zebra striping enabled and renders five visible selectable `Item` rows
+- **THEN** the 1st, 3rd, and 5th visible items paint with the secondary background colour matching the current focus state
+- **AND** the 2nd and 4th visible items paint with no secondary background
+
+#### Scenario: Headings and spacers are excluded from zebra counting
+- **WHEN** a visible Heading or Spacer row appears between two selectable `Item` rows
+- **THEN** the Heading or Spacer has no zebra background
+- **AND** the item-only counter does not increment for the structural row
+
+#### Scenario: Selected row overrides zebra
+- **WHEN** the selected row falls on a zebra-striped position on a list that paints a selected-row background
+- **THEN** the selected-row background is used, not the zebra background
+
+#### Scenario: Zebra is screen-row-parity based
+- **WHEN** the list scrolls by one row
+- **THEN** the first visible selectable item is always striped and alternation follows screen-row order regardless of its source-row index
+
+#### Scenario: Zebra is disabled by default
+- **WHEN** a Wide presentation is configured without a zebra-stripe policy
+- **THEN** all unselected rows paint with no explicit background, matching today's behaviour

@@ -8,8 +8,6 @@ use super::{
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use mbv_core::player::PlayerCommand;
-use std::sync::Arc;
-
 #[path = "queue_actions_playlist_mutation.rs"]
 mod queue_actions_playlist_mutation;
 
@@ -317,17 +315,7 @@ impl App {
                     );
                     self.submit_attached_sequence(&id, &items, start_idx);
                 } else {
-                    let Some(c) = self.emby_snapshot().map(Arc::new) else {
-                        self.flash("Emby is unavailable".into(), ToastSeverity::Warning);
-                        return;
-                    };
-                    self.player.play_queue(
-                        items,
-                        start_idx,
-                        self.queue_source.clone(),
-                        c,
-                        self.ui_volume,
-                    );
+                    self.submit_tab_queue(self.playing_queue_scope(), start_idx);
                     self.player
                         .send_command(PlayerCommand::SetMute(self.mute_on));
                 }

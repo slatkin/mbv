@@ -291,7 +291,12 @@ pub enum CtrlCmd {
     /// Replace the entire queue with item-generic slots and optionally
     /// begin playback from `start_idx`.
     UnifiedQueueReplace {
+        /// Legacy item-only representation retained so older peers can still
+        /// decode a replacement. New peers use `slots` for stable identities.
         items: Vec<QueueItem>,
+        /// Owner-assigned slot identities. Absent on legacy payloads.
+        #[serde(default)]
+        slots: Vec<UnifiedQueueSlot>,
         start_idx: Option<usize>,
     },
     /// Append item-generic values to the tail of the queue.
@@ -320,6 +325,18 @@ pub enum CtrlCmd {
         cursor: usize,
         source: QueueSource,
     },
+}
+
+impl CtrlCmd {
+    /// Builds `UnifiedQueueReplace`, deriving the legacy `items` payload from
+    /// `slots` so callers don't each re-project the same list.
+    pub fn unified_queue_replace(slots: Vec<UnifiedQueueSlot>, start_idx: Option<usize>) -> Self {
+        CtrlCmd::UnifiedQueueReplace {
+            items: slots.iter().map(|slot| slot.item.clone()).collect(),
+            slots,
+            start_idx,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

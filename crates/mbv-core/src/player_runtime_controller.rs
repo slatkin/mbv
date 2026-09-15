@@ -306,9 +306,10 @@ impl Player {
         client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
     }
 
-    /// Play a freshly fetched Emby sequence with no canonical queue behind it.
-    /// Ids are pinned to 1..=len because the controlling app rebuilds its own
-    /// queue for these paths with exactly those ids (`replace_playback_queue`).
+    /// Play a freshly fetched Emby sequence with no pre-existing canonical
+    /// queue. Callers that already own a queue must use `submit_queue_slots`
+    /// with that queue's slot pairs so owner and client address the same
+    /// occurrences.
     fn sequential_slot_ids(items: Vec<QueueItem>) -> Vec<ExecSlot> {
         items
             .into_iter()
@@ -376,6 +377,13 @@ impl Player {
             return false;
         }
         let start_idx = start_idx.min(items.len() - 1);
+        // Every accepted submission establishes a new queue identity. The
+        // generation is serialized in PlayerStatus so clients can fence
+        // slot-addressed commands against a locally replaced queue.
+        {
+            let mut st = self.status.lock().unwrap();
+            st.sequence_generation = st.sequence_generation.saturating_add(1);
+        }
 
         // Fast path: reuse existing mpv window when headless state matches.
         if self.status.lock().unwrap().active

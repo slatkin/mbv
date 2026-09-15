@@ -42,6 +42,13 @@ impl App {
         }
     }
 
+    /// Stamps `scope`'s queue with the playback owner's current sequence
+    /// generation, after a submit the owner accepted at that generation.
+    pub(super) fn stamp_queue_generation(&mut self, scope: QueueScope) {
+        let generation = self.player.status.lock().unwrap().sequence_generation;
+        self.queue_for_scope_mut(scope).sequence_generation = generation;
+    }
+
     pub(super) fn undo_stack_for_scope_mut(&mut self, scope: QueueScope) -> &mut Vec<UndoEntry> {
         match scope {
             QueueScope::Local => &mut self.queue_undo_stack,
@@ -126,6 +133,11 @@ impl App {
         match self.playing_queue_scope() {
             QueueScope::Local => {
                 self.player_tab.set_items(items, cursor);
+                // Keep the client queue fenced from the owner's last
+                // accepted submission until the next explicit play submits
+                // this replacement.
+                let owner_generation = self.player.status.lock().unwrap().sequence_generation;
+                self.player_tab.sequence_generation = owner_generation.saturating_add(1);
             }
             QueueScope::Remote => {
                 let queue = self
@@ -135,9 +147,9 @@ impl App {
                 queue.set_items(items, cursor);
             }
         }
-        // A full replacement regenerates slot ids: a preserved prior selection
-        // could collide with an unrelated new slot, so force a re-anchor to
-        // the replacement's start index rather than relying on `Preserve`.
+        // A full replacement changes the queue occurrence sequence. A preserved
+        // prior selection could refer to an unrelated slot, so force a re-anchor
+        // to the replacement's start index rather than relying on `Preserve`.
         self.pending_queue_cursor_reanchor = Some(self.playing_queue_scope());
     }
 
