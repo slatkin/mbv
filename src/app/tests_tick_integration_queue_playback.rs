@@ -12,6 +12,7 @@ use crate::app::components::{ComponentId, LibraryPlaybackPanel, Msg, QueuePlayba
 use crate::app::tests::make_app_stub;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::types_playback::PlaybackState;
+use mbv_core::player::PlayerEvent;
 use crate::app::{PanelFocus, PanelMode};
 
 fn click(column: u16, row: u16) -> tuirealm::event::Event<crate::app::components::UserEvent> {
@@ -345,4 +346,77 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         }
         assert!(painted > 0, "{mode:?}: the seekbar track painted");
     }
+}
+
+#[test]
+fn queue_rows_claim_now_playing_only_for_owner_confirmed_slot() {
+    use crate::app::components::media_list::MediaSemanticState;
+    use crate::app::components::queue::queue_media_rows;
+    use crate::app::tests::make_audio_items;
+
+    let mut app = make_app_stub();
+    app.player_tab.set_items(make_audio_items(2), 0);
+    let confirmed = app.player_tab.slot_id_at(0).unwrap();
+    assert!(matches!(
+        app.player_tab.queue.set_active_slot(confirmed),
+        mbv_core::playback_queue::QueueMutationResult::Applied(())
+    ));
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+        status.queue_len = 2;
+    }
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let rows = queue_media_rows(
+        harness.model().app.player_tab.slots(),
+        harness.model().app.displayed_playback_state(),
+        None,
+    );
+    assert!(matches!(
+        &rows[0],
+        crate::app::components::media_list::MediaListRow::Item {
+            semantic_state: MediaSemanticState::NowPlaying { .. }, ..
+        }
+    ));
+    assert!(matches!(
+        &rows[1],
+        crate::app::components::media_list::MediaListRow::Item {
+            semantic_state: MediaSemanticState::Ordinary, ..
+        }
+    ));
+
+    let confirmed_transition = {
+        let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
+        mbv_core::playback_transition::Transition::new(request_id, generation, confirmed)
+    };
+    harness
+        .model_mut()
+        .app
+        .bare_owner
+        .accept_local_transition(confirmed_transition);
+    let target = harness.model().app.player_tab.slot_id_at(1).unwrap();
+    let (request_id, generation) = harness.model_mut().app.bare_owner.mint_local_transition();
+    let transition = mbv_core::playback_transition::Transition::new(
+        request_id, generation, target,
+    );
+    harness.model_mut().app.bare_owner.accept_local_transition(transition);
+    harness.model_mut().app.player.status.lock().unwrap().active = false;
+    harness
+        .model_mut()
+        .app
+        .handle_player_event(PlayerEvent::CommandRejected("rejected".into()));
+    harness.model_mut().sync_mounted_surfaces();
+    let rows = queue_media_rows(
+        harness.model().app.player_tab.slots(),
+        harness.model().app.displayed_playback_state(),
+        None,
+    );
+    assert!(matches!(
+        &rows[1],
+        crate::app::components::media_list::MediaListRow::Item {
+            semantic_state: MediaSemanticState::Ordinary, ..
+        }
+    ));
 }

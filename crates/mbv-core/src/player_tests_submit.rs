@@ -1,3 +1,28 @@
+#[test]
+fn jump_to_absent_slot_is_discarded_and_rejected() {
+    let (run, _status, events) = make_queue_session_for_pos_tests_with_events(0);
+    let stale = QueueSlotId::from_raw(u64::MAX);
+    assert!(run.queue.slot(stale).is_none());
+    reject_stale_jump(&run.event_tx, stale);
+    match events.try_recv().expect("stale jump must emit rejection") {
+        PlayerEvent::CommandRejected(reason) => assert!(reason.contains("stale slot")),
+        _ => panic!("expected CommandRejected"),
+    }
+}
+
+#[test]
+fn jump_to_after_replacement_resolves_new_occurrence() {
+    let (mut run, _status, _events) = make_queue_session_for_pos_tests_with_events(0);
+    let replacement_id = QueueSlotId::from_raw(50_000);
+    let replacement = QueueItem::Feed(make_feed_entry("replacement", "Replacement"));
+    run.queue = ExecutionSequence::from_slot_items(
+        vec![(replacement_id, replacement)],
+        Some(replacement_id),
+    );
+    assert_eq!(run.queue.slot_index(replacement_id), Some(0));
+    assert_eq!(run.queue.slot(replacement_id).unwrap().item.id(), "replacement");
+}
+
 // Task 2.3: shared-boundary routing and failure surfacing.
 // Verifies that bare-local and stay-alive-local playback routes through
 // `submit_queue_slots`, that the fast path sends a SubmitQueue command, that
