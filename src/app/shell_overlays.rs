@@ -13,4 +13,3 @@ use super::components::{ComponentId, OverlayId, PopupId};
 use super::shell::Model;
 
 include!("shell_overlays_tests.rs");
-include!("shell_selection_modal_tests.rs");

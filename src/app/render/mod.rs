@@ -57,9 +57,6 @@ pub(in crate::app) use components::playlists::{
     PlaylistsViewState,
 };
 pub(in crate::app) use components::search_sidebar::render_search_sidebar;
-pub(in crate::app) use components::selection_modal::{
-    render_selection_modal_content, SelectionModalRenderModel,
-};
 pub(in crate::app) use components::sessions::render_sessions_overlay_content;
 pub(in crate::app) use components::settings_component::{
     render_settings_content, SettingsRenderGeometry, SettingsRenderModel,
@@ -203,8 +200,6 @@ mod tests;
 mod tests_conformance_matrix;
 #[cfg(test)]
 mod tests_feeds;
-#[cfg(test)]
-mod tests_selection_modal;
 #[cfg(test)]
 mod tests_surface_conformance;
 #[cfg(test)]

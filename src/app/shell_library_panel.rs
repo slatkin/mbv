@@ -140,7 +140,7 @@ impl Model {
 
     /// Open the active owner's Hero through the Library panel's local overlay
     /// contract. Destination actions use this instead of constructing the
-    /// retired constituent selection modal.
+    /// Library Hero overlay.
     pub(super) fn open_library_hero_overlay(&mut self) -> bool {
         self.application
             .get_component_mut(&ComponentId::Library)

@@ -308,48 +308,19 @@ multi-selection is Visual mode. "Selection" alone still means the cursor row.
 _Avoid_: marked rows, selection (for the set), checked items
 
 **WideMediaList**:
-The target provider-neutral, one-column fixed-row TuiRealm Component over a
-`MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
-will provide the Wide Variant without choosing a Service or destination. It is
-the target canonical control for Wide one-column rails, including Queue;
-the Library panel owns placement and presentation policy.
+The provider-neutral, one-column fixed-row TuiRealm Component over a
+`MediaList<Target>`. It is the canonical control for Library browser rails,
+Workspace lists, and Queue rows in every Panel mode; it never chooses a Service
+or destination. The Library panel owns placement and supplies the current row
+flow rectangle, while the destination retains Service content and typed
+translation.
 _Avoid_: generic list, two-column list, Inline Search
 
-**InlineMediaBrowser**:
-The target provider-neutral, one-column TuiRealm Component over a
-`MediaList<Target>`, introduced by `complete-shared-media-list-ownership`. It
-will provide the Inline Variant with selected-row replacement while its parent
-owns content authority. Narrow hero-bearing browse surfaces will use it
-for their one-column list. It is distinct from **Inline Search**, which is a
-library-scoped search capability embedded in a searchable destination and not a
-media-list control.
-_Avoid_: Inline Search, detail panel, generic list
-
-**Presentation** (media-list):
-One member of the closed set of media-list presentations — Wide and Inline —
-each a persistent component (WideMediaList or InlineMediaBrowser) over the one
-shared `MediaList<Target>`. The Library panel derives the active Presentation
-from shared geometry and content policy; a change re-selects among them and
-never invents a new one. Exactly one Presentation holds (carries) the owner at
-a time. Narrower than the general
-**Variant** term: every media-list Presentation is a Variant, but Variant
-also covers non-media-list named presentations (e.g. hero).
-_Avoid_: mode, control (for the carrying presentation), layout, Carrier
-
-**Carrier** (media-list):
-The destination-side `MediaListCarrier<Target>` container that owns a logical
-flow's persistent Presentation adapters (WideMediaList and
-InlineMediaBrowser) and tracks which one is active. Exactly one of its Presentations holds
-the shared `MediaList<Target>` — its rows, cursor, scroll, selection, and
-retained geometry — at a time; a responsive change moves the same owner
-between the adapters and preserves only the outgoing selected-row viewport
-offset. The owner is never copied. The Presentation that currently holds the
-owner is the **Presentation** term, not the container.
-_Avoid_: active list, owner swap, second control, active carrier (for the
-owner-holding Presentation)
-
 **Media-list row**:
-The one painted row of a `MediaList` flow, shared by the Wide and Inline Presentations; the Inline Presentation only gates its highlight and reserves its detail block around it. Its left-aligned metadata slot carries one closed role: a release year in the green metadata role or a progress badge in the FOAM one; its right-aligned duration slot is green.
+The one painted fixed-height row of a `MediaList` flow in every Panel mode. Its
+left-aligned metadata slot carries one closed role: a release year in the
+green metadata role or a progress badge in the FOAM one; its right-aligned
+duration slot is green.
 _Avoid_: wide media row, wide_media_row
 
 **Group heading**:
@@ -425,7 +396,7 @@ Session dispatches transport actions without conferring queue or occurrence
 identity on that Session.
 _Avoid_: play target, output target, active player
 
-## Presentation
+## Panels and surfaces
 
 **Panel**:
 A root-composed region with its own placement, surface fill, layout, and
@@ -441,7 +412,7 @@ The app-wide layout state, one of Mini, Narrow, or Wide:
   width is below the mini-view threshold. Both paths are the same state —
   Mini names "only one panel is showing," not the reason it's showing.
 - **Narrow**: both panels visible; a hero-bearing Library panel uses the
-  single-column inline hero presentation.
+  standard fixed-row browser and opens a Library Hero overlay on demand.
 - **Wide**: both panels visible; a hero-bearing Library panel uses Wide hero
   when the shared width and minimum-height conditions are met.
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
@@ -472,8 +443,20 @@ _Avoid_: status bar
 **Library panel**:
 The root-composed Panel that owns the shared Wide and Narrow library skeleton.
 Destinations supply typed Selector row, List controls row, list, Hero header,
-and Workspace content; they do not place or paint those slots.
+and Workspace content; they do not place or paint those slots. It also owns the
+Library Hero overlay lifecycle and its Library-confined placement and hit
+geometry.
 _Avoid_: destination panel, library screen
+
+**Library Hero overlay**:
+A Library-panel-local detail surface opened for a selected hero-bearing browser
+row in non-Wide geometry. It is centered within and confined to 85% of the
+visible Library pane, reuses the shared Hero header, overview, artwork, and
+optional Workspace content, and leaves a visible Queue independently operable.
+Library focus can dismiss it with Esc or a click on the dimmed Library
+remainder; changing destination dismisses it. It is distinct from application
+popups and from the four anchored Sidebars.
+_Avoid_: application popup, Sidebar, full-window overlay, separate detail block
 
 **Library playback panel**:
 The root-composed Panel that paints the playback transport in the Library
@@ -510,28 +493,13 @@ list, such as tracks, episodes, or chapters. The Library panel owns its box,
 surface, and placement.
 _Avoid_: detail workspace
 
-**Inline hero**:
-The selected item's detail replacing its ordinary active media row in Narrow or
-otherwise non-wide geometry. It is one variable-height segment of the
-single-column scrolling browser and owns the selected parent geometry: a single
-click focuses it and a double click performs normal item activation. Existing
-explicit child targets take precedence. If the replacement cannot fit, the
-ordinary selected row and its normal interaction are restored.
-_Avoid_: separate detail block, stacked hero
-
-**Selected-row replacement**:
-The inline presentation rule in which an item's selected ordinary row is replaced
-by its variable-height detail block, without a blank legacy row before the block.
-Scrolling budgets the replacement once and hit geometry has one parent target plus
-any explicit child targets.
-_Avoid_: detached detail, repeated row
-
 **Wide hero**:
 The sole Wide arrangement for hero-bearing browse surfaces: the single-column
 Library browser and its pills occupy the left pane, and the selected-item hero
 or provider-owned detail workspace occupies the right pane. It applies only when
-the shared width breakpoint and minimum-height guard are satisfied; otherwise
-the surface uses Inline hero.
+the shared width breakpoint and minimum-height guard are satisfied; otherwise the
+standard fixed-row browser remains active and detail opens through the Library
+Hero overlay.
 _Avoid_: separate detail block, split, side-by-side, hero-on-side, hero-on-left,
 hero-on-right
 
@@ -541,8 +509,8 @@ container surface itself, independent of what is painted inside it.
 _Avoid_: recessed box, hero panel, detail panel
 
 **Main content box**:
-The `#2d353b` `SURFACE_BACKDROP` inset within a Hero pane (or an inline hero's
-equivalent area), holding kind-dependent body content at one shared padding
+The `#2d353b` `SURFACE_BACKDROP` inset within a Hero pane or Library Hero
+overlay, holding kind-dependent body content at one shared padding
 value. It holds overview text and, for a Movie in the Wide Hero pane, the
 Cast and crew table in the same box. Distinct from the Hero pane it sits
 inside: the pane is the outer container fill, the box is the inner content
@@ -554,7 +522,8 @@ The Movie metadata row that joins the names of its declared provider links,
 rendered after the release-date, runtime, and genre rows. Each name is plain
 text unless the terminal declares hyperlink support and its URL is an `http` or
 `https` URL with no control bytes; eligible names use an OSC 8 hyperlink while
-remaining in the same row. The Narrow inline hero keeps this row plain text.
+remaining in the same row. The row remains plain text in the Library Hero
+overlay.
 _Avoid_: external-links row, link list, clickable links
 
 **Cast and crew table**:
@@ -566,7 +535,8 @@ provider order regardless of type; nothing is capped. An empty role falls back t
 person's provider type. A blank row, then a line of ▁ block characters in sage green, separates the
 overview text from the table's first row. The table starts at the box's first content row when there
 is no overview, and the box scrolls
-when the content exceeds its height. The Narrow inline hero does not render it.
+when the content exceeds its height. The Library Hero overlay reuses this
+same content when it is open.
 _Avoid_: credits list, cast list, detail table
 
 **Render Component**:
@@ -623,11 +593,12 @@ dependency order (`screens -> arrangements -> components`).
 _Avoid_: layout (bare), component, screen
 
 **Variant**:
-A centrally owned, closed presentation whose arm is derived from content or
+A centrally owned, closed visual form whose arm is derived from content or
 state available to every caller. A caller-selected arm with only one user is a
 defect, not an endorsed pattern: conform that caller or broaden the shared
-content type. The Library panel derives Wide or Narrow from shared geometry,
-and the Hero header derives Landscape, Portrait, or Square from artwork policy.
+content type. The Hero header derives Landscape, Portrait, or Square from
+artwork policy; the Library panel derives its Wide Hero arrangement from shared
+geometry.
 _Avoid_: mode (reserved for Panel mode), option
 
 **Policy**:

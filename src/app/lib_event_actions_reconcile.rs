@@ -1,4 +1,3 @@
-use super::types_selection_modal::SelectionModalSource;
 use super::App;
 
 impl App {
@@ -44,24 +43,6 @@ impl App {
                     episode_id: episode_id.to_string(),
                     current_time_seconds,
                     is_finished,
-                },
-            );
-        }
-        // Refresh the mounted podcast modal if this progress update belongs to
-        // its show, rebuilding it at its own component-owned selected filter
-        // (split-browse-state-interaction-fields task 3.2). The shell ignores
-        // this request when the modal is closed or showing another show.
-        if self.audiobookshelf_browse.iter().any(|state| {
-            state
-                .shows
-                .iter()
-                .any(|show| show.library_item_id == library_item_id)
-        }) {
-            self.pending_overlay = Some(
-                super::types_overlay::OverlayRequest::RefreshSelectionModalAtSelectedFilter {
-                    source: SelectionModalSource::Podcast {
-                        library_item_id: library_item_id.to_owned(),
-                    },
                 },
             );
         }

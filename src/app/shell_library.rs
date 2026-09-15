@@ -59,7 +59,6 @@ impl Model {
         // Rung 1: a mounted blocking overlay/modal is eligible alone.
         const BLOCKING: &[ComponentId] = &[
             ComponentId::Overlay(OverlayId::ContextMenu),
-            ComponentId::Overlay(OverlayId::SelectionModal),
             ComponentId::Modal(ModalId::Confirm),
             ComponentId::Modal(ModalId::DaemonLost),
             ComponentId::Modal(ModalId::SavePlaylist),
@@ -226,7 +225,6 @@ impl Model {
             ComponentId::Overlay(super::components::OverlayId::Playlists),
             ComponentId::Overlay(super::components::OverlayId::Help),
             ComponentId::Overlay(super::components::OverlayId::ContextMenu),
-            ComponentId::Overlay(super::components::OverlayId::SelectionModal),
             ComponentId::Modal(super::components::ModalId::Confirm),
             ComponentId::Modal(super::components::ModalId::DaemonLost),
             ComponentId::Modal(super::components::ModalId::SavePlaylist),

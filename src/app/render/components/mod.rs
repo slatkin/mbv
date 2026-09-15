@@ -39,7 +39,6 @@ pub(super) mod playlists;
 pub(in crate::app) mod queue;
 pub(in crate::app) mod queue_playback;
 pub(super) mod search_sidebar;
-pub(super) mod selection_modal;
 pub(super) mod sessions;
 pub(super) mod settings;
 pub(super) mod settings_component;

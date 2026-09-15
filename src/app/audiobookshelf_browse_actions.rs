@@ -1,7 +1,6 @@
 use super::notify_actions::ToastSeverity;
 #[cfg(test)]
 use super::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter;
-use super::types_audiobookshelf_browse::BookRow;
 use super::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
@@ -530,46 +529,6 @@ impl App {
             .active_slot()
             .and_then(|slot| slot.item.as_audiobookshelf_book())
             .is_some_and(|book| book.library_item_id == target.book_library_item_id());
-        if active_book {
-            self.player
-                .send_command(mbv_core::player::PlayerCommand::SeekAbsolute(
-                    target_seconds,
-                ));
-        }
-    }
-
-    pub(super) fn activate_audiobookshelf_book_row(&mut self, chapter_selection: Option<usize>) {
-        let Some(index) = self.tab.audiobookshelf_index() else {
-            return;
-        };
-        let (target_seconds, book_id) = {
-            let state = match self.audiobookshelf_book_browse.get(index) {
-                Some(state) => state,
-                None => return,
-            };
-            let Some(id) = state.selected_id.as_deref() else {
-                return;
-            };
-            let Some(cursor) = chapter_selection else {
-                return;
-            };
-            let target = match state.visible_rows(id).get(cursor) {
-                Some(BookRow::Chapter { start, .. }) => *start,
-                // audio-file fallback rows have no chapter offsets; leave the
-                // active position untouched rather than seeking somewhere wrong.
-                Some(BookRow::AudioFile { .. }) => return,
-                None => return,
-            };
-            (target, id.to_string())
-        };
-        // Only seek when the active queue slot is this book.
-        let active_book = self
-            .playback_queue()
-            .queue
-            .active_slot()
-            .and_then(|slot| slot.item.as_audiobookshelf_book())
-            .map(|book| book.library_item_id == book_id)
-            .unwrap_or(false);
         if active_book {
             self.player
                 .send_command(mbv_core::player::PlayerCommand::SeekAbsolute(

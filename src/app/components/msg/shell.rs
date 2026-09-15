@@ -30,9 +30,9 @@ pub enum ShellRequest {
         target: usize,
         kind: AlbumCursorKind,
     },
-    /// Activate the selected album in narrow mode, where album tracks use the
-    /// selection modal instead of the inline workspace. Carries the
-    /// component-resolved album so the shell effect never re-reads a cursor.
+    /// Activate the selected album in non-Wide mode by opening its Library
+    /// Hero overlay. Carries the component-resolved album so the shell effect
+    /// never re-reads a cursor.
     MusicAlbumActivate {
         item: EmbyItem,
     },
@@ -130,14 +130,6 @@ pub enum ShellRequest {
     /// pulls panel focus to the Library (design.md D4/D5). Mirrors
     /// `HomeRowClick`.
     FeedsRowClick,
-    /// Dismiss the blocking Selection modal.
-    DismissSelectionModal,
-    /// Select a source-specific filter in the Selection modal.
-    SelectionModalFilterSelected,
-    /// Rebuild a source-specific filter using the component-owned selection.
-    SelectionModalRefresh,
-    /// Activate the selected Selection modal item by its opaque provider id.
-    SelectionModalActivate(Option<String>),
     /// Commit the component-owned Multiselect choices through the legacy App
     /// action path.
     MultiselectCommit {

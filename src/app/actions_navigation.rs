@@ -175,9 +175,8 @@ impl App {
     /// Wide track-focus entry is owned by `MusicWorkspaceComponent` (Enter on
     /// an album row is component-local), so the wide arm is a no-op that only
     /// exists because the Enter key may still fall through to legacy while the
-    /// album's tracks are loading. Narrow has no inline track list to focus
-    /// (see `render_album_hero_detail`), so it opens the selection modal
-    /// instead (design.md decision 6).
+    /// album's tracks are loading. Non-Wide activation is handled by the
+    /// mounted Music owner through the Library Hero overlay.
     pub(super) fn activate_album_folder_row(&mut self, album: Option<EmbyItem>) {
         // Outcome 3 reader: the caller resolves the selected album (from the
         // mounted component's cursor, or the clicked row index for mouse).
@@ -185,8 +184,7 @@ impl App {
             return;
         }
         // The mounted Music owner opens the Library Hero overlay after it
-        // resolves the row. This legacy App entry point must not construct a
-        // constituent selection modal.
+        // resolves the row. This legacy App entry point has no UI side effect.
         let _ = album;
     }
 

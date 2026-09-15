@@ -4,8 +4,8 @@ use super::App;
 
 impl App {
     /// Applies the single Series activation gate shared by keyboard Enter and
-    /// browse double-click. Narrow presentations open the selection modal;
-    /// wide presentations retain the persistent season/episode workspace.
+    /// browse double-click. Non-Wide activation opens the Library Hero
+    /// overlay; Wide activation retains the persistent season/episode workspace.
     ///
     /// Resolves the target via `selected_series_item`, then delegates the
     /// wide/narrow branch to `activate_selected_series_item`.

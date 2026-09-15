@@ -62,7 +62,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
     assert!(model.app.activate_selected_series(0));
 
     // Narrow layout => the shell routes the resolved Series through the
-    // mounted owner's Library Hero overlay, not a constituent selection modal.
+    // mounted owner's Library Hero overlay.
     model.app.terminal_width = 80;
     model.app.terminal_height = 24;
     model.app.libs[0].nav_stack[0].set_resting_cursor(0);
@@ -121,7 +121,7 @@ fn activate_selected_series_resolves_mirrored_cursor_and_guards_series() {
 /// TV) and the wide-eligible TV Shows library sits at index 1, mirroring a
 /// common multi-library Emby account. Activating the Series selected in
 /// library 1 must enter the wide persistent workspace, not fall back to the
-/// narrow selection modal.
+/// Library Hero overlay.
 #[test]
 fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     let mut app = make_movie_app();
@@ -148,7 +148,7 @@ fn activate_selected_series_gates_on_the_caller_supplied_lib_idx_not_zero() {
     assert!(
         model.app.pending_overlay.is_none(),
         "library 1 is wide-eligible; activation must enter the persistent \
-         workspace, not open the narrow series selection modal"
+         workspace, not open a separate constituent picker"
     );
 }
 
@@ -178,7 +178,7 @@ fn tv_series_activation_branch_flips_on_resize_tick_before_repaint() {
     assert!(model.app.wide_tv_library_area(0).is_none());
 
     // Narrow: route the component-resolved Series through the Library Hero
-    // overlay, never the constituent selection modal.
+    // overlay.
     model.sync_library_panel();
     let item = model
         .test_tv_owner()
