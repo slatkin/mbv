@@ -145,7 +145,7 @@ pub(in crate::app) fn composite_landscape_logo(
     let (base_w, base_h) = base.dimensions();
     let max_w = ((base_w * 60) / 100).max(1);
     let max_h = ((base_h * 20) / 100).max(1);
-    let logo = logo.resize(max_w, max_h, image::imageops::FilterType::Nearest);
+    let logo = logo.resize(max_w, max_h, image::imageops::FilterType::Lanczos3);
     let (logo_w, logo_h) = logo.dimensions();
     let inset_x = ((base_w as f32 * 0.05).round() as u32).min(base_w.saturating_sub(logo_w));
     let inset_y = ((base_h as f32 * 0.05).round() as u32).min(base_h.saturating_sub(logo_h));
@@ -363,8 +363,8 @@ mod tests {
         let composed = composite_landscape_logo(&base, &image::DynamicImage::ImageRgba8(logo));
         let pixels = composed.as_rgba8().unwrap();
         // 10:20 contains into 60:10 as 5:10; 5% insets round to (5, 3).
-        assert_eq!(pixels.get_pixel(5, 3).0, [120, 70, 39, 254]);
-        assert_eq!(pixels.get_pixel(6, 3).0, [120, 70, 39, 254]);
+        assert_eq!(pixels.get_pixel(5, 3).0, [116, 68, 40, 255]);
+        assert_eq!(pixels.get_pixel(6, 3).0, [137, 76, 39, 255]);
         // The transparent half of the non-uniform Logo and the surrounding art
         // remain the original pixels, pinning both the aspect fit and boundary.
         assert_eq!(pixels.get_pixel(10, 3).0, [20, 40, 60, 255]);
