@@ -28,7 +28,6 @@ pub(super) const BG_GREEN_SOFT: Color = Color::Rgb(72, 88, 78); // softer green-
 pub(super) const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub(super) const GOLD: Color = Color::Rgb(222, 160, 0); // deep gold (#dea000)
 pub(super) const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
-pub(super) const LICHEN: Color = Color::Rgb(190, 197, 178); // pale sage-grey (#bec5b2)
 pub(super) const FOAM: Color = Color::Rgb(58, 148, 197); // project blue (#3a94c5)
 /// Selected pill surface; shares `FOAM`'s value today, kept separate so a
 /// `TEXT_METADATA` edit cannot move this surface fill.
@@ -66,7 +65,7 @@ pub(super) const PLAYBACK_CONTEXT: Color = Color::Rgb(219, 188, 127); // now-pla
 pub(super) const SELECTED_ROW_BAR: Color = Color::Rgb(45, 53, 59);
 
 pub(super) const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey for detail/label text (#6c766c)
-pub(super) const SOFT_WHITE: Color = Color::Rgb(244, 234, 211); // warm off-white (#f4ead3)
+pub(super) const SOFT_WHITE: Color = Color::Rgb(190, 197, 178); // pale sage-grey emphasis text (#bec5b2)
 pub(super) const PILL_SELECTOR_ROW_BG: Color = Color::Rgb(30, 35, 38); // pill-selector row background (#1e2326)
 pub(super) const PILL_SELECTOR_BG: Color = Color::Rgb(30, 35, 38); // unselected pill-selector surface (#1e2326)
 pub(super) const PILL_SELECTOR_FG: Color = Color::Rgb(73, 81, 86); // unselected pill-selector foreground (#495156)
