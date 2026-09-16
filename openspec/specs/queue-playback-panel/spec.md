@@ -45,8 +45,8 @@ each side, with no padding below it, so it is not flush with the column's top, l
 and its text aligns with the slot and transport below. The header SHALL always be painted, including
 while playback is idle. Its left side SHALL state the playback status and its right side SHALL state
 the playback target as `on <host>`, with the `on ` prefix muted and the hostname green when local
-and aqua when remote. While playing, the throbber and percent SHALL paint one space right of the
-status word; they SHALL NOT show while idle or paused.
+and aqua when remote. The header SHALL state the status and the target only: no throbber, no
+progress percent, and no time SHALL paint in it.
 
 The status word SHALL be `PLAYING` while playback is active and not paused, `PAUSED` while it is
 active and paused, and `IDLE` while it is inactive.
@@ -67,6 +67,7 @@ follow the queue scope being viewed.
 
 - **WHEN** a queue-visible layout is painted while local playback is active and not paused
 - **THEN** the header row SHALL read `PLAYING` on the left and `on <device name>` on the right
+- **AND** no throbber, progress percent, or time SHALL paint in the header row
 
 #### Scenario: Paused playback
 
@@ -95,6 +96,33 @@ follow the queue scope being viewed.
 
 - **WHEN** the layout is library-only
 - **THEN** no header row SHALL be painted
+
+### Requirement: The Library playback panel's title row shows elapsed time and the status pill
+
+The Library playback panel's title row SHALL paint the transport controls, the title, the elapsed
+position, and the status indicator pill, in that order left to right, and no progress cluster: no
+throbber glyph and no progress percent SHALL appear in the strip. The position SHALL show the
+elapsed time alone, never a `pos / dur` total. The status pill SHALL carry one cell of padding on
+each side, and the strip SHALL NOT paint a second pad beside it. The transport controls SHALL
+appear only when the glyph, the controls, the elapsed time, the pill and the title all fit.
+
+#### Scenario: Active playback in the strip
+
+- **WHEN** the Library playback panel paints an active item with a known runtime
+- **THEN** the title row SHALL show the transport controls, the title, the elapsed position, and the
+  padded status pill
+- **AND** no total duration, no percent, and no throbber glyph SHALL appear in the row
+
+#### Scenario: The strip's pill is padded once per side
+
+- **WHEN** the Library playback panel paints a status pill
+- **THEN** the pill SHALL open and close with exactly one padding cell each side
+
+#### Scenario: Narrow strip drops the transport controls
+
+- **WHEN** the strip is too narrow for the transport controls, the elapsed time, the pill and the
+  title together
+- **THEN** the strip SHALL drop the controls and keep the title, the elapsed time and the pill
 
 ### Requirement: The queue panel opens directly with its rows
 
