@@ -1,6 +1,6 @@
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::widgets::{Block, Paragraph};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 
 use super::backdrop::dim_backdrop_in;
@@ -17,6 +17,10 @@ pub(in crate::app) fn paint_library_hero_overlay(
     overlay: Rect,
 ) -> Rect {
     dim_backdrop_in(f, library_area);
+    // Reset the covered cells' symbols first, then restore the Library
+    // column's undimmed surface fill — Block::style only patches, so without
+    // the Clear the dimmed rows underneath would show through.
+    f.render_widget(Clear, overlay);
     f.render_widget(
         Block::default().style(
             Style::default()
