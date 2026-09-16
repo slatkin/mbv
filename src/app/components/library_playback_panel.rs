@@ -29,6 +29,7 @@ use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
+use mbv_core::playback_queue::PlaybackTitleParts;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
@@ -39,7 +40,11 @@ pub(in crate::app) struct PlaybackProjection {
     pub panel: palette::Surface,
     pub panel_focused: bool,
     pub now_playing_title: Option<(String, Color)>,
-    pub title_parts: Vec<(String, Color)>,
+    /// The typed now-playing title parts with their closed roles (D6); the
+    /// painter resolves a role to a colour. `None` when the attached target
+    /// is not addressable as a local queue item — `now_playing_title` then
+    /// carries the plain fallback title.
+    pub title_parts: Option<PlaybackTitleParts>,
     pub status_indicators: Option<Vec<Span<'static>>>,
     pub throbber: Span<'static>,
     pub idle_feed_title: Option<(String, bool)>,
@@ -72,7 +77,7 @@ impl LibraryPlaybackPanel {
                 panel: palette::Surface::PlaybackPanel,
                 panel_focused: false,
                 now_playing_title: None,
-                title_parts: Vec::new(),
+                title_parts: None,
                 status_indicators: None,
                 throbber: Span::raw(""),
                 idle_feed_title: None,
@@ -279,7 +284,7 @@ mod tests {
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
-            title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
+            title_parts: None,
             status_indicators: None,
             throbber: Span::raw(" "),
             idle_feed_title: None,
@@ -334,7 +339,7 @@ mod tests {
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
-            title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
+            title_parts: None,
             status_indicators: None,
             throbber: Span::raw(" "),
             idle_feed_title: None,

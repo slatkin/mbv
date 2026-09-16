@@ -78,7 +78,7 @@ impl QueuePlaybackPanel {
                 panel: TRANSPORT_SURFACE,
                 panel_focused: false,
                 now_playing_title: None,
-                title_parts: Vec::new(),
+                title_parts: None,
                 status_indicators: None,
                 throbber: ratatui::text::Span::raw(""),
                 idle_feed_title: None,

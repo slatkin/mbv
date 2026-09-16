@@ -5,7 +5,7 @@ use crate::app::render::arrangements::playback_transport::{
     transport_rows, transport_title_plan, TransportIndicators, TransportMeasure, TransportPlan,
 };
 use crate::app::ui_util::*;
-use mbv_core::playback_queue::PlaybackTitlePartRole;
+use mbv_core::playback_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -38,7 +38,12 @@ pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) next_available: bool,
     pub(in crate::app) status_indicators: Option<Vec<Span<'static>>>,
     pub(in crate::app) throbber: Span<'static>,
-    pub(in crate::app) title_parts: Vec<(String, Color)>,
+    /// The typed now-playing title parts with their closed roles (D6); the
+    /// painter resolves a role to a colour, never the producer. `None` when
+    /// the attached target is not addressable as a local queue item (a cast
+    /// receiver or remote Session) — the plain `now_playing_title` carries
+    /// that case.
+    pub(in crate::app) title_parts: Option<PlaybackTitleParts>,
     pub(in crate::app) idle_feed_title: Option<(String, bool)>,
     pub(in crate::app) marquee_text: &'a mut String,
     pub(in crate::app) marquee_started_at: &'a mut std::time::Instant,
@@ -194,10 +199,6 @@ fn split_title_rows(surface: palette::Surface) -> bool {
 /// parts (now-playing-media-type-titles D6, task 2.3): the painter turns a
 /// closed part role into its theme role here, and no other site maps a part
 /// role to a palette role.
-// Transitional (now-playing-media-type-titles): unit 3 wires the typed parts
-// through the projection; until then only the buffer test below exercises
-// this, so the non-test build carries it as deliberately unused.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(in crate::app) fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
     match role {
         PlaybackTitlePartRole::Title => palette::PLAYBACK_TITLE_FG,
@@ -432,11 +433,7 @@ fn render_queue_title_rows(
     // One left indent, at least one gap cell before the time, one right
     // indent.
     let title_max = lower.width.saturating_sub(1 + 1 + time_w + 1) as usize;
-    let title_parts = if ctx.title_parts.is_empty() {
-        vec![(title.to_string(), title_color)]
-    } else {
-        ctx.title_parts.clone()
-    };
+    let title_parts = playback_title_spans(ctx.title_parts.as_ref(), title, title_color);
     let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
     row.extend(marquee_spans(ctx, &title_parts, title_max));
     let row_w: u16 = row.iter().map(|span| span.content.width() as u16).sum();
@@ -568,11 +565,7 @@ pub(in crate::app) fn render_title_row(
         &glyphs,
     );
     let fixed_w = glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
-    let title_parts = if ctx.title_parts.is_empty() {
-        vec![(title.to_string(), title_color)]
-    } else {
-        ctx.title_parts.clone()
-    };
+    let title_parts = playback_title_spans(ctx.title_parts.as_ref(), title, title_color);
     left.extend(marquee_spans(
         ctx,
         &title_parts,
@@ -587,6 +580,28 @@ pub(in crate::app) fn render_title_row(
             .style(Style::default().bg(palette::surface_colors(ctx.panel, ctx.panel_focused).fill)),
         area,
     );
+}
+
+/// The painted (text, fg) spans for one now-playing title: the typed parts
+/// resolved through `title_part_fg` when the shell projected them, otherwise
+/// the attached target's plain title in its own colour. The context part's
+/// leading space rides in its own span so the one-space delineation (D3)
+/// paints in the context role.
+fn playback_title_spans(
+    parts: Option<&PlaybackTitleParts>,
+    title: &str,
+    title_color: Color,
+) -> Vec<(String, Color)> {
+    match parts {
+        Some(parts) => {
+            let mut spans = vec![(parts.title.text.clone(), title_part_fg(parts.title.role))];
+            if let Some(context) = &parts.context {
+                spans.push((format!(" {}", context.text), title_part_fg(context.role)));
+            }
+            spans
+        }
+        None => vec![(title.to_string(), title_color)],
+    }
 }
 
 fn marquee_spans(
@@ -607,7 +622,7 @@ fn marquee_spans(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbv_core::playback_queue::PlaybackTitlePart;
+    use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitleParts};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
@@ -617,16 +632,16 @@ mod tests {
     /// painter's own `title_part_fg` mapping.
     #[test]
     fn title_part_roles_paint_their_theme_roles_in_the_row() {
-        let parts = [
-            PlaybackTitlePart {
+        let parts = PlaybackTitleParts {
+            title: PlaybackTitlePart {
                 role: PlaybackTitlePartRole::Title,
                 text: "Pilot".to_string(),
             },
-            PlaybackTitlePart {
+            context: Some(PlaybackTitlePart {
                 role: PlaybackTitlePartRole::Context,
                 text: "Series".to_string(),
-            },
-        ];
+            }),
+        };
         let mut playback = PlaybackStripAreas::default();
         let mut marquee_text = String::new();
         let mut marquee_started_at = std::time::Instant::now();
@@ -644,10 +659,7 @@ mod tests {
             next_available: false,
             status_indicators: None,
             throbber: Span::raw(" "),
-            title_parts: parts
-                .iter()
-                .map(|p| (p.text.clone(), title_part_fg(p.role)))
-                .collect(),
+            title_parts: Some(parts.clone()),
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
             marquee_started_at: &mut marquee_started_at,
@@ -668,7 +680,10 @@ mod tests {
         let row = (0..60)
             .map(|x| buf[(x, 0)].symbol().to_string())
             .collect::<String>();
-        for part in &parts {
+        for part in [Some(&parts.title), parts.context.as_ref()]
+            .into_iter()
+            .flatten()
+        {
             let start = row
                 .find(&part.text)
                 .unwrap_or_else(|| panic!("{:?} not painted in the row: {row:?}", part.text))
@@ -718,7 +733,7 @@ mod tests {
             next_available: false,
             status_indicators: Some(vec![Span::raw("CODEC "), Span::raw("FLAC")]),
             throbber: Span::raw(" "),
-            title_parts: Vec::new(),
+            title_parts: None,
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
             marquee_started_at: &mut marquee_started_at,
