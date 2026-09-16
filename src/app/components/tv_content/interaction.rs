@@ -123,9 +123,14 @@ impl TvContent {
         // pane (legacy `handle_mouse_wide`). Over an open Library Hero
         // overlay, the Workspace's episode list is the scrollable surface:
         // a wheel over its rows steps the list like the Wide workspace
-        // wheel does and is claimed.
+        // wheel does and is claimed. The overlay is a non-Wide surface, so
+        // the actual breakpoint — not the pushed bit alone — gates this
+        // arm: a stale bit in Wide must never claim the Wide pane's wheel.
         if let MediaListSurfaceInput::Wheel { at, delta } = input {
-            if !self.hero_overlay_open || !self.episodes.claims_current_point(at) {
+            if self.is_wide
+                || !self.hero_overlay_open
+                || !self.episodes.claims_current_point(at)
+            {
                 return None;
             }
             self.episodes.delegate_operation(

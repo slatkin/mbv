@@ -1,4 +1,4 @@
-use super::TvContent;
+use super::{ShellRequest, TvContent};
 use crate::app::components::media_list::MediaListSurfaceInput;
 
 impl TvContent {
@@ -10,15 +10,20 @@ impl TvContent {
         );
     }
 
-    /// Painted item rows the overlay Workspace pager moves per
-    /// PageUp/PageDown: the episode box's own last-viewed content height
-    /// (one selectable row per painted row, like the browser pager).
-    pub(super) fn episode_page_rows(&self) -> i64 {
-        self.episodes
-            .wide()
-            .current_content_rect()
-            .map(|rect| rect.height.saturating_sub(1).max(1))
-            .unwrap_or(1) as i64
+    /// Delegate one pager/jump surface input to the episode owner's own list
+    /// -- its page stride and its ends, the same seam the movement chords
+    /// use -- and report the applied cursor movement as the component-
+    /// resolved `TvEpisodeMove` delta; the shell never recomputes it.
+    pub(super) fn move_episode_by(&mut self, input: MediaListSurfaceInput) -> ShellRequest {
+        let from = self.episodes.cursor();
+        self.episodes.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
+        ShellRequest::TvEpisodeMove {
+            delta: self.episodes.cursor() as i64 - from as i64,
+        }
     }
 
     pub(super) fn move_season(&mut self, delta: i64) {

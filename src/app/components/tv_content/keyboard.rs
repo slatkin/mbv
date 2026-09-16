@@ -2,6 +2,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::inline_search::InlineSearchAction;
 use super::{Msg, Pane, ShellRequest, TvContent};
+use crate::app::components::media_list::MediaListSurfaceInput;
 
 impl TvContent {
     /// Ctrl+P/S/A on the selected Inline Search result reuse the ordinary
@@ -58,8 +59,11 @@ impl TvContent {
         // The Library Hero overlay's focused Workspace keeps its local chords
         // in Narrow geometry: the overlay is the only Narrow surface that
         // focuses the Episodes pane, and the covered browser list must never
-        // receive its movement keys.
-        if self.hero_overlay_open && self.pane == Pane::Episodes {
+        // receive its movement keys. The overlay exists only in non-Wide
+        // geometry, so the actual breakpoint — not the pushed bit alone —
+        // gates these arms: a stale bit in Wide must never shadow the Wide
+        // workspace's own handling.
+        if !self.is_wide && self.hero_overlay_open && self.pane == Pane::Episodes {
             return self.handle_key_overlay_workspace(key);
         }
         if self.is_wide {
@@ -101,24 +105,10 @@ impl TvContent {
                 self.move_season(1);
                 Some(ShellRequest::TvSeasonMove { delta: 1 })
             }
-            Key::PageUp => {
-                let rows = -self.episode_page_rows();
-                self.move_episode(rows);
-                Some(ShellRequest::TvEpisodeMove { delta: rows })
-            }
-            Key::PageDown => {
-                let rows = self.episode_page_rows();
-                self.move_episode(rows);
-                Some(ShellRequest::TvEpisodeMove { delta: rows })
-            }
-            Key::Home => {
-                self.episodes.select_first();
-                None
-            }
-            Key::End => {
-                self.episodes.select_last();
-                None
-            }
+            Key::PageUp => Some(self.move_episode_by(MediaListSurfaceInput::Page(-1))),
+            Key::PageDown => Some(self.move_episode_by(MediaListSurfaceInput::Page(1))),
+            Key::Home => Some(self.move_episode_by(MediaListSurfaceInput::First)),
+            Key::End => Some(self.move_episode_by(MediaListSurfaceInput::Last)),
             _ => None,
         };
         request.map(Msg::Shell)

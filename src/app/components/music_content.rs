@@ -92,8 +92,9 @@ pub struct MusicContent {
     hero_image: HeroImageState,
     library_search_active: bool,
     /// Whether the Library Hero overlay is open over this owner (pushed by
-    /// the panel). Narrow geometry never focuses the track pane on its own;
-    /// while the overlay is open the Workspace keeps keyboard focus.
+    /// the panel). The overlay takes the Workspace's keyboard focus once, on
+    /// its open transition; ordinary pushes never focus or re-focus the
+    /// track pane, and an explicit shell focus clear always wins.
     hero_overlay_open: bool,
 }
 
@@ -151,13 +152,6 @@ impl MusicContent {
         }
         if album_changed {
             self.track_list.select_first();
-        }
-        // While the Library Hero overlay is open, its Workspace holds
-        // keyboard focus whenever it has rows: a deferred track fetch that
-        // completes after the open restores the focus the open path gave
-        // (the `Clear` request below still wins when the shell arms it).
-        if self.hero_overlay_open && !self.track_list.rows().is_empty() {
-            self.track_focused = true;
         }
 
         // The library-search projection still reaches Music. Reuse the same
@@ -236,9 +230,12 @@ impl MusicContent {
     }
 
     pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
-        // The Library Hero overlay's Workspace keeps the focus the panel's
-        // open path gave it: the pre-overlay Narrow surface never focused
-        // tracks, so this clear must not fire over an open overlay.
+        // An ordinary Narrow push clears the pre-overlay surface's track
+        // focus (design D5), but must not wipe the open Library Hero
+        // overlay's Workspace focus. Explicit shell clears are separate
+        // one-shot requests (`MusicTrackFocusRequest::Clear` ->
+        // `clear_track_focus`) or the dismiss path; they always win and now
+        // stay won, because no push re-seizes the focus.
         if !enabled && !self.hero_overlay_open {
             self.track_focused = false;
         }
@@ -714,6 +711,13 @@ impl LibraryContentOwner for MusicContent {
     }
 
     fn set_hero_overlay_open(&mut self, open: bool) {
+        // The overlay takes the Workspace focus exactly once, on its open
+        // transition (bit false->true) -- never again on the sync pass's
+        // bit re-assert or an ordinary push, so shell and local focus
+        // clears stay authoritative while the overlay is open.
+        if open && !self.hero_overlay_open {
+            self.enter_track_focus();
+        }
         self.hero_overlay_open = open;
     }
 
