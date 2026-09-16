@@ -50,6 +50,11 @@ impl Component for LibraryPanel {
             .unwrap_or_default();
         let mut hits = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
+        // The overlay's own area. In non-Wide geometry it is the browser's
+        // inset list box below the reserved pill rows, so the pill bar and
+        // its spacer band stay outside both the overlay frame and its dim
+        // backdrop; the Wide geometry keeps the whole panel as before.
+        let mut overlay_area = area;
         // One breakpoint predicate (design D4): `wide_hero_fits` stays the
         // single Wide/Narrow choice; the panel clamps the list's viewport
         // through the list's `sync_viewport` inside each skeleton.
@@ -93,15 +98,16 @@ impl Component for LibraryPanel {
                 &mut hits,
                 &mut windows,
             );
+            overlay_area = geometry.list_panel;
             self.narrow_geometry = Some(geometry);
         }
         // Paint the Library-local overlay after the ordinary skeleton. The
         // shared Hero path therefore remains the sole content painter.
         if self.hero_overlay_open {
             if let Some(overlay_rect) =
-                crate::app::render::arrangements::library::library_hero_overlay(area)
+                crate::app::render::arrangements::library::library_hero_overlay(overlay_area)
             {
-                let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, area, overlay_rect, hints);
+                let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, overlay_area, overlay_rect, hints);
                 if let Some(hero) = content.hero.as_mut() {
                     let composition = super::super::hero_composition::paint_library_hero_content(
                         frame,
@@ -112,16 +118,12 @@ impl Component for LibraryPanel {
                         &mut hits.links,
                         &mut hits.workspace_selector,
                         &mut windows.workspace_selector,
-                        super::super::hero_composition::HeroPanePaint {
-                            surface: crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
-                            // The overlay's sheet is flat dark: a focused
-                            // Workspace paints the resting pair, not the
-                            // focus green.
-                            workspace_follows_focus: false,
-                        },
+                        // The overlay's sheet is the pane fill shared content
+                        // repaints behind the Hero header and overview.
+                        crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
                     );
                     self.overlay_geometry = Some(super::OverlayGeometry {
-                        pane: area,
+                        pane: overlay_area,
                         frame: overlay_rect,
                         hero: composition,
                     });
@@ -131,7 +133,7 @@ impl Component for LibraryPanel {
                     // visible overlay/frame and its hit boundary alive rather
                     // than silently falling back to the covered browser.
                     self.overlay_geometry = Some(super::OverlayGeometry {
-                        pane: area,
+                        pane: overlay_area,
                         frame: overlay_rect,
                         hero: super::super::hero_composition::HeroCompositionGeometry {
                             workspace: None,

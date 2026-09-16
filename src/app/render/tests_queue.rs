@@ -702,12 +702,11 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     );
 }
 
-/// Gutter-accent selection: the marker is a foam Nerd Font glyph
-/// (U+F0BBA) in the selected row's leading gutter inside the panel; the
-/// panel paints no marker outside the box edge; the selected title is
-/// bold selected-row text inside the panel.
+/// Selected-row bar: the queue's selected row fills the panel with the bar
+/// and keeps its ordinary title role (no accent title, no bold); the panel
+/// paints nothing outside the recessed box edge.
 #[test]
-fn queue_selection_title_is_bold_selected_row_no_outside_marker() {
+fn queue_selection_paints_the_bar_without_an_outside_marker() {
     let mut app = make_queue_app(3);
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
@@ -723,20 +722,20 @@ fn queue_selection_title_is_bold_selected_row_no_outside_marker() {
         " ",
         "no marker may paint outside the box edge"
     );
-    // The selected title paints bold in the selected-row role.
+    // The selected row paints the bar and keeps the ordinary emphasis title,
+    // not bold.
     let title_x = box_area.x + 2;
-    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_SELECTED_ROW);
-    assert!(buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
+    assert_eq!(buf[(title_x, marker_y)].bg, palette::SELECTED_ROW_BG);
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS);
+    assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 
-    // Without panel focus the title is neither accent nor bold.
+    // Without panel focus the row keeps the ordinary emphasis title and is
+    // not bold. Its fill cannot prove the bar absent here: the bar shares the
+    // queue box's resting fill value.
     app.panel_focus = crate::app::PanelFocus::Library;
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
-    assert_ne!(
-        buf[(title_x, marker_y)].fg,
-        palette::TEXT_SELECTED_ROW,
-        "the unfocused queue title keeps the default colour"
-    );
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS);
     assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 }
 

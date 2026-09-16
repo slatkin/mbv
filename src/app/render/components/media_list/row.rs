@@ -17,16 +17,14 @@ use unicode_width::UnicodeWidthStr;
 /// (`inner_width` already excludes the scrollbar column). The now-playing
 /// row paints its total duration like every other row — no throbber slot.
 ///
-/// `selected_bg` is not a free per-caller choice: the focused selected row
-/// "punches through" to the surface *containing* the panel that holds the
-/// list, so it must be that parent container's background. The surface table
-/// owns the mapping: library rails plus Home and Feeds pass the `SelectedRow`
-/// row (the library backdrop, even while the list panel itself is
-/// focus-green), while queue and nested workspace lists resolve their owning
-/// column's selected-row identity (`SelectedRowOnQueueColumn` /
-/// `SelectedRowOnLibraryPane`) so the row follows that column's focus. When
-/// `gutter_accent` is set, the selected row keeps its default background
-/// treatment and paints its title in the bold selected-row role.
+/// `selected_bg` is the selected-row bar fill. Every selected row on a
+/// focused list paints it across the whole row, overriding its zebra stripe
+/// and the two-column gutters; callers resolve it to the `SELECTED_ROW_BG`
+/// role, and the surface table's owning-surface identity no longer changes the
+/// row's appearance. Every span keeps the ordinary unselected foreground role,
+/// so the bar introduces no bold title and no accent title colour. The
+/// `gutter_accent` argument is retained for the Wide callers but no longer
+/// changes painting.
 ///
 /// `alternate_bg` is the row's position in the list's zebra alternation. It
 /// paints every row type — selectable items, group headings and the blank
@@ -44,7 +42,7 @@ pub(in crate::app) fn media_list_row<Target>(
     focused: bool,
     selected_bg: Color,
     alternate_bg: Option<Color>,
-    gutter_accent: bool,
+    _gutter_accent: bool,
     inner_width: usize,
     has_scrollbar: bool,
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
@@ -138,24 +136,16 @@ pub(in crate::app) fn media_list_row<Target>(
                 .sum();
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
-            let paint_selected = selected && !gutter_accent;
+            // Every selected row paints the opaque bar edge to edge; the
+            // `gutter_accent` callers no longer keep their background.
+            let paint_selected = selected;
             let secondary_separator_reserve =
                 usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
             let icon_reserve = live_icon.map_or(0, UnicodeWidthStr::width);
             let title_width = content_w.saturating_sub(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
             );
-            let title_color = if selected {
-                // Gutter-accent lists paint the selected title in the
-                // selected-row role; other lists keep the emphasis title.
-                if gutter_accent {
-                    palette::TEXT_SELECTED_ROW
-                } else {
-                    palette::TEXT_EMPHASIS
-                }
-            } else {
-                fg
-            };
+            let title_color = fg;
             // Two-tone episode rows: an optional secondary title (the
             // episode title) paints in the selected-row role after the
             // primary title, with one separating space. (`parts` feeds the
@@ -167,12 +157,12 @@ pub(in crate::app) fn media_list_row<Target>(
                     Some(sec) => vec![
                         (primary.clone(), title_color),
                         (" ".into(), title_color),
-                        (sec.to_owned(), palette::TEXT_SELECTED_ROW),
+                        (sec.to_owned(), palette::TEXT_FOCUS_ACCENT),
                     ],
                     None => vec![(primary.clone(), title_color)],
                 };
             let parts_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-            let mut title_spans = marquee
+            let title_spans = marquee
                 .take()
                 .filter(|_| selected && parts_width > title_width)
                 .map(|(text, started_at)| {
@@ -198,17 +188,6 @@ pub(in crate::app) fn media_list_row<Target>(
                     }
                     spans
                 });
-            // Gutter-accent selection: the selected title paints in the
-            // selected-row role, bold; no icon, no background.
-            if selected && gutter_accent {
-                for span in &mut title_spans {
-                    span.style = span
-                        .style
-                        .fg(palette::TEXT_SELECTED_ROW)
-                        .add_modifier(Modifier::BOLD);
-                }
-            }
-
             let mut spans = vec![Span::raw("  ")];
             if let Some(icon) = live_icon {
                 spans.push(Span::styled(icon, Style::default().fg(palette::ACCENT)));

@@ -259,7 +259,10 @@ pub(in crate::app) enum PanelListPaintPolicy {
     /// the list backdrop surface.
     Wide { focused: bool },
     /// The Wide library Workspace presentation. Its selected row belongs to
-    /// the owning library pane surface rather than the list backdrop.
+    /// the owning library pane surface rather than the list backdrop. The
+    /// focus bit is the Workspace's own: it drives the list's cursor emphasis,
+    /// marquee, and scrollbar, and is independent of whether the containing
+    /// Hero pane resolves the box body's own focused fill.
     WideWorkspace { focused: bool },
 }
 

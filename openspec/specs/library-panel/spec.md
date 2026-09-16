@@ -373,8 +373,8 @@ chapters, Audiobookshelf podcast episodes) SHALL present them in a Workspace bel
 optional one-row header, an optional Selector row (season pills, episode played-state filter)
 followed by one Main content box
 holding the canonical list. The Workspace box SHALL render the accent-soft surface while its list holds
-focus and the backdrop surface otherwise. Its selected row SHALL use the owning-surface selected-row
-treatment. A Hero pane with a Workspace is focusable; a Hero pane without one is read-only and always
+focus and the backdrop surface otherwise. Its selected row SHALL paint the selected-row bar like every
+other canonical list row. A Hero pane with a Workspace is focusable; a Hero pane without one is read-only and always
 renders the resting surface. No destination SHALL render a second Workspace box.
 
 Grouped Music's Workspace SHALL carry the header `Tracks` (user direction 2026-09-15): the title in the
@@ -398,7 +398,7 @@ under it.
 
 #### Scenario: Audiobookshelf chapters render in the Workspace
 - **WHEN** an Audiobookshelf book is selected at Wide geometry
-- **THEN** its chapters render in the one Workspace box with the owning-surface selected-row treatment
+- **THEN** its chapters render in the one Workspace box with the selected-row bar
   used by TV and Music
 
 #### Scenario: Read-only hero

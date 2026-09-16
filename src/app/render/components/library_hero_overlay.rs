@@ -13,10 +13,12 @@ use crate::app::palette;
 pub(in crate::app) const OVERLAY_SHEET_SURFACE: palette::Surface = palette::Surface::PillRow;
 
 /// Paint the frameless Library-local overlay surface and return the inset Hero
-/// rectangle. Only `library_area` is dimmed; the Queue is outside this supplied
-/// rectangle. The overlay sheet is the popup's own dark chrome surface (the
-/// same one its hint pill row paints), so the rectangle and its hints read as
-/// one surface.
+/// rectangle. Only `library_area` is dimmed: in non-Wide geometry the caller
+/// supplies the browser's inset list box, so the reserved pill bar and its
+/// spacer band above it stay undimmed and legible; the Queue is outside this
+/// supplied rectangle. The overlay sheet is the popup's own dark chrome surface
+/// (the same one its hint pill row paints), so the rectangle and its hints read
+/// as one surface.
 ///
 /// `hints` is the overlay's bottom-row hint bar content, derived centrally by
 /// the caller from the active destination (a content change, not a painter
@@ -141,6 +143,34 @@ mod tests {
         for (idx, expected) in [foam, yellow, orange, foam].into_iter().enumerate() {
             assert_eq!(buf[(starts[idx] as u16, bar_y)].bg, expected, "chip {idx}");
         }
+    }
+
+    /// The dim backdrop is confined to the supplied area: the reserved rows
+    /// above the Library inset panel keep their own background, while the inset
+    /// panel's remainder outside the overlay frame is dimmed.
+    #[test]
+    fn dim_backdrop_is_confined_to_the_supplied_area() {
+        let area = Rect::new(0, 0, 48, 12);
+        // The inset list box, with two reserved chrome rows above it (the pill
+        // bar and its spacer band).
+        let inset = Rect::new(0, 2, 48, 10);
+        let overlay = Rect::new(4, 3, 40, 8);
+        let chrome = Color::Rgb(30, 35, 38); // PillRow
+        let mut terminal = Terminal::new(TestBackend::new(area.width, area.height)).unwrap();
+        terminal
+            .draw(|f| {
+                f.render_widget(Block::default().style(Style::default().bg(chrome)), area);
+                paint_library_hero_overlay(f, inset, overlay, &["Esc:Dismiss"]);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        for y in 0..inset.y {
+            for x in 0..area.width {
+                assert_eq!(buf[(x, y)].bg, chrome, "chrome row {y} column {x}");
+            }
+        }
+        assert_eq!(buf[(0, inset.y + 1)].bg, Color::Rgb(15, 17, 19)); // half of PillRow
+        assert_eq!(buf[(overlay.x, overlay.y)].bg, chrome); // the sheet is not dimmed
     }
 
     #[test]

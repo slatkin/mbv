@@ -37,7 +37,7 @@ For an item with a Workspace, opening the overlay SHALL give focus to its consti
 
 ### Requirement: The overlay is confined to the Library pane
 
-The Library Hero overlay SHALL be centered within the current Library pane and SHALL occupy 90 percent of that pane's width and height, subject to fitting within the available Library area. Its elevation, Library-only dimmed backdrop, and visible `Esc` dismissal hint SHALL make its overlay status evident. It SHALL NOT paint a border frame, occupy, cover, or dim any part of a visible Queue pane.
+The Library Hero overlay SHALL be centered within the current Library pane and SHALL occupy 90 percent of that pane's width and height, subject to fitting within the available Library area. In non-Wide geometry the pane it is placed and dimmed within SHALL be the Library browser's inset list box below the reserved Selector row and its spacer band, so neither the overlay frame nor its dimmed backdrop covers those chrome rows. Its elevation, Library-only dimmed backdrop, and visible `Esc` dismissal hint SHALL make its overlay status evident. It SHALL NOT paint a border frame, occupy, cover, or dim any part of a visible Queue pane.
 
 The overlay SHALL recompute its placement from the current Library pane whenever terminal geometry or Panel mode changes. Its internal Hero composition SHALL follow the existing Wide Hero space-allocation rules, including shrinking artwork before removing a present Workspace list viewport.
 
@@ -46,6 +46,12 @@ The overlay SHALL recompute its placement from the current Library pane whenever
 - **WHEN** the Library Hero overlay is open while both Library and Queue are visible
 - **THEN** the overlay and dimmed backdrop are contained within the Library pane
 - **AND** the Queue pane remains uncovered and undimmed
+
+#### Scenario: Non-Wide chrome rows stay outside the overlay
+
+- **WHEN** the Library Hero overlay is open in non-Wide geometry
+- **THEN** its frame and dimmed backdrop are contained within the browser's inset list box
+- **AND** the Selector row and the spacer band below it remain undimmed and uncovered
 
 #### Scenario: Geometry changes while open
 
@@ -121,4 +127,10 @@ The overlay SHALL NOT snapshot or duplicate Workspace rows at open time. Provide
 
 - **WHEN** matching provider data completes while the overlay shows a loading Workspace
 - **THEN** the Workspace updates to ready or empty state in place
+- **AND** the Workspace takes the focus its rows could not provide at open, seeds its cursor on the first row, and paints that cursor
 - **AND** the overlay remains open
+
+#### Scenario: Workspace focus is not re-seized
+
+- **WHEN** the user leaves the Workspace's focus (Esc or a shell focus clear) while the overlay stays open
+- **THEN** an ordinary refresh push does not re-focus the Workspace

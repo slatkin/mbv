@@ -81,11 +81,10 @@ pub const TEXT_ACCENT_MUTED: Color = primitives::BG_GREEN; // "loaded"/"playing"
                                                            // not the focused surface's `SURFACE_FOCUSED_BG` (task 4.2)
 pub const TEXT_DETAIL_META: Color = primitives::MUTED_GREEN; // detail-screen label/meta text
 pub const TEXT_METADATA: Color = primitives::FOAM; // secondary metadata (durations, pct, badges)
-/// Selected-row title foreground (gutter-accent lists, queue, legacy row
-/// spans): bold orange (#e59875). A role of its own, not `TEXT_FOCUS_ACCENT`
-/// (yellow) or `INDICATOR_RESOLUTION_FG` (whose primitive shares the value
-/// today), so an edit to either can never move the selected row.
-pub const TEXT_SELECTED_ROW: Color = primitives::ORANGE;
+/// Selected-row bar fill (audition: an opaque full-width bar replaces the
+/// punch-through and the gutter-accent-only title treatment; the row keeps
+/// its ordinary foreground roles on the bar).
+pub const SELECTED_ROW_BG: Color = primitives::SELECTED_ROW_BAR;
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours

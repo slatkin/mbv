@@ -10,8 +10,8 @@ single-column browser otherwise.
 
 ### Requirement: Selected cell indicator
 
-The selected cell in any list SHALL be identified by the selected row's
-background alone, bleeding to the list's outer edge (a 2-column extension
+The selected cell in any list SHALL be identified by the selected-row bar
+alone, bleeding to the list's outer edge (a 2-column extension
 into the panel margin in single-column mode, directional in two-column
 mode), rather than by a marker glyph, a `▌` left-edge mark, or a `##` title
 prefix. No marker glyph SHALL appear on any selected cell. The marker-free
@@ -21,7 +21,7 @@ picker, and Wide hero list panes.
 #### Scenario: Selected cell marked without a marker glyph
 
 - **WHEN** a cell in a list is the current selection
-- **THEN** its selected-row background extends to the list's outer edge
+- **THEN** its selected-row bar extends to the list's outer edge
 - **AND** it does NOT show a marker glyph, a `▌` mark, or a `##` title prefix
 
 ### Requirement: Inline replacement tracks the current selection independent of scroll position

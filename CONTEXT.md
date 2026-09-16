@@ -327,7 +327,7 @@ duration slot is green.
 _Avoid_: wide media row, wide_media_row
 
 **Group heading**:
-The non-selectable Heading row labelling a group of media-list Item rows (artist, feed age bucket, letter or surname bucket, season). Painted bold in the FOAM metadata role, unlike the focus-accent selected-row title; it is a visual label, never a selection or action target, and it takes its own place in the zebra alternation.
+The non-selectable Heading row labelling a group of media-list Item rows (artist, feed age bucket, letter or surname bucket, season). Painted bold in the FOAM metadata role; unlike a media-list Item row it keeps the surface fill and never paints the selected-row bar. It is a visual label, never a selection or action target, and it takes its own place in the zebra alternation.
 _Avoid_: artist header, group title, section label
 
 **Inline Search**:
@@ -421,17 +421,22 @@ The app-wide layout state, one of Mini, Narrow, or Wide:
 _Avoid_: layout mode, view mode, panel state, responsive mode, breakpoint mode
 
 **Zebra stripe**:
-The alternating-row secondary background on Wide media lists. Parity counts every visible row by
-screen-row order, so the window's first row is unstriped and the pattern runs unbroken through
-structural Heading and Spacer rows (a group never restarts it). A selected row keeps
-its stripe.
+The alternating-row secondary background on Wide media lists. Grouping Heading rows and Spacer rows
+keep the surface fill outside the sequence, and each group's member rows alternate from the secondary
+fill at the group's first member, so a stripe follows a row's position in its group rather than the
+screen row it lands on.
+A Spacer row between groups sits outside the sequence and keeps the surface fill; a list with no
+Heading above a row counts from its first row, which is unstriped. A selected row paints the
+selected-row bar instead of its stripe.
 _Avoid_: alternating row, striped background, row banding
 
-**Gutter accent**:
-The unconditional Wide selected-row treatment: while the list holds focus, the selected title is bold
-in the focus-accent role, with no selected-row background and no marker glyph; an unfocused list
-shows no accent.
-_Avoid_: gutter-selected style, gutter treatment, selection marker
+**Selected-row bar**:
+The unconditional selected-row treatment of every canonical media list: while the list holds focus the
+whole row paints the `#2d353b` bar fill across its full width — overriding its zebra stripe, its
+two-column gutters, and its owning surface — while every span keeps the ordinary unselected
+foreground role, so no title is bold and none takes an accent colour. A multi-selected row paints the
+bar too, including while the list is unfocused; an unfocused list paints no bar for its cursor row.
+_Avoid_: gutter accent, gutter-selected style, selection marker
 
 **Tab panel**:
 The root-composed Panel that paints tab selection and overflow controls for the
@@ -453,9 +458,12 @@ _Avoid_: destination panel, library screen
 
 **Library Hero overlay**:
 A Library-panel-local detail surface opened for a selected hero-bearing browser
-row in non-Wide geometry. It is centered within and confined to 85% of the
-visible Library pane, reuses the shared Hero header, overview (including cast
-and crew), artwork, and optional Workspace content, while its provider-link row
+row in non-Wide geometry. It is centered within and confined to 90% of the
+visible Library pane; in non-Wide geometry that pane is the browser's inset list
+box, so the Selector row and the spacer band below it stay outside both the
+overlay frame and its dimmed backdrop. It reuses the shared Hero header,
+overview (including cast and crew), artwork, and optional Workspace content,
+while its provider-link row
 remains plain text. It leaves a visible Queue independently operable. Library
 focus can dismiss it with Esc or a click on the dimmed Library remainder;
 changing destination dismisses it. It is distinct from application popups and

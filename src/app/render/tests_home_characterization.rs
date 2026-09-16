@@ -122,11 +122,11 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
 /// 5.11): after the Wide panel skeleton paint the zebra alternates from the
-/// primary fill, so the selected first row is unstriped and the row below it
-/// carries the MainContentBox stripe. Unfocused rows keep the unfocused
-/// stripe value.
+/// primary fill, so the selected first row paints the bar and the row below
+/// it carries the MainContentBox stripe. Unfocused rows keep the unfocused
+/// stripe value and paint no bar.
 #[test]
-fn wide_home_stripes_alternate_rows_under_the_gutter_accent() {
+fn wide_home_stripes_alternate_rows_with_the_selected_bar() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {
@@ -151,12 +151,12 @@ fn wide_home_stripes_alternate_rows_under_the_gutter_accent() {
     };
 
     // D1: the Browser-pane Wide arm stripes with the MainContentBox pair, on
-    // the sequence's second row; the selected first row keeps the pane fill.
+    // the sequence's second row; the selected first row paints the bar.
     let (selected, striped) = bgs(true);
     assert_eq!(
         selected,
-        Some(palette::surface_colors(palette::Surface::LibraryPanel, true).fill),
-        "the selected first row is the sequence's primary fill"
+        Some(palette::SELECTED_ROW_BG),
+        "the selected first row paints the bar"
     );
     assert_eq!(
         striped,
@@ -168,7 +168,7 @@ fn wide_home_stripes_alternate_rows_under_the_gutter_accent() {
     assert_eq!(
         selected,
         Some(palette::surface_colors(palette::Surface::LibraryPanel, false).fill),
-        "the unfocused first row keeps the pane fill"
+        "an unfocused list paints no bar and keeps the pane fill"
     );
     assert_eq!(
         striped,

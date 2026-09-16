@@ -86,6 +86,10 @@ pub struct MusicContent {
     pub(in crate::app) carrier: MediaListCarrier<String>,
     pub(in crate::app) track_list: MediaListCarrier<String>,
     pub(in crate::app) track_focused: bool,
+    /// Whether this frame's geometry hosts the inline track list (the Wide
+    /// pane). Pushed each sync pass beside the track-focus clear; narrow
+    /// selects the Library Hero overlay instead.
+    pub(in crate::app) inline_track_focus_enabled: bool,
     last_album_id: Option<String>,
     pub(in crate::app) inline_search: InlineSearch,
     hero_image: HeroImageState,
@@ -113,6 +117,7 @@ impl MusicContent {
             carrier: MediaListCarrier::new(),
             track_list: MediaListCarrier::new(),
             track_focused: false,
+            inline_track_focus_enabled: false,
             last_album_id: None,
             inline_search: InlineSearch::new(),
             hero_image: HeroImageState::None,
@@ -146,11 +151,20 @@ impl MusicContent {
             self.carrier.set_content(album_rows);
         }
         let track_rows = build_track_rows(self.context.album_tracks.as_deref().unwrap_or_default());
+        // The overlay's Workspace can outrun the album's track fetch: the open
+        // transition cannot take the focus while the rows are still empty, so
+        // it is taken the moment they arrive. Only the empty-to-non-empty edge
+        // fires, so an explicit Esc (or any later push) never re-seizes the
+        // focus the user left behind.
+        let track_rows_arrived = self.track_list.rows().is_empty() && !track_rows.is_empty();
         if self.track_list.rows() != track_rows.as_slice() {
             self.track_list.set_content(track_rows);
         }
         if album_changed {
             self.track_list.select_first();
+        }
+        if track_rows_arrived && self.hero_overlay_open {
+            self.enter_track_focus();
         }
 
         // The library-search projection still reaches Music. Reuse the same
@@ -229,6 +243,10 @@ impl MusicContent {
     }
 
     pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
+        // The shell pushes this frame's breakpoint: only the Wide pane hosts
+        // the inline track list, so the Enter chord must not silently focus a
+        // narrow track pane nothing paints.
+        self.inline_track_focus_enabled = enabled;
         // An ordinary Narrow push clears the pre-overlay surface's track
         // focus (design D5), but must not wipe the open Library Hero
         // overlay's Workspace focus. Explicit shell clears are separate
@@ -499,10 +517,16 @@ impl LibraryContentOwner for MusicContent {
             Key::Enter if self.track_list.rows().is_empty() => self
                 .selected_item()
                 .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
-            Key::Enter => {
+            // Narrow geometry has no inline track pane: the chord opens (or
+            // re-focuses) the Library Hero overlay instead of focusing a list
+            // nothing paints.
+            Key::Enter if self.inline_track_focus_enabled => {
                 self.enter_track_focus();
                 None
             }
+            Key::Enter => self
+                .selected_item()
+                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
             Key::Esc | Key::Backspace if self.track_focused => {
                 self.clear_track_focus();
                 None

@@ -697,3 +697,55 @@ fn album_row_right_click_requests_the_album_context_menu() {
         )))
     ));
 }
+
+#[test]
+fn narrow_enter_requests_album_activation_with_the_tracks_already_cached() {
+    let mut model = Model::new(make_music_group_app());
+    let mut track = make_item("Track One", "Audio");
+    track.id = "track-1".into();
+    model
+        .app
+        .album_tracks_cache
+        .insert("album-1".into(), vec![track]);
+    model.app.panel_focus = PanelFocus::Library;
+    model.sync_mounted_surfaces();
+    assert!(!model.app.is_right_panel_wide());
+
+    // The cached Tracklist must not turn the narrow Enter into a local
+    // track-pane focus: narrow paints no inline track pane, so the chord
+    // stays the overlay's activation request.
+    let message = model.test_music_owner_mut().on_key(&KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(
+        matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::MusicAlbumActivate { .. }))
+        ),
+        "narrow Enter with cached tracks requests the album's overlay"
+    );
+    assert!(
+        !model.test_music_owner().track_focused(),
+        "narrow Enter must not focus a track pane nothing paints"
+    );
+
+    let (mut music_resize, mut tv_resize) = (false, false);
+    model.handle_terminal_message(
+        message.expect("activation request"),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    let panel = model
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("Library panel mounted")
+        .as_any()
+        .downcast_ref::<LibraryPanel>()
+        .expect("Library panel");
+    assert!(panel.test_hero_overlay_open(), "the overlay opens");
+    assert!(
+        model.test_music_owner().track_focused(),
+        "the opened overlay focuses the cached Tracklist"
+    );
+}

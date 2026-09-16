@@ -39,11 +39,14 @@ pub(in crate::app) fn wide_library_panes(
     })
 }
 
-/// Place the Library-local Hero overlay inside the supplied Library pane at
-/// [`OVERLAY_PANE_PERCENT`] of the pane.
+/// Place the Library-local Hero overlay inside the supplied area at
+/// [`OVERLAY_PANE_PERCENT`] of it.
 ///
-/// The percentage is deliberately computed from the pane, not the terminal:
-/// this keeps the Queue column outside both the frame and its dimmed backdrop.
+/// The caller supplies the area the overlay owns: the non-Wide browser's inset
+/// list box, so the overlay and its dim backdrop never cover the pill bar or
+/// the spacer band above it. The percentage is deliberately computed from the
+/// supplied area, not the terminal: this keeps the Queue column outside both
+/// the frame and its dimmed backdrop.
 pub(in crate::app) fn library_hero_overlay(area: Rect) -> Option<Rect> {
     if area.width == 0 || area.height == 0 {
         return None;

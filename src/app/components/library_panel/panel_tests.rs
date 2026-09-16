@@ -409,6 +409,32 @@ fn wide_hero_link_click_emits_open_url_request() {
 }
 
 #[test]
+fn overlay_area_is_the_browser_inset_list_box() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log)));
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    let area = Rect::new(0, 0, 60, 24);
+    terminal
+        .draw(|f| Component::view(&mut panel, f, area))
+        .unwrap();
+    let narrow = panel
+        .test_narrow_geometry()
+        .expect("a sub-breakpoint area paints the narrow skeleton");
+    panel.test_open_hero_overlay();
+    terminal
+        .draw(|f| Component::view(&mut panel, f, area))
+        .unwrap();
+    let (pane, _) = panel.test_overlay_geometry().expect("the overlay painted");
+    assert_eq!(pane, narrow.list_panel);
+    assert!(
+        pane.y > narrow.selector_bar.bottom(),
+        "the reserved pill bar and its spacer band stay outside the overlay area"
+    );
+}
+
+#[test]
 fn overlay_dismissal_handles_escape_backdrop_destination_and_missing_parent() {
     let log = Rc::new(RefCell::new(FixtureLog::default()));
     let mut panel = LibraryPanel::new();

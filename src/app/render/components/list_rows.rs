@@ -213,9 +213,9 @@ pub(in crate::app::render) fn build_list_row_spans(
     selected: bool,
     fg: Color,
 ) -> Vec<Span<'static>> {
-    let bg = palette::surface_colors(palette::Surface::SelectedRow, selected).fill;
+    let bg = palette::SELECTED_ROW_BG;
     let mut spans: Vec<Span> = if selected {
-        let title_style = Style::default().fg(palette::TEXT_SELECTED_ROW).bg(bg);
+        let title_style = Style::default().fg(fg).bg(bg);
         vec![
             Span::styled(" ", Style::default().bg(bg)),
             Span::styled(title, title_style),
@@ -254,11 +254,7 @@ pub(in crate::app::render) fn item_cell_spans(
         let pad_span = if selected {
             Span::styled(
                 " ".repeat(pad),
-                Style::default().bg(palette::surface_colors(
-                    palette::Surface::SelectedRow,
-                    selected,
-                )
-                .fill),
+                Style::default().bg(palette::SELECTED_ROW_BG),
             )
         } else {
             Span::raw(" ".repeat(pad))
@@ -286,7 +282,7 @@ pub(in crate::app::render) fn draw_column_selection_bleed(
         cursor,
         item_rows,
         row_offset,
-        palette::surface_colors(palette::Surface::SelectedRow, false).fill,
+        palette::SELECTED_ROW_BG,
     );
 }
 

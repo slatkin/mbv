@@ -1,6 +1,6 @@
 use super::row::media_list_row;
 use crate::app::components::media_list::{
-    RowGeometry, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+    MediaListRow, RowGeometry, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
 };
 use crate::app::palette;
 use ratatui::layout::Rect;
@@ -26,7 +26,7 @@ pub(super) struct MediaListPaint<Target> {
 /// for the inline browsers until it is parameterised).
 ///
 /// `paint_area` supplies the full-width visual span (so the selected-row
-/// background and flush edge marker reach the panel border); its vertical span
+/// bar reaches the panel border); its vertical span
 /// is replaced with `content_area`'s row-flow span. This keeps framed parents'
 /// full-width selection treatment while aligning painted rows with retained
 /// geometry. `content_area` remains the hit/scroll geometry rect (inset on
@@ -75,9 +75,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
         .flatten()
         .and_then(|row| list.rows().get(row))
         .and_then(|row| match row {
-            crate::app::components::media_list::MediaListRow::Item { primary, .. } => {
-                Some(primary.clone())
-            }
+            MediaListRow::Item { primary, .. } => Some(primary.clone()),
             _ => None,
         });
     let mut marquee = marquee_primary.map(|primary| list.marquee_state(&primary));
@@ -85,26 +83,39 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     let offset = geometry.offset();
     let total_rows = geometry.len();
 
+    // A grouped list fills its content rows with the secondary colour under its
+    // surface-coloured labels, and alternates within each group: the group's
+    // first member carries the secondary fill and every second member after it
+    // takes the surface fill instead. An ungrouped list alternates throughout,
+    // opening on the primary fill.
+    let grouped = rows
+        .iter()
+        .any(|row| matches!(row, MediaListRow::Heading { .. }));
+
     let overflows = total_rows > content_area.height as usize;
     let scrollbar = focused && overflows;
     let inner_width = paint_area.width.saturating_sub(u16::from(scrollbar)) as usize;
+    let mut striped = offset % 2 == 1;
     let list_items: Vec<ListItem> = (offset..total_rows)
         .take(content_area.height as usize)
-        .enumerate()
-        .map(|(visible_row, row)| {
-            let source_row = geometry
-                .source_row(row)
-                .expect("wide geometry contains a source row");
+        .map(|source_row| {
             let row_target = rows[source_row].selectable_target();
             let multi_selected = row_target.is_some_and(|target| list.is_selected_target(target));
-            // The stripe runs continuously down the visible window: group
-            // headings and spacers take their place in the alternation like
-            // any other row, so a group does not restart the sequence. The
-            // sequence opens on the primary fill.
-            let alternate_bg = zebra_bg.filter(|_| visible_row % 2 == 1);
-            let item = media_list_row(
+            let alternate_bg = match rows[source_row] {
+                // A group's header is its surface-coloured label, and the
+                // separator above it sits outside the fill too: both keep the
+                // fill the list box already painted.
+                MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
+                _ if grouped => zebra_bg.filter(|_| grouped_member_striped(rows, source_row)),
+                _ => {
+                    let alternate_bg = zebra_bg.filter(|_| striped);
+                    striped = !striped;
+                    alternate_bg
+                }
+            };
+            media_list_row(
                 &rows[source_row],
-                Some(row) == selected_row || multi_selected,
+                Some(source_row) == selected_row || multi_selected,
                 focused || multi_selected,
                 selected_bg,
                 alternate_bg,
@@ -113,10 +124,9 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                 scrollbar,
                 marquee
                     .as_mut()
-                    .filter(|_| Some(row) == selected_row)
+                    .filter(|_| Some(source_row) == selected_row)
                     .map(|(text, started_at)| (text, started_at)),
-            );
-            item
+            )
         })
         .collect();
     // Keep the established full-width row treatment, but take the vertical
@@ -127,21 +137,10 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     f.render_widget(List::new(list_items), row_paint_area);
 
     if scrollbar {
-        let scrollbar_x = if row_paint_area.right() < f.area().right() {
-            row_paint_area.right()
-        } else {
-            row_paint_area.x + row_paint_area.width.saturating_sub(1)
-        };
-        // The scrollbar column resolves to the selected-row backing the caller
-        // painted for focused overflowing lists.
-        f.render_widget(
-            Block::default().style(Style::default().bg(selected_bg)),
-            Rect {
-                x: scrollbar_x,
-                width: 1,
-                ..row_paint_area
-            },
-        );
+        // The scrollbar column keeps the row's own background: the selected
+        // row's item style already fills it, and every other row keeps the
+        // panel fill. Painting the column separately would smear the selected
+        // row's bar down the whole list.
         crate::app::render::render_right_scrollbar(
             f,
             row_paint_area,
@@ -167,13 +166,26 @@ fn row_paint_area(paint_area: Rect, content_area: Rect) -> Rect {
     }
 }
 
-fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Color {
-    let surface = match surface {
-        SelectedRowSurface::ListBackdrop => palette::Surface::SelectedRow,
-        SelectedRowSurface::OwningQueueColumn => palette::Surface::SelectedRowOnQueueColumn,
-        SelectedRowSurface::OwningLibraryPane => palette::Surface::SelectedRowOnLibraryPane,
-    };
-    palette::surface_colors(surface, focused).fill
+/// Whether one content row of a grouped list takes the secondary zebra fill
+/// rather than the surface fill: a group's members alternate from the secondary
+/// fill at their first member, so every second member reverts to the surface
+/// fill. `row` is a content row's source index; the grouping rows are never
+/// asked.
+fn grouped_member_striped<Target>(rows: &[MediaListRow<Target>], row: usize) -> bool {
+    // The group's members start at the row below its header (the list's own
+    // first row when it has none above the row).
+    let start = (0..=row)
+        .rev()
+        .find(|&index| matches!(rows[index], MediaListRow::Heading { .. }))
+        .map_or(0, |header| header + 1);
+    (row - start).is_multiple_of(2)
+}
+
+fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> Color {
+    // Audition: every selected row paints the opaque bar (and the scrollbar
+    // column behind it), so the surface table's punch-through resolution is
+    // deliberately bypassed.
+    palette::SELECTED_ROW_BG
 }
 
 /// Component-view adapter for the retained-result seam.
@@ -196,8 +208,8 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq
         policy.focused(),
         selected_row_surface_color(policy.selected_surface(), policy.focused()),
         policy.zebra_bg(),
-        // Wide selection is always the gutter accent; `selected_bg` now only
-        // resolves the scrollbar backing for focused overflowing lists.
+        // Retained for the Wide callers; the bar is painted regardless, so this
+        // no longer changes appearance.
         true,
     );
     list.finish_view(

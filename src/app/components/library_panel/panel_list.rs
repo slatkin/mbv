@@ -74,7 +74,6 @@ mod panel_list_tests {
     use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
-    use ratatui::style::Color;
     use ratatui::Terminal;
 
     fn item(target: &str) -> MediaListRow<String> {
@@ -89,12 +88,12 @@ mod panel_list_tests {
         }
     }
 
-    /// The selected-row accent is intentionally identical across both Wide
+    /// The selected-row bar is intentionally identical across both Wide
     /// arms; arm-specific stripe colours are owned by the Render Component
-    /// regressions planned in tasks 4.1 and 4.2, at
-    /// `src/app/render/components/media_list.rs` and its Wide-arm tests.
+    /// regressions in `src/app/render/components/media_list.rs` and its
+    /// Wide-arm tests.
     #[test]
-    fn wide_selected_rows_use_the_gutter_accent_for_both_slots() {
+    fn wide_selected_rows_paint_the_bar_in_both_slots() {
         let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("selected")]);
         let area = Rect::new(0, 0, 20, 1);
@@ -111,7 +110,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            Color::Reset
+            palette::SELECTED_ROW_BG
         );
 
         terminal
@@ -125,7 +124,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            Color::Reset
+            palette::SELECTED_ROW_BG
         );
     }
 

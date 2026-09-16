@@ -1306,13 +1306,14 @@ fn non_wide_saved_geometry_agrees_with_the_painted_frame() {
     assert!(narrow.list_area.contains(ratatui::layout::Position { x, y }));
 }
 
-/// The Library Hero overlay's own pixels rest on the sheet whatever the
-/// Workspace's focus: the sheet carries its PillRow surface, and the
-/// Workspace box's panel and stripes carry the resting `MainContentBox` /
-/// `LibraryPanel` pair even though opening the overlay focuses the
-/// Workspace (the overlay's `workspace_follows_focus: false`).
+/// The Library Hero overlay paints its Workspace box from the Workspace's own
+/// focus: the sheet carries its PillRow surface, and the box's body carries the
+/// focused `MainContentBox` fill (`#48584e`) while the Workspace holds focus,
+/// with the list's rows striped in its focused `LibraryPanel` fill. The resting
+/// half of the same resolution is pinned by
+/// `wide_tests::unfocused_workspace_hero_renders_resting_surfaces`.
 #[test]
-fn overlay_sheet_and_workspace_box_paint_the_resting_pair() {
+fn overlay_sheet_and_workspace_box_paint_the_workspace_focus() {
     use crate::app::palette::{surface_colors, Surface};
     use tuirealm::event::{Key, KeyEvent};
 
@@ -1342,43 +1343,55 @@ fn overlay_sheet_and_workspace_box_paint_the_resting_pair() {
         "the overlay sheet carries the PillRow surface"
     );
 
-    // The Workspace box rests on the sheet: no cell in it resolves a
-    // focused fill while the Workspace holds focus.
+    // The Workspace box takes the focused `MainContentBox` fill while the
+    // Workspace holds focus. A whole-box "no resting cell" scan is no longer
+    // expressible: the selected row's bar shares the resting fill's value, so
+    // the box body's focused fill is proven on its own padding row below.
     let (box_panel, _) = panel_of(&harness)
         .and_then(|panel| panel.test_overlay_workspace_box())
         .expect("the overlay's Workspace box painted");
-    let focused_body = surface_colors(Surface::MainContentBox, true).fill;
-    let focused_stripe = surface_colors(Surface::LibraryPanel, true).fill;
-    for y in box_panel.top()..box_panel.bottom() {
-        for x in box_panel.left()..box_panel.right() {
-            let bg = buf[(x, y)].bg;
-            assert_ne!(
-                bg, focused_body,
-                "the Workspace box's body took a focused fill at ({x}, {y})"
-            );
-            assert_ne!(
-                bg, focused_stripe,
-                "the Workspace box's stripes took a focused fill at ({x}, {y})"
-            );
-        }
-    }
-
-    // The resting pair itself: the box's bottom padding row keeps the
-    // resting `MainContentBox` body fill and the row flow stripes with the
-    // resting `LibraryPanel` fill.
     let resting_body = surface_colors(Surface::MainContentBox, false).fill;
-    let resting_stripe = surface_colors(Surface::LibraryPanel, false).fill;
+    let focused_body = surface_colors(Surface::MainContentBox, true).fill;
+    assert_ne!(resting_body, focused_body);
+
+    // The box's body row carries the focused `MainContentBox` fill and the
+    // list's rows stripe with the Workspace's own focused `LibraryPanel`
+    // fill.
     assert_eq!(
         buf[(box_panel.x + 1, box_panel.bottom() - 1)].bg,
-        resting_body,
-        "the box's padding row keeps the resting MainContentBox body"
+        focused_body,
+        "the box's padding row carries the focused MainContentBox body"
     );
+    let focused_stripe = surface_colors(Surface::LibraryPanel, true).fill;
     let striped = (box_panel.top()..box_panel.bottom()).any(|y| {
-        (box_panel.left()..box_panel.right()).any(|x| buf[(x, y)].bg == resting_stripe)
+        (box_panel.left()..box_panel.right()).any(|x| buf[(x, y)].bg == focused_stripe)
     });
     assert!(
         striped,
-        "the Workspace box stripes its rows with the resting LibraryPanel fill"
+        "the Workspace box stripes its rows with the Workspace's focused LibraryPanel fill"
+    );
+
+    // The Queue column taking focus drops the same box to the resting fill
+    // while the overlay stays open: the box follows the Workspace's focus, not
+    // the overlay's existence.
+    harness.model_mut().app.panel_mode = PanelMode::Both;
+    harness.model_mut().app.terminal_width = 100;
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness.model_mut().sync_mounted_surfaces();
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "the overlay stays open while the Queue holds focus"
+    );
+    let (box_panel, _) = panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_workspace_box())
+        .expect("the overlay's Workspace box stays painted");
+    assert_eq!(
+        terminal.backend().buffer()[(box_panel.x + 1, box_panel.bottom() - 1)].bg,
+        resting_body,
+        "an unfocused Workspace box rests while the Queue holds focus"
     );
 }
 
@@ -1453,14 +1466,13 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     );
 }
 
-/// A narrow Music overlay whose album tracks are still fetching: opening
-/// cannot focus an empty Workspace, and the deferred track push never
-/// re-seizes the focus (only the open transition does); an explicit Enter
-/// takes it, Down then moves the track list (never the album browser), and
-/// the focus survives both a Queue focus round trip and a shell focus
-/// clear with its follow-up pushes.
+/// A narrow Music overlay whose album tracks are still fetching: the
+/// Workspace's rows arrive on a later sync pass and take the focus the open
+/// transition could not, so Down moves the track list (never the album
+/// browser) without a second Enter, and the focus survives a Queue focus
+/// round trip; an explicit shell focus clear still wins and stays won.
 #[test]
-fn late_overlay_workspace_focuses_once_and_keeps_its_keys() {
+fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
     use crate::app::components::MusicContent;
     use tuirealm::event::{Key, KeyEvent};
 
@@ -1513,28 +1525,22 @@ fn late_overlay_workspace_focuses_once_and_keeps_its_keys() {
         .insert("album-1".into(), tracks);
     harness.model_mut().sync_mounted_surfaces();
     assert!(
-        !harness
-            .model()
-            .library_owner::<MusicContent>(&music_key)
-            .expect("music owner installed")
-            .track_focused(),
-        "an ordinary push never re-seizes the overlay's workspace focus"
-    );
-
-    // The Workspace's own activation chord takes the focus the open
-    // transition could not (its rows were still empty).
-    harness.inject(Event::Keyboard(KeyEvent {
-        code: Key::Enter,
-        modifiers: KeyModifiers::NONE,
-    }));
-    let _ = harness.step();
-    assert!(
         harness
             .model()
             .library_owner::<MusicContent>(&music_key)
             .expect("music owner installed")
             .track_focused(),
-        "the Workspace's Enter takes the focus explicitly"
+        "the Workspace's arriving rows take the focus the open transition could not"
+    );
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .unwrap()
+            .selected_track_item()
+            .map(|track| track.id),
+        Some("track-1".into()),
+        "the arriving rows seed the cursor on the first track"
     );
 
     harness.inject(Event::Keyboard(KeyEvent {
@@ -1780,3 +1786,49 @@ fn stale_overlay_bit_never_shadows_wide_keyboard_handling() {
 /// pass.
 #[path = "tests_tick_integration_library_panel_hero.rs"]
 mod tests_tick_integration_library_panel_hero;
+
+/// The overlay's focused Workspace paints its cursor: every row of the
+/// canonical list that holds focus resolves the list's own focused emphasis
+/// (the selected row's bold title), and the Workspace box's own body fill
+/// follows the Workspace's focus as the Wide Hero pane's does.
+#[test]
+fn overlay_workspace_paints_its_cursor_row() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(6);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "the overlay is open in non-Wide geometry"
+    );
+    let (_, content) = panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_workspace_box())
+        .expect("the overlay's Workspace box painted");
+    // TV's Workspace carries no header row, so the only bar row inside the
+    // box's content is the cursor's own selected row.
+    let buf = terminal.backend().buffer();
+    let cursor_row = (content.top()..content.bottom()).find(|&y| {
+        (content.left()..content.right())
+            .any(|x| buf[(x, y)].bg == crate::app::palette::SELECTED_ROW_BG)
+    });
+    assert!(
+        cursor_row.is_some(),
+        "the overlay's focused Workspace must paint a visible cursor row"
+    );
+    let first_episode = find_text_in(buf, "Episode 1", content)
+        .expect("the first episode row paints")
+        .1;
+    assert_eq!(
+        cursor_row,
+        Some(first_episode),
+        "the cursor row is the Workspace's selected first episode"
+    );
+}

@@ -61,10 +61,7 @@ fn draw_pane(width: u16, height: u16, pane: &HeroContent<'_>) -> ratatui::buffer
                 0,
                 None,
                 &mut HitRegions::new(),
-                crate::app::components::library_panel::hero_composition::HeroPanePaint {
-                    surface: palette::Surface::HeroPane,
-                    workspace_follows_focus: true,
-                },
+                palette::Surface::HeroPane,
             );
         })
         .unwrap();

@@ -31,6 +31,11 @@
 //!     `SelectedRowOnQueueColumn` (`render/components/queue.rs:36`) or
 //!     `SelectedRowOnLibraryPane` (`tv_wide.rs:573-576`,
 //!     `music_wide.rs:537-538`).
+//!     NOTE (accepted selected-row bar): the selected-row painter now paints
+//!     the opaque `SELECTED_ROW_BG` bar for every selected row and
+//!     `selected_row_surface_color` ignores this family, so these
+//!     `SelectedRow*` rows no longer reach the screen; the family is kept for
+//!     the surface-table contract and pending cleanup.
 //! (c) **Cursor-driven sites** keep their predicate as the bit (D3(c)):
 //!     `tv_wide.rs:254` (`ctx.focused && ctx.episode_cursor.is_some()`),
 //!     `card.rs:245` (the queue column's focus), and the highlight gates of the

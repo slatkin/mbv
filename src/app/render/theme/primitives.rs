@@ -51,6 +51,10 @@ pub(super) const LIBRARY_SIDE_BG: Color = Color::Rgb(45, 53, 59); // library-sid
 pub(super) const PLAYBACK_PANEL_BG: Color = Color::Rgb(51, 60, 67); // now-playing panel background (#333c43)
 pub(super) const PLAYBACK_CONTENT_FG: Color = Color::Rgb(131, 192, 146); // playback title/codec value (#83c092)
 pub(super) const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metadata captions/time (#859289)
+/// The selected-row bar fill (#2d353b). A primitive of its own, not the
+/// library-side `LIBRARY_SIDE_BG`, so an edit to either can never move the bar.
+pub(super) const SELECTED_ROW_BAR: Color = Color::Rgb(45, 53, 59);
+
 pub(super) const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey for detail/label text (#6c766c)
 pub(super) const SOFT_WHITE: Color = Color::Rgb(244, 234, 211); // warm off-white (#f4ead3)
 pub(super) const PILL_SELECTOR_ROW_BG: Color = Color::Rgb(30, 35, 38); // pill-selector row background (#1e2326)

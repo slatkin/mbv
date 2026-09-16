@@ -10,7 +10,7 @@ mod wide_row_regression_tests {
     use super::wide::{
         render_wide_media_list, render_wide_media_list_component, render_wide_media_list_with_zebra,
     };
-    use super::wide_row_regression_tests_helpers::{item, paint, row_of};
+    use super::wide_row_regression_tests_helpers::{heading, item, paint, row_of};
     use crate::app::components::media_list::{
         MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState, WideMediaList,
         WideMediaListPaintPolicy, ZebraStripe,
@@ -382,8 +382,11 @@ mod wide_row_regression_tests {
         );
     }
 
+    /// A gutter-accent caller (`gutter_accent = true`) gets the same opaque
+    /// bar as any other list: the selected row fills the panel edge to edge
+    /// and keeps its ordinary foreground roles, with no bold title.
     #[test]
-    fn gutter_policy_selected_title_is_bold_selected_row() {
+    fn gutter_policy_selected_row_paints_the_bar_over_its_stripe() {
         let rect = Rect::new(0, 0, 32, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -400,45 +403,48 @@ mod wide_row_regression_tests {
                     rect,
                     &mut list,
                     true,
-                    palette::SURFACE_RESTING,
+                    palette::SELECTED_ROW_BG,
                     Some(Color::Rgb(60, 72, 65)),
                     true,
                 );
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        // The selected title paints in the selected-row role, bold; no icon and
-        // no selected background; the duration keeps the default colour.
+        // The selected title keeps the ordinary emphasis role (no bold) and
+        // the duration keeps its own green; the bar replaces the row's stripe
+        // and reaches both panel edges.
         assert_eq!(buf[(0, 1)].symbol(), " ");
-        assert_eq!(buf[(2, 1)].fg, palette::TEXT_SELECTED_ROW);
-        assert!(buf[(2, 1)].modifier.contains(Modifier::BOLD));
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_EMPHASIS);
+        assert!(!buf[(2, 1)].modifier.contains(Modifier::BOLD));
         assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
-        assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);
-        // The unselected first item keeps the primary fill (a one-row group
-        // never stripes), and the selected second item keeps its zebra stripe
-        // under the gutter accent.
+        for x in 0..rect.width {
+            assert_eq!(buf[(x, 1)].bg, palette::SELECTED_ROW_BG, "bar at x={x}");
+        }
+        // The unselected first item keeps the primary fill.
         assert_eq!(buf[(2, 0)].bg, Color::Reset);
-        assert_eq!(buf[(2, 1)].bg, Color::Rgb(60, 72, 65));
     }
 
-    /// One zebra sequence runs down the visible window: group headings and
-    /// blank spacers take their place in the alternation like any item, so a
-    /// group never restarts the pattern. The sequence opens on the primary
-    /// fill, and every row confines its stripe to the shared text-flow range
-    /// inside the two-column gutters.
+    /// A grouped list fills its content rows with the secondary colour under its
+    /// surface-coloured `Heading`/`Spacer` labels and alternates within each
+    /// group: every second member carries the surface fill instead, whatever the
+    /// group's size. Every content row still confines its fill to the shared
+    /// text-flow range inside the two-column gutters.
     #[test]
-    fn library_wide_browser_stripes_through_group_headings_and_spacers() {
-        let rect = Rect::new(0, 0, 40, 6);
+    fn library_wide_grouped_lists_alternate_from_the_secondary_fill() {
+        let rect = Rect::new(0, 0, 40, 11);
         let mut list = WideMediaList::new();
         list.set_content(vec![
-            item("one", "One", None),
-            MediaListRow::Heading {
-                text: "Group".into(),
-            },
-            item("two", "Two", None),
+            heading("A"),
+            item("a1", "A1", None),
+            item("a2", "A2", None),
+            item("a3", "A3", None),
             MediaListRow::Spacer,
-            item("three", "Three", None),
-            item("four", "Four", None),
+            heading("B"),
+            item("b1", "B1", None),
+            item("b2", "B2", None),
+            MediaListRow::Spacer,
+            heading("C"),
+            item("c1", "C1", None),
         ]);
         let pair = stripe(palette::Surface::MainContentBox);
         let other = stripe(palette::Surface::LibraryPanel);
@@ -456,15 +462,36 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        // Rows 1 (the heading) and 3 (the spacer) are striped with the items.
+        // Every group alternates from its own first member: group A's second
+        // member and group B's second member drop to the surface fill, and the
+        // membership count never matters -- group B's two members and group C's
+        // single member alternate like any other. The headers (0, 5, 9) and the
+        // separators (4, 8) keep the surface fill.
         for (y, striped) in [
             (0, false),
             (1, true),
             (2, false),
             (3, true),
             (4, false),
-            (5, true),
+            (5, false),
+            (6, true),
+            (7, false),
+            (8, false),
+            (9, false),
+            (10, true),
         ] {
+            if y == 1 {
+                // The cursor's own row paints the opaque bar across the whole
+                // panel, overriding both its stripe and the gutters.
+                for x in 0..rect.width {
+                    assert_eq!(
+                        buffer[(x, y)].bg,
+                        palette::SELECTED_ROW_BG,
+                        "cursor row {x}"
+                    );
+                }
+                continue;
+            }
             assert_eq!(
                 buffer[(2, y)].bg,
                 if striped { pair.focused } else { Color::Reset },
@@ -475,6 +502,54 @@ mod wide_row_regression_tests {
             assert_eq!(buffer[(38, y)].bg, Color::Reset, "row {y} right inset");
             assert_eq!(buffer[(39, y)].bg, Color::Reset, "row {y} right inset");
         }
+    }
+
+    /// An ungrouped list keeps its alternation, counted from its own first row:
+    /// a stripe is a property of the row, not of the screen row it lands on, so
+    /// scrolling never flips the stripes under the cursor.
+    #[test]
+    fn library_wide_ungrouped_stripes_follow_the_row_not_the_screen_row() {
+        let rect = Rect::new(0, 0, 40, 4);
+        let mut list = WideMediaList::new();
+        let rows: Vec<_> = (1..=11)
+            .map(|index| item(&format!("i{index}"), &format!("I{index}"), None))
+            .collect();
+        list.set_content(rows);
+        // The window opens on source row 7 (the last row is selected, so the
+        // first seven are off-screen): the first visible row carries the stripe,
+        // where the window-relative sequence would have striped the row below
+        // it instead.
+        list.select_last();
+        let pair = stripe(palette::Surface::MainContentBox);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list_component(
+                    f,
+                    rect,
+                    &mut list,
+                    WideMediaListPaintPolicy::new(true).with_zebra(pair),
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        // The window really opens mid-list: the first rows are scrolled off, so
+        // the stripes below prove the row's own parity rather than the
+        // window's.
+        let painted: String = (0..12).map(|x| buffer[(x, 0)].symbol()).collect();
+        assert!(
+            !painted.trim_start().starts_with("I1"),
+            "row 1 is off-screen"
+        );
+        assert!(
+            painted.trim_start().starts_with("I8"),
+            "the window opens on the eighth row, not the first"
+        );
+        assert_eq!(buffer[(2, 0)].bg, pair.focused, "source row 7");
+        assert_eq!(buffer[(2, 1)].bg, Color::Reset, "source row 8");
+        assert_eq!(buffer[(2, 2)].bg, pair.focused, "source row 9");
+        // Source row 10 is the selected row: the bar overrides its stripe.
+        assert_eq!(buffer[(2, 3)].bg, palette::SELECTED_ROW_BG, "source row 10");
     }
 
     #[test]
@@ -503,22 +578,21 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        // The sequence opens on the primary fill: rows 1 and 3 carry the
-        // stripe.
-        assert_eq!(buffer[(2, 0)].bg, Color::Reset);
+        // The selected first row paints the bar; the sequence then opens on
+        // the primary fill, so rows 1 and 3 carry the stripe.
+        assert_eq!(buffer[(2, 0)].bg, palette::SELECTED_ROW_BG);
         assert_eq!(buffer[(2, 1)].bg, pair.focused);
         assert_eq!(buffer[(2, 2)].bg, Color::Reset);
         assert_eq!(buffer[(2, 3)].bg, pair.focused);
     }
 
     #[test]
-    fn library_wide_accent_keeps_selected_stripe_and_unfocused_rows_plain() {
+    fn library_wide_selected_row_paints_the_bar_over_its_stripe() {
         let rect = Rect::new(0, 0, 40, 4);
         let pair = stripe(palette::Surface::MainContentBox);
         let mut selected = WideMediaList::new();
         selected.set_content(vec![item("one", "One", None), item("two", "Two", None)]);
-        // The sequence's second row carries the stripe, so the accent has to
-        // leave that stripe in place.
+        // The sequence's second row carries the stripe, and the bar replaces it.
         selected.select_last();
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
@@ -531,13 +605,17 @@ mod wide_row_regression_tests {
                 );
             })
             .unwrap();
-        let cell = &terminal.backend().buffer()[(2, 1)];
-        assert_eq!(cell.fg, palette::TEXT_SELECTED_ROW);
-        assert!(cell.modifier.contains(Modifier::BOLD));
-        assert_eq!(cell.bg, pair.focused);
-        assert_eq!(terminal.backend().buffer()[(0, 1)].bg, Color::Reset);
-        assert_eq!(terminal.backend().buffer()[(2, 0)].bg, Color::Reset);
+        let buffer = terminal.backend().buffer();
+        let cell = &buffer[(2, 1)];
+        assert_eq!(cell.fg, palette::TEXT_EMPHASIS);
+        assert!(!cell.modifier.contains(Modifier::BOLD));
+        for x in 0..rect.width {
+            assert_eq!(buffer[(x, 1)].bg, palette::SELECTED_ROW_BG, "bar at x={x}");
+        }
+        assert_eq!(buffer[(2, 0)].bg, Color::Reset);
 
+        // An unfocused list paints no bar at all: the rows keep their own
+        // ordinary and zebra fills.
         let mut unfocused = WideMediaList::new();
         unfocused.set_content(vec![item("one", "One", None), item("two", "Two", None)]);
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
@@ -551,16 +629,13 @@ mod wide_row_regression_tests {
                 );
             })
             .unwrap();
-        for y in 0..2 {
-            let cell = &terminal.backend().buffer()[(2, y)];
-            assert_ne!(cell.fg, palette::TEXT_SELECTED_ROW);
-        }
-        assert_eq!(terminal.backend().buffer()[(2, 1)].bg, pair.unfocused);
-        assert_eq!(terminal.backend().buffer()[(2, 0)].bg, Color::Reset);
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer[(2, 1)].bg, pair.unfocused);
+        assert_eq!(buffer[(2, 0)].bg, Color::Reset);
     }
 
     #[test]
-    fn non_adjacent_multi_selected_rows_take_accent_with_own_stripe() {
+    fn non_adjacent_multi_selected_rows_paint_the_bar() {
         let rect = Rect::new(0, 0, 32, 4);
         let pair = stripe(palette::Surface::MainContentBox);
         let mut list: WideMediaList<String> = WideMediaList::new();
@@ -585,18 +660,16 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        // Every accented row keeps the fill its own stripe parity resolves to:
-        // rows 1 and 3 are the sequence's striped rows, while the first row
-        // (the initial selection) is the sequence's primary fill.
-        for y in [1, 3] {
-            assert_eq!(buf[(2, y)].fg, palette::TEXT_SELECTED_ROW);
-            assert!(buf[(2, y)].modifier.contains(Modifier::BOLD));
-            assert_eq!(buf[(2, y)].bg, pair.unfocused);
-            assert_eq!(buf[(0, y)].bg, Color::Reset);
+        // The list is unfocused, so only the selected rows paint: the cursor's
+        // own first row plus the two toggled rows each fill the whole row with
+        // the bar and keep their ordinary foreground.
+        for y in [0, 1, 3] {
+            assert_eq!(buf[(2, y)].fg, palette::TEXT_EMPHASIS);
+            assert!(!buf[(2, y)].modifier.contains(Modifier::BOLD));
+            for x in 0..rect.width {
+                assert_eq!(buf[(x, y)].bg, palette::SELECTED_ROW_BG, "row {y} x={x}");
+            }
         }
-        assert_eq!(buf[(2, 0)].fg, palette::TEXT_SELECTED_ROW);
-        assert_eq!(buf[(2, 0)].bg, Color::Reset);
-        assert_ne!(buf[(2, 2)].fg, palette::TEXT_SELECTED_ROW);
         assert_eq!(buf[(2, 2)].bg, Color::Reset);
     }
 
@@ -1067,6 +1140,10 @@ mod wide_row_regression_tests_helpers {
         duration: Option<String>,
     ) -> MediaListRow<String> {
         row_of(target, primary, duration, MediaKind::Media)
+    }
+
+    pub(super) fn heading(text: &str) -> MediaListRow<String> {
+        MediaListRow::Heading { text: text.into() }
     }
 
     pub(super) fn row_of(
