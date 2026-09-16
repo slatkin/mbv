@@ -60,6 +60,34 @@ pub(in crate::app) struct HeroArtwork {
     pub image: HeroImageState,
 }
 
+impl HeroArtwork {
+    /// The shape of the artwork that will actually paint: the declared
+    /// policy shape until the projection has decoded the fetched image,
+    /// then the decoded source's own pixel-aspect class — wider than 5:4
+    /// stays Landscape, near-square (between 4:5 and 5:4) is Square, and
+    /// anything taller is Portrait. A declared landscape image the provider
+    /// cannot serve (the fetch chain falls through to the `Primary` poster)
+    /// therefore re-arms the side-by-side layout instead of painting a
+    /// portrait poster — uncropped in the overlay, cover-cropped in Wide —
+    /// inside a 16:9 box; genuinely 16:9 artwork keeps the Landscape arm.
+    pub(in crate::app) fn painted_shape(&self) -> ArtworkShape {
+        let decoded = match &self.image {
+            HeroImageState::Ready { decoded, .. } => *decoded,
+            _ => None,
+        };
+        let Some((w, h)) = decoded else {
+            return self.shape;
+        };
+        if w * 4 >= h * 5 {
+            ArtworkShape::Landscape
+        } else if w * 5 > h * 4 {
+            ArtworkShape::Square
+        } else {
+            ArtworkShape::Portrait
+        }
+    }
+}
+
 /// The projection's image state for one hero (task 5.10, design D9): the
 /// fetch/encode runs in the shell projection; painting reads this state only.
 #[derive(Clone, Debug, Eq, PartialEq)]

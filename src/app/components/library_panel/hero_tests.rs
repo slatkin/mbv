@@ -204,6 +204,38 @@ fn series_landscape_keeps_the_series_cache_key_namespace() {
     }
 }
 
+/// The painted-shape agreement (the user's side-by-side fix): a series whose
+/// policy pins Landscape from a declared thumb but whose fetch chain resolves
+/// the portrait `Primary` poster re-arms Portrait — the artwork that will
+/// actually paint governs the layout. Loading/None keep the declared arm
+/// stable before the image loads.
+#[test]
+fn landscape_declared_series_with_a_portrait_poster_painted_agrees_on_portrait() {
+    let item = emby_item(json!({
+        "Id": "s1", "Name": "Lost", "Type": "Series",
+        "ImageTags": { "Thumb": "thumb", "Primary": "poster" }, "UserData": {}
+    }));
+    let mut artwork = emby_artwork_policy(&item);
+    assert_eq!(shape(&artwork), ArtworkShape::Landscape);
+    // Before the projection resolves, the declared arm stands.
+    assert_eq!(artwork.painted_shape(), ArtworkShape::Landscape);
+    // The chain's landscape image is unserveable and the fetch resolves the
+    // poster: the decoded portrait aspect re-arms the painted shape.
+    artwork.image = HeroImageState::Ready {
+        cache_key: "k".into(),
+        decoded: Some((200, 300)),
+    };
+    assert_eq!(artwork.painted_shape(), ArtworkShape::Portrait);
+    // A genuinely 16:9 thumb keeps the Landscape arm.
+    artwork.image = HeroImageState::Ready {
+        cache_key: "k".into(),
+        decoded: Some((1600, 900)),
+    };
+    assert_eq!(artwork.painted_shape(), ArtworkShape::Landscape);
+    artwork.image = HeroImageState::Loading;
+    assert_eq!(artwork.painted_shape(), ArtworkShape::Landscape);
+}
+
 #[test]
 fn item_without_declared_artwork_falls_back_to_landscape_placeholder() {
     let item = emby_item(json!({ "Id": "v1", "Name": "Video", "Type": "Movie", "UserData": {} }));
