@@ -42,9 +42,8 @@ impl Component for LibraryPanel {
         let mut hits = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
         // One breakpoint predicate (design D4): `wide_hero_fits` stays the
-        // single Wide/Narrow choice; the panel drives the presentation
-        // transition through the list's `set_presentation` inside each
-        // skeleton.
+        // single Wide/Narrow choice; the panel clamps the list's viewport
+        // through the list's `sync_viewport` inside each skeleton.
         if wide_hero_fits(area) {
             if let Some(geometry) = render_wide_skeleton(
                 frame,
@@ -87,17 +86,61 @@ impl Component for LibraryPanel {
             );
             self.narrow_geometry = Some(geometry.clone());
         }
+        // Paint the Library-local overlay after the ordinary skeleton. The
+        // shared Hero path therefore remains the sole content painter.
+        if self.hero_overlay_open {
+            if let Some(overlay_rect) =
+                crate::app::render::arrangements::library::library_hero_overlay(area)
+            {
+                let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, area, overlay_rect);
+                if let Some(hero) = content.hero.as_mut() {
+                    let composition = super::super::hero_composition::paint_library_hero_content(
+                        frame,
+                        inner,
+                        hero,
+                        overview_scroll,
+                        self.hovered_link,
+                        &mut hits.links,
+                        &mut hits.workspace_selector,
+                        &mut windows.workspace_selector,
+                    );
+                    self.overlay_geometry = Some(super::OverlayGeometry {
+                        pane: area,
+                        frame: overlay_rect,
+                        hero: composition,
+                    });
+                } else {
+                    // A target may arrive one projection before its Hero
+                    // snapshot while provider detail is loading. Keep the
+                    // visible overlay/frame and its hit boundary alive rather
+                    // than silently falling back to the covered browser.
+                    self.overlay_geometry = Some(super::OverlayGeometry {
+                        pane: area,
+                        frame: overlay_rect,
+                        hero: super::super::hero_composition::HeroCompositionGeometry {
+                            workspace: None,
+                            hero_image: None,
+                            overview_box: None,
+                            overview_content_length: 0,
+                            overview_viewport: 0,
+                        },
+                    });
+                }
+            }
+        }
         // The projected hero image's reserved box (task 5.10, design D9): the
         // shell paints the protocol into it right after view returns.
-        self.image_paint = self
-            .wide_geometry
-            .as_ref()
-            .and_then(|geometry| geometry.hero_image.clone())
-            .or_else(|| {
-                self.narrow_geometry
-                    .as_ref()
-                    .and_then(|geometry| geometry.inline_hero_image.clone())
-            });
+        self.image_paint = if self.hero_overlay_open {
+            // The overlay owns the covered Hero surface while open; never
+            // project the underlying browser image into its dimmed frame.
+            self.overlay_geometry
+                .as_ref()
+                .and_then(|geometry| geometry.hero.hero_image.clone())
+        } else {
+            self.wide_geometry
+                .as_ref()
+                .and_then(|geometry| geometry.hero_image.clone())
+        };
         self.hits = hits;
         self.pill_windows = windows;
         self.painted_area = Some(area);
@@ -132,12 +175,38 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
             // mounted destination did. The router keeps precedence — this is
             // not a second resolution site, only delivery.
             Event::Keyboard(key) if self.focused => {
-                // Focus is panel-owned; keep the embedded owner's derived
-                // focus bit aligned before translating its local chord.
-                self.owners
+                if key.modifiers.is_empty()
+                    && key.code == tuirealm::event::Key::Esc
+                    && self.hero_overlay_open
+                {
+                    self.dismiss_hero_overlay();
+                    return LeafKeyResult::Consumed(None).into_option();
+                }
+                if key.modifiers.is_empty()
+                    && key.code == tuirealm::event::Key::Enter
+                    && !self.hero_overlay_open
+                    && self.narrow_geometry.is_some()
+                {
+                    if let Some(message) = self.open_hero_from_browser(None) {
+                        return Some(message);
+                    }
+                }
+                let result = self
+                    .owners
                     .active_mut()
-                    .map(|owner| owner.on_key_result(key).into_option())
-                    .unwrap_or(None)
+                    .map(|owner| owner.on_key_result(key))
+                    .unwrap_or(LeafKeyResult::Unhandled);
+                let hero_overlay_resolvable = self.hero_overlay_open
+                    && self
+                        .owners
+                        .active_mut()
+                        .is_some_and(|owner| owner.hero_overlay_available());
+                if hero_overlay_resolvable && matches!(result, LeafKeyResult::Unhandled) {
+                    return Some(Msg::TerminalEvent(
+                        crate::app::components::msg::TerminalObserverEvent::KeyClaimed,
+                    ));
+                }
+                result.into_option()
             }
             _ => None,
         }

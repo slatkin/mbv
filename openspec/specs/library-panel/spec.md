@@ -10,30 +10,22 @@ panel is composed.
 
 ### Requirement: Every library destination renders through one Library panel skeleton
 
-Home, Movies, Emby home videos, TV shows, grouped Music, Audiobookshelf Books, Audiobookshelf Podcasts
-and Feeds SHALL each render through the same Library panel: the Wide library panel when the shared
-Wide width and minimum-height conditions are met, and the Narrow library panel otherwise. The panel
-SHALL own every row, pane, fill, border, gap, inset and placeholder position. A destination SHALL
-supply only typed content for the panel's slots and SHALL NOT paint outside a slot, add a slot, or
-select an alternative skeleton, pane order, fill, inset or border.
+Home, Movies, Emby home videos, TV shows, grouped Music, Audiobookshelf Books, Audiobookshelf Podcasts and Feeds SHALL each render through the same Library panel: the Wide library panel when the shared Wide width and minimum-height conditions are met, and the non-Wide library panel otherwise. The panel SHALL own every row, pane, fill, border, gap, inset, overlay and placeholder position. A destination SHALL supply only typed content for the panel's slots and SHALL NOT paint outside a slot, add a slot, or select an alternative skeleton, pane order, fill, inset, border, or overlay placement.
 
-A slot a destination does not fill SHALL render as absent in the same way on every destination. Two
-destinations supplying the same kind of content SHALL render it identically at the same geometry.
+A slot a destination does not fill SHALL render as absent in the same way on every destination. Two destinations supplying the same kind of content SHALL render it identically at the same geometry. In non-Wide geometry the Browser pane SHALL show ordinary fixed-height canonical rows; selected-row replacement and Inline hero SHALL NOT render.
 
 #### Scenario: Two destinations with the same slot content
-- **WHEN** two library destinations supply the same kind of content for the same slots at the same
-  terminal size
+- **WHEN** two library destinations supply the same kind of content for the same slots at the same terminal size
 - **THEN** their panes, rows, fills, borders and insets occupy the same cells with the same surfaces
 
 #### Scenario: A destination has no content for an optional slot
 - **WHEN** a destination supplies no List controls row content
-- **THEN** no List controls row renders and the rows below move up exactly as on every other
-  destination without that content
+- **THEN** no List controls row renders and the rows below move up exactly as on every other destination without that content
 
 #### Scenario: The breakpoint is crossed
 - **WHEN** the terminal crosses the shared Wide conditions in either direction
-- **THEN** every library destination switches between the Wide and Narrow library panel at the same
-  width and height
+- **THEN** every library destination switches between the Wide two-pane panel and the non-Wide standard-list panel at the same width and height
+- **AND** no selected row changes height during that transition
 
 ### Requirement: Emby screens are the reference presentation
 
@@ -101,8 +93,13 @@ for every item wherever it appears (including Home rows), and never selected by 
   shared placeholder.
 
 Availability SHALL be decided from provider metadata before any image is fetched, so the header type
-does not change when the image arrives. The image the policy chooses SHALL be the same image for that
-item in the Wide header and the Narrow inline hero.
+does not depend on fetched pixels for its initial arm. The image the policy chooses SHALL be the same
+image for that item in the Wide header and the Library Hero overlay. When the chosen image decodes,
+the header SHALL re-arm from the painted artwork's aspect: roughly landscape-decoding artwork keeps
+the Landscape arm, squarish artwork re-arms to Square, and portrait artwork re-arms to Portrait —
+so a landscape-declared thumbnail that resolves to a portrait poster paints the Portrait arm instead
+of cover-cropping the poster into a landscape box. Until an image decodes, the declared policy shape
+holds.
 
 The header SHALL render title and metadata through one presentation for all three types. Metadata is
 an ordered list of plain-text rows supplied by the destination; the panel SHALL colour row *n* with
@@ -139,6 +136,12 @@ vertical space is constrained, the artwork SHALL shrink before a Workspace list 
 - **WHEN** a video Feeds entry with no artwork is selected at Wide geometry
 - **THEN** a Landscape header renders with the shared placeholder in its artwork box
 
+#### Scenario: A landscape-declared thumbnail decodes to a portrait poster
+- **WHEN** an item's artwork policy declares Landscape artwork but the decoded image's aspect is
+  portrait
+- **THEN** the header re-arms to the Portrait arm once the image is ready, instead of cover-cropping
+  the poster into the landscape box
+
 #### Scenario: Metadata rows are coloured by position
 - **WHEN** a header shows four metadata rows
 - **THEN** rows one to three use the first, second and third metadata colours and row four uses the
@@ -166,8 +169,6 @@ encodes an image larger than the box that paints it.
 Smaller-space constraints SHALL still apply on top of the cap. A header in a pane that offers fewer
 rows, or whose box is shrunk by a present Workspace or by the Landscape text block's room, SHALL use
 that smaller height.
-
-The Narrow inline hero SHALL be unaffected by this cap.
 
 #### Scenario: A tall Wide pane with a Portrait header
 - **WHEN** a Portrait header renders in a Wide Hero pane with more than 20 rows available for artwork
@@ -287,8 +288,7 @@ indicator SHALL paint at the box's right edge only while the flow overflows. The
 be component-local (owned by the Library
 panel's destination owner), clamped at both ends against the whole flow's length, and reset when the
 shown item changes. The table
-SHALL render only in the
-Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
+SHALL render only in the Wide Hero pane.
 
 #### Scenario: A Movie with one director and a full cast
 
@@ -407,33 +407,91 @@ under it.
 
 ### Requirement: Narrow inline hero has one form
 
-In the Narrow library panel, the selected item's inline hero SHALL render one form for every
-destination, derived by the panel from the same hero content the Wide panel uses: the image chosen by
-the artwork policy right-aligned with a size derived from its aspect, and title, the metadata rows
-(coloured as in Wide) and overview wrapping around it, continuing at full width below the image. The
-Wide Hero header types SHALL NOT apply in Narrow, and no destination SHALL supply a separate Narrow
-hero. The inline hero SHALL NOT contain Selector rows, List controls,
-or constituent-item rows.
+The Narrow inline hero form is removed. In every non-Wide Library panel, the selected item SHALL remain an ordinary fixed-height canonical media row until the user opens the Library Hero overlay. No destination SHALL supply or paint a separate non-Wide Hero form.
 
 #### Scenario: Narrow Movie and Narrow Audiobookshelf podcast
-- **WHEN** a Movie and an Audiobookshelf podcast are each selected in the Narrow panel
-- **THEN** both inline heroes render their image right-aligned with text wrapping around it
+
+- **WHEN** a Movie and an Audiobookshelf podcast are each selected where the Wide Hero arrangement does not fit
+- **THEN** both remain ordinary fixed-height media rows
+- **AND** no Hero content replaces either row
 
 #### Scenario: Narrow landscape artwork
-- **WHEN** the selected item's image is a 16:9 thumbnail in the Narrow panel
-- **THEN** it renders right-aligned with wrap-around text, not in a right-half meta column
 
-### Requirement: Narrow workspace lists open only as the selection modal
+- **WHEN** an item with landscape artwork is selected where the Wide Hero arrangement does not fit
+- **THEN** its artwork does not render inside or beside the selected browser row
+- **AND** opening its Library Hero overlay presents the artwork through the shared Hero content
 
-In the Narrow library panel, a selected item's constituent items SHALL be reachable only through the
-shared constituent-list selection modal, for every destination.
+### Requirement: Narrow workspace lists open only through the Library Hero overlay
+
+The Narrow constituent-list selection modal is removed. In every non-Wide Library panel, constituent items SHALL be reachable through the selected parent's Library Hero overlay, whose Workspace uses the same canonical list and provider-owned content as Wide Hero.
 
 #### Scenario: Narrow Audiobookshelf book
-- **WHEN** an Audiobookshelf book is selected in the Narrow panel
-- **THEN** no chapter rows render inside its inline hero
-- **AND** Enter opens the selection modal listing its chapters
+
+- **WHEN** an Audiobookshelf book is selected where the Wide Hero arrangement does not fit
+- **THEN** no chapter rows render inside the browser list
+- **AND** Enter opens the Library Hero overlay with its chapter Workspace focused
 
 #### Scenario: Narrow Audiobookshelf podcast
+- **WHEN** an Audiobookshelf podcast show is selected where the Wide Hero arrangement does not fit
+- **THEN** no filter pills or episode rows render inside the browser list
+- **AND** Enter opens the Library Hero overlay with its episode Workspace focused
+
+### Requirement: The non-Wide library panel body has one fill authority
+
+In non-Wide geometry the library column's own body fill SHALL resolve one named surface identity at
+every site that paints it — the panel placement, the Selector row's spacer row, and the status band's
+padding rows — rather than each site resolving an identity of its own. The identity SHALL follow the
+library panel's focus bit: while the panel holds focus it SHALL paint the focused content-body fill
+(`#3c4841`), and while it does not it SHALL paint the app backdrop (`#2d353b`). The status row inside
+the status band SHALL remain the status bar's own surface, and the identity SHALL NOT be reachable
+from Wide geometry.
+
+#### Scenario: A focused non-Wide library paints one body tone
+
+- **WHEN** the library panel renders in non-Wide geometry with the library panel focused
+- **THEN** the panel placement, the Selector row's spacer row and the status band's padding rows all
+  carry `#3c4841`
+- **AND** the status row keeps the status bar's own surface
+
+#### Scenario: A resting non-Wide library keeps its previous fill
+
+- **WHEN** the library panel renders in non-Wide geometry without library focus
+- **THEN** the panel placement, the Selector row's spacer row and the status band's padding rows all
+  carry `#2d353b`
+- **AND** they are unchanged from the fill the library column painted before this capability
+
+#### Scenario: Wide keeps its own column fill
+
+- **WHEN** the library panel renders in Wide geometry, focused or not
+- **THEN** the library column paints its fixed backdrop in both focus states
+- **AND** no part of the Wide skeleton resolves the non-Wide body identity
+
+#### Scenario: Mini follows the non-Wide presentation
+
+- **WHEN** the terminal is narrow enough for the mini view
+- **THEN** the library paints the non-Wide body identity with the focus bit, exactly as Narrow does
+- **AND** there is no Mini-specific paint bit or resting-only override
+
+### Requirement: The non-Wide list panel is inset inside its own surface
+
+The non-Wide list panel SHALL keep the whole list slot as its claim and take its rows from a row flow
+inset by one spacer row above and below (`PANE_PAD_Y`). Those spacer rows SHALL belong to the inset's
+own surface, not to the surrounding panel body. The geometry the panel reads back for row
+arithmetic, hit resolution and menu placement SHALL be the inset the rows occupy. A list slot with no
+rows to spare SHALL keep a single row rather than collapsing.
+
+#### Scenario: The inset's spacer rows carry the inset's fill
+
+- **WHEN** the non-Wide list panel renders focused
+- **THEN** the spacer row above and below the rows carry the inset's own focused fill (`#48584e`)
+- **AND** the surrounding panel body keeps its own fill
+
+#### Scenario: Retained geometry is the row flow
+
+- **WHEN** the non-Wide list panel has painted
+- **THEN** the retained list geometry, its selected-row rect and the resolved hit region agree with
+  the inset the rows were painted in
+
 - **WHEN** an Audiobookshelf podcast show is selected in the Narrow panel
 - **THEN** no filter pills or episode rows render inside its inline hero
 - **AND** Enter opens the selection modal listing its episodes
@@ -469,12 +527,8 @@ Logo decoration SHALL NOT appear on Portrait Wide artwork, Narrow inline artwork
 - **WHEN** a Movie with a declared Logo uses the Portrait Hero header at Wide geometry
 - **THEN** its portrait artwork remains undecorated
 
-#### Scenario: Movie uses inline artwork
-
-- **WHEN** a Movie with a declared Logo is shown in the Narrow inline presentation
-- **THEN** its artwork remains undecorated
-
 #### Scenario: Ineligible hero content
 
 - **WHEN** the shown hero is not a Movie, has no declared Logo, has no loaded base artwork, or uses the shared placeholder
 - **THEN** no Logo request or decoration changes that hero's presentation
+

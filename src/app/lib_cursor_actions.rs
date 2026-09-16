@@ -1,57 +1,5 @@
-use super::{
-    App, SelectionModalFilter, SelectionModalListState, SelectionModalRow, SelectionModalSource,
-};
-use crate::app::types_selection_modal::SelectionModalItem;
-use crate::app::ui_util::fmt_duration_approx;
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
-
-pub(super) fn series_season_pill_labels(detail: &super::SeriesDetail) -> Vec<String> {
-    detail
-        .seasons
-        .iter()
-        .enumerate()
-        .map(|(index, season)| {
-            let number = if season.index_number > 0 {
-                season.index_number as usize
-            } else {
-                index + 1
-            };
-            format!("{number:02}")
-        })
-        .collect()
-}
-
-pub(super) fn series_modal_state_for_season(
-    detail: &super::SeriesDetail,
-    season_index: usize,
-) -> SelectionModalListState {
-    let Some(season) = detail.seasons.get(season_index) else {
-        return SelectionModalListState::Empty;
-    };
-    let Some(episodes) = detail.episodes.get(&season.id) else {
-        return SelectionModalListState::Loading;
-    };
-    let rows = std::iter::once(SelectionModalRow::Header(season.display_name()))
-        .chain(episodes.iter().enumerate().map(|(index, episode)| {
-            let number = if episode.index_number > 0 {
-                episode.index_number as usize
-            } else {
-                index + 1
-            };
-            let meta = if episode.runtime_ticks > 0 {
-                fmt_duration_approx(episode.runtime_ticks / TICKS_PER_SECOND)
-            } else {
-                String::new()
-            };
-            SelectionModalRow::Item(SelectionModalItem {
-                name: format!("{number}. {}", episode.name),
-                meta,
-                id: episode.id.clone(),
-            })
-        }))
-        .collect();
-    SelectionModalListState::ready(rows)
-}
+use super::{App, SeriesDetail};
+use mbv_core::api::EmbyItem;
 
 impl App {
     pub(super) fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
@@ -81,77 +29,52 @@ impl App {
         self.fetch_series_detail(item.id.clone());
     }
 
-    /// Opens the Series constituent-list modal (design.md Decision 7): one
-    /// flat scrollable list with a non-selectable `Header` row per season
-    /// and selectable episode `Item` rows beneath it. Ensures the series
-    /// detail is fetched, mirroring `enter_series_selection`; if it hasn't
-    /// landed in `series_detail_cache` yet, opens with a loading placeholder
-    /// instead of episode rows.
-    pub(super) fn open_series_selection_modal(&mut self, item: &EmbyItem) {
-        let season_index = 0;
-        if self.series_detail_cache.contains_key(&item.id) {
-            let season_id = self
-                .series_detail_cache
-                .get(&item.id)
-                .and_then(|detail| detail.seasons.get(season_index))
-                .map(|season| season.id.clone());
-            if let Some(season_id) = season_id {
-                if !self
-                    .series_detail_cache
-                    .get(&item.id)
-                    .is_some_and(|detail| detail.episodes.contains_key(&season_id))
-                {
-                    self.fetch_series_season_episodes(item.id.clone(), season_id);
-                }
-            }
-        } else {
-            self.fetch_series_detail(item.id.clone());
+    pub(super) fn handle_series_detail_fetched(&mut self, series_id: String, detail: SeriesDetail) {
+        self.series_detail_cache.insert(series_id.clone(), detail);
+        self.series_detail_loading.remove(&series_id);
+        let first_season_id = self
+            .series_detail_cache
+            .get(&series_id)
+            .and_then(|detail| detail.seasons.first())
+            .map(|season| season.id.clone());
+        if let Some(season_id) = first_season_id {
+            self.fetch_series_season_episodes(series_id.clone(), season_id);
+            self.refresh_series_detail_loading(&series_id);
         }
-        let (state, filter) = match self.series_detail_cache.get(&item.id) {
-            Some(detail) => (
-                series_modal_state_for_season(detail, season_index),
-                Some(SelectionModalFilter {
-                    labels: series_season_pill_labels(detail),
-                    selected: season_index.min(detail.seasons.len().saturating_sub(1)),
-                }),
-            ),
-            None => (SelectionModalListState::Loading, None),
-        };
-        self.open_selection_modal(
-            SelectionModalSource::Series {
-                series_id: item.id.clone(),
-            },
-            item.display_name(),
-            state,
-            filter,
-        );
     }
 
-    pub(super) fn select_series_selection_modal_season(
+    pub(super) fn handle_series_season_episodes_fetched(
         &mut self,
         series_id: String,
-        season_index: usize,
+        season_id: String,
+        episodes: Vec<EmbyItem>,
     ) {
-        let Some(detail) = self.series_detail_cache.get(&series_id).cloned() else {
+        let key = (series_id.clone(), season_id.clone());
+        self.series_season_loading.remove(&key);
+        let Some(detail) = self.series_detail_cache.get_mut(&series_id) else {
+            self.refresh_series_detail_loading(&series_id);
             return;
         };
-        if detail.seasons.is_empty() {
-            self.refresh_selection_modal(
-                SelectionModalSource::Series { series_id },
-                SelectionModalListState::Empty,
-                None,
-            );
+        if !detail.seasons.iter().any(|season| season.id == season_id)
+            || detail.episodes.contains_key(&season_id)
+        {
+            self.refresh_series_detail_loading(&series_id);
             return;
         }
-        if season_index >= detail.seasons.len() {
-            return;
+        detail.episodes.insert(season_id, episodes);
+        self.refresh_series_detail_loading(&series_id);
+    }
+
+    fn refresh_series_detail_loading(&mut self, series_id: &str) {
+        if self
+            .series_season_loading
+            .iter()
+            .any(|(active_series, _)| active_series == series_id)
+        {
+            self.series_detail_loading.insert(series_id.to_owned());
+        } else {
+            self.series_detail_loading.remove(series_id);
         }
-        let season_id = detail.seasons[season_index].id.clone();
-        if !detail.episodes.contains_key(&season_id) {
-            self.fetch_series_season_episodes(series_id.clone(), season_id);
-        }
-        let state = series_modal_state_for_season(&detail, season_index);
-        self.refresh_selection_modal(SelectionModalSource::Series { series_id }, state, None);
     }
 
     pub(super) fn is_home_video_view(&self, lib_idx: usize) -> bool {

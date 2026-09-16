@@ -17,14 +17,14 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::library_panel::content::{
-    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
+    HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use crate::app::components::library_panel::{
     hero_content_emby, ArtworkShape, HeroArtwork, HeroContentData, HeroFacts, LibraryKey,
 };
 use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, MediaListSurfaceInput,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, MediaListSurfaceInput,
 };
 use crate::app::components::msg::{Msg, TerminalObserverEvent};
 use crate::app::components::{LibraryKind, ComponentId};
@@ -41,14 +41,38 @@ struct FixtureLog {
 
 struct FixtureOwner {
     carrier: MediaListCarrier<String>,
+    workspace_carrier: MediaListCarrier<String>,
     log: Rc<RefCell<FixtureLog>>,
+    workspace: bool,
+    workspace_focused: bool,
 }
 
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![row("alpha"), row("beta"), row("gamma")]);
-        Self { carrier, log }
+        let mut workspace_carrier = MediaListCarrier::new();
+        workspace_carrier.set_content(vec![row("track one"), row("track two")]);
+        Self {
+            carrier,
+            workspace_carrier,
+            log,
+            workspace: false,
+            workspace_focused: false,
+        }
+    }
+
+    fn enable_workspace(&mut self) {
+        self.workspace = true;
+        self.workspace_carrier.select_index(1);
+    }
+
+    fn workspace_state(&self) -> (usize, usize, Option<String>) {
+        (
+            self.workspace_carrier.cursor(),
+            self.workspace_carrier.scroll(),
+            self.workspace_carrier.selected_target().cloned(),
+        )
     }
 
     fn select_multiple_for_test(&mut self) {
@@ -100,9 +124,19 @@ impl LibraryContentOwner for FixtureOwner {
                 },
                 overview: None,
                 credits: None,
-                workspace: None,
+                workspace: self.workspace.then_some(Workspace {
+                    header: Some("Tracks"),
+                    selector: None,
+                    list: &mut self.workspace_carrier,
+                    focused: self.workspace_focused,
+                }),
             }),
         }
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.workspace_focused = self.workspace;
+        self.workspace_focused
     }
 
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
@@ -121,7 +155,9 @@ impl LibraryContentOwner for FixtureOwner {
                 if let Some(target) = &target {
                     self.carrier.select_target(target);
                 }
-                self.carrier.delegate_operation(input.into_operation(target).expect("resolved media-list pointer target"));
+                if let Some(operation) = input.into_operation(target) {
+                    self.carrier.delegate_operation(operation);
+                }
                 self.carrier.selected_target().cloned()
             }
             _ => self.carrier.selected_target().cloned(),
@@ -170,6 +206,17 @@ fn migrated_home() -> (TickHarness, Rc<RefCell<FixtureLog>>) {
     harness
         .model_mut()
         .push_library_owner(home_key(), Box::new(FixtureOwner::new(log.clone())));
+    harness.model_mut().sync_mounted_surfaces();
+    (harness, log)
+}
+
+fn migrated_home_with_workspace() -> (TickHarness, Rc<RefCell<FixtureLog>>) {
+    let (mut harness, log) = migrated_home();
+    harness
+        .model_mut()
+        .library_owner_mut::<FixtureOwner>(&home_key())
+        .expect("fixture owner installed")
+        .enable_workspace();
     harness.model_mut().sync_mounted_surfaces();
     (harness, log)
 }
@@ -291,10 +338,23 @@ fn draw_frame_sized(harness: &mut TickHarness) -> Terminal<TestBackend> {
     terminal
 }
 
+/// Draw at the model's own terminal width and height — for overlay cases
+/// whose Workspace box needs more rows than the default 30-row backend
+/// leaves the Library pane.
+fn draw_frame_at_model_size(harness: &mut TickHarness) -> Terminal<TestBackend> {
+    let width = harness.model().app.terminal_width;
+    let height = harness.model().app.terminal_height;
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|f| harness.model_mut().draw_frame(f, false, false))
+        .unwrap();
+    terminal
+}
+
 fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> {
-    for row in 0..30 {
+    for row in 0..buf.area.height {
         let mut line = String::new();
-        for x in 0..120 {
+        for x in 0..buf.area.width {
             line.push_str(buf[(x, row)].symbol());
         }
         if let Some(offset) = line.find(needle) {
@@ -304,11 +364,6 @@ fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> 
     None
 }
 
-/// Focus follows the active library through the real sync pass: the migrated
-/// tab routes to `ComponentId::Library`, an un-migrated tab routes to its old
-/// destination child, and back again. Task 6.1 migrated Movies, so the
-/// un-migrated fixture is the grouped Music library (task 8 still mounts its
-/// workspace).
 #[test]
 fn library_panel_focus_follows_the_active_library() {
     let (mut harness, _log) = migrated_home();
@@ -652,6 +707,795 @@ fn owner_state_survives_a_queue_only_round_trip() {
         "the wheel step continues from the selection made before the mode switch"
     );
 }
+
+/// Enter and browser double-click are delivered through the mounted panel
+/// after the shell sync pass. Both open the Library-local overlay; the mouse
+/// path resolves the clicked row rather than the pre-existing cursor.
+#[test]
+fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
+    let (mut harness, _log) = migrated_home();
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    drop(draw_frame_sized(&mut harness));
+    harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
+        code: tuirealm::event::Key::Enter,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|msg| matches!(
+        msg,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    drop(draw_frame_sized(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+
+    let (mut harness, log) = migrated_home_with_workspace();
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    let terminal = draw_frame_sized(&mut harness);
+    let beta = find_text(terminal.backend().buffer(), "beta").expect("first browser row");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: beta.0,
+        row: beta.1,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(log.borrow().selections.last(), Some(&Some("beta".into())));
+
+    let terminal = draw_frame_sized(&mut harness);
+    let gamma = find_text(terminal.backend().buffer(), "gamma").expect("second browser row");
+    for _ in 0..2 {
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: gamma.0,
+            row: gamma.1,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let outcome = harness.step();
+        assert!(outcome.raw_messages.iter().any(|message| {
+            matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+        }));
+    }
+    assert_eq!(log.borrow().selections.last(), Some(&Some("gamma".into())));
+    drop(draw_frame_sized(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<FixtureOwner>(&home_key())
+            .unwrap()
+            .workspace_state(),
+        (1, 0, Some("track two".into()))
+    );
+}
+
+/// The Library overlay is local to its panel: Queue can take focus and handle
+/// a normal action without dismissing it, then Library focus restores the
+/// retained overlay state.
+#[test]
+fn mounted_queue_action_preserves_unfocused_library_overlay() {
+    let (mut harness, _log) = migrated_home_with_workspace();
+    harness.model_mut().app.panel_mode = PanelMode::Both;
+    harness.model_mut().sync_mounted_surfaces();
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| {
+            component
+                .as_any_mut()
+                .downcast_mut::<crate::app::components::library_panel::LibraryPanel>()
+        })
+        .expect("Library panel mounted")
+        .test_open_hero_overlay();
+    harness
+        .model_mut()
+        .library_owner_mut::<FixtureOwner>(&home_key())
+        .expect("fixture owner installed")
+        .focus_hero_workspace();
+    let workspace_state = harness
+        .model()
+        .library_owner::<FixtureOwner>(&home_key())
+        .unwrap()
+        .workspace_state();
+    drop(draw_frame(&mut harness));
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Queue));
+    harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
+        code: tuirealm::event::Key::Down,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    harness.inject(Event::Keyboard(tuirealm::event::KeyEvent {
+        code: tuirealm::event::Key::Esc,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some(), "Queue Esc must not dismiss Library overlay");
+    drop(draw_frame(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<FixtureOwner>(&home_key())
+            .unwrap()
+            .workspace_state(),
+        workspace_state,
+        "Queue input preserves the overlay Workspace state"
+    );
+    harness.model_mut().app.panel_focus = PanelFocus::Library;
+    harness.model_mut().sync_mounted_surfaces();
+    assert_eq!(harness.model().application.focus(), Some(&ComponentId::Library));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<FixtureOwner>(&home_key())
+            .unwrap()
+            .workspace_state(),
+        workspace_state,
+        "returning to Library restores the Workspace state"
+    );
+}
+
+// ── Library Hero overlay Workspace focus (bug-fix unit) ────────────────
+//
+// The overlay is the only non-Wide surface that focuses a Workspace: on
+// open the destination's Workspace list must receive the destination's
+// local keys (and the pointer's row resolution), keep them across ordinary
+// refresh and Queue focus/return, and never let the covered browser list
+// move. Exercised through the real TV and Music owners (their key routing
+// is where the narrow fall-through lived), not the fixture owner, whose
+// `on_key` is a no-op.
+
+/// A narrow-geometry TV tab whose selected Series' season detail is cached:
+/// the mounted panel hosts the real `TvContent` owner with a paintable
+/// Workspace (`episode_count` episodes), tall enough for the overlay's
+/// Workspace box.
+fn migrated_tv_with_detail(episode_count: usize) -> TickHarness {
+    let mut app = crate::app::render::make_movie_app();
+    app.libs[0].library.collection_type = "tvshows".into();
+    for item in &mut app.libs[0].nav_stack[0].items {
+        item.item_type = "Series".into();
+        item.image_tags.thumb = "tag".into();
+    }
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    app.terminal_width = 80;
+    app.terminal_height = 60;
+    let mut season = crate::app::tests::make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let episodes: Vec<_> = (1..=episode_count)
+        .map(|index| {
+            let mut episode =
+                crate::app::tests::make_item(&format!("Episode {index}"), "Episode");
+            episode.id = format!("episode-{index}");
+            episode
+        })
+        .collect();
+    app.series_detail_cache.insert(
+        "movie-focused".into(),
+        crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: [("season-1".into(), episodes)].into_iter().collect(),
+        },
+    );
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_library_panel();
+    harness.model_mut().sync_mounted_surfaces();
+    harness
+}
+
+fn tv_owner_of(harness: &TickHarness) -> &crate::app::components::tv_content::TvContent {
+    harness
+        .model()
+        .library_owner::<crate::app::components::tv_content::TvContent>(
+            &harness.model().test_tv_owner_key(),
+        )
+        .expect("tv owner installed")
+}
+
+/// Enter opens the overlay with the Workspace focused; Up/Down then move the
+/// episode list while the covered browser cursor stays put, an ordinary
+/// refresh (provider detail completion) keeps the focus, and the keys keep
+/// working on the refreshed rows.
+#[test]
+fn overlay_workspace_keys_move_the_episode_list_not_the_browser() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(2);
+    drop(draw_frame_at_model_size(&mut harness));
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "Enter opens the overlay in narrow geometry"
+    );
+
+    // An ordinary refresh pass between open and the first key: the
+    // Workspace focus must survive it.
+    harness.model_mut().sync_mounted_surfaces();
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 1 })
+    )));
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        1,
+        "Down moves the overlay Workspace's episode list"
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the covered browser list must not move"
+    );
+
+    // Provider completion refreshes the Workspace rows in place; the focus
+    // and cursor survive it and the keys keep working.
+    let mut season = crate::app::tests::make_item("Season 1", "Season");
+    season.id = "season-1".into();
+    let episodes: Vec<_> = (1..=3)
+        .map(|index| {
+            let mut episode = crate::app::tests::make_item(&format!("Episode {index}"), "Episode");
+            episode.id = format!("episode-{index}");
+            episode
+        })
+        .collect();
+    harness
+        .model_mut()
+        .app
+        .series_detail_cache
+        .insert("movie-focused".into(), crate::app::SeriesDetail {
+            seasons: vec![season],
+            episodes: [("season-1".into(), episodes)].into_iter().collect(),
+        });
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        panel_of(&harness)
+            .map(|panel| panel.test_hero_overlay_open())
+            .unwrap_or(false),
+        "the refresh keeps the overlay open"
+    );
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        2,
+        "the refreshed Workspace keeps focus and moves to the third row"
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the browser cursor still never moved"
+    );
+}
+
+/// Clicking a Workspace row inside the overlay resolves to the episode
+/// list's stable target and is claimed — no part of the gesture reaches the
+/// covered browser.
+#[test]
+fn overlay_workspace_click_selects_and_is_claimed() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(2);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+
+    let (x, y) = find_text(terminal.backend().buffer(), "Episode 2")
+        .expect("the Workspace row paints");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(crate::app::components::msg::ShellRequest::TvHitClick {
+            hit: crate::app::components::msg::TvHit::EpisodeRow(target),
+        }) if target == "episode-2"
+    )));
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        1,
+        "the click selected the clicked Workspace row"
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the covered browser list must not move"
+    );
+}
+
+/// Keyboard movement inside the overlay's overflowing Workspace drags the
+/// viewport with the cursor: enough Down steps push the first row out of
+/// the box and pull the cursor's row in, with the browser list untouched.
+#[test]
+fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(30);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    assert_eq!(tv_owner_of(&harness).episode_scroll(), 0);
+
+    // More Down steps than the Workspace box's painted rows: the viewport
+    // must follow the cursor past its bottom edge.
+    for _ in 0..14 {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        14,
+        "the cursor moved through the overflowing list"
+    );
+    assert!(
+        tv_owner_of(&harness).episode_scroll() > 0,
+        "the Workspace viewport must follow the cursor with overflow"
+    );
+    let buf = terminal.backend().buffer();
+    assert!(
+        find_text(buf, "15. Episode 15").is_some(),
+        "the cursor's row scrolled into the Workspace box"
+    );
+    // Not "1. Episode 1": that string is a substring of "11. Episode 11".
+    // Row 6 is the last row above the scrolled-in window.
+    assert!(
+        find_text(buf, "6. Episode 6").is_none(),
+        "the first rows scrolled out of the Workspace box"
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the covered browser list must not move"
+    );
+}
+
+/// A wheel over the overlay's Workspace rows scrolls the episode list and
+/// is claimed; the covered browser list never scrolls from it.
+#[test]
+fn overlay_workspace_wheel_scrolls_and_is_claimed() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(30);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+
+    // Walk the cursor into the overflow first (the keyboard path, already
+    // covered above): the wheel's single notch must then scroll a following
+    // viewport, not a reset one. One notch = one cursor step (the canonical
+    // wheel = Move translation); the 30 ms burst throttle collapses rapid
+    // notches, so the test drives exactly one recognized gesture.
+    for _ in 0..14 {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+    drop(draw_frame_at_model_size(&mut harness));
+    let scroll_before = tv_owner_of(&harness).episode_scroll();
+    assert!(scroll_before > 0, "test setup: the viewport is in overflow");
+
+    let (x, y) = find_text(terminal.backend().buffer(), "Episode 2")
+        .or_else(|| find_text(terminal.backend().buffer(), "Episode 3"))
+        .or_else(|| find_text(terminal.backend().buffer(), "Episode 4"))
+        .or_else(|| find_text(terminal.backend().buffer(), "Episode 5"))
+        .expect("a Workspace row paints");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
+    )));
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        15,
+        "the wheel stepped the Workspace cursor"
+    );
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        tv_owner_of(&harness).episode_scroll() > scroll_before,
+        "the wheel scrolled the Workspace viewport past its bottom edge"
+    );
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some(),
+        "the wheel leaves the overlay open");
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the covered browser list must not move"
+    );
+}
+
+/// A narrow Music overlay whose album tracks are still fetching: opening
+/// cannot focus an empty Workspace, and the deferred track push never
+/// re-seizes the focus (only the open transition does); an explicit Enter
+/// takes it, Down then moves the track list (never the album browser), and
+/// the focus survives both a Queue focus round trip and a shell focus
+/// clear with its follow-up pushes.
+#[test]
+fn late_overlay_workspace_focuses_once_and_keeps_its_keys() {
+    use crate::app::components::MusicContent;
+    use tuirealm::event::{Key, KeyEvent};
+
+    let music_key = LibraryKey::Service {
+        service: mbv_core::config::ServiceKind::Emby,
+        library_id: "lib-music".into(),
+        kind: LibraryKind::Music,
+    };
+    let mut app = crate::app::render::make_music_group_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    app.terminal_width = 80;
+    app.terminal_height = 60;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_library_panel();
+    harness.model_mut().sync_mounted_surfaces();
+    drop(draw_frame_sized(&mut harness));
+
+    // Open while the selected album's tracks are not cached yet.
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_sized(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    assert!(
+        !harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .expect("music owner installed")
+            .track_focused(),
+        "an empty Workspace cannot take focus yet"
+    );
+
+    // The provider completion: the tracks arrive on the next sync pass.
+    let tracks: Vec<_> = (1..=2)
+        .map(|index| {
+            let mut track = crate::app::tests::make_item(&format!("Track {index}"), "Audio");
+            track.id = format!("track-{index}");
+            track
+        })
+        .collect();
+    harness
+        .model_mut()
+        .app
+        .album_tracks_cache
+        .insert("album-1".into(), tracks);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        !harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .expect("music owner installed")
+            .track_focused(),
+        "an ordinary push never re-seizes the overlay's workspace focus"
+    );
+
+    // The Workspace's own activation chord takes the focus the open
+    // transition could not (its rows were still empty).
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(
+        harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .expect("music owner installed")
+            .track_focused(),
+        "the Workspace's Enter takes the focus explicitly"
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(!outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(crate::app::components::msg::ShellRequest::MusicAlbumCursor { .. })
+    )));
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .unwrap()
+            .selected_track_item()
+            .map(|track| track.id),
+        Some("track-2".into()),
+        "Down moves the overlay Workspace's track list"
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[1].resting().cursor(),
+        0,
+        "the covered album browser must not move"
+    );
+
+    // Queue takes focus and gives it back: the Workspace keys keep working.
+    harness.model_mut().app.panel_focus = PanelFocus::Queue;
+    harness.model_mut().sync_mounted_surfaces();
+    harness.model_mut().app.panel_focus = PanelFocus::Library;
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Up,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(
+        harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .unwrap()
+            .selected_track_item()
+            .map(|track| track.id),
+        Some("track-1".into()),
+        "the Workspace keeps its keys across the Queue focus round trip"
+    );
+
+    // An explicit shell focus clear wins while the overlay is open and
+    // stays won: no follow-up push re-seizes the focus.
+    harness.model_mut().music_track_focus_request =
+        Some(crate::app::shell::MusicTrackFocusRequest::Clear);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        !harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .unwrap()
+            .track_focused(),
+        "the shell's focus clear takes effect over the open overlay"
+    );
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        !harness
+            .model()
+            .library_owner::<MusicContent>(&music_key)
+            .unwrap()
+            .track_focused(),
+        "no push re-seizes the focus after the shell's clear"
+    );
+}
+
+/// The overlay Workspace's pager delegates to the episode list's own page
+/// stride (the shared owner's canonical page operation, like Music's
+/// overlay pager) and reports the applied movement as the component-
+/// resolved `TvEpisodeMove` delta — never recomputed from painted row
+/// arithmetic that has no Narrow geometry behind it.
+#[test]
+fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(10);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some()
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::PageDown,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 5 })
+        )),
+        "PageDown moves by the episode list's own page stride"
+    );
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        5,
+        "PageDown lands five rows down"
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the covered browser list must not move"
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::PageUp,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -5 })
+        )),
+        "PageUp reports the applied movement too"
+    );
+    assert_eq!(tv_owner_of(&harness).episode_cursor(), 0);
+}
+
+/// The overlay Workspace's Home/End mutate the episode list locally AND
+/// report the component-resolved movement, exactly like the sibling
+/// movement chords — the shell never recomputes a jump the component made.
+#[test]
+fn overlay_workspace_home_end_report_the_resolved_move() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(10);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_at_model_size(&mut harness));
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::End,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 9 })
+        )),
+        "End reports the resolved jump to the last row"
+    );
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        9,
+        "End lands on the last row"
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Home,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -9 })
+        )),
+        "Home reports the resolved jump to the first row"
+    );
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        0,
+        "Home lands on the first row"
+    );
+}
+
+/// A stale overlay-open bit must never let the narrow overlay path shadow
+/// Wide handling: after a narrow->wide resize the overlay's keyboard arms
+/// are inert and the Wide workspace's own Home reaches the series rail.
+#[test]
+fn stale_overlay_bit_never_shadows_wide_keyboard_handling() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(2);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "Enter opens the overlay in narrow geometry"
+    );
+
+    // Resize narrow -> wide: the sync pass re-pushes the owner's actual
+    // breakpoint before the next key is delivered.
+    harness.model_mut().app.terminal_width = 160;
+    harness.model_mut().app.terminal_height = 40;
+    assert!(
+        harness.model().app.wide_tv_library_area(0).is_some(),
+        "the resized terminal is Wide-eligible"
+    );
+    harness.model_mut().sync_mounted_surfaces();
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Home,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome.raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvJumpCursor {
+                to_end: false
+            })
+        )),
+        "the Wide workspace's Home reaches the series rail, not the overlay arms"
+    );
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        0,
+        "the overlay's episode list did not move"
+    );
+}
+
 
 /// A library leaving the catalog retires its owner: the catalog-retention
 /// rule (moved inside from `reconcile_destination_mounts`) runs in the sync

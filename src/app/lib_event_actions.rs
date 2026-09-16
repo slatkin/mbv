@@ -1,5 +1,3 @@
-use super::selection_modal_actions::album_modal_state;
-use super::types_selection_modal::{SelectionModalListState, SelectionModalSource};
 use super::ui_util::sort_audio_tracks;
 use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
@@ -262,26 +260,21 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return;
             }
-            let modal_state = match result {
+            match result {
                 Ok(detail) => {
-                    let state = self.audiobookshelf_book_browse.iter_mut().find(|state| {
+                    if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
                         state
                             .books
                             .iter()
                             .any(|book| book.library_item_id == library_item_id)
-                    });
-                    state.map(|state| {
+                    }) {
                         state.detail_loading_ids.remove(&library_item_id);
                         state.detail_loading = state
                             .selected_id
                             .as_ref()
                             .is_some_and(|id| state.detail_loading_ids.contains(id));
                         state.detail_cache.insert(library_item_id.clone(), detail);
-                        super::audiobookshelf_book_modal_actions::book_modal_state(
-                            state,
-                            &library_item_id,
-                        )
-                    })
+                    }
                 }
                 Err(_error) => {
                     if let Some(state) = self.audiobookshelf_book_browse.iter_mut().find(|state| {
@@ -296,17 +289,7 @@ impl App {
                             .as_ref()
                             .is_some_and(|id| state.detail_loading_ids.contains(id));
                     }
-                    Some(SelectionModalListState::Empty)
                 }
-            };
-            if let Some(modal_state) = modal_state {
-                self.refresh_selection_modal(
-                    SelectionModalSource::Book {
-                        book_id: library_item_id,
-                    },
-                    modal_state,
-                    None,
-                );
             }
             return;
         }
@@ -334,25 +317,11 @@ impl App {
                             state.episodes = Some(episodes);
                         }
                     }
-                    // Rebuild the modal at its own selected filter (the filter
-                    // is component-owned now,
-                    // split-browse-state-interaction-fields task 3.2); no-op
-                    // when the modal is showing a different show or is closed.
-                    self.pending_overlay = Some(
-                        super::types_overlay::OverlayRequest::RefreshSelectionModalAtSelectedFilter {
-                            source: SelectionModalSource::Podcast { library_item_id },
-                        },
-                    );
                 }
                 Err(_error) => {
                     if let Some(state) = state {
                         state.detail_loading = false;
                     }
-                    self.refresh_selection_modal(
-                        SelectionModalSource::Podcast { library_item_id },
-                        SelectionModalListState::Empty,
-                        None,
-                    );
                 }
             }
             return;
@@ -587,9 +556,7 @@ impl App {
                 // album is open, so normalize it once before rendering or
                 // resolving the focused track for playback.
                 sort_audio_tracks(&mut tracks);
-                let state = album_modal_state(&tracks);
-                self.album_tracks_cache.insert(album_id.clone(), tracks);
-                self.refresh_selection_modal(SelectionModalSource::Album { album_id }, state, None);
+                self.album_tracks_cache.insert(album_id, tracks);
             }
             LibEvent::SeriesDetailFetched {
                 series_id,

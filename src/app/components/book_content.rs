@@ -14,7 +14,6 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
-    Presentation,
 };
 use super::msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -113,8 +112,8 @@ impl BookContent {
             selected_bucket: 0,
             focused: false,
             images_enabled: false,
-            carrier: MediaListCarrier::new(Presentation::Inline),
-            chapter_list: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
+            chapter_list: MediaListCarrier::new(),
             hero_image: HeroImageState::None,
         }
     }
@@ -130,18 +129,33 @@ impl BookContent {
         // save and restore (split-browse-state-interaction-fields task 2.2).
         // Whether the book the component was showing survived the new content
         // decides if its derived local state still means anything.
+        // The carrier owns the stable book target. A provider completion can
+        // carry a stale selected_id, but an open Hero must stay bound to the
+        // same book when that target remains in the refreshed catalog.
+        let prior_target = self.carrier.selected_target().cloned();
+        let projected_detail_loading = snapshot.detail_loading;
         let survived = self.initialized
-            && self.state.selected_id.as_ref().is_some_and(|prior| {
+            && prior_target.as_ref().is_some_and(|prior| {
                 snapshot
                     .books
                     .iter()
                     .any(|book| &book.library_item_id == prior)
             });
         self.state = snapshot.clone();
-        let identity_changed = self.initialized && !survived;
-        if identity_changed {
+        if !self.initialized {
+            if let Some(target) = self.state.selected_id.clone() {
+                self.carrier.select_target(&target);
+            }
+        } else if survived {
+            // Resolve the retained target through the same state-selection seam
+            // used by ordinary owner movement. This keeps cursor, selected_id,
+            // detail-loading state, and identity-gated chapter reset coherent.
+            self.sync_book_from_owner();
+        } else {
             self.chapter_focused = false;
+            self.carrier.select_first();
             self.state.select(0);
+            self.chapter_list.select_first();
         }
         // Re-anchor the surname-bucket pill onto the selected book
         // (book-browsing spec: refresh/paging preserves the selected book
@@ -159,19 +173,12 @@ impl BookContent {
             .selected_bucket
             .min(self.state.buckets.len().saturating_sub(1));
         self.set_book_rows();
-        if !self.initialized {
-            if let Some(target) = self.state.selected_id.clone() {
-                self.carrier.select_target(&target);
-            }
-        } else if identity_changed {
-            self.carrier.select_first();
-        }
+        // `sync_book_from_owner` uses the ordinary selection seam. Preserve
+        // the provider's projected loading state after that re-anchor.
+        self.state.detail_loading = projected_detail_loading;
         self.initialized = true;
         self.images_enabled = images_enabled;
         self.project_chapter_rows();
-        if identity_changed {
-            self.chapter_list.select_first();
-        }
     }
 
     /// Whether the parent-owned chapter pane currently has focus (design.md
@@ -507,6 +514,13 @@ impl BookContent {
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::ControlPicked(_) => {
                 None
             }
+            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfBookIntent(if self.chapter_focused {
+                    AudiobookshelfBookIntent::ActivateChapter(self.chapter_target())
+                } else {
+                    AudiobookshelfBookIntent::Activate
+                }),
+            )),
             LibrarySlotEvent::HeroPane(input) => match input {
                 MediaListSurfaceInput::Wheel { at, delta } => {
                     if self.chapter_list.claims_current_point(at) {
@@ -559,6 +573,10 @@ impl LibraryContentOwner for BookContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
         self.chapter_list.clear_selection();
+    }
+
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.carrier.selected_target().is_some()
     }
 
     fn set_selection_origin(
@@ -670,6 +688,15 @@ impl LibraryContentOwner for BookContent {
             }
             None => LeafKeyResult::Unhandled,
         }
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.enter_chapter_focus();
+        true
+    }
+
+    fn clear_hero_workspace_focus(&mut self) {
+        self.clear_chapter_focus();
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

@@ -138,6 +138,16 @@ impl Model {
         self.library_owner_mut(&key).map(f)
     }
 
+    /// Open the active owner's Hero through the Library panel's local overlay
+    /// contract. Destination actions use this instead of constructing the
+    /// Library Hero overlay.
+    pub(super) fn open_library_hero_overlay(&mut self) -> bool {
+        self.application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+            .is_some_and(LibraryPanel::open_hero_overlay_for_active)
+    }
+
     /// Push one content owner into the panel, addressed by `LibraryKey`
     /// (design D2). Production callers are the per-destination conversion
     /// slices (tasks 5.11+); the test harness pushes fixture owners to prove
@@ -240,6 +250,7 @@ impl Model {
         // in every Panel mode so a hidden library's owners keep their state.
         panel.retain_owners(&live);
         panel.set_active(active);
+        panel.sync_overlay_state();
         panel.set_list_pane_width(list_pane_width);
         panel.sync_mouse_eligibility(mouse_eligible);
     }
@@ -249,6 +260,39 @@ impl Model {
         let area = self.app.layout.root_frame.library?;
         let collapsed = self.app.effective_panel_mode() != PanelMode::Both;
         Some(crate::app::render::components::widgets::right_panel_content_area(area, collapsed))
+    }
+
+    /// The Library column's own body fill for the current geometry **and**
+    /// panel focus.
+    ///
+    /// Deliberately guarded twice. The geometry gate is the one breakpoint
+    /// predicate (`wide_hero_fits`): Wide keeps the column's fixed backdrop
+    /// exactly as before, so nothing here can change Wide. The focus bit is
+    /// the same `PanelFocus::Library` the rest of the chrome reads, and only
+    /// the non-Wide body follows it — an unfocused narrow library stays on the
+    /// default backdrop.
+    pub(super) fn library_body_fill(&self) -> ratatui::style::Color {
+        let Some(content_area) = self.library_panel_content_area() else {
+            // No library placement this frame: the column's own resting value.
+            return crate::app::palette::surface_colors(
+                crate::app::palette::Surface::LibraryColumn,
+                false,
+            )
+            .fill;
+        };
+        if crate::app::render::wide_hero_fits(content_area) {
+            return crate::app::palette::surface_colors(
+                crate::app::palette::Surface::LibraryColumn,
+                false,
+            )
+            .fill;
+        }
+        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        crate::app::palette::surface_colors(
+            crate::app::palette::Surface::NarrowLibraryBody,
+            focused,
+        )
+        .fill
     }
 
     /// The transitional draw step: give the library rect to the mounted
@@ -266,18 +310,17 @@ impl Model {
         // show the column's own background rather than whatever was painted
         // underneath before this panel owned the placement.
         frame.render_widget(ratatui::widgets::Clear, area);
+        // The panel body follows the skeleton it is about to paint: Wide keeps
+        // the column's resting backdrop, non-Wide paints its own body surface
+        // under the list. The gate is the one breakpoint predicate, evaluated
+        // on the rect the panel itself receives.
+        let content_area = self.library_panel_content_area().unwrap_or(area);
         frame.render_widget(
-            ratatui::widgets::Block::default().style(
-                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
-                    crate::app::palette::Surface::LibraryColumn,
-                    false,
-                )
-                .fill),
-            ),
+            ratatui::widgets::Block::default()
+                .style(ratatui::style::Style::default().bg(self.library_body_fill())),
             area,
         );
-        let area = self.library_panel_content_area().unwrap_or(area);
-        self.application.view(&id, frame, area);
+        self.application.view(&id, frame, content_area);
         // The projected hero image's pixel paint (task 5.10, design D9): the
         // painters read projected state and reserve the box; the shell paints
         // the cached protocol into it right after view returns — the same

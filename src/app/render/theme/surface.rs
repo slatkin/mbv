@@ -135,6 +135,10 @@ declare_surfaces!(
     // --- column/pane: the surface a content body sits on ---
     QueueColumn,
     LibraryColumn,
+    // The library panel's own body when there is no wide hero split: the
+    // non-Wide (Narrow/Mini) skeleton paints this instead of the column's
+    // backdrop, so the narrow list sits on a body rather than a gutter.
+    NarrowLibraryBody,
     WideSplitGutter,
     HeroPane,
     SelectedRow,

@@ -26,9 +26,6 @@ impl Model {
                 ComponentId::Overlay(OverlayId::ContextMenu) => {
                     self.render_context_menu_overlay(frame)
                 }
-                ComponentId::Overlay(OverlayId::SelectionModal) => {
-                    self.render_selection_modal_overlay(frame)
-                }
                 ComponentId::Popup(PopupId::Multiselect) => self.render_multiselect_popup(frame),
                 ComponentId::Popup(PopupId::LibraryRoutes) => {
                     self.render_library_routes_popup(frame)
@@ -55,7 +52,6 @@ impl Model {
     pub(super) fn blocking_overlay_active(&self) -> bool {
         [
             ComponentId::Overlay(OverlayId::ContextMenu),
-            ComponentId::Overlay(OverlayId::SelectionModal),
             ComponentId::Modal(ModalId::Confirm),
             ComponentId::Modal(ModalId::DaemonLost),
             ComponentId::Modal(ModalId::SavePlaylist),

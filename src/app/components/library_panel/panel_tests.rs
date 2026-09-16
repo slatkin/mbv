@@ -2,22 +2,23 @@ use crate::app::components::library_panel::{
     LibraryContentOwner, LibraryKey, LibraryPanel, LibrarySlotEvent,
 };
 use crate::app::components::media_list::MediaListSurfaceInput;
-use crate::app::components::{Msg, ShellRequest, UserEvent};
+use crate::app::components::{Msg, ShellRequest, TerminalObserverEvent, UserEvent};
 use tuirealm::component::{AppComponent, Component};
-use tuirealm::event::{Event, MouseEvent, MouseEventKind};
+use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind};
+use tuirealm::props::{AttrValue, Attribute};
 
 use crate::app::components::library_panel::content::{
     HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
 use std::cell::RefCell;
 use std::rc::Rc;
-use tuirealm::event::{KeyModifiers, MouseButton};
+use tuirealm::event::MouseButton;
 
 fn item(target: &str) -> MediaListRow<String> {
     MediaListRow::Item {
@@ -53,7 +54,7 @@ struct FixtureOwner {
 
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
         Self {
             carrier,
@@ -123,11 +124,9 @@ impl LibraryContentOwner for FixtureOwner {
                 if let Some(target) = &target {
                     self.carrier.select_target(target);
                 }
-                self.carrier.delegate_operation(
-                    input
-                        .into_operation(target)
-                        .expect("resolved media-list pointer target"),
-                );
+                if let Some(operation) = input.into_operation(target) {
+                    self.carrier.delegate_operation(operation);
+                }
                 self.carrier.selected_target().cloned()
             }
             _ => self.carrier.selected_target().cloned(),
@@ -168,7 +167,9 @@ fn draw_panel(panel: &mut LibraryPanel) -> ratatui::buffer::Buffer {
 }
 
 fn line_text(buf: &ratatui::buffer::Buffer, row: u16) -> String {
-    (0..120).map(|x| buf[(x, row)].symbol()).collect::<String>()
+    (0..buf.area.width)
+        .map(|x| buf[(x, row)].symbol())
+        .collect::<String>()
 }
 
 /// The panel without a migrated owner claims nothing: no paint, no
@@ -405,6 +406,53 @@ fn wide_hero_link_click_emits_open_url_request() {
         )),
         None
     );
+}
+
+#[test]
+fn overlay_dismissal_handles_escape_backdrop_destination_and_missing_parent() {
+    let log = Rc::new(RefCell::new(FixtureLog::default()));
+    let mut panel = LibraryPanel::new();
+    panel.set_active(Some(LibraryKey::Home));
+    panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
+    let _ = draw_panel(&mut panel);
+
+    panel.test_open_hero_overlay();
+    let _ = draw_panel(&mut panel);
+    let (pane, frame) = panel.test_overlay_geometry().unwrap();
+    let point = (pane.y..pane.bottom())
+        .flat_map(|y| (pane.x..pane.right()).map(move |x| (x, y)))
+        .find(|&(x, y)| !frame.contains(ratatui::layout::Position::new(x, y)))
+        .expect("dimmed Library remainder");
+    let before = log.borrow().selections.clone();
+    assert!(matches!(
+        panel.on(&mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            point.0,
+            point.1,
+        )),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+    assert_eq!(log.borrow().selections, before);
+    assert!(!panel.test_hero_overlay_open());
+
+    panel.test_open_hero_overlay();
+    panel.attr(Attribute::Focus, AttrValue::Flag(true));
+    assert!(panel
+        .on(&Event::Keyboard(KeyEvent::new(
+            Key::Esc,
+            KeyModifiers::NONE,
+        )))
+        .is_some());
+    assert!(!panel.test_hero_overlay_open());
+
+    panel.test_open_hero_overlay();
+    panel.set_active(Some(LibraryKey::Feeds));
+    assert!(!panel.test_hero_overlay_open());
+    panel.set_active(Some(LibraryKey::Home));
+    panel.test_open_hero_overlay();
+    panel.retain_owners(&[LibraryKey::Feeds]);
+    panel.sync_overlay_state();
+    assert!(!panel.test_hero_overlay_open());
 }
 
 #[test]

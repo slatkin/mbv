@@ -42,8 +42,6 @@ pub(crate) struct CardGeometry {
 #[derive(Clone, Default)]
 pub(crate) struct PaintedRowGeometry {
     pub left_area: Rect,
-    pub hero_area: Rect,
-    pub inline_hero_area: Rect,
     pub selected_item_rect: Option<Rect>,
     pub selector_tabs: Vec<(Rect, usize)>,
 }

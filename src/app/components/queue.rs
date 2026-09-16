@@ -11,7 +11,7 @@ use tuirealm::state::State;
 
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
+    MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
@@ -90,7 +90,7 @@ impl QueueComponent {
 
     pub fn new() -> Self {
         Self {
-            carrier: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
             scope: QueueScope::Local,
             focused: false,
             frame_focused: false,
@@ -255,7 +255,7 @@ impl QueueComponent {
     /// carrier's presentation seam.
     fn ensure_carrier(&mut self) {
         self.carrier
-            .set_presentation(Presentation::Wide, self.content_area.height.max(1) as usize);
+            .sync_viewport(self.content_area.height.max(1) as usize);
     }
 
     fn move_cursor(&mut self, delta: i64) -> Option<Msg> {

@@ -2,7 +2,7 @@ use super::super::components::library_panel::LibraryPanel;
 use super::super::components::msg::ContextMenuIntent;
 use super::super::components::{
     ComponentId, ContextMenuComponent, LibraryRoutesComponent, MultiselectComponent, OverlayId,
-    PopupId, QueueComponent, SelectionModalComponent, ShellRequest,
+    PopupId, QueueComponent, ShellRequest,
 };
 use super::super::shell::Model;
 use crate::app::types_context_menu::{
@@ -236,81 +236,6 @@ impl Model {
         if self.application.mounted(&id) {
             let _ = self.application.umount(&id);
         }
-    }
-
-    // --- Selection modal ----------------------------------------------------
-
-    fn selection_modal_id() -> ComponentId {
-        ComponentId::Overlay(OverlayId::SelectionModal)
-    }
-
-    /// Route typed Selection modal requests to the existing source-specific
-    /// App actions after reading the component-owned snapshot.
-    pub(in crate::app) fn handle_selection_modal_request(&mut self, request: ShellRequest) {
-        let id = Self::selection_modal_id();
-        match request {
-            ShellRequest::DismissSelectionModal => self.app.close_selection_modal(),
-            ShellRequest::SelectionModalFilterSelected | ShellRequest::SelectionModalRefresh => {
-                let Some((source, selected)) = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|component| {
-                        component.as_any().downcast_ref::<SelectionModalComponent>()
-                    })
-                    .and_then(|selection| {
-                        Some((
-                            selection.source()?.clone(),
-                            selection.filter_selected().unwrap_or(0),
-                        ))
-                    })
-                else {
-                    return;
-                };
-                match source {
-                    super::super::types_selection_modal::SelectionModalSource::Series {
-                        series_id,
-                    } => self
-                        .app
-                        .select_series_selection_modal_season(series_id, selected),
-                    super::super::types_selection_modal::SelectionModalSource::Podcast {
-                        library_item_id,
-                    } => self.select_podcast_selection_modal_filter(library_item_id, selected),
-                    // SelectionModalSource is closed (Series/Album/Podcast/Book);
-                    // only Series and Podcast modals carry a filter, so Album and
-                    // Book have no filter-selection effect.
-                    _ => {}
-                }
-            }
-            ShellRequest::SelectionModalActivate(item_id) => {
-                let Some(source) = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|component| {
-                        component.as_any().downcast_ref::<SelectionModalComponent>()
-                    })
-                    .and_then(SelectionModalComponent::source)
-                    .cloned()
-                else {
-                    return;
-                };
-                self.app.activate_selection_modal_item(source, item_id);
-            }
-            // unreachable: callers pass only DismissSelectionModal,
-            // SelectionModalFilterSelected, SelectionModalRefresh, or
-            // SelectionModalActivate (shell_messages.rs OR-group +
-            // shell_overlays_modals.rs); every one has an arm above.
-            _ => {}
-        }
-    }
-
-    /// Render the mounted Selection modal. The component owns its snapshot and
-    /// records the returned geometry for its own mouse hit-testing.
-    pub(in crate::app) fn render_selection_modal_overlay(&mut self, f: &mut ratatui::Frame) {
-        let id = Self::selection_modal_id();
-        if !self.application.mounted(&id) {
-            return;
-        }
-        self.application.view(&id, f, f.area());
     }
 
     // --- Settings Multiselect popup ----------------------------------------

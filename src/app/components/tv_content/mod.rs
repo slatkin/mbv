@@ -1,14 +1,13 @@
 //! The TV embedded content owner (tasks 8.1–8.4,
 //! unify-screens-under-panel-components; design.md D12).
 //!
-//! One plain type owns TV at every breakpoint: the series list (Wide and
-//! Inline presentations over one shared `MediaListCarrier`), the episode
-//! list, the season cursor, and the Inline Search session. It is never
-//! mounted, focused, subscribed, or given a `ComponentId`: the mounted
-//! `LibraryPanel` hosts it under `LibraryKey::Service(TvShows)` and is the
-//! library area's one event boundary. Wide and Narrow both paint through the
-//! Library panel skeleton; a breakpoint flip is an ordinary
-//! `set_presentation` on the shared owner, not a component hand-off.
+//! One plain type owns TV at every breakpoint: the series list (one fixed-row
+//! Wide presentation over one shared `MediaListCarrier`), the episode list,
+//! the season cursor, and the Inline Search session. It is never mounted,
+//! focused, subscribed, or given a `ComponentId`: the mounted `LibraryPanel`
+//! hosts it under `LibraryKey::Service(TvShows)` and is the library area's one
+//! event boundary. Wide and Narrow both paint through the Library panel
+//! skeleton; geometry changes clamp the same owner's viewport in place.
 //!
 //! Pointer resolution moved into the panel with the registration: the panel
 //! resolves the letter pills, season pills, series rows and hero-pane input
@@ -22,7 +21,7 @@ use super::library_panel::{
 };
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaSemanticState, Presentation, RowIntent, ViewportAnchor,
+    MediaSemanticState, RowIntent, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
@@ -42,10 +41,9 @@ enum Pane {
 }
 pub(in crate::app) struct TvContent {
     context: TvWideRenderCtx,
-    /// The one shared series-row owner, holding both the Wide and Inline
-    /// presentations (design.md D12): a breakpoint flip moves the same
-    /// owner between them, preserving only the outgoing selected-row
-    /// viewport offset.
+    /// The one shared series-row owner, kept in the fixed-row Wide
+    /// presentation at every breakpoint; geometry changes clamp its viewport
+    /// in place without transferring state to another presentation.
     carrier: MediaListCarrier<String>,
     season_cursor: usize,
     /// Embedded canonical control for the recessed episode media-list box
@@ -81,6 +79,10 @@ pub(in crate::app) struct TvContent {
     /// owner built and viewed without an explicit push (existing unit
     /// tests) keeps painting the Wide workspace.
     is_wide: bool,
+    /// Whether the Library Hero overlay is open over this owner (pushed by
+    /// the panel, design D2). In Narrow geometry only the overlay focuses
+    /// the Episodes pane, so this gates the overlay Workspace's key routing.
+    hero_overlay_open: bool,
 }
 /// Derives the Emby-specific semantic state for a Narrow series row (mirrors
 /// `browser::emby_semantic_state`/`emby_library_content::emby_semantic_state`; the
@@ -143,9 +145,9 @@ impl TvContent {
         context.focused = true;
         Self {
             context,
-            carrier: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
             season_cursor: 0,
-            episodes: MediaListCarrier::new(Presentation::Wide),
+            episodes: MediaListCarrier::new(),
             pane: Pane::Series,
             initialized: false,
             last_series_id: None,
@@ -155,6 +157,7 @@ impl TvContent {
             mouse_gestures: MouseGestureState::new(),
             inline_search: InlineSearch::new(),
             is_wide: true,
+            hero_overlay_open: false,
         }
     }
     /// Records the session-only Wide hero list-pane width override for the
@@ -164,28 +167,21 @@ impl TvContent {
         self.context.list.list_pane_width = list_pane_width;
     }
     /// Records this frame's breakpoint (design.md D12): `true` selects the
-    /// Wide pane-based workspace, `false` the flat Narrow series list. Must
-    /// be pushed before `set_content` so the carrier's presentation switch
-    /// (`ensure_carrier`) sees the current frame's breakpoint.
+    /// Whether the current geometry uses the Wide pane-based workspace.
+    /// Must be pushed before `set_content` so viewport sizing uses the current
+    /// frame's geometry.
     pub(in crate::app) fn set_is_wide(&mut self, is_wide: bool) {
         self.is_wide = is_wide;
     }
-    /// The presentation the shared owner holds for this frame's breakpoint.
-    fn active_presentation(&self) -> Presentation {
-        if self.is_wide {
-            Presentation::Wide
-        } else {
-            Presentation::Inline
-        }
+    pub(in crate::app) fn set_hero_overlay_open(&mut self, open: bool) {
+        self.hero_overlay_open = open;
     }
-    /// Move the shared owner into the active presentation when they diverge.
-    /// A responsive presentation change reads the same owner and preserves
-    /// only the outgoing selected-row viewport offset (design.md D12); no
-    /// cursor, scroll, or selection is ever copied between presentations.
+    /// Keep the shared owner in its fixed-row presentation and clamp its
+    /// viewport for the current geometry. No content or cursor state is copied
+    /// between adapters.
     fn ensure_carrier(&mut self) {
-        let target = self.active_presentation();
         let viewport_height = self.painted_viewport_height();
-        self.carrier.set_presentation(target, viewport_height);
+        self.carrier.sync_viewport(viewport_height);
     }
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
@@ -519,6 +515,12 @@ impl TvContent {
     pub(in crate::app) fn episode_cursor(&self) -> usize {
         self.episodes.cursor()
     }
+    /// Test-only: the episode owner's resting scroll offset, used to prove
+    /// the overlay Workspace's viewport follows cursor/wheel movement.
+    #[cfg(test)]
+    pub(in crate::app) fn episode_scroll(&self) -> usize {
+        self.episodes.scroll()
+    }
     pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();
         let season_id = self
@@ -549,6 +551,10 @@ impl InlineSearchHost for TvContent {
 impl LibraryContentOwner for TvContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
+    }
+
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.selected_item().is_some()
     }
 
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
@@ -607,6 +613,23 @@ impl LibraryContentOwner for TvContent {
             None => LeafKeyResult::Unhandled,
         }
     }
+    fn inline_search_active(&self) -> bool {
+        self.inline_search.is_active()
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.pane = Pane::Episodes;
+        true
+    }
+
+    fn clear_hero_workspace_focus(&mut self) {
+        self.pane = Pane::Series;
+    }
+
+    fn set_hero_overlay_open(&mut self, open: bool) {
+        self.set_hero_overlay_open(open);
+    }
+
     fn hero_data(&mut self) -> Option<HeroContentData> {
         self.context.selected_series.as_ref().map(hero_content_emby)
     }

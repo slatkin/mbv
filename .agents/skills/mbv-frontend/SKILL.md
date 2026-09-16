@@ -77,8 +77,11 @@ painting, and retained hit geometry; no base frame paints beneath it. A
 
 The Library Panel has Wide and Narrow skeletons with Selector row, List controls
 row, list, Hero header, and optional Workspace slots. The embedded
-`MediaList<Target>` owner is never mounted or focused; Wide and Inline
-presentations read the same owner. The Panel derives breakpoint presentation
+`MediaList<Target>` owner is never mounted or focused. The Library panel keeps
+one canonical fixed-row browser active across every geometry; its
+`MediaListCarrier<Target>` does not switch presentation owners, and geometry
+changes clamp the viewport in place. In non-Wide geometry, a hero-bearing
+browser opens a Library Hero overlay on demand. The Panel derives the skeleton
 from shared geometry and Hero header shape from content policy; destinations do
 not choose either.
 

@@ -33,12 +33,7 @@ impl StubList {
 }
 
 impl PanelList for StubList {
-    fn set_presentation(
-        &mut self,
-        _presentation: crate::app::components::media_list::Presentation,
-        _viewport_height: usize,
-    ) {
-    }
+    fn sync_viewport(&mut self, _viewport_height: usize) {}
 
     fn set_paint_policy(
         &mut self,
@@ -526,6 +521,39 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
     assert_eq!(list_rect.bottom(), box_panel.bottom() - PANE_PAD_Y);
     assert_eq!(list_rect.x, content_x);
     assert_eq!(list_rect.width, content_width);
+}
+
+#[test]
+fn ready_hero_reports_the_reserved_image_box_inside_the_hero_area() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut facts = hero_facts("Dune");
+    facts.artwork.image = crate::app::components::library_panel::content::HeroImageState::Ready {
+        cache_key: "dune-cover".into(),
+        decoded: Some((1600, 900)),
+    };
+    let mut content = LibraryPanelContent {
+        selector: None,
+        controls: None,
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts,
+            overview: None,
+            credits: None,
+            workspace: None,
+        }),
+    };
+
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let image = geo.hero_image.expect("ready artwork reserves an image box");
+    assert!(rect_contains(geo.hero_area, image.area));
+    assert!(image.area.width > 0 && image.area.height > 0);
+    assert_eq!(image.cache_key, "dune-cover");
+    // The shared composition reserves the image area for the shell projection;
+    // the header still paints its placeholder/content into that same area.
+    assert_eq!(
+        buf[(image.area.x, image.area.y)].bg,
+        buf[(geo.hero_area.x, geo.hero_area.y)].bg
+    );
 }
 
 #[test]

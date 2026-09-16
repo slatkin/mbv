@@ -26,7 +26,11 @@ fn dim(color: Color) -> Color {
 /// the background reads as dimmed while the modal itself stays at full
 /// brightness.
 pub fn dim_backdrop(f: &mut Frame) {
-    let area = f.area();
+    dim_backdrop_in(f, f.area());
+}
+
+/// Darkens cells within `area`, leaving the rest of the frame unchanged.
+pub fn dim_backdrop_in(f: &mut Frame, area: ratatui::layout::Rect) {
     let buf = f.buffer_mut();
     for y in area.y..area.y + area.height {
         for x in area.x..area.x + area.width {

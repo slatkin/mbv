@@ -21,17 +21,17 @@ impl Model {
         };
         match request {
             // A `Series` item routes through the shared Series-activation gate
-            // first (task 3.4a): at narrow TV width — the only layout where
-            // `TvContent` is mounted for a TV library — that reopens the
-            // season-selection modal instead of a flat drill-in. `false` means
+            // first (task 3.4a): at non-Wide TV width — the only layout where
+            // `TvContent` is mounted for a TV library — that opens the Library
+            // Hero overlay instead of a flat drill-in. `false` means
             // it was not a Series (or had no id), so fall back to the normal
             // select-item path, including the folder scroll-persist.
             ShellRequest::EmbyLibraryActivate { item } => {
                 if item.item_type == "Series"
                     && self.app.activate_selected_series_item(lib_idx, &item)
                 {
-                    // handled by Series activation (season-selection modal at
-                    // narrow width, persistent workspace at wide)
+                    // handled by Series activation (Library Hero overlay at
+                    // non-Wide width, persistent workspace at wide)
                 } else {
                     self.app.select_item(lib_idx, item);
                 }

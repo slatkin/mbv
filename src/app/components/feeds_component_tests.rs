@@ -426,24 +426,6 @@ fn changing_group_invalidates_previous_row_geometry() {
 }
 
 #[test]
-fn wide_feeds_keep_the_list_out_of_the_inline_hero_flow() {
-    let wide = crate::app::TWO_COLUMN_THRESHOLD;
-    let mut wide_panel = panel_with(component(), true);
-    let _ = paint(&mut wide_panel, wide, 20);
-    let wide_geometry = wide_panel.test_wide_geometry().expect("wide skeleton");
-    assert!(wide_panel.test_narrow_geometry().is_none());
-    assert!(wide_geometry.selected.is_some());
-
-    let narrow = wide - 1;
-    let mut narrow_panel = panel_with(component(), true);
-    let _ = paint(&mut narrow_panel, narrow, 20);
-    let narrow_geometry = narrow_panel
-        .test_narrow_geometry()
-        .expect("narrow skeleton");
-    assert!(narrow_geometry.inline_hero.unwrap_or_default().height > 0);
-}
-
-#[test]
 fn unchanged_snapshot_does_not_overwrite_component_cursor() {
     let mut owner = component();
     down(&mut owner, Key::Down);
@@ -606,45 +588,4 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
             Some(_),
         ))) if entries.len() == 1
     ));
-}
-
-/// Task 4.1: a double-click on a list row plays the resolved entry through
-/// the existing `FeedsPlay` request.
-#[test]
-fn feeds_mouse_double_click_plays_the_resolved_entry() {
-    let mut panel = panel_with(component(), true);
-    let _ = paint(&mut panel, 60, 20);
-    let list = panel
-        .test_narrow_geometry()
-        .expect("narrow skeleton")
-        .list_area;
-    // Two quick Downs at the same painted row = DoubleClick on the second;
-    // scan for a row whose double-click resolves a played entry.
-    for row in (list.y..list.y + list.height).rev() {
-        let mut played = None;
-        let _ = panel.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: list.x,
-            row,
-            modifiers: KeyModifiers::NONE,
-        }));
-        // A selection-only click leaves the painted frame valid, so the second
-        // Down resolves the same row without an intervening redraw (design.md
-        // D6, ADR 0024).
-        let msg = panel.on(&Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: list.x,
-            row,
-            modifiers: KeyModifiers::NONE,
-        }));
-        if let Some(Msg::Shell(ShellRequest::FeedsPlay(entries))) = msg {
-            let entry = entries.into_iter().next().expect("entry");
-            played = Some(entry);
-        }
-        if let Some(entry) = played {
-            assert_eq!(entry.guid, "Second");
-            return;
-        }
-    }
-    panic!("double-click on a painted row must emit FeedsPlay(Some(entry))");
 }

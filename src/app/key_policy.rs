@@ -24,7 +24,6 @@ pub(super) struct RouterSnapshot {
     /// closes it and takes precedence over the double-Escape playback stop,
     /// matching the legacy context stack (Sessions before Playback).
     pub sessions_sidebar_open: bool,
-    pub selection_modal_open: bool,
     pub context_menu_open: bool,
     pub idle_feed_link_available: bool,
     /// Whether the focused leaf is a text-entry component (the search sidebar,
@@ -42,6 +41,9 @@ pub(super) struct RouterSnapshot {
 /// One ordered layer of the keyboard policy.
 #[derive(Debug, Clone)]
 pub(super) struct KeyPolicyEntry {
+    /// Human-readable row label for the policy table; only the tests below
+    /// read it, so silence dead-code just where the tests are compiled out.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub name: &'static str,
     /// Whether the central router (UiRoot) owns the binding.
     pub global: bool,
@@ -52,7 +54,6 @@ pub(super) struct KeyPolicyEntry {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum KeyPolicyBinding {
-    Any,
     SettingsOpen,
     SessionsOpen,
     SessionsDismiss,
@@ -80,7 +81,6 @@ pub(super) enum KeyPolicyBinding {
 impl KeyPolicyBinding {
     fn matches(self, chord: KeyChord) -> bool {
         match self {
-            Self::Any => true,
             Self::SettingsOpen => chord.code == KeyCode::F(2),
             Self::SessionsOpen => chord.code == KeyCode::F(3),
             Self::SessionsDismiss => chord.code == KeyCode::Esc,
@@ -127,7 +127,6 @@ impl KeyPolicyBinding {
 /// `RouterSnapshot`; no component attribute or subscription state participates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum KeyPolicyGate {
-    SelectionModal,
     NoBlockingOverlay,
     NoBlockingOverlayAndHelpClosed,
     PanelFocusQueue,
@@ -141,7 +140,6 @@ pub(super) enum KeyPolicyGate {
 impl KeyPolicyGate {
     fn allows(self, chord: KeyChord, snapshot: &RouterSnapshot) -> bool {
         match self {
-            Self::SelectionModal => snapshot.selection_modal_open,
             Self::NoBlockingOverlay => !snapshot.blocking_overlay_open,
             Self::NoBlockingOverlayAndHelpClosed => {
                 !snapshot.blocking_overlay_open && !snapshot.help_overlay_open
@@ -190,13 +188,6 @@ impl KeyPolicyGate {
 
 /// The ordered keyboard policy. Entries are first-match-wins.
 pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
-    KeyPolicyEntry {
-        name: "selection_modal",
-        global: false,
-        binding: KeyPolicyBinding::Any,
-        gate: KeyPolicyGate::SelectionModal,
-        blocking: true,
-    },
     KeyPolicyEntry {
         name: "settings_open",
         global: true,
@@ -461,7 +452,7 @@ mod tests {
         sorted.sort_unstable();
         sorted.dedup();
         assert_eq!(sorted.len(), names.len());
-        assert_eq!(names.remove(0), "selection_modal");
+        assert_eq!(names.remove(0), "settings_open");
     }
 
     #[test]

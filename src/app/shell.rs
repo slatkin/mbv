@@ -355,9 +355,6 @@ impl Model {
             sessions_sidebar_open: self
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::Sessions)),
-            selection_modal_open: self
-                .application
-                .mounted(&ComponentId::Overlay(OverlayId::SelectionModal)),
             context_menu_open: self
                 .application
                 .mounted(&ComponentId::Overlay(OverlayId::ContextMenu)),

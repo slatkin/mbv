@@ -2,6 +2,7 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::super::inline_search::InlineSearchAction;
 use super::{Msg, Pane, ShellRequest, TvContent};
+use crate::app::components::media_list::MediaListSurfaceInput;
 
 impl TvContent {
     /// Ctrl+P/S/A on the selected Inline Search result reuse the ordinary
@@ -55,11 +56,62 @@ impl TvContent {
         if !self.context.focused {
             return None;
         }
+        // The Library Hero overlay's focused Workspace keeps its local chords
+        // in Narrow geometry: the overlay is the only Narrow surface that
+        // focuses the Episodes pane, and the covered browser list must never
+        // receive its movement keys. The overlay exists only in non-Wide
+        // geometry, so the actual breakpoint — not the pushed bit alone —
+        // gates these arms: a stale bit in Wide must never shadow the Wide
+        // workspace's own handling.
+        if !self.is_wide && self.hero_overlay_open && self.pane == Pane::Episodes {
+            return self.handle_key_overlay_workspace(key);
+        }
         if self.is_wide {
             self.handle_key_wide(key)
         } else {
             self.handle_key_narrow(key)
         }
+    }
+
+    /// The Library Hero overlay's focused Workspace chords (Narrow
+    /// geometry): the same translation the Wide Episodes pane uses for
+    /// movement and activation, extended with the pager/jump chords the
+    /// covered browser must never receive. The panel claims unhandled chords
+    /// while the overlay is open, so `None` here stays overlay-local.
+    fn handle_key_overlay_workspace(&mut self, key: &KeyEvent) -> Option<Msg> {
+        let request = match key.code {
+            Key::Enter => self
+                .selected_episode_item()
+                .map(|episode| ShellRequest::TvEpisodeActivate { episode }),
+            Key::Up | Key::Char('k') => {
+                self.move_episode(-1);
+                Some(ShellRequest::TvEpisodeMove { delta: -1 })
+            }
+            Key::Down | Key::Char('j') => {
+                self.move_episode(1);
+                Some(ShellRequest::TvEpisodeMove { delta: 1 })
+            }
+            Key::Char('[')
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                self.move_season(-1);
+                Some(ShellRequest::TvSeasonMove { delta: -1 })
+            }
+            Key::Char(']')
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT) =>
+            {
+                self.move_season(1);
+                Some(ShellRequest::TvSeasonMove { delta: 1 })
+            }
+            Key::PageUp => Some(self.move_episode_by(MediaListSurfaceInput::Page(-1))),
+            Key::PageDown => Some(self.move_episode_by(MediaListSurfaceInput::Page(1))),
+            Key::Home => Some(self.move_episode_by(MediaListSurfaceInput::First)),
+            Key::End => Some(self.move_episode_by(MediaListSurfaceInput::Last)),
+            _ => None,
+        };
+        request.map(Msg::Shell)
     }
 
     /// Wide pane-based keyboard handling (unchanged from before the merge).

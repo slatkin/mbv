@@ -52,7 +52,7 @@ struct HeroFixtureOwner {
 
 impl HeroFixtureOwner {
     fn new(hero: HeroContentData) -> Self {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![row("alpha")]);
         Self {
             carrier,
@@ -287,9 +287,9 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
     );
 
     // A real terminal shrink resets the image cache in the sync pass. Re-seed
-    // only the decoded base after that reset, then project/draw Narrow; this
-    // proves the selected Movie retains a usable Narrow protocol without
-    // requesting or applying its Wide-only Logo.
+    // only the decoded base after that reset, then project/draw non-Wide; the
+    // non-Wide panel paints ordinary rows only, so it resolves no image
+    // protocol and never requests or applies the Wide-only Logo.
     decorated.model_mut().app.terminal_width = 80;
     decorated.model_mut().app.terminal_height = 40;
     drop(draw_library_at(&mut decorated, 80, 40));
@@ -299,35 +299,24 @@ fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated()
         "the real responsive resize resets image state before re-projection"
     );
     seed_cached_hero_image(&mut decorated, "panel-logo:Backdrop,Primary", [20, 40, 60, 255]);
-    decorated.model_mut().sync_mounted_surfaces();
-    let owner_state = decorated
-        .model()
-        .library_owner::<HeroFixtureOwner>(&home_key())
-        .map(|owner| owner.hero.facts.artwork.image.clone());
-    assert!(
-        matches!(owner_state, Some(HeroImageState::Ready { .. })),
-        "the responsive re-projection publishes Ready to the owner: state={owner_state:?}, cache_keys={:?}, loading={:?}",
-        decorated.model().app.card_image_states.keys().collect::<Vec<_>>(),
-        decorated.model().app.card_image_loading
-    );
+    let fetch_calls_before = decorated.model().app.card_image_fetch_calls;
     let _narrow_frame = draw_library_at(&mut decorated, 80, 40);
-    let narrow_geometry = panel_of(&decorated)
-        .and_then(|panel| panel.test_narrow_geometry())
-        .expect("the real 80-column draw paints the Narrow skeleton");
-    let narrow_image = narrow_geometry.inline_hero_image.as_ref().unwrap_or_else(|| {
-        panic!("the Narrow hero keeps one usable image paint after reset: {narrow_geometry:?}")
-    });
-    assert!(!narrow_image.centered, "Narrow uses its inline right-aligned image");
+    let base_entry = decorated
+        .model()
+        .app
+        .card_image_states
+        .get("panel-logo:Backdrop,Primary")
+        .expect("the re-seeded base survives the non-Wide draw untouched");
     assert!(
-        decorated
-            .model()
-            .app
-            .card_image_states
-            .get("panel-logo:Backdrop,Primary")
-            .is_some_and(|entry| !entry.protocols.is_empty()),
-        "the Narrow draw resolves a usable protocol from the re-seeded base"
+        base_entry.protocols.is_empty(),
+        "the non-Wide draw resolves no image protocol from the re-seeded base"
     );
-    assert!(!logo_reserved(&decorated), "Narrow does not reserve the Wide-only Logo");
+    assert_eq!(
+        decorated.model().app.card_image_fetch_calls,
+        fetch_calls_before,
+        "the non-Wide draw issues no image fetch"
+    );
+    assert!(!logo_reserved(&decorated), "non-Wide does not reserve the Wide-only Logo");
 
     // Explicit negative leg: a Wide Portrait Movie with a declared Logo is
     // still a single undecorated base protocol.

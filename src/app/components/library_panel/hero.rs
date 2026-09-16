@@ -23,7 +23,7 @@ use super::content::{
 
 /// A producer's output (design D5): the facts plus the item's overview.
 /// Destinations attach a `Workspace` when assembling [`HeroContent`]; the
-/// header painter and the Narrow inline hero (task 5.7) both consume this.
+/// header painter and Library Hero overlay both consume this.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroContentData {
     pub facts: HeroFacts,

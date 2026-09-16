@@ -56,142 +56,77 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 ### Requirement: WideMediaList owns fixed-row mechanics
 
-`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a
-shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic
-painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row
-geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical
-shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its
-current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure
-those rectangles on the presentation.
+`WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
-The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only
-ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY
-supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no
-rectangle, callback, provider data, or effect. Every Wide presentation SHALL render its selected row
-with the gutter accent: the selected title paints bold in the focus-accent role while the list holds
-focus, the row paints no selected-row background, and it keeps its own zebra parity. There SHALL be
-no per-list opt-in or opt-out, and no marker glyph. An unfocused list SHALL show no selection accent
-at all. A multi-selected row follows the same treatment as the selected row, including while the
-list is unfocused.
+The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. Every fixed-row presentation SHALL render its selected row with the gutter accent: the selected title paints bold in the focus-accent role while the list holds focus, the row paints no selected-row background, and it keeps its own zebra parity. There SHALL be no per-list opt-in or opt-out, and no marker glyph. An unfocused list SHALL show no selection accent at all. A multi-selected row follows the same treatment as the selected row, including while the list is unfocused.
 
-On the Wide path the policy's owning-surface identity resolves the scrollbar column's backing fill
-only; the selected row never fills with it. The `InlineMediaBrowser` presentation keeps its
-selected-row background treatment unchanged.
+The policy's owning-surface identity resolves the scrollbar column's backing fill only; the selected row never fills with it.
 
-The presentation SHALL retain the current frame's read-only claim/content rectangles, selected
-target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or
-`RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve
-it from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area
-rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point
-and expose no selected/detail geometry.
+The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve it from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no selected geometry.
 
-It SHALL support Wide hero rails, provider workspace rows, and Queue fixed rows, but SHALL NOT
-implement Inline replacement or Grid placement. Letter grouping SHALL use
-`MediaListRow::Heading`/`Spacer` rows. Queue SHALL use the shared canonical owner with Wide
-presentation in every panel mode.
+It SHALL support Wide Hero browser rails, non-Wide Library browser lists, provider Workspace rows, and Queue fixed rows, but SHALL NOT implement selected-row replacement or Grid placement. Letter grouping SHALL use `MediaListRow::Heading`/`Spacer` rows. Queue SHALL use the shared canonical owner with this presentation in every Panel mode.
 
 #### Scenario: A gutter-accent selected row keeps default painting otherwise
 
-- **WHEN** a Wide list renders its selected row while focused
+- **WHEN** a fixed-row list renders its selected row while focused
 - **THEN** the title paints bold in the focus-accent role
-- **AND** the row background is whatever an unselected row in that position would paint, including a
-  zebra stripe
+- **AND** the row background is whatever an unselected row in that position would paint, including a zebra stripe
 - **AND** no icon or marker glyph appears in or beside the row
 
 #### Scenario: An unfocused Wide list shows no selection accent
 
-- **WHEN** a Wide list renders while unfocused
+- **WHEN** a fixed-row list renders while unfocused
 - **THEN** no selectable item row carries the bold focus-accent selected title
-- **AND** striped positions still show the unfocused secondary background
+- **AND** striped positions still show the unfocused secondary background when striping applies
 
 #### Scenario: A multi-selected row follows the selected-row treatment
 
-- **WHEN** a Wide list renders rows that are part of a multi-selection while the list is unfocused
+- **WHEN** a fixed-row list renders rows that are part of a multi-selection while the list is unfocused
 - **THEN** each multi-selected row paints the gutter accent title and no selected-row background
 - **AND** it keeps its own zebra parity
 
 #### Scenario: Wide TV rail composes the control
 
-- **WHEN** the TV surface is Wide hero
-- **THEN** its series rail is painted by one Wide presentation over the shared owner
-- **AND** the parent retains workspace, hero, images, chrome, and effects.
+- **WHEN** the TV browser renders in Wide or non-Wide geometry
+- **THEN** its series rail is painted by one fixed-row presentation over the shared owner
+- **AND** the parent retains Workspace, Hero, images, chrome, overlay, and effects
 
 #### Scenario: Queue paints and resolves one current row flow
 
-- **WHEN** Queue paints a non-empty fixed-row list in any panel mode
-- **THEN** its Wide presentation receives equal established claim and row-flow rectangles through one
-  component view and paints ordinary rows once
+- **WHEN** Queue paints a non-empty fixed-row list in any Panel mode
+- **THEN** its presentation receives equal established claim and row-flow rectangles through one component view and paints ordinary rows once
 - **AND** Queue resolves a later row point to the `QueueSlotId` from that current retained result
-- **AND** Queue does not rebuild row rectangles or a selectable row map.
+- **AND** Queue does not rebuild row rectangles or a selectable row map
 
 #### Scenario: Grouped Music paints both Wide row flows
 
-- **WHEN** Grouped Music paints its Wide album rail or Wide track table
-- **THEN** each flow uses a Wide presentation over its shared owner
-- **AND** Grouped Music resolves later row points from the current retained result without a cursor
-  mirror or row map
-- **AND** its existing panel framing and spacing are unchanged.
+- **WHEN** Grouped Music paints its album rail or track table
+- **THEN** each flow uses the fixed-row presentation over its shared owner
+- **AND** Grouped Music resolves later row points from the current retained result without a cursor mirror or row map
+- **AND** its existing panel framing and spacing are unchanged
 
 #### Scenario: Other provider workspaces paint fixed rows
 
-- **WHEN** TV paints episodes, Audiobookshelf Podcast paints episodes, or Audiobookshelf Book paints
-  chapter/audio-part rows
-- **THEN** each flow uses a Wide presentation over its shared owner
-- **AND** the destination resolves later row points from the current retained result without a cursor
-  mirror or row map.
+- **WHEN** TV paints episodes, Audiobookshelf Podcast paints episodes, or Audiobookshelf Book paints chapter or audio-part rows
+- **THEN** each flow uses the fixed-row presentation over its shared owner
+- **AND** the destination resolves later row points from the current retained result without a cursor mirror or row map
 
 #### Scenario: A Wide result expires before another view
 
-- **WHEN** a Wide presentation is configured for a new frame or receives an empty or zero-area view
+- **WHEN** a fixed-row presentation is configured for a new frame or receives an empty or zero-area view
 - **THEN** its prior point claim and selected-row geometry are unavailable
-- **AND** a parent treats the presentation as having no list target until the current view finishes.
-
-### Requirement: InlineMediaBrowser owns selected-row replacement
-
-`InlineMediaBrowser<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own one-column placement, selection visibility, variable-height selected-row replacement admission, ordinary-row fallback when replacement cannot fit, semantic painting delegation, and internal current-frame row and replacement geometry. Cursor, scroll, selected target, and other row-local state SHALL remain in the same logical owner used by the corresponding Wide presentation.
-
-The owning panel (the Library panel or the Queue panel) SHALL retain framing and establish current claim and row-flow rectangles through its arrangement, and SHALL select which presentation of the shared owner is active from its own breakpoint. The presentation's `Component::view` SHALL paint the established row flow once and SHALL be its only ordinary-row painting entry point for a frame. Before that call, the owning panel MAY supply only a closed semantic policy for focused/selected treatment and desired detail admission; the policy SHALL contain no rectangle, raw style, callback, provider data, or effect.
-
-The presentation SHALL retain the current frame's read-only claim/content rectangles, selected target/selected-row rectangle, admitted detail rectangle, and point-resolution facts, and expose no mutable row map or `RowGeometry` to a parent. A point-resolution call after view SHALL accept only the point and resolve ordinary and replacement targets from retained geometry. Configuring the presentation, beginning view, or viewing an empty/zero-area rectangle SHALL invalidate a prior result; before the current view completes, it SHALL claim no point and expose no detail rectangle.
-
-It SHALL remain distinct from Inline Search and SHALL NOT become a second mounted identity, subscription, focus target, gesture recognizer, or router.
-
-#### Scenario: A selected row is replaced
-
-- **WHEN** the selected item fits the Inline presentation
-- **THEN** its ordinary row is replaced once by the detail block
-- **AND** there is no blank duplicate row and the shared target remains stable.
-
-#### Scenario: Grouped Music consumes one admitted detail result
-
-- **WHEN** the Narrow library panel paints Grouped Music's Inline album list with a selected album
-- **THEN** its Inline presentation admits or falls back from detail within one view over the shared owner
-- **AND** the Library panel reads only the current retained admitted-detail rectangle before painting the one inline hero form into it
-- **AND** neither the panel nor Grouped Music reruns list layout, reconstructs selectable-row geometry, or transfers interaction state from another presentation
-- **AND** Grouped Music paints no detail of its own.
-
-#### Scenario: Inline and Wide read one owner
-
-- **WHEN** another logical list changes between Inline and Wide presentation
-- **THEN** both presentations read the same cursor, scroll, selected target, and row-local state
-- **AND** no presentation-to-presentation interaction-state transfer occurs.
-
-#### Scenario: An Inline result expires before another view
-
-- **WHEN** an Inline presentation is configured for a new frame or receives an empty or zero-area view
-- **THEN** its prior point claim and admitted-detail rectangle are unavailable
-- **AND** a parent treats the presentation as having no list target or detail region until the current view finishes.
+- **AND** a parent treats the presentation as having no list target until the current view finishes
 
 ### Requirement: Responsive handoff preserves an explicit anchor
 
-A Wide or Inline presentation change for one logical list SHALL reuse its shared canonical owner. The outgoing presentation SHALL record the selected ordinary row's viewport offset, and the receiving presentation SHALL preserve that offset when possible and clamp it to its viewport otherwise. It SHALL NOT copy cursor, selected target, scroll, or other row-local state between presentation-specific controls. Ordinary refresh SHALL preserve the stable target and locally clamp. Only a discrete navigation or restoration boundary MAY explicitly re-anchor the shared owner from a shell-owned stable target and row offset.
+A geometry change for one logical list SHALL reuse its shared canonical owner and fixed-row presentation. The presentation SHALL preserve the selected ordinary row's viewport offset when possible and clamp it to its new viewport otherwise. It SHALL NOT copy cursor, selected target, scroll, or other row-local state into a presentation-specific control. Ordinary refresh SHALL preserve the stable target and locally clamp. Only a discrete navigation or restoration boundary MAY explicitly re-anchor the shared owner from a shell-owned stable target and row offset.
 
 #### Scenario: TV re-anchors across breakpoints
 
-- **WHEN** TV changes Wide to Narrow and later returns to Wide
-- **THEN** the same logical series owner preserves the selected stable target and row-local state
-- **AND** the presentation handoff preserves or clamps only its viewport offset
-- **AND** no shell cursor/scroll mirror is adopted.
+- **WHEN** TV changes between Wide and non-Wide geometry
+- **THEN** the same logical series owner and fixed-row presentation preserve the selected stable target and row-local state
+- **AND** the viewport preserves or clamps the selected row offset
+- **AND** no shell cursor or scroll mirror is adopted
 
 ### Requirement: Named destinations compose without changing provider authority
 
@@ -300,7 +235,7 @@ When grouped Music or an Audiobookshelf Podcast or Book destination meets the sh
 
 ### Requirement: One shared owner supports list-local extension
 
-Every in-scope logical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its Wide and Inline presentations SHALL operate on that same owner rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
+Every in-scope logical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its fixed-row presentation SHALL operate on that owner in Wide and non-Wide geometry rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
 
 The in-scope flows SHALL be Queue slots; Home rows; generic Emby catalog rows; Movies and the Emby homevideos feed view; Grouped Music albums and tracks; TV series and episodes; Feeds entries; Audiobookshelf Podcast shows and filtered episodes; and Audiobookshelf Book titles and chapter/audio-part rows.
 
@@ -311,20 +246,20 @@ Parent destinations SHALL retain Service content, stable-target-to-domain lookup
 - **WHEN** a developer adds a purely list-local state transition and visual decoration
 - **THEN** the production change is confined to the shared canonical media-list state/behavior owner and shared row painter
 - **AND** no destination production file changes
-- **AND** Wide, Inline, and provider-workspace media rows receive the behavior through their existing composition.
+- **AND** browser and provider-Workspace media rows receive the behavior through their existing composition
 
 #### Scenario: Responsive presentation does not synchronize local state
 
-- **WHEN** one logical list changes between Wide and Inline presentation
-- **THEN** the new presentation reads the same shared owner
-- **AND** no cursor, scroll, membership, range, or other row-local state is copied between presentation-specific controls.
+- **WHEN** one logical list changes between Wide and non-Wide geometry
+- **THEN** the same shared owner and fixed-row presentation remain active
+- **AND** no cursor, scroll, membership, range, or other row-local state is copied between controls
 
 #### Scenario: Parent authority remains outside the row owner
 
-- **WHEN** a destination changes a section, group, filter, surname bucket, season, queue scope, or focused pane
-- **THEN** the destination remains authoritative for that chrome or workspace state
+- **WHEN** a destination changes a section, group, filter, surname bucket, season, queue scope, focused pane, or Library Hero overlay state
+- **THEN** the destination or owning Panel remains authoritative for that chrome, Workspace, or overlay state
 - **AND** it projects the resulting media rows into the shared owner
-- **AND** provider-specific effects remain typed destination intents.
+- **AND** provider-specific effects remain typed destination intents
 
 ### Requirement: Row-local input uses one delegation contract
 
@@ -581,3 +516,48 @@ width calculations, and hit geometry SHALL remain unchanged.
 
 - **WHEN** a Wide presentation is configured without a zebra-stripe policy
 - **THEN** all unselected rows paint with no explicit background, matching today's behaviour
+
+### Requirement: The non-Wide library list owns the surface under it
+
+The non-Wide library list's paint policy SHALL carry the list's own body fill. When a list carries
+one, the painter SHALL fill its claim rect with that fill before painting rows, and the scrollbar
+column SHALL resolve that same fill. A list that carries no body fill SHALL keep resolving the
+scrollbar column through the owning-surface identity of its selected-row surface, as before, so the
+Wide lists and the Queue are unaffected.
+
+#### Scenario: The scrollbar column is the list's own body
+
+- **WHEN** a non-Wide library list with its own body fill overflows and paints its scrollbar column
+- **THEN** that column carries the list's body fill, not the selected-row surface
+- **AND** no cell of the column carries a tone the list body does not
+
+#### Scenario: Lists without their own body fill are unchanged
+
+- **WHEN** a Wide library list or the Queue list paints its scrollbar column
+- **THEN** the column resolves the owning-surface identity of its selected-row surface
+- **AND** its painted fill is unchanged from before this capability
+
+### Requirement: Non-Wide library lists stripe with the library-panel pair
+
+The non-Wide library list SHALL stripe with the `LibraryPanel` pair — focused `#3c4841`, resting
+`#333c43` — while its own list box is filled with the `MainContentBox` pair (`#48584e` focused,
+`#2d353b` resting), so the stripe differs from the fill of its own list box in both focus states.
+Stripe parity, the selected row keeping its own parity, and `Heading`/`Spacer` rows never striping
+SHALL remain as the Wide requirement already defines them.
+
+#### Scenario: A focused non-Wide list alternates two tones
+
+- **WHEN** a non-Wide library list renders with library focus
+- **THEN** the alternate visible rows carry `#3c4841`
+- **AND** the rows between them carry the `MainContentBox` focused fill `#48584e`
+
+#### Scenario: A resting non-Wide list alternates two tones
+
+- **WHEN** a non-Wide library list renders without library focus
+- **THEN** the alternate visible rows carry `#333c43`
+- **AND** the rows between them carry the `MainContentBox` resting fill `#2d353b`
+
+#### Scenario: The stripe never equals its own list box
+
+- **WHEN** a non-Wide library list renders in either focus state
+- **THEN** its stripe colour differs from the fill its own list box is painted with in that state

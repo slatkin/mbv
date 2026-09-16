@@ -2,9 +2,6 @@ use super::types_confirm::ConfirmModal;
 use super::types_context_menu::{ContextMenu, MultiSelectKind};
 use super::types_daemon_lost::DaemonLostModal;
 use super::types_feed::SavePlaylistDialog;
-use super::types_selection_modal::{
-    SelectionModal, SelectionModalFilter, SelectionModalListState, SelectionModalSource,
-};
 use super::SidebarId;
 
 /// Shell handoffs used while App action code is still called below Model.
@@ -16,15 +13,6 @@ pub(super) enum OverlayRequest {
     Confirm(ConfirmModal),
     DaemonLost(DaemonLostModal),
     SavePlaylist(SavePlaylistDialog),
-    SelectionModal(SelectionModal),
-    RefreshSelectionModal {
-        source: SelectionModalSource,
-        state: SelectionModalListState,
-        filter: Option<SelectionModalFilter>,
-    },
-    RefreshSelectionModalAtSelectedFilter {
-        source: SelectionModalSource,
-    },
     ContextMenu(ContextMenu),
     DismissContextMenu,
     /// Open a nested Settings Multiselect popup of the given kind (task 5.3c).
@@ -36,5 +24,4 @@ pub(super) enum OverlayRequest {
     DismissConfirm,
     DismissDaemonLost,
     DismissSavePlaylist,
-    DismissSelectionModal,
 }

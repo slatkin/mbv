@@ -32,7 +32,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
+    MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
@@ -89,7 +89,7 @@ impl FeedsContent {
             entries: Vec::new(),
             all_entries: Vec::new(),
             visible_entries: Vec::new(),
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
             loading: false,
@@ -175,14 +175,8 @@ impl FeedsContent {
     /// Move the shared owner into the presentation the painted breakpoint
     /// selects (the legacy `ensure_carrier`), preserving only the outgoing
     /// selected-row viewport offset.
-    pub(in crate::app) fn ensure_presentation(&mut self, wide: bool, viewport_height: usize) {
-        let target = if wide {
-            Presentation::Wide
-        } else {
-            Presentation::Inline
-        };
-        self.carrier
-            .set_presentation(target, viewport_height.max(1));
+    pub(in crate::app) fn ensure_presentation(&mut self, _wide: bool, viewport_height: usize) {
+        self.carrier.sync_viewport(viewport_height.max(1));
     }
 
     /// The entry whose stable `guid` the shared owner selected. Effect
@@ -572,6 +566,10 @@ impl LibraryContentOwner for FeedsContent {
             },
             // Feeds has no Workspace and no hero-pane input of its own.
             LibrarySlotEvent::WorkspaceSelectorPicked(_) | LibrarySlotEvent::HeroPane(_) => None,
+            LibrarySlotEvent::HeroActivate => self
+                .selected_entry()
+                .cloned()
+                .map(|entry| Msg::Shell(ShellRequest::FeedsPlay(vec![entry]))),
         }
     }
 
@@ -598,6 +596,13 @@ impl LibraryContentOwner for FeedsContent {
             }
             None => LeafKeyResult::Unhandled,
         }
+    }
+
+    // Feed entries are leaf Heroes: the first Enter opens the Library Hero
+    // overlay and the overlay's subsequent activation uses the same typed
+    // playback request as the browser row.
+    fn hero_overlay_available(&mut self) -> bool {
+        self.selected_entry().is_some()
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

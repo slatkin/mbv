@@ -50,10 +50,15 @@ impl Model {
                         self.clear_multi_selection_from_origin(origin);
                     }
                     ShellRequest::MusicAlbumActivate { item } => {
+                        let owner_has_target = self
+                            .music_owner()
+                            .and_then(|owner| owner.selected_item())
+                            .is_some_and(|selected| selected.id == item.id);
                         if self.app.tab.emby_library_index().is_some()
                             && !self.app.is_right_panel_wide()
+                            && owner_has_target
                         {
-                            self.app.open_album_selection_modal(&item);
+                            self.open_library_hero_overlay();
                         }
                         self.push_music_workspace_content();
                     }
@@ -242,14 +247,6 @@ impl Model {
                         } else {
                             self.app.enqueue_feed_entries(entries);
                         }
-                    }
-                    request @ ShellRequest::DismissSelectionModal
-                    | request @ ShellRequest::SelectionModalFilterSelected
-                    | request @ ShellRequest::SelectionModalActivate(_) => {
-                        self.handle_selection_modal_request(request);
-                        // Selection-modal changes to the ABS episode filter
-                        // must reach the mounted component (5.3d.11 U6).
-                        self.push_audiobookshelf_podcast_content();
                     }
                     ShellRequest::MultiselectCommit { .. } => {
                         self.handle_multiselect_commit();
@@ -665,10 +662,6 @@ impl Model {
                     // keyboard dismiss is SettingsIntent::Back. Mouse-only, inert under D16
                     // (migrate-tui-to-tuirealm design D16, #628).
                     ShellRequest::DismissSettings => {}
-                    // Produced at shell_overlays_modals.rs:164 and consumed synchronously by
-                    // handle_selection_modal_request (shell_overlays_menus.rs:232); it never
-                    // arrives as a top-level Msg here.
-                    ShellRequest::SelectionModalRefresh => {}
                 }
             }
             Msg::Queue(request) => {

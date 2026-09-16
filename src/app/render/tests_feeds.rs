@@ -169,23 +169,6 @@ fn w_key_changes_the_filter() {
     assert_eq!(owner.watched_filter(), WatchedFilter::Watched);
 }
 
-/// Narrow derives the inline hero from the same `HeroContent`; the admitted
-/// block is the Narrow geometry's `inline_hero`.
-#[test]
-fn narrow_feeds_render_the_inline_hero_from_the_same_content() {
-    let mut panel = panel_with(feed_owner(), true);
-    let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
-    let terminal = terminal_for(&mut panel, width, 20);
-    let narrow = panel
-        .test_narrow_geometry()
-        .expect("the panel painted a Narrow skeleton");
-    let inline_hero = narrow.inline_hero.expect("admitted inline hero");
-    assert!(!inline_hero.is_empty());
-    let output = buffer_to_string(&terminal);
-    assert!(output.contains("Test Feed"));
-    assert!(output.contains("Entry One"));
-}
-
 /// Without subscriptions the panel paints neither the Selector bar nor the
 /// List controls row, only the empty-slot placeholder.
 #[test]

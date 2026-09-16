@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn visual_selection_change_is_consumed_by_the_carrier_helper() {
-        let mut carrier = super::super::MediaListCarrier::new(super::super::Presentation::Wide);
+        let mut carrier = super::super::MediaListCarrier::new();
         carrier.wide_mut().set_content((1..=3).map(item).collect());
         carrier.wide_mut().select_target(&2);
         let key = tuirealm::event::KeyEvent::new(
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn uppercase_visual_key_starts_visual_mode_at_cursor() {
-        let mut carrier = super::super::MediaListCarrier::new(super::super::Presentation::Wide);
+        let mut carrier = super::super::MediaListCarrier::new();
         carrier.wide_mut().set_content((1..=3).map(item).collect());
         carrier.wide_mut().select_target(&2);
         let key = tuirealm::event::KeyEvent::new(

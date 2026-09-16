@@ -17,12 +17,13 @@ use crate::app::components::media_list::{
     LibrarySelectionOrigin, MediaListSurfaceInput, SelectionOrigin, SelectionSummary,
 };
 use crate::app::components::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
-use crate::app::components::msg::{Msg, ShellRequest};
+use crate::app::components::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::list_pane_width::normalize_list_pane_width;
 use crate::app::render::wide_hero_fits;
 
 use super::content::{HeroImageState, PanelHeroImagePaint};
 use super::hero::HeroContentData;
+use super::hero_composition::HeroCompositionGeometry;
 use super::narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
 use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
 use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry};
@@ -32,6 +33,13 @@ use crate::app::components::inline_search::InlineSearchHost;
 /// gesture's arming and resolution (the same facts the old
 /// the former boundary carried, now derived from the panel's
 /// own painted skeleton geometry).
+#[derive(Clone, Debug)]
+struct OverlayGeometry {
+    pane: ratatui::layout::Rect,
+    frame: ratatui::layout::Rect,
+    hero: HeroCompositionGeometry,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct SplitGeometry {
     /// The shared `WIDE_HERO_PANE_GAP` gutter between the panes.
@@ -87,6 +95,8 @@ pub struct LibraryPanel {
     /// secondary shell intent while returning the owner's cursor echo.
     deferred_msg: Option<Msg>,
     focused_summary: Option<SelectionSummary>,
+    hero_overlay_open: bool,
+    overlay_geometry: Option<OverlayGeometry>,
 }
 
 impl From<LibraryKey> for LibrarySelectionOrigin {
@@ -129,6 +139,8 @@ impl LibraryPanel {
             image_paint: None,
             deferred_msg: None,
             focused_summary: None,
+            hero_overlay_open: false,
+            overlay_geometry: None,
         }
     }
 
@@ -168,6 +180,7 @@ impl LibraryPanel {
     pub(in crate::app) fn set_active(&mut self, key: Option<LibraryKey>) {
         let identity_changed = self.owners.active_key() != key.as_ref();
         if identity_changed {
+            self.dismiss_hero_overlay();
             if let Some(previous) = self.owners.active_key().cloned() {
                 if let Some(owner) = self.owners.get_mut(&previous) {
                     owner.clear_selection();
@@ -191,6 +204,67 @@ impl LibraryPanel {
     /// Pushed each sync pass by the shell beside the other per-frame facts.
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
         self.list_pane_width = list_pane_width;
+    }
+
+    /// Open the Library-local Hero overlay for the active Hero, retaining the
+    /// destination owner's workspace focus just as browser Enter does.
+    pub(in crate::app) fn open_hero_overlay_for_active(&mut self) -> bool {
+        if !self.can_open_hero_overlay() {
+            return false;
+        }
+        if let Some(owner) = self.owners.active_mut() {
+            owner.focus_hero_workspace();
+            owner.set_hero_overlay_open(true);
+        }
+        self.hero_overlay_open = true;
+        true
+    }
+
+    /// Open the Library-local Hero overlay for tests that construct a panel
+    /// without an active owner.
+    #[cfg(test)]
+    pub(in crate::app) fn test_open_hero_overlay(&mut self) {
+        self.hero_overlay_open = true;
+    }
+
+    pub(in crate::app) fn dismiss_hero_overlay(&mut self) {
+        if self.hero_overlay_open {
+            if let Some(owner) = self.owners.active_mut() {
+                owner.set_hero_overlay_open(false);
+                owner.clear_hero_workspace_focus();
+            }
+        }
+        self.hero_overlay_open = false;
+        self.overlay_geometry = None;
+    }
+
+    pub(in crate::app) fn sync_overlay_state(&mut self) {
+        let hero_available = self.owners.active_mut().is_some_and(|owner| {
+            owner.hero_overlay_available() || owner.hero_overlay_target_available()
+        });
+        if self.hero_overlay_open && !hero_available {
+            self.dismiss_hero_overlay();
+        }
+        // Re-assert the open flag so it can never drift from the panel's own
+        // bit (an owner reinstalled mid-session starts closed).
+        let open = self.hero_overlay_open;
+        if let Some(owner) = self.owners.active_mut() {
+            owner.set_hero_overlay_open(open);
+        }
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_hero_overlay_open(&self) -> bool {
+        self.hero_overlay_open
+    }
+
+    #[cfg(test)]
+    pub(in crate::app) fn test_overlay_geometry(
+        &self,
+    ) -> Option<(ratatui::layout::Rect, ratatui::layout::Rect)> {
+        self.overlay_geometry
+            .as_ref()
+            .map(|geometry| (geometry.pane, geometry.frame))
     }
 
     /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears
@@ -291,18 +365,13 @@ impl LibraryPanel {
         if let Some(wide) = self.wide_geometry.as_ref() {
             return crate::app::layout::PaintedRowGeometry {
                 left_area: wide.list_area,
-                hero_area: wide.hero_area,
-                inline_hero_area: wide.hero_area,
                 selected_item_rect: wide.selected,
                 selector_tabs: Vec::new(),
             };
         }
         if let Some(narrow) = self.narrow_geometry.as_ref() {
-            let inline_hero = narrow.inline_hero.unwrap_or_default();
             return crate::app::layout::PaintedRowGeometry {
                 left_area: narrow.list_area,
-                hero_area: inline_hero,
-                inline_hero_area: inline_hero,
                 selected_item_rect: narrow.selected,
                 selector_tabs: Vec::new(),
             };
@@ -438,8 +507,7 @@ impl LibraryPanel {
     }
 
     /// The hero pane's rect from the last painted Wide frame, when one
-    /// painted (the Narrow skeleton replaces the hero pane with the inline
-    /// hero inside the list, so there is no Narrow rect).
+    /// painted.
     fn hero_pane_rect(&self) -> Option<ratatui::layout::Rect> {
         self.wide_geometry.as_ref().map(|geometry| geometry.hero)
     }
@@ -449,6 +517,32 @@ impl LibraryPanel {
     /// carrier and translates the outcome into its `Msg`s.
     fn delegate_list_input(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
         self.slot_event(LibrarySlotEvent::List(input))
+    }
+
+    fn can_open_hero_overlay(&mut self) -> bool {
+        self.owners.active_mut().is_some_and(|owner| {
+            !owner.inline_search_active()
+                && (owner.hero_overlay_available() || owner.hero_overlay_target_available())
+        })
+    }
+
+    fn open_hero_from_browser(&mut self, at: Option<Position>) -> Option<Msg> {
+        let click_message = at.and_then(|at| {
+            self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(at)))
+        });
+        // Resolve the gate after the pointer click has moved the canonical
+        // browser selection to its post-click target. If the gate loses, the
+        // click message must survive: the component already mutated before
+        // the parent made this decision.
+        if !self.open_hero_overlay_for_active() {
+            return click_message;
+        }
+        let claim = if at.is_some() {
+            TerminalObserverEvent::MouseClaimed
+        } else {
+            TerminalObserverEvent::KeyClaimed
+        };
+        Some(Msg::TerminalEvent(claim))
     }
 
     fn slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
@@ -603,9 +697,16 @@ impl LibraryPanel {
                 };
                 self.slot_event(LibrarySlotEvent::List(input))
             }
-            MouseGesture::DoubleClick(at) if inside_list => self.slot_event(
-                LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(at)),
-            ),
+            MouseGesture::DoubleClick(at) if inside_list => {
+                if self.narrow_geometry.is_some() {
+                    if let Some(message) = self.open_hero_from_browser(Some(at)) {
+                        return Some(message);
+                    }
+                }
+                self.slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
+                    at,
+                )))
+            }
             MouseGesture::RightClick(at) if inside_list => self.slot_event(LibrarySlotEvent::List(
                 MediaListSurfaceInput::ContextClick(at),
             )),
@@ -617,6 +718,79 @@ impl LibraryPanel {
             }
             _ => None,
         }
+    }
+
+    fn overlay_gesture(&mut self, mouse: &MouseEvent, at: Position) -> Option<Msg> {
+        let geometry = self.overlay_geometry.as_ref()?;
+        let gesture = self.gestures.recognize(mouse)?;
+        if let Some(&index) = self.hits.workspace_selector.resolve(at) {
+            return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
+        }
+        if let MouseGesture::Click { .. } = gesture {
+            if let Some(&index) = self.hits.links.resolve(at) {
+                if let Some(url) = self
+                    .painted_link_urls
+                    .get(index)
+                    .cloned()
+                    .and_then(|url| super::overview_box::sanitize_url(&url).map(str::to_owned))
+                {
+                    return Some(Msg::Shell(ShellRequest::OpenUrl(url)));
+                }
+            }
+        }
+        if geometry
+            .hero
+            .workspace
+            .is_some_and(|(panel, _)| panel.contains(at))
+        {
+            return match gesture {
+                MouseGesture::Click { at, modifier } => {
+                    let input = match modifier {
+                        ClickModifier::Ctrl => MediaListSurfaceInput::ToggleClick(at),
+                        ClickModifier::Shift => MediaListSurfaceInput::RangeClick(at),
+                        ClickModifier::None => MediaListSurfaceInput::Click(at),
+                    };
+                    self.slot_event(LibrarySlotEvent::HeroPane(input))
+                }
+                MouseGesture::DoubleClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::DoubleClick(at),
+                )),
+                MouseGesture::RightClick(at) => self.slot_event(LibrarySlotEvent::HeroPane(
+                    MediaListSurfaceInput::ContextClick(at),
+                )),
+                MouseGesture::Scroll { at, delta } => {
+                    self.slot_event(LibrarySlotEvent::HeroPane(MediaListSurfaceInput::Wheel {
+                        at,
+                        delta,
+                    }))
+                }
+                _ => None,
+            };
+        }
+        if matches!(gesture, MouseGesture::DoubleClick(_)) {
+            let result = self
+                .owners
+                .active_mut()
+                .map(|owner| owner.activate_hero_selection())
+                .unwrap_or(LeafKeyResult::Unhandled);
+            return match result {
+                // A pointer gesture always claims as mouse. Preserve a
+                // destination request, but never leak a keyboard claim from
+                // an owner's legacy leaf disposition.
+                LeafKeyResult::Consumed(Some(Msg::TerminalEvent(_))) => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                }
+                LeafKeyResult::Consumed(message) => message.or(Some(Msg::TerminalEvent(
+                    TerminalObserverEvent::MouseClaimed,
+                ))),
+                LeafKeyResult::Unhandled => {
+                    Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                }
+            };
+        }
+        Some(Msg::TerminalEvent(
+            crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+        ))
     }
 
     fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<Msg> {
@@ -632,6 +806,29 @@ impl LibraryPanel {
         let at = Position::new(mouse.column, mouse.row);
         if !painted_area.contains(at) {
             return None;
+        }
+        // The overlay owns the Library pane's current-frame gesture. A
+        // backdrop click dismisses and is consumed; covered browser geometry
+        // is never replayed into the list.
+        if self.hero_overlay_open {
+            if !matches!(mouse.kind, MouseEventKind::Moved)
+                && !self
+                    .overlay_geometry
+                    .as_ref()
+                    .is_some_and(|geometry| geometry.frame.contains(at))
+            {
+                self.dismiss_hero_overlay();
+                return Some(Msg::TerminalEvent(
+                    crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+                ));
+            }
+            if self
+                .overlay_geometry
+                .as_ref()
+                .is_some_and(|geometry| geometry.frame.contains(at))
+            {
+                return self.overlay_gesture(mouse, at);
+            }
         }
         match mouse.kind {
             // A left press inside the painted gap arms only the split drag;
@@ -679,6 +876,7 @@ impl LibraryPanel {
         self.hits = SkeletonHits::default();
         self.wide_geometry = None;
         self.narrow_geometry = None;
+        self.overlay_geometry = None;
         self.painted_area = None;
         self.split = None;
         self.image_paint = None;

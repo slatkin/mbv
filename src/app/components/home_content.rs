@@ -22,7 +22,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibraryKey, LibrarySlotEv
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTrailing, MediaListTransition, MediaSemanticState, Presentation, RowIntent,
+    MediaListTrailing, MediaListTransition, MediaSemanticState, RowIntent,
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
@@ -63,7 +63,7 @@ impl HomeContent {
         Self {
             continue_items: Vec::new(),
             latest: Vec::new(),
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(),
             loading: false,
             section: 0,
             hero_image: HeroImageState::None,
@@ -572,6 +572,15 @@ impl LibraryContentOwner for HomeContent {
             LibrarySlotEvent::ControlPicked(_)
             | LibrarySlotEvent::WorkspaceSelectorPicked(_)
             | LibrarySlotEvent::HeroPane(_) => None,
+            LibrarySlotEvent::HeroActivate => match self
+                .delegate_row_local_input(MediaListSurfaceInput::Activate, None)
+                .external_intent
+            {
+                Some(RowIntent::Activate(target)) => Some(Msg::Shell(ShellRequest::HomePlay(
+                    self.home_row_target(Some(target)),
+                ))),
+                _ => None,
+            },
         }
     }
 

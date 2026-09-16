@@ -16,9 +16,6 @@ pub(super) mod confirm_modal;
 pub(super) mod context_menu;
 pub(super) mod daemon_lost_modal;
 pub(super) mod detail;
-#[cfg(test)]
-#[path = "detail_series_tests.rs"]
-mod detail_series_tests;
 pub(super) mod feeds_manage;
 pub(super) mod help;
 pub(super) mod hero;
@@ -27,6 +24,7 @@ pub(super) mod home_feed;
 pub(super) mod home_video;
 pub mod indicators;
 pub(in crate::app) mod inline_search;
+pub(in crate::app) mod library_hero_overlay;
 pub(super) mod library_routes;
 pub(super) mod list;
 pub(super) mod list_context;
@@ -41,7 +39,6 @@ pub(super) mod playlists;
 pub(in crate::app) mod queue;
 pub(in crate::app) mod queue_playback;
 pub(super) mod search_sidebar;
-pub(super) mod selection_modal;
 pub(super) mod sessions;
 pub(super) mod settings;
 pub(super) mod settings_component;

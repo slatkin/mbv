@@ -116,6 +116,10 @@ pub(in crate::app) enum LibrarySlotEvent {
     /// stable target through its own carrier), in the pane but off every
     /// row, or nowhere it claims.
     HeroPane(MediaListSurfaceInput),
+    /// Activate the selected Hero parent through the destination's typed
+    /// intent. This is the semantic equivalent of the keyboard Enter path;
+    /// pointer delivery must not fabricate a raw key event.
+    HeroActivate,
 }
 
 /// The embedded content owner contract: one producer per frame plus the slot
@@ -143,6 +147,48 @@ pub(in crate::app) trait LibraryContentOwner {
         self.on_key(key)
             .map(|message| LeafKeyResult::Consumed(Some(message)))
             .unwrap_or(LeafKeyResult::Unhandled)
+    }
+
+    fn hero_overlay_available(&mut self) -> bool {
+        self.content().hero.is_some()
+    }
+
+    /// Whether the selected parent can own a Hero overlay before its Hero
+    /// snapshot has materialized (for example while provider detail is
+    /// loading). Owners with Hero-bearing browser rows override this so Enter
+    /// never disappears during that hand-off.
+    fn hero_overlay_target_available(&mut self) -> bool {
+        false
+    }
+
+    fn inline_search_active(&self) -> bool {
+        false
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        false
+    }
+
+    /// Release the destination-local workspace focus acquired for the Hero
+    /// overlay, without changing its retained cursor or scroll.
+    fn clear_hero_workspace_focus(&mut self) {}
+
+    /// Whether the Library Hero overlay is open over this owner. The panel
+    /// sets it at open/dismiss and re-asserts it each sync pass. Owners whose
+    /// pre-overlay narrow surfaces never focused a Workspace (Music's sync
+    /// pass cleared inline track focus, TV's narrow keys ignored the pane
+    /// bit) use it to keep the overlay's Workspace focus and key routing
+    /// alive across ordinary refresh.
+    fn set_hero_overlay_open(&mut self, _open: bool) {}
+
+    /// Activate the currently selected Hero target through the owner's typed
+    /// destination intent. Pointer gestures call this semantic operation, not
+    /// a fabricated keyboard event.
+    fn activate_hero_selection(&mut self) -> LeafKeyResult {
+        match self.on_slot_event(LibrarySlotEvent::HeroActivate) {
+            Some(message) => LeafKeyResult::Consumed(Some(message)),
+            None => LeafKeyResult::Unhandled,
+        }
     }
 
     /// The current hero's content data for the shell's image projection

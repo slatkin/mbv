@@ -2,7 +2,6 @@ use super::test_helpers::{
     buffer_to_string, draw_mounted_frame, make_music_group_app, mounted_model_at,
 };
 use super::*;
-use crate::app::tests::make_item;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -52,79 +51,6 @@ fn music_buffer_characterization_covers_wide_unfocused_narrow_and_selected_state
             "narrow music row missing in {width}x{height}: {output:?}"
         );
     }
-}
-
-/// Task 3.1/3.2: the narrow grouped-album inline hero used to expand the
-/// selected album's row into a track table + "^P: Play | ..." action hint
-/// (`render_album_detail`, called from `AlbumInlineDetailStart`). It now
-/// routes through the Model A hero (`render_album_hero_detail`): title +
-/// meta + art only. The track list moved to the selection modal (task 3.3).
-#[test]
-fn narrow_grouped_music_hero_shows_only_title_meta_no_track_table_or_action_hint() {
-    let mut app = make_music_group_app();
-    let tracks: Vec<mbv_core::api::EmbyItem> = (0..2)
-        .map(|i| {
-            let mut track = make_item(&format!("Track {}", i + 1), "Audio");
-            track.id = format!("track-{}", i + 1);
-            track.index_number = (i + 1) as i64;
-            track
-        })
-        .collect();
-    app.album_tracks_cache.insert("album-1".into(), tracks);
-
-    let output = render_narrow_music(app, 60, 30);
-
-    assert!(
-        output.contains("First Album"),
-        "hero must still show the selected album's title:\n{output}"
-    );
-    assert!(
-        !output.contains("Track 1") && !output.contains("Track 2"),
-        "the inline hero must no longer show the track table:\n{output}"
-    );
-    assert!(
-        !output.contains("Show tracks") && !output.contains("Play | "),
-        "the inline hero must no longer show the action-hint row:\n{output}"
-    );
-}
-
-/// Task 9.3: the Narrow inline hero and the Wide header derive from one
-/// `HeroContent` (design D3/D7), so one resolved artist/year/title paints at
-/// both breakpoints and neither falls back to the raw folder name.
-#[test]
-fn narrow_and_wide_music_paint_the_same_resolved_album_hero() {
-    let narrow = render_narrow_music(folder_hero_app(), 60, 30);
-    let mut wide_model = mounted_model_at(folder_hero_app(), 160, 40);
-    let wide = draw_mounted_frame(&mut wide_model, 160, 40);
-
-    for expected in ["Folder Artist", "2024", "First Album"] {
-        assert!(
-            narrow.contains(expected),
-            "narrow hero missing {expected}:\n{narrow}"
-        );
-        assert!(
-            wide.contains(expected),
-            "wide hero missing {expected}:\n{wide}"
-        );
-    }
-    for output in [&narrow, &wide] {
-        assert!(
-            !output.contains("Folder Artist (2024) First Album"),
-            "the raw folder name must not paint as the hero title:\n{output}"
-        );
-    }
-}
-
-fn folder_hero_app() -> App {
-    let mut app = make_music_group_app();
-    app.libs[0].nav_stack[1].set_resting_cursor(0);
-    let album = &mut app.libs[0].nav_stack.last_mut().unwrap().items[0];
-    album.artist.clear();
-    album.name = "Folder Artist (2024) First Album".into();
-    album.production_year = 0;
-    app.album_artist_cache
-        .insert(album.id.clone(), "Folder Artist".into());
-    app
 }
 
 #[test]

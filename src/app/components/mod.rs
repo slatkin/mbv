@@ -35,7 +35,6 @@ pub mod queue_playback_panel;
 pub mod root;
 pub mod save_playlist;
 pub mod search_sidebar;
-pub mod selection_modal;
 pub mod sessions;
 pub mod settings;
 pub mod status_bar_panel;
@@ -70,7 +69,6 @@ pub use self::queue_playback_panel::QueuePlaybackPanel;
 pub(in crate::app) use self::root::UiRootComponent;
 pub use self::save_playlist::SavePlaylistComponent;
 pub use self::search_sidebar::SearchSidebarComponent;
-pub use self::selection_modal::SelectionModalComponent;
 pub use self::sessions::SessionsComponent;
 pub(in crate::app) use self::settings::{
     ServiceRow, SettingsComponent, SettingsRow, SettingsSnapshot, SetupDraft,
@@ -112,9 +110,6 @@ mod save_playlist_component_tests;
 #[cfg(test)]
 #[path = "search_sidebar_component_tests.rs"]
 mod search_sidebar_component_tests;
-#[cfg(test)]
-#[path = "selection_modal_component_tests.rs"]
-mod selection_modal_component_tests;
 #[cfg(test)]
 #[path = "tv_content_component_tests.rs"]
 mod tv_content_component_tests;

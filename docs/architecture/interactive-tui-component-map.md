@@ -35,13 +35,15 @@ only. The same content shape has the same presentation for every destination;
 Emby is the reference presentation and Audiobookshelf/Feeds conform.
 
 The embedded `MediaList<Target>` owner provides rows, stable targets, cursor,
-scroll, row-local behavior, and retained geometry. `WideMediaList` and
-`InlineMediaBrowser` are unmounted presentation adapters over that owner. They
-are not focus targets, subscriptions, or root identities. There is no Grid
-presentation. Inline Search occupies the Selector row and list slots when active.
-The panel derives Wide/Narrow from shared geometry and derives Hero header shape
-(Landscape, Portrait, or Square) from artwork policy. A destination cannot select
-an arm or add a slot.
+scroll, row-local behavior, and retained geometry. `MediaListCarrier<Target>`
+keeps one canonical fixed-row browser presentation over that owner in every
+Panel geometry; it is not a focus target, subscription, or root identity, and it
+never switches presentation owners. Geometry changes clamp the viewport in
+place. In non-Wide geometry, a hero-bearing browser opens a Library Hero overlay
+on demand. There is no Grid presentation. Inline Search occupies the Selector
+row and list slots when active. The panel derives Wide/Narrow from shared
+geometry and derives Hero header shape (Landscape, Portrait, or Square) from
+artwork policy. A destination cannot select an arm or add a slot.
 
 ## Authority boundaries
 

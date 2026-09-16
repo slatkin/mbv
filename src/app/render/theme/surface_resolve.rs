@@ -95,6 +95,7 @@ mod tests {
         match surface {
             Surface::QueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::LibraryColumn => (SURFACE_BACKDROP, SURFACE_BACKDROP),
+            Surface::NarrowLibraryBody => (SURFACE_FOCUSED, SURFACE_BACKDROP),
             Surface::WideSplitGutter => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::HeroPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SelectedRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),

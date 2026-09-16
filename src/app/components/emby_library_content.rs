@@ -14,9 +14,8 @@
 //! TV's browsing uses its own owner; nothing here is shared state with it.
 //!
 //! The selected item's hero comes from the shared `hero_content_emby`
-//! producer (design D5) and the Narrow inline hero is the panel's generic
-//! derivation from that same `HeroContent` (design D7) — this owner never
-//! builds a banner layout or fetches an image itself (task 5.10's shell
+//! producer (design D5) and is rendered by the Library Hero overlay — this
+//! owner never builds a banner layout or fetches an image itself (task 5.10's shell
 //! projection does that, generically, for every migrated owner).
 
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
@@ -33,7 +32,7 @@ use super::library_panel::HeroContentData;
 use super::library_panel::LibraryKind;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
-    MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Presentation, RowIntent,
+    MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -164,7 +163,7 @@ impl EmbyLibraryContent {
             show_letter_pills: false,
             feed_groups: Vec::new(),
             feed_group_cursor: 0,
-            carrier: MediaListCarrier::new(Presentation::Inline),
+            carrier: MediaListCarrier::new(),
             last_identity: None,
             last_projected_rows: None,
             hero_image: HeroImageState::None,
@@ -487,6 +486,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
         self.carrier.clear_selection();
     }
 
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.hero_item().is_some()
+    }
+
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
         Some(self)
     }
@@ -592,9 +595,7 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 }
                 // Row-local claim gate (mirrors the owner's list-point claim):
                 // only a point that resolves to a painted selectable row claims the
-                // click — the inline hero block resolves to the retained selected
-                // target (the detail block replaces the selected row), empty list
-                // space claims nothing.
+                // click; empty list space claims nothing.
                 let target = match input {
                     MediaListSurfaceInput::Click(at)
                     | MediaListSurfaceInput::ToggleClick(at)
@@ -662,6 +663,9 @@ impl LibraryContentOwner for EmbyLibraryContent {
             LibrarySlotEvent::ControlPicked(_)
             | LibrarySlotEvent::WorkspaceSelectorPicked(_)
             | LibrarySlotEvent::HeroPane(_) => None,
+            LibrarySlotEvent::HeroActivate => self
+                .selected_effect_item()
+                .map(|item| Msg::Shell(ShellRequest::EmbyLibraryActivate { item })),
         }
     }
 
@@ -690,6 +694,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
             }
             None => LeafKeyResult::Unhandled,
         }
+    }
+
+    fn inline_search_active(&self) -> bool {
+        self.inline_search.is_active()
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

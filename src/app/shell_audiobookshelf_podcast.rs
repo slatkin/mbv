@@ -93,7 +93,7 @@ impl Model {
                 if wide {
                     self.abs_podcast_owner_mut().unwrap().enter_episode_focus();
                 } else {
-                    self.open_podcast_selection_modal();
+                    self.open_library_hero_overlay();
                 }
             }
             PodcastEpisodeIntent::Enqueue(Some(target)) => {

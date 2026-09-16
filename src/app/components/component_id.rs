@@ -43,7 +43,7 @@ pub enum ComponentId {
 }
 
 /// Top-level overlay identity (design D3 names: Search, Settings, Sessions,
-/// Playlists, Help, ContextMenu, SelectionModal).
+/// Playlists, Help, and ContextMenu).
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum OverlayId {
     Search,
@@ -52,7 +52,6 @@ pub enum OverlayId {
     Playlists,
     Help,
     ContextMenu,
-    SelectionModal,
 }
 
 /// Blocking modal identity (design D3 names: Confirm, DaemonLost, SavePlaylist).

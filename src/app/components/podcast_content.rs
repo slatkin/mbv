@@ -11,9 +11,7 @@ use super::library_panel::hero::hero_content_abs_show;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::MediaListSurfaceInput;
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
-};
+use super::media_list::{MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState};
 use super::msg::{
     LeafKeyResult, Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition,
     ShellRequest,
@@ -68,8 +66,8 @@ impl PodcastContent {
             episode_focused: false,
             initialized: false,
             focused: false,
-            carrier: MediaListCarrier::new(Presentation::Inline),
-            episode_list: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
+            episode_list: MediaListCarrier::new(),
             hero_image: HeroImageState::None,
         }
     }
@@ -79,8 +77,13 @@ impl PodcastContent {
         snapshot: &AudiobookshelfBrowseState,
         _images_enabled: bool,
     ) {
+        // The carrier owns the authoritative stable target. The projected
+        // snapshot's selected_id can lag a provider refresh, so do not use it
+        // to decide whether the open Hero still represents the same show.
+        let prior_target = self.carrier.selected_target().cloned();
+        let projected_detail_loading = snapshot.detail_loading;
         let survived = self.initialized
-            && self.state.selected_id.as_ref().is_some_and(|prior| {
+            && prior_target.as_ref().is_some_and(|prior| {
                 snapshot
                     .shows
                     .iter()
@@ -108,13 +111,25 @@ impl PodcastContent {
             if let Some(id) = self.state.selected_id.clone() {
                 self.carrier.select_target(&id);
             }
-        } else if !survived {
+        } else if survived {
+            // Re-anchor through the same target-to-state selection seam used
+            // by list movement; it resets the episode workspace only when the
+            // show identity actually changes.
+            self.sync_show_selection();
+            if let Some(target) = self.carrier.selected_target() {
+                self.state.episodes = self.state.detail_cache.get(target).cloned();
+            }
+        } else {
             self.episode_filter = AudiobookshelfEpisodeFilter::All;
             self.episode_focused = false;
             self.carrier.select_first();
             self.state.select(0);
             self.episode_list.select_first();
         }
+        // `sync_show_selection` uses the ordinary selection seam, which
+        // clears its local loading bit. Restore the provider projection so a
+        // delayed detail completion remains visible to the mounted owner.
+        self.state.detail_loading = projected_detail_loading;
         self.initialized = true;
         self.project_episode_rows();
     }
@@ -162,6 +177,9 @@ impl PodcastContent {
 
     pub(in crate::app) fn episode_focused(&self) -> bool {
         self.episode_focused
+    }
+    pub(in crate::app) fn episode_rows(&self) -> &[MediaListRow<String>] {
+        self.episode_list.rows()
     }
     pub(in crate::app) fn episode_filter(&self) -> AudiobookshelfEpisodeFilter {
         self.episode_filter
@@ -336,6 +354,10 @@ impl LibraryContentOwner for PodcastContent {
         self.carrier.clear_selection();
     }
 
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.carrier.selected_target().is_some()
+    }
+
     fn set_selection_origin(
         &mut self,
         origin: crate::app::components::media_list::SelectionOrigin,
@@ -442,6 +464,15 @@ impl LibraryContentOwner for PodcastContent {
                 }
                 None
             }
+            LibrarySlotEvent::HeroActivate => Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
+                    if self.episode_focused {
+                        self.episode_target()
+                    } else {
+                        None
+                    },
+                )),
+            )),
         }
     }
 
@@ -551,6 +582,15 @@ impl LibraryContentOwner for PodcastContent {
             None if self.focused => LeafKeyResult::Consumed(None),
             None => LeafKeyResult::Unhandled,
         }
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.enter_episode_focus();
+        true
+    }
+
+    fn clear_hero_workspace_focus(&mut self) {
+        self.episode_focused = false;
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {
@@ -663,10 +703,10 @@ mod tests {
         owner.set_content(&state(), false);
 
         let area = Rect::new(0, 0, 30, 1);
-        owner.carrier.inline_mut().set_geometry(area, area);
+        owner.carrier.wide_mut().set_geometry(area, area);
         let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
         terminal
-            .draw(|frame| owner.carrier.inline_mut().view(frame, area))
+            .draw(|frame| owner.carrier.wide_mut().view(frame, area))
             .unwrap();
 
         assert!(matches!(

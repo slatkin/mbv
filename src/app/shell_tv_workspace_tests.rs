@@ -50,61 +50,6 @@ fn push_tv_workspace_projects_uncached_and_cached_series_image_state() {
     assert!(paint.is_none());
 }
 
-#[test]
-fn push_tv_workspace_projects_ready_narrow_series_image_paint() {
-    use crate::app::images::series_image_cache_key;
-    use crate::app::render::components::hero_model::SERIES_LANDSCAPE_IMAGE_TYPES;
-
-    // Narrow TV: width 70 is below `MINI_VIEW_THRESHOLD`, so the mini view
-    // decides the Panel mode and the library owns it here; the size is set
-    // before `Model::new` so the sync pass's resize handling (task 1.2) never
-    // sees a drift and clears the planted image state.
-    let mut app = make_movie_app();
-    app.libs[0].library.collection_type = "tvshows".into();
-    for item in &mut app.libs[0].nav_stack[0].items {
-        item.item_type = "Series".into();
-        item.image_tags.thumb = "tag".into();
-    }
-    app.mini_view_focus = crate::app::PanelFocus::Library;
-    app.terminal_width = 70;
-    app.terminal_height = 30;
-    app.image_protocol_enabled = true;
-    let mut model = Model::new(app);
-
-    // Height 30 admits the shared inline hero's 14-row detail block (the
-    // panel's list area is `terminal height - 10`; the deleted component's
-    // tests painted the whole frame), so the block whose image box the paint
-    // seam then retains is re-derived, not loosened.
-    {
-        let backend = TestBackend::new(70, 30);
-        let mut term = Terminal::new(backend).unwrap();
-        term.draw(|f| model.draw_frame(f, false, false)).unwrap();
-    }
-    model.sync_mounted_surfaces();
-    // The first projection issued the Series fetch (resolved synchronously by
-    // the fixture); the drain clears the key's reservation, then the planted
-    // entry is what the ready state reads.
-    let _ = model.drain_card_image_completions();
-    let expected_key = series_image_cache_key("movie-focused", SERIES_LANDSCAPE_IMAGE_TYPES);
-    let entry = model
-        .app
-        .build_cached_image(&expected_key, Some(image::DynamicImage::new_rgb8(64, 64)));
-    model
-        .app
-        .card_image_states
-        .insert(expected_key.clone(), entry);
-    model.sync_mounted_surfaces();
-
-    let area = model
-        .library_panel_content_area()
-        .expect("library placement after the frame publishes root_frame");
-    let paint = model
-        .test_paint_library_panel(area)
-        .expect("ready projected Narrow hero must retain image paint");
-    assert_eq!(paint.cache_key, expected_key);
-    assert!(paint.area.width > 0 && paint.area.height > 0);
-}
-
 /// Task 2.1: the Wide push prefetches the identical canonical key the
 /// painter requests, so `paint_home_image` on the consumed `HomeImagePaint`
 /// starts no additional fetch and the reservation survives the paint.

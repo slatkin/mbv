@@ -17,8 +17,7 @@ use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
-    Presentation, RowIntent,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState, RowIntent,
 };
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
@@ -91,6 +90,11 @@ pub struct MusicContent {
     pub(in crate::app) inline_search: InlineSearch,
     hero_image: HeroImageState,
     library_search_active: bool,
+    /// Whether the Library Hero overlay is open over this owner (pushed by
+    /// the panel). The overlay takes the Workspace's keyboard focus once, on
+    /// its open transition; ordinary pushes never focus or re-focus the
+    /// track pane, and an explicit shell focus clear always wins.
+    hero_overlay_open: bool,
 }
 
 impl MusicContent {
@@ -106,13 +110,14 @@ impl MusicContent {
                 Vec::new(),
                 None,
             ),
-            carrier: MediaListCarrier::new(Presentation::Inline),
-            track_list: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
+            track_list: MediaListCarrier::new(),
             track_focused: false,
             last_album_id: None,
             inline_search: InlineSearch::new(),
             hero_image: HeroImageState::None,
             library_search_active: false,
+            hero_overlay_open: false,
         }
     }
 
@@ -148,9 +153,9 @@ impl MusicContent {
             self.track_list.select_first();
         }
 
-        // The legacy library-search projection still reaches Music while its
-        // Narrow painter remains in place. Reuse the same InlineSearch owner
-        // for Wide rather than teaching the panel a Music-specific search arm.
+        // The library-search projection still reaches Music. Reuse the same
+        // InlineSearch owner for every geometry rather than teaching the panel
+        // a Music-specific search arm.
         if let Some(query) = self.context.list.search_query.clone() {
             if !self.inline_search.is_active() {
                 self.inline_search.open();
@@ -224,7 +229,13 @@ impl MusicContent {
     }
 
     pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
-        if !enabled {
+        // An ordinary Narrow push clears the pre-overlay surface's track
+        // focus (design D5), but must not wipe the open Library Hero
+        // overlay's Workspace focus. Explicit shell clears are separate
+        // one-shot requests (`MusicTrackFocusRequest::Clear` ->
+        // `clear_track_focus`) or the dismiss path; they always win and now
+        // stay won, because no push re-seizes the focus.
+        if !enabled && !self.hero_overlay_open {
             self.track_focused = false;
         }
     }
@@ -389,6 +400,10 @@ impl LibraryContentOwner for MusicContent {
         self.carrier.clear_selection();
     }
 
+    fn hero_overlay_target_available(&mut self) -> bool {
+        self.selected_item().is_some()
+    }
+
     fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
         Some(self)
     }
@@ -506,6 +521,33 @@ impl LibraryContentOwner for MusicContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
+                None
+            }
+            // The Library Hero overlay's pager/jump chords move the focused
+            // track list, never the covered album browser (the overlay is
+            // Narrow-only; Wide keeps the album-rail paging arms below).
+            Key::PageUp if self.hero_overlay_open && self.track_focused => {
+                self.track_list.delegate_operation(
+                    MediaListSurfaceInput::Page(-1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
+                None
+            }
+            Key::PageDown if self.hero_overlay_open && self.track_focused => {
+                self.track_list.delegate_operation(
+                    MediaListSurfaceInput::Page(1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
+                None
+            }
+            Key::Home if self.hero_overlay_open && self.track_focused => {
+                self.track_list.select_first();
+                None
+            }
+            Key::End if self.hero_overlay_open && self.track_focused => {
+                self.track_list.select_last();
                 None
             }
             Key::Char('/') => {
@@ -660,6 +702,30 @@ impl LibraryContentOwner for MusicContent {
             }
             None => LeafKeyResult::Unhandled,
         }
+    }
+
+    fn inline_search_active(&self) -> bool {
+        self.inline_search.is_active()
+    }
+
+    fn focus_hero_workspace(&mut self) -> bool {
+        self.enter_track_focus();
+        true
+    }
+
+    fn clear_hero_workspace_focus(&mut self) {
+        self.clear_track_focus();
+    }
+
+    fn set_hero_overlay_open(&mut self, open: bool) {
+        // The overlay takes the Workspace focus exactly once, on its open
+        // transition (bit false->true) -- never again on the sync pass's
+        // bit re-assert or an ordinary push, so shell and local focus
+        // clears stay authoritative while the overlay is open.
+        if open && !self.hero_overlay_open {
+            self.enter_track_focus();
+        }
+        self.hero_overlay_open = open;
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

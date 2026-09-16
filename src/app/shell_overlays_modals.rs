@@ -1,6 +1,6 @@
 use super::super::components::{
     ComponentId, ConfirmComponent, ContextMenuComponent, DaemonLostComponent, ModalId, OverlayId,
-    SavePlaylistComponent, SelectionModalComponent,
+    SavePlaylistComponent,
 };
 use super::super::shell::Model;
 use super::super::types_overlay::OverlayRequest;
@@ -89,58 +89,10 @@ impl Model {
                         .set_dialog(dialog.input, dialog.stage);
                 }
             }
-            OverlayRequest::SelectionModal(modal) => {
-                self.dismiss_blocking_modals();
-                let id = ComponentId::Overlay(OverlayId::SelectionModal);
-                self.application
-                    .mount(id.clone(), Box::new(SelectionModalComponent::new()), vec![])
-                    .expect("mount SelectionModal");
-                self.application
-                    .active(&id)
-                    .expect("activate SelectionModal");
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    comp.as_any_mut()
-                        .downcast_mut::<SelectionModalComponent>()
-                        .expect("SelectionModal component")
-                        .set_content(&modal);
-                }
-            }
-            OverlayRequest::RefreshSelectionModal {
-                source,
-                state,
-                filter,
-            } => {
-                let id = ComponentId::Overlay(OverlayId::SelectionModal);
-                if let Some(comp) = self.application.get_component_mut(&id) {
-                    comp.as_any_mut()
-                        .downcast_mut::<SelectionModalComponent>()
-                        .expect("SelectionModal component")
-                        .refresh(&source, state, filter);
-                }
-            }
-            OverlayRequest::RefreshSelectionModalAtSelectedFilter { source } => {
-                let id = ComponentId::Overlay(OverlayId::SelectionModal);
-                let matches = self
-                    .application
-                    .get_component(&id)
-                    .and_then(|component| {
-                        component.as_any().downcast_ref::<SelectionModalComponent>()
-                    })
-                    .and_then(SelectionModalComponent::source)
-                    .is_some_and(|current| current == &source);
-                if matches {
-                    self.handle_selection_modal_request(
-                        super::super::components::ShellRequest::SelectionModalRefresh,
-                    );
-                }
-            }
             OverlayRequest::DismissConfirm => self.dismiss_modal(&Self::confirm_id()),
             OverlayRequest::DismissDaemonLost => self.dismiss_modal(&Self::daemon_lost_id()),
             OverlayRequest::DismissSavePlaylist => {
                 self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist))
-            }
-            OverlayRequest::DismissSelectionModal => {
-                self.dismiss_modal(&ComponentId::Overlay(OverlayId::SelectionModal))
             }
             OverlayRequest::ContextMenu(menu) => {
                 // An open context menu replaces any sidebar surface (the old
@@ -191,7 +143,6 @@ impl Model {
         self.dismiss_modal(&Self::confirm_id());
         self.dismiss_modal(&Self::daemon_lost_id());
         self.dismiss_modal(&ComponentId::Modal(ModalId::SavePlaylist));
-        self.dismiss_modal(&ComponentId::Overlay(OverlayId::SelectionModal));
         // Re-homes the playback-event trigger that used to clear `App::context_menu`
         // (player_event.rs `raise_daemon_lost_modal`, task 5.3c).
         self.dismiss_modal(&ComponentId::Overlay(OverlayId::ContextMenu));

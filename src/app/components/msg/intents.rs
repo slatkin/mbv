@@ -100,9 +100,9 @@ pub enum PodcastEpisodeIntent {
     /// Space: App enters episode selection when its episode selection is
     /// `None`; otherwise App plays its selected episode, carrying its target.
     FocusOrPlay(Option<PodcastEpisodeTarget>),
-    /// Enter: when App selection is `None`, wide podcast enters inline episode
-    /// selection and narrow podcast opens the selection modal; otherwise App
-    /// plays its selected episode, carrying its target.
+    /// Enter: when App selection is `None`, wide podcast enters episode
+    /// selection and non-Wide podcast opens the Library Hero overlay; otherwise
+    /// App plays its selected episode, carrying its target.
     OpenOrPlay(Option<PodcastEpisodeTarget>),
     /// Ctrl+A: enqueue only when App episode selection is active; otherwise
     /// no-op when the target is `None`.
@@ -138,7 +138,7 @@ pub enum AudiobookshelfBookIntent {
     Enqueue,
     /// Enter on a selected book: the shell focuses the wide chapter
     /// workspace (the media-selection list in the hero pane). Narrow keeps
-    /// the selection modal, mirroring `PodcastEpisodeIntent::OpenOrPlay(None)`.
+    /// the Library Hero overlay, mirroring `PodcastEpisodeIntent::OpenOrPlay(None)`.
     FocusChapters,
     ActivateChapter(Option<BookChapterTarget>),
 }

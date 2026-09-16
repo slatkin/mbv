@@ -30,9 +30,9 @@ pub enum ShellRequest {
         target: usize,
         kind: AlbumCursorKind,
     },
-    /// Activate the selected album in narrow mode, where album tracks use the
-    /// selection modal instead of the inline workspace. Carries the
-    /// component-resolved album so the shell effect never re-reads a cursor.
+    /// Activate the selected album in non-Wide mode by opening its Library
+    /// Hero overlay. Carries the component-resolved album so the shell effect
+    /// never re-reads a cursor.
     MusicAlbumActivate {
         item: EmbyItem,
     },
@@ -130,14 +130,6 @@ pub enum ShellRequest {
     /// pulls panel focus to the Library (design.md D4/D5). Mirrors
     /// `HomeRowClick`.
     FeedsRowClick,
-    /// Dismiss the blocking Selection modal.
-    DismissSelectionModal,
-    /// Select a source-specific filter in the Selection modal.
-    SelectionModalFilterSelected,
-    /// Rebuild a source-specific filter using the component-owned selection.
-    SelectionModalRefresh,
-    /// Activate the selected Selection modal item by its opaque provider id.
-    SelectionModalActivate(Option<String>),
     /// Commit the component-owned Multiselect choices through the legacy App
     /// action path.
     MultiselectCommit {
@@ -172,7 +164,7 @@ pub enum ShellRequest {
     /// preference, resolved via the mounted component's `source_for_section`
     /// at the Model boundary (task 5.3d, numeric Home section deletion).
     HomeSectionSelected(usize),
-    /// A row the user single-clicked in the Home list or inline hero. The
+    /// A row the user single-clicked in the Home list or Library Hero overlay. The
     /// component has already moved its own selection to the resolved row; the
     /// shell only pulls panel focus to the Library (design.md D4/D5).
     HomeRowClick {
@@ -317,7 +309,7 @@ pub enum ShellRequest {
     TvSeasonMove {
         delta: i64,
     },
-    /// A row the user single-clicked in the browser list or inline hero,
+    /// A row the user single-clicked in the browser list or Library Hero overlay,
     /// resolved to an item index by the embedded control's `resolve_point`
     /// (design.md D4/D6). The shell applies focus-follows-click and sets the
     /// resting cursor.

@@ -1,4 +1,5 @@
 use crate::app::components::library_panel::{LibraryKey, LibraryPanel};
+use crate::app::components::media_list::MediaListRow;
 use crate::app::components::podcast_content::PodcastContent;
 use crate::app::components::{LibraryKind, ComponentId, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::tests_podcast::audiobookshelf_app;
@@ -6,7 +7,9 @@ use crate::app::tests_tick_harness::TickHarness;
 use mbv_core::config::ServiceKind;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
-use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{
+    Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 
 fn podcast(harness: &mut TickHarness) -> &mut PodcastContent {
     let key = LibraryKey::Service { service: ServiceKind::Audiobookshelf, library_id: "abs-podcasts".into(), kind: LibraryKind::AudiobookshelfPodcast };
@@ -118,6 +121,98 @@ fn podcast_panel_owns_one_surface_at_wide_and_normal_breakpoints() {
         assert_eq!(panel.test_narrow_geometry().is_some(), width == 80);
         assert!(panel.test_list_rect().is_some(), "the panel paints its list at {width}px");
     }
+}
+
+#[test]
+fn podcast_narrow_hero_workspace_completes_and_reanchors_stably() {
+    let mut app = audiobookshelf_app();
+    let browse = &mut app.audiobookshelf_browse[0];
+    browse.episodes = None;
+    browse.detail_loading = true;
+    let mut harness = TickHarness::new(app);
+
+    // The mounted tick opens the selected parent in Narrow geometry even
+    // while its provider-owned Workspace is still loading.
+    draw(&mut harness, 80);
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+    draw(&mut harness, 80);
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .expect("Library panel");
+    assert!(panel.test_hero_overlay_open());
+    assert!(panel.test_overlay_geometry().is_some());
+    assert!(harness.model().app.audiobookshelf_browse[0].detail_loading);
+    assert!(podcast(&mut harness).episode_rows().is_empty());
+
+    // Provider completion is injected at the state boundary; the same owner
+    // remains mounted and updates its Workspace in place without a sleep.
+    let episode = mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        library_item_id: "show-a".into(),
+        episode_id: "episode-ready".into(),
+        title: "Ready Episode".into(),
+        published_at: None,
+        duration_seconds: None,
+    };
+    let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
+    browse.detail_loading = false;
+    browse.cache_detail("show-a".into(), vec![episode]);
+    browse.episodes = browse.detail_cache.get("show-a").cloned();
+    harness.model_mut().push_audiobookshelf_podcast_content();
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness, 80);
+    assert!(!harness.model().app.audiobookshelf_browse[0].detail_loading);
+    assert!(matches!(
+        podcast(&mut harness).episode_rows().first(),
+        Some(MediaListRow::Item { target, .. }) if target == "episode-ready"
+    ));
+
+    // A refresh with a stale provider selected_id retains the canonical
+    // parent and its Workspace child target by stable identity.
+    let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
+    browse.shows.insert(
+        0,
+        mbv_core::audiobookshelf::AudiobookshelfShow {
+            library_item_id: "show-new".into(),
+            title: "New Show".into(),
+            author: None,
+            description: None,
+            cover_path: None,
+        },
+    );
+    browse.selected_id = Some("show-new".into());
+    harness.model_mut().push_audiobookshelf_podcast_content();
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness, 80);
+    assert!(harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .is_some_and(|panel| panel.test_hero_overlay_open()));
+    assert_eq!(podcast(&mut harness).selected_id().as_deref(), Some("show-a"));
+    assert!(matches!(
+        podcast(&mut harness).episode_rows().first(),
+        Some(MediaListRow::Item { target, .. }) if target == "episode-ready"
+    ));
+
+    // An empty provider completion remains an empty Workspace, not a stale
+    // copy of the previous child list.
+    let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
+    browse.detail_loading = false;
+    browse.cache_detail("show-a".into(), Vec::new());
+    browse.episodes = Some(Vec::new());
+    harness.model_mut().push_audiobookshelf_podcast_content();
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness, 80);
+    assert!(!harness.model().app.audiobookshelf_browse[0].detail_loading);
+    assert!(podcast(&mut harness).episode_rows().is_empty());
 }
 
 #[test]

@@ -18,7 +18,7 @@ use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::Frame;
 
-/// Standard inset for every selected detail block.
+#[cfg(test)]
 pub(in crate::app) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
 
 /// Returns `palette::TEXT_EMPHASIS` when `focused`, `palette::TEXT_SECONDARY` otherwise.
@@ -39,88 +39,36 @@ pub(in crate::app::render) enum DisplayRow {
     Item(Vec<usize>),
 }
 
-/// The shared selected-row replacement contract for a single-column browser.
-/// Callers provide their already-built rows; this plan owns admission,
-/// swallowing, flow scroll, fallback, geometry, targets, and marker policy.
-pub(in crate::app::render) struct InlineReplacementPlan<'a> {
+/// The shared fixed-row flow plan for a browser renderer.
+/// Callers provide their already-built rows; this plan owns clamped scroll and
+/// the row structure used by painting and selection bleed.
+pub(in crate::app::render) struct FixedRowPlan<'a> {
     display_rows: &'a [DisplayRow],
-    selected_row: usize,
-    selected_item: usize,
-    detail_rows: u16,
     total_display_rows: usize,
     offset: usize,
 }
 
-impl<'a> InlineReplacementPlan<'a> {
-    /// Builds one replacement plan from the surface's display rows. A detail
-    /// block is admitted only when `inline_detail_flow` can keep it and one
-    /// ordinary browser row visible; otherwise the ordinary row flow wins.
+impl<'a> FixedRowPlan<'a> {
     pub(in crate::app::render) fn new(
         display_rows: &'a [DisplayRow],
         selected_row: usize,
-        selected_item: usize,
-        desired_detail_rows: u16,
+        _selected_item: usize,
         visible_rows: u16,
         stored_offset: usize,
     ) -> Self {
-        let admitted = (selected_row < display_rows.len()).then(|| {
-            super::hero::inline_detail_flow(
-                selected_row,
-                desired_detail_rows,
-                visible_rows,
-                stored_offset,
-            )
-        });
-        let (detail_rows, offset) = match admitted.flatten() {
-            Some(flow) => {
-                let mut offset = flow.offset;
-                if matches!(
-                    display_rows.get(offset.saturating_sub(1)),
-                    Some(DisplayRow::LetterHeader(_))
-                ) && offset > 0
-                {
-                    let header_offset = offset - 1;
-                    let detail_end =
-                        selected_row.saturating_sub(header_offset) + desired_detail_rows as usize;
-                    if detail_end <= visible_rows as usize {
-                        offset = header_offset;
-                    }
-                }
-                (desired_detail_rows, offset)
-            }
-            None => {
-                if selected_row >= display_rows.len() {
-                    let max_offset = display_rows.len().saturating_sub(visible_rows as usize);
-                    let offset = stored_offset.min(max_offset);
-                    return Self {
-                        display_rows,
-                        selected_row,
-                        selected_item,
-                        detail_rows: 0,
-                        total_display_rows: display_rows.len(),
-                        offset,
-                    };
-                }
-                let visible_rows = visible_rows as usize;
-                let lower_bound = selected_row.saturating_sub(visible_rows.saturating_sub(1));
-                let offset = stored_offset.clamp(lower_bound, selected_row);
-                (0, offset)
-            }
-        };
-        let total_display_rows =
-            super::hero::inline_display_row_count(display_rows.len(), selected_row, detail_rows);
+        let height = visible_rows.max(1) as usize;
+        let max_offset = display_rows.len().saturating_sub(height);
+        let mut offset = stored_offset.min(max_offset);
+        if selected_row < offset {
+            offset = selected_row;
+        } else if selected_row >= offset + height {
+            offset = selected_row + 1 - height;
+        }
         Self {
             display_rows,
-            selected_row,
-            selected_item,
-            detail_rows,
-            total_display_rows,
+            total_display_rows: display_rows.len(),
             offset,
         }
-    }
-
-    pub(in crate::app::render) fn detail_rows(&self) -> u16 {
-        self.detail_rows
     }
 
     pub(in crate::app::render) fn offset(&self) -> usize {
@@ -131,48 +79,18 @@ impl<'a> InlineReplacementPlan<'a> {
         self.total_display_rows
     }
 
-    pub(in crate::app::render) fn display_row(
-        &self,
-        display_row: usize,
-    ) -> Option<super::hero::InlineDisplayRow> {
-        if self.selected_row >= self.display_rows.len() {
-            return (display_row < self.display_rows.len())
-                .then_some(super::hero::InlineDisplayRow::Source(display_row));
-        }
-        super::hero::inline_display_row(
-            self.display_rows.len(),
-            self.selected_row,
-            self.detail_rows,
-            display_row,
-        )
+    pub(in crate::app::render) fn display_row(&self, row: usize) -> Option<usize> {
+        (row < self.display_rows.len()).then_some(row)
     }
 
     pub(in crate::app::render) fn item_rows(&self) -> Vec<Vec<usize>> {
-        (0..self.total_display_rows)
-            .map(|display_row| match self.display_row(display_row) {
-                Some(super::hero::InlineDisplayRow::Replacement) => {
-                    if display_row == self.selected_row {
-                        vec![self.selected_item]
-                    } else {
-                        Vec::new()
-                    }
-                }
-                Some(super::hero::InlineDisplayRow::Source(source_row)) => {
-                    match &self.display_rows[source_row] {
-                        DisplayRow::Item(items) => items.clone(),
-                        DisplayRow::Spacer | DisplayRow::LetterHeader(_) => Vec::new(),
-                    }
-                }
-                None => Vec::new(),
+        self.display_rows
+            .iter()
+            .map(|row| match row {
+                DisplayRow::Item(indices) => indices.clone(),
+                DisplayRow::Spacer | DisplayRow::LetterHeader(_) => Vec::new(),
             })
             .collect()
-    }
-
-    /// Indicates whether the selected row's background extension should be
-    /// painted this frame: suppressed while an inline hero replaces the row's
-    /// own area, so the selected-row treatment does not fight the hero block.
-    pub(in crate::app::render) fn should_extend_selection_background(&self) -> bool {
-        self.detail_rows == 0
     }
 }
 
@@ -181,8 +99,7 @@ impl<'a> InlineReplacementPlan<'a> {
 /// prelude values both kinds' bodies read, factored out so each callee takes
 /// one struct instead of the same six-plus positional arguments.
 pub(in crate::app::render) struct ListRenderCtx<'a> {
-    /// The list's scrolling area. Narrow callers replace the active source row
-    /// in this same flow.
+    /// The list's scrolling area.
     pub(in crate::app::render) content_area: Rect,
     pub(in crate::app::render) items: &'a [mbv_core::api::EmbyItem],
     pub(in crate::app::render) cursor: usize,
@@ -190,7 +107,6 @@ pub(in crate::app::render) struct ListRenderCtx<'a> {
     /// Column count for this frame's list pane width (1 or 2).
     pub(in crate::app::render) cols: usize,
     pub(in crate::app::render) focused: bool,
-    pub(in crate::app::render) hero_rows: u16,
 }
 
 /// Owned browser-list inputs shared by narrow and wide renderers. The shell
@@ -258,7 +174,6 @@ impl LibraryListRenderCtx {
         content_area: Rect,
         cols: usize,
         focused: bool,
-        hero_rows: u16,
     ) -> ListRenderCtx<'_> {
         ListRenderCtx {
             content_area,
@@ -267,7 +182,6 @@ impl LibraryListRenderCtx {
             stored_scroll: self.scroll,
             cols,
             focused,
-            hero_rows,
         }
     }
 

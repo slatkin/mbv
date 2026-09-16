@@ -1,7 +1,7 @@
 //! The `PanelList` implementation (task 5.8, design D3): one object-safe
 //! implementation over the shared media-list carrier for every `Target`.
-//! The panel drives the carrier through this surface — breakpoint choice
-//! (`set_presentation`), the paint policy, the slot-rect view, and the
+//! The panel drives the carrier through this surface — the viewport clamp
+//! (`sync_viewport`), the paint policy, the slot-rect view, and the
 //! retained-geometry reads — while typed target resolution stays on the
 //! carrier's own surface, so no per-destination `ListSlot` arm can grow.
 
@@ -9,10 +9,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::component::Component;
 
-use crate::app::components::media_list::{
-    InlineMediaBrowserPaintPolicy, MediaListCarrier, Presentation, WideMediaListPaintPolicy,
-    ZebraStripe,
-};
+use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
 use crate::app::palette::{self, Surface};
 
 use super::content::{PanelList, PanelListPaintPolicy};
@@ -26,11 +23,10 @@ fn zebra_stripe(surface: Surface) -> ZebraStripe {
 }
 
 impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
-    fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize) {
+    fn sync_viewport(&mut self, viewport_height: usize) {
         // Path syntax prefers the inherent method, so this forwards to the
-        // carrier's own re-anchoring implementation rather than recursing
-        // into the trait.
-        MediaListCarrier::set_presentation(self, presentation, viewport_height);
+        // carrier's own viewport clamp rather than recursing into the trait.
+        MediaListCarrier::sync_viewport(self, viewport_height);
     }
 
     fn clear_selection(&mut self) {
@@ -51,35 +47,27 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
                         .with_zebra(zebra_stripe(Surface::LibraryPanel)),
                 );
             }
-            PanelListPaintPolicy::Inline {
-                focused,
-                desired_detail_rows,
-            } => {
-                self.inline_mut()
-                    .set_paint_policy(InlineMediaBrowserPaintPolicy::new(
-                        focused,
-                        desired_detail_rows,
-                    ));
+            PanelListPaintPolicy::Narrow { focused } => {
+                // Two tones while focused and two while resting. The surface is
+                // the list's own content fill; both zebra rows step down to the
+                // library stripe pair (focused `#3c4841`, resting `#333c43`).
+                // Only the focused pair moves relative to the wide list.
+                let body = palette::surface_colors(Surface::MainContentBox, focused).fill;
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::new(focused)
+                        .with_zebra(zebra_stripe(Surface::LibraryPanel))
+                        .with_body(body),
+                );
             }
         }
     }
 
     fn view(&mut self, frame: &mut Frame, rect: Rect) {
-        match self.active() {
-            Presentation::Wide => self.wide_mut().view(frame, rect),
-            Presentation::Inline => self.inline_mut().view(frame, rect),
-        }
+        self.wide_mut().view(frame, rect);
     }
 
     fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
-        match self.active() {
-            Presentation::Wide => self.wide_mut().set_geometry(claim_rect, content_rect),
-            Presentation::Inline => self.inline_mut().set_geometry(claim_rect, content_rect),
-        }
-    }
-
-    fn detail_rect(&self) -> Option<Rect> {
-        self.inline().current_detail_rect()
+        self.wide_mut().set_geometry(claim_rect, content_rect);
     }
 
     fn selected_row_rect(&self) -> Option<Rect> {
@@ -95,9 +83,7 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
 #[allow(clippy::unwrap_used)]
 mod panel_list_tests {
     use super::*;
-    use crate::app::components::media_list::{
-        MediaKind, MediaListRow, MediaSemanticState, Presentation,
-    };
+    use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::style::Color;
@@ -121,7 +107,7 @@ mod panel_list_tests {
     /// `src/app/render/components/media_list.rs` and its Wide-arm tests.
     #[test]
     fn wide_selected_rows_use_the_gutter_accent_for_both_slots() {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("selected")]);
         let area = Rect::new(0, 0, 20, 1);
         let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
@@ -155,15 +141,12 @@ mod panel_list_tests {
         );
     }
 
-    /// The canonical-list re-anchor contract, driven through the panel's
-    /// object-safe surface: `set_presentation(Inline | Wide, height)` moves
-    /// the one shared owner between the carrier's adapters and re-anchors
-    /// the selected row to the same viewport offset (design D3). The owner
-    /// is reconfigured, never copied — rows, selection, and scroll survive
-    /// the transition.
+    /// The canonical-list contract, driven through the panel's object-safe
+    /// surface: the same fixed-row owner remains active while its geometry
+    /// changes, preserving selection and clamping on view.
     #[test]
-    fn set_presentation_reanchors_the_shared_owner_across_the_transition() {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+    fn sync_viewport_preserves_the_shared_owner_across_the_transition() {
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("a"), item("b"), item("c")]);
         carrier.select_target(&"b".to_string());
         carrier.set_scroll(0);
@@ -184,9 +167,8 @@ mod panel_list_tests {
         let wide_offset = carrier.wide().current_flow_offset().expect("wide painted");
         let wide_selected = carrier.wide().current_selected_target().cloned();
 
-        // Panel-driven transition to Inline: the same owner, re-anchored.
-        PanelList::set_presentation(&mut carrier, Presentation::Inline, 2);
-        assert_eq!(carrier.active(), Presentation::Inline);
+        // The panel keeps the same fixed-row owner while geometry changes.
+        PanelList::sync_viewport(&mut carrier, 2);
         assert_eq!(
             carrier.selected_target().cloned(),
             wide_selected,
@@ -198,27 +180,23 @@ mod panel_list_tests {
             .draw(|f| {
                 PanelList::set_paint_policy(
                     &mut carrier,
-                    PanelListPaintPolicy::Inline {
-                        focused: true,
-                        desired_detail_rows: 0,
-                    },
+                    PanelListPaintPolicy::Wide { focused: true },
                 );
                 PanelList::view(&mut carrier, f, list_rect);
             })
             .unwrap();
         assert_eq!(
-            carrier.inline().current_flow_offset(),
+            carrier.wide().current_flow_offset(),
             Some(wide_offset),
             "the re-anchored offset survives the panel-driven transition"
         );
         assert_eq!(
-            carrier.inline().current_selected_target().cloned(),
+            carrier.wide().current_selected_target().cloned(),
             wide_selected,
             "the shared owner's selection is preserved across the transition"
         );
         // Back to Wide: the owner is reconfigured again, not copied.
-        PanelList::set_presentation(&mut carrier, Presentation::Wide, 2);
-        assert_eq!(carrier.active(), Presentation::Wide);
+        PanelList::sync_viewport(&mut carrier, 2);
         assert_eq!(carrier.selected_target().cloned(), wide_selected);
     }
 }

@@ -91,10 +91,8 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> PaintedRowGeometry {
     if let Some(wide) = panel.test_wide_geometry() {
         PaintedRowGeometry {
             left_area: wide.list_area,
-            hero_area: wide.hero_area,
             selected_item_rect: wide.selected,
             selector_tabs,
-            ..Default::default()
         }
     } else {
         let narrow = panel
@@ -102,10 +100,8 @@ fn panel_browse_layout(model: &crate::app::shell::Model) -> PaintedRowGeometry {
             .expect("the panel painted a Wide or Narrow skeleton");
         PaintedRowGeometry {
             left_area: narrow.list_area,
-            hero_area: narrow.inline_hero.unwrap_or_default(),
             selected_item_rect: narrow.selected,
             selector_tabs,
-            ..Default::default()
         }
     }
 }
@@ -244,10 +240,8 @@ fn render_feeds_panel(
     let layout = if let Some(wide) = panel.test_wide_geometry() {
         PaintedRowGeometry {
             left_area: wide.list_area,
-            hero_area: wide.hero_area,
             selected_item_rect: wide.selected,
             selector_tabs,
-            ..Default::default()
         }
     } else {
         let narrow = panel
@@ -255,10 +249,8 @@ fn render_feeds_panel(
             .expect("the panel painted a Wide or Narrow skeleton");
         PaintedRowGeometry {
             left_area: narrow.list_area,
-            hero_area: narrow.inline_hero.unwrap_or_default(),
             selected_item_rect: narrow.selected,
             selector_tabs,
-            ..Default::default()
         }
     };
     (terminal, layout)
@@ -367,40 +359,6 @@ fn assert_one_pill_row_and_spacer(
     }
 }
 
-#[test]
-fn matrix_bottom_selected_heroes_swallow_their_source_rows() {
-    let mut music = make_music_group_app();
-    music.libs[0].nav_stack[1].set_resting_cursor(0);
-    let cases = [("Music", music, "First Album")];
-
-    for (surface, app, title) in cases {
-        let (terminal, layout) = render_browse_component(app, 70, 30);
-        let output = buffer_to_string(&terminal);
-        assert!(
-            layout.hero_area.height > 0,
-            "{surface} bottom selection should admit a hero:\n{output}"
-        );
-        let selected_rect = layout
-            .selected_item_rect
-            .expect("selected item keeps a parent-owned target");
-        assert!(
-            layout
-                .hero_area
-                .contains((selected_rect.x, selected_rect.y).into())
-                && layout
-                    .hero_area
-                    .contains((selected_rect.right() - 1, selected_rect.bottom() - 1).into(),),
-            "{surface} selected target must be contained by the admitted hero"
-        );
-        assert!(selected_rect.height > 0);
-        assert_eq!(
-            output.matches(title).count(),
-            1,
-            "{surface} source row was not swallowed:\n{output}"
-        );
-    }
-}
-
 /// Task 5.3d + 5.11, Home as the first panel owner: the Home leg of the
 /// pill-bar conformance reads the mounted `LibraryPanel`'s own retained
 /// `SkeletonHits.selector` (the single painter) — the same painted-truth
@@ -501,32 +459,6 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
     assert!(
         !buffer_to_string(&terminal).is_empty(),
         "Feeds did not paint a buffer"
-    );
-}
-
-#[test]
-fn matrix_mini_presentations_do_not_admit_a_full_hero() {
-    // Home (task 5.3d + 5.11) is painted by the mounted `LibraryPanel`, so
-    // its mini-view hero is asserted from the panel's own geometry: the tiny
-    // viewport admits no inline hero. The pill data is Model-owned
-    // `home_content.latest` (5.3d).
-    let (model, _terminal) = render_home_shell_with(mixed_home_app(), 60, 8, |m| {
-        m.home_section_pending =
-            Some(crate::app::types_playback::HomeLatestSource::Audiobookshelf("books".into()));
-        m.home_content.latest = mixed_home_latest();
-    });
-    let admitted = model
-        .application
-        .get_component(&ComponentId::Library)
-        .expect("Library panel mounted")
-        .as_any()
-        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
-        .expect("Library panel type")
-        .test_narrow_geometry()
-        .and_then(|geo| geo.inline_hero);
-    assert_eq!(
-        admitted, None,
-        "Home mini presentation should not admit a hero"
     );
 }
 

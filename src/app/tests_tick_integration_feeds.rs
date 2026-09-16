@@ -121,6 +121,36 @@ fn feeds_tick_navigation_paints_selected_row_at_wide_and_narrow() {
 }
 
 #[test]
+fn feeds_tick_leaf_enter_opens_overlay_then_activates_selected_entry() {
+    let width = crate::app::TWO_COLUMN_THRESHOLD - 1;
+    let mut harness = harness(width);
+    draw(&mut harness, width);
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let opened = harness.step();
+    assert!(opened.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)
+    )));
+    draw(&mut harness, width);
+    assert!(panel(&harness).test_overlay_geometry().is_some());
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let activated = harness.step();
+    assert!(activated.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::FeedsPlay(entries)) if entries.len() == 1 && entries[0].guid == "one"
+    )));
+    assert!(panel(&harness).test_hero_overlay_open());
+}
+
+#[test]
 fn feeds_tick_click_resolves_painted_entry_and_blank_is_noop() {
     for width in [
         crate::app::TWO_COLUMN_THRESHOLD,

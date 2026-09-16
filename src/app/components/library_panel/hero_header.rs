@@ -2,8 +2,9 @@
 //! (16:9 artwork full content width above title/meta), Portrait (2:3) and
 //! Square (1:1) (title/meta left, artwork right) — behind one title/meta
 //! painter that colours meta row *n* with `HERO_META_ROLES[n % 3]` and owns
-//! truncation and wrapping. The arm comes only from the artwork policy's
-//! shape (`HeroHeader::from`), never from a destination. The artwork box is
+//! truncation and wrapping. The arm comes from the artwork policy's shape,
+//! re-armed to the projected image's decoded aspect once it resolves
+//! (`HeroArtwork::painted_shape`), never from a destination. The artwork box is
 //! sized by the paint-free [`hero_artwork_box`], the one layout site the
 //! shell projection (task 5.10) shares with the painter.
 
@@ -57,7 +58,7 @@ pub(in crate::app) fn hero_artwork_box(
     facts: &HeroFacts,
     workspace_present: bool,
 ) -> Rect {
-    let header = HeroHeader::from(facts.artwork.shape);
+    let header = HeroHeader::from(facts.artwork.painted_shape());
     // The artwork shrinks before a Workspace viewport would drop (design D5).
     let max_h = if workspace_present {
         area.height.saturating_sub(WORKSPACE_MIN_ROWS)
@@ -138,7 +139,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     hovered_link: Option<usize>,
     link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
 ) -> (u16, Option<Rect>, Option<OverviewPaint>) {
-    let header = HeroHeader::from(content.facts.artwork.shape);
+    let header = HeroHeader::from(content.facts.artwork.painted_shape());
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
     let image_ready = matches!(
         content.facts.artwork.image,
@@ -226,12 +227,7 @@ mod hero_header_tests {
     /// A stub `PanelList` so a Workspace can be present for the shrink rule.
     struct NoopList;
     impl PanelList for NoopList {
-        fn set_presentation(
-            &mut self,
-            _presentation: crate::app::components::media_list::Presentation,
-            _viewport_height: usize,
-        ) {
-        }
+        fn sync_viewport(&mut self, _viewport_height: usize) {}
 
         fn set_paint_policy(
             &mut self,
@@ -424,6 +420,96 @@ mod hero_header_tests {
         assert!(text_in(&buf, text_area, "Dune"));
         // The placeholder fills the whole box.
         assert_eq!(buf[(artwork.x + 1, artwork.y + 1)].bg, placeholder_fill());
+    }
+
+    /// A `Ready` projected image with `decoded` source pixels, on top of the
+    /// given declared policy shape — the agreement the painter must honour.
+    fn with_decoded_image(shape: ArtworkShape, decoded: (u32, u32)) -> HeroContent<'static> {
+        HeroContent {
+            facts: HeroFacts {
+                title: "Dune".into(),
+                meta_rows: vec!["2021".into()],
+                links: Vec::new(),
+                artwork: HeroArtwork {
+                    shape,
+                    source: None,
+                    decoration: None,
+                    image: crate::app::components::library_panel::content::HeroImageState::Ready {
+                        cache_key: "k".into(),
+                        decoded: Some(decoded),
+                    },
+                },
+            },
+            overview: None,
+            credits: None,
+            workspace: None,
+        }
+    }
+
+    /// The image the fetch actually resolved governs the arm: a series whose
+    /// policy pinned Landscape from a declared thumb but whose chain resolved
+    /// to the portrait poster paints the Portrait arm — title/meta beside a
+    /// right-aligned box, never stacked underneath the art.
+    #[test]
+    fn landscape_declared_series_with_a_portrait_poster_paints_text_beside_art() {
+        let pane = with_decoded_image(ArtworkShape::Landscape, (200, 300));
+        let artwork = hero_artwork_box(AREA, &pane.facts, false);
+        // Right-aligned side-by-side box, never the full content width.
+        assert_eq!(artwork.right(), AREA.right(), "art is right-aligned");
+        assert!(
+            artwork.width < AREA.width,
+            "not the Landscape full-width box"
+        );
+        let buf = draw_pane(AREA.width, AREA.height, &pane);
+        let beside = Rect {
+            width: artwork.x.saturating_sub(AREA.x + 1),
+            ..AREA
+        };
+        assert!(text_in(&buf, beside, "Dune"));
+        assert!(text_in(&buf, beside, "2021"));
+        let below = Rect {
+            y: artwork.bottom(),
+            height: AREA.bottom() - artwork.bottom(),
+            ..AREA
+        };
+        assert!(!text_in(&buf, below, "Dune"), "no title stacked below");
+    }
+
+    /// Genuinely 16:9 artwork keeps the Landscape arm: full-width art above
+    /// the title/meta block.
+    #[test]
+    fn landscape_declared_series_with_a_landscape_thumb_keeps_art_above_text() {
+        let pane = with_decoded_image(ArtworkShape::Landscape, (1600, 900));
+        let artwork = hero_artwork_box(AREA, &pane.facts, false);
+        assert_eq!(artwork.x, AREA.x);
+        assert_eq!(artwork.width, AREA.width);
+        let buf = draw_pane(AREA.width, AREA.height, &pane);
+        let below = Rect {
+            y: artwork.bottom(),
+            height: AREA.bottom() - artwork.bottom(),
+            ..AREA
+        };
+        assert!(text_in(&buf, below, "Dune"));
+        assert!(text_in(&buf, below, "2021"));
+    }
+
+    /// Square artwork (music) keeps the Square arm: side-by-side, unchanged.
+    #[test]
+    fn square_policy_with_square_art_keeps_text_beside_art() {
+        let pane = with_decoded_image(ArtworkShape::Square, (500, 500));
+        let artwork = hero_artwork_box(AREA, &pane.facts, false);
+        assert_eq!(artwork.right(), AREA.right());
+        assert!(
+            artwork.width < AREA.width,
+            "not the Landscape full-width box"
+        );
+        let buf = draw_pane(AREA.width, AREA.height, &pane);
+        let beside = Rect {
+            width: artwork.x.saturating_sub(AREA.x + 1),
+            ..AREA
+        };
+        assert!(text_in(&buf, beside, "Dune"));
+        assert!(text_in(&buf, beside, "2021"));
     }
 
     #[test]

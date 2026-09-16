@@ -83,6 +83,12 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_BACKDROP,
         },
+        Surface::NarrowLibraryBody => Row {
+            level: Level::ColumnPane,
+            focus: FocusSource::LibraryColumn,
+            soft: false,
+            resting: SURFACE_BACKDROP,
+        },
         // The wide hero split gap paints the backdrop in every frame today
         // (`components/wide_hero_boundary.rs:121`).
         Surface::WideSplitGutter => Row {
@@ -336,8 +342,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         },
         // --- popup ---
         // Every modal caller passes `SURFACE_FOCUSED` as its frame background
-        // (`render/components/modal_frame.rs:47` and its nine callers, e.g.
-        // `confirm_modal.rs:29`, `selection_modal.rs:65,96`).
+        // (`render/components/modal_frame.rs:47` and its remaining callers).
         Surface::PopupFrame => Row {
             level: Level::Popup,
             focus: FocusSource::Fixed,
@@ -379,6 +384,10 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
         "main paints the library column's gutter and the wide Music browser \
          container as the app backdrop (`SURFACE_BACKDROP`) in every frame; \
          neither follows panel focus",
+    ),
+    (
+        Surface::NarrowLibraryBody,
+        "the non-Wide library panel body rests at the app backdrop it replaced, \n         not the column/pane level's resting content value",
     ),
     (
         Surface::WideSplitGutter,

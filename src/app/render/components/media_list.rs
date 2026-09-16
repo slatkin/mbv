@@ -3,9 +3,7 @@ mod row;
 mod wide;
 
 pub(in crate::app) use plain_rows::render_plain_rows;
-pub(in crate::app) use wide::{
-    render_inline_media_browser_component, render_wide_media_list_component,
-};
+pub(in crate::app) use wide::render_wide_media_list_component;
 
 #[cfg(test)]
 mod wide_row_regression_tests {
@@ -304,6 +302,7 @@ mod wide_row_regression_tests {
                     selected_bg,
                     Some(zebra_bg),
                     false,
+                    None,
                 );
             })
             .unwrap();
@@ -362,6 +361,7 @@ mod wide_row_regression_tests {
                     palette::SURFACE_RESTING,
                     Some(zebra_bg),
                     false,
+                    None,
                 );
             })
             .unwrap();
@@ -405,6 +405,7 @@ mod wide_row_regression_tests {
                     palette::SURFACE_RESTING,
                     Some(Color::Rgb(60, 72, 65)),
                     true,
+                    None,
                 );
             })
             .unwrap();

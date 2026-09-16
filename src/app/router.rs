@@ -64,13 +64,6 @@ pub(super) fn resolve_router_outcome_with_focused(
     let focused_is_blocking_overlay =
         snapshot.blocking_overlay_open && focused.is_some_and(is_blocking_overlay);
     match resolve_policy(chord, snapshot) {
-        Some(entry) if entry.blocking && entry.name == "selection_modal" => {
-            if focused_is_blocking_overlay {
-                RouterOutcome::FallThrough
-            } else {
-                RouterOutcome::Swallow
-            }
-        }
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
         Some(entry) => {
             if snapshot.text_entry_focused
@@ -122,7 +115,7 @@ pub(super) fn is_blocking_overlay(id: &ComponentId) -> bool {
     use super::components::{ModalId, OverlayId, PopupId};
     matches!(
         id,
-        ComponentId::Overlay(OverlayId::ContextMenu | OverlayId::SelectionModal)
+        ComponentId::Overlay(OverlayId::ContextMenu)
             | ComponentId::Modal(ModalId::Confirm | ModalId::DaemonLost | ModalId::SavePlaylist,)
             | ComponentId::Popup(
                 PopupId::Multiselect | PopupId::LibraryRoutes | PopupId::FeedManage,

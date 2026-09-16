@@ -10,46 +10,23 @@
 //! [`PanelList`] surface until task 5.8 formalizes the trait.
 
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::{Block, Paragraph};
+
 use ratatui::Frame;
 
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
-use crate::app::render::arrangements::padded_rect;
 use crate::app::render::{
     render_inline_search, render_placeholder, wide_hero_browser_pane, wide_hero_hero_pane,
     PillBarWindow, PANE_PAD_X, PANE_PAD_Y,
 };
 
-use super::content::{HeroImageState, LibraryPanelContent, ListSlot, PanelHeroImagePaint};
-use super::hero_header::paint_hero_pane_content;
+use super::content::{LibraryPanelContent, ListSlot};
+use super::hero_composition::{full_width_claim, paint_library_hero_content};
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
     SELECTOR_ROW_PREFIX,
 };
-use crate::app::render::place_media_list_below;
-
-/// Blank rows between the header/overview content's painted bottom edge and
-/// the Workspace box (design D3: the Workspace sits below the overview).
-const WORKSPACE_GAP_ROWS: u16 = 1;
-
-/// A full-width claim rect over `content`'s rows, reaching `panel`'s left/
-/// right edges: the canonical rail's selected-row background extends to the
-/// panel border while row flow/hit geometry stays on the inset `content`.
-fn full_width_claim(panel: Rect, content: Rect) -> Rect {
-    Rect {
-        x: panel.x,
-        width: panel.width,
-        ..content
-    }
-}
-
-/// The Workspace selector's leading label (TV's season pills, the only
-/// current Workspace selector): the pre-migration wide rail's own prefix
-/// (`tv_wide.rs`), distinct from the Selector row's universal `⌘` glyph.
-const WORKSPACE_SELECTOR_PREFIX: &str = " Series: ";
 
 /// The skeleton's retained irregular-chrome hit registries, one per painted
 /// pill row (ADR 0024: the mounted panel owns gesture state and resolves the
@@ -100,7 +77,7 @@ pub(in crate::app) struct WideSkeletonGeometry {
     pub workspace: Option<(Rect, Rect)>,
     /// The projected hero image's paint (task 5.10, design D9), when the
     /// header reserved a ready image's box.
-    pub hero_image: Option<PanelHeroImagePaint>,
+    pub hero_image: Option<super::content::PanelHeroImagePaint>,
     pub overview_box: Option<Rect>,
     pub overview_content_length: usize,
     pub overview_viewport: usize,
@@ -156,6 +133,9 @@ pub(in crate::app) fn render_wide_skeleton(
                 hovered_selector,
                 &mut hits.selector,
                 &mut windows.selector,
+                // Wide's spacer stays the chrome gap band it has always been.
+                palette::Surface::PillRowGap,
+                false,
             );
         }
         (None, false) => {
@@ -174,9 +154,9 @@ pub(in crate::app) fn render_wide_skeleton(
                 &mut hits.selector,
                 &mut windows.selector,
             );
-            paint_pill_row_gap(f, pane.spacer_area);
+            paint_pill_row_gap(f, pane.spacer_area, palette::Surface::PillRowGap, false);
         }
-        (_, true) => paint_pill_row_gap(f, pane.spacer_area),
+        (_, true) => paint_pill_row_gap(f, pane.spacer_area, palette::Surface::PillRowGap, false),
     }
 
     // List controls row: reserved only when the destination supplies
@@ -244,13 +224,10 @@ pub(in crate::app) fn render_wide_skeleton(
             search.set_scroll(new_scroll);
         }
         ListSlot::Media(list) => {
-            // The panel drives the presentation and the paint policy (design
-            // D3): the Wide breakpoint selects the Wide presentation, and the
-            // slot fixes focus and the list-backdrop selected row (design D6).
-            list.set_presentation(
-                crate::app::components::media_list::Presentation::Wide,
-                list_area.height.max(1) as usize,
-            );
+            // The panel drives the viewport clamp and the paint policy
+            // (design D3): the slot fixes focus and the list-backdrop
+            // selected row (design D6).
+            list.sync_viewport(list_area.height.max(1) as usize);
             list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
                 focused: list_focused,
             });
@@ -281,8 +258,8 @@ pub(in crate::app) fn render_wide_skeleton(
     // still shows through its own content-box tint.
     let hero_area = wide_hero_hero_pane(f, area, false, override_width)?;
 
-    // The list slot's painted selection: the context-menu anchor's painted
-    // truth (the selected row's rect, or the admitted inline hero block).
+    // The list slot's painted selection is the context-menu anchor's painted
+    // truth.
     let selected = match &mut content.list {
         ListSlot::Media(list) => list.selected_row_rect(),
         _ => None,
@@ -305,168 +282,23 @@ pub(in crate::app) fn render_wide_skeleton(
     };
 
     if let Some(hero) = content.hero.as_mut() {
-        // The Hero header (task 5.5): policy arm, placeholder artwork box,
-        // one title/meta painter, and the overview box when overview text
-        // exists. Returns the first unpainted row and the projected image's
-        // reserved box (task 5.10: `Ready` reserves; the shell paints).
-        let (next_row, image_box, overview) = paint_hero_pane_content(
+        let composition = paint_library_hero_content(
             f,
             hero_area,
-            &*hero,
+            hero,
             overview_scroll,
             hovered_link,
             &mut hits.links,
+            &mut hits.workspace_selector,
+            &mut windows.workspace_selector,
         );
-        if let Some(overview) = overview {
-            geometry.overview_box = Some(overview.rect);
-            geometry.overview_content_length = overview.content_length;
-            geometry.overview_viewport = overview.viewport;
-        }
-        if let (HeroImageState::Ready { cache_key, .. }, Some(box_rect)) =
-            (&hero.facts.artwork.image, image_box)
-        {
-            geometry.hero_image = Some(PanelHeroImagePaint {
-                area: box_rect,
-                cache_key: cache_key.clone(),
-                centered: true,
-            });
-        }
-        if let Some(workspace) = hero.workspace.as_mut() {
-            // One blank row below the painted content before the Workspace
-            // box (task 5.6): `next_row` is the first *unpainted* row, and
-            // `place_media_list_below` adds `WORKSPACE_GAP_ROWS` blank rows
-            // above the box, so passing `next_row` leaves that row blank.
-            if let Some(workspace_rect) =
-                place_media_list_below(hero_area, next_row, WORKSPACE_GAP_ROWS, hero_area.height)
-            {
-                geometry.workspace = Some(paint_workspace_box(
-                    f,
-                    workspace_rect,
-                    workspace,
-                    &mut hits.workspace_selector,
-                    &mut windows.workspace_selector,
-                ));
-            }
-        }
+        geometry.workspace = composition.workspace;
+        geometry.hero_image = composition.hero_image;
+        geometry.overview_box = composition.overview_box;
+        geometry.overview_content_length = composition.overview_content_length;
+        geometry.overview_viewport = composition.overview_viewport;
     }
     Some(geometry)
-}
-
-/// Rows a Workspace header occupies: the title, the Hero separator line,
-/// and the blank row below it.
-const WORKSPACE_HEADER_ROWS: u16 = 3;
-
-/// Paints a Workspace box's header: the title in bold foam, then the
-/// separator line the Movie hero's overview box uses under its overview text
-/// (same `▁` block characters and role) spanning the box's content width.
-fn paint_workspace_header(f: &mut Frame, content: Rect, header: &str) {
-    f.render_widget(
-        Paragraph::new(header).style(
-            Style::default()
-                .fg(palette::TEXT_METADATA)
-                .add_modifier(ratatui::style::Modifier::BOLD),
-        ),
-        Rect {
-            height: 1,
-            ..content
-        },
-    );
-    crate::app::render::components::widgets::render_block_separator(
-        f,
-        Rect {
-            y: content.y.saturating_add(1),
-            height: 1,
-            ..content
-        },
-    );
-}
-
-/// The Workspace (task 5.6, design D6): an optional header band and Selector
-/// row over one Main content box holding the Workspace's `&mut dyn PanelList`.
-/// The box's surface is derived, not declared — accent-soft while the
-/// workspace list holds focus, backdrop otherwise (user decision: Music's
-/// behaviour for all) — and the list's selected row is fixed to the owning
-/// surface by the slot. Returns the (panel, content) rects, where `content`
-/// is the rect the list was viewed into below the header band.
-fn paint_workspace_box(
-    f: &mut Frame,
-    workspace_rect: Rect,
-    workspace: &mut super::content::Workspace<'_>,
-    hits: &mut HitRegions<usize>,
-    window: &mut PillBarWindow,
-) -> (Rect, Rect) {
-    let mut box_area = workspace_rect;
-    if let Some(selector) = &workspace.selector {
-        let bar = Rect {
-            height: 1,
-            ..workspace_rect
-        };
-        if bar.height > 0 {
-            // `render_pill_bar` fully repaints the row's background even
-            // with no pills (task 12.2): the row stays reserved, so it must
-            // still own its own paint. TV's season pills are this selector
-            // (`tv_content/mod.rs`); the legacy wide rail's own prefix
-            // (`tv_wide.rs`, pre-migration) is restored here rather than the
-            // Selector row's universal `⌘` glyph, which this row never used.
-            paint_pill_bar_row(
-                f,
-                bar,
-                &selector.pills,
-                selector.active,
-                None,
-                Some(WORKSPACE_SELECTOR_PREFIX),
-                hits,
-                window,
-            );
-        }
-        box_area = Rect {
-            y: bar.bottom(),
-            height: workspace_rect.height.saturating_sub(1),
-            ..workspace_rect
-        };
-    }
-    // The box fills `box_area` flush (matching the list panel and hero pane's
-    // own single inset): `workspace_rect` is already inset from the hero
-    // panel's edge by `hero_area`'s padding, so the panel must not add a
-    // second outer margin on top of it. Only `content` carries the box's own
-    // interior padding, matching every other recessed box.
-    let panel = box_area;
-    let background =
-        palette::surface_colors(palette::Surface::MainContentBox, workspace.focused).fill;
-    f.render_widget(
-        Block::default().style(Style::default().bg(background)),
-        panel,
-    );
-    let content = padded_rect(panel, PANE_PAD_X, PANE_PAD_Y);
-    // The destination's box header (Grouped Music's `Tracks`): title, the
-    // Hero separator line, one blank row, then the list. Skipped when the
-    // box cannot keep a list row under it -- the same "omitted when no room"
-    // convention as the other slot arrangements.
-    let content = match workspace.header {
-        Some(header) if content.height > WORKSPACE_HEADER_ROWS => {
-            paint_workspace_header(f, content, header);
-            Rect {
-                y: content.y.saturating_add(WORKSPACE_HEADER_ROWS),
-                height: content.height.saturating_sub(WORKSPACE_HEADER_ROWS),
-                ..content
-            }
-        }
-        _ => content,
-    };
-    // The owning-surface selected row is fixed by the slot (design D6): the
-    // panel sets the paint policy, destinations pass none.
-    workspace
-        .list
-        .set_paint_policy(super::content::PanelListPaintPolicy::WideWorkspace {
-            focused: workspace.focused,
-        });
-    // Full-width claim so the selected row's background reaches the box's
-    // own border, matching the Browser pane's list (see above).
-    workspace
-        .list
-        .set_geometry(full_width_claim(panel, content), content);
-    workspace.list.view(f, content);
-    (panel, content)
 }
 
 #[cfg(test)]
