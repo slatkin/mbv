@@ -517,53 +517,31 @@ width calculations, and hit geometry SHALL remain unchanged.
 - **WHEN** a Wide presentation is configured without a zebra-stripe policy
 - **THEN** all unselected rows paint with no explicit background, matching today's behaviour
 
-### Requirement: The non-Wide library list owns the surface under it
+### Requirement: The non-Wide library list is the Wide Browser-pane list
 
-The non-Wide library list's paint policy SHALL carry the list's own body fill. When a list carries
-one, the painter SHALL fill its claim rect with that fill before painting rows. The scrollbar column
-SHALL NOT resolve that same fill: the non-Wide library list SHALL carry the surrounding library panel
-body's identity for the column (`NarrowLibraryBody`: focused `#3c4841`, resting `#2d353b`), so the
-column reads as the pane's own margin rather than as another tone of the list inset it sits beside.
-A list that carries no body fill SHALL keep resolving the scrollbar column through the owning-surface
-identity of its selected-row surface, as before, so the Wide lists and the Queue are unaffected.
+The non-Wide library list SHALL be the Wide Browser-pane list at the non-Wide pane width: it SHALL
+resolve the same `LibraryPanel` list-box fill and the same `MainContentBox` stripe pair, and SHALL
+carry no per-geometry body fill or scrollbar-column fill. Its list box SHALL be filled by the panel
+that composes the surface, as the Wide Browser-pane list's is, so the Wide list policy is the only
+one the non-Wide library uses. A list that carries no body fill SHALL keep resolving the scrollbar
+column through the owning-surface identity of its selected-row surface, as before, so the Queue is
+unaffected.
 
-#### Scenario: The scrollbar column is the surrounding panel body
+#### Scenario: The non-Wide library list uses the Wide Browser-pane policy
+
+- **WHEN** a non-Wide library list renders in either focus state
+- **THEN** its list box carries the `LibraryPanel` fill and its alternating rows carry the
+  `MainContentBox` fill for that state
+- **AND** no body fill or scrollbar-column fill is set on its paint policy
+
+#### Scenario: Scrollbar column parity with the Wide Browser-pane list
 
 - **WHEN** a non-Wide library list overflows and paints its scrollbar column
-- **THEN** that column carries the non-Wide library panel body's fill
-- **AND** the column's `#3c4841` (focused) leaves the list's own `#48584e` inset beside it
+- **THEN** the column carries the same fill the Wide Browser-pane list's column carries
+- **AND** it does not carry a library-body fill
 
 #### Scenario: Lists without their own body fill are unchanged
 
 - **WHEN** a Wide library list or the Queue list paints its scrollbar column
 - **THEN** the column resolves the owning-surface identity of its selected-row surface
 - **AND** its painted fill is unchanged from before this capability
-
-### Requirement: Non-Wide library lists use the Wide browser list's pair
-
-The non-Wide library list SHALL take the same two surfaces as the Wide browser list, because it is the
-same panel at another breakpoint: its list box SHALL be filled with the `LibraryPanel` pair (focused
-`#3c4841`, resting `#333c43`) and it SHALL stripe with the `MainContentBox` pair (focused `#48584e`,
-resting `#2d353b`), so the stripe differs from the fill of its own list box in both focus states. The
-surrounding non-Wide panel body (`NarrowLibraryBody`: `#3c4841` focused, `#2d353b` resting) remains a
-separate identity: the box differs from that body while resting, and the scrollbar column SHALL
-resolve the body rather than the list's own fill so it reads as the pane's margin.
-Stripe parity, the selected row keeping its own parity, and `Heading`/`Spacer` rows never striping
-SHALL remain as the Wide requirement already defines them.
-
-#### Scenario: A focused non-Wide list alternates two tones
-
-- **WHEN** a non-Wide library list renders with library focus
-- **THEN** the list box carries the `LibraryPanel` focused fill `#3c4841`
-- **AND** the alternate visible rows carry the `MainContentBox` focused fill `#48584e`
-
-#### Scenario: A resting non-Wide list alternates two tones
-
-- **WHEN** a non-Wide library list renders without library focus
-- **THEN** the list box carries the `LibraryPanel` resting fill `#333c43`
-- **AND** the alternate visible rows carry the `MainContentBox` resting fill `#2d353b`
-
-#### Scenario: The stripe never equals its own list box
-
-- **WHEN** a non-Wide library list renders in either focus state
-- **THEN** its stripe colour differs from the fill its own list box is painted with in that state
