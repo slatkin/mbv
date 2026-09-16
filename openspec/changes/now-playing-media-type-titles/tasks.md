@@ -20,16 +20,16 @@
 
 ## 2. Theme roles
 
-- [ ] 2.1 Add two role-specific primitives in `src/app/render/theme/primitives.rs` (the aqua
+- [x] 2.1 Add two role-specific primitives in `src/app/render/theme/primitives.rs` (the aqua
   title value and the yellow context value), each with a doc comment recording that it shares a
   value with the brand aqua / focused-row accent but is deliberately its own primitive. Verify by
   inspecting that no existing role or primitive references the new names.
 
-- [ ] 2.2 Add the two roles in `src/app/render/theme/mod.rs` and re-export them through
+- [x] 2.2 Add the two roles in `src/app/render/theme/mod.rs` and re-export them through
   `src/app/palette.rs`. Verify `cargo check -p mbv` and that the role comments state what each
   means (now-playing title / now-playing context) rather than naming a hue.
 
-- [ ] 2.3 Add the single role-to-colour resolution point in the playback painter
+- [x] 2.3 Add the single role-to-colour resolution point in the playback painter
   (`src/app/render/components/chrome_player.rs`) so no other site maps a part role to a palette
   role. Verify with a painter buffer test asserting both role cells' `fg`.
 
