@@ -520,6 +520,12 @@ impl TvContent {
     pub(in crate::app) fn episode_cursor(&self) -> usize {
         self.episodes.cursor()
     }
+    /// Test-only: the episode owner's resting scroll offset, used to prove
+    /// the overlay Workspace's viewport follows cursor/wheel movement.
+    #[cfg(test)]
+    pub(in crate::app) fn episode_scroll(&self) -> usize {
+        self.episodes.scroll()
+    }
     pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();
         let season_id = self

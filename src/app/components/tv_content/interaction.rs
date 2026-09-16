@@ -119,15 +119,28 @@ impl TvContent {
     /// its row through its own carrier, and blank pane space is the
     /// `EpisodesPane` hit the deleted `resolve_hit` fallback produced.
     fn hero_pane_event(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        // The series rail is the only scrollable TV surface in the Wide
+        // pane (legacy `handle_mouse_wide`). Over an open Library Hero
+        // overlay, the Workspace's episode list is the scrollable surface:
+        // a wheel over its rows steps the list like the Wide workspace
+        // wheel does and is claimed.
+        if let MediaListSurfaceInput::Wheel { at, delta } = input {
+            if !self.hero_overlay_open || !self.episodes.claims_current_point(at) {
+                return None;
+            }
+            self.episodes.delegate_operation(
+                MediaListSurfaceInput::Wheel { at, delta }
+                    .into_operation(None)
+                    .expect("resolved media-list pointer target"),
+            );
+            return Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed));
+        }
         let at = match input {
             MediaListSurfaceInput::Click(at)
             | MediaListSurfaceInput::ToggleClick(at)
             | MediaListSurfaceInput::RangeClick(at)
             | MediaListSurfaceInput::DoubleClick(at)
             | MediaListSurfaceInput::ContextClick(at) => at,
-            // The series rail is the only scrollable TV surface; a wheel
-            // over the hero pane is unclaimed (legacy `handle_mouse_wide`).
-            MediaListSurfaceInput::Wheel { .. } => return None,
             _ => return None,
         };
         let hit = if self.episodes.claims_current_point(at) {

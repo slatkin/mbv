@@ -864,8 +864,9 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
 
 /// A narrow-geometry TV tab whose selected Series' season detail is cached:
 /// the mounted panel hosts the real `TvContent` owner with a paintable
-/// Workspace (two episodes), tall enough for the overlay's Workspace box.
-fn migrated_tv_with_detail() -> TickHarness {
+/// Workspace (`episode_count` episodes), tall enough for the overlay's
+/// Workspace box.
+fn migrated_tv_with_detail(episode_count: usize) -> TickHarness {
     let mut app = crate::app::render::make_movie_app();
     app.libs[0].library.collection_type = "tvshows".into();
     for item in &mut app.libs[0].nav_stack[0].items {
@@ -878,17 +879,19 @@ fn migrated_tv_with_detail() -> TickHarness {
     app.terminal_height = 60;
     let mut season = crate::app::tests::make_item("Season 1", "Season");
     season.id = "season-1".into();
-    let mut episode = crate::app::tests::make_item("Episode 1", "Episode");
-    episode.id = "episode-1".into();
-    let mut episode2 = crate::app::tests::make_item("Episode 2", "Episode");
-    episode2.id = "episode-2".into();
+    let episodes: Vec<_> = (1..=episode_count)
+        .map(|index| {
+            let mut episode =
+                crate::app::tests::make_item(&format!("Episode {index}"), "Episode");
+            episode.id = format!("episode-{index}");
+            episode
+        })
+        .collect();
     app.series_detail_cache.insert(
         "movie-focused".into(),
         crate::app::SeriesDetail {
             seasons: vec![season],
-            episodes: [("season-1".into(), vec![episode, episode2])]
-                .into_iter()
-                .collect(),
+            episodes: [("season-1".into(), episodes)].into_iter().collect(),
         },
     );
     let mut harness = TickHarness::new(app);
@@ -914,7 +917,7 @@ fn tv_owner_of(harness: &TickHarness) -> &crate::app::components::tv_content::Tv
 fn overlay_workspace_keys_move_the_episode_list_not_the_browser() {
     use tuirealm::event::{Key, KeyEvent};
 
-    let mut harness = migrated_tv_with_detail();
+    let mut harness = migrated_tv_with_detail(2);
     drop(draw_frame_at_model_size(&mut harness));
 
     harness.inject(Event::Keyboard(KeyEvent {
@@ -1004,7 +1007,7 @@ fn overlay_workspace_keys_move_the_episode_list_not_the_browser() {
 fn overlay_workspace_click_selects_and_is_claimed() {
     use tuirealm::event::{Key, KeyEvent};
 
-    let mut harness = migrated_tv_with_detail();
+    let mut harness = migrated_tv_with_detail(2);
     drop(draw_frame_at_model_size(&mut harness));
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -1036,6 +1039,134 @@ fn overlay_workspace_click_selects_and_is_claimed() {
         1,
         "the click selected the clicked Workspace row"
     );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the covered browser list must not move"
+    );
+}
+
+/// Keyboard movement inside the overlay's overflowing Workspace drags the
+/// viewport with the cursor: enough Down steps push the first row out of
+/// the box and pull the cursor's row in, with the browser list untouched.
+#[test]
+fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(30);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+    assert_eq!(tv_owner_of(&harness).episode_scroll(), 0);
+
+    // More Down steps than the Workspace box's painted rows: the viewport
+    // must follow the cursor past its bottom edge.
+    for _ in 0..14 {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        14,
+        "the cursor moved through the overflowing list"
+    );
+    assert!(
+        tv_owner_of(&harness).episode_scroll() > 0,
+        "the Workspace viewport must follow the cursor with overflow"
+    );
+    let buf = terminal.backend().buffer();
+    assert!(
+        find_text(buf, "15. Episode 15").is_some(),
+        "the cursor's row scrolled into the Workspace box"
+    );
+    // Not "1. Episode 1": that string is a substring of "11. Episode 11".
+    // Row 6 is the last row above the scrolled-in window.
+    assert!(
+        find_text(buf, "6. Episode 6").is_none(),
+        "the first rows scrolled out of the Workspace box"
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the covered browser list must not move"
+    );
+}
+
+/// A wheel over the overlay's Workspace rows scrolls the episode list and
+/// is claimed; the covered browser list never scrolls from it.
+#[test]
+fn overlay_workspace_wheel_scrolls_and_is_claimed() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(30);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some());
+
+    // Walk the cursor into the overflow first (the keyboard path, already
+    // covered above): the wheel's single notch must then scroll a following
+    // viewport, not a reset one. One notch = one cursor step (the canonical
+    // wheel = Move translation); the 30 ms burst throttle collapses rapid
+    // notches, so the test drives exactly one recognized gesture.
+    for _ in 0..14 {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+    drop(draw_frame_at_model_size(&mut harness));
+    let scroll_before = tv_owner_of(&harness).episode_scroll();
+    assert!(scroll_before > 0, "test setup: the viewport is in overflow");
+
+    let (x, y) = find_text(terminal.backend().buffer(), "Episode 2")
+        .or_else(|| find_text(terminal.backend().buffer(), "Episode 3"))
+        .or_else(|| find_text(terminal.backend().buffer(), "Episode 4"))
+        .or_else(|| find_text(terminal.backend().buffer(), "Episode 5"))
+        .expect("a Workspace row paints");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed)
+    )));
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        15,
+        "the wheel stepped the Workspace cursor"
+    );
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        tv_owner_of(&harness).episode_scroll() > scroll_before,
+        "the wheel scrolled the Workspace viewport past its bottom edge"
+    );
+    assert!(panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .is_some(),
+        "the wheel leaves the overlay open");
     assert_eq!(
         harness.model().app.libs[0].nav_stack[0].resting().cursor(),
         0,
