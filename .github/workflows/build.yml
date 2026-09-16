@@ -8,6 +8,18 @@ on:
       - 'v*'
   workflow_dispatch:
 
+# One commit means one build. release.sh pushes main and then the tag, so the
+# same commit would otherwise be built twice (~7min each in the Arch container):
+# once on refs/heads/main, once on refs/tags/v*. Keying on the commit SHA makes
+# the tag run supersede the branch run.
+#
+# The asymmetry matters: only an incoming *tag* run cancels (it is the last and
+# authoritative ref, and it publishes). An incoming branch run waits its turn,
+# so if the two pushes were ever received out of order the release still runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.sha }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
