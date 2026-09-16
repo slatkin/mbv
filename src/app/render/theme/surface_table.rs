@@ -85,9 +85,9 @@ pub(super) const fn row(surface: Surface) -> Row {
         },
         Surface::NarrowLibraryBody => Row {
             level: Level::ColumnPane,
-            focus: FocusSource::Fixed,
+            focus: FocusSource::LibraryColumn,
             soft: false,
-            resting: primitives::NARROW_LIBRARY_BODY_BG,
+            resting: SURFACE_BACKDROP,
         },
         // The wide hero split gap paints the backdrop in every frame today
         // (`components/wide_hero_boundary.rs:121`).
@@ -387,7 +387,7 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     ),
     (
         Surface::NarrowLibraryBody,
-        "the non-Wide library panel body paints its own green-grey rather than \n         the column/pane level's resting content value",
+        "the non-Wide library panel body rests at the app backdrop it replaced, \n         not the column/pane level's resting content value",
     ),
     (
         Surface::WideSplitGutter,

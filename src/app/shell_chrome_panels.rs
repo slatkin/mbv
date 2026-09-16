@@ -385,21 +385,26 @@ impl Model {
     }
 
     /// Paint the mounted `StatusBarPanel` into its `RootFrame.status_bar`
-    /// band. The gap row above the bar plus the band's gutter columns and
-    /// padding row below are the library column's backdrop (the same
-    /// `LibraryColumn` fill `render_library_panel_at` gives that
-    /// placement) and the status row is inset two columns each side, so
-    /// the bar floats clear of the content above and the column's edges.
+    /// band. The band's padding rows take the library column's own body fill
+    /// (`library_body_fill`: the wide column's backdrop, or the non-Wide
+    /// body resolved with the panel's focus), and the status row is inset two
+    /// columns each side, so the bar floats clear of the content above and the
+    /// column's edges.
     pub(super) fn render_status_bar_panel_at(&mut self, frame: &mut Frame, area: Rect) {
         let id = ComponentId::StatusBarPanel;
         if !self.application.mounted(&id) {
             return;
         }
-        fill_surface(
-            frame,
+        // The band's padding rows belong to the library column, not the bar:
+        // they take the same body fill the placement above them took, guarded
+        // by the same geometry + panel-focus pair, so a narrow library band
+        // never shows a strip of backdrop under a focused panel. The bar row
+        // itself is painted by `StatusBarPanel` afterwards.
+        frame.render_widget(ratatui::widgets::Clear, area);
+        frame.render_widget(
+            ratatui::widgets::Block::default()
+                .style(ratatui::style::Style::default().bg(self.library_body_fill())),
             area,
-            crate::app::palette::Surface::LibraryColumn,
-            false,
         );
         let row = status_bar_row(area);
         self.application.view(&id, frame, row);

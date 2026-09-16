@@ -55,6 +55,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
         selected_bg,
         None,
         false,
+        None,
     )
 }
 
@@ -67,6 +68,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     selected_bg: Color,
     zebra_bg: Option<Color>,
     gutter_accent: bool,
+    body_bg: Option<Color>,
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
     let selected_row = geometry.selected_row();
@@ -123,6 +125,16 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     // flow from the content rectangle. A framed parent may claim a wider
     // panel than its padded row flow; it must not move the painted rows away
     // from the retained row geometry.
+    // The list's own body, when it owns the surface it sits on (the non-Wide
+    // library list): one fill under the rows and the scrollbar column, so no
+    // site paints a strip of its own there.
+    if let Some(body_bg) = body_bg {
+        f.render_widget(
+            Block::default().style(Style::default().bg(body_bg)),
+            paint_area,
+        );
+    }
+
     let row_paint_area = row_paint_area(paint_area, content_area);
     f.render_widget(List::new(list_items), row_paint_area);
 
@@ -132,8 +144,10 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
         } else {
             row_paint_area.x + row_paint_area.width.saturating_sub(1)
         };
+        // With a body of its own the column is that body, not the
+        // selected-row punch-through the caller painted elsewhere.
         f.render_widget(
-            Block::default().style(Style::default().bg(selected_bg)),
+            Block::default().style(Style::default().bg(body_bg.unwrap_or(selected_bg))),
             Rect {
                 x: scrollbar_x,
                 width: 1,
@@ -197,6 +211,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq
         // Wide selection is always the gutter accent; `selected_bg` now only
         // resolves the scrollbar backing for focused overflowing lists.
         true,
+        policy.body_bg(),
     );
     list.finish_view(
         claim_rect,

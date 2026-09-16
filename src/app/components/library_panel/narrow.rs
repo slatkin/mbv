@@ -45,6 +45,11 @@ pub(in crate::app) fn render_narrow_skeleton(
             hovered_selector,
             &mut hits.selector,
             &mut windows.selector,
+            // The spacer is this panel showing through: in non-Wide geometry
+            // that is the panel's own body, resolved with the same focus bit
+            // the list below it uses.
+            crate::app::palette::Surface::NarrowLibraryBody,
+            browser_focused,
         ),
         (None, false) => {
             paint_pill_bar_row(
@@ -57,9 +62,19 @@ pub(in crate::app) fn render_narrow_skeleton(
                 &mut hits.selector,
                 &mut windows.selector,
             );
-            paint_pill_row_gap(f, areas.spacer_area);
+            paint_pill_row_gap(
+                f,
+                areas.spacer_area,
+                crate::app::palette::Surface::NarrowLibraryBody,
+                browser_focused,
+            );
         }
-        (_, true) => paint_pill_row_gap(f, areas.spacer_area),
+        (_, true) => paint_pill_row_gap(
+            f,
+            areas.spacer_area,
+            crate::app::palette::Surface::NarrowLibraryBody,
+            browser_focused,
+        ),
     }
 
     let (list_area, controls_area) = match &content.controls {
@@ -104,19 +119,12 @@ pub(in crate::app) fn render_narrow_skeleton(
             search.set_scroll(new_scroll);
         }
         ListSlot::Media(list) => {
-            // Ad-hoc tweak: the Narrow list body paints the same surface
-            // identity its zebra stripe resolves from, so while focused both
-            // the body and the secondary stripe are `#48584e` (one flat
-            // focused surface, no alternation) and while resting both are the
-            // backdrop they already showed through from the column.
-            crate::app::render::components::widgets::fill_surface(
-                f,
-                list_area,
-                crate::app::palette::Surface::MainContentBox,
-                browser_focused,
-            );
+            // The list owns the surface it sits on in this geometry: same
+            // identity its zebra stripe resolves from, and the same focus bit,
+            // so a focused narrow list is one flat surface and a resting one
+            // keeps the default backdrop. No separate body fill here.
             list.set_presentation(Presentation::Wide, list_area.height.max(1) as usize);
-            list.set_paint_policy(PanelListPaintPolicy::Wide {
+            list.set_paint_policy(PanelListPaintPolicy::Narrow {
                 focused: browser_focused,
             });
             list.set_geometry(list_area, list_area);

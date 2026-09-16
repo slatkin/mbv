@@ -262,6 +262,39 @@ impl Model {
         Some(crate::app::render::components::widgets::right_panel_content_area(area, collapsed))
     }
 
+    /// The Library column's own body fill for the current geometry **and**
+    /// panel focus.
+    ///
+    /// Deliberately guarded twice. The geometry gate is the one breakpoint
+    /// predicate (`wide_hero_fits`): Wide keeps the column's fixed backdrop
+    /// exactly as before, so nothing here can change Wide. The focus bit is
+    /// the same `PanelFocus::Library` the rest of the chrome reads, and only
+    /// the non-Wide body follows it — an unfocused narrow library stays on the
+    /// default backdrop.
+    pub(super) fn library_body_fill(&self) -> ratatui::style::Color {
+        let Some(content_area) = self.library_panel_content_area() else {
+            // No library placement this frame: the column's own resting value.
+            return crate::app::palette::surface_colors(
+                crate::app::palette::Surface::LibraryColumn,
+                false,
+            )
+            .fill;
+        };
+        if crate::app::render::wide_hero_fits(content_area) {
+            return crate::app::palette::surface_colors(
+                crate::app::palette::Surface::LibraryColumn,
+                false,
+            )
+            .fill;
+        }
+        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        crate::app::palette::surface_colors(
+            crate::app::palette::Surface::NarrowLibraryBody,
+            focused,
+        )
+        .fill
+    }
+
     /// The transitional draw step: give the library rect to the mounted
     /// `LibraryPanel` when the active library's owner has migrated; otherwise
     /// the old destination components paint (the caller gates them).
@@ -282,16 +315,9 @@ impl Model {
         // under the list. The gate is the one breakpoint predicate, evaluated
         // on the rect the panel itself receives.
         let content_area = self.library_panel_content_area().unwrap_or(area);
-        let body = if crate::app::render::wide_hero_fits(content_area) {
-            crate::app::palette::Surface::LibraryColumn
-        } else {
-            crate::app::palette::Surface::NarrowLibraryBody
-        };
         frame.render_widget(
-            ratatui::widgets::Block::default().style(
-                ratatui::style::Style::default()
-                    .bg(crate::app::palette::surface_colors(body, false).fill),
-            ),
+            ratatui::widgets::Block::default()
+                .style(ratatui::style::Style::default().bg(self.library_body_fill())),
             area,
         );
         self.application.view(&id, frame, content_area);

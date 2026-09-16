@@ -67,6 +67,11 @@ pub(in crate::app) const SELECTOR_ROW_PREFIX: &str = " \u{2318} ";
 /// the painted pills' hitboxes into `hits` — followed by the panel's spacer
 /// row. An empty pill list paints no bar (the row's place stays reserved for
 /// it), and the spacer always paints: the row is the bar plus the spacer.
+///
+/// `body`/`body_focused` are the owning panel's own body surface and focus
+/// bit: the spacer row is the panel showing through, so the caller supplies
+/// what "the panel" means in its geometry (Wide's chrome gap, or the non-Wide
+/// body) rather than this painter choosing one.
 pub(in crate::app) fn paint_selector_row(
     f: &mut Frame,
     bar_area: Rect,
@@ -75,6 +80,8 @@ pub(in crate::app) fn paint_selector_row(
     hovered: Option<usize>,
     hits: &mut HitRegions<usize>,
     window: &mut PillBarWindow,
+    body: palette::Surface,
+    body_focused: bool,
 ) {
     if !row.pills.is_empty() && bar_area.height > 0 && bar_area.width > 0 {
         paint_pill_bar_row(
@@ -88,17 +95,23 @@ pub(in crate::app) fn paint_selector_row(
             window,
         );
     }
-    paint_pill_row_gap(f, spacer_area);
+    paint_pill_row_gap(f, spacer_area, body, body_focused);
 }
 
-/// Paints the panel's blank spacer row below a pill bar (the `PillRowGap`
-/// chrome band). One owner: the slot paints it, so destinations never carry
-/// Home's private spacer paint again (design D8).
-pub(in crate::app) fn paint_pill_row_gap(f: &mut Frame, area: Rect) {
+/// Paints the panel's blank spacer row below a pill bar: the owning panel's
+/// own body surface (`body`, resolved with `focused`), never a separate
+/// backdrop of its own. One owner: the slot paints it, so destinations never
+/// carry Home's private spacer paint again (design D8).
+pub(in crate::app) fn paint_pill_row_gap(
+    f: &mut Frame,
+    area: Rect,
+    body: palette::Surface,
+    focused: bool,
+) {
     if area.height == 0 || area.width == 0 {
         return;
     }
-    let background = palette::surface_colors(palette::Surface::PillRowGap, false).fill;
+    let background = palette::surface_colors(body, focused).fill;
     f.render_widget(
         Paragraph::new(" ".repeat(area.width as usize)).style(Style::default().bg(background)),
         area,
@@ -159,7 +172,17 @@ mod tests {
         let mut hits = HitRegions::new();
         let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, None, &mut hits, &mut window);
+            paint_selector_row(
+                f,
+                bar,
+                spacer,
+                &row,
+                None,
+                &mut hits,
+                &mut window,
+                palette::Surface::PillRowGap,
+                false,
+            );
         });
         let buf = terminal.backend().buffer();
         assert!(text_in(buf, bar, "Movies") && text_in(buf, bar, "TV"));
@@ -197,7 +220,17 @@ mod tests {
         let mut hits = HitRegions::new();
         let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, Some(0), &mut hits, &mut window);
+            paint_selector_row(
+                f,
+                bar,
+                spacer,
+                &row,
+                Some(0),
+                &mut hits,
+                &mut window,
+                palette::Surface::PillRowGap,
+                false,
+            );
         });
         let buf = terminal.backend().buffer();
         let (hovered_rect, _) = hits.regions()[0];
@@ -240,7 +273,17 @@ mod tests {
         let mut hits = HitRegions::new();
         let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, None, &mut hits, &mut window);
+            paint_selector_row(
+                f,
+                bar,
+                spacer,
+                &row,
+                None,
+                &mut hits,
+                &mut window,
+                palette::Surface::PillRowGap,
+                false,
+            );
         });
         let buf = terminal.backend().buffer();
         // Both pills paint (unselected); no cell anywhere in the bar carries
@@ -274,7 +317,17 @@ mod tests {
         let mut hits = HitRegions::new();
         let mut window = PillBarWindow::default();
         let terminal = draw(24, 4, |f| {
-            paint_selector_row(f, bar, spacer, &row, None, &mut hits, &mut window);
+            paint_selector_row(
+                f,
+                bar,
+                spacer,
+                &row,
+                None,
+                &mut hits,
+                &mut window,
+                palette::Surface::PillRowGap,
+                false,
+            );
         });
         let buf = terminal.backend().buffer();
         assert!(hits.regions().is_empty(), "no pill painted, no hit kept");

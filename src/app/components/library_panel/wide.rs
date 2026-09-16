@@ -133,6 +133,9 @@ pub(in crate::app) fn render_wide_skeleton(
                 hovered_selector,
                 &mut hits.selector,
                 &mut windows.selector,
+                // Wide's spacer stays the chrome gap band it has always been.
+                palette::Surface::PillRowGap,
+                false,
             );
         }
         (None, false) => {
@@ -151,9 +154,9 @@ pub(in crate::app) fn render_wide_skeleton(
                 &mut hits.selector,
                 &mut windows.selector,
             );
-            paint_pill_row_gap(f, pane.spacer_area);
+            paint_pill_row_gap(f, pane.spacer_area, palette::Surface::PillRowGap, false);
         }
-        (_, true) => paint_pill_row_gap(f, pane.spacer_area),
+        (_, true) => paint_pill_row_gap(f, pane.spacer_area, palette::Surface::PillRowGap, false),
     }
 
     // List controls row: reserved only when the destination supplies
