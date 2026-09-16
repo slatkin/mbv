@@ -595,8 +595,12 @@ impl App {
             Command::OpenHelp => unreachable!("OpenHelp is dispatched by Model"),
             Command::FocusPanel(focus) => {
                 self.set_panel_focus(focus);
-                self.last_card_height = 0;
-                self.last_card_width = 0;
+                // No card-checkpoint reset: `last_card_*` is the measured
+                // image geometry and focus does not change the artwork
+                // (hide-queue-visuals-when-idle design). Clearing it here
+                // made every focus switch reserve the fallback rectangle
+                // for a frame -- the now-playing panel visibly grew then
+                // shrank between image and seekbar.
             }
 
             Command::CyclePanelMode => {

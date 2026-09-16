@@ -10,6 +10,24 @@ fn key_ctrl(code: KeyCode) -> KeyChord {
     KeyChord::new(code, KeyModifiers::CONTROL)
 }
 
+/// Focus switches keep the queue card checkpoint: the checkpoint is the
+/// measured image geometry and focus does not change the artwork, so a
+/// switch must not re-reserve the fallback rectangle for a frame (that
+/// made the now-playing panel visibly grow then shrink between image and
+/// seekbar).
+#[test]
+fn focus_panel_keeps_the_card_checkpoint() {
+    let mut app = make_app_stub();
+    app.last_card_height = 17;
+    app.last_card_width = 34;
+    app.dispatch(Command::FocusPanel(crate::app::PanelFocus::Library));
+    assert_eq!(app.last_card_height, 17);
+    assert_eq!(app.last_card_width, 34);
+    app.dispatch(Command::FocusPanel(crate::app::PanelFocus::Queue));
+    assert_eq!(app.last_card_height, 17);
+    assert_eq!(app.last_card_width, 34);
+}
+
 // ── PLAYBACK_HELP_BINDINGS stays truthful to playback_command_for_key ───
 
 /// Characterization test: replays every `PLAYBACK_HELP_BINDINGS` sample
