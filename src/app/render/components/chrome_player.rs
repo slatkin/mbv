@@ -5,6 +5,7 @@ use crate::app::render::arrangements::playback_transport::{
     transport_rows, transport_title_plan, TransportIndicators, TransportMeasure, TransportPlan,
 };
 use crate::app::ui_util::*;
+use mbv_core::playback_queue::PlaybackTitlePartRole;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -187,6 +188,21 @@ fn render_seekbar(
 /// title row.
 fn split_title_rows(surface: palette::Surface) -> bool {
     surface == palette::Surface::QueueOnlyPlaybackPanel
+}
+
+/// The single role-to-colour resolution point for the now-playing title
+/// parts (now-playing-media-type-titles D6, task 2.3): the painter turns a
+/// closed part role into its theme role here, and no other site maps a part
+/// role to a palette role.
+// Transitional (now-playing-media-type-titles): unit 3 wires the typed parts
+// through the projection; until then only the buffer test below exercises
+// this, so the non-test build carries it as deliberately unused.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(in crate::app) fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
+    match role {
+        PlaybackTitlePartRole::Title => palette::PLAYBACK_TITLE_FG,
+        PlaybackTitlePartRole::Context => palette::PLAYBACK_CONTEXT_FG,
+    }
 }
 
 /// The transport control glyphs and their colours for one render context.
@@ -591,8 +607,87 @@ fn marquee_spans(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mbv_core::playback_queue::PlaybackTitlePart;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+
+    /// The role-to-colour resolution point (task 2.3): a two-part now-playing
+    /// row paints the title part's cells in the title role's fg and the
+    /// context part's cells in the context role's fg, both through the
+    /// painter's own `title_part_fg` mapping.
+    #[test]
+    fn title_part_roles_paint_their_theme_roles_in_the_row() {
+        let parts = [
+            PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: "Pilot".to_string(),
+            },
+            PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Context,
+                text: "Series".to_string(),
+            },
+        ];
+        let mut playback = PlaybackStripAreas::default();
+        let mut marquee_text = String::new();
+        let mut marquee_started_at = std::time::Instant::now();
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 60, 1),
+            playback: &mut playback,
+            player_h: 2,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: None,
+            throbber: Span::raw(" "),
+            title_parts: parts
+                .iter()
+                .map(|p| (p.text.clone(), title_part_fg(p.role)))
+                .collect(),
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 60, 1),
+                    "",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row = (0..60)
+            .map(|x| buf[(x, 0)].symbol().to_string())
+            .collect::<String>();
+        for part in &parts {
+            let start = row
+                .find(&part.text)
+                .unwrap_or_else(|| panic!("{:?} not painted in the row: {row:?}", part.text))
+                as u16;
+            for i in 0..part.text.chars().count() as u16 {
+                assert_eq!(
+                    buf[(start + i, 0)].fg,
+                    title_part_fg(part.role),
+                    "cell {i} of {:?} must carry its role's fg: {row:?}",
+                    part.text
+                );
+            }
+        }
+        assert_ne!(
+            title_part_fg(PlaybackTitlePartRole::Title),
+            title_part_fg(PlaybackTitlePartRole::Context),
+            "the test locates the parts by their roles, so the roles must differ"
+        );
+    }
 
     /// The queue column's split upper row pads the status pill on both
     /// sides: the value (e.g. FLAC) must not touch the panel fill on the

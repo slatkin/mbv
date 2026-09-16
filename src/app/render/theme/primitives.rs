@@ -51,6 +51,15 @@ pub(super) const LIBRARY_SIDE_BG: Color = Color::Rgb(45, 53, 59); // library-sid
 pub(super) const PLAYBACK_PANEL_BG: Color = Color::Rgb(51, 60, 67); // now-playing panel background (#333c43)
 pub(super) const PLAYBACK_CONTENT_FG: Color = Color::Rgb(131, 192, 146); // playback title/codec value (#83c092)
 pub(super) const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metadata captions/time (#859289)
+/// The now-playing title row's title-part value. A primitive of its own, not
+/// the brand aqua's `AQUA`, whose value it shares today: a brand-aqua edit
+/// can never move the now-playing title (now-playing-media-type-titles D2).
+pub(super) const PLAYBACK_TITLE: Color = Color::Rgb(53, 167, 124); // now-playing title aqua (#35a77c), deliberately not the brand `AQUA`
+/// The now-playing title row's context-part value. A primitive of its own,
+/// not the focused-row accent's `YELLOW`, whose value it shares today: a
+/// focused-row-accent edit can never move the now-playing context
+/// (now-playing-media-type-titles D2).
+pub(super) const PLAYBACK_CONTEXT: Color = Color::Rgb(219, 188, 127); // now-playing context gold (#dbbc7f), deliberately not the `YELLOW` accent
 /// The selected-row bar fill (#2d353b). A primitive of its own, not the
 /// library-side `LIBRARY_SIDE_BG`, so an edit to either can never move the bar.
 pub(super) const SELECTED_ROW_BAR: Color = Color::Rgb(45, 53, 59);
