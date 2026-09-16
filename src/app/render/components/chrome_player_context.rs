@@ -48,7 +48,6 @@ impl App {
                 || self.player.status.lock().unwrap().active,
             next_available: self.transport_prev_next_available().1,
             status_indicators: self.build_status_indicator_spans(),
-            throbber: self.now_playing_throbber_span(),
             title_parts: self.active_playback_title_parts(),
             idle_feed_title: self.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {

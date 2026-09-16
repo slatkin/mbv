@@ -487,12 +487,12 @@ fn displayed_queue_playback_state_is_inactive_for_non_playback_scope() {
 }
 
 #[test]
-fn throbber_advances_when_session_reports_paused_but_position_advances() {
+fn transport_reads_as_playing_when_session_reports_paused_but_position_advances() {
     // Some Emby clients always report IsPaused=true even while the
     // transport is actively playing. The run loop bumps
     // `remote_stalled_while_paused` based on position observations, so when
     // position keeps advancing each poll the throttle is cleared and the
-    // throbber keeps ticking.
+    // transport keeps reading as playing.
 
     let mut app = make_remote_app_stub(make_items(2), make_items(2));
     app.connected_session_state = Some({
@@ -514,16 +514,16 @@ fn throbber_advances_when_session_reports_paused_but_position_advances() {
 
     assert!(
         !app.playback_transport_paused(),
-        "throbber must keep ticking when the latest API poll observed a position advance"
+        "the transport must keep reading as playing when the latest API poll observed a position advance"
     );
 }
 
 #[test]
-fn throbber_freezes_when_remote_pause_is_observed() {
+fn transport_reads_as_paused_when_remote_pause_is_observed() {
     // After the user pauses remotely, the next API poll sees IsPaused=true
     // with no position advance; the run loop latches
-    // `remote_stalled_while_paused` so the throbber freezes immediately
-    // rather than waiting out the 22s extrapolate window.
+    // `remote_stalled_while_paused` so the transport reads as paused
+    // immediately rather than waiting out the 22s extrapolate window.
 
     let mut app = make_remote_app_stub(make_items(2), make_items(2));
     app.connected_session_state = Some({
@@ -539,7 +539,7 @@ fn throbber_freezes_when_remote_pause_is_observed() {
 
     assert!(
         app.playback_transport_paused(),
-        "throbber must freeze once a single API poll observes IsPaused=true with no position advance"
+        "the transport must read as paused once a single API poll observes IsPaused=true with no position advance"
     );
 }
 

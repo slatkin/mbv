@@ -2,7 +2,7 @@ use super::chrome::play_icon;
 use super::marquee;
 use crate::app::palette;
 use crate::app::render::arrangements::playback_transport::{
-    transport_rows, transport_title_plan, TransportIndicators, TransportMeasure, TransportPlan,
+    transport_buttons_fit, transport_rows, TransportMeasure,
 };
 use crate::app::ui_util::*;
 use mbv_core::playback_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
@@ -37,7 +37,6 @@ pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) stop_available: bool,
     pub(in crate::app) next_available: bool,
     pub(in crate::app) status_indicators: Option<Vec<Span<'static>>>,
-    pub(in crate::app) throbber: Span<'static>,
     /// The typed now-playing title parts with their closed roles (D6); the
     /// painter resolves a role to a colour, never the producer. `None` when
     /// the attached target is not addressable as a local queue item (a cast
@@ -188,9 +187,8 @@ fn render_seekbar(
 }
 
 /// Whether the panel behind `surface` splits its title band across two rows:
-/// the queue column's transport moves the title, throbber/percent and time
-/// onto the blank indicator row, while the Library strip keeps the single
-/// title row.
+/// the queue column's transport moves the title and time onto the blank
+/// indicator row, while the Library strip keeps the single title row.
 fn split_title_rows(surface: palette::Surface) -> bool {
     surface == palette::Surface::QueueOnlyPlaybackPanel
 }
@@ -307,9 +305,8 @@ fn render_transport_glyphs(
 /// The status-indicator pills (codec/res/aud/sub, uppercased on the pill
 /// surface): the right side of the single title row and of the queue
 /// column's upper split row. Opens with one pill-background space so the
-/// resolution pill never touches the panel fill on the left, mirroring the
-/// trailing space on the right. No other trailing space; callers pad after
-/// merging.
+/// resolution pill never touches the panel fill on the left. No other
+/// trailing space; callers pad after merging (`padded_status_pill`).
 fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
     let mut codec_value_next = false;
@@ -353,11 +350,29 @@ fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     right
 }
 
+/// The status pill with a pad on both sides: `status_pill_spans` opens with
+/// the leading pad, this adds the matching trailing one so the value (e.g.
+/// FLAC) never touches the panel fill on the right. Empty when there is no
+/// cluster to paint.
+fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
+    let mut spans = status_pill_spans(ctx);
+    if !spans.is_empty() {
+        spans.push(Span::styled(
+            " ",
+            Style::default().bg(palette::surface_colors(
+                palette::Surface::PlaybackStatusPill,
+                false,
+            )
+            .fill),
+        ));
+    }
+    spans
+}
+
 /// The queue column's split title band: the upper row keeps the transport
 /// controls and the status pills, while the title and the `pos / dur` time
 /// move one row down onto the indicator row — the title left with one space
-/// of indent, the time right with one space of indent. The throbber and
-/// percent live up in the header while playing, never here. The title keeps
+/// of indent, the time right with one space of indent. The title keeps
 /// the shared marquee window, sized to the wider lower row. Hit geometry
 /// stays on the upper row, where the glyphs paint.
 fn render_queue_title_rows(
@@ -377,22 +392,10 @@ fn render_queue_title_rows(
     let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
     let (pos_ticks, rt_ticks, paused) = ctx.progress;
     let glyphs = control_glyphs(ctx, paused);
-    // The pill's trailing pad mirrors its leading pad (`status_pill_spans`
-    // opens with one pill-background space): without it the value (e.g.
-    // FLAC) touches the panel fill on the right. `render_title_row` pads
-    // the same way after its own merge; this row owns its merge, so it
-    // pads here before measuring.
-    let mut pills = status_pill_spans(ctx);
-    if !pills.is_empty() {
-        pills.push(Span::styled(
-            " ",
-            Style::default().bg(palette::surface_colors(
-                palette::Surface::PlaybackStatusPill,
-                false,
-            )
-            .fill),
-        ));
-    }
+    // The pill is padded on both sides before measuring: without the
+    // trailing pad the value (e.g. FLAC) touches the panel fill on the
+    // right. `render_title_row` pads the same way after its own merge.
+    let pills = padded_status_pill(ctx);
     let pills_w: u16 = pills.iter().map(|span| span.content.width() as u16).sum();
     let glyph_text = format!("{} ", glyphs.play.0);
     let glyph_w = glyph_text.width() as u16;
@@ -424,8 +427,7 @@ fn render_queue_title_rows(
         Paragraph::new(Line::from(upper_spans)).style(Style::default().bg(panel_bg)),
         upper,
     );
-    // The lower row: ` <title> ... <pos / dur> `. The throbber and percent
-    // ride in the header while playing, never here.
+    // The lower row: ` <title> ... <pos / dur> `.
     let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
     let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
     let time_text = format!("{pos_str} / {dur_str}");
@@ -464,94 +466,37 @@ pub(in crate::app) fn render_title_row(
         return;
     }
 
-    let (pos_ticks, rt_ticks, paused) = ctx.progress;
+    let (pos_ticks, _rt_ticks, paused) = ctx.progress;
     let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
-    let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
     let glyphs = control_glyphs(ctx, paused);
-    let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
-    let mut right = status_pill_spans(ctx);
-    let pct_str = fmt_playback_pct(pos_ticks, rt_ticks);
-    let mut progress_spans = vec![
-        Span::styled(
-            ctx.throbber.content.to_string(),
-            ctx.throbber.style.bg(pill_bg),
-        ),
-        Span::styled(
-            pct_str,
-            Style::default().fg(palette::TEXT_METADATA).bg(pill_bg),
-        ),
-    ];
-    if right.is_empty() {
-        right = progress_spans;
-    } else {
-        progress_spans.push(Span::styled(
-            " \u{29F8} ",
-            Style::default().fg(palette::BORDER_UNFOCUSED).bg(pill_bg),
-        ));
-        progress_spans.extend(right);
-        right = progress_spans;
-    }
-    if !right.is_empty() {
-        right.push(Span::styled(" ", Style::default().bg(pill_bg)));
-    }
-
-    let time_sep = " ";
-    let right_full = {
-        let mut spans = right.clone();
-        spans.insert(
-            0,
-            Span::styled(
-                format!("{pos_str} / {dur_str}"),
-                Style::default().fg(palette::PLAYBACK_META_FG),
-            ),
-        );
-        spans.insert(1, Span::raw(time_sep));
-        spans
-    };
-    let right_elapsed = {
-        let mut spans = right;
-        spans.insert(
-            0,
-            Span::styled(
-                pos_str.clone(),
-                Style::default().fg(palette::PLAYBACK_META_FG),
-            ),
-        );
-        spans.insert(1, Span::raw(time_sep));
-        spans
-    };
-    let right_full_w: u16 = right_full
-        .iter()
-        .map(|span| span.content.width() as u16)
-        .sum();
-    let right_elapsed_w: u16 = right_elapsed
-        .iter()
-        .map(|span| span.content.width() as u16)
-        .sum();
+    // The strip's right side is the elapsed time and the status pill alone:
+    // no progress cluster (the seekbar above already carries progress) and no
+    // total, so the narrow strip spends its columns on the title instead.
+    let mut right = padded_status_pill(ctx);
+    right.insert(0, Span::raw(" "));
+    right.insert(
+        0,
+        Span::styled(pos_str, Style::default().fg(palette::PLAYBACK_META_FG)),
+    );
+    let right_w: u16 = right.iter().map(|span| span.content.width() as u16).sum();
     let glyph_text = format!("{} ", glyphs.play.0);
     let glyph_w = glyph_text.width() as u16;
     let stop_w = glyphs.stop.0.width() as u16;
     let next_w = glyphs.next.0.width() as u16;
     let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
     let available = area.width as usize;
-    // The width-driven decision (task 3.5): which indicator set shows and
-    // whether the transport buttons fit, from the shared transport
+    // The width-driven decision (task 3.5): whether the transport buttons
+    // fit beside the title and the elapsed time, from the shared transport
     // arrangement.
-    let plan: TransportPlan = transport_title_plan(
+    let show_buttons = transport_buttons_fit(
         area.width,
         title.width() as u16,
         TransportMeasure {
             glyph_w,
             buttons_w: buttons_w as u16,
-            full_w: right_full_w,
-            elapsed_w: right_elapsed_w,
+            indicators_w: right_w,
         },
     );
-    let show_buttons = plan.transport_buttons;
-    let (right, right_w) = match plan.indicators {
-        TransportIndicators::Full => (right_full, right_full_w),
-        TransportIndicators::ElapsedOnly => (right_elapsed, right_elapsed_w),
-    };
 
     let mut left = render_transport_glyphs(
         ctx,
@@ -673,7 +618,6 @@ mod tests {
             stop_available: false,
             next_available: false,
             status_indicators: None,
-            throbber: Span::raw(" "),
             title_parts: Some(parts),
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
@@ -745,9 +689,11 @@ mod tests {
         // Backdate the start time into the middle of the marquee's hold at
         // the scrolled-out end (column = overflow, hold [HOLD+scroll,
         // 2*HOLD+scroll)): the window then shows the title's tail followed by
-        // the whole context part.
+        // the whole context part. The strip's elapsed-only right side leaves
+        // a 46-cell window on the 73-cell two-part title (overflow 27,
+        // scroll 4050ms), so the hold sits at [4650, 5250).
         let mut marquee_started_at =
-            std::time::Instant::now() - std::time::Duration::from_millis(6_300);
+            std::time::Instant::now() - std::time::Duration::from_millis(4_950);
         let mut ctx = PlaybackRenderContext {
             area: Rect::new(0, 0, 60, 1),
             playback: &mut playback,
@@ -761,7 +707,6 @@ mod tests {
             stop_available: false,
             next_available: false,
             status_indicators: None,
-            throbber: Span::raw(" "),
             title_parts: Some(parts),
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
@@ -832,7 +777,6 @@ mod tests {
             stop_available: false,
             next_available: false,
             status_indicators: Some(vec![Span::raw("CODEC "), Span::raw("FLAC")]),
-            throbber: Span::raw(" "),
             title_parts: None,
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
@@ -878,5 +822,71 @@ mod tests {
             39,
             "the padded pill runs flush to the row edge: {row_text:?}"
         );
+    }
+
+    /// The pill owns the padding on both sides: the keyvalue cluster carries
+    /// no outer space of its own, so the painted pill is exactly
+    /// ` FHD ⧸ EN ⧸ CC ` — one pad each side, never two on the right.
+    #[test]
+    fn status_pill_pads_the_keyvalue_cluster_once_on_each_side() {
+        use super::super::indicators::{indicator_spans, IndicatorData, IndicatorStyle};
+        let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
+        let panel_bg = palette::surface_colors(palette::Surface::PlaybackPanel, false).fill;
+        assert_ne!(
+            pill_bg, panel_bg,
+            "the test locates the pill by its fill, so the fills must differ"
+        );
+        let cluster = indicator_spans(
+            IndicatorStyle::KeyValue,
+            &IndicatorData {
+                res_label: "FHD".into(),
+                res_dim: false,
+                audio_label: "en".into(),
+                audio_dim: false,
+                audio_only: false,
+                sub_label: "CC".into(),
+                sub_on: false,
+            },
+            false,
+        );
+        let mut playback = PlaybackStripAreas::default();
+        let mut marquee_text = String::new();
+        let mut marquee_started_at = std::time::Instant::now();
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 40, 1),
+            playback: &mut playback,
+            player_h: 3,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: Some(cluster),
+            title_parts: None,
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 40, 1),
+                    "Title",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let pill: String = (0..40)
+            .filter(|&x| buf[(x, 0)].bg == pill_bg)
+            .map(|x| buf[(x, 0)].symbol())
+            .collect();
+        assert_eq!(pill, " FHD ⧸ EN ⧸ CC ", "padded pill content");
     }
 }

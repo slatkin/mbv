@@ -67,7 +67,7 @@ A push that forces the child to adopt a specific active index SHALL be scoped to
 
 - **WHEN** a shell tick finds the viewed scope, queue revision, playback-active flag, projected active target, and progress bucket all unchanged
 - **THEN** no slot list is cloned, no rows are projected, and no rows are pushed to the child
-- **AND** projected row data is unchanged (the painted frame may still differ via header throbber animation or other non-row state)
+- **AND** projected row data is unchanged (the painted frame may still differ via title marquee or other non-row state)
 - **AND** any pending cursor push and the current scope/chrome/title are still delivered
 
 #### Scenario: Progress-bucket change patches one row

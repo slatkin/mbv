@@ -66,7 +66,6 @@ impl Model {
             now_playing_title,
             title_parts,
             status_indicators: self.app.build_status_indicator_spans(),
-            throbber: self.app.now_playing_throbber_span(),
             idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {
                     (

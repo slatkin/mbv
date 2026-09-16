@@ -178,8 +178,6 @@ impl App {
             visualizer: None,
             visualizer_window: Default::default(),
             visualizer_glyph: init.visualizer_glyph,
-            now_playing_throbber_index: 0,
-            last_throbber_advance: std::time::Instant::now(),
             marquee_text: String::new(),
             marquee_started_at: std::time::Instant::now(),
             last_played_item_id: None,

@@ -145,7 +145,7 @@
       `cargo test --release -p <pkg>` (CI runs the release profile, where
       debug assertions are compiled out). Verification: the release-profile run
       of the affected package exits zero.
-- [ ] 8.3 Manual check against a real audio-only owner: attach to a
+- [x] 8.3 Manual check against a real audio-only owner: attach to a
       `mbvd --audio-only`, play a video, confirm the prompt appears, accept it,
       and confirm the video plays locally while the owner stops; repeat with a
       decline and confirm nothing changes. Verification: recorded as a manual

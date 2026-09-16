@@ -306,8 +306,6 @@ pub struct App {
     pub(super) visualizer: Option<PipeWireWorker>,
     pub(super) visualizer_window: StereoSampleWindow,
     pub(super) visualizer_glyph: String,
-    pub(super) now_playing_throbber_index: usize,
-    pub(super) last_throbber_advance: std::time::Instant,
     /// Text and start time of the shared marquee clock, reset whenever the
     /// tracked text changes so a new string always starts its scroll from
     /// the beginning rather than mid-cycle. Used by all marquee callers

@@ -1,22 +1,13 @@
-use super::shell_queue::NOW_PLAYING_THROBBER_FRAMES;
 use crate::app::layout::{AppLayout, FrameChromeGeometry};
 use crate::app::render::arrangements::chrome::{chrome_geometry, ChromeGeometryInput};
 use crate::app::render::arrangements::queue::{
     queue_footer_row, queue_list_box, queue_panel_subareas, QueuePanelGeometry,
 };
-use crate::app::{palette, App};
+use crate::app::App;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::text::Span;
 use ratatui::Frame;
 
 impl App {
-    pub(in crate::app) fn now_playing_throbber_span(&self) -> Span<'static> {
-        let frame = NOW_PLAYING_THROBBER_FRAMES
-            [self.now_playing_throbber_index % NOW_PLAYING_THROBBER_FRAMES.len()];
-        Span::styled(frame.to_string(), Style::default().fg(palette::ACCENT))
-    }
-
     pub(in crate::app) fn compute_frame_layout(
         &mut self,
         area: Rect,

@@ -80,7 +80,6 @@ impl QueuePlaybackPanel {
                 now_playing_title: None,
                 title_parts: None,
                 status_indicators: None,
-                throbber: ratatui::text::Span::raw(""),
                 idle_feed_title: None,
                 use_nerd_fonts: false,
                 stop_available: false,
@@ -234,7 +233,6 @@ impl Component for QueuePlaybackPanel {
                 stop_available: self.transport.stop_available,
                 next_available: self.transport.next_available,
                 status_indicators: self.transport.status_indicators.clone(),
-                throbber: self.transport.throbber.clone(),
                 title_parts: self.transport.title_parts.clone(),
                 // The queue column never shows the idle feed title: while
                 // idle the panel is collapsed to its header row (task 3.6),
@@ -595,16 +593,15 @@ mod tests {
         );
     }
 
-    /// The header carries no progress while playing: the transport's
-    /// throbber and percent stay out of the header row even when the
-    /// projected transport state has position and runtime to state.
+    /// The header carries no progress while playing: the percent stays out
+    /// of the header row even when the projected transport state has
+    /// position and runtime to state.
     #[test]
     fn header_shows_no_progress_while_playing() {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.state.position_ticks = 45 * mbv_core::api::TICKS_PER_SECOND;
         panel.transport.state.runtime_ticks = 90 * mbv_core::api::TICKS_PER_SECOND;
-        panel.transport.throbber = ratatui::text::Span::raw("~");
         panel.set_transport_area(None);
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
         terminal
@@ -613,8 +610,8 @@ mod tests {
         let buf = terminal.backend().buffer();
         let header: String = (0..40).map(|x| buf[(x, 1)].symbol().to_owned()).collect();
         assert!(
-            !header.contains('~') && !header.contains('%'),
-            "no throbber or percent in the header: {header:?}"
+            !header.contains('%'),
+            "no percent in the header: {header:?}"
         );
         assert!(header.contains(" PLAYING"), "status still left: {header:?}");
         assert!(
