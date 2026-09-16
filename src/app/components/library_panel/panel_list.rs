@@ -47,28 +47,6 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
                         .with_zebra(zebra_stripe(Surface::LibraryPanel)),
                 );
             }
-            PanelListPaintPolicy::Narrow { focused } => {
-                // The non-Wide list is the same panel as the Wide browser list:
-                // its list box is filled with the `LibraryPanel` pair
-                // (`#3c4841` focused, `#333c43` resting) and its rows stripe
-                // with the `MainContentBox` pair (`#48584e` / `#2d353b`). The
-                // surrounding non-Wide body (`NarrowLibraryBody`: `#3c4841` /
-                // `#2d353b`) is therefore distinct from the box in both
-                // states — except while focused, where both paint the focused
-                // content-body tone.
-                //
-                // The scrollbar column resolves that surrounding panel body
-                // rather than the list's own fill, so it reads as the pane's
-                // margin instead of another tone of the list box.
-                let body = palette::surface_colors(Surface::LibraryPanel, focused).fill;
-                let scrollbar = palette::surface_colors(Surface::NarrowLibraryBody, focused).fill;
-                self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::new(focused)
-                        .with_zebra(zebra_stripe(Surface::MainContentBox))
-                        .with_body(body)
-                        .with_scrollbar(scrollbar),
-                );
-            }
         }
     }
 

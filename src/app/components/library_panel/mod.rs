@@ -36,7 +36,7 @@ pub(in crate::app) use hero::{
     HeroContentData,
 };
 #[allow(unused_imports)]
-pub(in crate::app) use narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
+pub(in crate::app) use narrow::render_narrow_skeleton;
 #[allow(unused_imports)]
 pub(in crate::app) use overview_box::sanitize_url;
 pub(in crate::app) use owner::{LibraryContentOwner, LibrarySlotEvent};

@@ -261,12 +261,6 @@ pub(in crate::app) enum PanelListPaintPolicy {
     /// The Wide library Workspace presentation. Its selected row belongs to
     /// the owning library pane surface rather than the list backdrop.
     WideWorkspace { focused: bool },
-    /// The non-Wide library list. It owns the surface it sits on — the same
-    /// identity its zebra stripe resolves from — so the painter fills its own
-    /// body and resolves the scrollbar column through it. Wide keeps
-    /// `Wide`/`WideWorkspace`: its pane body is painted by the skeleton, not by
-    /// the list.
-    Narrow { focused: bool },
 }
 
 /// Object-safe view over one canonical media-list presentation flow

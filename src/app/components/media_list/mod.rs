@@ -180,17 +180,6 @@ pub struct WideMediaListPaintPolicy {
     focused: bool,
     selected_surface: SelectedRowSurface,
     zebra: Option<ZebraStripe>,
-    /// The list's own body fill, when the list owns the surface it sits on
-    /// (the non-Wide library list). The painter fills its paint area with it
-    /// and resolves the scrollbar column through it, so the body, the
-    /// scrollbar column and the rows share one surface. `None` leaves both to
-    /// the caller that already painted the surface (Wide and the queue).
-    body: Option<Color>,
-    /// The scrollbar column's own fill, overriding `body` for that column
-    /// alone. The non-Wide library list sets the surrounding panel body's
-    /// identity here, so the column reads as the pane's own margin rather than
-    /// as another tone of the list inset.
-    scrollbar: Option<Color>,
 }
 
 impl WideMediaListPaintPolicy {
@@ -199,8 +188,6 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::ListBackdrop,
             zebra: None,
-            body: None,
-            scrollbar: None,
         }
     }
 
@@ -209,8 +196,6 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningQueueColumn,
             zebra: None,
-            body: None,
-            scrollbar: None,
         }
     }
 
@@ -219,19 +204,7 @@ impl WideMediaListPaintPolicy {
             focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
             zebra: None,
-            body: None,
-            scrollbar: None,
         }
-    }
-
-    pub const fn with_body(mut self, body: Color) -> Self {
-        self.body = Some(body);
-        self
-    }
-
-    pub const fn with_scrollbar(mut self, scrollbar: Color) -> Self {
-        self.scrollbar = Some(scrollbar);
-        self
     }
 
     pub const fn with_zebra(mut self, zebra: ZebraStripe) -> Self {
@@ -247,14 +220,6 @@ impl WideMediaListPaintPolicy {
                 zebra.unfocused
             }
         })
-    }
-
-    pub(crate) const fn body_bg(self) -> Option<Color> {
-        self.body
-    }
-
-    pub(crate) const fn scrollbar_bg(self) -> Option<Color> {
-        self.scrollbar
     }
 
     pub(crate) const fn focused(self) -> bool {

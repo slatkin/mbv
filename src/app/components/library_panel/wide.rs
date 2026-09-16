@@ -16,6 +16,7 @@ use ratatui::Frame;
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
+use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
 use crate::app::render::{
     render_inline_search, render_placeholder, wide_hero_browser_pane, wide_hero_hero_pane,
     PillBarWindow, PANE_PAD_X, PANE_PAD_Y,
@@ -86,38 +87,37 @@ pub(in crate::app) struct WideSkeletonGeometry {
     pub selected: Option<Rect>,
 }
 
-/// Paints the Wide Library panel skeleton into `area`. Returns the frame's
-/// role-rect geometry, or `None` when `area` does not fit the shared Wide
-/// presentation (the Narrow skeleton, task 5.7, owns that breakpoint).
-///
-/// Rows top-to-bottom in the Browser pane: the Selector row (one pill bar +
-/// the panel's spacer, reserved even without a `SelectorRow`), the optional
-/// List controls row, and the list box (fill, then the list presentation or
-/// the `ListSlot::Empty` placeholder). While
-/// `ListSlot::Search` is active, the search box paints in the Selector row's
-/// rect and the results in the list box, and the rest of the panel is
-/// unchanged.
-#[allow(clippy::too_many_arguments)]
-pub(in crate::app) fn render_wide_skeleton(
+/// The Browser pane's role rects for this frame, in [`WideSkeletonGeometry`]
+/// field form (the pane painter's contribution to the skeleton geometry).
+/// Both skeletons consume it: the non-Wide panel delegates to
+/// [`paint_browser_pane`] and folds the rects into its own geometry.
+pub(in crate::app) struct BrowserPaneGeometry {
+    /// The Selector row's pill-bar rect, reserved even when the destination
+    /// supplies no `SelectorRow` (the Inline Search box takes it).
+    pub(in crate::app) selector_bar: Rect,
+    /// The List controls row's rect, when the destination supplies content.
+    pub(in crate::app) controls: Option<Rect>,
+    /// The list box's full panel rect (fill + border).
+    pub(in crate::app) list_panel: Rect,
+    /// The list box's inset row-flow rect.
+    pub(in crate::app) list_area: Rect,
+    /// The selected row's rect from the list slot's view, when one painted
+    /// (the context-menu anchor's painted truth).
+    pub(in crate::app) selected: Option<Rect>,
+}
+
+/// Paints the Browser pane (Selector row, optional List controls row, list
+/// box) and returns the role rects it placed. Pure painting over the supplied
+/// pane geometry; the hero pane and workspace content are painted elsewhere.
+pub(in crate::app) fn paint_browser_pane(
     f: &mut Frame,
-    area: Rect,
+    pane: WideHeroBrowserPane,
     content: &mut LibraryPanelContent<'_>,
-    browser_focused: bool,
-    override_width: Option<u16>,
-    overview_scroll: usize,
+    list_focused: bool,
     hovered_selector: Option<usize>,
-    hovered_link: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
-) -> Option<WideSkeletonGeometry> {
-    let WideLibraryPanes {
-        hero_panel,
-        browser_panel,
-        browser_area,
-        ..
-    } = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, override_width)?;
-    let pane = wide_hero_browser_pane(browser_panel, browser_area);
-
+) -> BrowserPaneGeometry {
     // Selector row: one pill bar + the panel's spacer, reserved even without
     // a SelectorRow — while a search is active the box takes the bar's rect
     // (spec: the Selector row's place is reserved for the search box) and
@@ -180,11 +180,6 @@ pub(in crate::app) fn render_wide_skeleton(
         _ => (pane.list_panel, None),
     };
 
-    // List box focus: the panel's bit, minus the Workspace. When the hero's
-    // media list holds focus the browser list drops its green and rests —
-    // green marks the focused list, never both at once.
-    let list_focused = browser_focused && !content.workspace_focused();
-
     // List box: fill, then the slot's content in the inset row-flow rect.
     crate::app::render::components::widgets::fill_surface(
         f,
@@ -200,6 +195,15 @@ pub(in crate::app) fn render_wide_skeleton(
         y: list_panel.y.saturating_add(PANE_PAD_Y),
         width: list_panel.width.saturating_sub(PANE_PAD_X * 2),
         height: list_panel.height.saturating_sub(PANE_PAD_Y * 2),
+    };
+    // A slot with no rows to spare keeps its single row rather than
+    // collapsing to an empty rect. Wide never reaches this — `wide_hero_fits`
+    // gates short areas out of the Wide skeleton — but the non-Wide panel is
+    // the whole pane and can be one or two rows tall.
+    let list_area = if list_area.height == 0 {
+        list_panel
+    } else {
+        list_area
     };
     match &mut content.list {
         ListSlot::Search(search) => {
@@ -252,12 +256,6 @@ pub(in crate::app) fn render_wide_skeleton(
         }
     }
 
-    // Hero pane: always the resting fill. It never takes the focused
-    // surface when the media list (or its Workspace) holds focus — only
-    // the list box above flips with the panel's focus. A focused Workspace
-    // still shows through its own content-box tint.
-    let hero_area = wide_hero_hero_pane(f, area, false, override_width)?;
-
     // The list slot's painted selection is the context-menu anchor's painted
     // truth.
     let selected = match &mut content.list {
@@ -265,20 +263,81 @@ pub(in crate::app) fn render_wide_skeleton(
         _ => None,
     };
 
-    let mut geometry = WideSkeletonGeometry {
-        browser: browser_panel,
-        hero: hero_panel,
+    BrowserPaneGeometry {
         selector_bar: pane.pills_area,
         controls: controls_area,
         list_panel,
         list_area,
+        selected,
+    }
+}
+
+/// Paints the Wide Library panel skeleton into `area`. Returns the frame's
+/// role-rect geometry, or `None` when `area` does not fit the shared Wide
+/// presentation (the Narrow skeleton, task 5.7, owns that breakpoint).
+///
+/// Rows top-to-bottom in the Browser pane: the Selector row (one pill bar +
+/// the panel's spacer, reserved even without a `SelectorRow`), the optional
+/// List controls row, and the list box (fill, then the list presentation or
+/// the `ListSlot::Empty` placeholder). While
+/// `ListSlot::Search` is active, the search box paints in the Selector row's
+/// rect and the results in the list box, and the rest of the panel is
+/// unchanged.
+#[allow(clippy::too_many_arguments)]
+pub(in crate::app) fn render_wide_skeleton(
+    f: &mut Frame,
+    area: Rect,
+    content: &mut LibraryPanelContent<'_>,
+    browser_focused: bool,
+    override_width: Option<u16>,
+    overview_scroll: usize,
+    hovered_selector: Option<usize>,
+    hovered_link: Option<usize>,
+    hits: &mut SkeletonHits,
+    windows: &mut SkeletonPillWindows,
+) -> Option<WideSkeletonGeometry> {
+    let WideLibraryPanes {
+        hero_panel,
+        browser_panel,
+        browser_area,
+        ..
+    } = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, override_width)?;
+    let pane = wide_hero_browser_pane(browser_panel, browser_area);
+
+    // List box focus: the panel's bit, minus the Workspace. When the hero's
+    // media list holds focus the browser list drops its green and rests —
+    // green marks the focused list, never both at once.
+    let list_focused = browser_focused && !content.workspace_focused();
+    let browser = paint_browser_pane(
+        f,
+        pane,
+        content,
+        list_focused,
+        hovered_selector,
+        hits,
+        windows,
+    );
+
+    // Hero pane: always the resting fill. It never takes the focused
+    // surface when the media list (or its Workspace) holds focus — only
+    // the list box above flips with the panel's focus. A focused Workspace
+    // still shows through its own content-box tint.
+    let hero_area = wide_hero_hero_pane(f, area, false, override_width)?;
+
+    let mut geometry = WideSkeletonGeometry {
+        browser: browser_panel,
+        hero: hero_panel,
+        selector_bar: browser.selector_bar,
+        controls: browser.controls,
+        list_panel: browser.list_panel,
+        list_area: browser.list_area,
         hero_area,
         workspace: None,
         hero_image: None,
         overview_box: None,
         overview_content_length: 0,
         overview_viewport: 0,
-        selected,
+        selected: browser.selected,
     };
 
     if let Some(hero) = content.hero.as_mut() {

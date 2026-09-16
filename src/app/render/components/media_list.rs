@@ -302,8 +302,6 @@ mod wide_row_regression_tests {
                     selected_bg,
                     Some(zebra_bg),
                     false,
-                    None,
-                    None,
                 );
             })
             .unwrap();
@@ -362,8 +360,6 @@ mod wide_row_regression_tests {
                     palette::SURFACE_RESTING,
                     Some(zebra_bg),
                     false,
-                    None,
-                    None,
                 );
             })
             .unwrap();
@@ -407,8 +403,6 @@ mod wide_row_regression_tests {
                     palette::SURFACE_RESTING,
                     Some(Color::Rgb(60, 72, 65)),
                     true,
-                    None,
-                    None,
                 );
             })
             .unwrap();

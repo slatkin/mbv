@@ -328,13 +328,6 @@ fn coverage_table_accounts_for_every_surface_row() {
              toward black, and its row value is the named Color::Black blend \
              base, which no cell's background ever equals",
         ),
-        (
-            palette::Surface::NarrowLibraryBody,
-            "painted by the shell's library placement fill, not by a component \
-             view, so this module's component-view probes cannot observe it; \
-             its focused/resting pair is pinned by `pinned_fills` in \
-             `surface_resolve` instead",
-        ),
     ];
     for &surface in palette::Surface::ALL {
         let pinned = probed_here.contains(&surface);
@@ -445,4 +438,171 @@ fn status_bar_floats_inside_its_band_clear_of_the_edges() {
             Rect::new(x, band.bottom() - 1, 1, 1),
         );
     }
+}
+
+/// A non-Wide library frame drawn through the real shell paint path
+/// (`unify-narrow-library-with-wide-browser-pane` 4.4). `width` below
+/// `TWO_COLUMN_THRESHOLD` draws Narrow; below `MINI_VIEW_THRESHOLD` it draws
+/// Mini. `filler_items` grows the list past the viewport so a focused frame
+/// overflows.
+fn drawn_non_wide_library(
+    width: u16,
+    focus: PanelFocus,
+    filler_items: usize,
+) -> (crate::app::shell::Model, Terminal<TestBackend>) {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = focus;
+    if filler_items > 0 {
+        let level = app.libs[0].nav_stack.last_mut().unwrap();
+        for i in 0..filler_items {
+            let mut item = crate::app::tests::make_item(&format!("Filler {i}"), "Movie");
+            item.id = format!("filler-{i}");
+            level.items.push(item);
+            level.total_count += 1;
+        }
+    }
+    let mut model = mounted_model_at(app, width, 30);
+    let term = draw_mounted_terminal(&mut model, width, 30);
+    (model, term)
+}
+
+/// `unify-narrow-library-with-wide-browser-pane` 4.4 (design D2/D5): the
+/// non-Wide library column's body is the Wide column's fixed backdrop. A
+/// focused and an unfocused Narrow frame paint the same fill for the
+/// always-painted regions — the panel placement, the Selector row's spacer
+/// row, and the status band's padding rows — and the status row keeps the
+/// status bar's own surface. Mini is the non-Wide presentation (there is no
+/// Mini-specific paint bit) and paints the same backdrop.
+#[test]
+fn non_wide_column_body_paints_the_fixed_backdrop_in_every_focus_state() {
+    let backdrop = palette::surface_colors(palette::Surface::LibraryColumn, false).fill;
+    let status_fill = palette::surface_colors(palette::Surface::StatusBar, false).fill;
+
+    let region_colors = |width: u16, focus: PanelFocus| {
+        let (model, term) = drawn_non_wide_library(width, focus, 0);
+        let buffer = term.backend().buffer();
+        let placement = model
+            .app
+            .layout
+            .root_frame
+            .library
+            .expect("the non-Wide frame places the library panel");
+        let content =
+            crate::app::render::components::widgets::right_panel_content_area(placement, true);
+        let spacer = crate::app::render::wide_hero_browser_pane(content, content).spacer_area;
+        let band = model
+            .app
+            .compute_chrome_geometry(Rect::new(0, 0, width, 30))
+            .status_area;
+        let row = super::arrangements::chrome::status_bar_row(band);
+        [
+            ("panel placement", buffer[(placement.x, placement.y)].bg),
+            ("selector spacer row", buffer[(spacer.x, spacer.y)].bg),
+            (
+                "status band padding row",
+                buffer[(band.x, band.bottom() - 1)].bg,
+            ),
+            ("status row", buffer[(row.x, row.y)].bg),
+        ]
+    };
+
+    // Narrow: below TWO_COLUMN_THRESHOLD, above the mini view.
+    let focused = region_colors(81, PanelFocus::Library);
+    let resting = region_colors(81, PanelFocus::Queue);
+    for (label, focused_bg, resting_bg) in focused
+        .iter()
+        .zip(resting.iter())
+        .map(|((label, focused_bg), (_, resting_bg))| (*label, *focused_bg, *resting_bg))
+    {
+        if label == "status row" {
+            assert_eq!(
+                focused_bg, status_fill,
+                "the status row keeps the status bar's own surface"
+            );
+            assert_eq!(
+                focused_bg, resting_bg,
+                "the status row must not follow the panel focus bit"
+            );
+        } else {
+            assert_eq!(
+                focused_bg, backdrop,
+                "{label}: the non-Wide column body must paint the library \n             column's fixed backdrop"
+            );
+            assert_eq!(
+                focused_bg, resting_bg,
+                "{label}: the column body must not follow the panel focus bit"
+            );
+        }
+    }
+
+    // Mini (< MINI_VIEW_THRESHOLD): the same regions, the same fixed
+    // backdrop — the mini view derives from the non-Wide presentation with
+    // no paint bit of its own.
+    let mini = region_colors(70, PanelFocus::Library);
+    for (label, bg) in mini {
+        let expected = if label == "status row" {
+            status_fill
+        } else {
+            backdrop
+        };
+        assert_eq!(bg, expected, "{label}: mini must match the non-Wide body");
+    }
+}
+
+/// `unify-narrow-library-with-wide-browser-pane` 4.4: the list's scrollbar
+/// column paints only while the list is focused and overflowing, so it is
+/// absent from an unfocused frame. In a focused overflowing Narrow frame it
+/// must resolve the selected-row surface (`#2d353b`) — the same fill the Wide
+/// Browser-pane list's column carries — never the list box's own fill beside
+/// it.
+#[test]
+fn focused_overflowing_narrow_scrollbar_column_paints_the_selected_row_surface() {
+    let width = 81;
+    let (model, term) = drawn_non_wide_library(width, PanelFocus::Library, 40);
+    let buffer = term.backend().buffer();
+    let placement = model
+        .app
+        .layout
+        .root_frame
+        .library
+        .expect("the non-Wide frame places the library panel");
+    let content =
+        crate::app::render::components::widgets::right_panel_content_area(placement, true);
+    let pane = crate::app::render::wide_hero_browser_pane(content, content);
+    assert!(
+        pane.list_panel.height > 8,
+        "setup: the list must have visible rows, got {:?}",
+        pane.list_panel
+    );
+
+    // The list claims the pane's full width; the scrollbar column sits just
+    // outside the claim while the frame has room (the same placement rule
+    // `render_wide_media_list_with_zebra` applies).
+    let claim_right = content.x + content.width;
+    let scrollbar_x = if claim_right < width {
+        claim_right
+    } else {
+        claim_right - 1
+    };
+    let first_row = pane.list_panel.y + super::arrangements::wide_hero::PANE_PAD_Y;
+    let unselected_row = first_row + 3;
+
+    let selected_fill = palette::surface_colors(palette::Surface::SelectedRow, true).fill;
+    assert_eq!(
+        buffer[(scrollbar_x, unselected_row)].bg,
+        selected_fill,
+        "the scrollbar column must resolve the selected-row surface"
+    );
+    assert_ne!(
+        buffer[(scrollbar_x - 1, unselected_row)].bg,
+        selected_fill,
+        "setup: the row beside the scrollbar column must be an unselected row, \
+         otherwise the probe cannot distinguish the column"
+    );
+    assert_eq!(
+        buffer[(scrollbar_x - 1, unselected_row)].bg,
+        palette::surface_colors(palette::Surface::LibraryPanel, true).fill,
+        "the row beside the scrollbar column carries the list box's own fill"
+    );
 }

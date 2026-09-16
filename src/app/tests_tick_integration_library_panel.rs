@@ -364,6 +364,26 @@ fn find_text(buf: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> 
     None
 }
 
+/// The first painted occurrence of `needle` inside `area`'s rows, for
+/// locating a browser row that another painted surface (a Wide Hero pane's
+/// title) also shows.
+fn find_text_in(
+    buf: &ratatui::buffer::Buffer,
+    needle: &str,
+    area: ratatui::layout::Rect,
+) -> Option<(u16, u16)> {
+    for row in area.top()..area.bottom() {
+        let mut line = String::new();
+        for x in area.left()..area.right() {
+            line.push_str(buf[(x, row)].symbol());
+        }
+        if let Some(offset) = line.find(needle) {
+            return Some((area.left() + offset as u16, row));
+        }
+    }
+    None
+}
+
 #[test]
 fn library_panel_focus_follows_the_active_library() {
     let (mut harness, _log) = migrated_home();
@@ -1091,16 +1111,286 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
         find_text(buf, "15. Episode 15").is_some(),
         "the cursor's row scrolled into the Workspace box"
     );
-    // Not "1. Episode 1": that string is a substring of "11. Episode 11".
-    // Row 6 is the last row above the scrolled-in window.
+    // The viewport is the painted Workspace box's content rows: re-derive
+    // the expected window from the box the frame actually painted (the
+    // overlay's size is an arrangement fact, not this test's input).
+    let (_, box_content) = panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_workspace_box())
+        .expect("the overlay's Workspace box painted");
+    let visible = box_content.height as usize;
+    let scroll = tv_owner_of(&harness).episode_scroll();
     assert!(
-        find_text(buf, "6. Episode 6").is_none(),
-        "the first rows scrolled out of the Workspace box"
+        scroll > 0,
+        "the Workspace viewport must follow the cursor with overflow"
     );
+    assert_eq!(
+        scroll,
+        14 + 1 - visible,
+        "the viewport follows the cursor: the cursor's row is the window's last row"
+    );
+    // The last row above the scrolled-in window has left the box. (Probing
+    // row 1 is a substring of row 11's label, so only probe row numbers
+    // whose label cannot match a longer one.)
+    if scroll >= 2 {
+        assert!(
+            find_text(buf, &format!("{}. Episode {scroll}", scroll)).is_none(),
+            "the rows above the window left the Workspace box"
+        );
+    }
     assert_eq!(
         harness.model().app.libs[0].nav_stack[0].resting().cursor(),
         0,
         "the covered browser list must not move"
+    );
+}
+
+/// The double-click-to-overlay gate is the non-Wide frame itself (design
+/// D4): `narrow_geometry` is `Some` exactly when a non-Wide frame painted.
+/// A non-Wide browser double-click opens the Library Hero overlay; the same
+/// double-click in Wide geometry stays in the list slot and never does.
+#[test]
+fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
+    // Non-Wide (80 < TWO_COLUMN_THRESHOLD): the gate is reported and the
+    // gesture opens the overlay.
+    let mut harness = migrated_tv_with_detail(2);
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_narrow_geometry())
+            .is_some(),
+        "a non-Wide frame reports the overlay gate"
+    );
+    let terminal = draw_frame_at_model_size(&mut harness);
+    let (x, y) = find_text(terminal.backend().buffer(), "Focused Movie")
+        .expect("the browser row paints");
+    for _ in 0..2 {
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: x,
+            row: y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "a non-Wide browser double-click opens the Library Hero overlay"
+    );
+
+    // The same gesture in Wide geometry: the list slot takes the
+    // double-click and the overlay stays closed.
+    let mut harness = migrated_tv_with_detail(2);
+    harness.model_mut().app.terminal_width = 100;
+    drop(draw_frame_at_model_size(&mut harness));
+    let wide_painted = panel_of(&harness)
+        .and_then(|panel| panel.test_wide_geometry())
+        .is_some();
+    assert!(wide_painted, "the frame is Wide");
+    let gate_reported = panel_of(&harness)
+        .and_then(|panel| panel.test_narrow_geometry())
+        .is_some();
+    assert!(!gate_reported, "a Wide frame reports no overlay gate");
+    let terminal = draw_frame_at_model_size(&mut harness);
+    let list = panel_of(&harness)
+        .and_then(|panel| panel.test_list_rect())
+        .expect("the Wide list painted");
+    let (x, y) = find_text_in(terminal.backend().buffer(), "Focused Movie", list)
+        .expect("the Wide browser row paints in the list slot");
+    for _ in 0..2 {
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: x,
+            row: y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+    drop(draw_frame_at_model_size(&mut harness));
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_none(),
+        "a Wide double-click must not take the overlay path"
+    );
+}
+
+/// The saved-geometry shift (unify-narrow U2/6.1): the non-Wide list slot's
+/// hit rect is the Wide pane's row-flow inset, so a click on the painted
+/// list box's outer two columns is padding and is not delegated to the list;
+/// a click inside the row flow still selects the row under it.
+#[test]
+fn non_wide_padding_click_is_not_delegated_and_a_row_flow_click_selects() {
+    let (mut harness, log) = migrated_home();
+    drop(draw_frame_at_model_size(&mut harness));
+    let narrow = panel_of(&harness)
+        .and_then(|panel| panel.test_narrow_geometry())
+        .expect("the frame is non-Wide");
+
+    // The outer two columns of the painted list box: on the pane the panel
+    // painted, but outside the row flow it retained as the hit rect.
+    let (edge_x, edge_y) = (narrow.list_panel.x + 1, narrow.list_panel.y + 2);
+    assert!(narrow.list_panel.contains(ratatui::layout::Position {
+        x: edge_x,
+        y: edge_y,
+    }), "the click lands on the painted pane");
+    assert!(
+        !narrow.list_area.contains(ratatui::layout::Position {
+            x: edge_x,
+            y: edge_y,
+        }),
+        "the click lands in the padding outside the row flow inset"
+    );
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: edge_x,
+        row: edge_y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert!(
+        log.borrow().events.is_empty(),
+        "a padding click must not reach the list"
+    );
+
+    // A click inside the row flow still selects the row under it.
+    let terminal = draw_frame_at_model_size(&mut harness);
+    let (x, y) = find_text_in(terminal.backend().buffer(), "alpha", narrow.list_area)
+        .expect("the first browser row paints in the row flow");
+    drop(terminal);
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    assert_eq!(
+        log.borrow().selections.last(),
+        Some(&Some("alpha".to_string())),
+        "the row under a row-flow click is selected"
+    );
+}
+
+/// The non-Wide saved geometry agrees with the painted frame (unify-narrow
+/// 6.2, ADR 0024): the hit rect is the row-flow inset, the selected-row rect
+/// is the painted cursor row, and the context-menu anchor is the painted
+/// Browser pane — not the inset.
+#[test]
+fn non_wide_saved_geometry_agrees_with_the_painted_frame() {
+    let (mut harness, _log) = migrated_home();
+    let terminal = draw_frame_at_model_size(&mut harness);
+    let narrow = panel_of(&harness)
+        .and_then(|panel| panel.test_narrow_geometry())
+        .expect("the frame is non-Wide");
+    let panel = panel_of(&harness).expect("the Library panel is mounted");
+
+    // The hit rect is the row-flow inset, not the pane.
+    assert_eq!(panel.test_list_rect(), Some(narrow.list_area));
+    assert_ne!(narrow.list_area, narrow.list_panel);
+
+    // The context-menu anchor is the painted Browser pane.
+    let (anchor, selected) = panel.menu_geometry().expect("the frame painted");
+    assert_eq!(anchor, narrow.list_panel);
+    assert_ne!(
+        anchor, narrow.list_area,
+        "the anchor is the pane, not the inset"
+    );
+
+    // The selected-row rect is the painted cursor row: the cursor row's text
+    // paints inside it, and it sits in the row flow.
+    let selected = selected.expect("the cursor row painted");
+    let (x, y) = find_text_in(terminal.backend().buffer(), "alpha", selected)
+        .expect("the cursor row paints in the selected-row rect");
+    assert_eq!(y, selected.y);
+    assert!(narrow.list_area.contains(ratatui::layout::Position { x, y }));
+}
+
+/// The Library Hero overlay's own pixels rest on the sheet whatever the
+/// Workspace's focus: the sheet carries its PillRow surface, and the
+/// Workspace box's panel and stripes carry the resting `MainContentBox` /
+/// `LibraryPanel` pair even though opening the overlay focuses the
+/// Workspace (the overlay's `workspace_follows_focus: false`).
+#[test]
+fn overlay_sheet_and_workspace_box_paint_the_resting_pair() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(6);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    let terminal = draw_frame_at_model_size(&mut harness);
+    assert!(
+        panel_of(&harness)
+            .and_then(|panel| panel.test_overlay_geometry())
+            .is_some(),
+        "the overlay is open in non-Wide geometry"
+    );
+    let buf = terminal.backend().buffer();
+
+    // The sheet's own surface: the overlay frame's top-left corner cell.
+    let (_, frame) = panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_geometry())
+        .expect("the overlay painted");
+    assert_eq!(
+        buf[(frame.x, frame.y)].bg,
+        crate::app::palette::surface_colors(crate::app::palette::Surface::PillRow, false).fill,
+        "the overlay sheet carries the PillRow surface"
+    );
+
+    // The Workspace box rests on the sheet: no cell in it resolves a
+    // focused fill while the Workspace holds focus.
+    let (box_panel, _) = panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_workspace_box())
+        .expect("the overlay's Workspace box painted");
+    let focused_body = crate::app::palette
+        ::surface_colors(crate::app::palette::Surface::MainContentBox, true)
+        .fill;
+    let focused_stripe = crate::app::palette
+        ::surface_colors(crate::app::palette::Surface::LibraryPanel, true)
+        .fill;
+    for y in box_panel.top()..box_panel.bottom() {
+        for x in box_panel.left()..box_panel.right() {
+            let bg = buf[(x, y)].bg;
+            assert_ne!(
+                bg, focused_body,
+                "the Workspace box's body took a focused fill at ({x}, {y})"
+            );
+            assert_ne!(
+                bg, focused_stripe,
+                "the Workspace box's stripes took a focused fill at ({x}, {y})"
+            );
+        }
+    }
+
+    // The resting pair itself: the box's bottom padding row keeps the
+    // resting `MainContentBox` body fill and the row flow stripes with the
+    // resting `LibraryPanel` fill.
+    let resting_body = crate::app::palette
+        ::surface_colors(crate::app::palette::Surface::MainContentBox, false)
+        .fill;
+    let resting_stripe = crate::app::palette
+        ::surface_colors(crate::app::palette::Surface::LibraryPanel, false)
+        .fill;
+    assert_eq!(
+        buf[(box_panel.x + 1, box_panel.bottom() - 1)].bg,
+        resting_body,
+        "the box's padding row keeps the resting MainContentBox body"
+    );
+    let mut striped = false;
+    for y in box_panel.top()..box_panel.bottom() {
+        for x in box_panel.left()..box_panel.right() {
+            striped = striped || buf[(x, y)].bg == resting_stripe;
+        }
+    }
+    assert!(
+        striped,
+        "the Workspace box stripes its rows with the resting LibraryPanel fill"
     );
 }
 

@@ -264,6 +264,23 @@ fn home_menu_uses_component_painted_geometry_not_poisoned_legacy_layout_narrow()
         .menu_geometry()
         .expect("panel painted geometry");
     let (panel, selected) = painted;
+    // The non-Wide anchor is the Wide pane's panel rect (unify-narrow 6.1):
+    // the pane the frame painted and retained, not the row-flow inset the
+    // pre-parity path anchored to.
+    let narrow = model
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|c| c.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_narrow_geometry())
+        .expect("the non-Wide frame painted");
+    assert_eq!(
+        panel, narrow.list_panel,
+        "the anchor is the painted Browser pane"
+    );
+    assert_ne!(
+        panel, narrow.list_area,
+        "the anchor is the pane, not the row-flow inset"
+    );
     model.app.layout.left_area = Rect::new(0, 0, 200, 200);
 
     term.draw(|f| model.render_context_menu_overlay(f)).unwrap();

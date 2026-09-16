@@ -5,6 +5,7 @@ use crate::app::components::library_panel::{
 use crate::app::components::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
 };
+use crate::app::palette;
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -62,7 +63,7 @@ fn narrow_skeleton_keeps_fixed_rows_and_panel_slots() {
         .contains(' '));
     let controls = geometry.controls.expect("controls row reserved");
     // The row flow is inset inside the list panel: one spacer row of the panel
-    // above it (`PANE_PAD_Y`), which the inset's own surface paints.
+    // above it (`PANE_PAD_Y`, the shared browser-pane inset).
     assert_eq!(
         geometry.list_area.y,
         controls.bottom() + crate::app::render::PANE_PAD_Y
@@ -101,4 +102,55 @@ fn fixed_row_owner_clamps_when_narrow_viewport_shrinks_and_restores() {
         .unwrap();
     assert_eq!(carrier.selected_target(), Some(&"9".to_string()));
     assert!(carrier.wide().current_flow_offset().unwrap() <= 9);
+}
+
+/// The non-Wide list box is the Wide browser pane's list box (design D3): the
+/// `LibraryPanel` fill pair on the box and the `MainContentBox` stripe pair on
+/// the alternating rows, in both focus states, with no body or scrollbar
+/// override of its own.
+#[test]
+fn narrow_list_box_uses_the_wide_browser_pane_fill_and_stripes() {
+    for focused in [false, true] {
+        let mut carrier = MediaListCarrier::new();
+        carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
+        let mut content = LibraryPanelContent {
+            selector: None,
+            controls: None,
+            list: ListSlot::Media(&mut carrier),
+            hero: None,
+        };
+        let area = Rect::new(0, 0, 60, 20);
+        let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
+        let mut hits = super::super::wide::SkeletonHits::default();
+        let mut windows = super::super::wide::SkeletonPillWindows::default();
+        let mut geometry = None;
+        terminal
+            .draw(|f| {
+                geometry = Some(render_narrow_skeleton(
+                    f,
+                    area,
+                    &mut content,
+                    focused,
+                    None,
+                    &mut hits,
+                    &mut windows,
+                ));
+            })
+            .unwrap();
+        let geometry = geometry.expect("narrow skeleton painted");
+        let buf = terminal.backend().buffer();
+        // The list box carries the `LibraryPanel` fill for this focus state.
+        assert_eq!(
+            buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
+            palette::surface_colors(palette::Surface::LibraryPanel, focused).fill
+        );
+        // The zebra sequence opens unstriped, so the second visible row
+        // stripes with the `MainContentBox` pair; the stripe starts after the
+        // row's two-column indent — the claim's left edge plus the indent,
+        // which is the inset row flow's `x` under the shared pane painter.
+        assert_eq!(
+            buf[(geometry.list_area.x, geometry.list_area.y + 1)].bg,
+            palette::surface_colors(palette::Surface::MainContentBox, focused).fill
+        );
+    }
 }

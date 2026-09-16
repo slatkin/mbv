@@ -262,37 +262,13 @@ impl Model {
         Some(crate::app::render::components::widgets::right_panel_content_area(area, collapsed))
     }
 
-    /// The Library column's own body fill for the current geometry **and**
-    /// panel focus.
-    ///
-    /// Deliberately guarded twice. The geometry gate is the one breakpoint
-    /// predicate (`wide_hero_fits`): Wide keeps the column's fixed backdrop
-    /// exactly as before, so nothing here can change Wide. The focus bit is
-    /// the same `PanelFocus::Library` the rest of the chrome reads, and only
-    /// the non-Wide body follows it — an unfocused narrow library stays on the
-    /// default backdrop.
+    /// The Library column's body fill: the column's fixed backdrop in every
+    /// geometry and every focus state. The non-Wide panel is the Wide browser
+    /// pane without a Hero, so its body no longer follows the panel focus bit
+    /// and no non-Wide surface identity exists — the single named authority
+    /// both the placement fill and the status band's padding rows read.
     pub(super) fn library_body_fill(&self) -> ratatui::style::Color {
-        let Some(content_area) = self.library_panel_content_area() else {
-            // No library placement this frame: the column's own resting value.
-            return crate::app::palette::surface_colors(
-                crate::app::palette::Surface::LibraryColumn,
-                false,
-            )
-            .fill;
-        };
-        if crate::app::render::wide_hero_fits(content_area) {
-            return crate::app::palette::surface_colors(
-                crate::app::palette::Surface::LibraryColumn,
-                false,
-            )
-            .fill;
-        }
-        let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
-        crate::app::palette::surface_colors(
-            crate::app::palette::Surface::NarrowLibraryBody,
-            focused,
-        )
-        .fill
+        crate::app::palette::surface_colors(crate::app::palette::Surface::LibraryColumn, false).fill
     }
 
     /// The transitional draw step: give the library rect to the mounted
@@ -310,10 +286,9 @@ impl Model {
         // show the column's own background rather than whatever was painted
         // underneath before this panel owned the placement.
         frame.render_widget(ratatui::widgets::Clear, area);
-        // The panel body follows the skeleton it is about to paint: Wide keeps
-        // the column's resting backdrop, non-Wide paints its own body surface
-        // under the list. The gate is the one breakpoint predicate, evaluated
-        // on the rect the panel itself receives.
+        // The panel body is the library column's fixed backdrop in every
+        // geometry and focus state: the non-Wide panel is the Wide browser
+        // pane without a Hero, so one backdrop serves both skeletons.
         let content_area = self.library_panel_content_area().unwrap_or(area);
         frame.render_widget(
             ratatui::widgets::Block::default()

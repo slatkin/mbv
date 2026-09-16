@@ -93,7 +93,7 @@ impl Component for LibraryPanel {
                 &mut hits,
                 &mut windows,
             );
-            self.narrow_geometry = Some(geometry.clone());
+            self.narrow_geometry = Some(geometry);
         }
         // Paint the Library-local overlay after the ordinary skeleton. The
         // shared Hero path therefore remains the sole content painter.

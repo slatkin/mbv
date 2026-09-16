@@ -11,7 +11,11 @@ own. The non-Wide library column body — the panel placement, the Selector row'
 band's padding rows and the list's scrollbar column — SHALL resolve the fixed app backdrop
 (`#2d353b`) in every focus state, as the Wide library column does. The status row inside the status
 band SHALL remain the status bar's own surface. No non-Wide-specific library surface identity SHALL
-exist.
+exist. The non-Wide browser rail's focus input SHALL be the library panel's own focus bit alone: a
+Workspace focused in Wide geometry SHALL NOT subtract the rail's focused surface after a transition
+to non-Wide geometry, so a panel-focused non-Wide rail always paints one visible focus indicator. A
+non-Wide list slot with no rows to spare SHALL keep its single row rather than collapsing to an empty
+rect, so a very short panel still paints one row.
 
 #### Scenario: A focused non-Wide library keeps the column backdrop
 
@@ -31,6 +35,18 @@ exist.
 
 - **WHEN** the library panel renders in non-Wide geometry with the library panel focused and without it
 - **THEN** the column body's painted fill is identical in both frames
+
+#### Scenario: A very short non-Wide panel keeps one row
+
+- **WHEN** a non-Wide library panel is too short to afford the row-flow inset
+- **THEN** its list slot keeps a single row instead of collapsing to an empty rect
+
+#### Scenario: A Workspace focused in Wide does not darken the non-Wide rail
+
+- **WHEN** the Hero Workspace holds focus in Wide geometry and the panel transitions to non-Wide
+  geometry with the Library Hero overlay closed
+- **THEN** a panel-focused non-Wide browser rail still paints its focused list-box fill
+- **AND** the rail's focus input does not depend on the Workspace's focus bit
 
 #### Scenario: Wide keeps its own column fill
 

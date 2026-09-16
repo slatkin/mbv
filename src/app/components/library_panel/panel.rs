@@ -24,7 +24,7 @@ use crate::app::render::wide_hero_fits;
 use super::content::{HeroImageState, PanelHeroImagePaint};
 use super::hero::HeroContentData;
 use super::hero_composition::HeroCompositionGeometry;
-use super::narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
+use super::narrow::render_narrow_skeleton;
 use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
 use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry};
 use crate::app::components::inline_search::InlineSearchHost;
@@ -77,7 +77,7 @@ pub struct LibraryPanel {
     /// pills, so a pointer selection of a painted pill never slides its bar.
     pill_windows: SkeletonPillWindows,
     wide_geometry: Option<WideSkeletonGeometry>,
-    narrow_geometry: Option<NarrowSkeletonGeometry>,
+    narrow_geometry: Option<WideSkeletonGeometry>,
     painted_area: Option<ratatui::layout::Rect>,
     split: Option<SplitGeometry>,
     /// The split boundary's private gesture state: a left press inside the
@@ -267,6 +267,15 @@ impl LibraryPanel {
             .map(|geometry| (geometry.pane, geometry.frame))
     }
 
+    /// The Library Hero overlay's painted Workspace box (panel, content)
+    /// rects, for the overlay-pixel test path.
+    #[cfg(test)]
+    pub(in crate::app) fn test_overlay_workspace_box(
+        &self,
+    ) -> Option<(ratatui::layout::Rect, ratatui::layout::Rect)> {
+        self.overlay_geometry.as_ref()?.hero.workspace
+    }
+
     /// Losing mouse eligibility mid-drag (overlay mount, mode change) clears
     /// the split gesture state before the next delivery — the same reset
     /// the former boundary applied while it owned the gesture —
@@ -379,10 +388,11 @@ impl LibraryPanel {
         crate::app::layout::PaintedRowGeometry::default()
     }
 
-    /// The last painted Narrow skeleton geometry, for the panel-output test
-    /// path.
+    /// The last painted Narrow skeleton geometry (the shared
+    /// [`WideSkeletonGeometry`] shape: the non-Wide panel is the Wide
+    /// browser pane without a Hero), for the panel-output test path.
     #[cfg(test)]
-    pub(in crate::app) fn test_narrow_geometry(&self) -> Option<NarrowSkeletonGeometry> {
+    pub(in crate::app) fn test_narrow_geometry(&self) -> Option<WideSkeletonGeometry> {
         self.narrow_geometry.clone()
     }
 
@@ -475,21 +485,19 @@ impl LibraryPanel {
         self.image_paint.take()
     }
 
-    /// The painted panel's (list slot rect, selected row rect) for the
+    /// The painted panel's (list pane rect, selected row rect) for the
     /// context-menu anchor path — the panel's own last-painted geometry, the
     /// same painted-truth contract the old destination components'
-    /// `menu_placement_geometry` served.
+    /// `menu_placement_geometry` served. Both skeletons save the Browser
+    /// pane's panel rect in `list_panel` (the non-Wide panel *is* the Wide
+    /// browser pane), so one expression covers every geometry.
     pub(in crate::app) fn menu_geometry(
         &self,
     ) -> Option<(ratatui::layout::Rect, Option<ratatui::layout::Rect>)> {
         self.wide_geometry
             .as_ref()
-            .map(|wide| (wide.list_panel, wide.selected))
-            .or_else(|| {
-                self.narrow_geometry
-                    .as_ref()
-                    .map(|narrow| (narrow.list_area, narrow.selected))
-            })
+            .or(self.narrow_geometry.as_ref())
+            .map(|geometry| (geometry.list_panel, geometry.selected))
     }
 
     // ── Event interpretation ─────────────────────────────────────────────

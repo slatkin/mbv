@@ -62,8 +62,11 @@ satisfy a geometry-scoped request.
 - A geometry-scoped difference must be provably unreachable from the geometries it does not target;
   reviewers should ask for that reachability argument, not just a green suite.
 - The first attempt at the non-Wide library palette (`0b0023c0`, reverted by `e127177b`) is the
-  worked counter-example this ADR cites; the accepted implementation is change
+  worked counter-example this ADR cites; the accepted implementation was change
   `add-non-wide-library-palette` (`Surface::NarrowLibraryBody` plus `PanelListPaintPolicy::Narrow`).
+  That identity was later retired by `unify-narrow-library-with-wide-browser-pane` once the non-Wide
+  library became the Wide browser pane without a Hero, so no non-Wide palette identity remains. The
+  Decision above still stands and governs any future geometry-scoped appearance.
 
 ## Considered options
 
@@ -81,5 +84,7 @@ satisfy a geometry-scoped request.
 ## References
 
 - `openspec/changes/add-non-wide-library-palette/` (proposal, design, delta specs)
+- `openspec/changes/unify-narrow-library-with-wide-browser-pane/` (the change that retired
+  `NarrowLibraryBody` and `PanelListPaintPolicy::Narrow`)
 - `openspec/specs/ui-design-system/spec.md` (the render-tree boundary and role vocabulary)
 - `docs/architecture/interactive-surface-ledger.md` (surface ownership)

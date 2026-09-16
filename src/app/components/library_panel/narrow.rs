@@ -1,29 +1,20 @@
-//! The non-Wide Library panel skeleton.  It keeps the same fixed-row
-//! canonical media-list owner as the Wide skeleton; only the surrounding
-//! selector/control rectangles and the row-flow geometry change.
+//! The non-Wide Library panel skeleton. In non-Wide geometry the panel *is*
+//! the Wide browser pane without a Hero (design D1): the shared
+//! browser-pane composition paints the Selector row, the optional List
+//! controls row and the list box, with the same surface identities the Wide
+//! list pane uses, and no Hero pane is painted beside it.
 
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use crate::app::render::arrangements::wide_hero::pill_bar_areas;
-use crate::app::render::{render_inline_search, render_placeholder, PANE_PAD_Y};
+use crate::app::render::wide_hero_browser_pane;
 
-use super::content::{LibraryPanelContent, ListSlot, PanelListPaintPolicy};
-use super::slots::{
-    paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
-    SELECTOR_ROW_PREFIX,
-};
-use super::wide::{SkeletonHits, SkeletonPillWindows};
+use super::content::LibraryPanelContent;
+use super::wide::{paint_browser_pane, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry};
 
-#[derive(Clone, Debug, Default)]
-pub(in crate::app) struct NarrowSkeletonGeometry {
-    pub selector_bar: Rect,
-    pub controls: Option<Rect>,
-    pub list_area: Rect,
-    pub selected: Option<Rect>,
-}
-
-/// Paint the non-Wide Library skeleton with ordinary fixed-height rows.
+/// Paint the non-Wide Library skeleton: the panel is the whole browser pane
+/// (`wide_hero_browser_pane(area, area)` places exactly the pane's pill-bar
+/// areas over the full width), with no Hero pane beside it.
 pub(in crate::app) fn render_narrow_skeleton(
     f: &mut Frame,
     area: Rect,
@@ -32,139 +23,35 @@ pub(in crate::app) fn render_narrow_skeleton(
     hovered_selector: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
-) -> NarrowSkeletonGeometry {
-    let areas = pill_bar_areas(area);
-    let searching = matches!(content.list, ListSlot::Search(_));
-    match (&content.selector, searching) {
-        (Some(selector), false) => paint_selector_row(
-            f,
-            areas.pills_area,
-            areas.spacer_area,
-            selector,
-            hovered_selector,
-            &mut hits.selector,
-            &mut windows.selector,
-            // The spacer is this panel showing through: in non-Wide geometry
-            // that is the panel's own body, resolved with the same focus bit
-            // the list below it uses.
-            crate::app::palette::Surface::NarrowLibraryBody,
-            browser_focused,
-        ),
-        (None, false) => {
-            paint_pill_bar_row(
-                f,
-                areas.pills_area,
-                &[],
-                None,
-                None,
-                Some(SELECTOR_ROW_PREFIX),
-                &mut hits.selector,
-                &mut windows.selector,
-            );
-            paint_pill_row_gap(
-                f,
-                areas.spacer_area,
-                crate::app::palette::Surface::NarrowLibraryBody,
-                browser_focused,
-            );
-        }
-        (_, true) => paint_pill_row_gap(
-            f,
-            areas.spacer_area,
-            crate::app::palette::Surface::NarrowLibraryBody,
-            browser_focused,
-        ),
-    }
-
-    let (list_area, controls_area) = match &content.controls {
-        Some(controls) if areas.content_area.height > 0 => {
-            let row = Rect {
-                height: 1,
-                ..areas.content_area
-            };
-            paint_list_controls_row(f, row, controls, &mut hits.controls);
-            (
-                Rect {
-                    y: row.bottom(),
-                    height: areas.content_area.height.saturating_sub(1),
-                    ..areas.content_area
-                },
-                Some(row),
-            )
-        }
-        _ => (areas.content_area, None),
-    };
-
-    let mut painted_list_area = list_area;
-    match &mut content.list {
-        ListSlot::Search(search) => {
-            let items = search.ordered_items();
-            let query = search.query().to_string();
-            let loading = search.loading();
-            let cursor = search.cursor();
-            let scroll_in = search.scroll();
-            let new_scroll = render_inline_search(
-                f,
-                areas.pills_area,
-                list_area,
-                &query,
-                loading,
-                items,
-                cursor,
-                scroll_in,
-                browser_focused,
-                1,
-                search.layout_mut(),
-            );
-            search.set_scroll(new_scroll);
-        }
-        ListSlot::Media(list) => {
-            // The inset list panel breathes like the wide pane's own list box:
-            // one spacer row above and below the rows. Those rows belong to the
-            // inset, not to the panel around it, so the claim is the whole
-            // panel (the painter fills it with the list's own surface) and only
-            // the row flow is inset.
-            let inset = Rect {
-                y: list_area.y.saturating_add(PANE_PAD_Y),
-                height: list_area.height.saturating_sub(PANE_PAD_Y * 2),
-                ..list_area
-            };
-            // A slot with no rows to spare keeps its single row rather than
-            // collapsing to an empty rect.
-            let inset = if inset.height == 0 { list_area } else { inset };
-            // The list owns the surface it sits on in this geometry: same
-            // identity its zebra stripe resolves from, and the same focus bit,
-            // so a focused narrow list is one flat surface and a resting one
-            // keeps the default backdrop. No separate body fill here.
-            list.sync_viewport(inset.height.max(1) as usize);
-            list.set_paint_policy(PanelListPaintPolicy::Narrow {
-                focused: browser_focused,
-            });
-            list.set_geometry(list_area, inset);
-            list.view(f, inset);
-            painted_list_area = inset;
-        }
-        ListSlot::Empty { loading, text } => {
-            let msg = if *loading {
-                " Loading…"
-            } else {
-                text.as_str()
-            };
-            if !msg.is_empty() {
-                render_placeholder(f, list_area, msg);
-            }
-        }
-    }
-
-    let selected = match &mut content.list {
-        ListSlot::Media(list) => list.selected_row_rect(),
-        _ => None,
-    };
-    NarrowSkeletonGeometry {
-        selector_bar: areas.pills_area,
-        controls: controls_area,
-        list_area: painted_list_area,
-        selected,
+) -> WideSkeletonGeometry {
+    let pane = wide_hero_browser_pane(area, area);
+    // The non-Wide rail's focus is the panel's bit alone: `workspace_focused`
+    // is breakpoint-unaware (a Workspace focused in Wide survives a shrink
+    // with the overlay closed), so the non-Wide rail never subtracts it.
+    let list_focused = browser_focused;
+    let browser = paint_browser_pane(
+        f,
+        pane,
+        content,
+        list_focused,
+        hovered_selector,
+        hits,
+        windows,
+    );
+    WideSkeletonGeometry {
+        browser: area,
+        hero: Rect::default(),
+        selector_bar: browser.selector_bar,
+        controls: browser.controls,
+        list_panel: browser.list_panel,
+        list_area: browser.list_area,
+        hero_area: Rect::default(),
+        workspace: None,
+        hero_image: None,
+        overview_box: None,
+        overview_content_length: 0,
+        overview_viewport: 0,
+        selected: browser.selected,
     }
 }
 
