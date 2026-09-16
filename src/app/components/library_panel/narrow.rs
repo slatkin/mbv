@@ -121,9 +121,10 @@ pub(in crate::app) fn render_narrow_skeleton(
         }
         ListSlot::Media(list) => {
             // The inset list panel breathes like the wide pane's own list box:
-            // one spacer row above and below, which the panel's body shows
-            // through. The rows the painter owns are the inset's, so the
-            // retained geometry stays exactly what this frame painted.
+            // one spacer row above and below the rows. Those rows belong to the
+            // inset, not to the panel around it, so the claim is the whole
+            // panel (the painter fills it with the list's own surface) and only
+            // the row flow is inset.
             let inset = Rect {
                 y: list_area.y.saturating_add(PANE_PAD_Y),
                 height: list_area.height.saturating_sub(PANE_PAD_Y * 2),
@@ -140,7 +141,7 @@ pub(in crate::app) fn render_narrow_skeleton(
             list.set_paint_policy(PanelListPaintPolicy::Narrow {
                 focused: browser_focused,
             });
-            list.set_geometry(inset, inset);
+            list.set_geometry(list_area, inset);
             list.view(f, inset);
             painted_list_area = inset;
         }
