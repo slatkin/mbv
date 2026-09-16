@@ -26,6 +26,7 @@ use super::hero::HeroContentData;
 use super::narrow::{render_narrow_skeleton, NarrowSkeletonGeometry};
 use super::owner::{LibraryContentOwner, LibraryKey, LibraryOwners, LibrarySlotEvent};
 use super::wide::{render_wide_skeleton, SkeletonHits, SkeletonPillWindows, WideSkeletonGeometry};
+use crate::app::components::inline_search::InlineSearchHost;
 
 /// The painted split's pointer→width resolution inputs, shared by the drag
 /// gesture's arming and resolution (the same facts the old
@@ -376,6 +377,21 @@ impl LibraryPanel {
         key: &LibraryKey,
     ) -> Option<&mut dyn LibraryContentOwner> {
         self.owners.get_mut(key)
+    }
+
+    /// The active owner's embedded Inline Search session, mutably — the
+    /// shell's open/load/push/dismiss path resolves the host through it.
+    pub(in crate::app) fn active_inline_search_session(
+        &mut self,
+    ) -> Option<&mut dyn InlineSearchHost> {
+        self.owners.active_mut()?.inline_search_session()
+    }
+
+    /// The shared-borrow twin of [`LibraryPanel::active_inline_search_session`]
+    /// for the shell's pure reads (is-open, selected result).
+    pub(in crate::app) fn active_inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
+        let key = self.owners.active_key()?;
+        self.owners.get(key)?.inline_search_session_ref()
     }
 
     /// The shared-borrow twin of [`LibraryPanel::owner_mut`], for the

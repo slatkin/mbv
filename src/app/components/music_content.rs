@@ -389,6 +389,14 @@ impl LibraryContentOwner for MusicContent {
         self.carrier.clear_selection();
     }
 
+    fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
+        Some(self)
+    }
+
+    fn inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
+        Some(self)
+    }
+
     fn set_selection_origin(
         &mut self,
         origin: crate::app::components::media_list::SelectionOrigin,

@@ -12,6 +12,7 @@ use std::collections::HashMap;
 
 use tuirealm::event::KeyEvent;
 
+use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::media_list::{MediaListSurfaceInput, SelectionSummary};
 use crate::app::components::msg::{LeafKeyResult, Msg};
 use mbv_core::config::ServiceKind;
@@ -183,6 +184,20 @@ pub(in crate::app) trait LibraryContentOwner {
     }
     fn hero_scroll(&mut self, _delta: i16, _max_offset: usize) -> bool {
         false
+    }
+
+    /// The owner's embedded Inline Search session, when it embeds one. The
+    /// shell's inline-search host path (open/load/push/dismiss) resolves the
+    /// panel's active owner through this; owners without a session return
+    /// `None` (the default).
+    fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
+        None
+    }
+
+    /// The shared-borrow twin of [`LibraryContentOwner::inline_search_session`]
+    /// for the shell's pure reads (is-open, selected result).
+    fn inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
+        None
     }
 
     /// Downcast support for the shell's per-destination pushes (the shell

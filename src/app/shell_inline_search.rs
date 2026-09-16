@@ -1,32 +1,49 @@
 use super::components::inline_search::InlineSearchHost;
+use super::components::library_panel::LibraryPanel;
 use super::components::{ComponentId, SearchPool};
 use super::shell::Model;
 use super::{AlbumIndexState, PanelFocus, TabSelection};
 
 impl Model {
-    pub(crate) fn active_inline_search_is_open(&self) -> bool {
-        self.music_owner()
-            .is_some_and(|host| host.inline_search().is_active())
+    /// The panel's active owner's Inline Search session, when one is
+    /// embedded (Emby browser, TV, and Music owners do; Home/Feeds/podcast/
+    /// book owners do not). The host path resolves through this so every
+    /// owner that opens inline search gets the same shell load/push flow.
+    fn active_inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
+        self.panel_mut()?.active_inline_search_session()
     }
 
-    fn active_inline_search_host(&self) -> Option<ComponentId> {
-        self.music_owner().map(|_| ComponentId::Library)
+    fn active_inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
+        self.panel()?.active_inline_search_session_ref()
+    }
+
+    /// The mounted `LibraryPanel`, typed.
+    fn panel(&self) -> Option<&LibraryPanel> {
+        self.application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+    }
+
+    fn panel_mut(&mut self) -> Option<&mut LibraryPanel> {
+        self.application
+            .get_component_mut(&ComponentId::Library)
+            .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+    }
+
+    pub(crate) fn active_inline_search_is_open(&self) -> bool {
+        self.active_inline_search_session_ref()
+            .is_some_and(|host| host.inline_search().is_active())
     }
 
     fn with_active_inline_search_host(
         &mut self,
         f: impl FnOnce(&mut dyn InlineSearchHost),
     ) -> bool {
-        let Some(id) = self.active_inline_search_host() else {
+        let Some(host) = self.active_inline_search_session() else {
             return false;
         };
-        if id == ComponentId::Library {
-            if let Some(host) = self.music_owner_mut() {
-                f(host);
-                return true;
-            }
-        }
-        false
+        f(host);
+        true
     }
 
     fn inline_search_needs_full_load(&self, index: usize) -> bool {
@@ -37,24 +54,17 @@ impl Model {
     }
 
     pub(super) fn dismiss_active_inline_search(&mut self) {
-        if let Some(id) = self.active_inline_search_host() {
-            self.close_inline_search_host(&id);
-        }
-    }
-
-    pub(super) fn close_inline_search_host(&mut self, id: &ComponentId) {
-        if id == &ComponentId::Library {
-            if let Some(host) = self.music_owner_mut() {
-                host.close_inline_search();
-            }
-        }
+        let _ = self.with_active_inline_search_host(|host| host.close_inline_search());
     }
 
     pub(super) fn push_inline_search_content(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        if self.active_inline_search_host().is_none() {
+        let has_session = self
+            .panel_mut()
+            .is_some_and(|panel| panel.active_inline_search_session().is_some());
+        if !has_session {
             return;
         }
         // Flat path: this push only projects the flat `Items` pool. Loading
@@ -125,7 +135,7 @@ impl Model {
             return;
         };
         let selected = self
-            .music_owner()
+            .active_inline_search_session_ref()
             .and_then(|host| host.selected_inline_search_item());
         if self.app.recursive_album_search_enabled(lib_idx) {
             let library_id = self.app.libs[lib_idx].library.id.clone();
@@ -169,13 +179,15 @@ impl Model {
 
     /// Drain tail for the inline search (called from the shell's `lib_rx`
     /// loop): completions that can change the mounted search's projected pool
-    /// — flat `nav_stack` items/`all_items`, or recursive `album_indexes` —
+    /// — flat nav_stack completions (`Loaded`), flat
+    /// items/`all_items`, or recursive `album_indexes` —
     /// re-push it after the App handles the event. The deleted per-frame
     /// mirror's projection is driven at async event boundaries.
-    pub(super) fn handle_inline_search_lib_event(&mut self, ev: super::LibEvent) {
+    pub(in crate::app) fn handle_inline_search_lib_event(&mut self, ev: super::LibEvent) {
         let pushes_inline_search = matches!(
             ev,
-            super::LibEvent::Refreshed { .. }
+            super::LibEvent::Loaded { .. }
+                | super::LibEvent::Refreshed { .. }
                 | super::LibEvent::AllItemsPrefetched { .. }
                 | super::LibEvent::AlbumIndexBuilt { .. }
                 | super::LibEvent::NavigateTo { .. }

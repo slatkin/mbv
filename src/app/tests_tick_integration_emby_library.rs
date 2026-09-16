@@ -4,6 +4,7 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
+use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
@@ -67,6 +68,101 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor() {
     assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
 
     let _ = draw(&mut harness, 100, 30);
+}
+
+#[test]
+fn inline_search_on_movies_library_receives_the_shell_pool_push() {
+    let mut app = make_movie_app();
+    app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _terminal = draw(&mut harness, 100, 30);
+
+    // `/` opens the embedded Inline Search through the shell, and the
+    // shell's `OpenInlineSearch` host path resolves the Movies owner: the
+    // nav-stack items are pushed as the search pool. (Regression: the
+    // #695-era conversion collapsed the host path to the Music owner only,
+    // so every non-Music library scored typed queries against an empty pool
+    // and populated no results.)
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| matches!(message, Msg::Shell(ShellRequest::OpenInlineSearch))),
+        "\"/\" emits the shell open request: {:?}",
+        outcome.messages
+    );
+    // Drain the step's shell requests like the run loop: the open request
+    // loads/pushes the pool into the owner's session.
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().active_inline_search_is_open());
+
+    // A typed query scores against the pushed pool: "o" matches both rows
+    // of the two-item nav-stack level.
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('o'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+    let owner = browser_owner(&harness);
+    assert_eq!(owner.inline_search().query(), "o");
+    assert_eq!(
+        owner.inline_search().results_len(),
+        2,
+        "typed query resolves rows from the shell-pushed pool"
+    );
+
+    // A flat browse completion under an open session (Enter on a folder
+    // result drills in: select_item pushes a loading placeholder level and
+    // the fetch completes asynchronously) re-pushes the pool at the
+    // lib-event boundary: without the `Loaded` re-push the search kept a
+    // stale empty pool and the list/hero painted blank. The query is
+    // re-scored against the new level's rows.
+    harness.model_mut().app.libs[0].nav_stack[0].loading = true;
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(crate::app::LibEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-movies".into(),
+            level: Box::new(crate::app::BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![
+                    crate::app::tests::make_item("Anchor", "Movie"),
+                    crate::app::tests::make_item("Another One", "Movie"),
+                    crate::app::tests::make_item("Another Two", "Movie"),
+                ],
+                total_count: 3,
+                resting: crate::app::types_browse::BrowseResting::new(0, 0),
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                music_grouping: None,
+            }),
+        });
+    let owner = browser_owner(&harness);
+    assert_eq!(
+        owner.inline_search().results_len(),
+        3,
+        "the browse completion re-pushes the pool; the query scores its rows"
+    );
 }
 
 #[test]

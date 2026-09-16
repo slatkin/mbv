@@ -15,7 +15,7 @@
 //! it painted and hands over typed slot events; this owner resolves the
 //! row-local target through its own carriers and emits the same
 //! `ShellRequest::TvHit*` messages the deleted component emitted.
-use super::inline_search::InlineSearch;
+use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::{
     hero_content_emby, HeroContent, HeroContentData, HeroImageState, LibraryContentOwner,
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
@@ -538,9 +538,25 @@ impl Default for TvContent {
         Self::new()
     }
 }
+impl InlineSearchHost for TvContent {
+    fn inline_search(&self) -> &InlineSearch {
+        &self.inline_search
+    }
+    fn inline_search_mut(&mut self) -> &mut InlineSearch {
+        &mut self.inline_search
+    }
+}
 impl LibraryContentOwner for TvContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
+    }
+
+    fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
+        Some(self)
+    }
+
+    fn inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
+        Some(self)
     }
 
     fn set_selection_origin(

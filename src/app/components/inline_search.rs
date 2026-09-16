@@ -263,7 +263,9 @@ impl InlineSearch {
             return;
         }
         use fuzzy_matcher::skim::SkimMatcherV2;
-        let matcher = SkimMatcherV2::default();
+        // Fully case-insensitive: media titles are searched without smart-case
+        // (an uppercase query letter must not make the scan case-sensitive).
+        let matcher = SkimMatcherV2::default().ignore_case();
         let mut scored = self.pool.match_scores(&matcher, &self.query);
         scored.sort_by_key(|&(_, score)| std::cmp::Reverse(score));
         self.order = scored;

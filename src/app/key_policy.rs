@@ -276,7 +276,7 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
     },
     KeyPolicyEntry {
         name: "visualizer",
-        global: false,
+        global: true,
         binding: KeyPolicyBinding::Visualizer,
         gate: KeyPolicyGate::NoBlockingOverlay,
         blocking: false,
