@@ -74,17 +74,17 @@
 
 ## 5. Regression and integration
 
-- [ ] 5.1 Confirm media lists did not move: the existing two-tone list-row tests in
+- [x] 5.1 Confirm media lists did not move: the existing two-tone list-row tests in
   `src/app/render/components/media_list/` and
   `src/app/render/components/media_list.rs` pass unmodified. Verify with
   `cargo nextest run -p mbv` and no edits to those test files.
 
-- [ ] 5.2 Add one real `Application::tick()` integration test through the shell sync pass
+- [x] 5.2 Add one real `Application::tick()` integration test through the shell sync pass
   (`src/app/tests_tick_integration*.rs`) asserting the projected parts for a two-part item and a
   single-part item, proving both panels receive them from the one projection. Verify with
   `cargo nextest run -p mbv`.
 
-- [ ] 5.3 Run the gates: `cargo fmt --all -- --check`,
+- [x] 5.3 Run the gates: `cargo fmt --all -- --check`,
   `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo nextest run -p mbv` and `cargo nextest run -p mbv-core`. Verify all clean.
 
