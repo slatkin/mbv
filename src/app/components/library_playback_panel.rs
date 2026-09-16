@@ -107,6 +107,13 @@ impl LibraryPlaybackPanel {
         (self.play_pause_area, self.seekbar_area)
     }
 
+    /// Test-only: the projected now-playing title parts the sync pass
+    /// delivered (task 5.2).
+    #[cfg(test)]
+    pub(in crate::app) fn title_parts_for_test(&self) -> Option<PlaybackTitleParts> {
+        self.projection.title_parts.clone()
+    }
+
     fn double_tap(last: &mut Option<Instant>) -> bool {
         let now = Instant::now();
         let result =

@@ -143,6 +143,15 @@ impl QueuePlaybackPanel {
         self.transport_area
     }
 
+    /// Test-only: the projected now-playing title parts the sync pass
+    /// delivered (task 5.2).
+    #[cfg(test)]
+    pub(in crate::app) fn transport_title_parts_for_test(
+        &self,
+    ) -> Option<mbv_core::playback_queue::PlaybackTitleParts> {
+        self.transport.title_parts.clone()
+    }
+
     fn mouse(&self, event: &MouseEvent) -> Option<Msg> {
         let point = (event.column, event.row).into();
         match event.kind {
