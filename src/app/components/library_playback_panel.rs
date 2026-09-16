@@ -29,6 +29,7 @@ use crate::app::render::arrangements::chrome::PLAYER_BOX_HEIGHT;
 use crate::app::render::PlaybackStripAreas;
 use crate::app::render::{render_player_panel, PlaybackRenderContext};
 use crate::app::types_playback::PlaybackState;
+use mbv_core::playback_queue::PlaybackTitleParts;
 
 #[derive(Clone, Debug, PartialEq)]
 pub(in crate::app) struct PlaybackProjection {
@@ -39,7 +40,11 @@ pub(in crate::app) struct PlaybackProjection {
     pub panel: palette::Surface,
     pub panel_focused: bool,
     pub now_playing_title: Option<(String, Color)>,
-    pub title_parts: Vec<(String, Color)>,
+    /// The typed now-playing title parts with their closed roles (D6); the
+    /// painter resolves a role to a colour. `None` when the attached target
+    /// is not addressable as a local queue item — `now_playing_title` then
+    /// carries the plain fallback title.
+    pub title_parts: Option<PlaybackTitleParts>,
     pub status_indicators: Option<Vec<Span<'static>>>,
     pub idle_feed_title: Option<(String, bool)>,
     pub use_nerd_fonts: bool,
@@ -71,7 +76,7 @@ impl LibraryPlaybackPanel {
                 panel: palette::Surface::PlaybackPanel,
                 panel_focused: false,
                 now_playing_title: None,
-                title_parts: Vec::new(),
+                title_parts: None,
                 status_indicators: None,
                 idle_feed_title: None,
                 use_nerd_fonts: false,
@@ -98,6 +103,13 @@ impl LibraryPlaybackPanel {
     #[cfg(test)]
     pub(in crate::app) fn transport_hits(&self) -> (Rect, Rect) {
         (self.play_pause_area, self.seekbar_area)
+    }
+
+    /// Test-only: the projected now-playing title parts the sync pass
+    /// delivered (task 5.2).
+    #[cfg(test)]
+    pub(in crate::app) fn title_parts_for_test(&self) -> Option<PlaybackTitleParts> {
+        self.projection.title_parts.clone()
     }
 
     fn double_tap(last: &mut Option<Instant>) -> bool {
@@ -249,8 +261,10 @@ impl AppComponent<Msg, UserEvent> for LibraryPlaybackPanel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+    use rstest::rstest;
 
     fn key(code: Key) -> Event<UserEvent> {
         Event::Keyboard(KeyEvent {
@@ -276,7 +290,7 @@ mod tests {
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
-            title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
+            title_parts: None,
             status_indicators: None,
             idle_feed_title: None,
             use_nerd_fonts: false,
@@ -288,6 +302,142 @@ mod tests {
             .draw(|frame| panel.view(frame, Rect::new(10, 5, 40, 4)))
             .unwrap();
         panel
+    }
+
+    /// The media-type families of the requirements table, as the projection
+    /// carries them (title part, optional context part). The mapping itself is
+    /// core's table (task 1.1); these fixtures pin the painted behaviour per
+    /// media type.
+    fn parts_for(title: &str, context: Option<&str>) -> PlaybackTitleParts {
+        PlaybackTitleParts {
+            title: PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: title.to_string(),
+            },
+            context: context.map(|text| PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Context,
+                text: text.to_string(),
+            }),
+        }
+    }
+
+    fn projection_with_parts(parts: PlaybackTitleParts) -> PlaybackProjection {
+        PlaybackProjection {
+            state: PlaybackState::default(),
+            show_controls: true,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            // The painter paints the typed parts only over an attached
+            // target's plain title; the parts replace it when present.
+            now_playing_title: Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG)),
+            title_parts: Some(parts),
+            status_indicators: None,
+            idle_feed_title: None,
+            use_nerd_fonts: false,
+            stop_available: true,
+            next_available: true,
+        }
+    }
+
+    /// Paint the panel and return the transport title row's text plus each
+    /// cell's foreground (the strip's title row is placement row 1 of the
+    /// band at y 5). The strip is 50 columns wide so every media type in the
+    /// table fits its slot without the marquee; the marquee window itself is
+    /// the painter test's proof (task 4.3).
+    fn painted_title_row(parts: PlaybackTitleParts) -> (String, Vec<Color>) {
+        let mut panel = LibraryPlaybackPanel::new();
+        panel.set_projection(projection_with_parts(parts));
+        let mut terminal = Terminal::new(TestBackend::new(70, 12)).unwrap();
+        terminal
+            .draw(|frame| panel.view(frame, Rect::new(10, 5, 50, 4)))
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        (
+            (0..70).map(|x| buf[(x, 6)].symbol().to_string()).collect(),
+            (0..70).map(|x| buf[(x, 6)].fg).collect(),
+        )
+    }
+
+    fn assert_cells_carry(text: &str, fgs: &[Color], needle: &str, expected: Color, label: &str) {
+        let start = text
+            .find(needle)
+            .unwrap_or_else(|| panic!("{label} not painted in the row: {text:?}"));
+        for (i, _) in needle.char_indices() {
+            assert_eq!(
+                fgs[start + i],
+                expected,
+                "cell {i} of {label} must carry its role's fg: {text:?}"
+            );
+        }
+    }
+
+    /// The painted media-type table (tasks 4.1, 4.2, 4.4): two-part rows
+    /// paint the title part in the aqua title role and the context part —
+    /// with its leading space — in the yellow context role, delineated by
+    /// exactly one space and no separator glyph; single-part rows paint
+    /// wholly in the title role with no context part after them.
+    #[rstest]
+    #[case::emby_movie("Movie Name", None)]
+    #[case::emby_home_video("Home Video", None)]
+    #[case::audiobookshelf_book("Book Title", None)]
+    #[case::emby_episode("Pilot", Some("Series"))]
+    #[case::emby_audio_track("Track", Some("Artist"))]
+    #[case::audiobookshelf_podcast("Episode", Some("Show"))]
+    #[case::feed_entry("Entry", Some("Subscription"))]
+    fn title_row_paints_each_media_types_parts_in_their_roles(
+        #[case] title: &str,
+        #[case] context: Option<&str>,
+    ) {
+        let (text, fgs) = painted_title_row(parts_for(title, context));
+        assert_cells_carry(
+            &text,
+            &fgs,
+            title,
+            palette::PLAYBACK_TITLE_FG,
+            "the title part",
+        );
+        match context {
+            Some(context) => {
+                // D3: exactly one space between the parts and no separator
+                // glyph of any form.
+                let joined = format!("{title} {context}");
+                // The painted run must be exactly the one-space join, not
+                // merely contain it: a wider delineation (e.g. a doubled
+                // space) must fail here.
+                let start = text.find(title).unwrap();
+                let painted: String = text[start..].chars().take(joined.chars().count()).collect();
+                assert_eq!(
+                    painted, joined,
+                    "exactly one space between the parts: {text:?}"
+                );
+                for separator in [" - ", " \u{2013} ", " \u{2014} ", " | ", " \u{2022} "] {
+                    assert!(
+                        !text.contains(&format!("{title}{separator}{context}")),
+                        "no separator glyph between the parts: {text:?}"
+                    );
+                }
+                // The context span owns its leading space, so the space and
+                // the context text paint in the context role.
+                for i in title.chars().count()..joined.chars().count() {
+                    assert_eq!(
+                        fgs[start + i],
+                        palette::PLAYBACK_CONTEXT_FG,
+                        "the space and context part paint in the context role: {text:?}"
+                    );
+                }
+            }
+            None => {
+                // A single-part row paints no context part: nothing in the
+                // context role follows the title run (the audiobook case is
+                // task 4.4, design D5).
+                let after = text.find(title).unwrap() + title.chars().count();
+                assert_ne!(
+                    fgs[after],
+                    palette::PLAYBACK_CONTEXT_FG,
+                    "no context part after the title: {text:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -330,7 +480,7 @@ mod tests {
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
             now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
-            title_parts: vec![("Example".into(), palette::PLAYBACK_VALUE_FG)],
+            title_parts: None,
             status_indicators: None,
             idle_feed_title: None,
             use_nerd_fonts: false,

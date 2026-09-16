@@ -5,6 +5,7 @@ use crate::app::render::arrangements::playback_transport::{
     transport_buttons_fit, transport_rows, TransportMeasure,
 };
 use crate::app::ui_util::*;
+use mbv_core::playback_queue::{PlaybackTitlePartRole, PlaybackTitleParts};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -36,7 +37,12 @@ pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) stop_available: bool,
     pub(in crate::app) next_available: bool,
     pub(in crate::app) status_indicators: Option<Vec<Span<'static>>>,
-    pub(in crate::app) title_parts: Vec<(String, Color)>,
+    /// The typed now-playing title parts with their closed roles (D6); the
+    /// painter resolves a role to a colour, never the producer. `None` when
+    /// the attached target is not addressable as a local queue item (a cast
+    /// receiver or remote Session) — the plain `now_playing_title` carries
+    /// that case.
+    pub(in crate::app) title_parts: Option<PlaybackTitleParts>,
     pub(in crate::app) idle_feed_title: Option<(String, bool)>,
     pub(in crate::app) marquee_text: &'a mut String,
     pub(in crate::app) marquee_started_at: &'a mut std::time::Instant,
@@ -185,6 +191,17 @@ fn render_seekbar(
 /// indicator row, while the Library strip keeps the single title row.
 fn split_title_rows(surface: palette::Surface) -> bool {
     surface == palette::Surface::QueueOnlyPlaybackPanel
+}
+
+/// The single role-to-colour resolution point for the now-playing title
+/// parts (now-playing-media-type-titles D6, task 2.3): the painter turns a
+/// closed part role into its theme role here, and no other site maps a part
+/// role to a palette role.
+pub(in crate::app) fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
+    match role {
+        PlaybackTitlePartRole::Title => palette::PLAYBACK_TITLE_FG,
+        PlaybackTitlePartRole::Context => palette::PLAYBACK_CONTEXT_FG,
+    }
 }
 
 /// The transport control glyphs and their colours for one render context.
@@ -418,11 +435,7 @@ fn render_queue_title_rows(
     // One left indent, at least one gap cell before the time, one right
     // indent.
     let title_max = lower.width.saturating_sub(1 + 1 + time_w + 1) as usize;
-    let title_parts = if ctx.title_parts.is_empty() {
-        vec![(title.to_string(), title_color)]
-    } else {
-        ctx.title_parts.clone()
-    };
+    let title_parts = playback_title_spans(ctx.title_parts.as_ref(), title, title_color);
     let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
     row.extend(marquee_spans(ctx, &title_parts, title_max));
     let row_w: u16 = row.iter().map(|span| span.content.width() as u16).sum();
@@ -497,11 +510,7 @@ pub(in crate::app) fn render_title_row(
         &glyphs,
     );
     let fixed_w = glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
-    let title_parts = if ctx.title_parts.is_empty() {
-        vec![(title.to_string(), title_color)]
-    } else {
-        ctx.title_parts.clone()
-    };
+    let title_parts = playback_title_spans(ctx.title_parts.as_ref(), title, title_color);
     left.extend(marquee_spans(
         ctx,
         &title_parts,
@@ -516,6 +525,28 @@ pub(in crate::app) fn render_title_row(
             .style(Style::default().bg(palette::surface_colors(ctx.panel, ctx.panel_focused).fill)),
         area,
     );
+}
+
+/// The painted (text, fg) spans for one now-playing title: the typed parts
+/// resolved through `title_part_fg` when the shell projected them, otherwise
+/// the attached target's plain title in its own colour. The context part's
+/// leading space rides in its own span so the one-space delineation (D3)
+/// paints in the context role.
+fn playback_title_spans(
+    parts: Option<&PlaybackTitleParts>,
+    title: &str,
+    title_color: Color,
+) -> Vec<(String, Color)> {
+    match parts {
+        Some(parts) => {
+            let mut spans = vec![(parts.title.text.clone(), title_part_fg(parts.title.role))];
+            if let Some(context) = &parts.context {
+                spans.push((format!(" {}", context.text), title_part_fg(context.role)));
+            }
+            spans
+        }
+        None => vec![(title.to_string(), title_color)],
+    }
 }
 
 fn marquee_spans(
@@ -536,8 +567,187 @@ fn marquee_spans(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+
+    /// Locate `needle` in the painted row and assert every one of its cells
+    /// carries `expected` as the foreground.
+    fn assert_cells_in_row(row: &str, fgs: &[Color], needle: &str, expected: Color, label: &str) {
+        let start = row
+            .find(needle)
+            .unwrap_or_else(|| panic!("{label} not painted in the row: {row:?}"));
+        for (i, _) in needle.char_indices() {
+            assert_eq!(
+                fgs[start + i],
+                expected,
+                "cell {i} of {label} must carry its role's fg: {row:?}"
+            );
+        }
+    }
+
+    /// The role-to-colour resolution point (task 2.3): a two-part now-playing
+    /// row paints the title part's cells in the title role's fg and the
+    /// context part's cells in the context role's fg, both through the
+    /// painter's own `title_part_fg` mapping.
+    #[test]
+    fn title_part_roles_paint_their_theme_roles_in_the_row() {
+        let parts = PlaybackTitleParts {
+            title: PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: "Pilot".to_string(),
+            },
+            context: Some(PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Context,
+                text: "Series".to_string(),
+            }),
+        };
+        let mut playback = PlaybackStripAreas::default();
+        let mut marquee_text = String::new();
+        let mut marquee_started_at = std::time::Instant::now();
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 60, 1),
+            playback: &mut playback,
+            player_h: 2,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: None,
+            title_parts: Some(parts),
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 60, 1),
+                    "",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row = (0..60)
+            .map(|x| buf[(x, 0)].symbol().to_string())
+            .collect::<String>();
+        let fgs: Vec<Color> = (0..60).map(|x| buf[(x, 0)].fg).collect();
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            "Pilot",
+            title_part_fg(PlaybackTitlePartRole::Title),
+            "the title part",
+        );
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            "Series",
+            title_part_fg(PlaybackTitlePartRole::Context),
+            "the context part",
+        );
+        assert_ne!(
+            title_part_fg(PlaybackTitlePartRole::Title),
+            title_part_fg(PlaybackTitlePartRole::Context),
+            "the test locates the parts by their roles, so the roles must differ"
+        );
+    }
+
+    /// The roles survive the overflow marquee (task 4.3): a two-part title
+    /// wider than its slot marquees, and the scrolled window still paints the
+    /// title part's cells in the title role and the context part's cells in
+    /// the context role. The marquee start time is backdated into the
+    /// scrolled-out hold (column = overflow), where the window shows the
+    /// title's tail followed by the whole context part.
+    #[test]
+    fn the_marquee_window_keeps_both_part_roles() {
+        let title_text = format!("{}Tail", "Long Episode ".repeat(5).trim_end());
+        let context_text = "Show".to_string();
+        let parts = PlaybackTitleParts {
+            title: PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: title_text.clone(),
+            },
+            context: Some(PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Context,
+                text: context_text.clone(),
+            }),
+        };
+        let mut playback = PlaybackStripAreas::default();
+        // Pre-seed the marquee state (the parts' concatenated text is the
+        // marquee key) so the draw below keeps the backdated start time
+        // instead of restarting the scroll.
+        let mut marquee_text = format!("{title_text} {context_text}");
+        // Backdate the start time into the middle of the marquee's hold at
+        // the scrolled-out end (column = overflow, hold [HOLD+scroll,
+        // 2*HOLD+scroll)): the window then shows the title's tail followed by
+        // the whole context part. The strip's elapsed-only right side leaves
+        // a 46-cell window on the 73-cell two-part title (overflow 27,
+        // scroll 4050ms), so the hold sits at [4650, 5250).
+        let mut marquee_started_at =
+            std::time::Instant::now() - std::time::Duration::from_millis(4_950);
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 60, 1),
+            playback: &mut playback,
+            player_h: 2,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: None,
+            title_parts: Some(parts),
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 60, 1),
+                    "",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row: String = (0..60).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+        let fgs: Vec<Color> = (0..60).map(|x| buf[(x, 0)].fg).collect();
+        // The marquee engaged: the two-part title is far wider than the
+        // window the row can spend on it, so the full title never paints.
+        assert!(
+            !row.contains(&format!("{title_text} {context_text}")),
+            "the two-part title must overflow the slot: {row:?}"
+        );
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            &context_text,
+            title_part_fg(PlaybackTitlePartRole::Context),
+            "the context part",
+        );
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            "Tail",
+            title_part_fg(PlaybackTitlePartRole::Title),
+            "the title part's tail",
+        );
+    }
 
     /// The queue column's split upper row pads the status pill on both
     /// sides: the value (e.g. FLAC) must not touch the panel fill on the
@@ -567,7 +777,7 @@ mod tests {
             stop_available: false,
             next_available: false,
             status_indicators: Some(vec![Span::raw("CODEC "), Span::raw("FLAC")]),
-            title_parts: Vec::new(),
+            title_parts: None,
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
             marquee_started_at: &mut marquee_started_at,
@@ -655,7 +865,7 @@ mod tests {
             stop_available: false,
             next_available: false,
             status_indicators: Some(cluster),
-            title_parts: Vec::new(),
+            title_parts: None,
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
             marquee_started_at: &mut marquee_started_at,

@@ -12,10 +12,18 @@ impl Model {
         // playhead here, at a fresh start, so the panel's title, artwork and
         // time describe the same item the queue row highlights.
         let state = self.app.displayed_playback_state();
+        // The typed title parts are built from the queue item itself (D1/D4)
+        // whenever the active slot is addressable locally; the fallback
+        // title below covers only the targets the queue cannot address.
+        // One queue lookup feeds both: the parts and the plain title
+        // describe the same slot.
+        let active_item = state
+            .active_idx
+            .filter(|_| state.active)
+            .and_then(|idx| self.app.playback_queue().item_at(idx));
+        let title_parts = active_item.map(|item| self.app.playback_title_parts(item));
         let title = if state.active {
-            state
-                .active_idx
-                .and_then(|idx| self.app.playback_queue().item_at(idx))
+            active_item
                 .map(|item| item.title().to_string())
                 // `effective_playback_state` reports `active` for a cast target
                 // or watched remote Session, but the local queue may hold no
@@ -43,9 +51,7 @@ impl Model {
                 .as_ref()
                 .and_then(|session| session.now_playing.clone())
         };
-        let now_playing_title = title
-            .clone()
-            .map(|title| (title, palette::PLAYBACK_VALUE_FG));
+        let now_playing_title = title.map(|title| (title, palette::PLAYBACK_VALUE_FG));
         let show_controls = state.active
             || self.app.connected_session_id.is_some()
             || self.app.cast_attachment.is_some();
@@ -57,11 +63,8 @@ impl Model {
             // site's surface on top of this default.
             panel: palette::Surface::PlaybackPanel,
             panel_focused: matches!(self.app.effective_panel_focus(), PanelFocus::Queue),
-            now_playing_title: now_playing_title.clone(),
-            title_parts: now_playing_title
-                .as_ref()
-                .map(|(title, color)| self.app.playback_title_parts(title, *color))
-                .unwrap_or_default(),
+            now_playing_title,
+            title_parts,
             status_indicators: self.app.build_status_indicator_spans(),
             idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {

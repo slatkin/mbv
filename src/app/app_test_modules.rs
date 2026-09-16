@@ -224,6 +224,10 @@ mod tests_tick_integration_mouse_sidebar;
 mod tests_tick_integration_queue_playback; // Queue playback panel ownership tick coverage (task 3.7)
 
 #[cfg(test)]
+#[path = "tests_tick_integration_playback_title_parts.rs"]
+mod tests_tick_integration_playback_title_parts; // Now-playing title-parts projection tick coverage (task 5.2)
+
+#[cfg(test)]
 #[path = "actions_tests_queue_state_reseat.rs"]
 mod actions_tests_queue_state_reseat;
 

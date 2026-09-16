@@ -109,6 +109,16 @@ pub const INDICATOR_AUDIO_FG: Color = primitives::PURPLE;
 // Playback panel
 pub const PLAYBACK_VALUE_FG: Color = primitives::PLAYBACK_CONTENT_FG; // title/codec value
 pub const PLAYBACK_META_FG: Color = primitives::PLAYBACK_META_FG; // captions/time
+/// The now-playing title row's title part: the item's own name (episode,
+/// track, entry, ...). Its own role rather than `ACCENT`/`TEXT_FOCUS_ACCENT`,
+/// whose primitives it shares values with today, so a focus-accent or brand
+/// edit cannot move it (now-playing-media-type-titles D2).
+pub const PLAYBACK_TITLE_FG: Color = primitives::PLAYBACK_TITLE;
+/// The now-playing title row's context part: the container the item came
+/// from (series, artist, show, subscription). Its own role rather than the
+/// focused-row accent, whose primitive it shares a value with today, so an
+/// accent edit cannot move it (now-playing-media-type-titles D2).
+pub const PLAYBACK_CONTEXT_FG: Color = primitives::PLAYBACK_CONTEXT;
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = primitives::SEEK_TRACK; // unplayed seek/progress track
