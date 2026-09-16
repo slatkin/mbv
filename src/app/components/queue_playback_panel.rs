@@ -362,11 +362,11 @@ mod tests {
     }
 
     /// The painted media-type table (tasks 4.1, 4.2, 4.4) on the queue
-    /// column's split lower title row: two-part rows paint the title part in
-    /// the aqua title role and the context part — with its leading space — in
-    /// the yellow context role, delineated by exactly one space and no
+    /// column's split lower title row: two-part rows paint the context part —
+    /// with its trailing space — in the yellow context role, then the title
+    /// part in the aqua title role, delineated by exactly one space and no
     /// separator glyph; single-part rows paint wholly in the title role with
-    /// no context part after them.
+    /// no context part before or after them.
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
     #[case::emby_home_video("Home Video", None)]
@@ -390,12 +390,13 @@ mod tests {
         match context {
             Some(context) => {
                 // D3: exactly one space between the parts and no separator
-                // glyph of any form.
-                let joined = format!("{title} {context}");
+                // glyph of any form. The context part paints first, the
+                // title part after it.
+                let joined = format!("{context} {title}");
                 // The painted run must be exactly the one-space join, not
                 // merely contain it: a wider delineation (e.g. a doubled
                 // space) must fail here.
-                let start = text.find(title).unwrap();
+                let start = text.find(context).unwrap();
                 let painted: String = text[start..].chars().take(joined.chars().count()).collect();
                 assert_eq!(
                     painted, joined,
@@ -403,25 +404,33 @@ mod tests {
                 );
                 for separator in [" - ", " \u{2013} ", " \u{2014} ", " | ", " \u{2022} "] {
                     assert!(
-                        !text.contains(&format!("{title}{separator}{context}")),
+                        !text.contains(&format!("{context}{separator}{title}")),
                         "no separator glyph between the parts: {text:?}"
                     );
                 }
-                // The context span owns its leading space, so the space and
-                // the context text paint in the context role.
-                for i in title.chars().count()..joined.chars().count() {
+                // The context span owns its trailing space, so the context
+                // text and the space paint in the context role.
+                for i in 0..context.chars().count() + 1 {
                     assert_eq!(
                         fgs[start + i],
                         palette::PLAYBACK_CONTEXT_FG,
-                        "the space and context part paint in the context role: {text:?}"
+                        "the context part and the space paint in the context role: {text:?}"
                     );
                 }
             }
             None => {
                 // A single-part row paints no context part: nothing in the
-                // context role follows the title run (the audiobook case is
-                // task 4.4, design D5).
-                let after = text.find(title).unwrap() + title.chars().count();
+                // context role precedes or follows the title run (the
+                // audiobook case is task 4.4, design D5).
+                let title_start = text.find(title).unwrap();
+                if title_start > 0 {
+                    assert_ne!(
+                        fgs[title_start - 1],
+                        palette::PLAYBACK_CONTEXT_FG,
+                        "no context part before the title: {text:?}"
+                    );
+                }
+                let after = title_start + title.chars().count();
                 assert_ne!(
                     fgs[after],
                     palette::PLAYBACK_CONTEXT_FG,

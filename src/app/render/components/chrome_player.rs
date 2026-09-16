@@ -671,8 +671,8 @@ mod tests {
     /// wider than its slot marquees, and the scrolled window still paints the
     /// title part's cells in the title role and the context part's cells in
     /// the context role. The marquee start time is backdated into the
-    /// scrolled-out hold (column = overflow), where the window shows the
-    /// title's tail followed by the whole context part.
+    /// leading hold (column = 0), where the window shows the whole context
+    /// part followed by the title's head.
     #[test]
     fn the_marquee_window_keeps_both_part_roles() {
         let title_text = format!("{}Tail", "Long Episode ".repeat(5).trim_end());
@@ -691,15 +691,14 @@ mod tests {
         // Pre-seed the marquee state (the parts' concatenated text is the
         // marquee key) so the draw below keeps the backdated start time
         // instead of restarting the scroll.
-        let mut marquee_text = format!("{title_text} {context_text}");
-        // Backdate the start time into the middle of the marquee's hold at
-        // the scrolled-out end (column = overflow, hold [HOLD+scroll,
-        // 2*HOLD+scroll)): the window then shows the title's tail followed by
-        // the whole context part. The strip's elapsed-only right side leaves
-        // a 46-cell window on the 73-cell two-part title (overflow 27,
-        // scroll 4050ms), so the hold sits at [4650, 5250).
+        let mut marquee_text = format!("{context_text} {title_text}");
+        // Backdate the start time into the leading hold (column = 0, hold
+        // [0, HOLD)): the window then shows the whole context part followed
+        // by the title's head. The strip's elapsed-only right side leaves
+        // a 46-cell window on the 73-cell two-part title (overflow 27), so
+        // the hold sits at [0, 600).
         let mut marquee_started_at =
-            std::time::Instant::now() - std::time::Duration::from_millis(4_950);
+            std::time::Instant::now() - std::time::Duration::from_millis(300);
         let mut ctx = PlaybackRenderContext {
             area: Rect::new(0, 0, 60, 1),
             playback: &mut playback,
@@ -736,7 +735,7 @@ mod tests {
         // The marquee engaged: the two-part title is far wider than the
         // window the row can spend on it, so the full title never paints.
         assert!(
-            !row.contains(&format!("{title_text} {context_text}")),
+            !row.contains(&format!("{context_text} {title_text}")),
             "the two-part title must overflow the slot: {row:?}"
         );
         assert_cells_in_row(
@@ -749,9 +748,9 @@ mod tests {
         assert_cells_in_row(
             &row,
             &fgs,
-            "Tail",
+            "Long Episode",
             title_part_fg(PlaybackTitlePartRole::Title),
-            "the title part's tail",
+            "the title part's head",
         );
     }
 

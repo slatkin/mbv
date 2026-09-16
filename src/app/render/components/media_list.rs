@@ -411,12 +411,12 @@ mod wide_row_regression_tests {
             .unwrap();
         let buf = terminal.backend().buffer();
         // The selected title keeps the ordinary emphasis role (no bold) and
-        // the duration keeps its own green; the bar replaces the row's stripe
-        // and reaches both panel edges.
+        // the duration keeps its own deep gold; the bar replaces the row's
+        // stripe and reaches both panel edges.
         assert_eq!(buf[(0, 1)].symbol(), " ");
         assert_eq!(buf[(2, 1)].fg, palette::TEXT_EMPHASIS);
         assert!(!buf[(2, 1)].modifier.contains(Modifier::BOLD));
-        assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
+        assert_eq!(buf[(26, 1)].fg, palette::DURATION);
         for x in 0..rect.width {
             assert_eq!(buf[(x, 1)].bg, palette::SELECTED_ROW_BG, "bar at x={x}");
         }
@@ -740,7 +740,7 @@ mod wide_row_regression_tests {
 
     /// canonical-list-duration-kind 1.2: the painter suppresses the duration
     /// slot for `Collection` rows even when one is projected, and paints a
-    /// `Media` row's duration right-aligned in `STATUS_AVAILABLE` green.
+    /// `Media` row's duration right-aligned in `DURATION` deep gold.
     #[test]
     fn collection_row_suppresses_projected_duration_media_row_paints_it() {
         let rect = Rect::new(0, 0, 40, 4);
@@ -783,8 +783,8 @@ mod wide_row_regression_tests {
         let dur_x = rect.width - 4;
         assert_eq!(
             buf[(dur_x, 1)].fg,
-            palette::STATUS_AVAILABLE,
-            "Media duration is painted green"
+            palette::DURATION,
+            "Media duration is painted deep gold"
         );
     }
 
@@ -999,14 +999,14 @@ mod wide_row_regression_tests {
         );
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 0)].symbol(), "2");
-        assert_eq!(buf[(duration_x, 0)].fg, palette::STATUS_AVAILABLE);
+        assert_eq!(buf[(duration_x, 0)].fg, palette::DURATION);
 
         let resume = row_text(1);
         assert!(resume.contains("Resume title 12%"));
         assert!(resume.contains("2:00"));
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 1)].symbol(), "2");
-        assert_eq!(buf[(duration_x, 1)].fg, palette::STATUS_AVAILABLE);
+        assert_eq!(buf[(duration_x, 1)].fg, palette::DURATION);
     }
 
     #[test]

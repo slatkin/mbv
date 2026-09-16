@@ -76,7 +76,7 @@ pub(in crate::app) fn media_list_row<Target>(
             ..
         } => {
             // Canonical row geometry:
-            // `[2-col indent][title…]  [FOAM trailing]  [green duration]`
+            // `[2-col indent][title…]  [FOAM trailing]  [gold duration]`
             // with the title at column 2 and a quiet gap before the right-aligned
             // duration.
 
@@ -205,7 +205,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::raw(" ".repeat(pad)));
                 spans.push(Span::styled(
                     dur.to_owned(),
-                    Style::default().fg(palette::STATUS_AVAILABLE),
+                    Style::default().fg(palette::DURATION),
                 ));
             }
             // Pad the selected row's spans out to the full row width (up to

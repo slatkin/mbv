@@ -367,10 +367,10 @@ pub enum MediaListRow<Target> {
         /// carries its own text role: a release year paints in the green
         /// (`STATUS_AVAILABLE`) metadata role, a progress badge in the FOAM
         /// (`TEXT_METADATA`) one. Distinct from `duration`, the right-aligned
-        /// green time slot.
+        /// deep gold time slot.
         trailing: Option<MediaListTrailing>,
         /// A duration/time string. Rendered as a distinct right-aligned
-        /// green (`STATUS_AVAILABLE`) element, never as FOAM `trailing`.
+        /// deep gold (`DURATION`) element, never as FOAM `trailing`.
         duration: Option<String>,
         /// Drill-in container vs. playable leaf; gates the duration slot.
         kind: MediaKind,

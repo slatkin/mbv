@@ -102,6 +102,13 @@ pub const HINT_PILL_FILLS: [Color; 3] = [primitives::FOAM, primitives::YELLOW, p
 pub const STATUS_ERROR: Color = primitives::RED;
 pub const STATUS_AVAILABLE: Color = primitives::GREEN; // checkmarks, available/positive metadata
 
+// Media list metadata
+/// The right-aligned duration column of every media list (queue, home,
+/// feeds, TV episode, music track, book chapter). Its own role rather than
+/// the green `STATUS_AVAILABLE` metadata role, so a status-colour edit
+/// cannot move the durations.
+pub const DURATION: Color = primitives::GOLD;
+
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = primitives::ORANGE;
 pub const INDICATOR_AUDIO_FG: Color = primitives::PURPLE;
