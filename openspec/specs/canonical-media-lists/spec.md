@@ -422,7 +422,7 @@ its own parity under the gutter accent. Each arm SHALL resolve its secondary pai
 table identity of the panel body that surrounds it, never from a raw colour value:
 
 - the Browser-pane list, whose list box is filled with the `LibraryPanel` surface, SHALL stripe with
-  the `MainContentBox` pair (focused `#48584e`, unfocused `#2d353b`);
+  the `MainContentBox` pair (focused `#333c43`, unfocused `#2d353b`);
 - the provider Workspace list, whose box is filled with the `MainContentBox` surface, SHALL stripe
   with the `LibraryPanel` pair (focused `#3c4841`, unfocused `#333c43`).
 

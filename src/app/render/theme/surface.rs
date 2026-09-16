@@ -104,9 +104,11 @@ pub(super) enum FocusSource {
 pub(super) struct Row {
     pub(super) level: Level,
     pub(super) focus: FocusSource,
-    /// Takes the soft content-body variant (`SOFT_CONTENT_BODY_BG`,
-    /// `#48584e`) while focused, instead of the level's focused fill.
-    pub(super) soft: bool,
+    /// Overrides the level's focused fill while focused. The soft
+    /// content-body variant: the Queue panel body takes `SOFT_CONTENT_BODY_BG`
+    /// (`#48584e`), the Library's content box takes `SURFACE_RESTING`
+    /// (`#333c43`).
+    pub(super) soft: Option<Color>,
     /// The value the row paints while resting: main's value for that surface.
     pub(super) resting: Color,
 }

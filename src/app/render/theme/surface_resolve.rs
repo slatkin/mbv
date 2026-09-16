@@ -16,8 +16,10 @@
 
 use super::surface::{FocusSource, Surface};
 use super::surface_table::{row, RESTING_DEVIATIONS};
-use super::*;
 use ratatui::style::Color;
+
+#[cfg(test)]
+use super::*;
 
 /// The resolved colour of one rendered surface for one frame.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -48,11 +50,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     );
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     if follow_focus {
-        SurfaceColors::fill(if row.soft {
-            primitives::SOFT_CONTENT_BODY_BG
-        } else {
-            row.level.focused_fill()
-        })
+        SurfaceColors::fill(row.soft.unwrap_or_else(|| row.level.focused_fill()))
     } else {
         SurfaceColors::fill(row.resting)
     }
@@ -103,7 +101,7 @@ mod tests {
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
             Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::QueuePanel => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
-            Surface::MainContentBox => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
+            Surface::MainContentBox => (SURFACE_RESTING, SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::QueueOnlyPlaybackPanel => (SURFACE_CHROME, SURFACE_CHROME),
@@ -175,7 +173,7 @@ mod tests {
     fn levels_share_the_focused_fill_and_differ_in_resting() {
         for &surface in Surface::ALL {
             let r = row(surface);
-            if r.focus == FocusSource::Fixed || r.soft {
+            if r.focus == FocusSource::Fixed || r.soft.is_some() {
                 continue;
             }
             let focused = surface_colors(surface, true).fill;
@@ -221,13 +219,13 @@ mod tests {
         let soft_rows: Vec<Surface> = Surface::ALL
             .iter()
             .copied()
-            .filter(|&s| row(s).soft)
+            .filter(|&s| row(s).soft.is_some())
             .collect();
         assert!(!soft_rows.is_empty(), "the table declares a soft variant");
         for surface in soft_rows {
             assert_eq!(
                 surface_colors(surface, true).fill,
-                primitives::SOFT_CONTENT_BODY_BG,
+                row(surface).soft.expect("the soft rows declare a fill"),
                 "{surface:?} focused soft fill"
             );
         }
