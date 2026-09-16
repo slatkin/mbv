@@ -35,18 +35,18 @@
 
 ## 3. Projection and wiring
 
-- [ ] 3.1 Change the shell→component title payload from `Vec<(String, Color)>` to the typed parts
+- [x] 3.1 Change the shell→component title payload from `Vec<(String, Color)>` to the typed parts
   carrying a closed role, in `PlaybackProjection`
   (`src/app/components/library_playback_panel.rs`) and `PlaybackRenderContext`
   (`src/app/render/components/chrome_player.rs`). Verify `cargo check -p mbv` and that the two
   panels' test fixtures still construct a projection.
 
-- [ ] 3.2 Resolve the feed subscription display name in the App layer by matching
+- [x] 3.2 Resolve the feed subscription display name in the App layer by matching
   `FeedEntry.feed_id` against the configured feed subscriptions' urls, and pass it into the
   mapping. Verify with a unit test covering a matching subscription, a non-matching entry and a
   `None` `feed_id`, asserting the resolved name is `None` in the last two cases.
 
-- [ ] 3.3 Rebuild `Model::transport_projection` (`src/app/shell_playback.rs`) from the queue item
+- [x] 3.3 Rebuild `Model::transport_projection` (`src/app/shell_playback.rs`) from the queue item
   rather than a title string, and remove the `display_name() == title` re-match plus the `&mut`
   receiver and the by-value clones it forced in
   `App::playback_title_parts` (`src/app/render/components/chrome_player_context.rs`). Verify
