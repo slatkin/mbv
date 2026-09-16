@@ -215,7 +215,7 @@ pub(in crate::app::render) fn build_list_row_spans(
 ) -> Vec<Span<'static>> {
     let bg = palette::surface_colors(palette::Surface::SelectedRow, selected).fill;
     let mut spans: Vec<Span> = if selected {
-        let title_style = Style::default().fg(palette::TEXT_FOCUS_ACCENT).bg(bg);
+        let title_style = Style::default().fg(palette::TEXT_SELECTED_ROW).bg(bg);
         vec![
             Span::styled(" ", Style::default().bg(bg)),
             Span::styled(title, title_style),

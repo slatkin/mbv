@@ -706,9 +706,9 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
 /// Gutter-accent selection: the marker is a foam Nerd Font glyph
 /// (U+F0BBA) in the selected row's leading gutter inside the panel; the
 /// panel paints no marker outside the box edge; the selected title is
-/// bold focus-accent text inside the panel.
+/// bold selected-row text inside the panel.
 #[test]
-fn queue_selection_title_is_bold_focus_accent_no_outside_marker() {
+fn queue_selection_title_is_bold_selected_row_no_outside_marker() {
     let mut app = make_queue_app(3);
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
@@ -724,9 +724,9 @@ fn queue_selection_title_is_bold_focus_accent_no_outside_marker() {
         " ",
         "no marker may paint outside the box edge"
     );
-    // The selected title paints bold in the focus accent.
+    // The selected title paints bold in the selected-row role.
     let title_x = box_area.x + 2;
-    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_FOCUS_ACCENT);
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_SELECTED_ROW);
     assert!(buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 
     // Without panel focus the title is neither accent nor bold.
@@ -735,7 +735,7 @@ fn queue_selection_title_is_bold_focus_accent_no_outside_marker() {
     let buf = term.backend().buffer();
     assert_ne!(
         buf[(title_x, marker_y)].fg,
-        palette::TEXT_FOCUS_ACCENT,
+        palette::TEXT_SELECTED_ROW,
         "the unfocused queue title keeps the default colour"
     );
     assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));

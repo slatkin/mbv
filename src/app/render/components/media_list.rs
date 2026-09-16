@@ -385,7 +385,7 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn gutter_policy_selected_title_is_bold_focus_accent() {
+    fn gutter_policy_selected_title_is_bold_selected_row() {
         let rect = Rect::new(0, 0, 32, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -410,10 +410,10 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        // The selected title paints in the focus accent, bold; no icon and
+        // The selected title paints in the selected-row role, bold; no icon and
         // no selected background; the duration keeps the default colour.
         assert_eq!(buf[(0, 1)].symbol(), " ");
-        assert_eq!(buf[(2, 1)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_SELECTED_ROW);
         assert!(buf[(2, 1)].modifier.contains(Modifier::BOLD));
         assert_eq!(buf[(26, 1)].fg, palette::STATUS_AVAILABLE);
         assert_ne!(buf[(10, 1)].bg, palette::SURFACE_RESTING);
@@ -535,7 +535,7 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(2, 1)];
-        assert_eq!(cell.fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(cell.fg, palette::TEXT_SELECTED_ROW);
         assert!(cell.modifier.contains(Modifier::BOLD));
         assert_eq!(cell.bg, pair.focused);
         assert_eq!(terminal.backend().buffer()[(0, 1)].bg, Color::Reset);
@@ -556,7 +556,7 @@ mod wide_row_regression_tests {
             .unwrap();
         for y in 0..2 {
             let cell = &terminal.backend().buffer()[(2, y)];
-            assert_ne!(cell.fg, palette::TEXT_FOCUS_ACCENT);
+            assert_ne!(cell.fg, palette::TEXT_SELECTED_ROW);
         }
         assert_eq!(terminal.backend().buffer()[(2, 1)].bg, pair.unfocused);
         assert_eq!(terminal.backend().buffer()[(2, 0)].bg, Color::Reset);
@@ -592,14 +592,14 @@ mod wide_row_regression_tests {
         // rows 1 and 3 are the sequence's striped rows, while the first row
         // (the initial selection) is the sequence's primary fill.
         for y in [1, 3] {
-            assert_eq!(buf[(2, y)].fg, palette::TEXT_FOCUS_ACCENT);
+            assert_eq!(buf[(2, y)].fg, palette::TEXT_SELECTED_ROW);
             assert!(buf[(2, y)].modifier.contains(Modifier::BOLD));
             assert_eq!(buf[(2, y)].bg, pair.unfocused);
             assert_eq!(buf[(0, y)].bg, Color::Reset);
         }
-        assert_eq!(buf[(2, 0)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_SELECTED_ROW);
         assert_eq!(buf[(2, 0)].bg, Color::Reset);
-        assert_ne!(buf[(2, 2)].fg, palette::TEXT_FOCUS_ACCENT);
+        assert_ne!(buf[(2, 2)].fg, palette::TEXT_SELECTED_ROW);
         assert_eq!(buf[(2, 2)].bg, Color::Reset);
     }
 

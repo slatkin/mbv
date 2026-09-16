@@ -26,7 +26,7 @@ use unicode_width::UnicodeWidthStr;
 /// column's selected-row identity (`SelectedRowOnQueueColumn` /
 /// `SelectedRowOnLibraryPane`) so the row follows that column's focus. When
 /// `gutter_accent` is set, the selected row keeps its default background
-/// treatment and paints its title in the bold focus-accent role.
+/// treatment and paints its title in the bold selected-row role.
 ///
 /// `alternate_bg` is the row's position in the list's zebra alternation. It
 /// paints every row type — selectable items, group headings and the blank
@@ -146,10 +146,10 @@ pub(in crate::app) fn media_list_row<Target>(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
             );
             let title_color = if selected {
-                // Gutter-accent lists paint the selected title in the focus
-                // accent; other lists keep the emphasis title.
+                // Gutter-accent lists paint the selected title in the
+                // selected-row role; other lists keep the emphasis title.
                 if gutter_accent {
-                    palette::TEXT_FOCUS_ACCENT
+                    palette::TEXT_SELECTED_ROW
                 } else {
                     palette::TEXT_EMPHASIS
                 }
@@ -157,14 +157,17 @@ pub(in crate::app) fn media_list_row<Target>(
                 fg
             };
             // Two-tone episode rows: an optional secondary title (the
-            // episode title) paints in the yellow focus-accent role after the
-            // primary title, with one separating space.
+            // episode title) paints in the selected-row role after the
+            // primary title, with one separating space. (`parts` feeds the
+            // marquee path, which only paints selected rows; unselected
+            // two-tone rows keep the yellow focus-accent secondary via the
+            // truncation branch below.)
             let parts: Vec<(String, Color)> =
                 match secondary.as_deref().filter(|sec| !sec.is_empty()) {
                     Some(sec) => vec![
                         (primary.clone(), title_color),
                         (" ".into(), title_color),
-                        (sec.to_owned(), palette::TEXT_FOCUS_ACCENT),
+                        (sec.to_owned(), palette::TEXT_SELECTED_ROW),
                     ],
                     None => vec![(primary.clone(), title_color)],
                 };
@@ -196,12 +199,12 @@ pub(in crate::app) fn media_list_row<Target>(
                     spans
                 });
             // Gutter-accent selection: the selected title paints in the
-            // focus accent, bold; no icon, no background.
+            // selected-row role, bold; no icon, no background.
             if selected && gutter_accent {
                 for span in &mut title_spans {
                     span.style = span
                         .style
-                        .fg(palette::TEXT_FOCUS_ACCENT)
+                        .fg(palette::TEXT_SELECTED_ROW)
                         .add_modifier(Modifier::BOLD);
                 }
             }

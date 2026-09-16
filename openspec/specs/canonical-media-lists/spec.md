@@ -58,7 +58,7 @@ The controls SHALL accept selectable item rows with stable opaque targets, prima
 
 `WideMediaList<Target>` SHALL be a persistent embedded plain TuiRealm presentation adapter for a shared canonical media-list owner. It SHALL own fixed-height one-column row placement, semantic painting delegation, scrollbar presentation, viewport clamping, and internal current-frame row geometry, while cursor, scroll, selected target, and other row-local state remain in the one logical shared owner. The parent SHALL retain ownership of the destination panel/frame and establish its current claim and row-flow rectangles using its existing arrangement; before view, it SHALL configure those rectangles on the presentation.
 
-The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. Every fixed-row presentation SHALL render its selected row with the gutter accent: the selected title paints bold in the focus-accent role while the list holds focus, the row paints no selected-row background, and it keeps its own zebra parity. There SHALL be no per-list opt-in or opt-out, and no marker glyph. An unfocused list SHALL show no selection accent at all. A multi-selected row follows the same treatment as the selected row, including while the list is unfocused.
+The presentation's `Component::view` SHALL paint the established row flow once and SHALL be the only ordinary-row painting entry point for that presentation in a frame. Before that call, the parent MAY supply only a closed semantic policy for focused/selected treatment; the policy SHALL contain no rectangle, callback, provider data, or effect. Every fixed-row presentation SHALL render its selected row with the gutter accent: the selected title paints bold in the orange selected-row role while the list holds focus, the row paints no selected-row background, and it keeps its own zebra parity. There SHALL be no per-list opt-in or opt-out, and no marker glyph. An unfocused list SHALL show no selection accent at all. A multi-selected row follows the same treatment as the selected row, including while the list is unfocused.
 
 The policy's owning-surface identity resolves the scrollbar column's backing fill only; the selected row never fills with it.
 
@@ -69,14 +69,14 @@ It SHALL support Wide Hero browser rails, non-Wide Library browser lists, provid
 #### Scenario: A gutter-accent selected row keeps default painting otherwise
 
 - **WHEN** a fixed-row list renders its selected row while focused
-- **THEN** the title paints bold in the focus-accent role
+- **THEN** the title paints bold in the orange selected-row role
 - **AND** the row background is whatever an unselected row in that position would paint, including a zebra stripe
 - **AND** no icon or marker glyph appears in or beside the row
 
 #### Scenario: An unfocused Wide list shows no selection accent
 
 - **WHEN** a fixed-row list renders while unfocused
-- **THEN** no selectable item row carries the bold focus-accent selected title
+- **THEN** no selectable item row carries the bold orange selected-row title
 - **AND** striped positions still show the unfocused secondary background when striping applies
 
 #### Scenario: A multi-selected row follows the selected-row treatment
