@@ -51,15 +51,14 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
                 );
             }
             PanelListPaintPolicy::Narrow { focused } => {
-                // The focused list is two tones: the surface is the list's own
-                // content fill, and the secondary zebra row steps down to the
-                // panel's body identity. Unfocused keeps the default pair (the
-                // resting backdrop on both), so nothing about the resting list
-                // moves.
+                // Two tones while focused and two while resting. The surface is
+                // the list's own content fill; both zebra rows step down to the
+                // library stripe pair (focused `#3c4841`, resting `#333c43`).
+                // Only the focused pair moves relative to the wide list.
                 let body = palette::surface_colors(Surface::MainContentBox, focused).fill;
                 self.wide_mut().set_paint_policy(
                     WideMediaListPaintPolicy::new(focused)
-                        .with_zebra(zebra_stripe(Surface::NarrowLibraryBody))
+                        .with_zebra(zebra_stripe(Surface::LibraryPanel))
                         .with_body(body),
                 );
             }
