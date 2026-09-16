@@ -33,12 +33,7 @@ impl StubList {
 }
 
 impl PanelList for StubList {
-    fn set_presentation(
-        &mut self,
-        _presentation: crate::app::components::media_list::Presentation,
-        _viewport_height: usize,
-    ) {
-    }
+    fn sync_viewport(&mut self, _viewport_height: usize) {}
 
     fn set_paint_policy(
         &mut self,

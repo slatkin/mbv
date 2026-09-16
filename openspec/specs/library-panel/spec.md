@@ -93,8 +93,13 @@ for every item wherever it appears (including Home rows), and never selected by 
   shared placeholder.
 
 Availability SHALL be decided from provider metadata before any image is fetched, so the header type
-does not change when the image arrives. The image the policy chooses SHALL be the same image for that
-item in the Wide header and the Narrow inline hero.
+does not depend on fetched pixels for its initial arm. The image the policy chooses SHALL be the same
+image for that item in the Wide header and the Library Hero overlay. When the chosen image decodes,
+the header SHALL re-arm from the painted artwork's aspect: roughly landscape-decoding artwork keeps
+the Landscape arm, squarish artwork re-arms to Square, and portrait artwork re-arms to Portrait —
+so a landscape-declared thumbnail that resolves to a portrait poster paints the Portrait arm instead
+of cover-cropping the poster into a landscape box. Until an image decodes, the declared policy shape
+holds.
 
 The header SHALL render title and metadata through one presentation for all three types. Metadata is
 an ordered list of plain-text rows supplied by the destination; the panel SHALL colour row *n* with
@@ -131,6 +136,12 @@ vertical space is constrained, the artwork SHALL shrink before a Workspace list 
 - **WHEN** a video Feeds entry with no artwork is selected at Wide geometry
 - **THEN** a Landscape header renders with the shared placeholder in its artwork box
 
+#### Scenario: A landscape-declared thumbnail decodes to a portrait poster
+- **WHEN** an item's artwork policy declares Landscape artwork but the decoded image's aspect is
+  portrait
+- **THEN** the header re-arms to the Portrait arm once the image is ready, instead of cover-cropping
+  the poster into the landscape box
+
 #### Scenario: Metadata rows are coloured by position
 - **WHEN** a header shows four metadata rows
 - **THEN** rows one to three use the first, second and third metadata colours and row four uses the
@@ -158,8 +169,6 @@ encodes an image larger than the box that paints it.
 Smaller-space constraints SHALL still apply on top of the cap. A header in a pane that offers fewer
 rows, or whose box is shrunk by a present Workspace or by the Landscape text block's room, SHALL use
 that smaller height.
-
-The Narrow inline hero SHALL be unaffected by this cap.
 
 #### Scenario: A tall Wide pane with a Portrait header
 - **WHEN** a Portrait header renders in a Wide Hero pane with more than 20 rows available for artwork
@@ -279,8 +288,7 @@ indicator SHALL paint at the box's right edge only while the flow overflows. The
 be component-local (owned by the Library
 panel's destination owner), clamped at both ends against the whole flow's length, and reset when the
 shown item changes. The table
-SHALL render only in the
-Wide Hero pane: the Narrow inline hero SHALL NOT render a cast and crew table.
+SHALL render only in the Wide Hero pane.
 
 #### Scenario: A Movie with one director and a full cast
 
@@ -413,7 +421,7 @@ The Narrow inline hero form is removed. In every non-Wide Library panel, the sel
 - **THEN** its artwork does not render inside or beside the selected browser row
 - **AND** opening its Library Hero overlay presents the artwork through the shared Hero content
 
-### Requirement: Narrow workspace lists open only as the selection modal
+### Requirement: Narrow workspace lists open only through the Library Hero overlay
 
 The Narrow constituent-list selection modal is removed. In every non-Wide Library panel, constituent items SHALL be reachable through the selected parent's Library Hero overlay, whose Workspace uses the same canonical list and provider-owned content as Wide Hero.
 

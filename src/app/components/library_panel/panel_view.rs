@@ -42,9 +42,8 @@ impl Component for LibraryPanel {
         let mut hits = std::mem::take(&mut self.hits);
         let mut windows = self.pill_windows;
         // One breakpoint predicate (design D4): `wide_hero_fits` stays the
-        // single Wide/Narrow choice; the panel drives the presentation
-        // transition through the list's `set_presentation` inside each
-        // skeleton.
+        // single Wide/Narrow choice; the panel clamps the list's viewport
+        // through the list's `sync_viewport` inside each skeleton.
         if wide_hero_fits(area) {
             if let Some(geometry) = render_wide_skeleton(
                 frame,

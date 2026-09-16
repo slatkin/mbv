@@ -18,7 +18,7 @@ mod tests;
 mod wide;
 
 pub use anchor::ViewportAnchor;
-pub use carrier::{MediaListCarrier, Presentation};
+pub use carrier::MediaListCarrier;
 pub use grouping::letter_grouped_rows;
 pub use wide::WideMediaList;
 

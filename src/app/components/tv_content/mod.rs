@@ -21,7 +21,7 @@ use super::library_panel::{
 };
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaSemanticState, Presentation, RowIntent, ViewportAnchor,
+    MediaSemanticState, RowIntent, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
@@ -145,9 +145,9 @@ impl TvContent {
         context.focused = true;
         Self {
             context,
-            carrier: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
             season_cursor: 0,
-            episodes: MediaListCarrier::new(Presentation::Wide),
+            episodes: MediaListCarrier::new(),
             pane: Pane::Series,
             initialized: false,
             last_series_id: None,
@@ -176,17 +176,12 @@ impl TvContent {
     pub(in crate::app) fn set_hero_overlay_open(&mut self, open: bool) {
         self.hero_overlay_open = open;
     }
-    /// The fixed-row presentation remains active at every breakpoint.
-    fn active_presentation(&self) -> Presentation {
-        Presentation::Wide
-    }
     /// Keep the shared owner in its fixed-row presentation and clamp its
     /// viewport for the current geometry. No content or cursor state is copied
     /// between adapters.
     fn ensure_carrier(&mut self) {
-        let target = self.active_presentation();
         let viewport_height = self.painted_viewport_height();
-        self.carrier.set_presentation(target, viewport_height);
+        self.carrier.sync_viewport(viewport_height);
     }
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();

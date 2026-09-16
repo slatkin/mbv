@@ -12,13 +12,6 @@ use super::{
     ViewportAnchor, WideMediaList,
 };
 
-/// The retained presentation identity for a carrier.  There is deliberately
-/// only one presentation: fixed rows are used in every panel geometry.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Presentation {
-    Wide,
-}
-
 /// One logical row flow's destination-side carrier over one canonical owner.
 pub struct MediaListCarrier<Target> {
     wide: WideMediaList<Target>,
@@ -26,19 +19,15 @@ pub struct MediaListCarrier<Target> {
 }
 
 impl<Target> MediaListCarrier<Target> {
-    pub fn new(_presentation: Presentation) -> Self {
-        Self::new_with_origin(_presentation, SelectionOrigin::Queue)
+    pub fn new() -> Self {
+        Self::new_with_origin(SelectionOrigin::Queue)
     }
 
-    pub fn new_with_origin(_presentation: Presentation, selection_origin: SelectionOrigin) -> Self {
+    pub fn new_with_origin(selection_origin: SelectionOrigin) -> Self {
         Self {
             wide: WideMediaList::new(),
             selection_origin,
         }
-    }
-
-    pub fn active(&self) -> Presentation {
-        Presentation::Wide
     }
 
     pub fn wide(&self) -> &WideMediaList<Target> {
@@ -114,15 +103,6 @@ impl<Target> MediaListCarrier<Target> {
 }
 
 impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
-    /// Keep the canonical fixed-row presentation active and clamp its
-    /// viewport to the current geometry without transferring owner state.
-    pub fn set_presentation(&mut self, _presentation: Presentation, viewport_height: usize) {
-        let offset = self.wide.resolve_viewport(viewport_height.max(1)).offset;
-        if self.wide.scroll() != offset {
-            self.wide.set_scroll(offset);
-        }
-    }
-
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         self.wide.set_content(rows);
     }
@@ -197,7 +177,9 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
 
     pub fn sync_viewport(&mut self, viewport_height: usize) {
         let offset = self.wide.resolve_viewport(viewport_height.max(1)).offset;
-        self.wide.set_scroll(offset);
+        if self.wide.scroll() != offset {
+            self.wide.set_scroll(offset);
+        }
     }
 
     pub fn delegate_operation(

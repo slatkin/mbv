@@ -17,8 +17,7 @@ use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
-    Presentation, RowIntent,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState, RowIntent,
 };
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
@@ -111,8 +110,8 @@ impl MusicContent {
                 Vec::new(),
                 None,
             ),
-            carrier: MediaListCarrier::new(Presentation::Wide),
-            track_list: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
+            track_list: MediaListCarrier::new(),
             track_focused: false,
             last_album_id: None,
             inline_search: InlineSearch::new(),

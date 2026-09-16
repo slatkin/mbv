@@ -41,7 +41,9 @@ pub(super) struct RouterSnapshot {
 /// One ordered layer of the keyboard policy.
 #[derive(Debug, Clone)]
 pub(super) struct KeyPolicyEntry {
-    #[allow(dead_code)]
+    /// Human-readable row label for the policy table; only the tests below
+    /// read it, so silence dead-code just where the tests are compiled out.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub name: &'static str,
     /// Whether the central router (UiRoot) owns the binding.
     pub global: bool,

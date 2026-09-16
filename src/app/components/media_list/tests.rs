@@ -1,6 +1,6 @@
 use super::{
-    MediaKind, MediaList, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
-    ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
+    MediaKind, MediaList, MediaListCarrier, MediaListRow, MediaSemanticState, ViewportAnchor,
+    WideMediaList, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -71,7 +71,7 @@ fn refresh_preserves_target_and_locally_clamps_missing_target() {
 
 #[test]
 fn fixed_row_owner_survives_wide_narrow_wide_geometry_changes() {
-    let mut carrier = MediaListCarrier::new(Presentation::Wide);
+    let mut carrier = MediaListCarrier::new();
     carrier.set_content((0..8).map(|i| item(&i.to_string())).collect());
     carrier.select_target(&"5".to_string());
     carrier.set_scroll(5);
@@ -79,13 +79,13 @@ fn fixed_row_owner_survives_wide_narrow_wide_geometry_changes() {
 
     // Both breakpoint arms configure the same fixed-row owner. The smaller
     // viewport clamps on view; no presentation-specific state is transferred.
-    carrier.set_presentation(Presentation::Wide, 3);
+    carrier.sync_viewport(3);
     paint(carrier.wide_mut(), Rect::new(0, 0, 20, 3));
     let narrow_offset = carrier.wide().current_flow_offset().unwrap();
     assert_eq!(carrier.selected_target(), target.as_ref());
     assert!(narrow_offset <= 5);
 
-    carrier.set_presentation(Presentation::Wide, 7);
+    carrier.sync_viewport(7);
     paint(carrier.wide_mut(), Rect::new(0, 0, 20, 7));
     assert_eq!(carrier.selected_target(), target.as_ref());
     assert!(carrier.wide().current_flow_offset().unwrap() <= narrow_offset);
@@ -123,11 +123,11 @@ fn fixed_row_claims_only_completed_current_frame() {
 
 #[test]
 fn carrier_preserves_multi_selection_across_geometry_changes() {
-    let mut carrier = MediaListCarrier::new(Presentation::Wide);
+    let mut carrier = MediaListCarrier::new();
     carrier.set_content(vec![item("one"), item("two"), item("three")]);
     carrier.toggle_selection(&"one".to_string());
     carrier.toggle_selection(&"three".to_string());
-    carrier.set_presentation(Presentation::Wide, 2);
+    carrier.sync_viewport(2);
     assert_eq!(carrier.multi_selection(), &["one", "three"]);
 }
 

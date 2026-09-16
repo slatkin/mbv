@@ -32,7 +32,7 @@ use super::library_panel::HeroContentData;
 use super::library_panel::LibraryKind;
 use super::media_list::{
     letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
-    MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, Presentation, RowIntent,
+    MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -163,7 +163,7 @@ impl EmbyLibraryContent {
             show_letter_pills: false,
             feed_groups: Vec::new(),
             feed_group_cursor: 0,
-            carrier: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
             last_identity: None,
             last_projected_rows: None,
             hero_image: HeroImageState::None,

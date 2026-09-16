@@ -222,7 +222,7 @@ impl LibraryPanel {
     /// Open the Library-local Hero overlay for tests that construct a panel
     /// without an active owner.
     #[cfg(test)]
-    pub(in crate::app) fn open_hero_overlay(&mut self) {
+    pub(in crate::app) fn test_open_hero_overlay(&mut self) {
         self.hero_overlay_open = true;
     }
 
@@ -250,11 +250,6 @@ impl LibraryPanel {
         if let Some(owner) = self.owners.active_mut() {
             owner.set_hero_overlay_open(open);
         }
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_open_hero_overlay(&mut self) {
-        self.open_hero_overlay();
     }
 
     #[cfg(test)]

@@ -24,7 +24,7 @@ use crate::app::components::library_panel::{
     hero_content_emby, ArtworkShape, HeroArtwork, HeroContentData, HeroFacts, LibraryKey,
 };
 use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation, MediaListSurfaceInput,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, MediaListSurfaceInput,
 };
 use crate::app::components::msg::{Msg, TerminalObserverEvent};
 use crate::app::components::{LibraryKind, ComponentId};
@@ -49,9 +49,9 @@ struct FixtureOwner {
 
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![row("alpha"), row("beta"), row("gamma")]);
-        let mut workspace_carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut workspace_carrier = MediaListCarrier::new();
         workspace_carrier.set_content(vec![row("track one"), row("track two")]);
         Self {
             carrier,

@@ -14,7 +14,6 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
-    Presentation,
 };
 use super::msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -113,8 +112,8 @@ impl BookContent {
             selected_bucket: 0,
             focused: false,
             images_enabled: false,
-            carrier: MediaListCarrier::new(Presentation::Wide),
-            chapter_list: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
+            chapter_list: MediaListCarrier::new(),
             hero_image: HeroImageState::None,
         }
     }

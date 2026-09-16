@@ -8,7 +8,6 @@ use ratatui::layout::Rect;
 use ratatui::Frame;
 
 use crate::app::components::inline_search::InlineSearch;
-use crate::app::components::media_list::Presentation;
 
 /// The artwork shape the header reserves a box for (spec: the Wide Hero
 /// header's three types). Chosen by the artwork policy (design D5, task
@@ -277,9 +276,9 @@ pub(in crate::app) enum PanelListPaintPolicy {
 /// surface — targets are erased here, so no per-destination `ListSlot` or
 /// `Workspace` arm can grow.
 pub(in crate::app) trait PanelList {
-    /// Keep the shared fixed-row owner active and clamp its viewport to the
-    /// current geometry; selection state remains with the owner.
-    fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize);
+    /// Clamp the viewport to the current geometry without transferring
+    /// owner state; selection state remains with the owner.
+    fn sync_viewport(&mut self, viewport_height: usize);
 
     /// Clear interaction selection when this owner is replaced as the active
     /// destination. Overlay focus changes do not call this method.

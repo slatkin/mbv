@@ -5,7 +5,6 @@
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
-use crate::app::components::media_list::Presentation;
 use crate::app::render::arrangements::wide_hero::pill_bar_areas;
 use crate::app::render::{render_inline_search, render_placeholder, PANE_PAD_Y};
 
@@ -137,7 +136,7 @@ pub(in crate::app) fn render_narrow_skeleton(
             // identity its zebra stripe resolves from, and the same focus bit,
             // so a focused narrow list is one flat surface and a resting one
             // keeps the default backdrop. No separate body fill here.
-            list.set_presentation(Presentation::Wide, inset.height.max(1) as usize);
+            list.sync_viewport(inset.height.max(1) as usize);
             list.set_paint_policy(PanelListPaintPolicy::Narrow {
                 focused: browser_focused,
             });

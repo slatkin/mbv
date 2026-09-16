@@ -13,12 +13,7 @@ use ratatui::Terminal;
 /// A stub `PanelList` so a Workspace can be present for the overview box.
 struct NoopList;
 impl PanelList for NoopList {
-    fn set_presentation(
-        &mut self,
-        _presentation: crate::app::components::media_list::Presentation,
-        _viewport_height: usize,
-    ) {
-    }
+    fn sync_viewport(&mut self, _viewport_height: usize) {}
 
     fn set_paint_policy(
         &mut self,

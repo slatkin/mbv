@@ -1,8 +1,15 @@
 //! Shared Library-panel Hero content composition.
 //!
 //! This path owns the Hero header, overview box, optional Workspace selector,
-//! Workspace box, and the paint-local geometry returned to the panel. A future
-//! Library Hero overlay can use the same supplied-rectangle contract as Wide.
+//! Workspace box, and the paint-local geometry returned to the panel. Both
+//! the Wide Hero pane and the Library Hero overlay call it under the same
+//! supplied-rectangle contract.
+//!
+//! Bespoke placement: a Panel owns its slots' placement, fills, and painting
+//! (mbv-frontend, "Panel and slot composition"), so this painter lives beside
+//! the Library panel's other skeleton painters (`wide.rs`, `narrow.rs`,
+//! `hero_header.rs`) instead of in `src/app/render/components/`. It resolves
+//! theme roles only and owns no interaction state.
 
 use ratatui::layout::Rect;
 use ratatui::style::Style;

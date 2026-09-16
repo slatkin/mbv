@@ -32,7 +32,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, MediaSemanticState, Presentation, RowIntent,
+    MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
@@ -89,7 +89,7 @@ impl FeedsContent {
             entries: Vec::new(),
             all_entries: Vec::new(),
             visible_entries: Vec::new(),
-            carrier: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
             watched_filter: WatchedFilter::default(),
             selected_group: 0,
             loading: false,
@@ -176,8 +176,7 @@ impl FeedsContent {
     /// selects (the legacy `ensure_carrier`), preserving only the outgoing
     /// selected-row viewport offset.
     pub(in crate::app) fn ensure_presentation(&mut self, _wide: bool, viewport_height: usize) {
-        self.carrier
-            .set_presentation(Presentation::Wide, viewport_height.max(1));
+        self.carrier.sync_viewport(viewport_height.max(1));
     }
 
     /// The entry whose stable `guid` the shared owner selected. Effect

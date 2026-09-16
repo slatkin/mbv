@@ -52,7 +52,7 @@ struct HeroFixtureOwner {
 
 impl HeroFixtureOwner {
     fn new(hero: HeroContentData) -> Self {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![row("alpha")]);
         Self {
             carrier,

@@ -11,9 +11,7 @@ use super::library_panel::hero::hero_content_abs_show;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::MediaListSurfaceInput;
-use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
-};
+use super::media_list::{MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState};
 use super::msg::{
     LeafKeyResult, Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition,
     ShellRequest,
@@ -68,8 +66,8 @@ impl PodcastContent {
             episode_focused: false,
             initialized: false,
             focused: false,
-            carrier: MediaListCarrier::new(Presentation::Wide),
-            episode_list: MediaListCarrier::new(Presentation::Wide),
+            carrier: MediaListCarrier::new(),
+            episode_list: MediaListCarrier::new(),
             hero_image: HeroImageState::None,
         }
     }

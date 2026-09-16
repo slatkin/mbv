@@ -1,7 +1,7 @@
 //! The `PanelList` implementation (task 5.8, design D3): one object-safe
 //! implementation over the shared media-list carrier for every `Target`.
-//! The panel drives the carrier through this surface — breakpoint choice
-//! (`set_presentation`), the paint policy, the slot-rect view, and the
+//! The panel drives the carrier through this surface — the viewport clamp
+//! (`sync_viewport`), the paint policy, the slot-rect view, and the
 //! retained-geometry reads — while typed target resolution stays on the
 //! carrier's own surface, so no per-destination `ListSlot` arm can grow.
 
@@ -9,9 +9,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::component::Component;
 
-use crate::app::components::media_list::{
-    MediaListCarrier, Presentation, WideMediaListPaintPolicy, ZebraStripe,
-};
+use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
 use crate::app::palette::{self, Surface};
 
 use super::content::{PanelList, PanelListPaintPolicy};
@@ -25,11 +23,10 @@ fn zebra_stripe(surface: Surface) -> ZebraStripe {
 }
 
 impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
-    fn set_presentation(&mut self, presentation: Presentation, viewport_height: usize) {
+    fn sync_viewport(&mut self, viewport_height: usize) {
         // Path syntax prefers the inherent method, so this forwards to the
-        // carrier's own re-anchoring implementation rather than recursing
-        // into the trait.
-        MediaListCarrier::set_presentation(self, presentation, viewport_height);
+        // carrier's own viewport clamp rather than recursing into the trait.
+        MediaListCarrier::sync_viewport(self, viewport_height);
     }
 
     fn clear_selection(&mut self) {
@@ -86,9 +83,7 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
 #[allow(clippy::unwrap_used)]
 mod panel_list_tests {
     use super::*;
-    use crate::app::components::media_list::{
-        MediaKind, MediaListRow, MediaSemanticState, Presentation,
-    };
+    use crate::app::components::media_list::{MediaKind, MediaListRow, MediaSemanticState};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::style::Color;
@@ -112,7 +107,7 @@ mod panel_list_tests {
     /// `src/app/render/components/media_list.rs` and its Wide-arm tests.
     #[test]
     fn wide_selected_rows_use_the_gutter_accent_for_both_slots() {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("selected")]);
         let area = Rect::new(0, 0, 20, 1);
         let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
@@ -150,8 +145,8 @@ mod panel_list_tests {
     /// surface: the same fixed-row owner remains active while its geometry
     /// changes, preserving selection and clamping on view.
     #[test]
-    fn set_presentation_reanchors_the_shared_owner_across_the_transition() {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+    fn sync_viewport_preserves_the_shared_owner_across_the_transition() {
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("a"), item("b"), item("c")]);
         carrier.select_target(&"b".to_string());
         carrier.set_scroll(0);
@@ -173,8 +168,7 @@ mod panel_list_tests {
         let wide_selected = carrier.wide().current_selected_target().cloned();
 
         // The panel keeps the same fixed-row owner while geometry changes.
-        PanelList::set_presentation(&mut carrier, Presentation::Wide, 2);
-        assert_eq!(carrier.active(), Presentation::Wide);
+        PanelList::sync_viewport(&mut carrier, 2);
         assert_eq!(
             carrier.selected_target().cloned(),
             wide_selected,
@@ -202,8 +196,7 @@ mod panel_list_tests {
             "the shared owner's selection is preserved across the transition"
         );
         // Back to Wide: the owner is reconfigured again, not copied.
-        PanelList::set_presentation(&mut carrier, Presentation::Wide, 2);
-        assert_eq!(carrier.active(), Presentation::Wide);
+        PanelList::sync_viewport(&mut carrier, 2);
         assert_eq!(carrier.selected_target().cloned(), wide_selected);
     }
 }

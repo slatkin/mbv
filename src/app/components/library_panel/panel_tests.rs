@@ -11,7 +11,7 @@ use crate::app::components::library_panel::content::{
     HeroContent, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -54,7 +54,7 @@ struct FixtureOwner {
 
 impl FixtureOwner {
     fn new(log: Rc<RefCell<FixtureLog>>) -> Self {
-        let mut carrier = MediaListCarrier::new(Presentation::Wide);
+        let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
         Self {
             carrier,

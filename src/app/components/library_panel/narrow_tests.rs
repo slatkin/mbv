@@ -3,7 +3,7 @@ use crate::app::components::library_panel::{
     LibraryPanelContent, ListControls, ListSlot, SelectorRow,
 };
 use crate::app::components::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState, Presentation,
+    MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -23,7 +23,7 @@ fn item(target: &str) -> MediaListRow<String> {
 
 #[test]
 fn narrow_skeleton_keeps_fixed_rows_and_panel_slots() {
-    let mut carrier = MediaListCarrier::new(Presentation::Wide);
+    let mut carrier = MediaListCarrier::new();
     carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
     carrier.select_target(&"beta".to_string());
     let mut content = LibraryPanelContent {
@@ -73,7 +73,7 @@ fn narrow_skeleton_keeps_fixed_rows_and_panel_slots() {
 
 #[test]
 fn fixed_row_owner_clamps_when_narrow_viewport_shrinks_and_restores() {
-    let mut carrier = MediaListCarrier::new(Presentation::Wide);
+    let mut carrier = MediaListCarrier::new();
     carrier.set_content((0..10).map(|i| item(&i.to_string())).collect());
     carrier.select_target(&"9".to_string());
     carrier.set_scroll(9);

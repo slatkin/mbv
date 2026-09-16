@@ -224,13 +224,10 @@ pub(in crate::app) fn render_wide_skeleton(
             search.set_scroll(new_scroll);
         }
         ListSlot::Media(list) => {
-            // The panel drives the presentation and the paint policy (design
-            // D3): the Wide breakpoint selects the Wide presentation, and the
-            // slot fixes focus and the list-backdrop selected row (design D6).
-            list.set_presentation(
-                crate::app::components::media_list::Presentation::Wide,
-                list_area.height.max(1) as usize,
-            );
+            // The panel drives the viewport clamp and the paint policy
+            // (design D3): the slot fixes focus and the list-backdrop
+            // selected row (design D6).
+            list.sync_viewport(list_area.height.max(1) as usize);
             list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
                 focused: list_focused,
             });

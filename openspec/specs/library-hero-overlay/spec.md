@@ -37,7 +37,7 @@ For an item with a Workspace, opening the overlay SHALL give focus to its consti
 
 ### Requirement: The overlay is confined to the Library pane
 
-The Library Hero overlay SHALL be centered within the current Library pane and SHALL occupy 85 percent of that pane's width and height, subject to fitting within the available Library area. Its frame, elevation, Library-only dimmed backdrop, and visible `Esc` dismissal hint SHALL make its overlay status evident. It SHALL NOT occupy, cover, or dim any part of a visible Queue pane.
+The Library Hero overlay SHALL be centered within the current Library pane and SHALL occupy 85 percent of that pane's width and height, subject to fitting within the available Library area. Its elevation, Library-only dimmed backdrop, and visible `Esc` dismissal hint SHALL make its overlay status evident. It SHALL NOT paint a border frame, occupy, cover, or dim any part of a visible Queue pane.
 
 The overlay SHALL recompute its placement from the current Library pane whenever terminal geometry or Panel mode changes. Its internal Hero composition SHALL follow the existing Wide Hero space-allocation rules, including shrinking artwork before removing a present Workspace list viewport.
 

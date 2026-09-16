@@ -61,10 +61,10 @@
   `cargo nextest run -p mbv --no-fail-fast` (**1449/1449 pass**), `cargo clippy --workspace
   --all-targets -- -D warnings` (clean).
   (Accepted at `e235ffa2`.)
-- [ ] 4.4 Manual live check on a real terminal, which carries the appearance claim the suites cannot:
+- [x] 4.4 Manual live check on a real terminal, which carries the appearance claim the suites cannot:
   focused and resting non-Wide library body, inset surface, its spacer rows, the scrollbar column
   and the secondary zebra row; the same in Mini; and that Wide is unchanged in both focus states.
-  (Open — requested from the user with the change landed locally.)
+  (Done — verified by the user on a real terminal, 2026-09-16.)
 
 ## 5. Durable record
 
