@@ -69,7 +69,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::QueueColumn => Row {
             level: Level::ColumnPane,
             focus: FocusSource::QueueColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // Main never follows focus here: the shell paints the right column's
@@ -80,7 +80,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::LibraryColumn => Row {
             level: Level::ColumnPane,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_BACKDROP,
         },
         // The wide hero split gap paints the backdrop in every frame today
@@ -88,7 +88,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::WideSplitGutter => Row {
             level: Level::ColumnPane,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_BACKDROP,
         },
         // `CONTEXT.md` defines the Hero pane as the `#333c43` resting fill of
@@ -98,7 +98,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::HeroPane => Row {
             level: Level::ColumnPane,
             focus: FocusSource::LibraryColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // The library punch-through: the backdrop beneath the list panel
@@ -109,7 +109,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::SelectedRow => Row {
             level: Level::ColumnPane,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_BACKDROP,
         },
         // The queue list's selected row is a hole in the queue column: it
@@ -118,7 +118,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::SelectedRowOnQueueColumn => Row {
             level: Level::ColumnPane,
             focus: FocusSource::QueueColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // TV's episode list and Music's track list are holes in the library
@@ -128,7 +128,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::SelectedRowOnLibraryPane => Row {
             level: Level::ColumnPane,
             focus: FocusSource::LibraryColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // A popup's context-menu row is the one selected row at this level
@@ -137,7 +137,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::ContextMenuSelectedRow => Row {
             level: Level::ColumnPane,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: ACCENT_ACTIVE,
         },
         // --- content body ---
@@ -150,14 +150,14 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::LibraryPanel => Row {
             level: Level::ContentBody,
             focus: FocusSource::LibraryColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // The queue panel body (`render/components/widgets.rs:237-241`).
         Surface::QueuePanel => Row {
             level: Level::ContentBody,
             focus: FocusSource::QueueColumn,
-            soft: Some(primitives::SOFT_CONTENT_BODY_BG),
+            soft: true,
             resting: SURFACE_BACKDROP,
         },
         // A pane's content box: TV's episode listing
@@ -165,19 +165,19 @@ pub(super) const fn row(surface: Surface) -> Row {
         // (`render/arrangements/wide_hero.rs:468`, chosen at
         // `music_wide.rs:528-532`) and the generic pane inset
         // (`wide_hero.rs:467`) are the same identity. Main's focused half is
-        // the Library stripe value (`SURFACE_RESTING`, `#333c43`); its
-        // resting half is the backdrop the generic painter writes.
+        // the soft variant; its resting half is the backdrop the generic
+        // painter writes.
         Surface::MainContentBox => Row {
             level: Level::ContentBody,
             focus: FocusSource::LibraryColumn,
-            soft: Some(SURFACE_RESTING),
+            soft: true,
             resting: SURFACE_BACKDROP,
         },
         // The selected row's inline detail (`render/components/hero.rs:192`).
         Surface::InlineHero => Row {
             level: Level::ContentBody,
             focus: FocusSource::LibraryColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // The now-playing panel body: the projection at
@@ -186,7 +186,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::PlaybackPanel => Row {
             level: Level::ContentBody,
             focus: FocusSource::QueueColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // The Queue-only playback strip (`shell_draw.rs:285,296,315`): with no
@@ -198,7 +198,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::QueueOnlyPlaybackPanel => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_CHROME,
         },
         // The expanded (F1-F4) sidebar body paints the resting content value
@@ -206,7 +206,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::SidebarBody => Row {
             level: Level::ContentBody,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // The non-hero sidebar shell is its own appearance
@@ -214,7 +214,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::NonHeroSidebarBody => Row {
             level: Level::ContentBody,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_SIDEBAR,
         },
         // The queue card's now-playing content is the queue column's content,
@@ -224,7 +224,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::QueueCardVisualizer => Row {
             level: Level::ContentBody,
             focus: FocusSource::QueueColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         // --- recess ---
@@ -234,19 +234,19 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::PlaybackRecess => Row {
             level: Level::Recess,
             focus: FocusSource::QueueColumn,
-            soft: None,
+            soft: false,
             resting: SURFACE_RESTING,
         },
         Surface::PlaybackStatusPill => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_BACKDROP,
         },
         Surface::ArtworkPlaceholder => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_BACKDROP,
         },
         // Main paints the artwork-loading inset's fill (the `OVERLAY` value):
@@ -258,44 +258,44 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::ArtworkLoadingPlaceholder => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: primitives::ARTWORK_LOADING_PLACEHOLDER,
         },
         // --- chrome band ---
         Surface::StatusBar => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_CHROME,
         },
         Surface::StatusBarPill => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_CHROME,
         },
         Surface::QueuePanelBand => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_CHROME,
         },
         Surface::PillRow => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: PILL_ROW_BG,
         },
         Surface::PillChip => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: PILL_BG,
         },
         Surface::PillChipSelected => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: PILL_SELECTED_BG,
         },
         // The queue's selected scope pill paints the Direct-remote aqua
@@ -305,7 +305,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::QueueScopePillSelected => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: ACCENT,
         },
         // Home's pill-bar spacer band paints the backdrop today
@@ -313,25 +313,25 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::PillRowGap => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_BACKDROP,
         },
         Surface::SidebarBand => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_CHROME,
         },
         Surface::NonHeroSidebarBand => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_ITEM_FOCUSED,
         },
         Surface::TabBar => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_CHROME,
         },
         // --- popup ---
@@ -340,7 +340,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::PopupFrame => Row {
             level: Level::Popup,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: SURFACE_FOCUSED,
         },
         // The dim backdrop paints no fill of its own: it blends every
@@ -352,7 +352,7 @@ pub(super) const fn row(surface: Surface) -> Row {
         Surface::PopupDimBackdrop => Row {
             level: Level::Popup,
             focus: FocusSource::Fixed,
-            soft: None,
+            soft: false,
             resting: Color::Black,
         },
     }
