@@ -104,6 +104,17 @@ pub(in crate::app) fn render_narrow_skeleton(
             search.set_scroll(new_scroll);
         }
         ListSlot::Media(list) => {
+            // Ad-hoc tweak: the Narrow list body paints the same surface
+            // identity its zebra stripe resolves from, so while focused both
+            // the body and the secondary stripe are `#48584e` (one flat
+            // focused surface, no alternation) and while resting both are the
+            // backdrop they already showed through from the column.
+            crate::app::render::components::widgets::fill_surface(
+                f,
+                list_area,
+                crate::app::palette::Surface::MainContentBox,
+                browser_focused,
+            );
             list.set_presentation(Presentation::Wide, list_area.height.max(1) as usize);
             list.set_paint_policy(PanelListPaintPolicy::Wide {
                 focused: browser_focused,

@@ -41,6 +41,10 @@ pub(super) const SURFACE_FOCUSED_BG: Color = Color::Rgb(60, 72, 65); // focused-
 /// pill-selector's overflow accent): deliberately not the focused surface's
 /// `SURFACE_FOCUSED_BG`, whose value it shares today.
 pub(super) const BG_GREEN: Color = Color::Rgb(60, 72, 65); // dark green-grey (#3c4841)
+/// The non-Wide library panel body's own primitive: its own constant so a text
+/// or focused-pair edit can never move it, the same way `SURFACE_FOCUSED_BG`
+/// is separated from `BG_GREEN`. Shares that value today.
+pub(super) const NARROW_LIBRARY_BODY_BG: Color = Color::Rgb(60, 72, 65); // non-wide library body green-grey (#3c4841)
 pub(super) const GREEN: Color = Color::Rgb(147, 178, 89); // green (#93b259)
 pub(super) const IRIS: Color = Color::Rgb(167, 192, 128); // sage green — active tab, focused pill text (#A7C080)
 pub(super) const FOCUSED: Color = Color::Rgb(83, 83, 83); // focused item bg (#535353)

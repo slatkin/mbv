@@ -277,18 +277,24 @@ impl Model {
         // show the column's own background rather than whatever was painted
         // underneath before this panel owned the placement.
         frame.render_widget(ratatui::widgets::Clear, area);
+        // The panel body follows the skeleton it is about to paint: Wide keeps
+        // the column's resting backdrop, non-Wide paints its own body surface
+        // under the list. The gate is the one breakpoint predicate, evaluated
+        // on the rect the panel itself receives.
+        let content_area = self.library_panel_content_area().unwrap_or(area);
+        let body = if crate::app::render::wide_hero_fits(content_area) {
+            crate::app::palette::Surface::LibraryColumn
+        } else {
+            crate::app::palette::Surface::NarrowLibraryBody
+        };
         frame.render_widget(
             ratatui::widgets::Block::default().style(
-                ratatui::style::Style::default().bg(crate::app::palette::surface_colors(
-                    crate::app::palette::Surface::LibraryColumn,
-                    false,
-                )
-                .fill),
+                ratatui::style::Style::default()
+                    .bg(crate::app::palette::surface_colors(body, false).fill),
             ),
             area,
         );
-        let area = self.library_panel_content_area().unwrap_or(area);
-        self.application.view(&id, frame, area);
+        self.application.view(&id, frame, content_area);
         // The projected hero image's pixel paint (task 5.10, design D9): the
         // painters read projected state and reserve the box; the shell paints
         // the cached protocol into it right after view returns — the same
