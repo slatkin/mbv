@@ -30,11 +30,6 @@ impl Model {
         self.library_owner(&key)
     }
 
-    pub fn music_owner_mut(&mut self) -> Option<&mut MusicContent> {
-        let key = self.music_owner_key()?;
-        self.library_owner_mut(&key)
-    }
-
     fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
         let key = self.music_owner_key()?;
         self.update_library_owner(key, || Box::new(MusicContent::new()), f)
@@ -151,7 +146,9 @@ impl Model {
     }
     #[cfg(test)]
     pub(super) fn test_music_owner_mut(&mut self) -> &mut MusicContent {
-        self.music_owner_mut().expect("music owner")
+        self.music_owner_key()
+            .and_then(|key| self.library_owner_mut::<MusicContent>(&key))
+            .expect("music owner")
     }
 }
 

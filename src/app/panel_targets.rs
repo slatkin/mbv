@@ -66,6 +66,7 @@ mod tests {
             user_name: "user".to_string(),
             host: "host".to_string(),
             supported_commands: Vec::new(),
+            playable_media_types: Vec::new(),
             now_playing: None,
             now_playing_item_id: None,
             position_s: 0,

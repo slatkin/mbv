@@ -134,6 +134,15 @@ impl App {
                     self.replace_audiobookshelf_confirmed(generation);
                 }
             }
+            ConfirmAction::PlayLocallyInstead => match key.code {
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => {
+                    self.play_pending_local_play();
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+                    self.pending_local_play = None;
+                }
+                _ => {}
+            },
             ConfirmAction::DiscardOrSaveDirtyPlaylist => {
                 let play_after = matches!(
                     self.pending_queue_action,

@@ -269,6 +269,19 @@ fn clear_queue_c_is_global_but_yields_to_text_entry() {
     );
 }
 #[test]
+fn quit_and_visualizer_yield_to_text_entry() {
+    let focused = ComponentId::Library;
+    let mut typing = idle_snapshot();
+    typing.text_entry_focused = true;
+    for key in [key(KeyCode::Char('q')), key(KeyCode::Char('v'))] {
+        assert_eq!(
+            resolve_router_outcome_with_focused(key, &typing, Some(&focused)),
+            RouterOutcome::FallThrough,
+            "inline search must keep typed characters instead of quitting/toggling"
+        );
+    }
+}
+#[test]
 fn confirm_accept_re_encodes_to_y_chord() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = crate::app::tests::make_app_stub();

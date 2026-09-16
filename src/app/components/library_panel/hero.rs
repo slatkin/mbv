@@ -46,6 +46,7 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
         return HeroArtwork {
             shape: ArtworkShape::Square,
             source: music_source(item),
+            decoration: None,
             image: HeroImageState::None,
         };
     }
@@ -61,6 +62,7 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
         return HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: None,
+            decoration: None,
             image: HeroImageState::None,
         };
     }
@@ -68,21 +70,37 @@ pub(in crate::app) fn emby_artwork_policy(item: &EmbyItem) -> HeroArtwork {
         HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: Some(emby_source(item, landscape_image_chain(item))),
+            decoration: movie_logo_source(item),
             image: HeroImageState::None,
         }
     } else if poster_declared {
         HeroArtwork {
             shape: ArtworkShape::Portrait,
-            source: Some(emby_source(item, &["Primary", "Backdrop", "Logo"])),
+            source: Some(emby_source(item, &["Primary", "Backdrop"])),
+            decoration: None,
             image: HeroImageState::None,
         }
     } else {
         HeroArtwork {
             shape: ArtworkShape::Landscape,
             source: None,
+            decoration: None,
             image: HeroImageState::None,
         }
     }
+}
+
+fn movie_logo_source(item: &EmbyItem) -> Option<ArtworkSource> {
+    if item.item_type != "Movie" || item.image_tags.logo.is_empty() {
+        return None;
+    }
+    let mut source = emby_source(item, &["Logo"]);
+    // Unlike base artwork, a Logo is independently addressed by its provider
+    // declaration. This prevents a changed Logo tag from reusing stale bytes.
+    if let ArtworkSource::Emby { cache_key, .. } = &mut source {
+        *cache_key = format!("{}:Logo:{}", item.id, item.image_tags.logo);
+    }
+    Some(source)
 }
 
 /// The artwork policy for one queue item: dispatches to the item kind's
@@ -109,6 +127,7 @@ pub(in crate::app) fn abs_book_artwork_policy(book: &AudiobookshelfBookQueueItem
                 library_item_id: book.library_item_id.clone(),
                 book: true,
             }),
+        decoration: None,
         image: HeroImageState::None,
     }
 }
@@ -126,6 +145,7 @@ pub(in crate::app) fn abs_episode_artwork_policy(episode: &AudiobookshelfQueueIt
                 library_item_id: episode.library_item_id.clone(),
                 book: false,
             }),
+        decoration: None,
         image: HeroImageState::None,
     }
 }
@@ -145,6 +165,7 @@ pub(in crate::app) fn abs_show_artwork_policy(
                 library_item_id: show.library_item_id.clone(),
                 book: false,
             }),
+        decoration: None,
         image: HeroImageState::None,
     }
 }
@@ -162,6 +183,7 @@ pub(in crate::app) fn feed_artwork_policy(entry: &FeedEntry) -> HeroArtwork {
             ArtworkShape::Landscape
         },
         source: None,
+        decoration: None,
         image: HeroImageState::None,
     }
 }
@@ -220,6 +242,7 @@ pub(in crate::app) fn music_album_artwork(item: &EmbyItem) -> HeroArtwork {
     HeroArtwork {
         shape: ArtworkShape::Square,
         source: album_source(item),
+        decoration: None,
         image: HeroImageState::None,
     }
 }
@@ -230,6 +253,7 @@ pub(in crate::app) fn music_album_artwork(item: &EmbyItem) -> HeroArtwork {
 fn landscape_image_chain(item: &EmbyItem) -> &'static [&'static str] {
     match item.item_type.as_str() {
         "Series" | "Episode" => SERIES_LANDSCAPE_IMAGE_TYPES,
+        "Movie" => &["Backdrop", "Primary"],
         _ => &["Backdrop", "Primary", "Logo"],
     }
 }

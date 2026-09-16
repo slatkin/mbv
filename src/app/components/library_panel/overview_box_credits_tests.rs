@@ -28,6 +28,7 @@ fn facts(shape: ArtworkShape) -> HeroFacts {
         artwork: HeroArtwork {
             shape,
             source: None,
+            decoration: None,
             image: HeroImageState::None,
         },
     }

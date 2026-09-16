@@ -481,7 +481,6 @@ impl InlineSearchHost for EmbyLibraryContent {
         &mut self.inline_search
     }
 }
-
 impl LibraryContentOwner for EmbyLibraryContent {
     fn clear_selection(&mut self) {
         self.carrier.clear_selection();
@@ -489,6 +488,14 @@ impl LibraryContentOwner for EmbyLibraryContent {
 
     fn hero_overlay_target_available(&mut self) -> bool {
         self.hero_item().is_some()
+    }
+
+    fn inline_search_session(&mut self) -> Option<&mut dyn InlineSearchHost> {
+        Some(self)
+    }
+
+    fn inline_search_session_ref(&self) -> Option<&dyn InlineSearchHost> {
+        Some(self)
     }
 
     fn set_selection_origin(

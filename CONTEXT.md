@@ -116,8 +116,11 @@ _Avoid_: daemon mode, background mode, alive mode, persistent mode
 A Player owner configured with `--audio-only` (packaged mbvd ships this way)
 that can only play audio. It never holds a video item; a mixed submission that
 contains audio is accepted minus the non-audio items (wholly non-audio remains
-refused). Planned Client fall-through for explicitly requested non-audio items
-is tracked in issue #431 and ADR 0017.
+refused). When a Client explicitly plays a video through an eligible ctrl
+attachment or controlled Emby session, mbv prompts with the owner and selection
+named; confirmation stops the owner, ends the attachment, and plays locally,
+while a decline changes nothing. The Local stay-alive daemon is never audio-only.
+See `openspec/changes/play-locally-when-owner-cannot` for this shipped behavior.
 _Avoid_: audio daemon, headless audio owner, mbvd audio mode
 
 **Playback run**:

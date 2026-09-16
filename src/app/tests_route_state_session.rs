@@ -1,6 +1,7 @@
 use super::tests_route_state::stub_endpoint;
 use super::*;
 use crate::app::tests::*;
+use rstest::rstest;
 
 #[test]
 fn remote_slot_state_is_local_daemon_for_thin_client_mode() {
@@ -133,6 +134,26 @@ fn attached_session_state_wins_over_local_daemon_indicator() {
 
     assert_eq!(app.remote_slot_state(), RemoteSlotState::AttachedSession);
     assert!(app.can_disconnect_remote());
+}
+
+#[rstest]
+#[case::advertises_audio_only(vec!["Audio"], true)]
+#[case::advertises_audio_and_video(vec!["Audio", "Video"], false)]
+#[case::advertises_nothing(Vec::new(), false)]
+fn attached_session_playable_media_capability(
+    #[case] playable_media_types: Vec<&str>,
+    #[case] expected_audio_only: bool,
+) {
+    let mut app = make_app_stub();
+    app.connected_session_id = Some("session-1".into());
+    let mut session = make_session("remote-host", "Emby");
+    session.playable_media_types = playable_media_types
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+    app.connected_session_state = Some(session);
+
+    assert_eq!(app.session_owner_is_audio_only(), expected_audio_only);
 }
 
 #[test]

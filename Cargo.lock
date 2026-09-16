@@ -1699,7 +1699,7 @@ dependencies = [
 
 [[package]]
 name = "mbv"
-version = "0.19.3"
+version = "0.19.4"
 dependencies = [
  "crossterm",
  "fuzzy-matcher",
@@ -1732,7 +1732,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-core"
-version = "0.19.3"
+version = "0.19.4"
 dependencies = [
  "flume",
  "libc",
@@ -1755,7 +1755,7 @@ dependencies = [
 
 [[package]]
 name = "mbvd"
-version = "0.19.3"
+version = "0.19.4"
 dependencies = [
  "libc",
  "log",

@@ -243,6 +243,8 @@ pub struct App {
     pub(super) queue_source: crate::config::QueueSource,
     pub(super) queue_dirty: bool,
     pub(super) pending_queue_action: Option<PendingQueueAction>,
+    /// Deferred explicit play awaiting the section-5 local fall-through prompt.
+    pub(super) pending_local_play: Option<PendingQueueAction>,
     pub(super) use_nerd_fonts: bool,
     pub(super) indicator_style: render::indicators::IndicatorStyle,
     pub(super) ws_send_tx: Option<mbv_core::ws::WsSender>,
@@ -374,6 +376,10 @@ pub struct App {
     /// case, hiding a redundant reservation from the other counters).
     #[cfg(test)]
     pub(super) card_image_fetch_calls: u32,
+    /// Test-only instrumentation: counts protocol construction so hero cache
+    /// validity tests can distinguish reuse from a rebuild.
+    #[cfg(test)]
+    pub(super) image_protocol_builds: std::cell::Cell<u32>,
 }
 
 impl App {

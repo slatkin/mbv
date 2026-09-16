@@ -288,6 +288,9 @@ pub struct EmbyImageTags {
     /// `ImageTags.Thumb`: a 16:9 landscape thumbnail is declared available.
     #[serde(default)]
     pub thumb: String,
+    /// `ImageTags.Logo`: an optional semantic logo decoration is declared available.
+    #[serde(default)]
+    pub logo: String,
     /// `ImageTags.Primary`: a primary (poster/square) image is declared
     /// available.
     #[serde(default)]
@@ -417,6 +420,9 @@ pub struct SessionInfo {
     pub user_name: String,
     pub host: String,
     pub supported_commands: Vec<String>,
+    /// Media kinds this session advertises as playable. An empty list means
+    /// that the capability is unknown, rather than that the session is audio-only.
+    pub playable_media_types: Vec<String>,
     pub now_playing: Option<String>,
     pub now_playing_item_id: Option<String>,
     pub position_s: i64,

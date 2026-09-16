@@ -87,7 +87,8 @@ impl LibraryContentOwner for HeroFixtureOwner {
     }
 
     fn set_hero_image(&mut self, state: HeroImageState) {
-        self.image_states.push(state);
+        self.image_states.push(state.clone());
+        self.hero.facts.artwork.image = state;
     }
 
     fn hero_scroll_offset(&self) -> usize {
@@ -160,6 +161,258 @@ fn migrated_movie_with_hero(item: mbv_core::api::EmbyItem) -> TickHarness {
         Box::new(HeroFixtureOwner::new(hero_content_emby(&item))),
     );
     harness
+}
+
+/// Seed decoded sources without constructing a live Service. Keeping the
+/// protocol map empty makes the following real shell sync/draw pass prove the
+/// projection's one Wide protocol build and the normal Narrow lazy protocol
+/// path, rather than testing a prebuilt painter fixture.
+fn seed_cached_hero_image(
+    harness: &mut TickHarness,
+    cache_key: &str,
+    rgba: [u8; 4],
+) {
+    let image = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+        40,
+        20,
+        image::Rgba(rgba),
+    ));
+    harness.model_mut().app.card_image_loading.remove(cache_key);
+    harness.model_mut().app.card_image_states.insert(
+        cache_key.to_owned(),
+        crate::app::images::CachedImage {
+            img: Some(image),
+            protocols: std::collections::HashMap::new(),
+            cover_box: None,
+            applied_logo_key: None,
+        },
+    );
+}
+
+fn draw_library_at(
+    harness: &mut TickHarness,
+    width: u16,
+    height: u16,
+) -> Terminal<TestBackend> {
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    terminal
+}
+
+/// Establish the root placement, then run the production sync pass and draw
+/// the settled frame. The dimensions match the App fixture so the seeded
+/// image state is not mistaken for a resize reset on the initial frame.
+fn settle_library_frame(
+    harness: &mut TickHarness,
+    width: u16,
+    height: u16,
+) -> Terminal<TestBackend> {
+    drop(draw_library_at(harness, width, height));
+    harness.model_mut().sync_mounted_surfaces();
+    draw_library_at(harness, width, height)
+}
+
+/// A Logo reservation is visible as a `:Logo:` key in the pending set, so its
+/// presence is the whole question for every ineligible hero.
+fn logo_reserved(harness: &TickHarness) -> bool {
+    harness
+        .model()
+        .app
+        .card_image_loading
+        .iter()
+        .any(|key| key.contains(":Logo:"))
+}
+
+/// A negative leg: draw one frame, run the real sync pass, and assert this
+/// ineligible hero reserved no Logo.
+fn assert_no_logo_reserved(label: &str, item: mbv_core::api::EmbyItem, width: u16) {
+    let mut harness = migrated_home_with_hero(item, width);
+    drop(draw_frame_sized(&mut harness));
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(!logo_reserved(&harness), "{label} reserves no Logo");
+}
+
+#[test]
+fn wide_landscape_movie_logo_is_one_composited_paint_and_narrow_is_undecorated() {
+    let mut decorated_item = landscape_hero_item("panel-logo");
+    decorated_item.image_tags.logo = "logo-tag".into();
+    let mut decorated = migrated_home_with_hero(decorated_item, 160);
+    seed_cached_hero_image(&mut decorated, "panel-logo:Backdrop,Primary", [20, 40, 60, 255]);
+    seed_cached_hero_image(&mut decorated, "panel-logo:Logo:logo-tag", [220, 100, 20, 128]);
+    let _wide_frame = settle_library_frame(&mut decorated, 160, 40);
+
+    let wide_geometry = panel_of(&decorated)
+        .and_then(|panel| panel.test_wide_geometry())
+        .expect("the landscape Movie paints the Wide skeleton");
+    let wide_image = wide_geometry
+        .hero_image
+        .as_ref()
+        .expect("the Wide hero reserves one image paint");
+    assert_eq!(
+        decorated.model().app.image_protocol_builds.get(),
+        1,
+        "the Wide hero builds one protocol for the composited bitmap"
+    );
+    assert_eq!(
+        decorated
+            .model()
+            .app
+            .card_image_states
+            .get("panel-logo:Backdrop,Primary")
+            .and_then(|entry| entry.applied_logo_key.as_deref()),
+        Some("panel-logo:Logo:logo-tag"),
+        "the single Wide protocol records the applied Logo identity"
+    );
+
+    // The undecorated control uses the same landscape Movie and base source;
+    // its artwork box must be unchanged, not merely present.
+    let mut plain_item = landscape_hero_item("panel-logo");
+    plain_item.image_tags.logo.clear();
+    let mut plain = migrated_home_with_hero(plain_item, 160);
+    seed_cached_hero_image(&mut plain, "panel-logo:Backdrop,Primary", [20, 40, 60, 255]);
+    let _plain_frame = settle_library_frame(&mut plain, 160, 40);
+    let plain_geometry = panel_of(&plain)
+        .and_then(|panel| panel.test_wide_geometry())
+        .expect("the undecorated landscape Movie paints the Wide skeleton");
+    assert_eq!(
+        wide_image.area,
+        plain_geometry
+            .hero_image
+            .as_ref()
+            .expect("the undecorated hero reserves one image paint")
+            .area,
+        "adding a Logo does not change the landscape artwork box"
+    );
+
+    // A real terminal shrink resets the image cache in the sync pass. Re-seed
+    // only the decoded base after that reset, then project/draw non-Wide; the
+    // non-Wide panel paints ordinary rows only, so it resolves no image
+    // protocol and never requests or applies the Wide-only Logo.
+    decorated.model_mut().app.terminal_width = 80;
+    decorated.model_mut().app.terminal_height = 40;
+    drop(draw_library_at(&mut decorated, 80, 40));
+    decorated.model_mut().sync_mounted_surfaces();
+    assert!(
+        decorated.model().app.card_image_states.is_empty(),
+        "the real responsive resize resets image state before re-projection"
+    );
+    seed_cached_hero_image(&mut decorated, "panel-logo:Backdrop,Primary", [20, 40, 60, 255]);
+    let fetch_calls_before = decorated.model().app.card_image_fetch_calls;
+    let _narrow_frame = draw_library_at(&mut decorated, 80, 40);
+    let base_entry = decorated
+        .model()
+        .app
+        .card_image_states
+        .get("panel-logo:Backdrop,Primary")
+        .expect("the re-seeded base survives the non-Wide draw untouched");
+    assert!(
+        base_entry.protocols.is_empty(),
+        "the non-Wide draw resolves no image protocol from the re-seeded base"
+    );
+    assert_eq!(
+        decorated.model().app.card_image_fetch_calls,
+        fetch_calls_before,
+        "the non-Wide draw issues no image fetch"
+    );
+    assert!(!logo_reserved(&decorated), "non-Wide does not reserve the Wide-only Logo");
+
+    // Explicit negative leg: a Wide Portrait Movie with a declared Logo is
+    // still a single undecorated base protocol.
+    let mut portrait_item = crate::app::tests::make_item("Portrait", "Movie");
+    portrait_item.id = "panel-portrait".into();
+    portrait_item.image_tags.primary = "poster-tag".into();
+    portrait_item.image_tags.logo = "logo-tag".into();
+    let mut portrait = migrated_home_with_hero(portrait_item, 160);
+    seed_cached_hero_image(&mut portrait, "panel-portrait:Primary,Backdrop", [20, 40, 60, 255]);
+    seed_cached_hero_image(&mut portrait, "panel-portrait:Logo:logo-tag", [220, 100, 20, 128]);
+    let _portrait_frame = settle_library_frame(&mut portrait, 160, 40);
+    let portrait_geometry = panel_of(&portrait)
+        .and_then(|panel| panel.test_wide_geometry())
+        .expect("the Portrait Movie paints the Wide skeleton");
+    assert!(portrait_geometry.hero_image.is_some());
+    assert!(
+        portrait
+            .model()
+            .app
+            .card_image_states
+            .get("panel-portrait:Primary,Backdrop")
+            .is_some_and(|entry| !entry.protocols.is_empty()),
+        "the seeded portrait base resolves to a usable Wide protocol"
+    );
+    assert_eq!(
+        portrait
+            .model()
+            .app
+            .card_image_states
+            .get("panel-portrait:Primary,Backdrop")
+            .and_then(|entry| entry.applied_logo_key.as_deref()),
+        None,
+        "a Wide Portrait Movie remains undecorated"
+    );
+    assert!(!logo_reserved(&portrait), "a Wide Portrait Movie does not reserve a Logo");
+}
+
+#[test]
+fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placeholder_or_non_movie() {
+    let mut landscape = landscape_hero_item("logo-wide");
+    landscape.image_tags.logo = "logo-tag".into();
+    let mut wide = migrated_home_with_hero(landscape, 160);
+    // The Logo is reserved only behind a decoded base, so a first pass with
+    // the base still in flight reserves nothing but the base itself.
+    drop(draw_frame_sized(&mut wide));
+    wide.model_mut().sync_mounted_surfaces();
+    assert!(wide.model().app.card_image_loading.contains("logo-wide:Backdrop,Primary"));
+    assert!(!logo_reserved(&wide));
+    assert_eq!(wide.model().app.card_image_fetch_calls, 1);
+
+    // Once that base is decoded, the eligible Wide Landscape Movie reserves
+    // exactly its declared Logo.
+    seed_cached_hero_image(&mut wide, "logo-wide:Backdrop,Primary", [20, 40, 60, 255]);
+    wide.model_mut().sync_mounted_surfaces();
+    assert!(wide.model().app.card_image_loading.contains("logo-wide:Logo:logo-tag"));
+    assert_eq!(wide.model().app.card_image_fetch_calls, 2);
+
+    // A base that resolved empty can never be decorated, so it reserves no
+    // Logo: the placeholder is final. Draw at the fixture's own dimensions so
+    // the seeded empty entry is not wiped by a resize reset.
+    let mut empty_base_item = landscape_hero_item("logo-empty-base");
+    empty_base_item.image_tags.logo = "logo-tag".into();
+    let mut empty_base = migrated_home_with_hero(empty_base_item, 160);
+    empty_base.model_mut().app.card_image_loading.remove("logo-empty-base:Backdrop,Primary");
+    empty_base.model_mut().app.card_image_states.insert(
+        "logo-empty-base:Backdrop,Primary".to_owned(),
+        crate::app::images::CachedImage::empty(),
+    );
+    let empty_base_calls_before = empty_base.model().app.card_image_fetch_calls;
+    let _empty_base_frame = settle_library_frame(&mut empty_base, 160, 40);
+    assert!(!logo_reserved(&empty_base), "a resolved-empty base reserves no Logo");
+    assert_eq!(
+        empty_base.model().app.card_image_fetch_calls,
+        empty_base_calls_before,
+        "a resolved-empty base issues no further fetch after its own"
+    );
+
+    let mut portrait = crate::app::tests::make_item("Portrait", "Movie");
+    portrait.id = "logo-portrait".into();
+    portrait.image_tags.primary = "poster".into();
+    portrait.image_tags.logo = "logo-tag".into();
+    assert_no_logo_reserved("a Wide Portrait Movie", portrait, 160);
+
+    let mut narrow_item = landscape_hero_item("logo-narrow");
+    narrow_item.image_tags.logo = "logo-tag".into();
+    assert_no_logo_reserved("a Narrow Landscape Movie", narrow_item, 80);
+
+    let mut non_movie = crate::app::tests::make_item("Series", "Series");
+    non_movie.id = "logo-series".into();
+    non_movie.image_tags.thumb = "thumb".into();
+    non_movie.image_tags.logo = "logo-tag".into();
+    assert_no_logo_reserved("a non-Movie hero", non_movie, 160);
+
+    let mut placeholder = crate::app::tests::make_item("Placeholder", "Movie");
+    placeholder.id = "logo-placeholder".into();
+    assert_no_logo_reserved("a placeholder hero", placeholder, 160);
 }
 
 #[test]
@@ -249,7 +502,7 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
     drop(draw_frame_sized(&mut harness));
     harness.model_mut().sync_mounted_surfaces();
 
-    let key = "hero-a:Backdrop,Primary,Logo";
+    let key = "hero-a:Backdrop,Primary";
     assert!(
         harness.model().app.card_image_loading.contains(key),
         "the new hero key must be reserved by the projection"
@@ -299,5 +552,5 @@ fn hero_projection_fetches_image_once_and_none_on_repaint() {
         .model()
         .app
         .card_image_loading
-        .contains("hero-b:Backdrop,Primary,Logo"));
+        .contains("hero-b:Backdrop,Primary"));
 }

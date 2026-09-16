@@ -75,6 +75,17 @@ fn capable_client_hello_uses_control_credential_field() {
 }
 
 #[test]
+fn audio_only_capability_is_optional_and_unknown_capabilities_are_accepted() {
+    let mut hello = CtrlHello::current();
+    assert!(!hello.supports_audio_only());
+    hello.capabilities.push(CTRL_CAP_AUDIO_ONLY.to_string());
+    hello.capabilities.push("future-capability".to_string());
+    hello.validate_peer().unwrap();
+    assert!(hello.supports_audio_only());
+    assert!(!hello.compatibility().unwrap().supports_audio_only);
+}
+
+#[test]
 fn invalid_control_credential_is_rejected_without_emby_validation() {
     let hello = CtrlHello::current_control_client("not-the-control-secret".into());
     assert!(hello.validate_control_credential("control-secret").is_err());

@@ -4,10 +4,12 @@ use ratatui::Terminal;
 use tuirealm::event::{Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;
+use crate::app::components::inline_search::InlineSearchHost;
 use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
 
+use crate::app::tests::{install_test_emby, make_session};
 use crate::app::tests_tick_harness::TickHarness;
 
 /// The migrated Movies/HomeVideos/Generic owner inside the mounted
@@ -66,6 +68,101 @@ fn browser_wide_tick_moves_control_without_recomputing_app_cursor() {
     assert_eq!(harness.model().app.libs[0].nav_stack[0].resting().cursor(), 0);
 
     let _ = draw(&mut harness, 100, 30);
+}
+
+#[test]
+fn inline_search_on_movies_library_receives_the_shell_pool_push() {
+    let mut app = make_movie_app();
+    app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _terminal = draw(&mut harness, 100, 30);
+
+    // `/` opens the embedded Inline Search through the shell, and the
+    // shell's `OpenInlineSearch` host path resolves the Movies owner: the
+    // nav-stack items are pushed as the search pool. (Regression: the
+    // #695-era conversion collapsed the host path to the Music owner only,
+    // so every non-Music library scored typed queries against an empty pool
+    // and populated no results.)
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| matches!(message, Msg::Shell(ShellRequest::OpenInlineSearch))),
+        "\"/\" emits the shell open request: {:?}",
+        outcome.messages
+    );
+    // Drain the step's shell requests like the run loop: the open request
+    // loads/pushes the pool into the owner's session.
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness.model().active_inline_search_is_open());
+
+    // A typed query scores against the pushed pool: "o" matches both rows
+    // of the two-item nav-stack level.
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('o'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+    let owner = browser_owner(&harness);
+    assert_eq!(owner.inline_search().query(), "o");
+    assert_eq!(
+        owner.inline_search().results_len(),
+        2,
+        "typed query resolves rows from the shell-pushed pool"
+    );
+
+    // A flat browse completion under an open session (Enter on a folder
+    // result drills in: select_item pushes a loading placeholder level and
+    // the fetch completes asynchronously) re-pushes the pool at the
+    // lib-event boundary: without the `Loaded` re-push the search kept a
+    // stale empty pool and the list/hero painted blank. The query is
+    // re-scored against the new level's rows.
+    harness.model_mut().app.libs[0].nav_stack[0].loading = true;
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(crate::app::LibEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-movies".into(),
+            level: Box::new(crate::app::BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![
+                    crate::app::tests::make_item("Anchor", "Movie"),
+                    crate::app::tests::make_item("Another One", "Movie"),
+                    crate::app::tests::make_item("Another Two", "Movie"),
+                ],
+                total_count: 3,
+                resting: crate::app::types_browse::BrowseResting::new(0, 0),
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                music_grouping: None,
+            }),
+        });
+    let owner = browser_owner(&harness);
+    assert_eq!(
+        owner.inline_search().results_len(),
+        3,
+        "the browse completion re-pushes the pool; the query scores its rows"
+    );
 }
 
 #[test]
@@ -143,4 +240,94 @@ fn browser_generic_narrow_tick_isolated_from_canonical_controls() {
     // The next frame retains the selection in the shared owner.
     let _ = draw(&mut harness, 100, 30);
     assert_eq!(browser_owner(&harness).cursor(), 1);
+}
+
+#[test]
+fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
+    let mut app = make_movie_app();
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    let http = mbv_core::mock_http::MockHttp::new();
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
+        std::sync::Mutex::new(client),
+    ));
+    http.respond(404, "");
+    let (remote, player_rx, command_rx) =
+        mbv_core::remote_player::RemotePlayer::stub_audio_only_with_command_rx(Vec::new(), 0);
+    let session = make_session("audio-owner", "mbv");
+    let endpoint = mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:0".parse().unwrap());
+    app.switch_to_direct_remote(&session, remote, player_rx, &endpoint);
+    while command_rx.try_recv().is_ok() {}
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _ = draw(&mut harness, 100, 30);
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('p'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| {
+        matches!(
+            message,
+            Msg::Shell(ShellRequest::EmbyLibraryPlay { item })
+                if item.id == "movie-focused"
+        )
+    }));
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages.iter().cloned() {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    let confirm_id = ComponentId::Modal(crate::app::components::ModalId::Confirm);
+    assert!(harness.model().application.get_component(&confirm_id).is_some());
+    assert_eq!(harness.model().application.focus(), Some(&confirm_id));
+    assert!(command_rx.try_recv().is_err(), "play stayed unsubmitted");
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('y'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(harness.model().application.get_component(&confirm_id).is_none());
+    assert!(!harness.model().app.player.is_remote());
+    assert!(harness.model().app.player.status.lock().unwrap().active);
+    assert!(!harness.model().app.direct_remote_connected);
+    assert!(harness.model().app.remote_player_tab.is_none());
+    assert_eq!(harness.model().app.queue_scope, crate::app::QueueScope::Local);
+    let local_items = harness.model().app.player_tab.emby_items();
+    assert_eq!(
+        local_items.first().expect("local playback queue is non-empty").id,
+        "movie-focused"
+    );
+    assert!(command_rx.try_iter().any(|command| {
+        matches!(
+            command,
+            mbv_core::ctrl::CtrlCmd::PlaybackIntent(intent)
+                if intent.action == mbv_core::ctrl::PlaybackIntentAction::Stop
+        )
+    }));
 }

@@ -295,6 +295,10 @@ impl RemotePlayer {
         self.ctrl_compatibility.supports_lifecycle_shutdown
     }
 
+    pub fn supports_audio_only(&self) -> bool {
+        self.ctrl_compatibility.supports_audio_only
+    }
+
     pub fn unified_queue_state(&self) -> Option<crate::ctrl::UnifiedQueueStateData> {
         self.unified_queue.lock().unwrap().clone()
     }
@@ -373,5 +377,17 @@ impl RemotePlayer {
             event_rx,
             cmd_rx,
         )
+    }
+
+    /// Test-support stub whose advertised ctrl capability identifies an
+    /// audio-only playback owner.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn stub_audio_only_with_command_rx(
+        items: Vec<EmbyItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility.supports_audio_only = true;
+        (remote, event_rx, cmd_rx)
     }
 }
