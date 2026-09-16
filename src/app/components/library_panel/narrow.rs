@@ -7,7 +7,7 @@ use ratatui::Frame;
 
 use crate::app::components::media_list::Presentation;
 use crate::app::render::arrangements::wide_hero::pill_bar_areas;
-use crate::app::render::{render_inline_search, render_placeholder};
+use crate::app::render::{render_inline_search, render_placeholder, PANE_PAD_Y};
 
 use super::content::{LibraryPanelContent, ListSlot, PanelListPaintPolicy};
 use super::slots::{
@@ -96,6 +96,7 @@ pub(in crate::app) fn render_narrow_skeleton(
         _ => (areas.content_area, None),
     };
 
+    let mut painted_list_area = list_area;
     match &mut content.list {
         ListSlot::Search(search) => {
             let items = search.ordered_items();
@@ -119,16 +120,29 @@ pub(in crate::app) fn render_narrow_skeleton(
             search.set_scroll(new_scroll);
         }
         ListSlot::Media(list) => {
+            // The inset list panel breathes like the wide pane's own list box:
+            // one spacer row above and below, which the panel's body shows
+            // through. The rows the painter owns are the inset's, so the
+            // retained geometry stays exactly what this frame painted.
+            let inset = Rect {
+                y: list_area.y.saturating_add(PANE_PAD_Y),
+                height: list_area.height.saturating_sub(PANE_PAD_Y * 2),
+                ..list_area
+            };
+            // A slot with no rows to spare keeps its single row rather than
+            // collapsing to an empty rect.
+            let inset = if inset.height == 0 { list_area } else { inset };
             // The list owns the surface it sits on in this geometry: same
             // identity its zebra stripe resolves from, and the same focus bit,
             // so a focused narrow list is one flat surface and a resting one
             // keeps the default backdrop. No separate body fill here.
-            list.set_presentation(Presentation::Wide, list_area.height.max(1) as usize);
+            list.set_presentation(Presentation::Wide, inset.height.max(1) as usize);
             list.set_paint_policy(PanelListPaintPolicy::Narrow {
                 focused: browser_focused,
             });
-            list.set_geometry(list_area, list_area);
-            list.view(f, list_area);
+            list.set_geometry(inset, inset);
+            list.view(f, inset);
+            painted_list_area = inset;
         }
         ListSlot::Empty { loading, text } => {
             let msg = if *loading {
@@ -149,7 +163,7 @@ pub(in crate::app) fn render_narrow_skeleton(
     NarrowSkeletonGeometry {
         selector_bar: areas.pills_area,
         controls: controls_area,
-        list_area,
+        list_area: painted_list_area,
         selected,
     }
 }
