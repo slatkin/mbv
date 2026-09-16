@@ -40,8 +40,16 @@ pub(in crate::app) fn paint_library_hero_overlay(
         );
     }
     // The hint owns the final row; shared Hero content must not repaint it.
+    // The content itself is inset: one blank row on top and two blank columns
+    // on the left and right, so the Hero never touches the overlay's edge.
     Rect {
-        height: overlay.height.saturating_sub(1),
-        ..overlay
+        x: overlay.x.saturating_add(2),
+        y: overlay.y.saturating_add(1),
+        width: overlay.width.saturating_sub(4),
+        height: overlay
+            .height
+            .saturating_sub(1)
+            .saturating_sub(1)
+            .saturating_sub(1),
     }
 }
