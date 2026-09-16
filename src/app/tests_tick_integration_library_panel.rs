@@ -384,6 +384,20 @@ fn find_text_in(
     None
 }
 
+/// A left double-click at `(x, y)`: two press+step pairs, the gesture the
+/// list slot's activation seam reads.
+fn double_click(harness: &mut TickHarness, x: u16, y: u16) {
+    for _ in 0..2 {
+        harness.inject(Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: x,
+            row: y,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+}
+
 #[test]
 fn library_panel_focus_follows_the_active_library() {
     let (mut harness, _log) = migrated_home();
@@ -1163,15 +1177,7 @@ fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
     let terminal = draw_frame_at_model_size(&mut harness);
     let (x, y) = find_text(terminal.backend().buffer(), "Focused Movie")
         .expect("the browser row paints");
-    for _ in 0..2 {
-        harness.inject(Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: x,
-            row: y,
-            modifiers: KeyModifiers::NONE,
-        }));
-        let _ = harness.step();
-    }
+    double_click(&mut harness, x, y);
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
         panel_of(&harness)
@@ -1199,15 +1205,7 @@ fn browser_double_click_opens_the_overlay_only_in_non_wide_geometry() {
         .expect("the Wide list painted");
     let (x, y) = find_text_in(terminal.backend().buffer(), "Focused Movie", list)
         .expect("the Wide browser row paints in the list slot");
-    for _ in 0..2 {
-        harness.inject(Event::Mouse(MouseEvent {
-            kind: MouseEventKind::Down(MouseButton::Left),
-            column: x,
-            row: y,
-            modifiers: KeyModifiers::NONE,
-        }));
-        let _ = harness.step();
-    }
+    double_click(&mut harness, x, y);
     drop(draw_frame_at_model_size(&mut harness));
     assert!(
         panel_of(&harness)
@@ -1315,6 +1313,7 @@ fn non_wide_saved_geometry_agrees_with_the_painted_frame() {
 /// Workspace (the overlay's `workspace_follows_focus: false`).
 #[test]
 fn overlay_sheet_and_workspace_box_paint_the_resting_pair() {
+    use crate::app::palette::{surface_colors, Surface};
     use tuirealm::event::{Key, KeyEvent};
 
     let mut harness = migrated_tv_with_detail(6);
@@ -1339,7 +1338,7 @@ fn overlay_sheet_and_workspace_box_paint_the_resting_pair() {
         .expect("the overlay painted");
     assert_eq!(
         buf[(frame.x, frame.y)].bg,
-        crate::app::palette::surface_colors(crate::app::palette::Surface::PillRow, false).fill,
+        surface_colors(Surface::PillRow, false).fill,
         "the overlay sheet carries the PillRow surface"
     );
 
@@ -1348,12 +1347,8 @@ fn overlay_sheet_and_workspace_box_paint_the_resting_pair() {
     let (box_panel, _) = panel_of(&harness)
         .and_then(|panel| panel.test_overlay_workspace_box())
         .expect("the overlay's Workspace box painted");
-    let focused_body = crate::app::palette
-        ::surface_colors(crate::app::palette::Surface::MainContentBox, true)
-        .fill;
-    let focused_stripe = crate::app::palette
-        ::surface_colors(crate::app::palette::Surface::LibraryPanel, true)
-        .fill;
+    let focused_body = surface_colors(Surface::MainContentBox, true).fill;
+    let focused_stripe = surface_colors(Surface::LibraryPanel, true).fill;
     for y in box_panel.top()..box_panel.bottom() {
         for x in box_panel.left()..box_panel.right() {
             let bg = buf[(x, y)].bg;
@@ -1371,23 +1366,16 @@ fn overlay_sheet_and_workspace_box_paint_the_resting_pair() {
     // The resting pair itself: the box's bottom padding row keeps the
     // resting `MainContentBox` body fill and the row flow stripes with the
     // resting `LibraryPanel` fill.
-    let resting_body = crate::app::palette
-        ::surface_colors(crate::app::palette::Surface::MainContentBox, false)
-        .fill;
-    let resting_stripe = crate::app::palette
-        ::surface_colors(crate::app::palette::Surface::LibraryPanel, false)
-        .fill;
+    let resting_body = surface_colors(Surface::MainContentBox, false).fill;
+    let resting_stripe = surface_colors(Surface::LibraryPanel, false).fill;
     assert_eq!(
         buf[(box_panel.x + 1, box_panel.bottom() - 1)].bg,
         resting_body,
         "the box's padding row keeps the resting MainContentBox body"
     );
-    let mut striped = false;
-    for y in box_panel.top()..box_panel.bottom() {
-        for x in box_panel.left()..box_panel.right() {
-            striped = striped || buf[(x, y)].bg == resting_stripe;
-        }
-    }
+    let striped = (box_panel.top()..box_panel.bottom()).any(|y| {
+        (box_panel.left()..box_panel.right()).any(|x| buf[(x, y)].bg == resting_stripe)
+    });
     assert!(
         striped,
         "the Workspace box stripes its rows with the resting LibraryPanel fill"

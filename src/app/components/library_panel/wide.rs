@@ -55,8 +55,10 @@ pub(in crate::app) struct SkeletonPillWindows {
 
 /// Everything the Wide skeleton placed this frame, in role-rect form. The
 /// panel component (task 5.9) retains these rects; tests assert containment
-/// against them, never absolute coordinates (design D15).
-#[derive(Clone, Debug)]
+/// against them, never absolute coordinates (design D15). `Default` is the
+/// non-Wide panel's geometry: it supplies the Browser pane's rects and leaves
+/// every Hero/Workspace/overview field unset (design D1).
+#[derive(Clone, Debug, Default)]
 pub(in crate::app) struct WideSkeletonGeometry {
     /// The Browser pane (list pane).
     pub browser: Rect,

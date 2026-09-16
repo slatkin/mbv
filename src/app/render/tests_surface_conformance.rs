@@ -478,6 +478,15 @@ fn drawn_non_wide_library(
 fn non_wide_column_body_paints_the_fixed_backdrop_in_every_focus_state() {
     let backdrop = palette::surface_colors(palette::Surface::LibraryColumn, false).fill;
     let status_fill = palette::surface_colors(palette::Surface::StatusBar, false).fill;
+    // The status row keeps the status bar's own surface; every other probed
+    // region is the column's fixed backdrop.
+    let expected_fill = |label: &str| {
+        if label == "status row" {
+            status_fill
+        } else {
+            backdrop
+        }
+    };
 
     let region_colors = |width: u16, focus: PanelFocus| {
         let (model, term) = drawn_non_wide_library(width, focus, 0);
@@ -510,43 +519,27 @@ fn non_wide_column_body_paints_the_fixed_backdrop_in_every_focus_state() {
     // Narrow: below TWO_COLUMN_THRESHOLD, above the mini view.
     let focused = region_colors(81, PanelFocus::Library);
     let resting = region_colors(81, PanelFocus::Queue);
-    for (label, focused_bg, resting_bg) in focused
-        .iter()
-        .zip(resting.iter())
-        .map(|((label, focused_bg), (_, resting_bg))| (*label, *focused_bg, *resting_bg))
-    {
-        if label == "status row" {
-            assert_eq!(
-                focused_bg, status_fill,
-                "the status row keeps the status bar's own surface"
-            );
-            assert_eq!(
-                focused_bg, resting_bg,
-                "the status row must not follow the panel focus bit"
-            );
-        } else {
-            assert_eq!(
-                focused_bg, backdrop,
-                "{label}: the non-Wide column body must paint the library \n             column's fixed backdrop"
-            );
-            assert_eq!(
-                focused_bg, resting_bg,
-                "{label}: the column body must not follow the panel focus bit"
-            );
-        }
+    for ((label, focused_bg), (_, resting_bg)) in focused.iter().zip(&resting) {
+        assert_eq!(
+            *focused_bg,
+            expected_fill(label),
+            "{label}: the non-Wide column paints its fixed surface"
+        );
+        assert_eq!(
+            focused_bg, resting_bg,
+            "{label}: the column body must not follow the panel focus bit"
+        );
     }
 
     // Mini (< MINI_VIEW_THRESHOLD): the same regions, the same fixed
     // backdrop — the mini view derives from the non-Wide presentation with
     // no paint bit of its own.
-    let mini = region_colors(70, PanelFocus::Library);
-    for (label, bg) in mini {
-        let expected = if label == "status row" {
-            status_fill
-        } else {
-            backdrop
-        };
-        assert_eq!(bg, expected, "{label}: mini must match the non-Wide body");
+    for (label, bg) in region_colors(70, PanelFocus::Library) {
+        assert_eq!(
+            bg,
+            expected_fill(label),
+            "{label}: mini must match the non-Wide body"
+        );
     }
 }
 
