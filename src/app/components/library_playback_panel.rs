@@ -399,8 +399,13 @@ mod tests {
                 // D3: exactly one space between the parts and no separator
                 // glyph of any form.
                 let joined = format!("{title} {context}");
-                assert!(
-                    text.contains(&joined),
+                // The painted run must be exactly the one-space join, not
+                // merely contain it: a wider delineation (e.g. a doubled
+                // space) must fail here.
+                let start = text.find(title).unwrap();
+                let painted: String = text[start..].chars().take(joined.chars().count()).collect();
+                assert_eq!(
+                    painted, joined,
                     "exactly one space between the parts: {text:?}"
                 );
                 for separator in [" - ", " \u{2013} ", " \u{2014} ", " | ", " \u{2022} "] {
@@ -411,7 +416,6 @@ mod tests {
                 }
                 // The context span owns its leading space, so the space and
                 // the context text paint in the context role.
-                let start = text.find(&joined).unwrap();
                 for i in title.chars().count()..joined.chars().count() {
                     assert_eq!(
                         fgs[start + i],
