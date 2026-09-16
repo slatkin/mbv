@@ -637,6 +637,7 @@ fn feed_slot_participates_in_queue_ordering_and_survives_refresh() {
 }
 
 include!("playback_queue_tests_feed.rs");
+include!("playback_queue_tests_title_parts.rs");
 
 // ---------------------------------------------------------------------------
 // PlaybackQueue operation tests (task 1.2)

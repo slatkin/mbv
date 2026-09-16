@@ -26,6 +26,65 @@ pub enum QueueItemKind {
 }
 
 // ---------------------------------------------------------------------------
+// Now-playing title parts — typed, colour-free presentation metadata for the
+// playback panel's title row: the item's own title part plus an optional
+// context part naming the container it came from. Roles are closed; the
+// painter resolves a role to a colour, never the producer.
+// ---------------------------------------------------------------------------
+
+/// The closed role a now-playing title part plays: the item's own name
+/// (`Title`) or the container it came from (`Context`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PlaybackTitlePartRole {
+    /// The item's own name: episode name, track name, entry title, ... .
+    Title,
+    /// The container the item came from: series, artist, show, subscription.
+    Context,
+}
+
+/// One part of a now-playing title: its text and the closed role it plays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaybackTitlePart {
+    pub role: PlaybackTitlePartRole,
+    pub text: String,
+}
+
+/// The now-playing title parts for a queue item: the item's own title part,
+/// plus the optional context part naming the container it came from. Media
+/// types with no container — and media types whose container name is absent
+/// — carry the title part alone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaybackTitleParts {
+    pub title: PlaybackTitlePart,
+    pub context: Option<PlaybackTitlePart>,
+}
+
+impl PlaybackTitleParts {
+    fn single(title: impl Into<String>) -> Self {
+        PlaybackTitleParts {
+            title: PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: title.into(),
+            },
+            context: None,
+        }
+    }
+
+    fn two(title: impl Into<String>, context: impl Into<String>) -> Self {
+        PlaybackTitleParts {
+            title: PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: title.into(),
+            },
+            context: Some(PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Context,
+                text: context.into(),
+            }),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AudiobookshelfQueueItem — identity, presentation, duration, progress,
 // completion, and Service-scoped artwork identity. Excludes credentials,
 // server URL, playback sessionId, resolved source URL, and headers.
@@ -343,6 +402,44 @@ impl QueueItem {
                 .map(|show| (show.to_owned(), Some(ep.title.clone())))
                 .unwrap_or_else(|| (ep.title.clone(), None)),
             other => (other.display_name(), None),
+        }
+    }
+
+    /// The now-playing title parts for the playback panel: the item's own
+    /// title part plus, when the item carries one, the context part naming
+    /// the container it came from — the series for an Emby episode, the
+    /// artist for an Emby audio track, the show for an Audiobookshelf podcast
+    /// episode, the subscription for a feed entry. Media types with no
+    /// container, and items whose container name is absent, degrade to the
+    /// title part alone. `feed_subscription_name` is the caller-resolved
+    /// subscription display name; it is read only for feed items and ignored
+    /// by every other kind. This is presentation metadata only — the
+    /// colourless plain-text forms (`display_name()`, `playback_label()`)
+    /// keep their existing separators.
+    pub fn playback_title_parts(&self, feed_subscription_name: Option<&str>) -> PlaybackTitleParts {
+        match self {
+            QueueItem::Emby(item) => {
+                if item.item_type == "Episode" && !item.series_name.is_empty() {
+                    PlaybackTitleParts::two(item.name.clone(), item.series_name.clone())
+                } else if item.is_audio() && !item.artist.is_empty() {
+                    PlaybackTitleParts::two(item.name.clone(), item.artist.clone())
+                } else {
+                    PlaybackTitleParts::single(item.name.clone())
+                }
+            }
+            QueueItem::Feed(entry) => match feed_subscription_name.filter(|n| !n.is_empty()) {
+                Some(name) => PlaybackTitleParts::two(entry.title.clone(), name.to_owned()),
+                None => PlaybackTitleParts::single(entry.title.clone()),
+            },
+            QueueItem::Audiobookshelf(ep) => match ep
+                .show_title
+                .as_deref()
+                .filter(|show| !show.is_empty())
+            {
+                Some(show) => PlaybackTitleParts::two(ep.title.clone(), show.to_owned()),
+                None => PlaybackTitleParts::single(ep.title.clone()),
+            },
+            QueueItem::AudiobookshelfBook(book) => PlaybackTitleParts::single(book.title.clone()),
         }
     }
 
