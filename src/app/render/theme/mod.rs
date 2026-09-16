@@ -55,7 +55,7 @@ pub const HERO_CREDITS_NAME: Color = primitives::YELLOW; // credits name column
 // Accents
 pub const ACCENT: Color = primitives::AQUA; // focus accent, watched, folders, Emby brand glyph
 pub const ACCENT_ACTIVE: Color = primitives::IRIS; // active tab, focused pill/badge text, selected-row bg
-pub const ACCENT_AUDIOBOOKSHELF: Color = primitives::AMBER; // audiobookshelf brand glyph
+pub const ACCENT_AUDIOBOOKSHELF: Color = primitives::GOLD; // audiobookshelf brand glyph
 
 // Rules
 pub const BORDER_UNFOCUSED: Color = primitives::OVERLAY;
@@ -107,7 +107,7 @@ pub const STATUS_AVAILABLE: Color = primitives::GREEN; // checkmarks, available/
 /// feeds, TV episode, music track, book chapter). Its own role rather than
 /// the green `STATUS_AVAILABLE` metadata role, so a status-colour edit
 /// cannot move the durations.
-pub const DURATION: Color = primitives::GOLD;
+pub const DURATION: Color = primitives::LICHEN;
 
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = primitives::ORANGE;

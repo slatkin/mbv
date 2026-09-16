@@ -28,7 +28,7 @@ pub(super) const BG_GREEN_SOFT: Color = Color::Rgb(72, 88, 78); // softer green-
 pub(super) const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
 pub(super) const GOLD: Color = Color::Rgb(222, 160, 0); // deep gold (#dea000)
 pub(super) const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
-pub(super) const AMBER: Color = Color::Rgb(199, 152, 71); // audiobookshelf gold (#c79847)
+pub(super) const LICHEN: Color = Color::Rgb(190, 197, 178); // pale sage-grey (#bec5b2)
 pub(super) const FOAM: Color = Color::Rgb(58, 148, 197); // project blue (#3a94c5)
 /// Selected pill surface; shares `FOAM`'s value today, kept separate so a
 /// `TEXT_METADATA` edit cannot move this surface fill.
