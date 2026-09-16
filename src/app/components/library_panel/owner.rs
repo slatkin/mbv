@@ -172,6 +172,14 @@ pub(in crate::app) trait LibraryContentOwner {
     /// overlay, without changing its retained cursor or scroll.
     fn clear_hero_workspace_focus(&mut self) {}
 
+    /// Whether the Library Hero overlay is open over this owner. The panel
+    /// sets it at open/dismiss and re-asserts it each sync pass. Owners whose
+    /// pre-overlay narrow surfaces never focused a Workspace (Music's sync
+    /// pass cleared inline track focus, TV's narrow keys ignored the pane
+    /// bit) use it to keep the overlay's Workspace focus and key routing
+    /// alive across ordinary refresh.
+    fn set_hero_overlay_open(&mut self, _open: bool) {}
+
     /// Activate the currently selected Hero target through the owner's typed
     /// destination intent. Pointer gestures call this semantic operation, not
     /// a fabricated keyboard event.

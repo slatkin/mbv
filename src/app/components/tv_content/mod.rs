@@ -79,6 +79,10 @@ pub(in crate::app) struct TvContent {
     /// owner built and viewed without an explicit push (existing unit
     /// tests) keeps painting the Wide workspace.
     is_wide: bool,
+    /// Whether the Library Hero overlay is open over this owner (pushed by
+    /// the panel, design D2). In Narrow geometry only the overlay focuses
+    /// the Episodes pane, so this gates the overlay Workspace's key routing.
+    hero_overlay_open: bool,
 }
 /// Derives the Emby-specific semantic state for a Narrow series row (mirrors
 /// `browser::emby_semantic_state`/`emby_library_content::emby_semantic_state`; the
@@ -153,6 +157,7 @@ impl TvContent {
             mouse_gestures: MouseGestureState::new(),
             inline_search: InlineSearch::new(),
             is_wide: true,
+            hero_overlay_open: false,
         }
     }
     /// Records the session-only Wide hero list-pane width override for the
@@ -167,6 +172,9 @@ impl TvContent {
     /// frame's geometry.
     pub(in crate::app) fn set_is_wide(&mut self, is_wide: bool) {
         self.is_wide = is_wide;
+    }
+    pub(in crate::app) fn set_hero_overlay_open(&mut self, open: bool) {
+        self.hero_overlay_open = open;
     }
     /// The fixed-row presentation remains active at every breakpoint.
     fn active_presentation(&self) -> Presentation {
@@ -599,6 +607,10 @@ impl LibraryContentOwner for TvContent {
 
     fn clear_hero_workspace_focus(&mut self) {
         self.pane = Pane::Series;
+    }
+
+    fn set_hero_overlay_open(&mut self, open: bool) {
+        self.set_hero_overlay_open(open);
     }
 
     fn hero_data(&mut self) -> Option<HeroContentData> {

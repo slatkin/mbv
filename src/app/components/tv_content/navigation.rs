@@ -10,6 +10,17 @@ impl TvContent {
         );
     }
 
+    /// Painted item rows the overlay Workspace pager moves per
+    /// PageUp/PageDown: the episode box's own last-viewed content height
+    /// (one selectable row per painted row, like the browser pager).
+    pub(super) fn episode_page_rows(&self) -> i64 {
+        self.episodes
+            .wide()
+            .current_content_rect()
+            .map(|rect| rect.height.saturating_sub(1).max(1))
+            .unwrap_or(1) as i64
+    }
+
     pub(super) fn move_season(&mut self, delta: i64) {
         let count = self
             .context

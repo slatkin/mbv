@@ -213,6 +213,7 @@ impl LibraryPanel {
         }
         if let Some(owner) = self.owners.active_mut() {
             owner.focus_hero_workspace();
+            owner.set_hero_overlay_open(true);
         }
         self.hero_overlay_open = true;
         true
@@ -228,6 +229,7 @@ impl LibraryPanel {
     pub(in crate::app) fn dismiss_hero_overlay(&mut self) {
         if self.hero_overlay_open {
             if let Some(owner) = self.owners.active_mut() {
+                owner.set_hero_overlay_open(false);
                 owner.clear_hero_workspace_focus();
             }
         }
@@ -241,6 +243,12 @@ impl LibraryPanel {
         });
         if self.hero_overlay_open && !hero_available {
             self.dismiss_hero_overlay();
+        }
+        // Re-assert the open flag so it can never drift from the panel's own
+        // bit (an owner reinstalled mid-session starts closed).
+        let open = self.hero_overlay_open;
+        if let Some(owner) = self.owners.active_mut() {
+            owner.set_hero_overlay_open(open);
         }
     }
 
