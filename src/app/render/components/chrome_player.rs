@@ -529,9 +529,10 @@ pub(in crate::app) fn render_title_row(
 
 /// The painted (text, fg) spans for one now-playing title: the typed parts
 /// resolved through `title_part_fg` when the shell projected them, otherwise
-/// the attached target's plain title in its own colour. The context part's
-/// leading space rides in its own span so the one-space delineation (D3)
-/// paints in the context role.
+/// the attached target's plain title in its own colour. The context part
+/// (the container: show, artist, feed) paints first; its trailing space
+/// rides in its own span so the one-space delineation (D3) paints in the
+/// context role.
 fn playback_title_spans(
     parts: Option<&PlaybackTitleParts>,
     title: &str,
@@ -539,10 +540,11 @@ fn playback_title_spans(
 ) -> Vec<(String, Color)> {
     match parts {
         Some(parts) => {
-            let mut spans = vec![(parts.title.text.clone(), title_part_fg(parts.title.role))];
+            let mut spans = Vec::new();
             if let Some(context) = &parts.context {
-                spans.push((format!(" {}", context.text), title_part_fg(context.role)));
+                spans.push((format!("{} ", context.text), title_part_fg(context.role)));
             }
+            spans.push((parts.title.text.clone(), title_part_fg(parts.title.role)));
             spans
         }
         None => vec![(title.to_string(), title_color)],
@@ -653,6 +655,10 @@ mod tests {
             "Series",
             title_part_fg(PlaybackTitlePartRole::Context),
             "the context part",
+        );
+        assert!(
+            row.find("Series") < row.find("Pilot"),
+            "the context part (show) paints before the title part, not after: {row:?}"
         );
         assert_ne!(
             title_part_fg(PlaybackTitlePartRole::Title),

@@ -298,6 +298,10 @@ the container the item came from, when the item has one.
 | Audiobookshelf book | book title | — |
 | Feed entry | entry title | feed subscription name |
 
+The row SHALL paint the context part first, then the title part: an episode renders as the series
+name followed by the episode name, an audio track as the artist followed by the track name, a feed
+entry as the subscription name followed by the entry title.
+
 The context part SHALL be omitted — leaving a single-part title — when the media type has no
 container, and when the container name is absent from the item or cannot be resolved. In
 particular an Audiobookshelf podcast episode queued outside its show, and a feed entry whose
@@ -309,8 +313,8 @@ viewed queue does not hold, the row SHALL continue to render that target's own t
 #### Scenario: Emby episode shows series and episode
 
 - **WHEN** the panel renders while an Emby episode is playing
-- **THEN** the title row SHALL show the episode name and the series name
-- **AND** neither part SHALL be dropped or reordered
+- **THEN** the title row SHALL show the series name first and the episode name after it
+- **AND** neither part SHALL be dropped
 
 #### Scenario: Emby movie shows the name alone
 
