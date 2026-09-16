@@ -71,16 +71,12 @@ impl PlaybackTitleParts {
     }
 
     fn two(title: impl Into<String>, context: impl Into<String>) -> Self {
-        PlaybackTitleParts {
-            title: PlaybackTitlePart {
-                role: PlaybackTitlePartRole::Title,
-                text: title.into(),
-            },
-            context: Some(PlaybackTitlePart {
-                role: PlaybackTitlePartRole::Context,
-                text: context.into(),
-            }),
-        }
+        let mut parts = Self::single(title);
+        parts.context = Some(PlaybackTitlePart {
+            role: PlaybackTitlePartRole::Context,
+            text: context.into(),
+        });
+        parts
     }
 }
 
@@ -427,18 +423,20 @@ impl QueueItem {
                     PlaybackTitleParts::single(item.name.clone())
                 }
             }
-            QueueItem::Feed(entry) => match feed_subscription_name.filter(|n| !n.is_empty()) {
-                Some(name) => PlaybackTitleParts::two(entry.title.clone(), name.to_owned()),
-                None => PlaybackTitleParts::single(entry.title.clone()),
-            },
-            QueueItem::Audiobookshelf(ep) => match ep
-                .show_title
-                .as_deref()
-                .filter(|show| !show.is_empty())
-            {
-                Some(show) => PlaybackTitleParts::two(ep.title.clone(), show.to_owned()),
-                None => PlaybackTitleParts::single(ep.title.clone()),
-            },
+            QueueItem::Feed(entry) => {
+                if let Some(name) = feed_subscription_name.filter(|n| !n.is_empty()) {
+                    PlaybackTitleParts::two(entry.title.clone(), name.to_owned())
+                } else {
+                    PlaybackTitleParts::single(entry.title.clone())
+                }
+            }
+            QueueItem::Audiobookshelf(ep) => {
+                if let Some(show) = ep.show_title.as_deref().filter(|show| !show.is_empty()) {
+                    PlaybackTitleParts::two(ep.title.clone(), show.to_owned())
+                } else {
+                    PlaybackTitleParts::single(ep.title.clone())
+                }
+            }
             QueueItem::AudiobookshelfBook(book) => PlaybackTitleParts::single(book.title.clone()),
         }
     }

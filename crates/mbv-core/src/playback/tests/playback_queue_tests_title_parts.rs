@@ -20,7 +20,7 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
         "emby_movie" => QueueItem::Emby(Box::new(emby_item_of_type("m1", "Movie", "Video", "The Film"))),
         "emby_episode" => {
             let mut e = emby_item_of_type("e1", "Episode", "Video", "Pilot");
-            e.series_name = "Serie Name".to_string();
+            e.series_name = "Series Name".to_string();
             QueueItem::Emby(Box::new(e))
         }
         "emby_audio_track" => {
@@ -57,7 +57,7 @@ fn title_parts_queue_item(kind: &str) -> QueueItem {
 
 #[rstest::rstest]
 #[case::emby_movie("emby_movie", Some("Sub Name"), "The Film", None)]
-#[case::emby_episode("emby_episode", Some("Sub Name"), "Pilot", Some("Serie Name"))]
+#[case::emby_episode("emby_episode", Some("Sub Name"), "Pilot", Some("Series Name"))]
 #[case::emby_audio_track("emby_audio_track", Some("Sub Name"), "Track Name", Some("Artist Name"))]
 #[case::emby_home_video("emby_home_video", Some("Sub Name"), "Home Clip", None)]
 #[case::audiobookshelf_podcast_episode(
@@ -126,6 +126,6 @@ fn non_feed_items_ignore_the_feed_subscription_name() {
     // not pick it up as a context part.
     let movie = QueueItem::Emby(Box::new(emby_item_of_type("m1", "Movie", "Video", "The Film")));
     let parts = movie.playback_title_parts(Some("Sub Name"));
-    assert_eq!(parts.context, None);
+    assert!(parts.context.is_none());
     assert_eq!(parts.title.text, "The Film");
 }

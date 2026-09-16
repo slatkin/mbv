@@ -43,32 +43,40 @@ fn title_parts_app(active_idx: usize) -> App {
     app
 }
 
-fn two_part_expected() -> PlaybackTitleParts {
+fn expected_parts(title: &str, context: Option<&str>) -> PlaybackTitleParts {
     PlaybackTitleParts {
         title: PlaybackTitlePart {
             role: PlaybackTitlePartRole::Title,
-            text: "Track Two".into(),
+            text: title.into(),
         },
-        context: Some(PlaybackTitlePart {
+        context: context.map(|text| PlaybackTitlePart {
             role: PlaybackTitlePartRole::Context,
-            text: "Artist B".into(),
+            text: text.into(),
         }),
-    }
-}
-
-fn single_part_expected() -> PlaybackTitleParts {
-    PlaybackTitleParts {
-        title: PlaybackTitlePart {
-            role: PlaybackTitlePartRole::Title,
-            text: "Movie One".into(),
-        },
-        context: None,
     }
 }
 
 fn step_tick(harness: &mut TickHarness) {
     harness.inject(inert_key());
     harness.step();
+}
+
+fn queue_panel(harness: &TickHarness) -> &QueuePlaybackPanel {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::QueuePlaybackPanel)
+        .and_then(|component| component.as_any().downcast_ref::<QueuePlaybackPanel>())
+        .expect("Queue playback panel mounted in a queue-visible layout")
+}
+
+fn strip(harness: &TickHarness) -> &LibraryPlaybackPanel {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::LibraryPlaybackPanel)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPlaybackPanel>())
+        .expect("the strip mounts when the queue column is hidden")
 }
 
 #[test]
@@ -78,29 +86,17 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
     // Queue-column panel (queue visible): the two-part slot projects both
     // parts, the single-part slot one.
     step_tick(&mut harness);
-    let panel = harness
-        .model()
-        .application
-        .get_component(&ComponentId::QueuePlaybackPanel)
-        .and_then(|component| component.as_any().downcast_ref::<QueuePlaybackPanel>())
-        .expect("Queue playback panel mounted in a queue-visible layout");
     assert_eq!(
-        panel.transport_title_parts_for_test().as_ref(),
-        Some(&two_part_expected()),
+        queue_panel(&harness).transport_title_parts_for_test().as_ref(),
+        Some(&expected_parts("Track Two", Some("Artist B"))),
         "the two-part slot projects a title part and a context part"
     );
 
     harness.model_mut().app.player.status.lock().unwrap().current_idx = 1;
     step_tick(&mut harness);
-    let panel = harness
-        .model()
-        .application
-        .get_component(&ComponentId::QueuePlaybackPanel)
-        .and_then(|component| component.as_any().downcast_ref::<QueuePlaybackPanel>())
-        .expect("Queue playback panel stays mounted across the playhead move");
     assert_eq!(
-        panel.transport_title_parts_for_test().as_ref(),
-        Some(&single_part_expected()),
+        queue_panel(&harness).transport_title_parts_for_test().as_ref(),
+        Some(&expected_parts("Movie One", None)),
         "the single-part slot projects the title part alone"
     );
 
@@ -109,29 +105,17 @@ fn tick_projects_title_parts_to_both_playback_panels_from_the_one_projection() {
     harness.model_mut().app.panel_mode = PanelMode::LibraryOnly;
     harness.model_mut().app.panel_focus = PanelFocus::Library;
     step_tick(&mut harness);
-    let strip = harness
-        .model()
-        .application
-        .get_component(&ComponentId::LibraryPlaybackPanel)
-        .and_then(|component| component.as_any().downcast_ref::<LibraryPlaybackPanel>())
-        .expect("the strip mounts when the queue column is hidden");
     assert_eq!(
-        strip.title_parts_for_test().as_ref(),
-        Some(&single_part_expected()),
+        strip(&harness).title_parts_for_test().as_ref(),
+        Some(&expected_parts("Movie One", None)),
         "the strip receives the single-part projection"
     );
 
     harness.model_mut().app.player.status.lock().unwrap().current_idx = 0;
     step_tick(&mut harness);
-    let strip = harness
-        .model()
-        .application
-        .get_component(&ComponentId::LibraryPlaybackPanel)
-        .and_then(|component| component.as_any().downcast_ref::<LibraryPlaybackPanel>())
-        .expect("the strip stays mounted across the playhead move");
     assert_eq!(
-        strip.title_parts_for_test().as_ref(),
-        Some(&two_part_expected()),
+        strip(&harness).title_parts_for_test().as_ref(),
+        Some(&expected_parts("Track Two", Some("Artist B"))),
         "the strip receives the two-part projection"
     );
 }

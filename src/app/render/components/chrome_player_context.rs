@@ -70,12 +70,9 @@ impl App {
     /// remote Session the queue cannot address).
     pub(in crate::app) fn active_playback_title_parts(&self) -> Option<PlaybackTitleParts> {
         let playback = self.effective_playback_state();
-        playback
-            .active
-            .then_some(playback.active_idx)
-            .flatten()
-            .and_then(|idx| self.playback_queue().item_at(idx))
-            .map(|item| self.playback_title_parts(item))
+        let idx = playback.active_idx.filter(|_| playback.active)?;
+        let item = self.playback_queue().item_at(idx)?;
+        Some(self.playback_title_parts(item))
     }
 
     /// The now-playing title parts for one queue item: core's media-type
@@ -169,15 +166,15 @@ mod tests {
 
         let non_matching = QueueItem::Feed(feed_entry(Some("https://other.example.org/rss")));
         let parts = app.playback_title_parts(&non_matching);
-        assert_eq!(
-            parts.context, None,
+        assert!(
+            parts.context.is_none(),
             "a non-matching entry degrades to the title part alone"
         );
 
         let identity_less = QueueItem::Feed(feed_entry(None));
         let parts = app.playback_title_parts(&identity_less);
-        assert_eq!(
-            parts.context, None,
+        assert!(
+            parts.context.is_none(),
             "a `None` feed_id degrades to the title part alone"
         );
     }

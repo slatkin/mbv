@@ -15,18 +15,15 @@ impl Model {
         // The typed title parts are built from the queue item itself (D1/D4)
         // whenever the active slot is addressable locally; the fallback
         // title below covers only the targets the queue cannot address.
-        let title_parts = if state.active {
-            state
-                .active_idx
-                .and_then(|idx| self.app.playback_queue().item_at(idx))
-                .map(|item| self.app.playback_title_parts(item))
-        } else {
-            None
-        };
+        // One queue lookup feeds both: the parts and the plain title
+        // describe the same slot.
+        let active_item = state
+            .active_idx
+            .filter(|_| state.active)
+            .and_then(|idx| self.app.playback_queue().item_at(idx));
+        let title_parts = active_item.map(|item| self.app.playback_title_parts(item));
         let title = if state.active {
-            state
-                .active_idx
-                .and_then(|idx| self.app.playback_queue().item_at(idx))
+            active_item
                 .map(|item| item.title().to_string())
                 // `effective_playback_state` reports `active` for a cast target
                 // or watched remote Session, but the local queue may hold no

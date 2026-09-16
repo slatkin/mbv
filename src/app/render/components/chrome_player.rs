@@ -674,7 +674,7 @@ mod tests {
             next_available: false,
             status_indicators: None,
             throbber: Span::raw(" "),
-            title_parts: Some(parts.clone()),
+            title_parts: Some(parts),
             idle_feed_title: None,
             marquee_text: &mut marquee_text,
             marquee_started_at: &mut marquee_started_at,
@@ -695,23 +695,21 @@ mod tests {
         let row = (0..60)
             .map(|x| buf[(x, 0)].symbol().to_string())
             .collect::<String>();
-        for part in [Some(&parts.title), parts.context.as_ref()]
-            .into_iter()
-            .flatten()
-        {
-            let start = row
-                .find(&part.text)
-                .unwrap_or_else(|| panic!("{:?} not painted in the row: {row:?}", part.text))
-                as u16;
-            for i in 0..part.text.chars().count() as u16 {
-                assert_eq!(
-                    buf[(start + i, 0)].fg,
-                    title_part_fg(part.role),
-                    "cell {i} of {:?} must carry its role's fg: {row:?}",
-                    part.text
-                );
-            }
-        }
+        let fgs: Vec<Color> = (0..60).map(|x| buf[(x, 0)].fg).collect();
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            "Pilot",
+            title_part_fg(PlaybackTitlePartRole::Title),
+            "the title part",
+        );
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            "Series",
+            title_part_fg(PlaybackTitlePartRole::Context),
+            "the context part",
+        );
         assert_ne!(
             title_part_fg(PlaybackTitlePartRole::Title),
             title_part_fg(PlaybackTitlePartRole::Context),
