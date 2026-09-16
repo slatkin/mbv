@@ -47,7 +47,6 @@ impl App {
                 || self.player.status.lock().unwrap().active,
             next_available: self.transport_prev_next_available().1,
             status_indicators: self.build_status_indicator_spans(),
-            throbber: self.now_playing_throbber_span(),
             title_parts: now_playing_title
                 .as_ref()
                 .map(|(title, color)| self.playback_title_parts(title, *color))

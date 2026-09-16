@@ -621,15 +621,6 @@ impl Model {
                 .app
                 .wants_terminal_render(had_events, last_render, render_interval)
             {
-                if self.app.last_throbber_advance.elapsed() >= std::time::Duration::from_millis(300)
-                {
-                    let playback = self.app.effective_playback_state();
-                    if playback.active && !self.app.playback_transport_paused() {
-                        self.app.now_playing_throbber_index =
-                            self.app.now_playing_throbber_index.wrapping_add(1);
-                    }
-                    self.app.last_throbber_advance = std::time::Instant::now();
-                }
                 if self.app.force_clear {
                     self.app.force_clear = false;
                     if let Err(e) = terminal.clear() {

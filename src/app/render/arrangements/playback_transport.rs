@@ -1,10 +1,10 @@
 //! The width-driven transport arrangement (task 3.5, design D10): which
-//! transport rows and indicators show at a given width and height. Both
-//! playback panels consume it — the Queue playback panel's queue-column
-//! transport (task 3.5) and the Library playback panel's right-column strip
-//! (task 4.1) — so the two presentations cannot drift in what they show at
-//! the same width. Placement only: the leaf painters
-//! (`render/components/chrome_player.rs`) paint the rows it returns.
+//! transport rows show at a given width and height, and whether the title
+//! row's buttons fit. Both playback panels consume it — the Queue playback
+//! panel's queue-column transport (task 3.5) and the Library playback
+//! panel's right-column strip (task 4.1) — so the two presentations cannot
+//! drift in what they show at the same width. Placement only: the leaf
+//! painters (`render/components/chrome_player.rs`) paint the rows it returns.
 
 use ratatui::layout::Rect;
 
@@ -19,35 +19,16 @@ pub(in crate::app) struct TransportRows {
     pub(in crate::app) indicator_row: Option<Rect>,
 }
 
-/// How much of the title row's right side the indicators take at a given
-/// width: the full span set, or the elapsed time alone when the panel is
-/// too narrow to fit the full set alongside the title.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) enum TransportIndicators {
-    Full,
-    ElapsedOnly,
-}
-
-/// The title row's width decision: which indicator set shows, and whether
-/// the stop/next transport buttons fit beside the title.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(in crate::app) struct TransportPlan {
-    pub(in crate::app) indicators: TransportIndicators,
-    pub(in crate::app) transport_buttons: bool,
-}
-
-/// Measured title-row facts the width decision consumes (built by the
-/// painter's `title_row_facts`, task 3.5).
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+/// The title row's width decision: whether the stop/next transport buttons
+/// fit beside the title and the indicators.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Default)]
 pub(in crate::app) struct TransportMeasure {
     /// The play/pause glyph cell width (including its trailing space).
     pub(in crate::app) glyph_w: u16,
     /// The stop + next buttons' width including their separating spaces.
     pub(in crate::app) buttons_w: u16,
-    /// The full indicator span set's width (progress + status + time).
-    pub(in crate::app) full_w: u16,
-    /// The elapsed-only fallback's width.
-    pub(in crate::app) elapsed_w: u16,
+    /// The indicator span set's width (the elapsed time and the status pill).
+    pub(in crate::app) indicators_w: u16,
 }
 
 /// Which transport rows render in a panel rect of `rows` available height.
@@ -67,31 +48,18 @@ pub(in crate::app) fn transport_rows(area: Rect, rows: u16) -> TransportRows {
     }
 }
 
-/// The title row's width decision for a panel `available` columns wide with
-/// a title of `title_width` columns: the transport buttons show only when
-/// the full indicator set, the buttons and the title all fit; otherwise the
-/// buttons drop and, if even the full set plus title cannot fit, the
-/// indicators collapse to the elapsed time alone.
-pub(in crate::app) fn transport_title_plan(
+/// Whether the title row's stop/next buttons fit: only when the glyph, the
+/// buttons, the indicators and the title all fit side by side.
+pub(in crate::app) fn transport_buttons_fit(
     available: u16,
     title_width: u16,
     measure: TransportMeasure,
-) -> TransportPlan {
-    let available = available as usize;
-    let title_w = title_width as usize;
-    let glyph_w = measure.glyph_w as usize;
-    let full_w = measure.full_w as usize;
-    let buttons_w = measure.buttons_w as usize;
-    let transport_buttons = available >= glyph_w + full_w + buttons_w + title_w;
-    let indicators = if transport_buttons || available >= glyph_w + full_w + title_w {
-        TransportIndicators::Full
-    } else {
-        TransportIndicators::ElapsedOnly
-    };
-    TransportPlan {
-        indicators,
-        transport_buttons,
-    }
+) -> bool {
+    available as usize
+        >= measure.glyph_w as usize
+            + measure.indicators_w as usize
+            + measure.buttons_w as usize
+            + title_width as usize
 }
 
 #[cfg(test)]
@@ -102,8 +70,7 @@ mod tests {
         TransportMeasure {
             glyph_w: 3,
             buttons_w: 6,
-            full_w: 20,
-            elapsed_w: 6,
+            indicators_w: 14,
         }
     }
 
@@ -126,27 +93,19 @@ mod tests {
         assert!(short.indicator_row.is_none());
     }
 
-    /// Wide panels show the full indicator set and the transport buttons.
+    /// A panel wide enough for the glyph, the buttons, the indicators and
+    /// the title shows the buttons.
     #[test]
-    fn wide_panels_show_full_indicators_and_buttons() {
-        let plan = transport_title_plan(80, 10, measure());
-        assert_eq!(plan.indicators, TransportIndicators::Full);
-        assert!(plan.transport_buttons);
+    fn wide_panels_show_the_transport_buttons() {
+        assert!(transport_buttons_fit(80, 10, measure()));
     }
 
-    /// A panel too narrow for buttons plus the full set beside the title
-    /// drops the buttons but keeps the full indicators when they still fit.
+    /// A panel too narrow to fit the buttons beside the title drops them
+    /// rather than overlapping the title.
     #[test]
-    fn narrow_panels_drop_buttons_before_indicators() {
-        // 36 columns: the full set + title fits, the buttons do not.
-        let a = transport_title_plan(36, 10, measure());
-        assert!(!a.transport_buttons);
-        assert_eq!(a.indicators, TransportIndicators::Full);
-
-        // 20 columns: even the full set + title no longer fits.
-        let b = transport_title_plan(20, 10, measure());
-        assert!(!b.transport_buttons);
-        assert_eq!(b.indicators, TransportIndicators::ElapsedOnly);
+    fn narrow_panels_drop_the_transport_buttons() {
+        // 32 columns: the glyph, indicators and title fit, the buttons do not.
+        assert!(!transport_buttons_fit(32, 10, measure()));
     }
 
     /// A zero-width panel places no rows.

@@ -7,8 +7,9 @@ use super::{PanelFocus, PlaybackState, QueueScope};
 use crate::app::notify_actions::ToastSeverity;
 use mbv_core::playback_queue::QueueSlotId;
 
-/// The row projection inputs that can change queue rows. Chrome and pause state
-/// are delivered independently; pause only affects the paint-time throbber.
+/// The row projection inputs that can change queue rows. Chrome and pause
+/// state are delivered independently; pause only affects the paint-time
+/// progress bucket.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::app) struct QueueProjectionFingerprint {
     revision: u64,
@@ -22,15 +23,6 @@ pub(in crate::app) struct QueueProjectionFingerprint {
     progress_bucket: u16,
 }
 
-/// Now-playing liveness frames, shared by the queue row and the playback
-/// panel (`App::now_playing_throbber_span`) so both stay in lockstep: the
-/// horizontal block ramp (plus blank) with progress to its right. Each
-/// surface keeps its own style (queue: aqua liveness role; panel: accent);
-/// only the glyph set is shared. The advance cadence lives in `shell_run`.
-pub(in crate::app) const NOW_PLAYING_THROBBER_FRAMES: [char; 9] =
-    [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█'];
-
-/// The active row's progress bucket: whole-percent, so animation frames and
 fn progress_bucket(playback: PlaybackState) -> u16 {
     if playback.active && playback.position_ticks > 0 && playback.runtime_ticks > 0 {
         (playback.position_ticks * 100 / playback.runtime_ticks).clamp(0, 100) as u16

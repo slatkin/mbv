@@ -63,7 +63,6 @@ impl Model {
                 .map(|(title, color)| self.app.playback_title_parts(title, *color))
                 .unwrap_or_default(),
             status_indicators: self.app.build_status_indicator_spans(),
-            throbber: self.app.now_playing_throbber_span(),
             idle_feed_title: self.app.idle_feed.as_ref().and_then(|feed| {
                 feed.items.get(feed.current_index).map(|item| {
                     (
