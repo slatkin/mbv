@@ -55,21 +55,21 @@
 
 ## 4. Panel behaviour
 
-- [ ] 4.1 Add buffer-level tests in `src/app/components/library_playback_panel.rs` and
+- [x] 4.1 Add buffer-level tests in `src/app/components/library_playback_panel.rs` and
   `src/app/components/queue_playback_panel.rs` covering each media type in the requirements
   table: two-part rows paint the title part in the aqua title role and the context part in the
   yellow context role; single-part rows paint wholly in the title role. Verify the assertions are
   on painted cell foregrounds, not on the projected values.
 
-- [ ] 4.2 Assert the delineation is a single space and nothing else: the painted row text has
+- [x] 4.2 Assert the delineation is a single space and nothing else: the painted row text has
   exactly one space between the parts and contains no `-`, `–`, `—`, `|` or `•` between them.
   Verify by asserting on the buffer's row text for every two-part media type.
 
-- [ ] 4.3 Assert the roles survive the overflow marquee: paint a two-part title wider than its
+- [x] 4.3 Assert the roles survive the overflow marquee: paint a two-part title wider than its
   slot and verify the marqueed window keeps both role colours. Verify in the painter's own tests
   in `src/app/render/components/chrome_player.rs`.
 
-- [ ] 4.4 Assert the audiobook row paints the book title alone, with no context part, matching
+- [x] 4.4 Assert the audiobook row paints the book title alone, with no context part, matching
   design D5. Verify with a buffer-level case in the panel tests.
 
 ## 5. Regression and integration
