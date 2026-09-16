@@ -1,6 +1,6 @@
 ## 1. Shared title-part mapping (`crates/mbv-core`)
 
-- [ ] 1.1 Add a typed title-parts value (a title part, an optional context part, and a closed
+- [x] 1.1 Add a typed title-parts value (a title part, an optional context part, and a closed
   part role) plus the media-type mapping to `crates/mbv-core/src/playback/queue_items.rs`,
   covering Emby movie / episode / audio track / home video, Audiobookshelf podcast episode and
   book, and feed entry. The mapping takes the caller-resolved feed subscription name as an
@@ -8,12 +8,12 @@
   in the existing core test module (`crates/mbv-core/src/playback/tests/`) named per media type
   and run `cargo nextest run -p mbv-core`.
 
-- [ ] 1.2 In the same table, cover the degradation cases that must produce a single part: an
+- [x] 1.2 In the same table, cover the degradation cases that must produce a single part: an
   Audiobookshelf podcast episode with no show title, a feed entry with no matching subscription,
   a feed entry with no `feed_id`, an Audiobookshelf book, and an Emby movie / home video. Verify
   each case asserts exactly one part and no context part.
 
-- [ ] 1.3 Confirm the adjacent presentation methods are untouched and still pass:
+- [x] 1.3 Confirm the adjacent presentation methods are untouched and still pass:
   `QueueItem::display_name()`, `QueueItem::display_name_parts()`, `EmbyItem::playback_label()`
   and `EmbyItem::display_name()` carry no changes. Verify with
   `cargo nextest run -p mbv-core` including `api_tests_parsing.rs`.
