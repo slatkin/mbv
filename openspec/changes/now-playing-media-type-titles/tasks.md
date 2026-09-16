@@ -88,7 +88,7 @@
   `cargo clippy --workspace --all-targets -- -D warnings`,
   `cargo nextest run -p mbv` and `cargo nextest run -p mbv-core`. Verify all clean.
 
-- [ ] 5.4 Manual check, not a test: on a real terminal, confirm the aqua title reads clearly on
+- [x] 5.4 Manual check, not a test: on a real terminal, confirm the aqua title reads clearly on
   the focused Library strip (the measured ~3.17:1 case) in the narrow and wide layouts, and that
   the one-space colour delineation reads as two parts rather than one run-together title. Record
   the outcome; if it is unreadable, the follow-up is a lighter aqua primitive, not a different
