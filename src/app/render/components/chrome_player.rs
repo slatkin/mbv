@@ -622,9 +622,24 @@ fn marquee_spans(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitleParts};
+    use mbv_core::playback_queue::{PlaybackTitlePart, PlaybackTitlePartRole, PlaybackTitleParts};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+
+    /// Locate `needle` in the painted row and assert every one of its cells
+    /// carries `expected` as the foreground.
+    fn assert_cells_in_row(row: &str, fgs: &[Color], needle: &str, expected: Color, label: &str) {
+        let start = row
+            .find(needle)
+            .unwrap_or_else(|| panic!("{label} not painted in the row: {row:?}"));
+        for (i, _) in needle.char_indices() {
+            assert_eq!(
+                fgs[start + i],
+                expected,
+                "cell {i} of {label} must carry its role's fg: {row:?}"
+            );
+        }
+    }
 
     /// The role-to-colour resolution point (task 2.3): a two-part now-playing
     /// row paints the title part's cells in the title role's fg and the
@@ -701,6 +716,93 @@ mod tests {
             title_part_fg(PlaybackTitlePartRole::Title),
             title_part_fg(PlaybackTitlePartRole::Context),
             "the test locates the parts by their roles, so the roles must differ"
+        );
+    }
+
+    /// The roles survive the overflow marquee (task 4.3): a two-part title
+    /// wider than its slot marquees, and the scrolled window still paints the
+    /// title part's cells in the title role and the context part's cells in
+    /// the context role. The marquee start time is backdated into the
+    /// scrolled-out hold (column = overflow), where the window shows the
+    /// title's tail followed by the whole context part.
+    #[test]
+    fn the_marquee_window_keeps_both_part_roles() {
+        let title_text = format!("{}Tail", "Long Episode ".repeat(5).trim_end());
+        let context_text = "Show".to_string();
+        let parts = PlaybackTitleParts {
+            title: PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: title_text.clone(),
+            },
+            context: Some(PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Context,
+                text: context_text.clone(),
+            }),
+        };
+        let mut playback = PlaybackStripAreas::default();
+        // Pre-seed the marquee state (the parts' concatenated text is the
+        // marquee key) so the draw below keeps the backdated start time
+        // instead of restarting the scroll.
+        let mut marquee_text = format!("{title_text} {context_text}");
+        // Backdate the start time into the middle of the marquee's hold at
+        // the scrolled-out end (column = overflow, hold [HOLD+scroll,
+        // 2*HOLD+scroll)): the window then shows the title's tail followed by
+        // the whole context part.
+        let mut marquee_started_at =
+            std::time::Instant::now() - std::time::Duration::from_millis(6_300);
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 60, 1),
+            playback: &mut playback,
+            player_h: 2,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: None,
+            throbber: Span::raw(" "),
+            title_parts: Some(parts),
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 60, 1),
+                    "",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row: String = (0..60).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+        let fgs: Vec<Color> = (0..60).map(|x| buf[(x, 0)].fg).collect();
+        // The marquee engaged: the two-part title is far wider than the
+        // window the row can spend on it, so the full title never paints.
+        assert!(
+            !row.contains(&format!("{title_text} {context_text}")),
+            "the two-part title must overflow the slot: {row:?}"
+        );
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            &context_text,
+            title_part_fg(PlaybackTitlePartRole::Context),
+            "the context part",
+        );
+        assert_cells_in_row(
+            &row,
+            &fgs,
+            "Tail",
+            title_part_fg(PlaybackTitlePartRole::Title),
+            "the title part's tail",
         );
     }
 
