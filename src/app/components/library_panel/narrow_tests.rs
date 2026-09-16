@@ -61,7 +61,12 @@ fn narrow_skeleton_keeps_fixed_rows_and_panel_slots() {
         .symbol()
         .contains(' '));
     let controls = geometry.controls.expect("controls row reserved");
-    assert_eq!(geometry.list_area.y, controls.bottom());
+    // The row flow is inset inside the list panel: one spacer row of the panel
+    // above it (`PANE_PAD_Y`), which the inset's own surface paints.
+    assert_eq!(
+        geometry.list_area.y,
+        controls.bottom() + crate::app::render::PANE_PAD_Y
+    );
     assert!(geometry.selected.is_some());
     assert_eq!(carrier.selected_target(), Some(&"beta".to_string()));
 }

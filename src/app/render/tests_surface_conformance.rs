@@ -374,6 +374,13 @@ fn coverage_table_accounts_for_every_surface_row() {
              toward black, and its row value is the named Color::Black blend \
              base, which no cell's background ever equals",
         ),
+        (
+            palette::Surface::NarrowLibraryBody,
+            "painted by the shell's library placement fill, not by a component \
+             view, so this module's component-view probes cannot observe it; \
+             its focused/resting pair is pinned by `pinned_fills` in \
+             `surface_resolve` instead",
+        ),
     ];
     for &surface in palette::Surface::ALL {
         let pinned = probed_here.contains(&surface);
