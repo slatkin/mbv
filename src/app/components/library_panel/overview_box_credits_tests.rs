@@ -58,7 +58,14 @@ fn overview_credits_have_blank_row_separator_and_zebra_stripes() {
     let mut terminal = Terminal::new(TestBackend::new(32, 12)).unwrap();
     terminal
         .draw(|f| {
-            paint_overview_box(f, Rect::new(0, 0, 32, 12), 0, &content, 0);
+            paint_overview_box(
+                f,
+                Rect::new(0, 0, 32, 12),
+                0,
+                &content,
+                0,
+                palette::Surface::HeroPane,
+            );
         })
         .unwrap();
     let buffer = terminal.backend().buffer();
@@ -92,7 +99,16 @@ fn long_overview_scrolls_inside_a_short_box() {
     let mut terminal = Terminal::new(TestBackend::new(32, 6)).unwrap();
     let mut metrics = None;
     terminal
-        .draw(|f| metrics = paint_overview_box(f, Rect::new(0, 0, 32, 6), 0, &content, 0))
+        .draw(|f| {
+            metrics = paint_overview_box(
+                f,
+                Rect::new(0, 0, 32, 6),
+                0,
+                &content,
+                0,
+                palette::Surface::HeroPane,
+            )
+        })
         .unwrap();
     let buffer = terminal.backend().buffer();
     let inner = Rect::new(2, 2, 28, 3);
@@ -119,6 +135,7 @@ fn long_overview_scrolls_inside_a_short_box() {
                 0,
                 &content,
                 metrics.content_length - metrics.viewport,
+                palette::Surface::HeroPane,
             );
         })
         .unwrap();
@@ -159,7 +176,16 @@ fn overview_separator_and_credits_scroll_as_one_flow() {
         let mut terminal = Terminal::new(TestBackend::new(32, 14)).unwrap();
         let mut paint = None;
         terminal
-            .draw(|f| paint = paint_overview_box(f, Rect::new(0, 0, 32, 14), 0, &content, offset))
+            .draw(|f| {
+                paint = paint_overview_box(
+                    f,
+                    Rect::new(0, 0, 32, 14),
+                    0,
+                    &content,
+                    offset,
+                    palette::Surface::HeroPane,
+                )
+            })
             .unwrap();
         (terminal.backend().buffer().clone(), paint.unwrap())
     };
@@ -219,7 +245,14 @@ fn credits_scrollbar_thumb_tracks_table_offset() {
         let mut terminal = Terminal::new(TestBackend::new(32, 14)).unwrap();
         terminal
             .draw(|f| {
-                paint_overview_box(f, Rect::new(0, 0, 32, 14), 0, &content, offset);
+                paint_overview_box(
+                    f,
+                    Rect::new(0, 0, 32, 14),
+                    0,
+                    &content,
+                    offset,
+                    palette::Surface::HeroPane,
+                );
             })
             .unwrap();
         (2..14)

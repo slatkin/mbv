@@ -22,7 +22,7 @@ use crate::app::render::{
 };
 
 use super::content::{LibraryPanelContent, ListSlot};
-use super::hero_composition::{full_width_claim, paint_library_hero_content};
+use super::hero_composition::{full_width_claim, paint_library_hero_content, HeroPanePaint};
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
     SELECTOR_ROW_PREFIX,
@@ -291,6 +291,10 @@ pub(in crate::app) fn render_wide_skeleton(
             &mut hits.links,
             &mut hits.workspace_selector,
             &mut windows.workspace_selector,
+            HeroPanePaint {
+                surface: crate::app::palette::Surface::HeroPane,
+                workspace_follows_focus: true,
+            },
         );
         geometry.workspace = composition.workspace;
         geometry.hero_image = composition.hero_image;

@@ -21,12 +21,11 @@ use super::msg::{
 use super::user_event::UserEvent;
 use crate::app::palette;
 use crate::app::render::arrangements::queue::{
-    queue_footer_row, queue_list_box, queue_panel_separator_row, queue_panel_subareas,
-    queue_panel_title_row,
+    queue_footer_row, queue_list_box, queue_panel_subareas,
 };
 use crate::app::render::components::queue::{render_queue_status, QueueTitleModel};
-use crate::app::render::components::widgets::{render_block_separator, render_queue_panel_frame};
-use crate::app::render::{render_queue_body, render_queue_title, QueuePresentation};
+use crate::app::render::components::widgets::render_queue_panel_frame;
+use crate::app::render::{render_queue_body, QueuePresentation};
 use crate::app::types_context_menu::ContextMenuTargets;
 use crate::app::types_playback::{PlaybackState, QueueScope};
 use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
@@ -625,10 +624,9 @@ impl Component for QueueComponent {
         self.area = area;
         // Component-retained geometry (task 3.1): the framed content area
         // derives from the placement through the shared arrangement
-        // helpers, replacing the legacy queue geometry mirror. One blank
-        // top-inset row stays above the title, then the separator line and
-        // one blank row, and the list starts below them. The status bar
-        // lives in the QueueColumn footer below the recessed box, with one
+        // helpers, replacing the legacy queue geometry mirror. The list keeps
+        // the recessed box's own one-row top inset and bottom padding; the
+        // status bar lives in the QueueColumn footer below the box, with one
         // gap row above and below it.
         let footer_row = queue_footer_row(area);
         let panel_box = queue_list_box(area);
@@ -639,12 +637,6 @@ impl Component for QueueComponent {
         // above the footer band. The footer band keeps the QueueColumn
         // surface around the footer row.
         render_queue_panel_frame(frame, area, self.frame_focused);
-        if let Some(title_row) = queue_panel_title_row(panel_box) {
-            render_queue_title(frame, title_row);
-            if let Some(separator_row) = queue_panel_separator_row(panel_box) {
-                render_block_separator(frame, separator_row);
-            }
-        }
         // The status pill row the projection pushed, painted at the
         // QueueColumn footer (moved out of the recessed panel).
         if let Some(footer_row) = footer_row {

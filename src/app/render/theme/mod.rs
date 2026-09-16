@@ -93,6 +93,12 @@ pub const TEXT_SELECTED_ROW: Color = primitives::ORANGE;
 // metadata.
 pub const HERO_META_ROLES: [Color; 3] = [TEXT_DETAIL_META, TEXT_METADATA, TEXT_SECONDARY];
 
+/// The Library Hero overlay's display-only hint chips' fills, rotated by chip
+/// index (foam, yellow, orange, repeating). A role set of its own rather than
+/// borrowed text roles: these are chip *surfaces*, and a text-colour edit must
+/// not move them.
+pub const HINT_PILL_FILLS: [Color; 3] = [primitives::FOAM, primitives::YELLOW, primitives::ORANGE];
+
 // Status
 pub const STATUS_ERROR: Color = primitives::RED;
 pub const STATUS_AVAILABLE: Color = primitives::GREEN; // checkmarks, available/positive metadata

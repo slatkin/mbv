@@ -23,6 +23,15 @@ impl Component for LibraryPanel {
         // a Wide→Narrow resize leaves neither the vanished split's gap armed
         // nor the stale Wide list rect claiming clicks.
         self.reset_frame();
+        // The overlay hint bar's chips are derived centrally from the active
+        // destination key (a content change, not a painter arm); per-screen
+        // hints land here screen-by-screen (Home first). Read before the
+        // mutable content borrow below so the two never overlap.
+        let hints: &[&str] = if matches!(self.owners.active_key(), Some(LibraryKey::Home)) {
+            &["ENTER:Play", "ESC:Exit"]
+        } else {
+            &["ESC:Exit"]
+        };
         let Some(owner) = self.owners.active_mut() else {
             return;
         };
@@ -92,7 +101,7 @@ impl Component for LibraryPanel {
             if let Some(overlay_rect) =
                 crate::app::render::arrangements::library::library_hero_overlay(area)
             {
-                let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, area, overlay_rect);
+                let inner = crate::app::render::components::library_hero_overlay::paint_library_hero_overlay(frame, area, overlay_rect, hints);
                 if let Some(hero) = content.hero.as_mut() {
                     let composition = super::super::hero_composition::paint_library_hero_content(
                         frame,
@@ -103,6 +112,13 @@ impl Component for LibraryPanel {
                         &mut hits.links,
                         &mut hits.workspace_selector,
                         &mut windows.workspace_selector,
+                        super::super::hero_composition::HeroPanePaint {
+                            surface: crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
+                            // The overlay's sheet is flat dark: a focused
+                            // Workspace paints the resting pair, not the
+                            // focus green.
+                            workspace_follows_focus: false,
+                        },
                     );
                     self.overlay_geometry = Some(super::OverlayGeometry {
                         pane: area,

@@ -36,6 +36,7 @@ pub(in crate::app) fn paint_overview_box(
     next_row: u16,
     content: &HeroContent<'_>,
     scroll_offset: usize,
+    pane_surface: palette::Surface,
 ) -> Option<OverviewPaint> {
     let overview = content
         .overview
@@ -79,10 +80,12 @@ pub(in crate::app) fn paint_overview_box(
     if box_height <= PANE_PAD_Y * 2 {
         return None;
     }
+    // The blank row between the header text and the overview box belongs to
+    // the pane the content is painted into, so it repaints that pane's own
+    // surface: the Wide Hero pane's fill, or the Library Hero overlay's sheet.
     f.render_widget(
-        Block::default().style(
-            Style::default().bg(palette::surface_colors(palette::Surface::HeroPane, false).fill),
-        ),
+        Block::default()
+            .style(Style::default().bg(palette::surface_colors(pane_surface, false).fill)),
         Rect {
             y: next_row,
             height: 1.min(area.bottom().saturating_sub(next_row)),

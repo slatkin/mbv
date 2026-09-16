@@ -1,6 +1,11 @@
 use super::{padded_rect, wide_hero};
 use ratatui::layout::Rect;
 
+/// Percent of the Library pane the Library Hero overlay occupies in each
+/// dimension (openspec/specs/library-hero-overlay/spec.md, "The overlay is
+/// confined to the Library pane").
+pub(in crate::app) const OVERLAY_PANE_PERCENT: u32 = 90;
+
 /// The shared padded panes used by wide library presentations.
 pub(in crate::app) struct WideLibraryPanes {
     pub hero_panel: Rect,
@@ -34,7 +39,8 @@ pub(in crate::app) fn wide_library_panes(
     })
 }
 
-/// Place the Library-local Hero overlay inside the supplied Library pane.
+/// Place the Library-local Hero overlay inside the supplied Library pane at
+/// [`OVERLAY_PANE_PERCENT`] of the pane.
 ///
 /// The percentage is deliberately computed from the pane, not the terminal:
 /// this keeps the Queue column outside both the frame and its dimmed backdrop.
@@ -42,8 +48,8 @@ pub(in crate::app) fn library_hero_overlay(area: Rect) -> Option<Rect> {
     if area.width == 0 || area.height == 0 {
         return None;
     }
-    let width = ((area.width as u32 * 85) / 100).max(1) as u16;
-    let height = ((area.height as u32 * 85) / 100).max(1) as u16;
+    let width = ((area.width as u32 * OVERLAY_PANE_PERCENT) / 100).max(1) as u16;
+    let height = ((area.height as u32 * OVERLAY_PANE_PERCENT) / 100).max(1) as u16;
     Some(Rect {
         x: area.x + area.width.saturating_sub(width) / 2,
         y: area.y + area.height.saturating_sub(height) / 2,

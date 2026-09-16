@@ -309,8 +309,7 @@ fn idle_queue_only_hides_card_and_panel_at_both_widths() {
             .join("\n");
 
         // No card surface is published, so the queue takes the whole column
-        // below the header row and the panel's title band; no card/panel/track
-        // content paints above it.
+        // below the header row; no card/panel/track content paints above it.
         assert!(!before_queue.contains('\u{2594}'));
         assert!(!before_queue.contains("On Now:"));
         assert!(layout.content_area.height > 0);

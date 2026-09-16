@@ -56,6 +56,7 @@ pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
         None,
         false,
         None,
+        None,
     )
 }
 
@@ -69,6 +70,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     zebra_bg: Option<Color>,
     gutter_accent: bool,
     body_bg: Option<Color>,
+    scrollbar_bg: Option<Color>,
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
     let selected_row = geometry.selected_row();
@@ -145,9 +147,12 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
             row_paint_area.x + row_paint_area.width.saturating_sub(1)
         };
         // With a body of its own the column is that body, not the
-        // selected-row punch-through the caller painted elsewhere.
+        // selected-row punch-through the caller painted elsewhere — unless the
+        // policy names the column's own fill (the non-Wide library list
+        // resolves the surrounding panel body there).
         f.render_widget(
-            Block::default().style(Style::default().bg(body_bg.unwrap_or(selected_bg))),
+            Block::default()
+                .style(Style::default().bg(scrollbar_bg.or(body_bg).unwrap_or(selected_bg))),
             Rect {
                 x: scrollbar_x,
                 width: 1,
@@ -212,6 +217,7 @@ pub(in crate::app) fn render_wide_media_list_component<Target: Clone + PartialEq
         // resolves the scrollbar backing for focused overflowing lists.
         true,
         policy.body_bg(),
+        policy.scrollbar_bg(),
     );
     list.finish_view(
         claim_rect,

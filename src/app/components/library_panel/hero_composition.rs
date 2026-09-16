@@ -39,6 +39,22 @@ const WORKSPACE_HEADER_ROWS: u16 = 3;
 /// glyph (which identifies the general Selector row).
 const WORKSPACE_SELECTOR_PREFIX: &str = " Series: ";
 
+/// The surface context a Hero pane's caller supplies to the shared
+/// composition: the surface it painted `hero_area` with, and whether the
+/// Workspace box's fills follow the Workspace's own focus.
+#[derive(Clone, Copy, Debug)]
+pub(in crate::app) struct HeroPanePaint {
+    /// The surface the pane was painted with (the Wide Hero pane's fill, or
+    /// the Library Hero overlay's sheet). Shared content repaints it wherever
+    /// it needs the pane's own background.
+    pub surface: palette::Surface,
+    /// `true` when a focused Workspace's fills resolve the focused pair (the
+    /// Wide Hero pane); `false` when they stay on the resting pair whatever
+    /// the Workspace's focus (the Library Hero overlay's sheet paints a flat
+    /// dark panel with dark stripes).
+    pub workspace_follows_focus: bool,
+}
+
 /// Geometry produced by painting shared Hero content.
 #[derive(Clone, Debug)]
 pub(in crate::app) struct HeroCompositionGeometry {
@@ -50,7 +66,9 @@ pub(in crate::app) struct HeroCompositionGeometry {
 }
 
 /// Paint the shared Hero content into `area`, returning image and Workspace
-/// geometry for the owning Library panel.
+/// geometry for the owning Library panel. `paint` carries the surface the
+/// caller painted `hero_area` with and how the Workspace box resolves its own
+/// fills.
 pub(in crate::app) fn paint_library_hero_content(
     f: &mut Frame,
     hero_area: Rect,
@@ -60,6 +78,7 @@ pub(in crate::app) fn paint_library_hero_content(
     link_hits: &mut HitRegions<usize>,
     workspace_selector_hits: &mut HitRegions<usize>,
     workspace_selector_window: &mut PillBarWindow,
+    paint: HeroPanePaint,
 ) -> HeroCompositionGeometry {
     let (next_row, image_box, overview) = paint_hero_pane_content(
         f,
@@ -68,6 +87,7 @@ pub(in crate::app) fn paint_library_hero_content(
         overview_scroll,
         hovered_link,
         link_hits,
+        paint,
     );
     let mut geometry = HeroCompositionGeometry {
         workspace: None,
@@ -98,6 +118,7 @@ pub(in crate::app) fn paint_library_hero_content(
                 workspace,
                 workspace_selector_hits,
                 workspace_selector_window,
+                paint.workspace_follows_focus,
             ));
         }
     }
@@ -142,7 +163,12 @@ fn paint_workspace_box(
     workspace: &mut Workspace<'_>,
     hits: &mut HitRegions<usize>,
     window: &mut PillBarWindow,
+    follows_focus: bool,
 ) -> (Rect, Rect) {
+    // The box's fills resolve this bit, not the Workspace's own focus: the
+    // Library Hero overlay's sheet paints a flat resting pair whatever the
+    // Workspace holds, while the Wide Hero pane follows it.
+    let box_focused = workspace.focused && follows_focus;
     let mut box_area = workspace_rect;
     if let Some(selector) = &workspace.selector {
         let bar = Rect {
@@ -168,8 +194,7 @@ fn paint_workspace_box(
         };
     }
     let panel = box_area;
-    let background =
-        palette::surface_colors(palette::Surface::MainContentBox, workspace.focused).fill;
+    let background = palette::surface_colors(palette::Surface::MainContentBox, box_focused).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         panel,
@@ -189,7 +214,7 @@ fn paint_workspace_box(
     workspace
         .list
         .set_paint_policy(PanelListPaintPolicy::WideWorkspace {
-            focused: workspace.focused,
+            focused: box_focused,
         });
     workspace
         .list

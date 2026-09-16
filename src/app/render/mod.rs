@@ -28,9 +28,7 @@ pub(in crate::app) use components::feeds_manage::{
 pub(in crate::app) use components::help::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
-pub(in crate::app) use components::queue::{
-    render_queue_body, render_queue_title, QueuePresentation,
-};
+pub(in crate::app) use components::queue::{render_queue_body, QueuePresentation};
 pub(in crate::app) use components::queue_playback::render_playback_header;
 
 pub(in crate::app) use arrangements::wide_hero::{
@@ -91,9 +89,9 @@ pub(crate) use screens::sort_filter::{
 // see `palette.rs`'s own re-export.
 pub(crate) use theme::{
     ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, HERO_CREDITS_NAME,
-    HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR, INDICATOR_AUDIO_FG,
-    INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG, PLAYBACK_META_FG,
-    PLAYBACK_VALUE_FG, PROGRESS_TRACK, SCROLLBAR, STATUS_AVAILABLE, STATUS_ERROR,
+    HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR, HINT_PILL_FILLS,
+    INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
+    PLAYBACK_META_FG, PLAYBACK_VALUE_FG, PROGRESS_TRACK, SCROLLBAR, STATUS_AVAILABLE, STATUS_ERROR,
     TEXT_ACCENT_MUTED, TEXT_EMPHASIS, TEXT_FOCUS_ACCENT, TEXT_HERO_TITLE, TEXT_METADATA,
     TEXT_MUTED, TEXT_ON_ACCENT, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_SELECTED_ROW, TEXT_STRONG,
 };

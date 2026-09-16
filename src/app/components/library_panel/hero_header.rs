@@ -138,6 +138,7 @@ pub(in crate::app) fn paint_hero_pane_content(
     overview_scroll: usize,
     hovered_link: Option<usize>,
     link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
+    paint: super::hero_composition::HeroPanePaint,
 ) -> (u16, Option<Rect>, Option<OverviewPaint>) {
     let header = HeroHeader::from(content.facts.artwork.painted_shape());
     let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
@@ -176,7 +177,14 @@ pub(in crate::app) fn paint_hero_pane_content(
 
     // The overview Main content box only when overview text exists (design
     // D5); without it the Workspace moves up.
-    let overview = overview_box::paint_overview_box(f, area, next_row, content, overview_scroll);
+    let overview = overview_box::paint_overview_box(
+        f,
+        area,
+        next_row,
+        content,
+        overview_scroll,
+        paint.surface,
+    );
     let next_row = overview
         .as_ref()
         .map(|overview| overview.bottom)
@@ -276,6 +284,10 @@ mod hero_header_tests {
                     0,
                     None,
                     &mut crate::app::components::mouse::hit::HitRegions::new(),
+                    super::super::hero_composition::HeroPanePaint {
+                        surface: palette::Surface::HeroPane,
+                        workspace_follows_focus: true,
+                    },
                 );
             })
             .unwrap();

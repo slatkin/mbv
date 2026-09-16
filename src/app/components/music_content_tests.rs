@@ -81,7 +81,7 @@ fn content_exposes_tracks_as_the_workspace() {
         .as_ref()
         .and_then(|hero| hero.workspace.as_ref())
         .and_then(|workspace| workspace.header);
-    assert_eq!(header, Some("Tracks"));
+    assert_eq!(header, Some("Tracklist"));
     assert_eq!(owner.track_list.rows().len(), 1);
 }
 

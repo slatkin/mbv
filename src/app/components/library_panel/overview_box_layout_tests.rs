@@ -54,7 +54,18 @@ fn draw_pane(width: u16, height: u16, pane: &HeroContent<'_>) -> ratatui::buffer
     let area = Rect::new(0, 0, width, height);
     terminal
         .draw(|f| {
-            paint_hero_pane_content(f, area, pane, 0, None, &mut HitRegions::new());
+            paint_hero_pane_content(
+                f,
+                area,
+                pane,
+                0,
+                None,
+                &mut HitRegions::new(),
+                crate::app::components::library_panel::hero_composition::HeroPanePaint {
+                    surface: palette::Surface::HeroPane,
+                    workspace_follows_focus: true,
+                },
+            );
         })
         .unwrap();
     terminal.backend().buffer().clone()

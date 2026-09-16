@@ -2,7 +2,7 @@ use crate::app::components::media_list::{WideMediaList, WideMediaListPaintPolicy
 use crate::app::{palette, App, QueueScope, RemoteSlotState};
 use mbv_core::playback_queue::QueueSlotId;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 use ratatui::Frame;
@@ -37,25 +37,6 @@ pub(in crate::app) fn render_queue_body(
             Component::view(list, frame, area);
         }
     }
-}
-
-/// Paint the `Queue` panel title: bold foam, one row. The blank top-inset
-/// row stays above it and the list starts directly below it (geometry owned
-/// by `arrangements::queue`).
-pub(in crate::app) fn render_queue_title(frame: &mut Frame, area: Rect) {
-    if area.width == 0 || area.height == 0 {
-        return;
-    }
-    let area = Rect { height: 1, ..area };
-    frame.render_widget(
-        Paragraph::new(Line::from(Span::styled(
-            "  Queue",
-            Style::default()
-                .fg(palette::TEXT_METADATA)
-                .add_modifier(Modifier::BOLD),
-        ))),
-        area,
-    );
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -218,26 +199,4 @@ pub(in crate::app) fn render_queue_status(
         }
     }
     (scope_local, scope_remote)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ratatui::backend::TestBackend;
-    use ratatui::Terminal;
-
-    #[test]
-    fn title_reads_queue_bold_foam() {
-        let mut term = Terminal::new(TestBackend::new(30, 1)).unwrap();
-        term.draw(|f| render_queue_title(f, Rect::new(0, 0, 30, 1)))
-            .unwrap();
-        let buf = term.backend().buffer();
-        let text: String = (0..7).map(|x| buf[(x, 0)].symbol().to_owned()).collect();
-        assert_eq!(text, "  Queue");
-        for x in 0..7 {
-            let style = buf[(x, 0)].style();
-            assert_eq!(style.fg, Some(palette::TEXT_METADATA));
-            assert!(style.add_modifier.contains(Modifier::BOLD));
-        }
-    }
 }
