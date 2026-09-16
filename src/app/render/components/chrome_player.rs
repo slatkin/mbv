@@ -613,4 +613,70 @@ mod tests {
             "the padded pill runs flush to the row edge: {row_text:?}"
         );
     }
+
+    /// The pill owns the padding on both sides: the keyvalue cluster carries
+    /// no outer space of its own, so the painted pill is exactly
+    /// ` FHD ⧸ EN ⧸ CC ` — one pad each side, never two on the right.
+    #[test]
+    fn status_pill_pads_the_keyvalue_cluster_once_on_each_side() {
+        use super::super::indicators::{indicator_spans, IndicatorData, IndicatorStyle};
+        let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
+        let panel_bg = palette::surface_colors(palette::Surface::PlaybackPanel, false).fill;
+        assert_ne!(
+            pill_bg, panel_bg,
+            "the test locates the pill by its fill, so the fills must differ"
+        );
+        let cluster = indicator_spans(
+            IndicatorStyle::KeyValue,
+            &IndicatorData {
+                res_label: "FHD".into(),
+                res_dim: false,
+                audio_label: "en".into(),
+                audio_dim: false,
+                audio_only: false,
+                sub_label: "CC".into(),
+                sub_on: false,
+            },
+            false,
+        );
+        let mut playback = PlaybackStripAreas::default();
+        let mut marquee_text = String::new();
+        let mut marquee_started_at = std::time::Instant::now();
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 40, 1),
+            playback: &mut playback,
+            player_h: 3,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: Some(cluster),
+            title_parts: Vec::new(),
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(40, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 40, 1),
+                    "Title",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let pill: String = (0..40)
+            .filter(|&x| buf[(x, 0)].bg == pill_bg)
+            .map(|x| buf[(x, 0)].symbol())
+            .collect();
+        assert_eq!(pill, " FHD ⧸ EN ⧸ CC ", "padded pill content");
+    }
 }

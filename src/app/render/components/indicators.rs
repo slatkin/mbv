@@ -237,6 +237,9 @@ fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
 }
 
 // --- Labeled key·value: aac ⧸ en ⧸ CC, or FHD ⧸ en ⧸ CC -------------------
+// The groups are separated by ` ⧸ ` and the set carries no leading or
+// trailing space: the pill painter owns the padding around it, so a space
+// here would double the pill's own pad.
 fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
     // res_label already reads as a resolution (FHD/HD/SD/QHD/4K) — no suffix.
@@ -252,7 +255,6 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
             Style::default().fg(palette::BORDER_UNFOCUSED),
         ));
         out.push(Span::styled(d.sub_label.clone(), bold(d.sub_color())));
-        out.push(Span::raw(" "));
     }
     out
 }
