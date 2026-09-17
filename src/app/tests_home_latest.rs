@@ -689,16 +689,28 @@ fn async_clamp_keeps_pending_home_source_until_restored() {
 
 /// Task 2.2 (home-rows-playback-palette): assignment resolves the display
 /// name of the configured subscription matching a feed entry's `feed_id`
-/// (the same config match the playback strip uses) into the shell-resolved
-/// lookup; a non-matching `feed_id` and a `None` `feed_id` yield no entry.
-#[test]
-fn assign_home_content_resolves_only_matching_feed_subscription_names() {
-    let mut model = Model::new(make_app_stub());
+/// (the App layer's subscription match) into the shell-resolved lookup;
+/// a non-matching `feed_id` and a `None` `feed_id` yield no entry.
+fn model_with_example_subscription() -> Model {
+    let model = Model::new(make_app_stub());
     model.app.config.lock().unwrap().feeds.push(FeedSubscription {
         name: "Example Daily".into(),
         url: "https://example.com/feed.xml".into(),
         kind: FeedKind::Audio,
     });
+    model
+}
+
+fn feeds_content(items: Vec<QueueItem>) -> HomeContent {
+    let mut content = HomeContent::new();
+    content.loading = false;
+    content.latest = vec![("Feeds".into(), HomeLatestSource::Feeds, items)];
+    content
+}
+
+#[test]
+fn assign_home_content_resolves_only_matching_feed_subscription_names() {
+    let mut model = model_with_example_subscription();
 
     let mut matching = feed_item("Entry");
     matching.feed_id = Some("https://example.com/feed.xml".into());
@@ -706,18 +718,11 @@ fn assign_home_content_resolves_only_matching_feed_subscription_names() {
     non_matching.feed_id = Some("https://other.example.org/rss".into());
     let identity_less = feed_item("NoId");
 
-    let mut content = HomeContent::new();
-    content.loading = false;
-    content.latest = vec![(
-        "Feeds".into(),
-        HomeLatestSource::Feeds,
-        vec![
-            QueueItem::Feed(matching),
-            QueueItem::Feed(non_matching),
-            QueueItem::Feed(identity_less),
-        ],
-    )];
-    model.assign_home_content(content);
+    model.assign_home_content(feeds_content(vec![
+        QueueItem::Feed(matching),
+        QueueItem::Feed(non_matching),
+        QueueItem::Feed(identity_less),
+    ]));
 
     let names = &model.home_content.feed_names;
     assert_eq!(
@@ -732,27 +737,14 @@ fn assign_home_content_resolves_only_matching_feed_subscription_names() {
     );
 }
 
-/// Task 2.2 (home-rows-playback-palette): `HomeContentCleared` wipes the
-/// feed-name lookup together with the rest of the shell-owned content.
+/// `HomeContentCleared` wipes the feed-name lookup with the rest of the content.
 #[test]
 fn clear_home_content_clears_the_feed_name_lookup() {
-    let mut model = Model::new(make_app_stub());
-    model.app.config.lock().unwrap().feeds.push(FeedSubscription {
-        name: "Example Daily".into(),
-        url: "https://example.com/feed.xml".into(),
-        kind: FeedKind::Audio,
-    });
+    let mut model = model_with_example_subscription();
 
     let mut matching = feed_item("Entry");
     matching.feed_id = Some("https://example.com/feed.xml".into());
-    let mut content = HomeContent::new();
-    content.loading = false;
-    content.latest = vec![(
-        "Feeds".into(),
-        HomeLatestSource::Feeds,
-        vec![QueueItem::Feed(matching)],
-    )];
-    model.assign_home_content(content);
+    model.assign_home_content(feeds_content(vec![QueueItem::Feed(matching)]));
     assert!(!model.home_content.feed_names.is_empty());
 
     model.clear_home_content();

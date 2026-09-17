@@ -33,24 +33,22 @@ impl Model {
     }
 
     /// Shell-side feed-name resolution for a Home snapshot (design D2):
-    /// feed subscription names live in `Config`, which never crosses into a
-    /// component, so the shell resolves the display names for the feed
-    /// entries a snapshot carries at assignment time (the same config
-    /// subscription match the App layer uses for the playback strip) and the
-    /// component's projection looks them up by the entry's `feed_id`.
+    /// `Config` never crosses into a component, so the shell resolves feed
+    /// display names at assignment time (the App layer's subscription match)
+    /// for the component's projection to look up by `feed_id`.
     pub(super) fn resolve_home_feed_names(&self, content: &HomeContent) -> HashMap<String, String> {
-        let mut names = HashMap::new();
-        for (_, _, items) in &content.latest {
-            for entry in items.iter().filter_map(|item| item.as_feed()) {
-                let Some(feed_id) = entry.feed_id.as_deref() else {
-                    continue;
-                };
-                if let Some(name) = self.app.feed_subscription_display_name(entry) {
-                    names.insert(feed_id.to_string(), name);
-                }
-            }
-        }
-        names
+        content
+            .latest
+            .iter()
+            .flat_map(|(_, _, items)| items)
+            .filter_map(|item| item.as_feed())
+            .filter_map(|entry| {
+                Some((
+                    entry.feed_id.as_deref()?.to_string(),
+                    self.app.feed_subscription_display_name(entry)?,
+                ))
+            })
+            .collect()
     }
 
     /// Reset Home content after an Emby removal/replacement

@@ -54,10 +54,9 @@ pub(in crate::app) struct HomeContent {
     /// drives its Wide/Inline presentation from its own breakpoint.
     carrier: MediaListCarrier<String>,
     loading: bool,
-    /// The shell-resolved feed-id → subscription display-name lookup
-    /// (design D2) riding each content snapshot: the shell resolves
-    /// subscription names (a `Config` fact) at assignment time and the
-    /// projection reads entries up by the feed entry's `feed_id`.
+    /// Shell-resolved feed-id → display-name lookup (design D2): `Config`
+    /// never enters components, so the shell resolves at assignment and the
+    /// projection reads entries up by `feed_id`.
     feed_names: HashMap<String, String>,
     section: usize,
     /// The projection's image state for the current hero (task 5.10): set by
@@ -212,13 +211,10 @@ impl HomeContent {
         let rows: Vec<MediaListRow<String>> = items
             .iter()
             .map(|item| {
-                // Split rows carry the now-playing two-tone mapping (design
-                // D2/D4): the primary text is the container/context part
-                // (series, artist, show, subscription) and the secondary
-                // title after it is the item's own name; single-part rows
-                // keep the title alone. Feed subscription names come from
-                // the shell-resolved lookup keyed by the entry's `feed_id`
-                // — components never receive `Config`.
+                // Split rows share the now-playing mapping (design D2/D4):
+                // primary is the container/context, secondary the item's own
+                // name; feed names come from the shell-resolved `feed_id`
+                // lookup (`Config` never enters components).
                 let feed_name = item
                     .as_feed()
                     .and_then(|entry| entry.feed_id.as_deref())
@@ -425,8 +421,7 @@ impl HomeContent {
         self.carrier.multi_selection().len()
     }
 
-    /// The active section's projected rows, for component-local projection
-    /// tests (the canonical owner's row flow, untruncated by design).
+    /// Active section rows for projection tests (untruncated by design).
     #[cfg(test)]
     pub(in crate::app) fn test_active_rows(&self) -> &[MediaListRow<String>] {
         self.carrier.rows()
@@ -815,10 +810,9 @@ mod tests {
         assert_eq!(row_parts(&owner, 1), ("The Book".into(), None));
     }
 
-    /// Truncation priority (the item title survives before the context part
-    /// ellipsises) is the canonical painter's contract, pinned in the row
-    /// tests; the projection's side of it is to hand over both parts
-    /// untruncated so the painter can decide.
+    /// Truncation is the canonical painter's contract (a split row is cut
+    /// as one string, context first); the projection's side of it is to hand
+    /// over both parts untruncated so the painter can decide.
     #[test]
     fn split_rows_carry_their_full_parts_for_the_painters_truncation_priority() {
         let mut episode = make_item("A Very Long Episode Title That Must Survive", "Episode");

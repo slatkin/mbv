@@ -165,11 +165,9 @@ pub(super) struct HomeContent {
     pub(super) continue_items: Vec<EmbyItem>,
     pub(super) latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
     pub(super) loading: bool,
-    /// Shell-resolved feed-id → subscription display-name lookup (design D2):
-    /// feed subscription names live in `Config`, which never crosses into a
-    /// component, so the shell resolves them for the sections it assigns and
-    /// the component's projection reads entries up by the entry's `feed_id`.
-    /// Same assignment-time staleness window as the playback strip.
+    /// Shell-resolved feed-id → display-name lookup (design D2): `Config`
+    /// never enters components, so the shell resolves at assignment and the
+    /// projection reads by `feed_id`. Same staleness window as the strip.
     pub(super) feed_names: HashMap<String, String>,
 }
 

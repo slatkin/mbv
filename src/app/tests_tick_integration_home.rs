@@ -554,13 +554,11 @@ fn home_owner_cursor_survives_a_content_push() {
     );
 }
 
-/// The list-row cells for Home's two fixture rows, found as a pair: the
-/// split row's `(context_x, title_x, y)` and the single-part row's `(x, y)`,
-/// where the single-part row sits on the buffer line directly below the
-/// split row (the list's fixed-row flow, with no `Heading`/`Spacer` between
-/// them). The cursor-following Hero header can paint either title on its own
-/// line, so a lone whole-frame match proves nothing about a row — only the
-/// adjacent pair identifies the list rows the palette claims are about.
+/// The list-row cells for Home's two fixture rows: the split row's
+/// `(context_x, title_x, y)` and the single-part row's `(x, y)` on the line
+/// directly below it (the list's fixed-row flow, no `Heading`/`Spacer`
+/// between). The cursor-following Hero can paint either title on its own
+/// line, so only the adjacent pair identifies the list rows.
 fn home_list_row_cells(
     terminal: &Terminal<TestBackend>,
     context: &str,
@@ -569,19 +567,15 @@ fn home_list_row_cells(
 ) -> ((u16, u16, u16), (u16, u16)) {
     let buf = terminal.backend().buffer();
     let whole = format!("{context} {split_title}");
-    let needle_ys = |needle: &str| -> Vec<(u16, usize)> {
-        (0..buf.area().height)
-            .filter_map(|y| {
-                let row: String = (0..buf.area().width)
-                    .map(|x| buf[(x, y)].symbol())
-                    .collect();
-                row.find(needle).map(|at| (y, at))
-            })
-            .collect()
+    let row_text = |y: u16| -> String {
+        (0..buf.area().width).map(|x| buf[(x, y)].symbol()).collect()
     };
-    let single_hits = needle_ys(single_title);
-    for (y, at) in needle_ys(&whole) {
-        if let Some(&(_, single_at)) = single_hits.iter().find(|&&(sy, _)| sy == y + 1) {
+    for y in 0..buf.area().height.saturating_sub(1) {
+        let row = row_text(y);
+        let Some(at) = row.find(&whole) else {
+            continue;
+        };
+        if let Some(single_at) = row_text(y + 1).find(single_title) {
             return (
                 (at as u16, (at + context.len() + 1) as u16, y),
                 (single_at as u16, y + 1),
@@ -651,3 +645,4 @@ fn home_tick_render_paints_split_row_palette_and_ordinary_single_part_role() {
     let narrow = draw(&mut harness, 60, 20);
     assert_home_palette_painted(&narrow, "Narrow");
 }
+

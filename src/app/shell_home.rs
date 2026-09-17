@@ -150,9 +150,8 @@ impl Model {
             .map(|(title, source, items)| (title.clone(), source.clone(), items.clone()))
             .collect();
         let loading = self.home_content.loading;
-        // The feed-name lookup rides the content snapshot (design D2): the
-        // owner's projection reads subscription names from the same
-        // assignment the items came from.
+        // Feed names ride the snapshot (design D2) so the projection reads
+        // them from the same assignment as the items.
         let feed_names = self.home_content.feed_names.clone();
         // Snapshot the pending persisted-pill restore before the owner borrow
         // so the source identity is stable; arriving sources are applied by

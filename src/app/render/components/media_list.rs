@@ -19,7 +19,6 @@ mod wide_row_regression_tests {
     use ratatui::style::{Color, Modifier};
     use ratatui::Terminal;
     use std::time::{Duration, Instant};
-    use unicode_width::UnicodeWidthStr;
 
     /// The zebra pair a surface resolves to for its focused and unfocused fills.
     fn stripe(surface: palette::Surface) -> ZebraStripe {
@@ -787,11 +786,9 @@ mod wide_row_regression_tests {
         );
     }
 
-    /// Split rows paint the now-playing two-tone palette: the series/context
-    /// title paints in the playback-context gold role and the episode/item
-    /// title after it in the playback-title aqua role, so the two are
-    /// visually delineated. On a slot too narrow for both, the item title
-    /// keeps its budget and the context name ellipsises first.
+    /// Split rows paint the now-playing two-tone palette: context in gold,
+    /// item title in aqua. On a narrow slot the row truncates as one string —
+    /// the context keeps its width and the single ellipsis lands at the cut.
     #[test]
     fn episode_row_paints_the_split_row_playback_palette() {
         use crate::app::components::media_list::{MediaListRow, MediaSemanticState};
@@ -830,7 +827,8 @@ mod wide_row_regression_tests {
         );
 
         // Narrow slot on an unselected row (the selected row marquees):
-        // the episode title survives, the series name ellipsises first.
+        // the row truncates as one string — the context part keeps its full
+        // budget and the single ellipsis lands at the cut.
         let rect = Rect::new(0, 0, 20, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -864,24 +862,20 @@ mod wide_row_regression_tests {
             .map(|x| buf[(x, 1)].symbol().to_string())
             .collect();
         assert!(
-            row_text.contains("Episode Title"),
-            "episode title survives a narrow slot: {row_text:?}"
+            row_text.contains("A Very Long Se\u{2026}"),
+            "the row truncates as one string with one trailing ellipsis: {row_text:?}"
         );
         assert!(
-            row_text.contains('\u{2026}'),
-            "long series name ellipsises first: {row_text:?}"
+            !row_text.contains("Episode"),
+            "the item title is cut with the row: {row_text:?}"
         );
-        // The unselected (truncation-branch) split row paints the same
-        // two-tone roles as the selected one.
+        assert!(row_text.matches('\u{2026}').count() == 1, "{row_text:?}");
+        // The truncated context part keeps the playback-context gold role.
         assert_eq!(buf[(2, 1)].fg, palette::PLAYBACK_CONTEXT_FG);
-        let sec_x = 2 + row_text[2..row_text.find("Episode").unwrap()].width() as u16;
-        assert_eq!(buf[(sec_x, 1)].fg, palette::PLAYBACK_TITLE_FG);
     }
 
-    /// A row with no secondary title is not a split row: its primary text
-    /// keeps the ordinary title role for its semantic state (soft white
-    /// emphasis, played muted) — the split-row palette never leaks onto
-    /// title-only rows.
+    /// A row with no secondary title keeps its semantic title role (soft
+    /// white emphasis, played muted) — the split palette never leaks.
     #[test]
     fn single_part_rows_keep_the_ordinary_title_role() {
         let rect = Rect::new(0, 0, 40, 2);
@@ -917,10 +911,8 @@ mod wide_row_regression_tests {
         assert_eq!(buf[(2, 1)].fg, palette::TEXT_MUTED);
     }
 
-    /// The mute follows the title role, not the position: a played split row
-    /// mutes the item title (aqua → played muted) while the context part
-    /// keeps the playback-context gold, so the container name stays legible
-    /// on watched rows.
+    /// A played split row mutes only the item title (aqua → muted) while the
+    /// context keeps gold, so the container stays legible on watched rows.
     #[test]
     fn played_split_row_mutes_the_item_title_while_context_keeps_gold() {
         let rect = Rect::new(0, 0, 40, 1);
