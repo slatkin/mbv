@@ -547,10 +547,10 @@ impl<Target> MediaList<Target> {
     /// Move the viewport window `delta` display rows (signed) for a painted
     /// `painted_height` (design D1): clamp to the first/last display row, and
     /// drag the selection into the window only when the step would leave it
-    /// outside — to the nearest selectable row the window shows, resolved
-    /// against the ascending selectable index (`Heading`/`Spacer` rows are
-    /// never selected). A step never extends a live range. Returns whether
-    /// the window moved; a step at a content end moves nothing.
+    /// outside — to the leading edge of the step direction, resolved against
+    /// the ascending selectable index (`Heading`/`Spacer` rows are never
+    /// selected). A step never extends a live range. Returns whether the
+    /// window moved; a step at a content end moves nothing.
     pub fn scroll_viewport(&mut self, delta: i64, painted_height: usize) -> bool {
         let total_rows = self.rows.len();
         if total_rows == 0 {
@@ -571,7 +571,7 @@ impl<Target> MediaList<Target> {
             return false;
         }
         self.scroll = target as usize;
-        self.drag_selection_into_window(target as usize, height as usize);
+        self.drag_selection_into_window(target as usize, height as usize, delta);
         true
     }
 
@@ -586,28 +586,34 @@ impl<Target> MediaList<Target> {
         )
     }
 
-    /// Drag the cursor to the nearest selectable row inside the window
-    /// `[top, top + height)` when the selection would otherwise sit outside
-    /// it (design D3): the first selectable row at or below the window top,
-    /// or the last selectable row at or above the window's last row. A
-    /// window showing no selectable row leaves the selection where it is.
-    fn drag_selection_into_window(&mut self, top: usize, height: usize) {
+    /// Drag the cursor into the window `[top, top + height)` when the step
+    /// would otherwise leave the selection outside it (design D1): the drag
+    /// resolves against the **step direction** — the first selectable row of
+    /// the new window for a step toward the preceding display row (`step` <
+    /// 0), the last selectable row of the new window for a step toward the
+    /// following one. The selection therefore lands on the leading edge of
+    /// the gesture and never on the edge it was dragged off — the trailing
+    /// edge it would ride for every further press (Invariant 6,
+    /// `docs/invariants/06-viewport-step-leading-edge.md`). Resolution is
+    /// selectable-only: a `Heading`/`Spacer` run at the leading edge is
+    /// skipped to the nearest selectable row at that edge. A window showing
+    /// no selectable row leaves the selection where it is.
+    fn drag_selection_into_window(&mut self, top: usize, height: usize, step: i64) {
         let Some(row) = self.selected_display_row() else {
             return;
         };
         if row >= top && row < top + height {
             return;
         }
-        let cursor = if row < top {
+        let cursor = if step < 0 {
             let index = self
                 .selectable
                 .partition_point(|&candidate| candidate < top);
             if index == self.selectable.len() {
                 return;
             }
-            // The nearest candidate may still sit beyond the window's last row
-            // (e.g. a `Heading`/`Spacer` run fills the window): a row outside
-            // `[top, top + height)` is not one the window shows, so the
+            // A selectable row past the window's last row is not one the
+            // window shows (e.g. a `Heading`/`Spacer` run fills it), so the
             // selection stays where it is.
             if self.selectable[index] >= top + height {
                 return;

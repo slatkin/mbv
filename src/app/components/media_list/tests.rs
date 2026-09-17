@@ -165,18 +165,82 @@ fn viewport_step_at_the_window_edge_drags_the_selection_both_ways() {
     let mut list = MediaList::new();
     list.set_content(numbered_items(6));
     // Stepping down with the selection on the window's first visible row
-    // drags it to the nearest selectable row inside the new window.
+    // drags it to the leading edge of the step direction: the new window's
+    // last selectable row.
     list.select_target(&"0".to_string());
     assert!(list.scroll_viewport(1, 3));
     assert_eq!(list.scroll(), 1);
-    assert_eq!(list.selected_target(), Some(&"1".to_string()));
+    assert_eq!(list.selected_target(), Some(&"3".to_string()));
     // Stepping up with the selection on the window's last visible row drags
-    // it back to the nearest selectable row above the window's last row.
+    // it to the new window's first selectable row — the edge the step came
+    // from, never the edge the selection was dragged off.
     list.set_scroll(3);
     list.select_target(&"5".to_string());
     assert!(list.scroll_viewport(-1, 3));
     assert_eq!(list.scroll(), 2);
+    assert_eq!(list.selected_target(), Some(&"2".to_string()));
+}
+
+// Task 1.3 / Invariant 6: the named guard. A step that drags lands the
+// selection on the leading edge of the step direction — the edge the gesture
+// is travelling toward — and never on the trailing edge it was dragged off,
+// for the one-row form and the page form, both ways. The superseded
+// trailing-edge resolution fails every assertion below.
+#[test]
+fn viewport_step_lands_on_the_leading_edge_not_the_edge_it_left() {
+    let mut list = MediaList::new();
+    list.set_content(numbered_items(12));
+
+    // One-row form, downward. The window [0, 4) shows "0".."3"; a step down
+    // from its first visible row lands on the new window's last row.
+    list.select_target(&"0".to_string());
+    assert!(list.scroll_viewport(1, 4));
+    assert_eq!(list.scroll(), 1);
     assert_eq!(list.selected_target(), Some(&"4".to_string()));
+    assert_ne!(
+        list.selected_target(),
+        Some(&"1".to_string()),
+        "the selection must not be parked on the edge it left"
+    );
+
+    // One-row form, upward. From the window [5, 9) with the selection on its
+    // last visible row the step lands on the new window [4, 8)'s first row.
+    list.set_scroll(5);
+    list.select_target(&"8".to_string());
+    assert!(list.scroll_viewport(-1, 4));
+    assert_eq!(list.scroll(), 4);
+    assert_eq!(list.selected_target(), Some(&"4".to_string()));
+    assert_ne!(
+        list.selected_target(),
+        Some(&"7".to_string()),
+        "the selection must not be parked on the edge it left"
+    );
+
+    // Page form, downward: the paged window [4, 8) is entered on its last
+    // selectable row, not on the top edge it left.
+    list.set_scroll(0);
+    list.select_target(&"0".to_string());
+    assert!(list.scroll_viewport_page(1, 4));
+    assert_eq!(list.scroll(), 4);
+    assert_eq!(list.selected_target(), Some(&"7".to_string()));
+    assert_ne!(
+        list.selected_target(),
+        Some(&"4".to_string()),
+        "the selection must not be parked on the edge it left"
+    );
+
+    // Page form, upward: the paged window [0, 4) is entered on its first
+    // selectable row, not on the bottom edge it left.
+    list.set_scroll(4);
+    list.select_target(&"7".to_string());
+    assert!(list.scroll_viewport_page(-1, 4));
+    assert_eq!(list.scroll(), 0);
+    assert_eq!(list.selected_target(), Some(&"0".to_string()));
+    assert_ne!(
+        list.selected_target(),
+        Some(&"3".to_string()),
+        "the selection must not be parked on the edge it left"
+    );
 }
 
 // Task 1.1: both content ends clamp.
@@ -195,42 +259,42 @@ fn viewport_step_clamps_at_both_content_ends() {
     assert_eq!(list.selected_target(), Some(&"5".to_string()));
 }
 
-// Task 1.1 / D3: the drag resolves the nearest *selectable* row against the
-// ascending selectable index; a `Heading` inside the window is never selected.
+// Task 1.1 / D1: the drag resolves the leading edge of the step direction
+// against the ascending selectable index; a `Heading` at that edge is skipped
+// to the nearest selectable row at the same edge.
 #[test]
 fn viewport_drag_skips_structural_rows_in_both_directions() {
     let mut list = MediaList::new();
     list.set_content(vec![
-        MediaListRow::Heading { text: "A".into() },
         item("a"),
         item("b"),
-        MediaListRow::Heading { text: "B".into() },
         item("c"),
+        MediaListRow::Heading { text: "B".into() },
         item("d"),
         item("e"),
+        item("f"),
     ]);
-    // Display rows: 0=Heading, 1=a, 2=b, 3=Heading, 4=c, 5=d, 6=e.
-    // Step down from window [2, 5) with the selection on its first visible
-    // row: the new window [3, 6) starts at the `Heading`, so the drag lands
-    // past it on "c".
-    list.set_scroll(2);
-    list.select_target(&"b".to_string());
+    // Display rows: 0=a, 1=b, 2=c, 3=Heading, 4=d, 5=e, 6=f.
+    // Step down from window [0, 3) with the selection on its first visible
+    // row: the new window [1, 4) ends on the `Heading`, so the drag lands
+    // before it on "c".
+    list.select_target(&"a".to_string());
     assert!(list.scroll_viewport(1, 3));
-    assert_eq!(list.scroll(), 3);
-    assert_eq!(list.selected_target(), Some(&"c".to_string()));
-    // Step up from window [2, 5) with the selection on its last visible row:
-    // the row above the new window's last row is the `Heading`, so the drag
-    // lands before it on "b".
-    list.set_scroll(2);
-    list.select_target(&"c".to_string());
-    assert!(list.scroll_viewport(-1, 3));
     assert_eq!(list.scroll(), 1);
-    assert_eq!(list.selected_target(), Some(&"b".to_string()));
+    assert_eq!(list.selected_target(), Some(&"c".to_string()));
+    // Step up from window [4, 7) with the selection on its last visible row:
+    // the new window [3, 6) starts at the `Heading`, so the drag lands past
+    // it on "d".
+    list.set_scroll(4);
+    list.select_target(&"f".to_string());
+    assert!(list.scroll_viewport(-1, 3));
+    assert_eq!(list.scroll(), 3);
+    assert_eq!(list.selected_target(), Some(&"d".to_string()));
 }
 
-// Task 1.1 / D3: a window whose rows are all structural (`Heading`/`Spacer`)
-// shows no selectable row, so the selection stays where it is even though the
-// nearest selectable candidate lies outside the moved window.
+// Task 1.1 / D1: a window whose rows are all structural (`Heading`/`Spacer`)
+// shows no selectable row at either leading edge, so the selection stays where
+// it is even though selectable rows exist outside the moved window.
 #[test]
 fn viewport_step_leaves_the_selection_when_the_window_shows_no_selectable_row() {
     let mut list = MediaList::new();
@@ -244,42 +308,28 @@ fn viewport_step_leaves_the_selection_when_the_window_shows_no_selectable_row() 
     // Display rows: 0=Heading, 1=a, 2=Heading, 3=Spacer, 4=b.
     // Step down from window [1, 3) with the selection on its first visible
     // row: the new window [2, 4) holds only the `Heading` and the `Spacer`,
-    // and the nearest selectable row past the top ("b", row 4) is outside it,
-    // so the selection stays on "a" while the window alone moves. (The window
-    // is stored after the selection so the D4 cursor rule does not back it up
+    // so the leading-edge rule finds no selectable row there and the
+    // selection stays on "a" while the window alone moves. (The window is
+    // stored after the selection so the D4 cursor rule does not back it up
     // onto the `Heading` — this is a step, not a cursor move.)
     list.select_target(&"a".to_string());
     list.set_scroll(1);
     assert!(list.scroll_viewport(1, 2));
     assert_eq!(list.scroll(), 2);
     assert_eq!(list.selected_target(), Some(&"a".to_string()));
-    // Mirrored upward: step up from window [2, 4) with the selection on its
-    // last visible row; the new window [1, 3) holds the `Heading` and the
-    // `Spacer`, and the nearest selectable row before the bottom ("a", row 1)
-    // is inside it, so use a list whose nearest candidate falls below instead.
-    let mut list = MediaList::new();
-    list.set_content(vec![
-        item("a"),
-        MediaListRow::Heading { text: "B".into() },
-        MediaListRow::Spacer,
-        MediaListRow::Heading { text: "C".into() },
-        MediaListRow::Spacer,
-        item("b"),
-    ]);
-    // Display rows: 0=a, 1=Heading, 2=Spacer, 3=Heading, 4=Spacer, 5=b.
+    // Mirrored upward onto the same structural window: from window [3, 5)
+    // with the selection on its last visible row the step reaches [2, 4),
+    // which again holds only the `Heading` and the `Spacer` — no selectable
+    // row at the leading edge, so the selection stays on "b".
+    list.set_scroll(3);
     list.select_target(&"b".to_string());
-    list.set_scroll(2);
     assert!(list.scroll_viewport(-1, 2));
-    // The displayed window had lowered onto the selection (the paint shows
-    // [4, 6)); the step steps from the visible window, so the new window
-    // [3, 5) holds only structural rows and the nearest selectable row
-    // before its bottom ("a", row 0) is outside it — the selection stays
-    // on "b".
-    assert_eq!(list.scroll(), 3);
+    assert_eq!(list.scroll(), 2);
     assert_eq!(list.selected_target(), Some(&"b".to_string()));
 }
 
-// Task 1.2: a page moves by the painted height and drags the selection.
+// Task 1.2: a page moves by the painted height and drags the selection to
+// the leading edge of the page direction.
 #[test]
 fn viewport_page_moves_by_the_painted_height_and_drags() {
     let mut list = MediaList::new();
@@ -287,13 +337,14 @@ fn viewport_page_moves_by_the_painted_height_and_drags() {
     list.select_target(&"0".to_string());
     assert!(list.scroll_viewport_page(1, 3));
     assert_eq!(list.scroll(), 3);
-    assert_eq!(list.selected_target(), Some(&"3".to_string()));
+    assert_eq!(list.selected_target(), Some(&"5".to_string()));
     list.select_target(&"6".to_string());
     // select_target lowered the window for display only (stored scroll 3,
-    // displayed [4, 7)); the page steps from the visible window.
+    // displayed [4, 7)); the page steps from the visible window and lands on
+    // the new window's first selectable row.
     assert!(list.scroll_viewport_page(-1, 3));
     assert_eq!(list.scroll(), 1);
-    assert_eq!(list.selected_target(), Some(&"3".to_string()));
+    assert_eq!(list.selected_target(), Some(&"1".to_string()));
 }
 
 // Task 1.2: a page longer than the remaining content clamps.
@@ -305,11 +356,11 @@ fn viewport_page_clamps_to_the_remaining_content() {
     list.select_target(&"6".to_string());
     assert!(list.scroll_viewport_page(1, 3));
     assert_eq!(list.scroll(), 7);
-    assert_eq!(list.selected_target(), Some(&"7".to_string()));
+    assert_eq!(list.selected_target(), Some(&"9".to_string()));
     // Already at the last display row: a further page changes nothing.
     assert!(!list.scroll_viewport_page(1, 3));
     assert_eq!(list.scroll(), 7);
-    assert_eq!(list.selected_target(), Some(&"7".to_string()));
+    assert_eq!(list.selected_target(), Some(&"9".to_string()));
 }
 
 // Task 1.3: transition dispositions — a window-only move is consumed with no
@@ -332,7 +383,7 @@ fn viewport_step_transition_dispositions() {
     list.select_target(&"0".to_string());
     let dragged = list.delegate_viewport_operation(MediaListOperation::ScrollViewport(1), Some(3));
     assert_eq!(dragged.disposition, MediaListDisposition::Consumed);
-    assert_eq!(dragged.selected_target, Some("1".to_string()));
+    assert_eq!(dragged.selected_target, Some("3".to_string()));
 
     list.set_scroll(0);
     list.select_target(&"0".to_string());
@@ -353,7 +404,7 @@ fn viewport_page_transition_moves_by_the_height_and_reports_the_drag() {
     let paged =
         list.delegate_viewport_operation(MediaListOperation::ScrollViewportPage(1), Some(3));
     assert_eq!(paged.disposition, MediaListDisposition::Consumed);
-    assert_eq!(paged.selected_target, Some("3".to_string()));
+    assert_eq!(paged.selected_target, Some("5".to_string()));
     assert_eq!(paged.selection_summary, None);
     assert_eq!(list.scroll(), 3);
     // Paging back up drags the selection the same way, and a further page at
@@ -361,7 +412,7 @@ fn viewport_page_transition_moves_by_the_height_and_reports_the_drag() {
     let paged_up =
         list.delegate_viewport_operation(MediaListOperation::ScrollViewportPage(-1), Some(3));
     assert_eq!(paged_up.disposition, MediaListDisposition::Consumed);
-    assert_eq!(paged_up.selected_target, Some("2".to_string()));
+    assert_eq!(paged_up.selected_target, Some("0".to_string()));
     assert_eq!(list.scroll(), 0);
     let boundary =
         list.delegate_viewport_operation(MediaListOperation::ScrollViewportPage(-1), Some(3));
@@ -478,12 +529,12 @@ fn viewport_step_during_visual_mode_leaves_the_multi_selection_unchanged() {
     assert_eq!(list.multi_selection(), &["2", "3", "4"]);
     // The selection ("4", display row 4) sits on the displayed window's
     // top edge (the stored window [4, 7) shows it on its first row), so the
-    // step leaves it above the new window and drags the cursor to the
-    // nearest shown selectable row without touching the range.
+    // step leaves it above the new window and drags the cursor to the new
+    // window's last selectable row without touching the range.
     list.set_scroll(4);
     let stepped = list.delegate_viewport_operation(MediaListOperation::ScrollViewport(1), Some(3));
     assert_eq!(stepped.disposition, MediaListDisposition::Consumed);
-    assert_eq!(stepped.selected_target, Some("5".to_string()));
+    assert_eq!(stepped.selected_target, Some("7".to_string()));
     assert_eq!(stepped.selection_summary, None);
     assert_eq!(list.multi_selection(), &["2", "3", "4"]);
 }
@@ -679,13 +730,15 @@ fn wheel_input_steps_the_viewport_one_row_at_wide_and_narrow_heights() {
         );
         assert_eq!(carrier.scroll(), 0);
 
-        // With the selection on the window's top edge, the step drags it —
-        // the wheel moves the selection only through the drag rule.
+        // With the selection on the window's top edge, the step drags it to
+        // the new window's last selectable row — the wheel moves the
+        // selection only through the drag rule, which resolves the leading
+        // edge of the step direction.
         carrier.select_target(&"0".to_string());
         let dragged = carrier.delegate_operation(wheel(1));
         assert_eq!(dragged.disposition, MediaListDisposition::Consumed);
         assert_eq!(carrier.scroll(), 1);
-        assert_eq!(dragged.selected_target, Some("1".to_string()));
+        assert_eq!(dragged.selected_target, Some(height.to_string()));
     }
 }
 
