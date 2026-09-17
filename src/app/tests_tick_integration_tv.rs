@@ -451,11 +451,15 @@ fn navigated_series_opens_the_wide_workspace() {
 }
 
 /// Task 3.1: the Narrow landing opens the Library Hero overlay for the
-/// navigated show, through the same hand-off.
+/// navigated show, through the same hand-off. Starts on the Home tab so the
+/// hand-off must run AFTER the sync pass retargets the panel's active owner
+/// to the landed library; opening the overlay during the event drain would
+/// target the pre-navigation owner instead.
 #[test]
 fn navigated_series_opens_the_hero_overlay_narrow() {
     let mut harness = tv_harness();
     harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().app.tab = TabSelection::Home;
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
 
@@ -470,6 +474,7 @@ fn navigated_series_opens_the_hero_overlay_narrow() {
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness);
 
+    assert_eq!(harness.model().app.tab, TabSelection::EmbyLibrary(0));
     assert!(harness.model().app.wide_tv_library_area(0).is_none());
     assert!(
         panel(&harness).test_hero_overlay_open(),
@@ -479,6 +484,10 @@ fn navigated_series_opens_the_hero_overlay_narrow() {
         tv(&harness).selected_item().map(|item| item.id),
         Some("series-1".to_string()),
         "the retained TV owner re-anchors onto the navigated series"
+    );
+    assert!(
+        tv(&harness).episode_pane_focused(),
+        "the overlay belongs to the TV owner, not the pre-navigation one"
     );
 }
 
