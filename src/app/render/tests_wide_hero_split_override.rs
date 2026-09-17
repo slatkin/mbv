@@ -36,7 +36,7 @@ fn wide_area() -> Rect {
 fn render_tv_wide(override_width: Option<u16>) -> String {
     let mut owner = TvContent::new();
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series One", "Series")], 0, 0),
+        LibraryListRenderCtx::from_items(vec![make_item("Series One", "Series")], 0),
         None,
         None,
         0,

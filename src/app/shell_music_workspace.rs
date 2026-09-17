@@ -4,7 +4,7 @@
 
 use super::components::library_panel::LibraryKey;
 use super::components::music_content::MusicContent;
-use super::components::{InlineSearchHost, LibraryKind};
+use super::components::LibraryKind;
 use super::shell::{Model, MusicTrackFocusRequest};
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -79,17 +79,7 @@ impl Model {
                     .and_then(|t| level.items.iter().position(|i| i.id == t))
             })
             .or_else(|| resting.map(|r| r.0));
-        let mut context = self
-            .app
-            .wide_music_render_ctx(index, cursor.map(|c| (c, 0)));
-        if let Some(owner) = self.music_owner() {
-            if owner.inline_search().is_active() {
-                context.list = context.list.with_search(
-                    owner.inline_search().query().to_string(),
-                    owner.inline_search().loading(),
-                );
-            }
-        }
+        let context = self.app.wide_music_render_ctx(index, cursor);
         if let Some(album) = context.selected_album.as_ref() {
             if !self.app.album_tracks_cache.contains_key(&album.id)
                 && !self.app.album_tracks_loading.contains(&album.id)

@@ -39,7 +39,6 @@ pub(in crate::app) use components::hero::render_search_box;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
-pub(in crate::app) use components::list::render_generic_movies_home_video_rows_with_ctx;
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use screens::feeds_model::{
     current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,

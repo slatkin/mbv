@@ -296,7 +296,8 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
 
     /// Replace the display rows from a letter-grouped projection: sort the
     /// `(sort_str, Item)` pairs by natural key and inject `Heading`/`Spacer`
-    /// rows per bucket, matching `render_letter_grouped_rows`. `total_count`
+    /// rows per bucket, matching the deleted legacy painter's contract.
+    /// `total_count`
     /// selects range vs per-letter buckets; `letter_filter_active` forces
     /// per-letter mode for an already-filtered slice.
     pub fn set_letter_grouped_content(

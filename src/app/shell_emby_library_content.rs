@@ -131,7 +131,7 @@ impl Model {
                     .nav_stack
                     .last()
                     .map_or(0, |l| l.resting().scroll());
-                let ctx = self.app.library_list_render_ctx(index, cursor, scroll);
+                let ctx = self.app.library_list_render_ctx(index, cursor);
                 (
                     ctx.items,
                     ctx.total_count,

@@ -101,7 +101,7 @@ fn narrow_tv_dims_watched_and_in_progress_rows_but_wide_never_does() {
     in_progress.playback_position_ticks = 500;
 
     let content = TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![watched.clone(), in_progress.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![watched.clone(), in_progress.clone()], 0),
         None,
         None,
         0,
@@ -139,7 +139,6 @@ fn tv_series_clicks_use_the_rendered_series_row_for_left_and_right_clicks() {
                 make_item("Series B", "Series"),
             ],
             0,
-            0,
         ),
         None,
         None,
@@ -175,7 +174,7 @@ fn tv_keyboard_context_menu_uses_all_selected_rows_and_single_row_without_select
     let mut second = make_item("Series B", "Series");
     second.id = "series-b".into();
     let content = TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![first, second], 0, 0),
+        LibraryListRenderCtx::from_items(vec![first, second], 0),
         None,
         None,
         0,
@@ -213,7 +212,7 @@ fn tv_context_click_outside_selection_forwards_cleared_selection() {
     second.id = "series-b".into();
     let mut owner = TvContent::new();
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![first, second], 0, 0),
+        LibraryListRenderCtx::from_items(vec![first, second], 0),
         None,
         None,
         0,
@@ -235,7 +234,7 @@ fn tv_series_hits_use_retained_rows_and_wheel_moves_the_control() {
     second.id = "series-b".into();
     let mut owner = TvContent::new();
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![first, second], 0, 0),
+        LibraryListRenderCtx::from_items(vec![first, second], 0),
         None,
         None,
         0,
@@ -292,7 +291,7 @@ fn tv_enter_selects_first_episode_for_activation() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series),
         Some(detail),
         0,
@@ -335,7 +334,7 @@ fn tv_right_does_not_move_focus_between_panes() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series),
         Some(detail),
         0,
@@ -374,7 +373,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series.clone()),
         Some(detail(vec![
             episode("Episode 1", "episode-1"),
@@ -400,7 +399,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
     // An unavailable detail refresh must not erase the mounted component's
     // local episode cursor while the data is loading.
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series.clone()),
         None,
         0,
@@ -414,7 +413,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
     );
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series.clone()),
         Some(detail(vec![episode("Episode 1", "episode-1")])),
         0,
@@ -434,7 +433,7 @@ fn tv_content_refresh_clamps_episode_cursor_and_handles_empty_season() {
     ));
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series),
         Some(detail(Vec::new())),
         0,
@@ -453,7 +452,6 @@ fn tv_keyboard_leaves_key_unclaimed_when_queue_is_focused() {
                 make_item("Series A", "Series"),
                 make_item("Series B", "Series"),
             ],
-            0,
             0,
         ),
         None,
@@ -480,7 +478,7 @@ fn tv_episode_brackets_with_modifiers_are_unclaimed() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
+        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0),
         None,
         None,
         0,
@@ -522,7 +520,7 @@ fn tv_episode_brackets_wrap_season_selection() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series),
         Some(detail),
         0,
@@ -567,7 +565,7 @@ fn tv_first_mount_seeds_the_stable_target_and_renders_sorted_rows() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(items, 1, 0),
+        LibraryListRenderCtx::from_items(items, 1),
         None,
         None,
         0,

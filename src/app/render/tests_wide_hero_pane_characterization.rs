@@ -47,7 +47,7 @@ fn direct_terminal(mut draw: impl FnMut(&mut ratatui::Frame)) -> Terminal<TestBa
 fn tv_wide_left_pane_unconditional_fill_shared_inset() {
     let mut owner = TvContent::new();
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Focused Series", "Series")], 0, 0),
+        LibraryListRenderCtx::from_items(vec![make_item("Focused Series", "Series")], 0),
         None,
         None,
         0,

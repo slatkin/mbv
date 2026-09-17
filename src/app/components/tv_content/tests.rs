@@ -36,7 +36,7 @@ fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
         .collect(),
     };
     component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series.clone()),
         Some(detail.clone()),
         0,
@@ -58,7 +58,7 @@ fn tv_workspace_keeps_episode_pane_cursor_local_between_syncs() {
     assert_eq!(component.episodes.cursor(), 1);
 
     component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series),
         Some(detail),
         0,
@@ -86,7 +86,7 @@ fn tv_workspace_series_change_resets_local_selection() {
     series_b.id = "series-b".into();
 
     component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series_a.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series_a.clone()], 0),
         Some(series_a),
         Some(detail.clone()),
         0,
@@ -96,7 +96,7 @@ fn tv_workspace_series_change_resets_local_selection() {
     component.move_season(1);
 
     component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series_b.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series_b.clone()], 0),
         Some(series_b),
         Some(detail),
         0,
@@ -113,7 +113,7 @@ fn tv_workspace_series_change_resets_local_selection() {
 fn tv_workspace_renders_the_wide_workspace_without_app() {
     let mut component = TvContent::new();
     component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
+        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0),
         None,
         None,
         0,
@@ -153,7 +153,7 @@ fn tv_workspace_renders_the_narrow_series_list_without_app() {
     let mut component = TvContent::new();
     component.set_is_wide(false);
     component.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
+        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0),
         None,
         None,
         0,

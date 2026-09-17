@@ -21,9 +21,8 @@ pub(super) struct MediaListPaint<Target> {
 
 /// Paint entry point for the embedded plain `WideMediaList` (design.md D1):
 /// a fixed-height, one-column list with no inline-detail replacement flow.
-/// Reuses the shared list-row span and scrollbar primitives rather than the
-/// `EmbyItem`-typed `render_plain_rows` in `plain_rows` (which stays the path
-/// for the inline browsers until it is parameterised).
+/// Reuses the shared palette/theme roles rather than any `EmbyItem`-typed
+/// legacy row painter.
 ///
 /// `paint_area` supplies the full-width visual span (so the selected-row
 /// bar reaches the panel border); its vertical span

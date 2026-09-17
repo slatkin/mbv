@@ -1,6 +1,6 @@
 //! Letter grouping for [`WideMediaList`](super::WideMediaList): injects
-//! `Heading`/`Spacer` rows into a sorted item list, matching the accepted
-//! `render_letter_grouped_rows` contract (bucket derivation, sorted display
+//! `Heading`/`Spacer` rows into a sorted item list, matching the deleted
+//! legacy painter's accepted contract (bucket derivation, sorted display
 //! order, spacer-before-every-heading-except-first).
 //!
 //! Provider-neutral (design.md line 21): the caller projects each item to a
@@ -109,7 +109,7 @@ mod tests {
         // Digit titles sort before "A" and accented titles after "Z", so the
         // "#" bucket appears at both ends -- the reference only compares each
         // item's bucket against the previous one, so a non-contiguous bucket
-        // emits a fresh heading. Faithful to `render_letter_grouped_rows`.
+        // emits a fresh heading. Faithful to the deleted legacy painter.
         let rows = letter_grouped_rows(movies_fixture(), 7, false);
         assert_eq!(
             shape(&rows),

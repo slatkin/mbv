@@ -114,16 +114,12 @@ impl App {
     pub(in crate::app) fn wide_music_render_ctx(
         &self,
         lib_idx: usize,
-        cursor_scroll: Option<(usize, usize)>,
+        cursor: Option<usize>,
     ) -> MusicWideRenderCtx {
-        let list = self.library_list_render_ctx(
-            lib_idx,
-            cursor_scroll.map_or(0, |v| v.0),
-            cursor_scroll.map_or(0, |v| v.1),
-        );
+        let list = self.library_list_render_ctx(lib_idx, cursor.unwrap_or(0));
         let lib = &self.libs[lib_idx];
         let level = lib.nav_stack.last();
-        let selected_cursor = cursor_scroll.map_or(0, |(cursor, _)| cursor);
+        let selected_cursor = cursor.unwrap_or(0);
         let selected_album = level
             .and_then(|level| level.items.get(selected_cursor))
             .cloned();

@@ -246,10 +246,6 @@ impl Model {
                 .nav_stack
                 .last()
                 .map_or(0, |l| l.resting().cursor()),
-            self.app.libs[index]
-                .nav_stack
-                .last()
-                .map_or(0, |l| l.resting().scroll()),
         );
         // The TV owner owns the selection cursor. Derive the pushed Series
         // snapshot from the owner's authoritative selection (its own cursor

@@ -19,7 +19,6 @@ fn tv_keyboard_uses_typed_requests_and_routes_brackets_by_pane() {
                 make_item("Series B", "Series"),
             ],
             0,
-            0,
         ),
         None,
         Some(detail),
@@ -71,7 +70,7 @@ fn dot_emits_library_context_menu() {
 
     let series = make_item("Series", "Series");
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series], 0),
         None,
         None,
         0,
@@ -89,7 +88,7 @@ fn slash_emits_open_inline_search() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
+        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0),
         None,
         None,
         0,
@@ -114,7 +113,7 @@ fn wide_tv_search_paints_in_browser_pane_not_hero_pane() {
     let mut series = make_item("Series", "Series");
     series.id = "series-id".into();
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series], 0),
         None,
         None,
         0,
@@ -197,7 +196,7 @@ fn wide_tv_search_right_click_on_result_opens_context_menu() {
     let mut series = make_item("Series", "Series");
     series.id = "series-id".into();
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series], 0),
         None,
         None,
         0,
@@ -254,7 +253,7 @@ fn dot_with_episode_focus_targets_series() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series),
         Some(detail),
         0,
@@ -277,7 +276,7 @@ fn ctrl_r_emits_library_rescan() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0, 0),
+        LibraryListRenderCtx::from_items(vec![make_item("Series", "Series")], 0),
         None,
         None,
         0,
@@ -309,7 +308,7 @@ fn ctrl_w_emits_library_toggle_watched() {
     let mut owner = TvContent::new();
 
     owner.set_content(TvWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![series.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![series.clone()], 0),
         Some(series.clone()),
         Some(detail),
         0,

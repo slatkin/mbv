@@ -9,7 +9,7 @@
 use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-use super::inline_search::{InlineSearch, InlineSearchHost, SearchPool};
+use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow, Workspace,
 };
@@ -94,7 +94,6 @@ pub struct MusicContent {
     last_album_id: Option<String>,
     pub(in crate::app) inline_search: InlineSearch,
     hero_image: HeroImageState,
-    library_search_active: bool,
     /// Whether the Library Hero overlay is open over this owner (pushed by
     /// the panel). The overlay takes the Workspace's keyboard focus once, on
     /// its open transition; ordinary pushes never focus or re-focus the
@@ -106,7 +105,7 @@ impl MusicContent {
     pub(in crate::app) fn new() -> Self {
         Self {
             context: MusicWideRenderCtx::new(
-                crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
+                crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0),
                 None,
                 String::new(),
                 Vec::new(),
@@ -122,7 +121,6 @@ impl MusicContent {
             last_album_id: None,
             inline_search: InlineSearch::new(),
             hero_image: HeroImageState::None,
-            library_search_active: false,
             hero_overlay_open: false,
         }
     }
@@ -166,26 +164,6 @@ impl MusicContent {
         }
         if track_rows_arrived && self.hero_overlay_open {
             self.enter_track_focus();
-        }
-
-        // The library-search projection still reaches Music. Reuse the same
-        // InlineSearch owner for every geometry rather than teaching the panel
-        // a Music-specific search arm.
-        if let Some(query) = self.context.list.search_query.clone() {
-            if !self.inline_search.is_active() {
-                self.inline_search.open();
-                self.inline_search
-                    .set_pool(SearchPool::Items(self.context.list.items.clone()));
-                self.inline_search.restore_query(query);
-            } else if self.inline_search.query() != query {
-                self.inline_search.restore_query(query);
-            }
-            self.inline_search
-                .set_loading(self.context.list.search_loading);
-            self.library_search_active = true;
-        } else if self.library_search_active {
-            self.inline_search.close();
-            self.library_search_active = false;
         }
     }
 

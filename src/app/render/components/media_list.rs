@@ -1,8 +1,6 @@
-mod plain_rows;
 mod row;
 mod wide;
 
-pub(in crate::app) use plain_rows::render_plain_rows;
 pub(in crate::app) use wide::render_wide_media_list_component;
 
 #[cfg(test)]

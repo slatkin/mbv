@@ -10,7 +10,7 @@ fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
     let mut album = album;
     album.overview = overview.into();
     MusicWideRenderCtx::new(
-        LibraryListRenderCtx::from_items(vec![album.clone()], 0, 0),
+        LibraryListRenderCtx::from_items(vec![album.clone()], 0),
         Some(album),
         "Artist".into(),
         vec![make_item("Artist", "MusicArtist")],

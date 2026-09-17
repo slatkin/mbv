@@ -133,7 +133,7 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
 impl TvContent {
     pub fn new() -> Self {
         let mut context = TvWideRenderCtx::new(
-            crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0, 0),
+            crate::app::render::LibraryListRenderCtx::from_items(Vec::new(), 0),
             None,
             None,
             0,
@@ -185,7 +185,7 @@ impl TvContent {
     }
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();
-        let grouped = !context.list.is_search_active()
+        let grouped = !self.inline_search.is_active()
             && (context.show_letter_pills
                 || context.list.has_letter_filter()
                 || context.list.true_total() >= 50);
