@@ -60,7 +60,7 @@ the landing:
 | Series | the item | `activate_searched_series` flow |
 | Episode / Season | owning Series | `activate_searched_series` flow |
 | Audio / MusicAlbum | owning album | Music album activation |
-| MusicArtist | itself | plain chain (`[library, artist]` levels - the artist's album list as the top level; an artist has no single owning album, so the original "resolve to its album" rule was unsatisfiable and was renamed to this rule during U2 review) |
+| MusicArtist | itself | resolve failure (flash, current view unchanged) - an artist has no single owning album, and a real-tick render check proved a plain artist chain does not render on a grouped Music surface (stale phantom surface / empty area), so the interim chain rule was replaced by the resolve-failure rule |
 
 Resolution uses the item's own `series_id` for Episode/Season (one field, no
 extra round trip when present; `get_ancestors` remains the fallback), and
