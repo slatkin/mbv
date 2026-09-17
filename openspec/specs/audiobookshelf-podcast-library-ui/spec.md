@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provides an Audiobookshelf podcast browsing experience whose presentation and interaction are structurally identical to the TV Shows tab, with podcast-native data substituted for TV-native data and without adding playback behavior.
+Provides an Audiobookshelf podcast browsing experience: one flat, age-grouped episode list behind a single state-and-show pill selector, with a Wide-only episode hero over the parent show's cover and ordinary episode rows in every other geometry.
 
 ## Requirements
 
