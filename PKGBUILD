@@ -8,7 +8,7 @@ url="https://github.com/slatkin/mbv"
 license=('MIT')
 depends=('mpv' 'openssl' 'pipewire')
 source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/slatkin/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('f122803f7e25f7ffbe8dc5cf2cc79bd2fc66cf9cdc39d8d50e6bb99380b84e98')
 
 package() {
     cd "${pkgname}-${pkgver}"
