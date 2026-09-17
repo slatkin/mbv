@@ -140,3 +140,18 @@ new shapes are already serializable browse levels). Rollback = revert commit.
 
 None — the three scope questions from exploration were answered by the user's
 direction (land the show, workspace opens, fix shared path, music included).
+
+### D6: Deep selection rides the reveal, not a second navigation
+
+The landing carries the chosen item alongside the reveal (episode id on the
+Series landing, track id on the Album landing) through the pending/hand-off
+chain unchanged; the hand-off selects it after the presentation opens — TV
+resolves season + episode against series detail (fetching that season's
+episodes when uncached) and applies episode focus, Music selects the track in
+the adopted track list. Absence is not failure: the navigation target is the
+show/album, so a missing episode/track keeps the landed state with default
+selection and no flash. Season reveals and Movie/generic landings are
+untouched (show-level default selection; cursor already on the item).
+Alternative considered: a second navigate/select event after landing —
+rejected, the hand-off already runs at exactly the right seam with the owner
+re-anchored.

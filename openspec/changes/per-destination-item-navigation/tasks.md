@@ -59,3 +59,25 @@
 - [ ] 5.2 Manual check (single-user system): queue → right-click an episode →
   "Go to Library" lands on the show with its Workspace/overlay open; a queued
   track lands on its album; Delete on the first queue item still removes it.
+
+## 6. Deep selection (the chosen episode/track is selected)
+
+- [ ] 6.1 TV: an Episode reveal carries the episode through
+  `NavigateLanding::Series` and the pending/hand-off chain; after the series
+  hand-off opens the Wide workspace, the workspace resolves the episode's
+  season + episode (fetching season episodes when uncached) and selects the
+  episode with episode focus. A Season reveal keeps the show-level landing
+  with default selection. When the episode is absent from the fetched detail,
+  the show landing stands with default selection (no error — the navigation
+  target was reached). Verify with a tick-integration test through
+  `Application::tick()` (Wide: workspace open, episode selected; Narrow:
+  overlay opens for the show).
+- [ ] 6.2 Music: an Audio track reveal carries the track through
+  `NavigateLanding::Album`; after the album activation the workspace track
+  list selects the track (grouped and flat). When the track is absent, the
+  album landing stands with default selection (no error). Verify with
+  unit/tick test on the retained Music owner pattern.
+- [ ] 6.3 Gates + live re-check: `cargo nextest run -p mbv` and `-p mbv-core`,
+  clippy `-D warnings`, `cargo fmt --check`, `openspec validate --all`; user
+  live check of episode → show + episode selected and track → album + track
+  selected.

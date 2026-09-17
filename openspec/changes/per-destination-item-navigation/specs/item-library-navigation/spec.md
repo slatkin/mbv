@@ -102,3 +102,28 @@ navigation rather than the pre-navigation selection.
   the session
 - **THEN** the retained TV destination's series selection points at the
   navigated show before the next content push
+
+### Requirement: Navigated workspaces select the chosen episode or track
+
+When item navigation resolves an Episode to its show, the opened TV Workspace
+SHALL select that episode (season + episode resolved, fetching season episodes
+when uncached) with episode focus. When item navigation resolves a Music track
+to its album, the album's workspace track list SHALL select that track. A
+Season reveal keeps the show-level landing with default selection. When the
+chosen episode or track is absent from the fetched detail, the show/album
+landing SHALL stand with default selection and no error. Movie/generic
+behavior is unchanged (the cursor already rests on the item).
+
+#### Scenario: Navigated workspace selects the episode
+
+- **WHEN** the user chooses "Go to Library" on a queued Episode and the
+  library is in the Wide hero arrangement
+- **THEN** the show is selected with its Workspace open
+- **AND** the episode is selected in the workspace
+
+#### Scenario: Navigated track list selects the track
+
+- **WHEN** the user chooses "Go to Library" on a queued Music track
+- **THEN** the track's album is selected with its track list as the workspace
+  content
+- **AND** the track is selected in the track list
