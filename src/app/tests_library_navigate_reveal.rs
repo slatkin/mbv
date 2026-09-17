@@ -48,13 +48,18 @@ fn ancestor(id: &str, item_type: &str) -> EmbyItem {
     Err("Could not resolve the item's album")
 )]
 #[case::album_resolves_itself("MusicAlbum", "", "", &[], Ok(RevealTarget::Album("item1".into())))]
-// U2 correction: an artist reveals ITSELF. Its ancestor chain never holds a
-// MusicAlbum, so the old "owning album" rule was unsatisfiable once the kind
-// was wired into emission.
-#[case::artist_resolves_itself("MusicArtist", "", "", &[], Ok(RevealTarget::Artist("item1".into())))]
-#[case::artist_resolves_itself_without_an_album_ancestor(
-    "MusicArtist", "", "", &[("folder1", "Folder"), ("root", "AggregateFolder")],
-    Ok(RevealTarget::Artist("item1".into()))
+// D1: an artist does not land. It has no single owning album, and a plain
+// artist browse chain does not render on a grouped Music surface (real-tick
+// render check), so the kind resolves to the pre-U2 failure regardless of
+// the ancestors it has.
+#[case::artist_is_a_resolve_failure(
+    "MusicArtist", "", "", &[],
+    Err("Could not resolve the artist's album")
+)]
+#[case::artist_is_a_resolve_failure_even_with_an_album_ancestor(
+    "MusicArtist", "", "",
+    &[("alb1", "MusicAlbum"), ("folder1", "Folder"), ("root", "AggregateFolder")],
+    Err("Could not resolve the artist's album")
 )]
 #[case::series_resolves_itself("Series", "", "", &[], Ok(RevealTarget::Series("item1".into())))]
 #[case::movie_keeps_the_chain("Movie", "", "", &[], Ok(RevealTarget::Chain))]
@@ -900,11 +905,11 @@ fn completed_series_landing_handoff_survives_an_unrelated_error_drain() {
 }
 
 #[test]
-fn artist_navigation_lands_on_the_plain_chain_shape() {
-    // U2 correction (finding 5): the artist kind has its own named rule --
-    // fetch + type-verify the artist, then land through the plain chain path
-    // (`[library, artist]` levels), save, switch. Pre-change this kind fell
-    // through to the generic Chain arm, so the shape is the pre-change one.
+fn artist_navigation_is_a_resolve_failure_that_leaves_the_view_unchanged() {
+    // D1: the artist kind does not land -- it has no single owning album and
+    // a plain artist chain does not render on a grouped Music surface. The
+    // worker sends the resolve-failure flash (the pre-U2 semantics) and the
+    // active view is untouched: no landing, no tab switch, no saved position.
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_mock_emby(&http);
@@ -917,15 +922,11 @@ fn artist_navigation_lands_on_the_plain_chain_shape() {
         200,
         r#"{"Items":[{"Id":"art1","Name":"The Artist","Type":"MusicArtist"}]}"#,
     );
-    // get_ancestors(art1): library folder + AggregateFolder only.
+    // get_ancestors(art1): the fallback round trip still runs before the
+    // failure is reported; library folder + AggregateFolder only.
     http.respond(
         200,
         r#"[{"Id":"lib-music","Name":"Music","Type":"CollectionFolder"},{"Id":"root","Name":"root","Type":"AggregateFolder"}]"#,
-    );
-    // The chain's single level: the library root listing.
-    http.respond(
-        200,
-        r#"{"Items":[{"Id":"art0","Name":"Other Artist","Type":"MusicArtist"},{"Id":"art1","Name":"The Artist","Type":"MusicArtist"}],"TotalRecordCount":2}"#,
     );
 
     app.spawn_navigate_to_item(
@@ -937,52 +938,39 @@ fn artist_navigation_lands_on_the_plain_chain_shape() {
     let ev = app
         .lib_rx
         .recv_timeout(Duration::from_secs(2))
-        .expect("navigate event");
-    let LibEvent::NavigateTo { landing, .. } = ev else {
-        panic!("expected NavigateTo, got a resolve failure");
+        .expect("resolve-failure event");
+    let LibEvent::Error(message) = ev else {
+        panic!("an artist must not land");
     };
-    let NavigateLanding::Chain { nav_stack } = landing else {
-        panic!("expected the artist's plain Chain landing");
-    };
-    assert_eq!(nav_stack.len(), 1, "[library, artist]: one level");
-    assert_eq!(nav_stack[0].parent_id, "lib-music");
-    assert_eq!(
-        nav_stack[0].items[nav_stack[0].resting().cursor()].id,
-        "art1",
-        "cursor on the artist"
+    assert!(
+        message.contains("artist's album"),
+        "the failure names the unsatisfiable owning album: {message}"
     );
 
-    app.handle_lib_event(LibEvent::NavigateTo {
-        lib_idx: 0,
-        landing: NavigateLanding::Chain { nav_stack },
-        switch_tab: true,
-    });
-    assert_eq!(app.tab, TabSelection::EmbyLibrary(0), "saved then switched");
-    let saved = app
-        .saved_library_position(0)
-        .expect("the landed state is the saved position");
-    assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("art1"));
+    app.handle_lib_event(LibEvent::Error(message));
+    assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
+    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert!(app.status.contains("Library error"), "{}", app.status);
+    assert!(
+        app.libs[0].nav_stack.is_empty(),
+        "no browse level is materialized for an artist"
+    );
+    assert!(
+        app.saved_library_position(0).is_none(),
+        "a failed navigation saves nothing"
+    );
 }
 
 #[test]
-fn artist_id_resolving_to_a_non_artist_record_is_a_resolve_failure() {
-    // U2 correction (finding 5): the resolve-failure semantics for the artist
-    // fetch are unchanged -- an unexpected fetched record is a failure, never
-    // a silent misroute.
+fn artist_navigation_on_a_deleted_item_fails_at_the_fetch() {
+    // D1: the artist kind fails before any landing kind is chosen, so a
+    // missing record is the same flash and the ancestors round trip is never
+    // paid -- one request, no landing, no tab switch.
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let mut app = app_with_mock_emby(&http);
     app.tab = TabSelection::Home;
-    http.respond(
-        200,
-        r#"{"Items":[{"Id":"art1","Name":"Not An Artist","Type":"MusicAlbum"}]}"#,
-    );
-    // The type-verification fetch of the same id (the Series sibling's
-    // shape: a mismatched caller item_type re-fetches before failing).
-    http.respond(
-        200,
-        r#"{"Items":[{"Id":"art1","Name":"Not An Artist","Type":"MusicAlbum"}]}"#,
-    );
+    http.respond(200, r#"{"Items":[]}"#);
 
     app.spawn_navigate_to_item(
         "art1".into(),
@@ -997,6 +985,11 @@ fn artist_id_resolving_to_a_non_artist_record_is_a_resolve_failure() {
     assert!(matches!(ev, LibEvent::Error(_)), "expected LibEvent::Error");
     app.handle_lib_event(ev);
     assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
+    assert_eq!(
+        http.request_count(),
+        1,
+        "the deleted item fails at the fetch, before the ancestors round trip"
+    );
 }
 
 #[test]
