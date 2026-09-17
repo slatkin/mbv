@@ -786,13 +786,11 @@ mod wide_row_regression_tests {
         );
     }
 
-    /// Episode rows split into a two-tone title: the series title paints in
-    /// the ordinary emphasis role and the episode title after it in the
-    /// yellow focus-accent role, so the two are visually delineated. On a
-    /// slot too narrow for both, the episode title keeps its budget and the
-    /// series name ellipsises first.
+    /// Split rows paint the now-playing two-tone palette: context in gold,
+    /// item title in aqua. On a narrow slot the row truncates as one string —
+    /// the context keeps its width and the single ellipsis lands at the cut.
     #[test]
-    fn episode_row_paints_secondary_title_in_the_focus_accent_role() {
+    fn episode_row_paints_the_split_row_playback_palette() {
         use crate::app::components::media_list::{MediaListRow, MediaSemanticState};
 
         let rect = Rect::new(0, 0, 40, 1);
@@ -822,14 +820,15 @@ mod wide_row_regression_tests {
         );
         // The series title is at the 2-column quiet indent; the episode
         // title starts after it and the one separating space.
-        assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
+        assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
-            palette::TEXT_FOCUS_ACCENT
+            palette::PLAYBACK_TITLE_FG
         );
 
         // Narrow slot on an unselected row (the selected row marquees):
-        // the episode title survives, the series name ellipsises first.
+        // the row truncates as one string — the context part keeps its full
+        // budget and the single ellipsis lands at the cut.
         let rect = Rect::new(0, 0, 20, 2);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -863,12 +862,81 @@ mod wide_row_regression_tests {
             .map(|x| buf[(x, 1)].symbol().to_string())
             .collect();
         assert!(
-            row_text.contains("Episode Title"),
-            "episode title survives a narrow slot: {row_text:?}"
+            row_text.contains("A Very Long Se\u{2026}"),
+            "the row truncates as one string with one trailing ellipsis: {row_text:?}"
         );
         assert!(
-            row_text.contains('\u{2026}'),
-            "long series name ellipsises first: {row_text:?}"
+            !row_text.contains("Episode"),
+            "the item title is cut with the row: {row_text:?}"
+        );
+        assert!(row_text.matches('\u{2026}').count() == 1, "{row_text:?}");
+        // The truncated context part keeps the playback-context gold role.
+        assert_eq!(buf[(2, 1)].fg, palette::PLAYBACK_CONTEXT_FG);
+    }
+
+    /// A row with no secondary title keeps its semantic title role (soft
+    /// white emphasis, played muted) — the split palette never leaks.
+    #[test]
+    fn single_part_rows_keep_the_ordinary_title_role() {
+        let rect = Rect::new(0, 0, 40, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "ordinary".into(),
+                primary: "Ordinary Movie".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "played".into(),
+                primary: "Played Movie".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Played,
+            },
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_MUTED);
+    }
+
+    /// A played split row mutes only the item title (aqua → muted) while the
+    /// context keeps gold, so the container stays legible on watched rows.
+    #[test]
+    fn played_split_row_mutes_the_item_title_while_context_keeps_gold() {
+        let rect = Rect::new(0, 0, 40, 1);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "ep".into(),
+            primary: "Severance".into(),
+            secondary: Some("Episode Title".into()),
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Played,
+        }]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
+        assert_eq!(
+            buf[(2 + "Severance ".len() as u16, 0)].fg,
+            palette::TEXT_MUTED
         );
     }
 

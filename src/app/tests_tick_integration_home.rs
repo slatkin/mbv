@@ -553,3 +553,96 @@ fn home_owner_cursor_survives_a_content_push() {
         "the owner's cursor survives the content projection"
     );
 }
+
+/// The list-row cells for Home's two fixture rows: the split row's
+/// `(context_x, title_x, y)` and the single-part row's `(x, y)` on the line
+/// directly below it (the list's fixed-row flow, no `Heading`/`Spacer`
+/// between). The cursor-following Hero can paint either title on its own
+/// line, so only the adjacent pair identifies the list rows.
+fn home_list_row_cells(
+    terminal: &Terminal<TestBackend>,
+    context: &str,
+    split_title: &str,
+    single_title: &str,
+) -> ((u16, u16, u16), (u16, u16)) {
+    let buf = terminal.backend().buffer();
+    let whole = format!("{context} {split_title}");
+    let row_text = |y: u16| -> String {
+        (0..buf.area().width).map(|x| buf[(x, y)].symbol()).collect()
+    };
+    for y in 0..buf.area().height.saturating_sub(1) {
+        let row = row_text(y);
+        let Some(at) = row.find(&whole) else {
+            continue;
+        };
+        if let Some(single_at) = row_text(y + 1).find(single_title) {
+            return (
+                (at as u16, (at + context.len() + 1) as u16, y),
+                (single_at as u16, y + 1),
+            );
+        }
+    }
+    panic!(
+        "adjacent list rows for split {whole:?} and single-part {single_title:?} not painted"
+    );
+}
+
+fn assert_home_palette_painted(terminal: &Terminal<TestBackend>, label: &str) {
+    use crate::app::palette;
+
+    let buf = terminal.backend().buffer();
+    // A split row (episode → series context + item title): the context name
+    // paints the playback-context gold role and the item title the
+    // playback-title aqua role.
+    let ((ctx_x, title_x, row_y), (single_x, single_y)) =
+        home_list_row_cells(terminal, "Severance", "Broken Bird", "The Long Goodbye");
+    assert_eq!(
+        buf[(ctx_x, row_y)].fg,
+        palette::PLAYBACK_CONTEXT_FG,
+        "{label}: split-row context must paint the playback-context role"
+    );
+    assert_eq!(
+        buf[(title_x, row_y)].fg,
+        palette::PLAYBACK_TITLE_FG,
+        "{label}: split-row item title must paint the playback-title role"
+    );
+    // A single-part row (movie, no container) keeps the ordinary title role.
+    assert_eq!(
+        buf[(single_x, single_y)].fg,
+        palette::TEXT_EMPHASIS,
+        "{label}: single-part row must keep the ordinary title role"
+    );
+}
+
+/// Task 4.2: a Home section render through the shell sync pass (a real tick
+/// followed by the panel's own `draw_frame` placement) paints the now-playing
+/// two-tone palette on split rows and the ordinary role on single-part rows,
+/// in both the Wide and Narrow presentations.
+#[test]
+fn home_tick_render_paints_split_row_palette_and_ordinary_single_part_role() {
+    let mut harness = home_harness(160, 30, 0);
+    let mut episode = make_item("Broken Bird", "Episode");
+    episode.id = "home-ep".into();
+    episode.series_name = "Severance".into();
+    let mut movie = make_item("The Long Goodbye", "Movie");
+    movie.id = "home-movie".into();
+    harness.model_mut().home_content.continue_items = vec![episode, movie];
+    harness.model_mut().home_content.loading = false;
+    harness.model_mut().push_home_content();
+    harness.model_mut().sync_mounted_surfaces();
+
+    // A real tick through the shell sync pass moves the cursor onto the
+    // single-part row before the frame is drawn.
+    harness.inject(key(Key::Down));
+    let outcome = harness.step();
+    handle_tick_messages(&mut harness, outcome.messages);
+
+    let wide = draw(&mut harness, 160, 30);
+    assert_home_palette_painted(&wide, "Wide");
+
+    // The Narrow presentation reuses the same owner through the panel; the
+    // palette must survive the geometry transition.
+    let narrow = draw(&mut harness, 60, 20);
+    assert_home_palette_painted(&narrow, "Narrow");
+}
+

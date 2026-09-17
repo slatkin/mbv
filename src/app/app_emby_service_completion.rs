@@ -324,6 +324,7 @@ impl App {
             continue_items,
             latest,
             loading: false,
+            feed_names: std::collections::HashMap::new(),
         }
     }
 }

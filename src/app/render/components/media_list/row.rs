@@ -86,6 +86,9 @@ pub(in crate::app) fn media_list_row<Target>(
                 // the ordinary role. Active rows retain resume progress inline
                 // but do not receive the play marker. Both states append their
                 // progress percentage to the trailing text in the same style.
+                // A now-playing row never carries secondary (Home, the only
+                // split-row producer, emits `Ordinary` rows), so the palette
+                // below never applies to one.
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
                 MediaSemanticState::Played => (palette::TEXT_MUTED, None, None),
                 MediaSemanticState::Active { progress } => (
@@ -141,18 +144,23 @@ pub(in crate::app) fn media_list_row<Target>(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
             );
             let title_color = fg;
-            // Two-tone episode rows: an optional secondary title (the
-            // episode title) paints in the selected-row role after the
-            // primary title, with one separating space. (`parts` feeds the
-            // marquee path, which only paints selected rows; unselected
-            // two-tone rows keep the yellow focus-accent secondary via the
-            // truncation branch below.)
+            // Split rows paint the now-playing two-tone palette: primary is
+            // the container/context in gold, secondary the item's own name in
+            // aqua, with one separating space. A played row mutes only the
+            // secondary; no other state moves the palette (a `NowPlaying` row
+            // never carries secondary). Single-part rows keep their semantic
+            // title role. (`parts` feeds the selected-row marquee path;
+            // unselected split rows paint the same roles below.)
+            let secondary_color = match semantic_state {
+                MediaSemanticState::Played => palette::TEXT_MUTED,
+                _ => palette::PLAYBACK_TITLE_FG,
+            };
             let parts: Vec<(String, Color)> =
                 match secondary.as_deref().filter(|sec| !sec.is_empty()) {
                     Some(sec) => vec![
-                        (primary.clone(), title_color),
-                        (" ".into(), title_color),
-                        (sec.to_owned(), palette::TEXT_FOCUS_ACCENT),
+                        (primary.clone(), palette::PLAYBACK_CONTEXT_FG),
+                        (" ".into(), palette::PLAYBACK_CONTEXT_FG),
+                        (sec.to_owned(), secondary_color),
                     ],
                     None => vec![(primary.clone(), title_color)],
                 };
@@ -164,22 +172,29 @@ pub(in crate::app) fn media_list_row<Target>(
                     marquee_spans(primary, &parts, title_width, text, started_at)
                 })
                 .unwrap_or_else(|| {
-                    // Truncation priority: the secondary title keeps its width
-                    // (up to the whole slot) and the primary title takes the
-                    // rest, so a long series name ellipsises before the
-                    // episode title is dropped.
-                    let sec = secondary.as_deref().filter(|sec| !sec.is_empty());
-                    let sec_w = sec.map_or(0, |text| text.width().min(title_width));
-                    let mut spans = vec![Span::styled(
-                        trunc_str(primary, title_width - sec_w),
-                        Style::default().fg(title_color),
-                    )];
-                    if let Some(sec) = sec.filter(|_| sec_w > 0) {
-                        spans.push(Span::raw(" "));
-                        spans.push(Span::styled(
-                            trunc_str(sec, sec_w),
-                            Style::default().fg(palette::TEXT_FOCUS_ACCENT),
-                        ));
+                    // Whole-row truncation: the title parts (context,
+                    // separator, item title) are one string cut as a unit —
+                    // full parts while they fit, then the part that crosses
+                    // the budget takes the single trailing ellipsis and
+                    // everything after it is dropped. The context part keeps
+                    // its full width; the item title absorbs the cut.
+                    let mut spans = Vec::new();
+                    let mut used = 0usize;
+                    for (text, color) in &parts {
+                        if used >= title_width {
+                            break;
+                        }
+                        let budget = title_width - used;
+                        if text.width() <= budget {
+                            spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                            used += text.width();
+                        } else {
+                            spans.push(Span::styled(
+                                trunc_str(text, budget),
+                                Style::default().fg(*color),
+                            ));
+                            break;
+                        }
                     }
                     spans
                 });

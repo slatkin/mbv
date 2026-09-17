@@ -14,7 +14,9 @@ pub(super) fn marquee_spans(
     marquee_started_at: &mut std::time::Instant,
 ) -> Vec<Span<'static>> {
     let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
-    if max_width == 0 || total_width <= max_width {
+    // A zero budget (the row fully consumed by reserved slots) yields an
+    // empty window — never the untruncated parts.
+    if total_width <= max_width {
         return parts
             .iter()
             .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))

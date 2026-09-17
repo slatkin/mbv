@@ -2,7 +2,7 @@ use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::{QueueItem, QueueSlotId};
 use mbv_core::player::{PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::sync::mpsc;
 
 /// Shared local-vs-remote playback seam for the TUI action layer.
@@ -165,6 +165,10 @@ pub(super) struct HomeContent {
     pub(super) continue_items: Vec<EmbyItem>,
     pub(super) latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
     pub(super) loading: bool,
+    /// Shell-resolved feed-id → display-name lookup (design D2): `Config`
+    /// never enters components, so the shell resolves at assignment and the
+    /// projection reads by `feed_id`. Same staleness window as the strip.
+    pub(super) feed_names: HashMap<String, String>,
 }
 
 impl HomeContent {
@@ -176,6 +180,7 @@ impl HomeContent {
             continue_items: Vec::new(),
             latest: Vec::new(),
             loading: true,
+            feed_names: HashMap::new(),
         }
     }
 }

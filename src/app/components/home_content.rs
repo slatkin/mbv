@@ -12,6 +12,8 @@
 //! its content type (Emby, ABS or Feeds), and its image state is the shell
 //! projection's (task 5.10): this owner never fetches.
 
+use std::collections::HashMap;
+
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::library_panel::content::{
@@ -52,6 +54,10 @@ pub(in crate::app) struct HomeContent {
     /// drives its Wide/Inline presentation from its own breakpoint.
     carrier: MediaListCarrier<String>,
     loading: bool,
+    /// Shell-resolved feed-id → display-name lookup (design D2): `Config`
+    /// never enters components, so the shell resolves at assignment and the
+    /// projection reads entries up by `feed_id`.
+    feed_names: HashMap<String, String>,
     section: usize,
     /// The projection's image state for the current hero (task 5.10): set by
     /// the shell, read by the painters through the panel content.
@@ -65,6 +71,7 @@ impl HomeContent {
             latest: Vec::new(),
             carrier: MediaListCarrier::new(),
             loading: false,
+            feed_names: HashMap::new(),
             section: 0,
             hero_image: HeroImageState::None,
         }
@@ -79,10 +86,12 @@ impl HomeContent {
         continue_items: Vec<QueueItem>,
         latest: Vec<(String, HomeLatestSource, Vec<QueueItem>)>,
         loading: bool,
+        feed_names: HashMap<String, String>,
     ) {
         self.continue_items = continue_items;
         self.latest = latest;
         self.loading = loading;
+        self.feed_names = feed_names;
         self.clamp_section();
         self.project_active_section();
     }
@@ -202,9 +211,20 @@ impl HomeContent {
         let rows: Vec<MediaListRow<String>> = items
             .iter()
             .map(|item| {
-                // Episode rows split into a two-tone title: the series/show
-                // title paints soft white, the episode title yellow after it.
-                let (primary, secondary) = item.display_name_parts();
+                // Split rows share the now-playing mapping (design D2/D4):
+                // primary is the container/context, secondary the item's own
+                // name; feed names come from the shell-resolved `feed_id`
+                // lookup (`Config` never enters components).
+                let feed_name = item
+                    .as_feed()
+                    .and_then(|entry| entry.feed_id.as_deref())
+                    .and_then(|feed_id| self.feed_names.get(feed_id))
+                    .map(String::as_str);
+                let parts = item.playback_title_parts(feed_name);
+                let (primary, secondary) = match parts.context {
+                    Some(context) => (context.text, Some(parts.title.text)),
+                    None => (parts.title.text, None),
+                };
                 MediaListRow::Item {
                     primary,
                     secondary,
@@ -399,6 +419,12 @@ impl HomeContent {
     #[cfg(test)]
     pub(in crate::app) fn test_multi_selection_len(&self) -> usize {
         self.carrier.multi_selection().len()
+    }
+
+    /// Active section rows for projection tests (untruncated by design).
+    #[cfg(test)]
+    pub(in crate::app) fn test_active_rows(&self) -> &[MediaListRow<String>] {
+        self.carrier.rows()
     }
 }
 
@@ -619,5 +645,207 @@ impl LibraryContentOwner for HomeContent {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+}
+
+/// Task 3.2 (home-rows-playback-palette): the Home row projection applies
+/// the now-playing title-parts mapping — the container/context part is the
+/// primary, the item's own title the secondary, and title-only rows carry no
+/// secondary part. The core media-type mapping itself is pinned in
+/// `playback_queue_tests_title_parts`; these tests pin the Home wiring
+/// (including the shell-resolved feed-name lookup by `feed_id`).
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_item;
+    use mbv_core::playback_queue::{
+        AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, FeedEntry,
+    };
+
+    const SUBSCRIPTION_URL: &str = "https://example.com/feed.xml";
+
+    fn feed_entry(title: &str, feed_id: Option<&str>) -> QueueItem {
+        QueueItem::Feed(FeedEntry {
+            guid: format!("guid-{title}"),
+            title: title.into(),
+            enclosure_url: None,
+            link: None,
+            mime_type: None,
+            duration_ticks: None,
+            pub_date_secs: None,
+            feed_kind: None,
+            feed_id: feed_id.map(Into::into),
+            position_ticks: 0,
+            played: false,
+        })
+    }
+
+    fn owner_with_section(
+        source: HomeLatestSource,
+        items: Vec<QueueItem>,
+        feed_names: &[(&str, &str)],
+    ) -> HomeContent {
+        let mut owner = HomeContent::new();
+        let names = feed_names
+            .iter()
+            .map(|(id, name)| (id.to_string(), name.to_string()))
+            .collect();
+        owner.set_content(
+            Vec::new(),
+            vec![("Latest".into(), source.clone(), items)],
+            false,
+            names,
+        );
+        assert!(
+            owner.restore_section(&source),
+            "the pushed section must exist"
+        );
+        owner
+    }
+
+    fn row_parts(owner: &HomeContent, index: usize) -> (String, Option<String>) {
+        match &owner.test_active_rows()[index] {
+            MediaListRow::Item {
+                primary, secondary, ..
+            } => (primary.clone(), secondary.clone()),
+            other => panic!("expected an item row, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn episode_rows_project_the_series_as_context_and_the_episode_title() {
+        let mut episode = make_item("Pilot", "Episode");
+        episode.id = "ep1".into();
+        episode.series_name = "Series Name".into();
+        let owner = owner_with_section(
+            HomeLatestSource::Emby("emby".into()),
+            vec![QueueItem::Emby(Box::new(episode))],
+            &[],
+        );
+        assert_eq!(
+            row_parts(&owner, 0),
+            ("Series Name".into(), Some("Pilot".into()))
+        );
+    }
+
+    #[test]
+    fn audio_track_rows_project_the_artist_as_context() {
+        let mut track = make_item("Track Name", "Audio");
+        track.id = "a1".into();
+        track.media_type = "Audio".into();
+        track.artist = "Artist Name".into();
+        let owner = owner_with_section(
+            HomeLatestSource::Emby("emby".into()),
+            vec![QueueItem::Emby(Box::new(track))],
+            &[],
+        );
+        assert_eq!(
+            row_parts(&owner, 0),
+            ("Artist Name".into(), Some("Track Name".into()))
+        );
+    }
+
+    #[test]
+    fn feed_rows_project_the_resolved_subscription_as_context() {
+        let owner = owner_with_section(
+            HomeLatestSource::Feeds,
+            vec![feed_entry("Entry Title", Some(SUBSCRIPTION_URL))],
+            &[(SUBSCRIPTION_URL, "Example Daily")],
+        );
+        assert_eq!(
+            row_parts(&owner, 0),
+            ("Example Daily".into(), Some("Entry Title".into()))
+        );
+    }
+
+    #[test]
+    fn feed_rows_without_a_resolved_subscription_stay_single_part() {
+        let owner = owner_with_section(
+            HomeLatestSource::Feeds,
+            vec![feed_entry("Entry Title", Some(SUBSCRIPTION_URL))],
+            &[],
+        );
+        assert_eq!(row_parts(&owner, 0), ("Entry Title".into(), None));
+    }
+
+    #[test]
+    fn abs_podcast_rows_project_the_show_as_context() {
+        let owner = owner_with_section(
+            HomeLatestSource::Audiobookshelf("lib".into()),
+            vec![QueueItem::Audiobookshelf(AudiobookshelfQueueItem {
+                library_item_id: "show".into(),
+                episode_id: "ep1".into(),
+                title: "Episode Five".into(),
+                show_title: Some("Show Title".into()),
+                ..abs_episode_defaults()
+            })],
+            &[],
+        );
+        assert_eq!(
+            row_parts(&owner, 0),
+            ("Show Title".into(), Some("Episode Five".into()))
+        );
+    }
+
+    #[test]
+    fn movie_and_book_rows_stay_single_part() {
+        let mut movie = make_item("The Film", "Movie");
+        movie.id = "m1".into();
+        let book = QueueItem::AudiobookshelfBook(AudiobookshelfBookQueueItem {
+            library_item_id: "book".into(),
+            title: "The Book".into(),
+            author: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            is_finished: false,
+            cover_path: None,
+        });
+        let owner = owner_with_section(
+            HomeLatestSource::Emby("emby".into()),
+            vec![QueueItem::Emby(Box::new(movie)), book],
+            &[],
+        );
+        assert_eq!(row_parts(&owner, 0), ("The Film".into(), None));
+        assert_eq!(row_parts(&owner, 1), ("The Book".into(), None));
+    }
+
+    /// Truncation is the canonical painter's contract (a split row is cut
+    /// as one string, context first); the projection's side of it is to hand
+    /// over both parts untruncated so the painter can decide.
+    #[test]
+    fn split_rows_carry_their_full_parts_for_the_painters_truncation_priority() {
+        let mut episode = make_item("A Very Long Episode Title That Must Survive", "Episode");
+        episode.id = "ep1".into();
+        episode.series_name = "A Very Long Series Name That May Ellipsise First".into();
+        let owner = owner_with_section(
+            HomeLatestSource::Emby("emby".into()),
+            vec![QueueItem::Emby(Box::new(episode))],
+            &[],
+        );
+        assert_eq!(
+            row_parts(&owner, 0),
+            (
+                "A Very Long Series Name That May Ellipsise First".into(),
+                Some("A Very Long Episode Title That Must Survive".into())
+            )
+        );
+    }
+
+    fn abs_episode_defaults() -> AudiobookshelfQueueItem {
+        AudiobookshelfQueueItem {
+            library_item_id: String::new(),
+            episode_id: String::new(),
+            title: String::new(),
+            show_title: None,
+            author: None,
+            description: None,
+            duration_ticks: None,
+            position_ticks: 0,
+            played: false,
+            pub_date_secs: None,
+            is_finished: false,
+            cover_path: None,
+        }
     }
 }

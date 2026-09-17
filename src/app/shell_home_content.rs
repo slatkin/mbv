@@ -13,6 +13,7 @@ use super::notify_actions::ToastSeverity;
 use super::shell::Model;
 use super::types_playback::HomeContent;
 use mbv_core::playback_queue::QueueItem;
+use std::collections::HashMap;
 use std::time::Instant;
 
 impl Model {
@@ -25,9 +26,29 @@ impl Model {
     /// content's own `loading` flag (always `false` for a completed
     /// computation) is authoritative, so an assigned refresh also clears a
     /// pending startup skeleton.
-    pub(super) fn assign_home_content(&mut self, content: HomeContent) {
+    pub(super) fn assign_home_content(&mut self, mut content: HomeContent) {
+        content.feed_names = self.resolve_home_feed_names(&content);
         self.home_content = content;
         self.push_home_content();
+    }
+
+    /// Shell-side feed-name resolution for a Home snapshot (design D2):
+    /// `Config` never crosses into a component, so the shell resolves feed
+    /// display names at assignment time (the App layer's subscription match)
+    /// for the component's projection to look up by `feed_id`.
+    pub(super) fn resolve_home_feed_names(&self, content: &HomeContent) -> HashMap<String, String> {
+        content
+            .latest
+            .iter()
+            .flat_map(|(_, _, items)| items)
+            .filter_map(|item| item.as_feed())
+            .filter_map(|entry| {
+                Some((
+                    entry.feed_id.as_deref()?.to_string(),
+                    self.app.feed_subscription_display_name(entry)?,
+                ))
+            })
+            .collect()
     }
 
     /// Reset Home content after an Emby removal/replacement
@@ -38,6 +59,7 @@ impl Model {
     pub(super) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
         self.home_content.latest.clear();
+        self.home_content.feed_names.clear();
         self.push_home_content();
     }
 
@@ -83,6 +105,9 @@ impl Model {
             sections,
             |source| matches!(source, super::types_playback::HomeLatestSource::Feeds),
         );
+        // Merged feed sections never pass through `assign_home_content`, so
+        // re-resolve the lookup over the merged content (design D2).
+        self.home_content.feed_names = self.resolve_home_feed_names(&self.home_content);
         self.push_home_content();
     }
 

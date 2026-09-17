@@ -150,12 +150,15 @@ impl Model {
             .map(|(title, source, items)| (title.clone(), source.clone(), items.clone()))
             .collect();
         let loading = self.home_content.loading;
+        // Feed names ride the snapshot (design D2) so the projection reads
+        // them from the same assignment as the items.
+        let feed_names = self.home_content.feed_names.clone();
         // Snapshot the pending persisted-pill restore before the owner borrow
         // so the source identity is stable; arriving sources are applied by
         // `restore_section` only once a matching section exists.
         let pending = self.home_section_pending.clone();
         let restored = self.update_home_owner(|home| {
-            home.set_content(continue_items, latest, loading);
+            home.set_content(continue_items, latest, loading, feed_names);
             pending
                 .as_ref()
                 .and_then(|source| home.restore_section(source).then(|| source.clone()))
@@ -608,7 +611,7 @@ mod tests {
         // owner section back to section 0): the same keyboard '.' path
         // shows the entry again.
         model
-            .update_home_owner(|home| home.set_content(vec![], vec![], false))
+            .update_home_owner(|home| home.set_content(vec![], vec![], false, Default::default()))
             .expect("Home owner installed");
         assert!(
             model.home_continue_watching_selected(),

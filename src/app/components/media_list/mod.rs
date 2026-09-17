@@ -346,8 +346,11 @@ pub enum MediaListRow<Target> {
     Item {
         target: Target,
         primary: String,
-        /// Optional secondary title painted after `primary` in the yellow
-        /// focus-accent role (the episode title of a series/show row).
+        /// Optional secondary title of a split row (e.g. an episode title)
+        /// painted after `primary` with one space: `primary` is the
+        /// container/context name in gold (`PLAYBACK_CONTEXT_FG`), secondary
+        /// in aqua (`PLAYBACK_TITLE_FG`); a played row mutes only the
+        /// secondary to (`TEXT_MUTED`).
         secondary: Option<String>,
         /// Left-aligned metadata rendered right after `primary`. The variant
         /// carries its own text role: a release year paints in the green
