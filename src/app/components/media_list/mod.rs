@@ -616,7 +616,7 @@ impl<Target> MediaList<Target> {
         } else {
             let index = self
                 .selectable
-                .partition_point(|&candidate| candidate <= top + height - 1);
+                .partition_point(|&candidate| candidate < top + height);
             if index == 0 {
                 return;
             }

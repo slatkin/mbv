@@ -582,25 +582,21 @@ impl LibraryContentOwner for PodcastContent {
             // moves by a page or one display row, clamped, and the selection
             // rides only when the step would leave it outside. The show-move
             // echo reports a selection move only (design D8).
-            Key::PageUp if !episode => {
-                return self.show_viewport(MediaListSurfaceInput::Page(-1));
-            }
-            Key::PageDown if !episode => {
-                return self.show_viewport(MediaListSurfaceInput::Page(1));
-            }
+            Key::PageUp if !episode => self.show_viewport(MediaListSurfaceInput::Page(-1)),
+            Key::PageDown if !episode => self.show_viewport(MediaListSurfaceInput::Page(1)),
             Key::Char('e') if key.modifiers == KeyModifiers::CONTROL => {
-                return if episode {
+                if episode {
                     self.episode_viewport(MediaListSurfaceInput::ScrollViewport(-1))
                 } else {
                     self.show_viewport(MediaListSurfaceInput::ScrollViewport(-1))
-                };
+                }
             }
             Key::Char('y') if key.modifiers == KeyModifiers::CONTROL => {
-                return if episode {
+                if episode {
                     self.episode_viewport(MediaListSurfaceInput::ScrollViewport(1))
                 } else {
                     self.show_viewport(MediaListSurfaceInput::ScrollViewport(1))
-                };
+                }
             }
             Key::PageUp if episode => {
                 self.episode_viewport(MediaListSurfaceInput::Page(-1));
