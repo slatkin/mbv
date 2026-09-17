@@ -95,15 +95,22 @@ fn build_navigate_landing(
     // Ancestors are ordered nearest→root: [Season, Series, physical_folder, AggregateFolder].
     // The pure table decides first from the item's own back-references; the
     // round trip is paid only when a kind's fallback needs the chain.
-    match resolve_reveal_target(item_type, &item, None) {
-        Ok(reveal) => landing_for_target(client, &item, reveal, lib_id),
+    let reveal = match resolve_reveal_target(item_type, &item, None) {
+        Ok(reveal) => reveal,
         Err(_) => {
             let ancestors = client.get_ancestors(item_id)?;
             log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
-            let reveal = resolve_reveal_target(item_type, &item, Some(&ancestors))?;
-            landing_for_target(client, &item, reveal, lib_id)
+            resolve_reveal_target(item_type, &item, Some(&ancestors))?
         }
-    }
+    };
+    landing_for_target(client, &item, reveal, lib_id)
+}
+
+/// The navigable ancestors inside the library: `get_ancestors` is
+/// nearest→root and its last two entries are the physical library folder and
+/// the AggregateFolder root, which are never browse levels of their own.
+fn ancestors_inside_library(ancestors: &[EmbyItem]) -> &[EmbyItem] {
+    &ancestors[..ancestors.len().saturating_sub(2)]
 }
 
 /// D1+D2: the landing kind is chosen from the RESOLVED `RevealTarget` kind.
@@ -114,10 +121,10 @@ fn landing_for_target(
     client: &EmbyClient,
     item: &EmbyItem,
     reveal: RevealTarget,
-    _lib_id: &str,
+    lib_id: &str,
 ) -> Result<NavigateLanding, String> {
     match reveal {
-        RevealTarget::Chain => build_chain_nav_stack(client, item, _lib_id)
+        RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
             .map(|nav_stack| NavigateLanding::Chain { nav_stack }),
         RevealTarget::Series(series_id) => {
             // The item's own record already in hand doubles as the reveal
@@ -154,11 +161,7 @@ fn landing_for_target(
             // folder + AggregateFolder (same rule as `build_chain_nav_stack`)
             // and reverse what's left to root→album.
             let ancestors = client.get_ancestors(&album.id)?;
-            let inside = if ancestors.len() >= 2 {
-                &ancestors[..ancestors.len() - 2]
-            } else {
-                &ancestors[..0]
-            };
+            let inside = ancestors_inside_library(&ancestors);
             let ancestors = inside
                 .iter()
                 .rev()
@@ -185,7 +188,7 @@ fn landing_for_target(
             if artist.item_type != "MusicArtist" {
                 return Err(format!("Item {artist_id} is not an artist"));
             }
-            build_chain_nav_stack(client, &artist, _lib_id)
+            build_chain_nav_stack(client, &artist, lib_id)
                 .map(|nav_stack| NavigateLanding::Chain { nav_stack })
         }
     }
@@ -202,11 +205,7 @@ fn build_chain_nav_stack(
     // Drop the last two ancestors (physical library folder + AggregateFolder
     // root); everything before those is navigable content inside the library.
     let ancestors = client.get_ancestors(&item.id)?;
-    let inside = if ancestors.len() >= 2 {
-        &ancestors[..ancestors.len() - 2]
-    } else {
-        &ancestors[..0]
-    };
+    let inside = ancestors_inside_library(&ancestors);
 
     // Build nav levels: lib_id first, then inside ancestors from root→item, then item itself.
     // inside is nearest→root order; we need root→item, so iterate reversed.

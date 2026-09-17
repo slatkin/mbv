@@ -860,6 +860,46 @@ fn pending_series_landing_survives_a_foreign_library_drain() {
 }
 
 #[test]
+fn completed_series_landing_handoff_survives_an_unrelated_error_drain() {
+    // P2 correction: the hand-off is armed only after the landing already
+    // succeeded, so an unrelated `LibEvent::Error` drain must not swallow the
+    // owed workspace/overlay open. The pre-landing pending landing is still
+    // dropped by the same drain.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_loaded_tv_library();
+    app.tab = TabSelection::Home;
+
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Series {
+            reveal: Box::new(series_item("ser1", "The Show")),
+        },
+        switch_tab: true,
+    });
+    assert!(
+        app.pending_series_handoff.is_some(),
+        "the completed landing armed the hand-off"
+    );
+    // A second, still-unresolved landing: the error drain must drop it.
+    app.pending_series_landing = Some(crate::app::types_events::PendingSeriesLanding {
+        lib_idx: 0,
+        reveal: Box::new(series_item("ser2", "Third Show")),
+        switch_tab: true,
+    });
+
+    app.handle_lib_event(LibEvent::Error("an unrelated refresh failed".into()));
+
+    assert!(
+        app.pending_series_handoff.is_some(),
+        "a completed landing's hand-off survives an unrelated error"
+    );
+    assert!(
+        app.pending_series_landing.is_none(),
+        "the pre-landing pending is still dropped by the error drain"
+    );
+}
+
+#[test]
 fn artist_navigation_lands_on_the_plain_chain_shape() {
     // U2 correction (finding 5): the artist kind has its own named rule --
     // fetch + type-verify the artist, then land through the plain chain path

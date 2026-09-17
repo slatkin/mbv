@@ -751,10 +751,12 @@ impl App {
                 // A failed per-kind activation reports through here; drop the
                 // deferred tab switch and the pending Series landing so
                 // neither can fire on a later, unrelated drain (U2
-                // correction).
+                // correction). `pending_series_handoff` deliberately survives:
+                // it is only armed once the landing already succeeded, and an
+                // unscoped later error must not swallow the pending workspace/
+                // overlay open -- it is consumed by the next sync pass.
                 self.pending_navigate_tab_switch = None;
                 self.pending_series_landing = None;
-                self.pending_series_handoff = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
         }

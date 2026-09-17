@@ -50,8 +50,13 @@ pub(super) struct PendingSeriesLanding {
 /// the immediate `NavigateTo` arm or the deferred
 /// `retry_pending_series_landing` -- and consumed by the shell's sync pass
 /// (`Model::drain_series_navigation_handoff`), which runs the same
-/// presentation sequence Inline Search's series activation runs. One shot:
-/// consumed on read.
+/// presentation sequence Inline Search's series activation runs.
+///
+/// Lifecycle: the landing has already succeeded when this is armed, so it is
+/// NOT cleared by `LibEvent::Error` (an unrelated error after the landing must
+/// not swallow the owed workspace/overlay open); it survives to the next sync
+/// pass. A manual tab change in between discards it silently, without
+/// surfacing an error.
 pub(super) struct PendingSeriesHandoff {
     pub(super) lib_idx: usize,
     pub(super) reveal: Box<EmbyItem>,
