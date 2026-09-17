@@ -18,9 +18,12 @@ browse level. A Movie or generic video item SHALL land on the library's root
 browse level with the cursor on the item. A Series SHALL land on the root
 browse level with the cursor on the series. An Episode or Season SHALL resolve
 its owning Series and land on that show; a Season or Episode SHALL never exist
-as the top browse level of the landed navigation. A Music item (track, album,
-or artist) SHALL resolve to its album and land with that album selected in the
-Music surface.
+as the top browse level of the landed navigation. A Music track or album
+SHALL resolve to its album and land with that album selected in the Music
+surface. A MusicArtist SHALL NOT land: the navigation SHALL fail with a flash
+and leave the current view unchanged (an artist has no single owning album,
+and a plain artist browse chain does not render on a grouped Music surface —
+verified by a real-tick render check).
 
 #### Scenario: Episode in the queue navigates to its show
 
@@ -34,7 +37,9 @@ Music surface.
 
 - **WHEN** the user chooses "Go to Library" on a queued Music track
 - **THEN** the Music library tab becomes the active tab selection with the
-  track's album selected and its track list available as the workspace content
+  track's album selected and, in the album-grouped view, the album's track list
+  as the workspace content; in a flat (non-grouped) music library the landed
+  top browse level IS the track list
 
 #### Scenario: Movie in the queue navigates to its list row
 
@@ -88,8 +93,9 @@ pre-navigation position SHALL NOT apply after the navigation completes.
 
 When item navigation targets a destination whose Interactive Component is
 already mounted, the component SHALL re-anchor its selection to the landed
-item before the next presentation push, so the workspace or list reflects the
-navigation rather than the pre-navigation selection.
+item before the presentation push that draws the landed state, so the
+workspace or list reflects the navigation rather than the pre-navigation
+selection.
 
 #### Scenario: Previously visited TV library follows the navigation
 

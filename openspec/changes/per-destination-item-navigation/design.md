@@ -59,7 +59,8 @@ the landing:
 | Movie / generic | the item | root level, cursor on it (existing chain path) |
 | Series | the item | `activate_searched_series` flow |
 | Episode / Season | owning Series | `activate_searched_series` flow |
-| Audio / MusicAlbum / MusicArtist | owning album | Music album activation |
+| Audio / MusicAlbum | owning album | Music album activation |
+| MusicArtist | itself | resolve failure (flash, current view unchanged) — an artist has no single owning album, and a real-tick render check proved a plain artist chain does not render on a grouped Music surface (stale phantom surface / empty area), so the interim chain rule was replaced by the resolve-failure rule |
 
 Resolution uses the item's own `series_id` for Episode/Season (one field, no
 extra round trip when present; `get_ancestors` remains the fallback), and
@@ -82,13 +83,15 @@ synchronous App state and the event already exists.
 
 ### D3: Shell hand-off mirrors Inline Search's series/album activation exactly
 
-The Model drain on a navigated show/album performs the same sequence as
-`activate_inline_search_item`: TV — `reanchor_tv_owner_selection`,
-`push_tv_workspace_content`, then `activate_selected_series_item` (Wide) or
-`open_library_hero_overlay` (Narrow), and re-push. Music — set
-`music_workspace_reanchor` and push; the owner adopts the album's track list as
-workspace content. No new hand-off kind is invented. The re-anchor added in
-34dbbd55 is subsumed by this sequence (kept for the Movie/generic arm).
+The hand-off runs in the shell sync pass, right after `sync_library_panel`
+(armed at exact landing completion — immediate or deferred retry — and
+consumed once), performing the same sequence as `activate_inline_search_item`:
+TV — `reanchor_tv_owner_selection`, `push_tv_workspace_content`, then
+`activate_selected_series_item` (Wide) or `open_library_hero_overlay`
+(Narrow), and re-push. Music — the existing `RecursiveAlbumActivated` shell arm
+(set `music_workspace_reanchor`, track-focus request, pushes) is the mechanism
+for the album landing. No new hand-off kind is invented. The re-anchor added
+in 34dbbd55 is subsumed by this sequence (kept for the Movie/generic arm).
 
 ### D4: Landing replaces the saved Library position (generalized)
 
@@ -96,6 +99,26 @@ The 34dbbd55 `save_default_library_position` call stays, applied to whatever
 state the per-kind landing produced, before `switch_tab` activation. The
 restore fence (requested-position check in
 `handle_restored_library_position`) then discards any pre-navigation restore.
+
+### D5: Ensure-then-land for a Series whose target library cannot satisfy the landing
+
+A miss against a root corpus that can still grow is not a failure (the
+pre-change Chain arm landed regardless of library load state, and the spec
+requires the landing to select the show). Instead the landing arms a pending
+state and grows the corpus: `ensure_lib_loaded_for` for an unloaded library,
+`spawn_all_items_prefetch` when the root is loaded but `all_items` is absent
+(`ensure_lib_loaded_for`'s saved-position restore path never emits `Loaded`, so
+the restored-position drain is a third retry trigger; its prefetch only fires
+for this user-initiated pending, keeping startup restore's no-prefetch regime).
+Retries fire only on drains whose `parent_id` is the library root's parent.
+The miss rule — flash, tab unchanged — is reserved for a genuinely absent item
+against a complete corpus. Lifecycle: the pending is consumed only by its own
+library's drains, cleared on `LibEvent::Error`, and cleared on any manual tab
+change; the deferred album tab switch (`pending_navigate_tab_switch`) and the
+series hand-off (`pending_series_handoff`) follow the same pattern. Loss
+semantics: an armed pending that is discarded by a manual tab change or an
+unscooped `LibEvent::Error` never surfaces an error — it simply leaves the
+current view untouched.
 
 ## Risks / Trade-offs
 
