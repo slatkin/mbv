@@ -102,15 +102,12 @@ pub(in crate::app) fn media_list_row<Target>(
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;
             // The left-aligned metadata pieces, in paint order: the trailing
-            // slot's own role (a year is green, a progress badge FOAM), then
-            // the active row's percentage as its own FOAM piece.
+            // slot's own role (a year is green), then the active row's
+            // percentage as its own FOAM piece.
             let mut trailing_pieces: Vec<(String, Color)> = Vec::new();
             match trailing {
                 Some(MediaListTrailing::Year(text)) if !text.is_empty() => {
                     trailing_pieces.push((text.clone(), palette::STATUS_AVAILABLE));
-                }
-                Some(MediaListTrailing::Progress(text)) if !text.is_empty() => {
-                    trailing_pieces.push((text.clone(), palette::TEXT_METADATA));
                 }
                 _ => {}
             }
@@ -140,10 +137,10 @@ pub(in crate::app) fn media_list_row<Target>(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
             );
             let title_color = fg;
-            // Split rows paint the now-playing two-tone palette: primary is
-            // the container/context in gold, secondary the item's own name in
-            // sage, with one separating space. A played row mutes only the
-            // secondary; no other state moves the palette (a `NowPlaying` row
+            // Split rows paint the two-tone palette: primary is the
+            // container/context in gold, secondary the item's own name in the
+            // soft-white emphasis role, with one separating space. A played
+            // row mutes only the secondary; no other state moves the palette (a `NowPlaying` row
             // never carries secondary). Single-part rows keep their semantic
             // title role. (`parts` feeds the selected-row marquee path;
             // unselected split rows paint the same roles below.)

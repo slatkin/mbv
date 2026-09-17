@@ -80,32 +80,11 @@ pub(in crate::app) struct TvContent {
     /// the Episodes pane, so this gates the overlay Workspace's key routing.
     hero_overlay_open: bool,
 }
-/// Derives the Emby-specific semantic state for a Narrow series row (mirrors
-/// `browser::emby_semantic_state`/`emby_library_content::emby_semantic_state`; the
-/// provider-neutral `media_list` layer deliberately stays free of `EmbyItem`,
-/// so each projection site carries its own copy).
-fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
-    if item.playback_position_ticks > 0 && !item.played {
-        let progress = if item.runtime_ticks > 0 {
-            Some(
-                ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64).min(100)
-                    as u16,
-            )
-        } else {
-            None
-        };
-        MediaSemanticState::active(progress)
-    } else if item.played {
-        MediaSemanticState::Played
-    } else {
-        MediaSemanticState::Ordinary
-    }
-}
+
 /// Build the embedded episode `WideMediaList`'s rows from a season's
 /// episodes (task 4.2d): the canonical control's row content. Library lists
-/// carry no time column, so no duration is projected. A played episode
-/// carries the shared played state so its title paints the one played-row
-/// colour everywhere.
+/// carry no time column, so no duration is projected. The row state comes
+/// from the one canonical derivation.
 fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
         .iter()
@@ -123,11 +102,11 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 trailing: None,
                 duration: None,
                 kind: MediaKind::Media,
-                semantic_state: if episode.played {
-                    MediaSemanticState::Played
-                } else {
-                    MediaSemanticState::Ordinary
-                },
+                semantic_state: MediaSemanticState::from_progress(
+                    episode.played,
+                    episode.playback_position_ticks,
+                    episode.runtime_ticks,
+                ),
             }
         })
         .collect()
@@ -197,7 +176,6 @@ impl TvContent {
         };
         let mut sorted_items: Vec<&EmbyItem> = context.list.items.iter().collect();
         sorted_items.sort_by_key(|item| natural_sort_key(effective_sort_str(item)));
-        let is_wide = self.is_wide;
         let rows = sorted_items.iter().enumerate().flat_map(|(index, item)| {
             let heading = grouped
                 .then(|| {
@@ -226,19 +204,13 @@ impl TvContent {
                         .then(|| MediaListTrailing::Year(item.production_year.to_string())),
                     duration: None,
                     kind: MediaKind::Collection,
-                    // A played series paints the one played-row colour in
-                    // both geometries. In-progress dimming keeps the
-                    // established per-geometry behaviour: Wide's series rail
-                    // never dimmed on in-progress state (legacy rail parity)
-                    // while Narrow reproduced the prior TV browse row
-                    // projection's `emby_semantic_state` dimming.
-                    semantic_state: if item.played {
-                        MediaSemanticState::Played
-                    } else if is_wide {
-                        MediaSemanticState::Ordinary
-                    } else {
-                        emby_semantic_state(item)
-                    },
+                    // The one canonical state derivation; the series rail no
+                    // longer diverges by geometry.
+                    semantic_state: MediaSemanticState::from_progress(
+                        item.played,
+                        item.playback_position_ticks,
+                        item.runtime_ticks,
+                    ),
                 }))
         });
         let rows = rows.collect::<Vec<_>>();

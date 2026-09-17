@@ -49,28 +49,6 @@ pub(in crate::app) struct EmbyLibraryIdentity {
     pub(in crate::app) feed_group: Option<usize>,
 }
 
-/// Derives the Emby-specific semantic state for a browse row (mirrors
-/// the prior Emby semantic-state helper; the provider-neutral `media_list` layer
-/// deliberately stays free of `EmbyItem`, so both projection sites — this
-/// owner and TV's `TvContent` — carry their own copy).
-fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
-    if item.playback_position_ticks > 0 && !item.played {
-        let progress = if item.runtime_ticks > 0 {
-            Some(
-                ((item.playback_position_ticks as u64 * 100) / item.runtime_ticks as u64).min(100)
-                    as u16,
-            )
-        } else {
-            None
-        };
-        MediaSemanticState::active(progress)
-    } else if item.played {
-        MediaSemanticState::Played
-    } else {
-        MediaSemanticState::Ordinary
-    }
-}
-
 fn row_for(item: &EmbyItem) -> MediaListRow<String> {
     let primary = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
         format!("{} \u{b7} {} items", item.display_name(), item.total_count)
@@ -87,7 +65,11 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
             .then(|| MediaListTrailing::Year(item.production_year.to_string())),
         duration: None,
         kind: MediaKind::Collection,
-        semantic_state: emby_semantic_state(item),
+        semantic_state: MediaSemanticState::from_progress(
+            item.played,
+            item.playback_position_ticks,
+            item.runtime_ticks,
+        ),
     }
 }
 

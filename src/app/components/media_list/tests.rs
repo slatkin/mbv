@@ -176,3 +176,33 @@ fn media_list_selection_summary_stays_provider_neutral() {
     let transition = list.delegate_operation(super::MediaListOperation::Context("two".into()));
     assert!(transition.external_intent.is_some());
 }
+
+/// The one canonical state derivation every list uses: `played` wins, a
+/// positive resume position yields `Active` with the bounded percentage (no
+/// percentage when the runtime is unknown), and no position is `Ordinary`.
+#[test]
+fn from_progress_is_the_one_state_derivation() {
+    assert_eq!(
+        MediaSemanticState::from_progress(true, 50, 100),
+        MediaSemanticState::Played,
+        "played wins over any resume position"
+    );
+    assert_eq!(
+        MediaSemanticState::from_progress(false, 25, 100),
+        MediaSemanticState::active(Some(25))
+    );
+    assert_eq!(
+        MediaSemanticState::from_progress(false, 50, 0),
+        MediaSemanticState::active(None),
+        "an unknown runtime keeps Active without a percentage"
+    );
+    assert_eq!(
+        MediaSemanticState::from_progress(false, 0, 100),
+        MediaSemanticState::Ordinary
+    );
+    assert_eq!(
+        MediaSemanticState::from_progress(false, 150, 100),
+        MediaSemanticState::active(Some(100)),
+        "the percentage is bounded at 100"
+    );
+}

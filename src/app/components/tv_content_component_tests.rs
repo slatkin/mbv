@@ -83,7 +83,7 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<super::UserEvent>
 }
 
 #[test]
-fn played_tv_series_dim_in_both_geometries_but_in_progress_only_narrows() {
+fn tv_series_rows_use_the_canonical_state_in_both_geometries() {
     let mut watched = make_item("Watched Series", "Series");
     watched.id = "series-watched".into();
     watched.played = true;
@@ -124,10 +124,10 @@ fn played_tv_series_dim_in_both_geometries_but_in_progress_only_narrows() {
         "a played series paints the shared played state in Wide too"
     );
     assert!(
-        !wide_states
+        wide_states
             .iter()
             .any(|state| matches!(state, MediaSemanticState::Active { .. })),
-        "Wide's series rail still never dims in-progress rows"
+        "the one canonical derivation dims in-progress rows in Wide too"
     );
 }
 

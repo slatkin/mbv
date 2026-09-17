@@ -10,8 +10,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaListTransition, MediaSemanticState, RowIntent,
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTransition,
+    MediaSemanticState, RowIntent,
 };
 use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
@@ -28,7 +28,7 @@ use crate::app::render::components::widgets::render_queue_panel_frame;
 use crate::app::render::{render_queue_body, QueuePresentation};
 use crate::app::types_context_menu::ContextMenuTargets;
 use crate::app::types_playback::{PlaybackState, QueueScope};
-use crate::app::ui_util::{fmt_duration_short, fmt_playback_pct};
+use crate::app::ui_util::fmt_duration_short;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{QueueItem, QueueSlot, QueueSlotId};
 
@@ -745,39 +745,24 @@ fn queue_media_row_at(
     let is_active = playback.active && playback.active_idx == Some(index) && !superseded;
     let is_pending = pending_slot == Some(slot.slot_id) && !is_active;
     let (title, pos_ticks, duration_ticks) = queue_row_fields(&slot.item, playback, is_active);
-    let (semantic_state, trailing) = if is_pending {
-        (MediaSemanticState::NowPlaying { progress: None }, None)
+    let semantic_state = if is_pending {
+        MediaSemanticState::NowPlaying { progress: None }
     } else if is_active {
         let progress = (pos_ticks > 0 && duration_ticks > 0)
             .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
-        (
-            MediaSemanticState::NowPlaying {
-                progress: progress.map(crate::app::components::media_list::ActiveProgress::new),
-            },
-            None,
-        )
+        MediaSemanticState::NowPlaying {
+            progress: progress.map(crate::app::components::media_list::ActiveProgress::new),
+        }
     } else {
-        let pct = match &slot.item {
-            QueueItem::Emby(item) if !item.is_audio() => {
-                let pct = fmt_playback_pct(item.playback_position_ticks, item.runtime_ticks);
-                (!pct.is_empty()).then_some(pct)
-            }
-            _ => None,
-        };
-        // A played slot paints the one played-row colour, in the queue like
-        // every other list.
-        let state = if slot.item.played() {
-            MediaSemanticState::Played
-        } else {
-            MediaSemanticState::Ordinary
-        };
-        (state, pct)
+        // The one canonical state derivation: a played slot paints the
+        // shared played colour, an in-progress slot its resume percentage.
+        MediaSemanticState::from_progress(slot.item.played(), pos_ticks, duration_ticks)
     };
     MediaListRow::Item {
         target: slot.slot_id,
         primary: title,
         secondary: None,
-        trailing: trailing.map(MediaListTrailing::Progress),
+        trailing: None,
         // The now-playing row shows its total duration in every state: a
         // pending selection is not playing yet, but it still has a known
         // runtime, and blanking the slot reads as a glitch.

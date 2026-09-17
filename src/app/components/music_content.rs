@@ -75,12 +75,12 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 trailing: None,
                 duration,
                 kind: MediaKind::Media,
-                // A played track paints the one played-row colour.
-                semantic_state: if track.played {
-                    MediaSemanticState::Played
-                } else {
-                    MediaSemanticState::Ordinary
-                },
+                // The one canonical state derivation.
+                semantic_state: MediaSemanticState::from_progress(
+                    track.played,
+                    track.playback_position_ticks,
+                    track.runtime_ticks,
+                ),
             }
         })
         .collect()

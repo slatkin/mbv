@@ -139,6 +139,24 @@ impl MediaSemanticState {
             progress: progress.map(ActiveProgress::new),
         }
     }
+
+    /// The one derivation every list uses to turn an item's playback facts
+    /// into a row state — the canonical state/colour policy, so no
+    /// destination decides a row colour. `played` wins; a positive resume
+    /// position with a known runtime yields `Active` with the bounded
+    /// percentage (no percentage when the runtime is unknown); otherwise the
+    /// row is `Ordinary`.
+    pub fn from_progress(played: bool, position_ticks: i64, runtime_ticks: i64) -> Self {
+        if played {
+            Self::Played
+        } else if position_ticks > 0 {
+            let progress = (runtime_ticks > 0)
+                .then(|| ((position_ticks as u128 * 100) / runtime_ticks as u128).min(100) as u16);
+            Self::active(progress)
+        } else {
+            Self::Ordinary
+        }
+    }
 }
 
 /// Which semantic surface should receive the selected-row treatment.
@@ -332,12 +350,12 @@ pub enum RowIntent<Target> {
 
 /// The left-aligned metadata a row paints after its `primary` title, with the
 /// text role baked in (one closed vocabulary: rows never carry raw colours).
+/// Resume/live progress is not trailing metadata: it comes from the row's
+/// [`MediaSemanticState`], so `Active`/`NowPlaying` render it inline.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListTrailing {
     /// The item's release year, painted in the green metadata role.
     Year(String),
-    /// A progress badge (a percentage), painted in the FOAM metadata role.
-    Progress(String),
 }
 
 /// A closed, provider-neutral row vocabulary for embedded media lists.

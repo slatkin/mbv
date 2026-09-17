@@ -125,11 +125,11 @@ fn search_result_row(item: &mbv_core::api::EmbyItem) -> MediaListRow<String> {
         } else {
             MediaKind::Media
         },
-        semantic_state: if item.played {
-            MediaSemanticState::Played
-        } else {
-            MediaSemanticState::Ordinary
-        },
+        semantic_state: MediaSemanticState::from_progress(
+            item.played,
+            item.playback_position_ticks,
+            item.runtime_ticks,
+        ),
     }
 }
 

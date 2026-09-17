@@ -24,7 +24,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTrailing, MediaListTransition, MediaSemanticState, RowIntent,
+    MediaListTransition, MediaSemanticState, RowIntent,
 };
 use crate::app::types_context_menu::ContextMenuTargets;
 
@@ -32,17 +32,6 @@ use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::types_playback::HomeLatestSource;
 use crate::app::ui_util::trunc_str;
 use mbv_core::playback_queue::QueueItem;
-
-/// The resume-percentage badge Home rows draw next to the title (rendered as
-/// canonical `trailing`). Only for in-progress, unfinished items with a
-/// non-zero rounded percentage.
-fn home_progress_badge(item: &QueueItem) -> Option<String> {
-    let (position, runtime) = (item.playback_position_ticks(), item.runtime_ticks());
-    (position > 0 && !item.played() && runtime > 0)
-        .then(|| (position as i128 * 100 / runtime as i128) as u16)
-        .filter(|pct| *pct > 0)
-        .map(|pct| format!("{pct}%"))
-}
 
 /// The embedded content owner for the Home destination (design D2). Plain
 /// type; the mounted `LibraryPanel` borrows it for content and slot events.
@@ -233,19 +222,18 @@ impl HomeContent {
                     // by identity, not by a title that can collide across
                     // episodes.
                     target: item.id().to_owned(),
-                    trailing: home_progress_badge(item).map(MediaListTrailing::Progress),
+                    // The canonical state renders an active row's resume
+                    // percentage inline, so Home projects no separate badge.
+                    trailing: None,
                     // Library lists carry no time column (only the Queue list
                     // and the sessions modal show one).
                     duration: None,
                     kind: MediaKind::Media,
-                    // A played item paints the one played-row colour in every
-                    // tab; in-progress items keep the ordinary title with the
-                    // trailing resume badge.
-                    semantic_state: if item.played() {
-                        MediaSemanticState::Played
-                    } else {
-                        MediaSemanticState::Ordinary
-                    },
+                    semantic_state: MediaSemanticState::from_progress(
+                        item.played(),
+                        item.playback_position_ticks(),
+                        item.runtime_ticks(),
+                    ),
                 }
             })
             .collect();
@@ -816,11 +804,10 @@ mod tests {
         assert_eq!(row_parts(&owner, 1), ("The Book".into(), None));
     }
 
-    /// One played colour in every tab: a finished Home item projects the
-    /// shared `Played` state, while an in-progress item stays `Ordinary` (its
-    /// trailing resume badge carries progress).
+    /// Home rows use the one canonical state derivation: a finished item is
+    /// `Played`, an in-progress item is `Active` with its resume percentage.
     #[test]
-    fn played_home_rows_project_the_shared_played_state() {
+    fn home_rows_use_the_canonical_state_derivation() {
         let mut played = make_item("Finished Film", "Movie");
         played.id = "played".into();
         played.played = true;
@@ -845,7 +832,7 @@ mod tests {
             })
             .collect();
         assert_eq!(states[0], MediaSemanticState::Played);
-        assert_eq!(states[1], MediaSemanticState::Ordinary);
+        assert_eq!(states[1], MediaSemanticState::active(Some(50)));
     }
 
     /// Truncation is the canonical painter's contract (a split row is cut

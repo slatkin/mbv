@@ -244,10 +244,10 @@ mod wide_row_regression_tests {
                 target: "resume".into(),
                 primary: "Resume".into(),
                 secondary: None,
-                trailing: Some(MediaListTrailing::Progress("47%".into())),
+                trailing: None,
                 duration: None,
                 kind: MediaKind::Media,
-                semantic_state: MediaSemanticState::Ordinary,
+                semantic_state: MediaSemanticState::active(Some(47)),
             },
         ]);
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
@@ -977,7 +977,7 @@ mod wide_row_regression_tests {
                 target: "playing".into(),
                 primary: "Playing title".into(),
                 secondary: None,
-                trailing: Some(MediaListTrailing::Progress("FOAM".into())),
+                trailing: Some(MediaListTrailing::Year("FOAM".into())),
                 duration: Some("2:00".into()),
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::NowPlaying {
