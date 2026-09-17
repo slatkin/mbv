@@ -36,8 +36,8 @@ same "container + item title" fact renders with two different colour vocabularie
 
 ### Modified Capabilities
 
-- `canonical-media-lists`: the two-tone row colour contract changes — the optional secondary title
-  paints in the playback-context gold role while the primary (item title) paints in the
+- `canonical-media-lists`: the two-tone row colour contract changes — the primary (container/context)
+  paints in the playback-context gold role while the secondary (item title) paints in the
   playback-title aqua role on split rows; single-part rows keep the ordinary title role; played
   rows mute the title part while the context part keeps its role.
 - `home-latest-sections`: Home rows SHALL render the container context part per media type using
