@@ -201,10 +201,11 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
         MediaListRow::Item { target, .. } if Some(target) == selected.as_ref()
     )));
 
-    // An empty provider completion remains an empty view, not a stale copy
-    // of the previous rows — driven through the same lib-event arrival.
+    // An empty provider completion overwrites the previously cached rows —
+    // the view must not keep a stale copy of the previous episodes — driven
+    // through the same lib-event arrival, with the show's earlier batch
+    // still in the cache when the empty result lands.
     let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
-    browse.detail_cache.remove("show-a");
     browse.detail_loading_ids.insert("show-a".into(), 1);
     let generation = harness.model().app.audiobookshelf_runtime.generation();
     harness.model_mut().app.handle_lib_event(crate::app::LibEvent::AudiobookshelfDetailFetched {
@@ -219,15 +220,28 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
     assert!(!harness.model().app.audiobookshelf_browse[0]
         .detail_loading_ids
         .contains_key("show-a"));
+    // The empty result wins: the cached batch for the show is now empty and
+    // the owner's list re-projected to no rows. Without dispatching the
+    // empty arrival, the earlier batch would still be cached and painted.
+    let browse = &harness.model().app.audiobookshelf_browse[0];
+    assert!(
+        browse
+            .detail_cache
+            .get("show-a")
+            .is_some_and(|episodes| episodes.is_empty()),
+        "the empty arrival overwrites the previously cached batch"
+    );
     assert!(podcast(&mut harness).episode_rows().is_empty());
 }
 
-/// A superseded-generation arrival (its Service setup was replaced after
-/// the request spawned) is rejected by the shell's lib-event arm
-/// (`audiobookshelf_runtime.accepts`): the payload is never cached and the
-/// mounted owner's flat list is unchanged through the sync pass (row 4.1).
-/// The in-flight mark still retires on the rejected path so the bounded
-/// fan-out never stalls behind it.
+/// A superseded-generation arrival is rejected by the shell's lib-event
+/// arm (`audiobookshelf_runtime.accepts`): the Service setup was replaced
+/// after the request spawned (production does this via the runtime's
+/// `remove_setup`, which advances the generation), so the payload arrives
+/// carrying the OLDER generation it spawned with. It is never cached and
+/// the mounted owner's flat list is unchanged through the sync pass (row
+/// 4.1). The in-flight mark still retires on the rejected path so the
+/// bounded fan-out never stalls behind it.
 #[test]
 fn stale_generation_arrival_never_reaches_the_owner_through_the_sync_pass() {
     let mut app = audiobookshelf_app();
@@ -239,15 +253,21 @@ fn stale_generation_arrival_never_reaches_the_owner_through_the_sync_pass() {
     draw(&mut harness, 160);
     assert!(podcast(&mut harness).episode_rows().is_empty());
 
-    // The arrival's generation is ahead of the runtime's current one: its
-    // Service setup was replaced after the request spawned. The lib-event
-    // arm rejects the payload whole — it is never cached and never lands on
-    // the mounted owner's flat list through the re-projection and sync pass.
-    let stale_generation = mbv_core::service_runtime::SetupGeneration::new(
-        harness.model().app.audiobookshelf_runtime.generation().value() + 1,
+    // The request spawns under the runtime's current generation, then the
+    // Service setup is replaced the way production does, advancing the
+    // runtime's generation past the one the arrival will carry.
+    let spawned_generation = harness.model().app.audiobookshelf_runtime.generation();
+    harness.model_mut().app.audiobookshelf_runtime.remove_setup();
+    assert_ne!(
+        harness.model().app.audiobookshelf_runtime.generation(),
+        spawned_generation,
+        "the runtime's generation advanced past the spawned request"
     );
+    // The arrival carries the OLDER generation: the lib-event arm rejects
+    // the payload whole — it is never cached and never lands on the mounted
+    // owner's flat list through the re-projection and sync pass.
     harness.model_mut().app.handle_lib_event(crate::app::LibEvent::AudiobookshelfDetailFetched {
-        generation: stale_generation,
+        generation: spawned_generation,
         request: 0,
         library_item_id: "show-a".into(),
         result: Ok(vec![episode("show-a", "episode-stale")]),
