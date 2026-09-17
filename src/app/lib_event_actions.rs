@@ -149,7 +149,15 @@ impl App {
         if self.saved_library_position(lib_idx).as_ref() != Some(&requested_position) {
             return;
         }
-        if self.active_library_position_scope_for(lib_idx).is_none() {
+        // A restore an armed pending Series landing is waiting on is never
+        // stale: the landing spawned it and cannot retry until it applies,
+        // and the landing is initiated from another tab (queue "Go to
+        // Library") whose tab switch happens only on completion.
+        let serves_pending_landing = self
+            .pending_series_landing
+            .as_ref()
+            .is_some_and(|pending| pending.lib_idx == lib_idx);
+        if self.active_library_position_scope_for(lib_idx).is_none() && !serves_pending_landing {
             return;
         }
         if let Some(lib) = self.libs.get_mut(lib_idx) {

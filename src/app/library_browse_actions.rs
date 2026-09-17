@@ -616,6 +616,11 @@ impl App {
         libs: Vec<(usize, String, String)>,
     ) {
         let Some(client) = self.emby_snapshot() else {
+            // An unavailable Emby is a resolve failure (task 4.2), never a
+            // silent drop: the 4.2 flash fires and the active tab is unchanged.
+            let _ = self
+                .lib_tx
+                .send(LibEvent::Error("Emby is unavailable".into()));
             return;
         };
         let tx = self.lib_tx.clone();
