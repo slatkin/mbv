@@ -83,6 +83,8 @@ The inline hero SHALL render the same content shape on every surface: title, opt
 
 For wide Movies, the left hero SHALL continue using Home's selected-media card. For wide TV, the left workspace SHALL continue showing Series artwork, metadata, overview, season pills, and episodes. Other surfaces SHALL retain their declared content and interaction behavior while adopting the same placement rule. Wide-mode track and episode listings are outside this requirement; they are governed by the Wide hero presentation.
 
+The Audiobookshelf podcast tab is the one surface whose rows are not hero-bearing in this presentation: its downloaded episodes are the tab's own list rows, so no row is ever replaced by inline detail. The selected episode's hero is a Wide-only pane, and in the non-Wide presentation the episodes remain ordinary rows and Enter plays the selected episode.
+
 #### Scenario: Wide hero-bearing browse surface
 
 - **WHEN** a hero-bearing browse surface meets the shared wide geometry conditions and has a selected item
@@ -129,11 +131,11 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 
 #### Scenario: Narrow Audiobookshelf podcast
 
-- **WHEN** an Audiobookshelf podcast library uses the inline presentation
-- **THEN** selected-show hero content (title, author, description, cover) replaces the active show row
-- **AND** filters and downloaded episodes do NOT render inside the inline hero
-- **AND** alphabetical pills render in the panel area like every other library tab
-- **AND** pressing Enter opens the constituent-list modal for episode selection
+- **WHEN** an Audiobookshelf podcast library uses the non-Wide presentation
+- **THEN** every episode remains an ordinary fixed-height media row in the scrolling browser and no row is replaced by inline detail
+- **AND** the state-and-show pill row renders in the panel area like every other library tab
+- **AND** the selected episode's hero does not render in this presentation
+- **AND** pressing Enter plays the selected episode
 
 #### Scenario: Narrow Audiobookshelf book
 

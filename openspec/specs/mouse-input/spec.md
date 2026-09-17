@@ -379,7 +379,7 @@ the listed painted region, and retains only the stated semantic boundary:
 | Queue | `QueueComponent`; painted `WideMediaList` queue region | Wide and narrow | none for wheel |
 | Music | `MusicWorkspaceComponent`; Wide rail or Normal/Narrow inline list | Wide and Normal/Narrow | resolved album cursor request |
 | Feeds | `FeedsComponent`; active canonical list region | Wide and Normal/Narrow | none for wheel |
-| Audiobookshelf podcast | `AudiobookshelfPodcastComponent`; painted show-row geometry | Wide and Normal/Narrow | resolved show selection |
+| Audiobookshelf podcast | `PodcastContent` over the Library panel's canonical list; painted episode-row geometry | Wide and Normal/Narrow | resolved pill and episode selection |
 | Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | resolved book/chapter selection or focus |
 | Inline Search | active host component; painted results `left_area`, first refusal | Emby library, Music, and TV host paths | local result selection only |
 | Global Search sidebar | `SearchSidebarComponent`; painter-published result-row hit regions | fixed overlay geometry (breakpoint-invariant) | local result selection only |
