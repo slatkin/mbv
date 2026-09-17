@@ -147,3 +147,36 @@ fn remote_jump_target_resolves_next_and_previous_without_tracking() {
     assert_eq!(target, Some((1, 20)));
     assert_eq!(crate::app::session_command_actions::remote_jump_target(&app.player_tab, Some("b"), -1), Some((1, 20)));
 }
+
+/// A receiver-driven track change must stamp the canonical queue's active
+/// slot: without it the queue keeps the originally submitted slot "active"
+/// and Delete on that stale row hits `RequiresActiveConfirmation` and
+/// silently vanishes (queue regrade, session-follow was display-only).
+#[test]
+fn session_item_change_stamps_canonical_active_slot_and_unblocks_removal() {
+    let mut app = attached_app();
+    let mut first = app.player_tab.emby_items()[0].clone();
+    first.id = "a".into();
+    let mut second = app.player_tab.emby_items()[1].clone();
+    second.id = "b".into();
+    app.player_tab.set_items(vec![first, second], 0);
+    // Receiver auto-advanced: item "b" (slot 2) is now playing.
+    let mut advanced = make_session("Client", "Emby");
+    advanced.id = "session".into();
+    advanced.now_playing_item_id = Some("b".into());
+    app.handle_session_event(SessionEvent::Loaded { sessions: vec![advanced] });
+
+    let b_slot = app.player_tab.queue.slots()[1].slot_id;
+    assert_eq!(app.player_tab.queue.active_slot_id(), Some(b_slot));
+
+    // The stale previously-played first row is deletable again: no confirm
+    // modal, no silent no-op.
+    let before = app.player_tab.total_queue_len();
+    app.remove_from_queue(0);
+    assert_eq!(
+        app.player_tab.total_queue_len(),
+        before - 1,
+        "removing a non-playing row must not be blocked by a stale active slot"
+    );
+    assert!(app.pending_overlay.is_none(), "no confirm modal for a non-playing row");
+}

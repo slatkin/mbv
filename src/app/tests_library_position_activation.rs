@@ -194,6 +194,68 @@ fn library_tab_next_activates_saved_placeholder() {
 }
 
 #[test]
+fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
+    // Queue "Go to Library" (and search-sidebar activation) lands via
+    // `LibEvent::NavigateTo` with a fully built nav stack whose resting
+    // cursor sits on the target item. Switching to the library tab must not
+    // discard that stack in favour of the saved position.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    let mut library = make_item("Movies", "CollectionFolder");
+    library.id = "lib-movies".into();
+    library.collection_type = "movies".into();
+    app.libs.push(LibraryTab::new(library));
+    let position = crate::config::LibraryPosition {
+        levels: vec![crate::config::LibraryPositionLevel {
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            focused_item_id: Some("id1".into()),
+            cursor_index: 1,
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            letter_filter_index: None,
+            library_total: None,
+        }],
+        ..Default::default()
+    };
+    app.replace_saved_library_position(0, position);
+    app.panel_focus = PanelFocus::Queue;
+    app.tab = TabSelection::Home;
+
+    let navigated = BrowseLevel {
+        parent_id: "lib-movies".into(),
+        title: "Movies".into(),
+        items: make_items(5),
+        total_count: 5,
+        resting: crate::app::types_browse::BrowseResting::new(3, 0),
+        item_types: Some("Movie".into()),
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        music_grouping: None,
+    };
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        nav_stack: vec![navigated],
+        switch_tab: true,
+    });
+
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
+    assert_eq!(app.libs[0].nav_stack.len(), 1);
+    assert_eq!(
+        app.libs[0].nav_stack[0].resting().cursor(),
+        3,
+        "the navigated cursor must survive the tab switch"
+    );
+    assert!(!app.libs[0].nav_stack[0].loading);
+}
+
+#[test]
 fn library_tab_next_from_queue_focus_accepts_restore_result() {
     let _guard = crate::config::TestStateDirGuard::new();
     let mut app = make_app_stub();

@@ -235,6 +235,35 @@ impl Model {
                 | super::LibEvent::NavigateTo { .. }
                 | super::LibEvent::SearchItemsLoaded { .. }
         );
+        // A cross-tab navigation (queue "Go to Library", search-sidebar
+        // activation) replaces the nav stack wholesale: retained destination
+        // owners would otherwise keep their pre-navigation selection. Re-anchor
+        // them once, against the navigated resting cursor, before the drain's
+        // content pushes read it.
+        if let super::LibEvent::NavigateTo {
+            lib_idx,
+            ref nav_stack,
+            switch_tab: true,
+        } = ev
+        {
+            let collection_type = self
+                .app
+                .libs
+                .get(lib_idx)
+                .map(|lib| lib.library.collection_type.clone());
+            match collection_type.as_deref() {
+                // The series containing (or being) the navigated item is the
+                // second level's parent (`parents[1]` in
+                // `spawn_navigate_to_item`'s stack construction).
+                Some("tvshows") => {
+                    if let Some(series_id) = nav_stack.get(1).map(|l| l.parent_id.clone()) {
+                        self.reanchor_tv_owner_selection(&series_id);
+                    }
+                }
+                Some("music") => self.music_workspace_reanchor = true,
+                _ => {}
+            }
+        }
         if matches!(
             &ev,
             super::LibEvent::NavigateTo {
