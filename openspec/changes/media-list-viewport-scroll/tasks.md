@@ -75,19 +75,19 @@ follow-up units; coordinate before editing the same file.
 
 ## 5. Wheel conversion (D1, D8)
 
-- [ ] 5.1 Map `MediaListSurfaceInput::Wheel` to `ScrollViewport` in the shared conversion so every
+- [x] 5.1 Map `MediaListSurfaceInput::Wheel` to `ScrollViewport` in the shared conversion so every
   carrier-backed surface steps its viewport.
   (Verify: component tests — the wheel moves the window one row at wide and narrow heights.)
-- [ ] 5.2 Convert the direct `Move` build in the Emby owner and gate its `EmbyLibraryCursorIndex` echo on an
+- [x] 5.2 Convert the direct `Move` build in the Emby owner and gate its `EmbyLibraryCursorIndex` echo on an
   actual selection move, reporting the window's reached row for pagination instead. Confirm the
   pending-fetch guard means repeated viewport position reports at the loaded end do not trigger repeated
   fetches — a scroll-only wheel reader at the bottom must not spam pagination.
   (Verify: tick test — a viewport-only wheel step emits no cursor index and still reports position;
   pagination still fires near the loaded end; repeated reports at the loaded end fire at most one fetch.)
-- [ ] 5.3 Convert the Music album rail and track-list wheel arms, gating the album cursor request on a
+- [x] 5.3 Convert the Music album rail and track-list wheel arms, gating the album cursor request on a
   dragged selection.
   (Verify: the updated `tests_tick_integration_music_mouse` assertions plus an album-rail wheel test.)
-- [ ] 5.4 Convert the Queue, Home, Feeds, TV, podcast, book, and Inline Search wheel arms.
+- [x] 5.4 Convert the Queue, Home, Feeds, TV, podcast, book, and Inline Search wheel arms.
   (Verify: per-surface component or tick test that the window moves one row and the selection rides only
   at the window's edge.)
 
