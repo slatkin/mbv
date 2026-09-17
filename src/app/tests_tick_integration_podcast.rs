@@ -65,10 +65,11 @@ fn podcast_owner_is_registered_and_starts_on_the_first_episode() {
         "episode-a",
         "the flat browser starts on the remembered pill's first episode"
     );
-    // Row movement stays owner-local: no cross-boundary request is emitted.
+    // Keyboard list movement resolves like a row click: the landed cursor
+    // persists and re-projects through the same ShowMove request.
     harness.inject(Event::Keyboard(KeyEvent { code: Key::Down, modifiers: KeyModifiers::NONE }));
     let result = harness.step();
-    assert!(!result.raw_messages.iter().any(|msg| matches!(msg, Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { .. }))));
+    assert!(result.raw_messages.iter().any(|msg| matches!(msg, Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { library_item_id: None }))));
 }
 
 #[test]
@@ -99,7 +100,7 @@ fn podcast_panel_mouse_pill_click_commits_the_state_selection() {
             crate::app::types_audiobookshelf_browse::AudiobookshelfEpisodeFilter::Played
         )
     ));
-    assert!(outcome.raw_messages.iter().any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))));
+    assert!(outcome.raw_messages.iter().any(|message| matches!(message, Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { library_item_id: None }))));
 }
 
 #[test]

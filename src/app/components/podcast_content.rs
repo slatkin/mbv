@@ -24,8 +24,7 @@ use super::media_list::{
     MediaSemanticState,
 };
 use super::msg::{
-    LeafKeyResult, Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest,
-    TerminalObserverEvent,
+    Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
 };
 use crate::app::render::current_time_secs;
 use crate::app::types_audiobookshelf_browse::{
@@ -63,6 +62,10 @@ pub(in crate::app) struct PodcastContent {
     /// The projection's image state for the current hero: set by the shell,
     /// read by the painters through the panel content.
     hero_image: HeroImageState,
+    /// Injectable grouping clock (`None` = wall clock): the injected
+    /// `now_secs` seam `podcast_display_rows` takes, so tests keep the
+    /// age-group projection deterministic.
+    now_secs: Option<u64>,
 }
 
 impl PodcastContent {
@@ -83,6 +86,7 @@ impl PodcastContent {
             focused: false,
             episodes: MediaListCarrier::new(),
             hero_image: HeroImageState::None,
+            now_secs: None,
         }
     }
 
@@ -147,7 +151,7 @@ impl PodcastContent {
     /// builder; indices are unchanged and targeting is the stable episode
     /// identity). Every row is a split row naming its parent podcast.
     fn rebuild_rows(&mut self) {
-        let now = current_time_secs();
+        let now = self.now_secs.unwrap_or_else(current_time_secs);
         let view = self.active_episodes();
         let state = &self.state;
         let rows: Vec<MediaListRow<PodcastEpisodeTarget>> = podcast_display_rows(&view, now)
@@ -242,8 +246,10 @@ impl PodcastContent {
 
     /// `[`/`]`: one uniform walk of the whole bar — state pills then show
     /// pills in painted order, wrapping at either end (design D4). There is
-    /// no per-kind key or behaviour: the bar is one selector.
-    fn cycle_pill(&mut self, delta: i64) {
+    /// no per-kind key or behaviour: the bar is one selector. A committed
+    /// step resolves the value and sends the same effect the pointer pick
+    /// sends (one path, both inputs).
+    fn cycle_pill(&mut self, delta: i64) -> Option<Msg> {
         let count = STATE_PILL_COUNT + self.state.shows.len();
         let next = (self.active_pill_index().unwrap_or(0) as i64 + delta).rem_euclid(count as i64)
             as usize;
@@ -256,29 +262,47 @@ impl PodcastContent {
                     .clone(),
             )
         };
+        let changed = self.pill != pill;
         self.set_pill(pill);
+        self.pill_effect_msg(changed)
     }
 
-    /// The shell effect a committed show pill keeps alive until the loading
-    /// unit (row 3.3) reshapes the fetch triggers: the resolved show
-    /// identity drives the per-show episode fetch, position persistence, and
-    /// re-projection. State-pill movement has no cross-boundary effect yet.
+    /// The shell effect every committed pill keeps alive until the loading
+    /// unit (row 3.3) reshapes the fetch triggers. A show pill carries its
+    /// resolved identity: the per-show episode fetch, position persistence,
+    /// and re-projection. A state pill sends the same message shape a plain
+    /// row click sends — click-to-focus, position persistence, and
+    /// re-projection with no show identity — the state-pill fan-out
+    /// triggers themselves are row 3.3.
     fn pill_effect_msg(&self, changed: bool) -> Option<Msg> {
         if !changed {
             return None;
         }
-        match &self.pill {
-            PillSelection::Show(library_item_id) => {
-                Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-                    library_item_id: Some(library_item_id.clone()),
-                }))
-            }
+        let library_item_id = match &self.pill {
+            PillSelection::Show(library_item_id) => Some(library_item_id.clone()),
             PillSelection::State(_) => None,
-        }
+        };
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            library_item_id,
+        }))
+    }
+
+    /// Keyboard list movement resolves like a row click: the landed cursor
+    /// persists and re-projects through the same request the pointer path
+    /// sends (click-to-focus + saved position, no show identity).
+    fn move_effect() -> Option<Msg> {
+        Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+            library_item_id: None,
+        }))
     }
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+    #[cfg(test)]
+    pub(in crate::app) fn set_now_secs(&mut self, now_secs: u64) {
+        self.now_secs = Some(now_secs);
+        self.rebuild_rows();
     }
 
     #[cfg(test)]
@@ -378,7 +402,7 @@ impl PodcastContent {
                     .clone()
                     .unwrap_or_else(|| "No podcasts".into()),
             }
-        } else if self.active_episodes().is_empty() {
+        } else if self.episodes.rows().is_empty() {
             ListSlot::Empty {
                 loading: self.pill_fetch_in_flight(),
                 text: " No episodes".into(),
@@ -525,7 +549,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                None
+                Self::move_effect()
             }
             Key::Down | Key::Char('j') => {
                 self.episodes.delegate_operation(
@@ -533,7 +557,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                None
+                Self::move_effect()
             }
             Key::PageUp => {
                 self.episodes.delegate_operation(
@@ -541,7 +565,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                None
+                Self::move_effect()
             }
             Key::PageDown => {
                 self.episodes.delegate_operation(
@@ -549,7 +573,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                None
+                Self::move_effect()
             }
             Key::Home => {
                 self.episodes.delegate_operation(
@@ -557,7 +581,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                None
+                Self::move_effect()
             }
             Key::End => {
                 self.episodes.delegate_operation(
@@ -565,16 +589,10 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                None
+                Self::move_effect()
             }
-            Key::Char('[') if key.modifiers.is_empty() => {
-                self.cycle_pill(-1);
-                None
-            }
-            Key::Char(']') if key.modifiers.is_empty() => {
-                self.cycle_pill(1);
-                None
-            }
+            Key::Char('[') if key.modifiers.is_empty() => self.cycle_pill(-1),
+            Key::Char(']') if key.modifiers.is_empty() => self.cycle_pill(1),
             Key::Enter => Some(Msg::Shell(
                 ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::OpenOrPlay(
                     self.episodes.selected_target().cloned(),
@@ -591,27 +609,6 @@ impl LibraryContentOwner for PodcastContent {
                 )),
             )),
             _ => None,
-        }
-    }
-
-    fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
-        match self.on_key(key) {
-            Some(message) => LeafKeyResult::Consumed(Some(message)),
-            None if matches!(
-                key.code,
-                Key::Up
-                    | Key::Down
-                    | Key::PageUp
-                    | Key::PageDown
-                    | Key::Home
-                    | Key::End
-                    | Key::Left
-                    | Key::Right
-            ) =>
-            {
-                LeafKeyResult::Consumed(None)
-            }
-            None => LeafKeyResult::Unhandled,
         }
     }
 
@@ -632,6 +629,7 @@ impl LibraryContentOwner for PodcastContent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::components::msg::LeafKeyResult;
     use mbv_core::audiobookshelf::{
         AudiobookshelfLibrary, AudiobookshelfProgress, AudiobookshelfShow,
     };
@@ -721,6 +719,7 @@ mod tests {
 
     fn owner() -> PodcastContent {
         let mut owner = PodcastContent::new();
+        owner.set_now_secs(NOW);
         owner.set_content(&state(), false);
         owner
     }
@@ -787,6 +786,7 @@ mod tests {
             vec![show("long", "A Very Long Podcast Show Name Indeed Indeed")],
         );
         let mut owner = PodcastContent::new();
+        owner.set_now_secs(NOW);
         owner.set_content(&state, false);
         assert_eq!(
             pills(&owner.content())[3],
@@ -987,6 +987,75 @@ mod tests {
     }
 
     #[test]
+    fn keyboard_pill_walk_sends_the_same_effect_a_pointer_pick_sends() {
+        let mut owner = owner();
+        owner.set_focused(true);
+        // Three `]` steps land on the Alpha show pill; the walk resolves the
+        // value and requests that show's fetch/persistence/re-projection.
+        let mut message = None;
+        for _ in 0..3 {
+            message = owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
+        }
+        assert!(matches!(
+            message,
+            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+                library_item_id: Some(ref id)
+            })) if id == "alpha"
+        ));
+        // A state-pill commit sends the same shape a plain row click sends.
+        assert!(matches!(
+            owner.on_key(&KeyEvent::new(Key::Char('['), KeyModifiers::NONE)),
+            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+                library_item_id: None
+            }))
+        ));
+    }
+
+    #[test]
+    fn keyboard_list_movement_persists_like_a_row_click() {
+        let mut owner = owner();
+        owner.set_focused(true);
+        for key in [
+            Key::Down,
+            Key::Up,
+            Key::PageDown,
+            Key::PageUp,
+            Key::End,
+            Key::Home,
+        ] {
+            assert!(
+                matches!(
+                    owner.on_key(&KeyEvent::new(key, KeyModifiers::NONE)),
+                    Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+                        library_item_id: None
+                    }))
+                ),
+                "{key:?} movement persists like a row click"
+            );
+        }
+    }
+
+    #[test]
+    fn unfocused_owner_leaves_movement_and_unhandled_keys_to_the_router() {
+        let mut owner = owner();
+        assert_eq!(
+            owner.on_key_result(&KeyEvent::new(Key::Down, KeyModifiers::NONE)),
+            LeafKeyResult::Unhandled,
+            "movement while unfocused is not swallowed"
+        );
+        assert_eq!(
+            owner.on_key_result(&KeyEvent::new(Key::Left, KeyModifiers::NONE)),
+            LeafKeyResult::Unhandled
+        );
+        // Focused but unhandled keys stay Unhandled too.
+        owner.set_focused(true);
+        assert_eq!(
+            owner.on_key_result(&KeyEvent::new(Key::Left, KeyModifiers::NONE)),
+            LeafKeyResult::Unhandled
+        );
+    }
+
+    #[test]
     fn enter_emits_open_or_play_with_the_selected_episode_target() {
         let mut owner = owner();
         owner.set_focused(true);
@@ -1009,14 +1078,14 @@ mod tests {
                 library_item_id: Some(ref id)
             })) if id == "alpha"
         ));
-        // A state pill pick claims the pointer gesture; it has no
-        // cross-boundary effect yet (row 3.3 owns the state-pill fan-out
-        // triggers).
+        // A state-pill pick re-projects and persists through the same
+        // request shape a plain row click sends (no show identity); the
+        // fan-out triggers themselves are row 3.3.
         assert!(matches!(
             owner.on_slot_event(LibrarySlotEvent::SelectorPicked(1)),
-            Some(Msg::TerminalEvent(
-                crate::app::components::msg::TerminalObserverEvent::MouseClaimed
-            ))
+            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+                library_item_id: None
+            }))
         ));
         // A pick beyond the painted bar resolves nothing.
         assert_eq!(
