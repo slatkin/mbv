@@ -122,16 +122,16 @@ follow-up units; coordinate before editing the same file.
 
 ## 8. Evidence and gates
 
-- [ ] 8.1 Add tick-integration evidence through `Application::tick()`: a wheel step and the viewport chord
+- [x] 8.1 Add tick-integration evidence through `Application::tick()`: a wheel step and the viewport chord
   each move the window one row, drag the selection only at the edge, and reach display row 0 on a grouped
   list in Wide and non-Wide geometry.
   (Verify: new cases in the `tests_tick_integration_*` suites.)
-- [ ] 8.2 Update the interactive-surface ledger rows for the converted surfaces and confirm each names its
+- [x] 8.2 Update the interactive-surface ledger rows for the converted surfaces and confirm each names its
   viewport-step proof.
   (Verify: `docs/architecture/interactive-surface-ledger.md` updated alongside the spec verification record.)
-- [ ] 8.3 Add the change's domain terms (the viewport and its step) to `CONTEXT.md` and use them
+- [x] 8.3 Add the change's domain terms (the viewport and its step) to `CONTEXT.md` and use them
   consistently in the code and artifacts.
   (Verify: terms present, no collision with the existing `MediaList`/`Group heading` entries.)
-- [ ] 8.4 Full gates.
+- [x] 8.4 Full gates.
   (Verify: `cargo fmt --all -- --check`; `cargo clippy --workspace --all-targets -- -D warnings`;
   `cargo nextest run -p mbv` and `-p mbv-core`; `openspec validate --all`.)
