@@ -1,3 +1,4 @@
+use crate::app::render::{feed_age_group, FeedAgeGroup};
 use mbv_core::audiobookshelf::{
     AudiobookshelfAudioFile, AudiobookshelfBook, AudiobookshelfBookProgress, AudiobookshelfChapter,
     AudiobookshelfDownloadedEpisode, AudiobookshelfLibrary, AudiobookshelfProgress,
@@ -27,16 +28,18 @@ impl AudiobookshelfBrowseKind {
     }
 }
 
+/// The podcast tab's state pills, in the painted pill-bar order (spec: the
+/// state pills `All` / `Unplayed` / `Played` precede the show pills).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum AudiobookshelfEpisodeFilter {
     #[default]
     All,
-    Played,
     Unplayed,
+    Played,
 }
 
 impl AudiobookshelfEpisodeFilter {
-    pub(super) const ALL: [Self; 3] = [Self::All, Self::Played, Self::Unplayed];
+    pub(super) const ALL: [Self; 3] = [Self::All, Self::Unplayed, Self::Played];
 
     pub(super) fn label(self) -> &'static str {
         match self {
@@ -47,18 +50,55 @@ impl AudiobookshelfEpisodeFilter {
     }
 }
 
+/// The podcast tab's pill selection, stored by value and never by a painted
+/// position (design D3): the show list grows and re-sorts as pages land
+/// (`append_page` sorts by title), so an index would silently rebind the
+/// active view. The remembered pill across tab switches is the same value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) enum PillSelection {
+    /// A state pill: every fetched show's episodes, filtered by play state.
+    State(AudiobookshelfEpisodeFilter),
+    /// A show pill: that show's episodes regardless of play state, by the
+    /// show's provider-native `library_item_id`.
+    Show(String),
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct AudiobookshelfBrowseState {
     pub library: AudiobookshelfLibrary,
+    /// The paged show list; it feeds the podcast pill bar (one pill per
+    /// show). Page arrivals append at most once per show and sort by title.
     pub shows: Vec<AudiobookshelfShow>,
     pub total: usize,
     pub next_page: usize,
     pub loading_pages: HashSet<usize>,
     pub selected_id: Option<String>,
     pub error: Option<String>,
-    pub episodes: Option<Vec<AudiobookshelfDownloadedEpisode>>,
+    /// Per-show downloaded-episode cache filled by the per-show episode
+    /// fan-out: one entry per fetched show, keyed by that show's
+    /// `library_item_id`. A re-arrival replaces the entry (append at most
+    /// once); the flat episode views concatenate the entries in show order.
     pub detail_cache: HashMap<String, Vec<AudiobookshelfDownloadedEpisode>>,
-    pub detail_loading: bool,
+    /// Show ids with an episode fetch in flight, holding the request serial
+    /// each fetch was issued under (the state's monotonically increasing
+    /// `next_detail_request`). A response retires — and may write the cache
+    /// from — its own serial only, so an orphaned or superseded response can
+    /// neither retire a newer request's mark nor overwrite a newer cache
+    /// entry.
+    pub detail_loading_ids: HashMap<String, u64>,
+    /// The serial issued to the most recent per-show episode fetch.
+    pub next_detail_request: u64,
+    /// The committed show-pill scope for the lazy episode fan-out (design
+    /// D5): `Some(id)` = a show pill is active, so that show's episodes are
+    /// the view's only requirement; `None` = a state pill (or the tab's
+    /// default) is active, so every listed show is required. Written by the
+    /// shell from the component's resolved pill movement, read by the
+    /// fan-out scheduler — never a mirror of the owner's painted selection.
+    pub committed_show_pill: Option<String>,
+    /// The tab's selected episode, by `(library_item_id, episode_id)`
+    /// identity — the same identity as the progress map. A refresh that
+    /// removes the episode from the views clears it.
+    pub selected_episode: Option<(String, String)>,
     pub progress: HashMap<(String, String), AudiobookshelfProgress>,
 }
 
@@ -72,9 +112,11 @@ impl AudiobookshelfBrowseState {
             loading_pages: HashSet::new(),
             selected_id: None,
             error: None,
-            episodes: None,
             detail_cache: HashMap::new(),
-            detail_loading: false,
+            detail_loading_ids: HashMap::new(),
+            next_detail_request: 0,
+            committed_show_pill: None,
+            selected_episode: None,
             progress: HashMap::new(),
         }
     }
@@ -90,40 +132,60 @@ impl AudiobookshelfBrowseState {
             .unwrap_or(0)
     }
 
-    /// Whether the last `select()` changed the selected show. The component
-    /// owns the episode filter / episode-mode selection and consults this to
-    /// reset them on an identity change (the reset moved off this content
-    /// struct in split-browse-state-interaction-fields task 3.2).
-    pub fn select_changed_identity(&self, cursor: usize) -> bool {
-        self.shows.get(cursor).map(|show| &show.library_item_id) != self.selected_id.as_ref()
-    }
-
     pub fn select(&mut self, cursor: usize) {
         self.selected_id = self
             .shows
             .get(cursor)
             .map(|show| show.library_item_id.clone());
-        self.episodes = self
-            .selected_id
-            .as_ref()
-            .and_then(|id| self.detail_cache.get(id).cloned());
-        self.detail_loading = false;
     }
 
     pub fn cache_detail(&mut self, id: String, episodes: Vec<AudiobookshelfDownloadedEpisode>) {
         self.detail_cache.insert(id, episodes);
     }
 
-    pub fn selected_show(&self) -> Option<&AudiobookshelfShow> {
-        let id = self.selected_id.as_deref()?;
-        self.shows.iter().find(|show| show.library_item_id == id)
+    /// Clears the per-show episode cache, the in-flight fetch marks, and the
+    /// selected episode for a refresh; the episode views reload from the
+    /// per-show fan-out (the show list itself is cleared by the caller).
+    pub fn clear_episodes(&mut self) {
+        self.detail_cache.clear();
+        self.detail_loading_ids.clear();
+        self.selected_episode = None;
     }
 
+    /// The fetched episode with exactly this `(library_item_id, episode_id)`
+    /// identity, from the per-show cache — regardless of which show's fetch
+    /// placed it or which pill view is active.
+    pub fn episode_by_identity(
+        &self,
+        library_item_id: &str,
+        episode_id: &str,
+    ) -> Option<&AudiobookshelfDownloadedEpisode> {
+        self.detail_cache
+            .get(library_item_id)?
+            .iter()
+            .find(|episode| episode.episode_id == episode_id)
+    }
+
+    /// The flat episode view: every fetched show's downloaded episodes,
+    /// concatenated in show (pill-bar) order so the view is deterministic.
+    /// The active pill scopes and the state filter narrows this view in the
+    /// owner; here it is the unfiltered union.
     pub fn visible_episodes(
         &self,
         filter: AudiobookshelfEpisodeFilter,
     ) -> Vec<&AudiobookshelfDownloadedEpisode> {
-        self.visible_episodes_from(self.episodes.as_deref().unwrap_or_default(), filter)
+        let mut visible = Vec::new();
+        for show in &self.shows {
+            if let Some(episodes) = self.detail_cache.get(&show.library_item_id) {
+                visible.extend(self.visible_episodes_from(episodes, filter));
+            }
+        }
+        // Each per-show run is already newest-first; one stable merge pass
+        // over the whole union keeps undated episodes last.
+        visible.sort_by(|left, right| {
+            compare_publication_dates(left.published_at, right.published_at)
+        });
+        visible
     }
 
     pub fn visible_episodes_from<'a>(
@@ -146,7 +208,7 @@ impl AudiobookshelfBrowseState {
             })
             .collect::<Vec<_>>();
         episodes.sort_by(|left, right| {
-            compare_publication_dates(left.published_at.as_deref(), right.published_at.as_deref())
+            compare_publication_dates(left.published_at, right.published_at)
         });
         episodes
     }
@@ -256,35 +318,6 @@ pub(super) fn build_surname_buckets(books: &[AudiobookshelfBook]) -> Vec<Surname
             books.len()
         } else {
             books.partition_point(|book| surname_bucket_key(&book.author_sort_key) <= upper)
-        };
-        if end > start {
-            buckets.push(SurnameBucket {
-                label: SURNAME_BUCKET_LABELS[i],
-                start,
-                end,
-            });
-        }
-        start = end;
-    }
-    buckets
-}
-
-/// Same partitioning as `build_surname_buckets`, keyed by a podcast show's
-/// title instead of a book's author surname -- shows have no separate sort
-/// key, so the title itself (already the sort key `append_page` orders
-/// `shows` by) is the bucket key. Kept as a separate function rather than a
-/// generic one over both owning types: `AudiobookshelfShow` and
-/// `AudiobookshelfBook` share no common trait today, and the loop body is
-/// small enough that duplicating it is cheaper than introducing one.
-pub(super) fn build_show_title_buckets(shows: &[AudiobookshelfShow]) -> Vec<SurnameBucket> {
-    let mut buckets = Vec::with_capacity(SURNAME_BUCKET_LABELS.len());
-    let mut start = 0;
-    for (i, &upper) in SURNAME_BUCKET_UPPER.iter().enumerate() {
-        let is_last = i + 1 == SURNAME_BUCKET_UPPER.len();
-        let end = if is_last {
-            shows.len()
-        } else {
-            shows.partition_point(|show| surname_bucket_key(&show.title) <= upper)
         };
         if end > start {
             buckets.push(SurnameBucket {
@@ -470,18 +503,54 @@ pub(super) enum BookRow {
     },
 }
 
-fn compare_publication_dates(left: Option<&str>, right: Option<&str>) -> std::cmp::Ordering {
+fn compare_publication_dates(left: Option<u64>, right: Option<u64>) -> std::cmp::Ordering {
     match (left, right) {
         (None, None) => std::cmp::Ordering::Equal,
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (Some(_), None) => std::cmp::Ordering::Less,
-        (Some(left), Some(right)) => match (left.parse::<f64>(), right.parse::<f64>()) {
-            (Ok(left), Ok(right)) => right
-                .partial_cmp(&left)
-                .unwrap_or(std::cmp::Ordering::Equal),
-            _ => right.cmp(left),
-        },
+        (Some(left), Some(right)) => right.cmp(&left),
     }
+}
+
+/// One renderable row in the podcast tab's grouped flat episode list,
+/// mirroring `FeedDisplayRow`: non-selectable age-group headings and spacers
+/// around selectable `Entry` indices into the flat episode slice (grouping
+/// never changes the indices or the stable `(library_item_id, episode_id)`
+/// targeting). Consumed by the podcast owner (row 3.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) enum PodcastDisplayRow {
+    Spacer,
+    Heading(FeedAgeGroup),
+    Entry(usize),
+}
+
+/// Groups the flat episode slice under the Feeds age groups. The slice is
+/// sorted newest-first globally (undated episodes last) before the
+/// consecutive-run merge, so an interleaved slice does not repeat headings;
+/// a group with no episodes produces no heading.
+pub(in crate::app) fn podcast_display_rows(
+    episodes: &[AudiobookshelfDownloadedEpisode],
+    now_secs: u64,
+) -> Vec<PodcastDisplayRow> {
+    let mut order: Vec<usize> = (0..episodes.len()).collect();
+    order.sort_by(|&left, &right| {
+        compare_publication_dates(episodes[left].published_at, episodes[right].published_at)
+    });
+
+    let mut rows = Vec::new();
+    let mut last_group = None;
+    for idx in order {
+        let group = feed_age_group(episodes[idx].published_at, now_secs);
+        if last_group != Some(group) {
+            if last_group.is_some() {
+                rows.push(PodcastDisplayRow::Spacer);
+            }
+            rows.push(PodcastDisplayRow::Heading(group));
+            last_group = Some(group);
+        }
+        rows.push(PodcastDisplayRow::Entry(idx));
+    }
+    rows
 }
 
 #[cfg(test)]
@@ -512,29 +581,98 @@ mod tests {
             library_item_id: show.into(),
             episode_id: id.into(),
             title: id.into(),
+            description: None,
             published_at: None,
             duration_seconds: None,
         }
     }
 
     #[test]
-    fn select_drops_the_prior_shows_episodes_and_reports_identity_change() {
+    fn episode_cache_fills_progressively_per_show_and_dedupes() {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
-        state.select(0);
-        state.episodes = Some(vec![episode("a", "shared"), episode("a", "two")]);
-        assert!(state.select_changed_identity(1));
-        state.select(1);
-        assert_eq!(state.episodes, None);
+
+        // Each show's fetch lands separately and joins the flat view without
+        // disturbing the other shows' cached entries.
+        state.cache_detail(
+            "a".into(),
+            vec![episode("a", "a-one"), episode("a", "a-two")],
+        );
+        assert_eq!(
+            state
+                .visible_episodes(AudiobookshelfEpisodeFilter::All)
+                .into_iter()
+                .map(|episode| episode.episode_id.as_str())
+                .collect::<Vec<_>>(),
+            ["a-one", "a-two"]
+        );
+
+        state.cache_detail("b".into(), vec![episode("b", "b-one")]);
+        assert_eq!(
+            state
+                .visible_episodes(AudiobookshelfEpisodeFilter::All)
+                .into_iter()
+                .map(|episode| episode.episode_id.as_str())
+                .collect::<Vec<_>>(),
+            ["a-one", "a-two", "b-one"],
+            "the flat view concatenates the cached shows in show order"
+        );
+        assert_eq!(
+            state.detail_cache["a"],
+            vec![episode("a", "a-one"), episode("a", "a-two")]
+        );
+
+        // A re-arrival replaces the show's entry: append at most once, never
+        // a duplicate.
+        state.cache_detail("a".into(), vec![episode("a", "a-one")]);
+        assert_eq!(
+            state
+                .visible_episodes(AudiobookshelfEpisodeFilter::All)
+                .into_iter()
+                .map(|episode| episode.episode_id.as_str())
+                .collect::<Vec<_>>(),
+            ["a-one", "b-one"]
+        );
     }
 
     #[test]
-    fn empty_episodes_and_missing_progress_are_unstarted() {
+    fn cache_arrivals_keep_the_selected_episode_and_refresh_clears_it() {
         let mut state = AudiobookshelfBrowseState::new(library());
-        state.append_page(1, 20, 1, vec![show("a", "A")]);
-        state.episodes = Some(Vec::new());
-        assert_eq!(state.shows.len(), 1);
-        assert!(!state.progress.contains_key(&("a".into(), "missing".into())));
+        state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
+        state.selected_episode = Some(("a".into(), "a-one".into()));
+
+        state.cache_detail("b".into(), vec![episode("b", "b-one")]);
+        assert_eq!(
+            state.selected_episode,
+            Some(("a".into(), "a-one".into())),
+            "a later show's cache arrival keeps the selected episode"
+        );
+
+        // Refresh: the cache reloads from the fan-out and the selected
+        // episode identity goes with it.
+        state.cache_detail("a".into(), vec![episode("a", "a-one")]);
+        state.clear_episodes();
+        assert!(state.detail_cache.is_empty());
+        assert!(state.detail_loading_ids.is_empty());
+        assert_eq!(state.selected_episode, None);
+    }
+
+    #[test]
+    fn episode_by_identity_resolves_across_shows_and_requires_both_ids() {
+        let mut state = AudiobookshelfBrowseState::new(library());
+        state.append_page(1, 20, 2, vec![show("a", "A"), show("b", "B")]);
+        state.cache_detail("a".into(), vec![episode("a", "shared")]);
+        state.cache_detail("b".into(), vec![episode("b", "shared")]);
+
+        assert_eq!(
+            state
+                .episode_by_identity("b", "shared")
+                .map(|episode| episode.library_item_id.as_str()),
+            Some("b"),
+            "the same episode id on two shows stays isolated by show identity"
+        );
+        assert!(state.episode_by_identity("a", "missing").is_none());
+        assert!(state.episode_by_identity("c", "shared").is_none());
     }
 
     #[test]
@@ -558,11 +696,14 @@ mod tests {
     fn filters_completed_progress_and_treats_partial_as_unplayed() {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(0, 20, 1, vec![show("a", "A")]);
-        state.episodes = Some(vec![
-            episode("a", "finished"),
-            episode("a", "partial"),
-            episode("a", "missing"),
-        ]);
+        state.cache_detail(
+            "a".into(),
+            vec![
+                episode("a", "finished"),
+                episode("a", "partial"),
+                episode("a", "missing"),
+            ],
+        );
         state.progress.insert(
             ("a".into(), "finished".into()),
             AudiobookshelfProgress {
@@ -599,12 +740,15 @@ mod tests {
     #[test]
     fn visible_episodes_are_newest_first_with_undated_last() {
         let mut state = AudiobookshelfBrowseState::new(library());
-        state.append_page(0, 20, 1, vec![show("a", "A")]);
-        state.episodes = Some(vec![
-            episode_with_date("a", "old", Some("2026-01-01")),
-            episode_with_date("a", "undated", None),
-            episode_with_date("a", "new", Some("2026-08-12")),
-        ]);
+        state.append_page(0, 20, 2, vec![show("a", "A"), show("b", "B")]);
+        state.cache_detail(
+            "a".into(),
+            vec![
+                episode_with_date("a", "old", Some(1_767_225_600)),
+                episode_with_date("a", "new", Some(1_786_492_800)),
+            ],
+        );
+        state.cache_detail("b".into(), vec![episode_with_date("b", "undated", None)]);
 
         assert_eq!(
             state
@@ -612,7 +756,41 @@ mod tests {
                 .into_iter()
                 .map(|episode| episode.episode_id.as_str())
                 .collect::<Vec<_>>(),
-            ["new", "old", "undated"]
+            ["new", "old", "undated"],
+            "the flat union sorts newest-first globally, undated episodes last"
+        );
+    }
+
+    #[test]
+    fn display_rows_insert_non_selectable_groups_without_changing_indices() {
+        const DAY: u64 = 24 * 60 * 60;
+        let now = 30 * DAY;
+        // Deliberately interleaved and unsorted: the builder sorts the flat
+        // slice newest-first globally before merging consecutive runs, and a
+        // group with no episodes produces no heading.
+        let episodes = vec![
+            episode_with_date("a", "month", Some(now - 30 * DAY)),
+            episode_with_date("a", "new", Some(now)),
+            episode_with_date("a", "undated", None),
+            episode_with_date("a", "recent", Some(now - 2 * DAY)),
+        ];
+
+        assert_eq!(
+            podcast_display_rows(&episodes, now),
+            vec![
+                PodcastDisplayRow::Heading(FeedAgeGroup::New),
+                PodcastDisplayRow::Entry(1),
+                PodcastDisplayRow::Spacer,
+                PodcastDisplayRow::Heading(FeedAgeGroup::Recent),
+                PodcastDisplayRow::Entry(3),
+                PodcastDisplayRow::Spacer,
+                PodcastDisplayRow::Heading(FeedAgeGroup::OlderThanMonth),
+                PodcastDisplayRow::Entry(0),
+                PodcastDisplayRow::Spacer,
+                PodcastDisplayRow::Heading(FeedAgeGroup::Unknown),
+                PodcastDisplayRow::Entry(2),
+            ],
+            "undated episodes sort last and group as `Unknown date`; empty groups are omitted"
         );
     }
 
@@ -705,13 +883,14 @@ mod tests {
     fn episode_with_date(
         show: &str,
         id: &str,
-        published_at: Option<&str>,
+        published_at: Option<u64>,
     ) -> AudiobookshelfDownloadedEpisode {
         AudiobookshelfDownloadedEpisode {
             library_item_id: show.into(),
             episode_id: id.into(),
             title: id.into(),
-            published_at: published_at.map(str::to_string),
+            description: None,
+            published_at,
             duration_seconds: None,
         }
     }

@@ -412,15 +412,17 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
     // A populated ABS browse tab.
     let library = abs_library("abs-pod", "podcast");
     let mut browse = AudiobookshelfBrowseState::new(library.clone());
-    browse.episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    browse.detail_cache.insert(
+        "show-1".into(),
+        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-1".into(),
             episode_id: "episode-1".into(),
             title: "Episode 1".into(),
+            description: None,
             published_at: None,
             duration_seconds: Some(120.0),
-        },
-    ]);
+        }],
+    );
     browse.selected_id = Some("show-1".into());
     app.audiobookshelf_libraries.push(library);
     app.audiobookshelf_browse.push(browse);

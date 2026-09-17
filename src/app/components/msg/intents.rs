@@ -77,35 +77,24 @@ pub enum AlbumCursorKind {
     Page,
 }
 
-/// Closed set of podcast episode-mode transitions (task 5.3d.6). The
-/// component performs its local episode/cursor/filter mutation and emits the
-/// matching variant while episode selection is active; the shell maps it onto
-/// the legacy App episode-move / filter-cycle / exit operations preserving
-/// the current App episode target (D17).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PodcastEpisodeTransition {
-    PreviousEpisode,
-    NextEpisode,
-    PreviousFilter,
-    NextFilter,
-    Exit,
-}
-
 /// Closed set of podcast episode action intents (task 5.3d.7). The component
-/// emits the intent matched from Space/Enter/Ctrl+A; the shell resolves the
-/// episode-selection and wide/narrow conditions from current App state/layout
-/// at the Model boundary and runs the existing App effect (D17).
+/// emits the intent matched from Space/Enter/Ctrl+A; the shell runs the App
+/// play/enqueue effect directly — episodes are the tab's leaf rows, so there
+/// is no episode-selection or overlay stage (reorganize-podcast-pill-
+/// navigation D6).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PodcastEpisodeIntent {
-    /// Space: App enters episode selection when its episode selection is
-    /// `None`; otherwise App plays its selected episode, carrying its target.
+    /// Space: App plays the carried target; a selectionless activation is a
+    /// no-op (the episode-selection path left with the show browser,
+    /// reorganize-podcast-pill-navigation 3.1).
     FocusOrPlay(Option<PodcastEpisodeTarget>),
-    /// Enter: when App selection is `None`, wide podcast enters episode
-    /// selection and non-Wide podcast opens the Library Hero overlay; otherwise
-    /// App plays its selected episode, carrying its target.
+    /// Enter or double-click: App plays the carried episode target
+    /// immediately, in every geometry — podcast episodes are not
+    /// hero-bearing rows and no overlay or inline detail opens (design D6).
+    /// A selectionless activation is a no-op.
     OpenOrPlay(Option<PodcastEpisodeTarget>),
-    /// Ctrl+A: enqueue only when App episode selection is active; otherwise
-    /// no-op when the target is `None`.
+    /// Ctrl+A: enqueue the carried target; a selectionless activation is a
+    /// no-op.
     Enqueue(Option<PodcastEpisodeTarget>),
 }
 

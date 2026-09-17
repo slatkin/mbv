@@ -15,7 +15,7 @@ use crate::app::render::components::hero_model::{
     emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES,
 };
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
-use crate::app::ui_util::{clean_overview, fmt_duration_approx};
+use crate::app::ui_util::{clean_overview, fmt_duration_approx, fmt_publish_date};
 
 use super::content::{
     ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroImageState, HeroLink,
@@ -132,26 +132,6 @@ pub(in crate::app) fn abs_episode_artwork_policy(episode: &AudiobookshelfQueueIt
             .filter(|id| !id.is_empty())
             .map(|_| ArtworkSource::AudiobookshelfCover {
                 library_item_id: episode.library_item_id.clone(),
-                book: false,
-            }),
-        decoration: None,
-        image: HeroImageState::None,
-    }
-}
-
-/// The artwork policy for an Audiobookshelf podcast show (design D5): square
-/// cover, like every podcast.
-pub(in crate::app) fn abs_show_artwork_policy(
-    show: &mbv_core::audiobookshelf::AudiobookshelfShow,
-) -> HeroArtwork {
-    HeroArtwork {
-        shape: ArtworkShape::Square,
-        source: show
-            .cover_path
-            .as_deref()
-            .filter(|id| !id.is_empty())
-            .map(|_| ArtworkSource::AudiobookshelfCover {
-                library_item_id: show.library_item_id.clone(),
                 book: false,
             }),
         decoration: None,
@@ -418,8 +398,13 @@ fn abs_book_meta_rows(book: &AudiobookshelfBookQueueItem) -> Vec<String> {
     rows
 }
 
-/// The Audiobookshelf podcast episode producer (design D5): show and author
-/// as plain meta rows, cleaned overview, Square cover.
+/// The Audiobookshelf podcast episode producer (design D7, row 3.5): the
+/// episode title, then the parent show's name, duration and publish date as
+/// plain meta rows, the cleaned episode description as the overview, and the
+/// parent show's Square cover. There is no credits block and no author row:
+/// no such field exists on the episode payload. One producer for every
+/// destination that presents the episode (podcast tab, queue panel, Home
+/// rows), so the facts cannot drift.
 pub(in crate::app) fn hero_content_abs_episode(
     episode: &AudiobookshelfQueueItem,
 ) -> HeroContentData {
@@ -427,11 +412,11 @@ pub(in crate::app) fn hero_content_abs_episode(
     if let Some(show) = episode.show_title.as_deref().filter(|s| !s.is_empty()) {
         meta_rows.push(show.to_string());
     }
-    if let Some(author) = episode.author.as_deref().filter(|a| !a.is_empty()) {
-        meta_rows.push(author.to_string());
-    }
     if let Some(ticks) = episode.duration_ticks.filter(|t| *t > 0) {
         meta_rows.push(fmt_duration_approx(ticks as i64 / TICKS_PER_SECOND));
+    }
+    if let Some(secs) = episode.pub_date_secs {
+        meta_rows.push(fmt_publish_date(secs));
     }
     let facts = HeroFacts {
         title: episode.title.clone(),
@@ -440,34 +425,6 @@ pub(in crate::app) fn hero_content_abs_episode(
         artwork: abs_episode_artwork_policy(episode),
     };
     let overview = episode
-        .description
-        .as_deref()
-        .map(clean_overview)
-        .filter(|d| !d.is_empty());
-    HeroContentData {
-        facts,
-        overview,
-        credits: None,
-    }
-}
-
-/// The Audiobookshelf podcast show producer (design D5): author as a plain
-/// meta row, cleaned overview, Square cover.
-pub(in crate::app) fn hero_content_abs_show(
-    show: &mbv_core::audiobookshelf::AudiobookshelfShow,
-) -> HeroContentData {
-    let facts = HeroFacts {
-        title: show.title.clone(),
-        meta_rows: show
-            .author
-            .as_deref()
-            .filter(|a| !a.is_empty())
-            .map(|a| vec![a.to_string()])
-            .unwrap_or_default(),
-        links: Vec::new(),
-        artwork: abs_show_artwork_policy(show),
-    };
-    let overview = show
         .description
         .as_deref()
         .map(clean_overview)

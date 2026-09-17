@@ -79,9 +79,11 @@ The selected item's hero or detail workspace SHALL be positioned by the shared l
 
 The inline hero SHALL remain part of list flow as the selected row's replacement. Its variable height SHALL be budgeted once, its block SHALL own the selected item's geometry and parent activation target, and single click SHALL focus while double click performs normal item activation. If the replacement cannot fit, the ordinary selected row SHALL be restored with its normal selected appearance and interaction.
 
-The inline hero SHALL render the same content shape on every surface: title, optional metadata line, optional overview text, and an optional image. The image model SHALL be selected by image aspect ratio — Model A (right-aligned, wrap-around) for tall images such as posters and book covers, Model B (right-half, meta-column) for wide 16:9 thumbnails. No surface SHALL render structured lists (seasons, episodes, tracks, chapters) inside the inline hero. Structured lists SHALL be accessed via the inline-hero selection modal (see `inline-hero-selection-modal`).
+The inline hero SHALL render the same content shape on every surface: title, optional metadata line, optional overview text, and an optional image. The image model SHALL be selected by image aspect ratio — Model A (right-aligned, wrap-around) for tall images such as posters and book covers, Model B (right-half, meta-column) for wide 16:9 thumbnails. No surface SHALL render structured lists (seasons, episodes, tracks, chapters) inside the inline hero. Structured lists SHALL be accessed through the Library Hero overlay's Workspace (see `library-hero-overlay`).
 
 For wide Movies, the left hero SHALL continue using Home's selected-media card. For wide TV, the left workspace SHALL continue showing Series artwork, metadata, overview, season pills, and episodes. Other surfaces SHALL retain their declared content and interaction behavior while adopting the same placement rule. Wide-mode track and episode listings are outside this requirement; they are governed by the Wide hero presentation.
+
+The Audiobookshelf podcast tab is the one surface whose rows are not hero-bearing in this presentation: its downloaded episodes are the tab's own list rows, so no row is ever replaced by inline detail. The selected episode's hero is a Wide-only pane, and in the non-Wide presentation the episodes remain ordinary rows and Enter plays the selected episode.
 
 #### Scenario: Wide hero-bearing browse surface
 
@@ -114,26 +116,26 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 - **THEN** the ordinary selected row is restored
 - **AND** its normal selected appearance and interaction are retained
 
-#### Scenario: Narrow TV shows uses standard hero with selection modal
+#### Scenario: Narrow TV shows opens the Library Hero overlay
 
 - **WHEN** a TV Series is selected in the inline presentation
 - **THEN** the inline hero shows the Series title, metadata, overview, and poster image only
 - **AND** season pills and episode rows do NOT render inside the inline hero
-- **AND** pressing Enter opens the constituent-list modal for season and episode selection
+- **AND** pressing Enter opens the Library Hero overlay with its season and episode Workspace focused
 
 #### Scenario: Narrow grouped Music
 
 - **WHEN** grouped Music uses the inline presentation
 - **THEN** selected album hero content (title, metadata, album art) replaces the active album row
-- **AND** the track list does NOT render inline; Enter opens the selection modal
+- **AND** the track list does NOT render inline; Enter opens the Library Hero overlay with its track Workspace focused
 
 #### Scenario: Narrow Audiobookshelf podcast
 
-- **WHEN** an Audiobookshelf podcast library uses the inline presentation
-- **THEN** selected-show hero content (title, author, description, cover) replaces the active show row
-- **AND** filters and downloaded episodes do NOT render inside the inline hero
-- **AND** alphabetical pills render in the panel area like every other library tab
-- **AND** pressing Enter opens the constituent-list modal for episode selection
+- **WHEN** an Audiobookshelf podcast library uses the non-Wide presentation
+- **THEN** every episode remains an ordinary fixed-height media row in the scrolling browser and no row is replaced by inline detail
+- **AND** the state-and-show pill row renders in the panel area like every other library tab
+- **AND** the selected episode's hero does not render in this presentation
+- **AND** pressing Enter plays the selected episode
 
 #### Scenario: Narrow Audiobookshelf book
 
@@ -143,7 +145,7 @@ For wide Movies, the left hero SHALL continue using Home's selected-media card. 
 - **AND** the cover image uses Model A (right-aligned, wrap-around), not Model B
 - **AND** exactly one author-bucket pill row renders above the browser with a parent-background spacer
 - **AND** no chapter child target or chapter focus exists in the narrow presentation
-- **AND** Enter or parent double-click opens the chapter selection modal
+- **AND** Enter or parent double-click opens the Library Hero overlay with its chapter Workspace focused
 
 #### Scenario: Narrow Feeds
 

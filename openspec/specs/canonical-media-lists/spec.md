@@ -204,7 +204,7 @@ Migrated Home and Feeds rows SHALL use the canonical row model and painter. The 
 
 ### Requirement: Provider destinations compose canonical media controls
 
-Grouped Music album and track browsing, Audiobookshelf Podcast show and episode browsing, and Audiobookshelf Book and chapter/audio-part browsing SHALL prepare provider-owned content as canonical selectable `Item`, non-selectable `Heading`, and `Spacer` rows and compose shared Wide or Inline presentations where their arrangements require them. The controls SHALL remain embedded beneath the mounted destination component. Provider detail workspaces, images, selectors, surname buckets, filters, effects, and typed intent translation SHALL remain parent-owned; every media-row flow's cursor, scroll, authoritative selected target, row-local behavior, and retained row geometry SHALL remain in its shared canonical owner.
+Grouped Music album and track browsing, Audiobookshelf Podcast episode browsing, and Audiobookshelf Book and chapter/audio-part browsing SHALL prepare provider-owned content as canonical selectable `Item`, non-selectable `Heading`, and `Spacer` rows and compose shared Wide or Inline presentations where their arrangements require them. The controls SHALL remain embedded beneath the mounted destination component. Provider detail workspaces, images, selectors, surname buckets, filters, effects, and typed intent translation SHALL remain parent-owned; every media-row flow's cursor, scroll, authoritative selected target, row-local behavior, and retained row geometry SHALL remain in its shared canonical owner.
 
 #### Scenario: Music groups retain provider authority
 
@@ -216,8 +216,8 @@ Grouped Music album and track browsing, Audiobookshelf Podcast show and episode 
 #### Scenario: Audiobookshelf shows compose without losing episodes
 
 - **WHEN** an Audiobookshelf podcast library is shown Wide or Normal
-- **THEN** show and filtered episode rows use shared canonical ownership and delegation
-- **AND** episode filtering, active-pane focus, images, content lookup, and typed playback intents remain Audiobookshelf-podcast-owned
+- **THEN** episode rows use shared canonical ownership and delegation
+- **AND** the pill row's selection and filtering, active-pane focus, images, content lookup, and typed playback intents remain Audiobookshelf-podcast-owned
 - **AND** episode rows are not reseeded or reselected during painting.
 
 #### Scenario: Audiobookshelf books compose without duplicate detail
@@ -229,7 +229,7 @@ Grouped Music album and track browsing, Audiobookshelf Podcast show and episode 
 
 ### Requirement: Audiobookshelf geometry has complete breakpoint fallbacks
 
-Audiobookshelf Podcast and Book surfaces SHALL use the shared Wide hero or Inline arrangement at the established Wide/Normal breakpoints, preserve the short-height fallback, and hand off stable selected target and viewport anchor across breakpoint changes. Non-list repairs required to make the composition correct SHALL live in shared arrangements or the owning destination component, not a bespoke exception.
+Audiobookshelf Book surfaces SHALL use the shared Wide hero or Inline arrangement at the established Wide/Normal breakpoints. Audiobookshelf Podcast surfaces SHALL use the shared Wide hero when it fits and their ordinary episode rows at every other geometry, because the podcast tab has no Inline hero. Both SHALL preserve the short-height fallback and hand off stable selected target and viewport anchor across breakpoint changes. Non-list repairs required to make the composition correct SHALL live in shared arrangements or the owning destination component, not a bespoke exception.
 
 #### Scenario: Wide and short layouts are deterministic
 - **WHEN** terminal width/height crosses the Wide threshold or the short-height guard
@@ -255,7 +255,7 @@ When grouped Music or an Audiobookshelf Podcast or Book destination meets the sh
 
 Every in-scope logical media-row flow SHALL have exactly one shared owner for row content order, selectable-target indexing, cursor, scroll, authoritative selected-row identity, row-local interaction state, and row-local behavior. Its fixed-row presentation SHALL operate on that owner in Wide and non-Wide geometry rather than synchronize independent copies. A purely list-local state transition and row decoration SHALL be implementable in the shared canonical media-list subsystem without changing destination production code.
 
-The in-scope flows SHALL be Queue slots; Home rows; generic Emby catalog rows; Movies and the Emby homevideos feed view; Grouped Music albums and tracks; TV series and episodes; Feeds entries; Audiobookshelf Podcast shows and filtered episodes; and Audiobookshelf Book titles and chapter/audio-part rows.
+The in-scope flows SHALL be Queue slots; Home rows; generic Emby catalog rows; Movies and the Emby homevideos feed view; Grouped Music albums and tracks; TV series and episodes; Feeds entries; Audiobookshelf Podcast episode rows; and Audiobookshelf Book titles and chapter/audio-part rows.
 
 Parent destinations SHALL retain Service content, stable-target-to-domain lookup, active pane and component focus, section/group/filter/bucket/season/scope chrome, Workspaces, loading, images, effects, persistence, and provider-specific typed intent translation. They SHALL NOT retain a second row cursor, row scroll, row-local membership or range state, row hit map, or authoritative selected-row identity.
 

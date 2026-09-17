@@ -208,15 +208,17 @@ fn local_daemon_app_keeps_live_abs_queue_and_reconciles_browse_on_adoption() {
     };
     let mut browse =
         crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState::new(library.clone());
-    browse.episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    browse.detail_cache.insert(
+        "show-a".into(),
+        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),
+            description: None,
             published_at: None,
             duration_seconds: Some(300.0),
-        },
-    ]);
+        }],
+    );
     app.audiobookshelf_libraries.push(library);
     app.audiobookshelf_browse.push(browse);
 

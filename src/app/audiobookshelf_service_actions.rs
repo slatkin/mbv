@@ -461,12 +461,15 @@ impl App {
             state.progress.contains_key(&(
                 progress.library_item_id.clone(),
                 progress.episode_id.clone(),
-            )) || state.episodes.as_ref().is_some_and(|eps| {
-                eps.iter().any(|ep| {
-                    ep.library_item_id == progress.library_item_id
-                        && ep.episode_id == progress.episode_id
+            )) || state
+                .detail_cache
+                .get(&progress.library_item_id)
+                .is_some_and(|eps| {
+                    eps.iter().any(|ep| {
+                        ep.library_item_id == progress.library_item_id
+                            && ep.episode_id == progress.episode_id
+                    })
                 })
-            })
         }) || self.player_tab.queue.slots().iter().any(|slot| {
             slot.item.as_audiobookshelf().is_some_and(|ep| {
                 ep.library_item_id == progress.library_item_id

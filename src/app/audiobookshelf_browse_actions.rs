@@ -5,6 +5,11 @@ use super::App;
 use mbv_core::api::TICKS_PER_SECOND;
 use mbv_core::playback_queue::{AudiobookshelfBookQueueItem, AudiobookshelfQueueItem, QueueItem};
 
+/// The number of per-show episode fetches the podcast fan-out keeps in
+/// flight at once (design D5: bounded in-flight requests; a library with
+/// many shows fills in progressively).
+pub(in crate::app) const MAX_PODCAST_DETAILS_IN_FLIGHT: usize = 4;
+
 impl App {
     /// Resolve the browse kind for Audiobookshelf library `index` from its
     /// `media_type`, once. This is the single resolution point the
@@ -25,29 +30,34 @@ impl App {
         })
     }
 
-    /// Fetches the selected podcast show's downloaded episodes.
+    /// Fetches one podcast show's downloaded episodes (design D2: the
+    /// per-show expanded-item fetch). The in-flight mark is inserted only
+    /// after the Service setup and key resolve: an early return on missing
+    /// setup must not leak the mark and blocklist the show for the session
+    /// (reorganize-podcast-pill-navigation 3.3 carried obligation).
     pub(super) fn start_audiobookshelf_detail(&mut self, library_item_id: String) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
         };
-        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
-            return;
-        };
-        if let Some(cached) = state.detail_cache.get(&library_item_id).cloned() {
-            state.episodes = Some(cached);
-            state.detail_loading = false;
-            return;
-        }
-        if state.episodes.is_some() || state.detail_loading {
-            return;
-        }
-        state.detail_loading = true;
         let config_snapshot = self.config.lock().unwrap().clone();
         let Some((setup, key)) =
             super::service_startup::audiobookshelf_setup_and_key(&config_snapshot)
         else {
             return;
         };
+        let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
+            return;
+        };
+        if state.detail_cache.contains_key(&library_item_id)
+            || state.detail_loading_ids.contains_key(&library_item_id)
+        {
+            return;
+        }
+        state.next_detail_request += 1;
+        let request = state.next_detail_request;
+        state
+            .detail_loading_ids
+            .insert(library_item_id.clone(), request);
         let generation = self.audiobookshelf_runtime.generation();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
@@ -61,6 +71,7 @@ impl App {
                 });
             let _ = tx.send(super::types_events::LibEvent::AudiobookshelfDetailFetched {
                 generation,
+                request,
                 library_item_id,
                 result,
             });
@@ -114,6 +125,52 @@ impl App {
         });
     }
 
+    /// The lazy episode fan-out (design D5, task 3.3): the committed pill
+    /// decides the required shows — a show pill needs that show; a state
+    /// pill needs every listed show. Shows already cached or in flight are
+    /// skipped, so each show is fetched at most once per session and
+    /// re-arming after an arrival is idempotent; the in-flight cap bounds
+    /// the batch. Only the active tab's library fans out: an inactive tab
+    /// has no viewed pill to load for.
+    pub(super) fn start_audiobookshelf_podcast_fan_out(&mut self, index: usize) {
+        if self.tab.audiobookshelf_index() != Some(index) {
+            return;
+        }
+        let required: Vec<String> = {
+            let Some(state) = self.audiobookshelf_browse.get(index) else {
+                return;
+            };
+            match state.committed_show_pill.as_ref() {
+                Some(id) => vec![id.clone()],
+                None => state
+                    .shows
+                    .iter()
+                    .map(|show| show.library_item_id.clone())
+                    .collect(),
+            }
+        };
+        for id in required {
+            let in_flight = self.audiobookshelf_browse[index].detail_loading_ids.len();
+            if in_flight >= MAX_PODCAST_DETAILS_IN_FLIGHT {
+                break;
+            }
+            self.start_audiobookshelf_detail(id);
+        }
+    }
+
+    /// A state-pill scope commit or a state-scoped list interaction (design
+    /// D5): the required shows are every listed show; arm the bounded
+    /// fan-out.
+    pub(super) fn commit_audiobookshelf_podcast_state_scope(&mut self) {
+        let Some(index) = self.tab.audiobookshelf_index() else {
+            return;
+        };
+        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+            state.committed_show_pill = None;
+        }
+        self.start_audiobookshelf_podcast_fan_out(index);
+    }
+
     pub(super) fn audiobookshelf_refresh(&mut self) {
         let Some(index) = self.tab.audiobookshelf_index() else {
             return;
@@ -126,13 +183,16 @@ impl App {
             state.total = 0;
             state.next_page = 0;
             state.error = None;
-            state.detail_cache.clear();
-            state.episodes = None;
+            state.clear_episodes();
             // `episode_filter` / episode-pane focus / `scroll` are
             // component-owned now (split-browse-state-interaction-fields task
             // 3.2); the content push after this reset drops the selected show,
             // which resets the component's own interaction state.
             state.loading_pages.clear();
+            // The cleared list also drops the component's show pill (it
+            // resets to `All` on the content push), so the fan-out scope
+            // follows it back to the state pills.
+            state.committed_show_pill = None;
             // Mark page 0 pending before re-issuing it so the catalog reloads
             // from the first page (the renderer shows a Loading placeholder
             // until the response lands).
@@ -183,6 +243,11 @@ impl App {
         }) else {
             return;
         };
+        // The resolved show pill scopes the fan-out (design D5): only that
+        // show's episodes are required while it is active.
+        if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
+            state.committed_show_pill = Some(target.to_string());
+        }
         self.select_audiobookshelf_show(cursor);
     }
 
@@ -346,14 +411,18 @@ impl App {
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;
-        let episode = state.episodes.as_deref()?.iter().find(|episode| {
-            episode.library_item_id == target.library_item_id()
-                && episode.episode_id == target.episode_id()
-        })?;
+        // The episode is resolved by its own `(library_item_id, episode_id)`
+        // identity from the per-show cache, never from the tab's current
+        // selection: selection is pill/episode identity now, and the queue
+        // item's parent-show metadata follows the episode (design D6).
+        let episode = state.episode_by_identity(target.library_item_id(), target.episode_id())?;
         if episode.library_item_id.trim().is_empty() || episode.episode_id.trim().is_empty() {
             return None;
         }
-        let show = state.selected_show();
+        let show = state
+            .shows
+            .iter()
+            .find(|show| show.library_item_id == episode.library_item_id);
         let progress = state
             .progress
             .get(&(episode.library_item_id.clone(), episode.episode_id.clone()));
@@ -372,10 +441,7 @@ impl App {
             duration_ticks: episode.duration_seconds.and_then(seconds_to_ticks_u64),
             position_ticks,
             played: is_finished,
-            pub_date_secs: episode
-                .published_at
-                .as_deref()
-                .and_then(super::feed_parse_date::parse_pub_date_secs),
+            pub_date_secs: episode.published_at,
             is_finished,
             cover_path: show.and_then(|show| show.cover_path.clone()),
         }))

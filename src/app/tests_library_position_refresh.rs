@@ -46,15 +46,17 @@ fn mixed_services_app() -> App {
             cover_path: None,
         }],
     );
-    abs_state.episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    abs_state.detail_cache.insert(
+        "show-a".into(),
+        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),
+            description: None,
             published_at: None,
             duration_seconds: None,
-        },
-    ]);
+        }],
+    );
     app.audiobookshelf_libraries.push(abs_library);
     app.audiobookshelf_browse.push(abs_state);
     app.feed_tab.subscriptions = vec![mbv_core::config::FeedSubscription {
@@ -87,7 +89,9 @@ fn refresh_current_view_targets_the_focused_emby_library_only() {
         "Audiobookshelf catalog must not be cleared"
     );
     assert!(
-        app.audiobookshelf_browse[0].episodes.is_some(),
+        app.audiobookshelf_browse[0]
+            .detail_cache
+            .contains_key("show-a"),
         "Audiobookshelf episodes must be preserved"
     );
     assert!(!app.feed_tab.loading, "Feeds must not be refreshed");
@@ -108,7 +112,7 @@ fn refresh_current_view_with_queue_focus_leaves_browse_destinations_untouched() 
         "queue refresh must not reload the Emby library"
     );
     assert_eq!(app.audiobookshelf_browse[0].shows.len(), 1);
-    assert!(app.audiobookshelf_browse[0].episodes.is_some());
+    assert!(app.audiobookshelf_browse[0].detail_cache.contains_key("show-a"));
     assert!(!app.feed_tab.loading);
 }
 

@@ -21,6 +21,7 @@ uuid.workspace = true
 tungstenite.workspace = true
 log.workspace = true
 libc.workspace = true
+time = { version = "0.3", features = ["parsing"] }
 rust_cast = "0.21"
 mdns-sd = { version = "0.21", default-features = false, features = ["log"] }
 

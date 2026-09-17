@@ -11,9 +11,11 @@ In every geometry where the Wide Hero arrangement does not apply, pressing Enter
 
 For an item with a Workspace, opening the overlay SHALL give focus to its constituent media list. For an item without a Workspace, opening SHALL give focus to the Hero overlay and a subsequent Enter SHALL perform the item's existing activation behavior.
 
+Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast tab lists downloaded episodes directly, its hero has no Workspace and no inline or overlay presentation, and Enter on a selected episode performs its play activation immediately.
+
 #### Scenario: Parent with constituent media opens focused Workspace
 
-- **WHEN** the user presses Enter on a selected series, album, podcast show, or audiobook book in non-Wide geometry
+- **WHEN** the user presses Enter on a selected series, album, or audiobook book in non-Wide geometry
 - **THEN** the Library Hero overlay opens for that selected item
 - **AND** its episode, track, or chapter media list holds focus
 
@@ -33,6 +35,12 @@ For an item with a Workspace, opening the overlay SHALL give focus to its consti
 
 - **WHEN** Inline Search is active in non-Wide geometry and the user presses Enter on a result
 - **THEN** the result performs its existing navigation or activation behavior
+- **AND** no Library Hero overlay opens
+
+#### Scenario: Podcast episode plays without an overlay
+
+- **WHEN** the user presses Enter on a selected Audiobookshelf podcast episode in non-Wide geometry
+- **THEN** the episode performs its play activation
 - **AND** no Library Hero overlay opens
 
 ### Requirement: The overlay is confined to the Library pane

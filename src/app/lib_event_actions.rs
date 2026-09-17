@@ -323,34 +323,54 @@ impl App {
         }
         if let LibEvent::AudiobookshelfDetailFetched {
             generation,
+            request,
             library_item_id,
             result,
         } = ev
         {
-            if !self.audiobookshelf_runtime.accepts(generation) {
-                return;
-            }
-            let state = self.audiobookshelf_browse.iter_mut().find(|state| {
+            let index = self.audiobookshelf_browse.iter().position(|state| {
                 state
                     .shows
                     .iter()
                     .any(|show| show.library_item_id == library_item_id)
             });
-            match result {
-                Ok(episodes) => {
-                    if let Some(state) = state {
-                        state.detail_loading = false;
-                        state.cache_detail(library_item_id.clone(), episodes.clone());
-                        if state.selected_id.as_deref() == Some(&library_item_id) {
-                            state.episodes = Some(episodes);
-                        }
+            let Some(state) = index.and_then(|index| self.audiobookshelf_browse.get_mut(index))
+            else {
+                return;
+            };
+            // The response belongs to this state only when the show's
+            // in-flight mark still carries its request serial: an orphaned
+            // response (its mark cleared by a refresh) or a superseded one (a
+            // newer request for the show was issued) is discarded whole — it
+            // must neither retire the newer request's mark nor write the
+            // cache over a newer entry.
+            if state.detail_loading_ids.get(&library_item_id) != Some(&request) {
+                return;
+            }
+            state.detail_loading_ids.remove(&library_item_id);
+            // The mark is retired and the batch re-armed on the
+            // rejected-generation path too: a generation bump between spawn
+            // and arrival must not leak the in-flight slot and permanently
+            // stall the remaining shows behind the bounded cap. A rejected
+            // payload is still never cached.
+            if self.audiobookshelf_runtime.accepts(generation) {
+                match result {
+                    Ok(episodes) => {
+                        state.cache_detail(library_item_id, episodes);
+                    }
+                    Err(_error) => {
+                        // A failed fetch consumed the show's once-per-session
+                        // request: caching an empty result keeps the bounded
+                        // fan-out from re-issuing it forever (design D5);
+                        // the refresh key re-requests everything.
+                        state.cache_detail(library_item_id, Vec::new());
                     }
                 }
-                Err(_error) => {
-                    if let Some(state) = state {
-                        state.detail_loading = false;
-                    }
-                }
+            }
+            // The fan-out continues its bounded batch: the next required
+            // show's request starts as this one retires (design D5).
+            if let Some(index) = index {
+                self.start_audiobookshelf_podcast_fan_out(index);
             }
             return;
         }
@@ -369,22 +389,19 @@ impl App {
                 .position(|library| library.id == library_id)
             {
                 let mut next_page = None;
-                let mut selected_detail = None;
                 if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
                     match result {
                         Ok(page) => {
                             state.append_page(page.page, page.limit, page.total, page.items);
                             next_page = state.needs_page();
-                            if state.episodes.is_none() && !state.detail_loading {
-                                selected_detail = state.selected_id.clone();
-                            }
                         }
                         Err(error) => state.error = Some(error.to_string()),
                     }
                 }
-                if let Some(selected_detail) = selected_detail {
-                    self.start_audiobookshelf_detail(selected_detail);
-                }
+                // A landed page may list shows the active pill's fan-out has
+                // not requested yet (a state pill requires every show); the
+                // scheduler re-arms idempotently and stays bounded (design D5).
+                self.start_audiobookshelf_podcast_fan_out(index);
                 if let Some(next_page) = next_page {
                     super::service_startup::start_audiobookshelf_shows(
                         self.config.lock().unwrap().clone(),

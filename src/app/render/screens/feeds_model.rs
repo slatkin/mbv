@@ -32,7 +32,11 @@ pub(in crate::app) enum FeedDisplayRow {
     Entry(usize),
 }
 
-fn feed_age_group(pub_date_secs: Option<u64>, now_secs: u64) -> FeedAgeGroup {
+/// One Feeds age group for `pub_date_secs` against `now_secs`: the shared
+/// day-boundary criteria the Feeds tab and the podcast tab's episode
+/// grouping both use (one implementation; the podcast tab consumes it
+/// through `podcast_display_rows`).
+pub(in crate::app) fn feed_age_group(pub_date_secs: Option<u64>, now_secs: u64) -> FeedAgeGroup {
     let Some(pub_date_secs) = pub_date_secs else {
         return FeedAgeGroup::Unknown;
     };

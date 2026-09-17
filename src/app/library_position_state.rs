@@ -228,8 +228,12 @@ impl App {
             levels: vec![crate::config::LibraryPositionLevel {
                 parent_id: state.library.id.clone(),
                 title: state.library.name.clone(),
-                focused_item_id: state.selected_id.clone(),
-                cursor_index: state.cursor(),
+                // The podcast tab's selection is the active pill plus the
+                // selected episode, not a show id: a saved position no longer
+                // records one (design: the remembered pill is session memory
+                // and restore ignores the old show-id values; no migration).
+                focused_item_id: None,
+                cursor_index: 0,
                 item_types: Some("podcast".into()),
                 unplayed_only: false,
                 sort_by: "SortName".into(),
@@ -275,30 +279,43 @@ impl App {
     }
 
     pub(super) fn activate_audiobookshelf_position(&mut self, index: usize) {
-        let saved = self
-            .audiobookshelf_position_key(index)
-            .and_then(|key| self.library_position_state.libraries.get(&key).cloned());
+        // A saved position names a show id under the retired show-browser
+        // model; restore ignores the saved value entirely (design: no
+        // migration). Tab activation is a refresh trigger (design D5): the
+        // active pill's required shows are re-requested and their episodes
+        // replaced.
+        if self.tab.audiobookshelf_index() != Some(index) {
+            return;
+        }
+        self.refresh_audiobookshelf_podcast_pill_shows(index);
+    }
+
+    /// Tab-activation refresh for the podcast tab (design D5): drop the
+    /// committed pill's required shows' landed episode caches, then re-arm
+    /// the bounded fan-out. A show with a fetch still in flight keeps its
+    /// single request: stripping its mark here would re-request it and let
+    /// the orphaned response clear the new request's mark, multiplying
+    /// requests across tab ping-pong — the in-flight response lands into the
+    /// cache instead. A show pill re-requests that show only; a state pill
+    /// re-requests every listed show.
+    fn refresh_audiobookshelf_podcast_pill_shows(&mut self, index: usize) {
         let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
             return;
         };
-        if state.selected_id.is_none() {
-            state.selected_id = saved
-                .as_ref()
-                .and_then(|position| position.levels.first())
-                .and_then(|level| level.focused_item_id.clone());
-        }
-        let Some(id) = state.selected_id.clone() else {
-            if !state.shows.is_empty() {
-                state.select(0);
-            }
-            return;
+        let required: Vec<String> = match state.committed_show_pill.as_ref() {
+            Some(id) => vec![id.clone()],
+            None => state
+                .shows
+                .iter()
+                .map(|show| show.library_item_id.clone())
+                .collect(),
         };
-        if state.shows.iter().any(|show| show.library_item_id == id) {
-            state.episodes = state.detail_cache.get(&id).cloned();
+        for id in &required {
+            if !state.detail_loading_ids.contains_key(id) {
+                state.detail_cache.remove(id);
+            }
         }
-        if self.tab.audiobookshelf_index() == Some(index) {
-            self.start_audiobookshelf_detail(id);
-        }
+        self.start_audiobookshelf_podcast_fan_out(index);
     }
 
     /// Book-shaped sibling of `activate_audiobookshelf_position`. A saved

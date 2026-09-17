@@ -14,7 +14,7 @@ use super::hit_regions::TvHit;
 use super::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, ConfirmIntent,
     ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, PodcastEpisodeIntent,
-    PodcastEpisodeTransition, SavePlaylistIntent, SettingsIntent,
+    SavePlaylistIntent, SettingsIntent,
 };
 use super::queue::QueueIntent;
 use crate::app::types_context_menu::ContextMenuTargets;
@@ -179,23 +179,17 @@ pub enum ShellRequest {
     HomePillClick {
         target: usize,
     },
-    /// Resolved podcast show-list cursor
-    /// (split-audiobookshelf-cursor-ownership D1). Emitted by the component
-    /// after its local cursor mutation for Up/k, Down/j, Left/h, Right/l,
-    /// PageUp/PageDown, Home/End while no episode selection is active. Carries
-    /// the show index the component landed on; the shell applies it via
-    /// `App::select_audiobookshelf_show` (clamp + `state.select` +
-    /// detail-fetch), saves the position, and re-projects podcast content
-    /// without recomputing the movement.
+    /// The podcast tab's committed pill or pill-scoped list interaction
+    /// (reorganize-podcast-pill-navigation D3/D5): `Some(id)` carries a show
+    /// pill's resolved identity — the shell applies it via
+    /// `App::select_audiobookshelf_show_target`, which scopes the episode
+    /// fan-out to that show (fetched at most once per session), saves the
+    /// position, and re-projects podcast content. `None` carries a state
+    /// pill scope (or its list interaction): the fan-out's required shows
+    /// are every listed show.
     AudiobookshelfPodcastShowMove {
         library_item_id: Option<String>,
     },
-    /// Typed podcast episode-mode transition (task 5.3d.6). Emitted by the
-    /// component after its local episode-cursor/filter/exit mutation while
-    /// episode selection is active (Up/k, Down/j, `[`, `]`, Esc, Backspace);
-    /// the shell maps the variant onto the legacy App episode operations and
-    /// re-projects podcast content.
-    AudiobookshelfPodcastEpisodeTransition(PodcastEpisodeTransition),
     /// Typed podcast episode action intent (task 5.3d.7). Emitted by the
     /// component for Space/Enter/Ctrl+A; the shell resolves the episode-
     /// selection and wide/narrow conditions from current App state/layout and

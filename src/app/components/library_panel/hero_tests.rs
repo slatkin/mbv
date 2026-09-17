@@ -475,21 +475,88 @@ fn queue_producer_dispatches_by_kind() {
     assert_eq!(produced, hero_content_abs_book(&book));
 }
 
+/// The episode producer's facts are what the episode payload actually has
+/// (design D7): title = episode title, meta rows = the parent show's name,
+/// duration and publish date — no author row, and the overview is the
+/// cleaned plain text.
 #[test]
-fn abs_episode_producer_rows_show_author_duration() {
+fn abs_episode_producer_rows_show_show_duration_and_publish_date() {
     let mut episode = episode_item(Some("cover"));
     episode.show_title = Some("The Show".into());
     episode.author = Some("Host".into());
     episode.duration_ticks = Some(1_800 * TICKS_PER_SECOND as u64);
+    episode.pub_date_secs = Some(1_752_883_200); // 2025-07-19 UTC
     let produced = hero_content_abs_episode(&episode);
     assert_eq!(produced.facts.title, "Ep 1");
-    assert_eq!(produced.facts.meta_rows, vec!["The Show", "Host", "30m"]);
+    assert_eq!(
+        produced.facts.meta_rows,
+        vec!["The Show", "30m", "19 Jul 2025"]
+    );
     // The overview is the cleaned plain text.
     assert_eq!(
         produced.overview.as_deref(),
         Some("<i>About</i> this episode".trim())
     );
     assert_eq!(produced.facts.artwork.shape, ArtworkShape::Square);
+    // No credits block: the producer never invents one.
+    assert_eq!(produced.credits, None);
+}
+
+/// Missing metadata collapses without inventing rows (design D7): no show
+/// name, duration, or publish date leaves the hero with the title and
+/// overview alone.
+#[test]
+fn abs_episode_producer_collapses_missing_metadata() {
+    let mut episode = episode_item(None);
+    episode.duration_ticks = None;
+    let produced = hero_content_abs_episode(&episode);
+    assert_eq!(produced.facts.title, "Ep 1");
+    assert!(produced.facts.meta_rows.is_empty());
+    assert!(produced.overview.is_some());
+    // The parent show's cover is addressed by the show's provider-native
+    // identity through the Square artwork policy; without a cover path the
+    // placeholder stands in (images-disabled budgeting reads the same None
+    // image state).
+    assert_eq!(produced.facts.artwork.shape, ArtworkShape::Square);
+    assert_eq!(produced.facts.artwork.source, None);
+    // With a cover, the fetch is keyed by the parent show's library item id.
+    let with_cover = hero_content_abs_episode(&episode_item(Some("cover")));
+    assert_eq!(
+        with_cover.facts.artwork.source,
+        Some(ArtworkSource::AudiobookshelfCover {
+            library_item_id: "lib-1".into(),
+            book: false,
+        })
+    );
+}
+
+/// Images-disabled budgeting on the episode hero path (row 3.5), explicit
+/// rather than implied by the missing-cover case: the episode's Square cover
+/// source exists, but with the image protocol disabled the projection returns
+/// `HeroImageState::None` — the placeholder is final and no cover fetch is
+/// keyed by anything.
+#[test]
+fn images_disabled_budgets_no_cover_fetch_for_the_episode_hero() {
+    use crate::app::tests::make_app_stub;
+
+    let produced = hero_content_abs_episode(&episode_item(Some("cover")));
+    assert!(produced.facts.artwork.source.is_some());
+    assert_eq!(
+        produced.facts.artwork.painted_shape(),
+        ArtworkShape::Square,
+        "the Square placeholder stands in"
+    );
+
+    let mut app = make_app_stub();
+    app.image_protocol_enabled = false;
+    let area = ratatui::layout::Rect::new(0, 0, 40, 12);
+    let state = app.project_hero_image(&produced.facts, false, area, None);
+    assert!(matches!(state, HeroImageState::None));
+    assert!(app.card_image_loading.is_empty());
+    assert!(
+        app.card_image_states.is_empty(),
+        "no cover fetch is keyed by anything"
+    );
 }
 
 #[test]

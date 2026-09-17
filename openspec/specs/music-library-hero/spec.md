@@ -7,7 +7,7 @@ Provides a responsive grouped Music layout that preserves the current narrow her
 
 ### Requirement: Grouped Music uses responsive compositions
 
-The grouped Music album view SHALL use Wide hero when it meets the shared wide geometry conditions. Its right pane SHALL contain album detail and tracks, and its left rail SHALL contain a single-column album browser. Otherwise the selected album detail SHALL replace the active album row in a single-column browser. The inline hero SHALL show album title, metadata, and album art only — no track list. The track list SHALL be accessed via the inline-hero selection modal (see `inline-hero-selection-modal`). Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
+The grouped Music album view SHALL use Wide hero when it meets the shared wide geometry conditions. Its right pane SHALL contain album detail and tracks, and its left rail SHALL contain a single-column album browser. Otherwise the selected album detail SHALL replace the active album row in a single-column browser. The inline hero SHALL show album title, metadata, and album art only — no track list. The track list SHALL be accessed through the Library Hero overlay's Workspace (see `library-hero-overlay`). Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
 
 #### Scenario: Grouped Music below the breakpoint
 
@@ -15,7 +15,7 @@ The grouped Music album view SHALL use Wide hero when it meets the shared wide g
 - **THEN** group pills span the content width
 - **AND** albums render one per row
 - **AND** the selected album's hero (title, metadata, album art) replaces its active row
-- **AND** the track list does NOT render inline; Enter opens the selection modal
+- **AND** the track list does NOT render inline; Enter opens the Library Hero overlay with its track Workspace focused
 
 #### Scenario: Grouped Music at the breakpoint
 
