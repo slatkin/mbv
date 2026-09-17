@@ -14,16 +14,16 @@
 
 ## 2. Per-kind landing (App side)
 
-- [ ] 2.1 Implement the Movie/generic arm unchanged (root level + cursor,
+- [x] 2.1 Implement the Movie/generic arm unchanged (root level + cursor,
   `save_default_library_position` before `switch_tab`), keeping the
   `navigate_to_item_keeps_navigated_cursor_across_tab_switch` regression green
   (`cargo nextest run -p mbv navigate_to_item_keeps`).
-- [ ] 2.2 Implement the show arm via `activate_searched_series` (letter pill,
+- [x] 2.2 Implement the show arm via `activate_searched_series` (letter pill,
   cursor on the series, `fetch_series_detail`) applied to the target library's
   current root level; a miss (series absent from the corpus) flashes the
   library-error path and leaves the tab unchanged. Verify with a unit test
   asserting root-level-only landing, pill applied, and cursor on the show.
-- [ ] 2.3 Implement the Music album arm via `activate_recursive_album` on the
+- [x] 2.3 Implement the Music album arm via `activate_recursive_album` on the
   resolved album; verify the landed stack matches that flow's existing shape
   for one grouped and one flat library (unit tests, mocked fetch).
 
@@ -44,7 +44,7 @@
 
 ## 4. Fences and failure paths
 
-- [ ] 4.1 Extend the NavigateTo arm's save-and-fence to the per-kind landings
+- [x] 4.1 Extend the NavigateTo arm's save-and-fence to the per-kind landings
   (landing replaces the saved Library position; stale restore discarded).
   Verify by extending `navigate_to_item_keeps_navigated_cursor_across_tab_switch`
   with a late in-flight `RestoreLibraryPosition` for the pre-navigation state.
