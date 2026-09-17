@@ -8,6 +8,9 @@ use mbv_core::api::EmbyItem;
 
 impl App {
     fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
+        // The drain's own parent id tells a root load apart from a deeper
+        // level's load for the pending Series landing retry below.
+        let loaded_parent_id = parent_id.clone();
         self.handle_loaded_level(lib_idx, parent_id, level);
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
@@ -22,6 +25,10 @@ impl App {
                 .unwrap_or(0),
         );
         self.spawn_all_items_prefetch(lib_idx);
+        // A pending Series landing retries once this library's ROOT level has
+        // drained (U2 correction: ensure-then-land); a deeper level's load
+        // re-arms and waits.
+        self.retry_pending_series_landing(lib_idx, &loaded_parent_id);
     }
 
     /// On the FIRST unfiltered load of a library's top browse level, this
@@ -163,6 +170,18 @@ impl App {
             if let Some(restored) = restored {
                 self.replace_saved_library_position(lib_idx, restored);
             }
+        }
+        // A pending Series landing retries against the restored root corpus.
+        // `arm` only pays the whole-library prefetch for a user-initiated
+        // pending landing, so a startup restore stays in the no-prefetch
+        // regime the note below protects.
+        if let Some(parent_id) = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first())
+            .map(|lvl| lvl.parent_id.clone())
+        {
+            self.retry_pending_series_landing(lib_idx, &parent_id);
         }
         // Deliberately no `spawn_all_items_prefetch` call here (unlike
         // `handle_lib_loaded`'s sibling call, which is safe): this method
@@ -505,14 +524,16 @@ impl App {
                 // this drain (D4): the landed stack has replaced the nav
                 // stack and the saved position above, so the switch's
                 // activation compares equal and never restores. Consume it
-                // only when this landing is the pending navigation's library
-                // (an Inline Search activation elsewhere must not switch tabs).
-                if let Some(idx) = self.pending_navigate_tab_switch.take() {
-                    if self
-                        .libs
+                // only when this landing belongs to the pending navigation's
+                // library; an Inline Search activation, or any other
+                // library's landing, must leave it armed (U2 correction).
+                let belongs_to_pending = self.pending_navigate_tab_switch.is_some_and(|idx| {
+                    self.libs
                         .get(idx)
                         .is_some_and(|lib| lib.library.id == library_id)
-                    {
+                });
+                if belongs_to_pending {
+                    if let Some(idx) = self.pending_navigate_tab_switch.take() {
                         self.set_library_tab(idx + 1);
                     }
                 }
@@ -529,6 +550,9 @@ impl App {
                         }
                     }
                 }
+                // The whole-library corpus is exactly what a pending Series
+                // landing was waiting for (U2 correction).
+                self.retry_pending_series_landing(lib_idx, &parent_id);
             }
             LibEvent::FeedHomeVideoAggregated {
                 lib_idx,
@@ -627,9 +651,10 @@ impl App {
                         }
                     }
                     NavigateLanding::Series { reveal } => {
-                        if self.libs.get(lib_idx).is_some()
-                            && self.activate_searched_series(lib_idx, &reveal)
-                        {
+                        let name = reveal.name.clone();
+                        if !self.libs.get(lib_idx).is_some() {
+                            self.flash_error(format!("Could not land on '{name}' in its library"));
+                        } else if self.activate_searched_series(lib_idx, &reveal) {
                             // D4: the landed root level (pill + cursor) is the
                             // saved position from now on; the fence in
                             // `handle_restored_library_position` then discards
@@ -638,29 +663,17 @@ impl App {
                             if switch_tab {
                                 self.set_library_tab(lib_idx + 1);
                             }
-                        } else {
-                            // Miss (absent from the level corpus, unloaded
-                            // library): flash the library-error path and leave
-                            // the active tab unchanged (task 4.2's semantics).
-                            self.flash_error(format!(
-                                "Could not land on '{}' in its library",
-                                reveal.name
-                            ));
+                        } else if !self.arm_pending_series_landing(lib_idx, reveal, switch_tab) {
+                            // Miss against a complete corpus (absent item, an
+                            // unloadable library): flash the library-error
+                            // path and leave the active tab unchanged (task
+                            // 4.2's semantics). A satisfiable-but-not-yet
+                            // corpus was armed above instead (U2 correction).
+                            self.flash_error(format!("Could not land on '{name}' in its library"));
                         }
                     }
                     NavigateLanding::Album { reveal, ancestors } => {
-                        let display_label = ancestors
-                            .iter()
-                            .map(|part| part.name.clone())
-                            .chain(std::iter::once(reveal.display_name()))
-                            .collect::<Vec<_>>()
-                            .join(" / ");
-                        let entry = AlbumSearchEntry {
-                            album: *reveal,
-                            ancestors,
-                            search_text: display_label.clone(),
-                            display_label,
-                        };
+                        let entry = AlbumSearchEntry::from_chain(*reveal, ancestors);
                         // Fully async, exactly like Inline Search's album
                         // activation: the nav stack is replaced (and the
                         // landed position saved) on the
@@ -731,10 +744,12 @@ impl App {
             | LibEvent::AudiobookshelfLatestRebuilt(_)
             | LibEvent::FeedsLatestRebuilt(_) => {}
             LibEvent::Error(e) => {
-                // A failed per-kind album activation reports through here;
-                // drop the deferred tab switch so it can never fire on a
-                // later, unrelated album activation.
+                // A failed per-kind activation reports through here; drop the
+                // deferred tab switch and the pending Series landing so
+                // neither can fire on a later, unrelated drain (U2
+                // correction).
                 self.pending_navigate_tab_switch = None;
+                self.pending_series_landing = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
         }

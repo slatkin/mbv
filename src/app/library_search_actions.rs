@@ -96,8 +96,15 @@ impl App {
         lib_idx: usize,
         entry: AlbumSearchEntry,
     ) -> bool {
-        let library_id = self.libs[lib_idx].library.id.clone();
-        let library_name = self.libs[lib_idx].library.display_name();
+        // A catalog change between resolve and drain can leave `lib_idx`
+        // stale; a miss flashes (the caller's false branch) instead of
+        // panicking on the raw index (U2 correction, matching the sibling
+        // Series/Chain arms' `libs.get` guards).
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return false;
+        };
+        let library_id = lib.library.id.clone();
+        let library_name = lib.library.display_name();
         let Some(client) = self.emby_snapshot() else {
             return false;
         };

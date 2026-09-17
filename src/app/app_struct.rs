@@ -6,7 +6,7 @@ use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
-use super::types_events::{LibEvent, SessionEvent};
+use super::types_events::{LibEvent, PendingSeriesLanding, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
@@ -179,8 +179,19 @@ pub struct App {
     /// of change `per-destination-item-navigation`): set when the recursive
     /// album activation spawns, consumed on its `RecursiveAlbumActivated`
     /// drain once the landed nav stack has replaced the saved position, so
-    /// the switch's activation never restores a stale position.
+    /// the switch's activation never restores a stale position. Consumed only
+    /// when the drained activation belongs to the pending library; any other
+    /// library's activation leaves it armed. Loss semantics: it is cleared by
+    /// any manual tab change (`apply_tab_position`) and by `LibEvent::Error`,
+    /// so a user who moved on or a failed activation never gets yanked to the
+    /// navigated library (U2 correction).
     pub(super) pending_navigate_tab_switch: Option<usize>,
+    /// Ensure-then-land state for a `NavigateLanding::Series` whose target
+    /// library corpus is not ready (U2 correction): armed by the
+    /// `NavigateTo` arm, retried on that library's `Loaded`,
+    /// `AllItemsPrefetched` and restored-position drains. See
+    /// `PendingSeriesLanding` for the full lifecycle.
+    pub(super) pending_series_landing: Option<PendingSeriesLanding>,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,

@@ -29,6 +29,22 @@ pub(super) enum NavigateLanding {
     },
 }
 
+/// A `NavigateLanding::Series` the target library's corpus could not satisfy
+/// yet (U2 correction): armed when the library has no loaded root level, the
+/// series sits outside the loaded page, or the whole-library `all_items`
+/// cache is absent. `Ensure-then-land`: the arm grows the corpus via
+/// `ensure_lib_loaded_for`/`spawn_all_items_prefetch` and
+/// `App::retry_pending_series_landing` retries the landing on that
+/// library's next `Loaded`/`AllItemsPrefetched`/restored-position drain.
+/// Cleared by the retry on success (land, save, switch per D4) or on a miss
+/// against a complete corpus (flash, tab unchanged), by `LibEvent::Error`,
+/// and by any manual tab change.
+pub(super) struct PendingSeriesLanding {
+    pub(super) lib_idx: usize,
+    pub(super) reveal: Box<EmbyItem>,
+    pub(super) switch_tab: bool,
+}
+
 pub(super) enum LibEvent {
     Loaded {
         lib_idx: usize,

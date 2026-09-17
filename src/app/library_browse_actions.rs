@@ -6,14 +6,15 @@ use mbv_core::api::{EmbyClient, EmbyItem};
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.
 /// `Chain` keeps the built ancestor-chain nav stack (Movie/generic);
-/// `Series`/`Album` name the single reveal item the App lands per kind at
-/// drain time. An unresolvable kind is a resolve failure (task 4.2), never a
-/// silent misroute.
+/// `Series`/`Album`/`Artist` name the single reveal item the App lands per
+/// kind at drain time. An unresolvable kind is a resolve failure (task 4.2),
+/// never a silent misroute.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum RevealTarget {
     Chain,
     Series(String),
     Album(String),
+    Artist(String),
 }
 
 /// D1 reveal-item table, pure over the item's own back-references and its
@@ -48,11 +49,11 @@ pub(super) fn resolve_reveal_target(
                 .ok_or_else(|| "Could not resolve the item's album".to_string())
         }
         "MusicAlbum" => Ok(RevealTarget::Album(item.id.clone())),
-        // An artist's owning album exists only as an ancestor; with none
-        // there is no album surface to land on (resolve failure, task 4.2).
-        "MusicArtist" => owning_ancestor(ancestors, "MusicAlbum")
-            .map(|a| RevealTarget::Album(a.id.clone()))
-            .ok_or_else(|| "Could not resolve the artist's album".to_string()),
+        // An artist reveals itself (U2 correction): its ancestor chain never
+        // contains a MusicAlbum, so "resolve to the owning album" is
+        // unsatisfiable. The landing uses the plain chain shape for the
+        // artist's own record instead.
+        "MusicArtist" => Ok(RevealTarget::Artist(item.id.clone())),
         "Series" => Ok(RevealTarget::Series(item.id.clone())),
         // Movie/generic: the ancestor-chain rebuild is already correct.
         _ => Ok(RevealTarget::Chain),
@@ -170,6 +171,22 @@ fn landing_for_target(
                 reveal: Box::new(album),
                 ancestors,
             })
+        }
+        // The artist kind's own named rule (U2 correction): fetch + verify
+        // the artist record, then land through the plain chain path -- the
+        // `[library, artist]` levels the pre-change Chain shape built for
+        // every kind. No album is involved; the artist's chain has none.
+        RevealTarget::Artist(artist_id) => {
+            let artist = if item.id == artist_id && item.item_type == "MusicArtist" {
+                item.clone()
+            } else {
+                fetch_reveal_item(client, &artist_id)?
+            };
+            if artist.item_type != "MusicArtist" {
+                return Err(format!("Item {artist_id} is not an artist"));
+            }
+            build_chain_nav_stack(client, &artist, _lib_id)
+                .map(|nav_stack| NavigateLanding::Chain { nav_stack })
         }
     }
 }
@@ -323,16 +340,7 @@ pub(super) fn build_album_index_with(
             // index. `is_folder` is the same criterion the intermediate
             // levels above already use.
             for album in items.into_iter().filter(|item| item.is_folder) {
-                let mut labels: Vec<String> =
-                    ancestors.iter().map(|part| part.name.clone()).collect();
-                labels.push(album.display_name());
-                let display_label = labels.join(" / ");
-                entries.push(AlbumSearchEntry {
-                    album,
-                    ancestors: ancestors.clone(),
-                    search_text: display_label.clone(),
-                    display_label,
-                });
+                entries.push(AlbumSearchEntry::from_chain(album, ancestors.clone()));
             }
             return Ok(());
         }

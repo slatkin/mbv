@@ -48,13 +48,13 @@ fn ancestor(id: &str, item_type: &str) -> EmbyItem {
     Err("Could not resolve the item's album")
 )]
 #[case::album_resolves_itself("MusicAlbum", "", "", &[], Ok(RevealTarget::Album("item1".into())))]
-#[case::artist_resolves_its_album_ancestor(
-    "MusicArtist", "", "", &[("alb1", "MusicAlbum"), ("folder1", "Folder"), ("root", "AggregateFolder")],
-    Ok(RevealTarget::Album("alb1".into()))
-)]
-#[case::artist_without_an_album_ancestor_is_a_resolve_failure(
+// U2 correction: an artist reveals ITSELF. Its ancestor chain never holds a
+// MusicAlbum, so the old "owning album" rule was unsatisfiable once the kind
+// was wired into emission.
+#[case::artist_resolves_itself("MusicArtist", "", "", &[], Ok(RevealTarget::Artist("item1".into())))]
+#[case::artist_resolves_itself_without_an_album_ancestor(
     "MusicArtist", "", "", &[("folder1", "Folder"), ("root", "AggregateFolder")],
-    Err("Could not resolve the artist's album")
+    Ok(RevealTarget::Artist("item1".into()))
 )]
 #[case::series_resolves_itself("Series", "", "", &[], Ok(RevealTarget::Series("item1".into())))]
 #[case::movie_keeps_the_chain("Movie", "", "", &[], Ok(RevealTarget::Chain))]
@@ -635,4 +635,492 @@ fn resolve_failure_drains_the_error_event_and_flashes_without_a_tab_change() {
     assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
     assert!(app.status.contains("Library error"), "flash: {}", app.status);
     assert_eq!(app.status_severity, ToastSeverity::Error);
+}
+
+// ── U2 correction: ensure-then-land Series, per-kind artist, lifecycle ──
+
+/// A TV library tab whose root level exists but only carries the first page
+/// of a longer listing (`total_count` beyond `items`), so the pending Series
+/// landing must wait for the whole-library prefetch.
+fn app_with_paginated_tv_library() -> App {
+    let mut app = make_app_stub();
+    let mut library = make_item("TV", "CollectionFolder");
+    library.id = "lib-tv".into();
+    library.collection_type = "tvshows".into();
+    app.libs.push(LibraryTab::new(library));
+    app.libs[0].library_total = Some(5);
+    let mut other = make_item("Other Show", "Series");
+    other.id = "ser0".into();
+    app.libs[0].nav_stack.push(BrowseLevel {
+        parent_id: "lib-tv".into(),
+        title: "TV".into(),
+        items: vec![other],
+        total_count: 5,
+        resting: BrowseResting::new(0, 0),
+        item_types: Some("Series".into()),
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        music_grouping: None,
+    });
+    app
+}
+
+fn series_item(id: &str, name: &str) -> EmbyItem {
+    let mut item = make_item(name, "Series");
+    item.id = id.into();
+    item
+}
+
+#[test]
+fn series_landing_on_an_unloaded_library_waits_then_lands_on_the_loaded_drain() {
+    // U2 correction (finding 1, spec P1): the queue "Go to Library" on an
+    // episode of a never-visited library must LAND, not flash. The arm
+    // materializes the root level via `ensure_lib_loaded_for`, and the
+    // `Loaded` drain retries the landing: land, save position, switch (D4).
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_mock_emby(&http);
+    let mut library = make_item("TV", "CollectionFolder");
+    library.id = "lib-tv".into();
+    library.collection_type = "tvshows".into();
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::Home;
+    // The series-detail fetch is orthogonal here; a cache hit keeps the
+    // script to the single browse response.
+    app.series_detail_cache.insert(
+        "ser1".into(),
+        SeriesDetail {
+            seasons: Vec::new(),
+            episodes: std::collections::HashMap::new(),
+        },
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"ser0","Name":"Other Show","Type":"Series"},{"Id":"ser1","Name":"The Show","Type":"Series"}],"TotalRecordCount":2}"#,
+    );
+
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Series {
+            reveal: Box::new(series_item("ser1", "The Show")),
+        },
+        switch_tab: true,
+    });
+
+    assert_eq!(app.tab, TabSelection::Home, "no tab yank before landing");
+    assert!(
+        app.pending_series_landing.is_some(),
+        "the landing is armed, not flashed"
+    );
+    assert!(
+        !app.status.contains("Could not land on"),
+        "an unloaded library is not a miss: {}",
+        app.status
+    );
+    assert_eq!(app.libs[0].nav_stack.len(), 1, "root level materialized");
+
+    let ev = app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("root browse loaded");
+    assert!(matches!(ev, LibEvent::Loaded { .. }), "expected Loaded");
+    app.handle_lib_event(ev);
+
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0), "landed and switched");
+    assert!(app.pending_series_landing.is_none(), "pending consumed");
+    let level = &app.libs[0].nav_stack[0];
+    let cursor = level.resting().cursor();
+    assert_eq!(level.items[cursor].id, "ser1", "cursor on the show");
+    let saved = app
+        .saved_library_position(0)
+        .expect("the landed state is the saved position (D4)");
+    assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("ser1"));
+}
+
+#[test]
+fn series_landing_waits_for_the_whole_library_prefetch_on_a_paginated_root() {
+    // U2 correction (finding 1): a series outside the loaded page needs the
+    // whole-library `all_items` corpus; the pending landing retries on its
+    // `AllItemsPrefetched` drain.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_paginated_tv_library();
+    app.tab = TabSelection::Home;
+    let mut show = series_item("ser1", "The Show");
+    show.id = "ser1".into();
+
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Series {
+            reveal: Box::new(show),
+        },
+        switch_tab: true,
+    });
+
+    assert_eq!(app.tab, TabSelection::Home);
+    assert!(app.pending_series_landing.is_some());
+    assert!(!app.status.contains("Could not land on"), "{}", app.status);
+
+    app.handle_lib_event(LibEvent::AllItemsPrefetched {
+        lib_idx: 0,
+        parent_id: "lib-tv".into(),
+        items: vec![
+            series_item("ser0", "Other Show"),
+            series_item("ser1", "The Show"),
+            series_item("ser2", "Third Show"),
+        ],
+    });
+
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0), "landed on the drain");
+    assert!(app.pending_series_landing.is_none());
+    let level = &app.libs[0].nav_stack[0];
+    assert_eq!(
+        level.items[level.resting().cursor()].id,
+        "ser1",
+        "cursor on the series within the prefetched corpus"
+    );
+}
+
+#[test]
+fn series_landing_miss_after_the_whole_library_load_flashes_and_clears() {
+    // U2 correction (finding 1): the miss rule is reserved for a genuinely
+    // absent item. Once the whole-library corpus is in hand and still lacks
+    // the show, the pending landing flashes and leaves the tab unchanged.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_paginated_tv_library();
+    app.tab = TabSelection::Home;
+
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Series {
+            reveal: Box::new(series_item("ser-absent", "Missing Show")),
+        },
+        switch_tab: true,
+    });
+    assert!(app.pending_series_landing.is_some());
+
+    app.handle_lib_event(LibEvent::AllItemsPrefetched {
+        lib_idx: 0,
+        parent_id: "lib-tv".into(),
+        items: vec![
+            series_item("ser0", "Other Show"),
+            series_item("ser2", "Third Show"),
+        ],
+    });
+
+    assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
+    assert!(
+        app.pending_series_landing.is_none(),
+        "a complete-corpus miss clears the pending landing"
+    );
+    assert!(
+        app.status.contains("Could not land on"),
+        "flash: {}",
+        app.status
+    );
+    assert_eq!(app.status_severity, ToastSeverity::Error);
+    assert_eq!(
+        app.libs[0].nav_stack[0].resting().cursor(),
+        0,
+        "the root level stays untouched by a miss"
+    );
+}
+
+#[test]
+fn pending_series_landing_survives_a_foreign_library_drain() {
+    // U2 correction (finding 1 wiring): a drain for another library must not
+    // consume or move the pending landing.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_paginated_tv_library();
+    app.tab = TabSelection::Home;
+    app.pending_series_landing = Some(crate::app::types_events::PendingSeriesLanding {
+        lib_idx: 0,
+        reveal: Box::new(series_item("ser1", "The Show")),
+        switch_tab: true,
+    });
+    let mut other_lib = make_item("Music", "CollectionFolder");
+    other_lib.id = "lib-other".into();
+    other_lib.collection_type = "music".into();
+    app.libs.push(LibraryTab::new(other_lib));
+
+    app.handle_lib_event(LibEvent::AllItemsPrefetched {
+        lib_idx: 1,
+        parent_id: "lib-other".into(),
+        items: vec![series_item("ser1", "The Show")],
+    });
+
+    assert!(
+        app.pending_series_landing.is_some(),
+        "a foreign library's drain leaves the pending landing armed"
+    );
+    assert_eq!(app.tab, TabSelection::Home);
+}
+
+#[test]
+fn artist_navigation_lands_on_the_plain_chain_shape() {
+    // U2 correction (finding 5): the artist kind has its own named rule --
+    // fetch + type-verify the artist, then land through the plain chain path
+    // (`[library, artist]` levels), save, switch. Pre-change this kind fell
+    // through to the generic Chain arm, so the shape is the pre-change one.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_mock_emby(&http);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.collection_type = "music".into();
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::Home;
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"art1","Name":"The Artist","Type":"MusicArtist"}]}"#,
+    );
+    // get_ancestors(art1): library folder + AggregateFolder only.
+    http.respond(
+        200,
+        r#"[{"Id":"lib-music","Name":"Music","Type":"CollectionFolder"},{"Id":"root","Name":"root","Type":"AggregateFolder"}]"#,
+    );
+    // The chain's single level: the library root listing.
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"art0","Name":"Other Artist","Type":"MusicArtist"},{"Id":"art1","Name":"The Artist","Type":"MusicArtist"}],"TotalRecordCount":2}"#,
+    );
+
+    app.spawn_navigate_to_item(
+        "art1".into(),
+        "MusicArtist".into(),
+        vec![(0, "lib-music".into(), "music".into())],
+    );
+
+    let ev = app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("navigate event");
+    let LibEvent::NavigateTo { landing, .. } = ev else {
+        panic!("expected NavigateTo, got a resolve failure");
+    };
+    let NavigateLanding::Chain { nav_stack } = landing else {
+        panic!("expected the artist's plain Chain landing");
+    };
+    assert_eq!(nav_stack.len(), 1, "[library, artist]: one level");
+    assert_eq!(nav_stack[0].parent_id, "lib-music");
+    assert_eq!(
+        nav_stack[0].items[nav_stack[0].resting().cursor()].id,
+        "art1",
+        "cursor on the artist"
+    );
+
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Chain { nav_stack },
+        switch_tab: true,
+    });
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0), "saved then switched");
+    let saved = app
+        .saved_library_position(0)
+        .expect("the landed state is the saved position");
+    assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("art1"));
+}
+
+#[test]
+fn artist_id_resolving_to_a_non_artist_record_is_a_resolve_failure() {
+    // U2 correction (finding 5): the resolve-failure semantics for the artist
+    // fetch are unchanged -- an unexpected fetched record is a failure, never
+    // a silent misroute.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_mock_emby(&http);
+    app.tab = TabSelection::Home;
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"art1","Name":"Not An Artist","Type":"MusicAlbum"}]}"#,
+    );
+    // The type-verification fetch of the same id (the Series sibling's
+    // shape: a mismatched caller item_type re-fetches before failing).
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"art1","Name":"Not An Artist","Type":"MusicAlbum"}]}"#,
+    );
+
+    app.spawn_navigate_to_item(
+        "art1".into(),
+        "MusicArtist".into(),
+        vec![(0, "lib-music".into(), "music".into())],
+    );
+
+    let ev = app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("error event");
+    assert!(matches!(ev, LibEvent::Error(_)), "expected LibEvent::Error");
+    app.handle_lib_event(ev);
+    assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
+}
+
+#[test]
+fn album_landing_with_a_stale_library_index_flashes_instead_of_panicking() {
+    // U2 correction (finding 2): a catalog change between resolution and the
+    // drain can leave `lib_idx` out of range; the Album arm must flash (the
+    // activation returns false) rather than index `self.libs` unchecked.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = app_with_loaded_tv_library();
+    app.tab = TabSelection::Home;
+
+    let mut album = make_item("The Album", "MusicAlbum");
+    album.id = "alb1".into();
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 7,
+        landing: NavigateLanding::Album {
+            reveal: Box::new(album),
+            ancestors: Vec::new(),
+        },
+        switch_tab: true,
+    });
+
+    assert_eq!(app.tab, TabSelection::Home, "active tab unchanged");
+    assert_eq!(app.pending_navigate_tab_switch, None);
+    assert!(
+        app.status.contains("Could not start"),
+        "flash: {}",
+        app.status
+    );
+    assert_eq!(app.status_severity, ToastSeverity::Error);
+}
+
+#[test]
+fn recursive_album_activation_rests_the_cursor_on_a_non_folder_album() {
+    // U2 correction (finding 4c): the activation walks raw parent listings
+    // (`fetch_all_album_index_items` applies no `is_folder` filter), so a
+    // MusicAlbum record that is not a folder still lands with the cursor on
+    // it -- the is_folder filter belongs to the album INDEX walk only.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_mock_emby(&http);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.collection_type = "music".into();
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::Home;
+
+    // The album's parent listing: a folder record first, the non-folder
+    // MusicAlbum second; the cursor must be the album's own position.
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"fold1","Name":"Unmatched Folder","Type":"Folder","IsFolder":true},{"Id":"alb1","Name":"The Album","Type":"MusicAlbum","IsFolder":false}],"TotalRecordCount":2}"#,
+    );
+
+    let mut album = make_item("The Album", "MusicAlbum");
+    album.id = "alb1".into();
+    album.is_folder = false;
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Album {
+            reveal: Box::new(album),
+            ancestors: Vec::new(),
+        },
+        switch_tab: true,
+    });
+
+    let ev = app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("album activated");
+    app.handle_lib_event(ev);
+
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0));
+    let level = &app.libs[0].nav_stack[0];
+    assert_eq!(level.items.len(), 2);
+    assert_eq!(
+        level.resting().cursor(),
+        1,
+        "cursor on the non-folder album, not clamped to the folder at index 0"
+    );
+    assert_eq!(level.items[1].id, "alb1");
+}
+
+#[test]
+fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
+    // U2 correction (finding 4b): a manual tab change clears the deferred
+    // navigation, so the later activation drain cannot switch back.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let mut app = app_with_mock_emby(&http);
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.collection_type = "music".into();
+    app.libs.push(LibraryTab::new(library));
+    app.tab = TabSelection::Home;
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}],"TotalRecordCount":1}"#,
+    );
+
+    let mut album = make_item("The Album", "MusicAlbum");
+    album.id = "alb1".into();
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Album {
+            reveal: Box::new(album),
+            ancestors: Vec::new(),
+        },
+        switch_tab: true,
+    });
+    assert_eq!(app.pending_navigate_tab_switch, Some(0));
+
+    // The user moves on before the activation drains.
+    app.set_library_tab(0);
+    assert_eq!(app.pending_navigate_tab_switch, None, "manual change clears");
+
+    let ev = app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("album activated");
+    app.handle_lib_event(ev);
+
+    assert_eq!(
+        app.tab,
+        TabSelection::Home,
+        "the drain must not yank the tab after the user moved on"
+    );
+    assert_eq!(
+        app.libs[0].nav_stack[0].items[app.libs[0].nav_stack[0].resting().cursor()].id,
+        "alb1",
+        "the landing itself still applied"
+    );
+}
+
+#[test]
+fn foreign_library_album_drain_leaves_the_deferred_switch_armed() {
+    // U2 correction (finding 4a): the deferred switch belongs to one
+    // library; another library's activation drain must leave it armed.
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    for (id, name) in [("lib-music-a", "Music A"), ("lib-music-b", "Music B")] {
+        let mut library = make_item(name, "CollectionFolder");
+        library.id = id.into();
+        library.collection_type = "music".into();
+        app.libs.push(LibraryTab::new(library));
+    }
+    app.tab = TabSelection::Home;
+    app.pending_navigate_tab_switch = Some(0);
+
+    app.handle_lib_event(LibEvent::RecursiveAlbumActivated {
+        library_id: "lib-music-b".into(),
+        nav_stack: Vec::new(),
+    });
+    assert_eq!(
+        app.pending_navigate_tab_switch,
+        Some(0),
+        "another library's activation leaves the switch armed"
+    );
+    assert_eq!(app.tab, TabSelection::Home, "no switch on a foreign drain");
+
+    app.handle_lib_event(LibEvent::RecursiveAlbumActivated {
+        library_id: "lib-music-a".into(),
+        nav_stack: Vec::new(),
+    });
+    assert_eq!(app.pending_navigate_tab_switch, None, "consumed on its own");
+    assert_eq!(app.tab, TabSelection::EmbyLibrary(0), "switched to its library");
 }
