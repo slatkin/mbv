@@ -24,8 +24,7 @@ pub use self::hit_regions::TvHit;
 pub use self::intents::{
     AlbumCursorKind, AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget,
     ConfirmIntent, ContextMenuIntent, DaemonLostIntent, FeedsManageIntent, HomeRowTarget,
-    PodcastEpisodeIntent, PodcastEpisodeTarget, PodcastEpisodeTransition, SavePlaylistIntent,
-    SettingsIntent,
+    PodcastEpisodeIntent, PodcastEpisodeTarget, SavePlaylistIntent, SettingsIntent,
 };
 pub use self::playback::PlaybackRequest;
 pub use self::queue::{QueueColumnResize, QueueIntent, QueueMove, QueueRequest};

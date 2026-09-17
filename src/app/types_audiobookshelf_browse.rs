@@ -28,16 +28,18 @@ impl AudiobookshelfBrowseKind {
     }
 }
 
+/// The podcast tab's state pills, in the painted pill-bar order (spec: the
+/// state pills `All` / `Unplayed` / `Played` precede the show pills).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(super) enum AudiobookshelfEpisodeFilter {
     #[default]
     All,
-    Played,
     Unplayed,
+    Played,
 }
 
 impl AudiobookshelfEpisodeFilter {
-    pub(super) const ALL: [Self; 3] = [Self::All, Self::Played, Self::Unplayed];
+    pub(super) const ALL: [Self; 3] = [Self::All, Self::Unplayed, Self::Played];
 
     pub(super) fn label(self) -> &'static str {
         match self {
@@ -46,6 +48,19 @@ impl AudiobookshelfEpisodeFilter {
             Self::Unplayed => "Unplayed",
         }
     }
+}
+
+/// The podcast tab's pill selection, stored by value and never by a painted
+/// position (design D3): the show list grows and re-sorts as pages land
+/// (`append_page` sorts by title), so an index would silently rebind the
+/// active view. The remembered pill across tab switches is the same value.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::app) enum PillSelection {
+    /// A state pill: every fetched show's episodes, filtered by play state.
+    State(AudiobookshelfEpisodeFilter),
+    /// A show pill: that show's episodes regardless of play state, by the
+    /// show's provider-native `library_item_id`.
+    Show(String),
 }
 
 #[derive(Debug, Clone)]
@@ -101,14 +116,6 @@ impl AudiobookshelfBrowseState {
             .unwrap_or(0)
     }
 
-    /// Whether the last `select()` changed the selected show. The component
-    /// owns the episode filter / episode-mode selection and consults this to
-    /// reset them on an identity change (the reset moved off this content
-    /// struct in split-browse-state-interaction-fields task 3.2).
-    pub fn select_changed_identity(&self, cursor: usize) -> bool {
-        self.shows.get(cursor).map(|show| &show.library_item_id) != self.selected_id.as_ref()
-    }
-
     pub fn select(&mut self, cursor: usize) {
         self.selected_id = self
             .shows
@@ -129,11 +136,6 @@ impl AudiobookshelfBrowseState {
         self.selected_episode = None;
     }
 
-    pub fn selected_show(&self) -> Option<&AudiobookshelfShow> {
-        let id = self.selected_id.as_deref()?;
-        self.shows.iter().find(|show| show.library_item_id == id)
-    }
-
     /// The fetched episode with exactly this `(library_item_id, episode_id)`
     /// identity, from the per-show cache — regardless of which show's fetch
     /// placed it or which pill view is active.
@@ -148,21 +150,10 @@ impl AudiobookshelfBrowseState {
             .find(|episode| episode.episode_id == episode_id)
     }
 
-    /// The selected show's cached downloaded episodes, in cache order. Empty
-    /// when nothing is selected or the show has no fetched episodes yet.
-    pub fn selected_episodes(&self) -> &[AudiobookshelfDownloadedEpisode] {
-        self.selected_id
-            .as_deref()
-            .and_then(|id| self.detail_cache.get(id))
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
-    }
-
     /// The flat episode view: every fetched show's downloaded episodes,
     /// concatenated in show (pill-bar) order so the view is deterministic.
     /// The active pill scopes and the state filter narrows this view in the
     /// owner; here it is the unfiltered union.
-    #[cfg_attr(not(test), allow(dead_code))]
     pub fn visible_episodes(
         &self,
         filter: AudiobookshelfEpisodeFilter,
@@ -509,9 +500,7 @@ fn compare_publication_dates(left: Option<u64>, right: Option<u64>) -> std::cmp:
 /// mirroring `FeedDisplayRow`: non-selectable age-group headings and spacers
 /// around selectable `Entry` indices into the flat episode slice (grouping
 /// never changes the indices or the stable `(library_item_id, episode_id)`
-/// targeting). Consumed by the podcast owner rewrite (row 3.1); the state
-/// owns the grouping until then.
-#[cfg_attr(not(test), allow(dead_code))]
+/// targeting). Consumed by the podcast owner (row 3.1).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::app) enum PodcastDisplayRow {
     Spacer,
@@ -523,7 +512,6 @@ pub(in crate::app) enum PodcastDisplayRow {
 /// sorted newest-first globally (undated episodes last) before the
 /// consecutive-run merge, so an interleaved slice does not repeat headings;
 /// a group with no episodes produces no heading.
-#[cfg_attr(not(test), allow(dead_code))]
 pub(in crate::app) fn podcast_display_rows(
     episodes: &[AudiobookshelfDownloadedEpisode],
     now_secs: u64,

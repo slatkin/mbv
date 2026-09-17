@@ -139,26 +139,6 @@ pub(in crate::app) fn abs_episode_artwork_policy(episode: &AudiobookshelfQueueIt
     }
 }
 
-/// The artwork policy for an Audiobookshelf podcast show (design D5): square
-/// cover, like every podcast.
-pub(in crate::app) fn abs_show_artwork_policy(
-    show: &mbv_core::audiobookshelf::AudiobookshelfShow,
-) -> HeroArtwork {
-    HeroArtwork {
-        shape: ArtworkShape::Square,
-        source: show
-            .cover_path
-            .as_deref()
-            .filter(|id| !id.is_empty())
-            .map(|_| ArtworkSource::AudiobookshelfCover {
-                library_item_id: show.library_item_id.clone(),
-                book: false,
-            }),
-        decoration: None,
-        image: HeroImageState::None,
-    }
-}
-
 /// The artwork policy for a feed entry (design D5): no artwork source exists
 /// for feed entries. Podcast feeds (declared `FeedKind::Audio`) are Square;
 /// video (and unknown-kind legacy) feeds fall back to Landscape — both with
@@ -440,34 +420,6 @@ pub(in crate::app) fn hero_content_abs_episode(
         artwork: abs_episode_artwork_policy(episode),
     };
     let overview = episode
-        .description
-        .as_deref()
-        .map(clean_overview)
-        .filter(|d| !d.is_empty());
-    HeroContentData {
-        facts,
-        overview,
-        credits: None,
-    }
-}
-
-/// The Audiobookshelf podcast show producer (design D5): author as a plain
-/// meta row, cleaned overview, Square cover.
-pub(in crate::app) fn hero_content_abs_show(
-    show: &mbv_core::audiobookshelf::AudiobookshelfShow,
-) -> HeroContentData {
-    let facts = HeroFacts {
-        title: show.title.clone(),
-        meta_rows: show
-            .author
-            .as_deref()
-            .filter(|a| !a.is_empty())
-            .map(|a| vec![a.to_string()])
-            .unwrap_or_default(),
-        links: Vec::new(),
-        artwork: abs_show_artwork_policy(show),
-    };
-    let overview = show
         .description
         .as_deref()
         .map(clean_overview)

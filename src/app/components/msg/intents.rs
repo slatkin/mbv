@@ -77,20 +77,6 @@ pub enum AlbumCursorKind {
     Page,
 }
 
-/// Closed set of podcast episode-mode transitions (task 5.3d.6). The
-/// component performs its local episode/cursor/filter mutation and emits the
-/// matching variant while episode selection is active; the shell maps it onto
-/// the legacy App episode-move / filter-cycle / exit operations preserving
-/// the current App episode target (D17).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PodcastEpisodeTransition {
-    PreviousEpisode,
-    NextEpisode,
-    PreviousFilter,
-    NextFilter,
-    Exit,
-}
-
 /// Closed set of podcast episode action intents (task 5.3d.7). The component
 /// emits the intent matched from Space/Enter/Ctrl+A; the shell resolves the
 /// episode-selection and wide/narrow conditions from current App state/layout

@@ -41,9 +41,10 @@ use crate::app::render::{
 use crate::app::types_feed_tab::WatchedFilter;
 use crate::app::ui_util::trunc_str;
 
-/// Max feed-group pill label length. This owner is the one producer of the
-/// Selector row's labels (design D8: no destination-side pill vocabulary).
-const MAX_GROUP_LABEL: usize = 18;
+/// Max feed-group pill label length. The Feeds owner and the podcast tab's
+/// show pills are the producers of the Selector row's labels (design D8: no
+/// destination-side pill vocabulary).
+pub(in crate::app) const MAX_GROUP_LABEL: usize = 18;
 
 /// The owner's shell-projected snapshot (the legacy Feeds component's
 /// `set_content` contract). The Watched filter and the selected feed group

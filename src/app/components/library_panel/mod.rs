@@ -31,9 +31,8 @@ pub(in crate::app) use content::{
 };
 #[allow(unused_imports)]
 pub(in crate::app) use hero::{
-    emby_artwork_policy, hero_content_abs_book, hero_content_abs_episode, hero_content_abs_show,
-    hero_content_emby, hero_content_feed, hero_content_music_album, hero_content_queue,
-    HeroContentData,
+    emby_artwork_policy, hero_content_abs_book, hero_content_abs_episode, hero_content_emby,
+    hero_content_feed, hero_content_music_album, hero_content_queue, HeroContentData,
 };
 #[allow(unused_imports)]
 pub(in crate::app) use narrow::render_narrow_skeleton;

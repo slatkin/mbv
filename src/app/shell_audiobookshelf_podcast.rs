@@ -26,14 +26,6 @@ impl Model {
         })?
     }
 
-    pub(in crate::app) fn abs_podcast_owner(&self) -> Option<&PodcastContent> {
-        let key = self.abs_podcast_key()?;
-        self.library_owner(&key)
-    }
-    pub(in crate::app) fn abs_podcast_owner_mut(&mut self) -> Option<&mut PodcastContent> {
-        let key = self.abs_podcast_key()?;
-        self.library_owner_mut(&key)
-    }
     fn update_abs_podcast_owner<R>(
         &mut self,
         f: impl FnOnce(&mut PodcastContent) -> R,
@@ -67,12 +59,8 @@ impl Model {
         &mut self,
         intent: PodcastEpisodeIntent,
     ) {
-        if self.abs_podcast_owner().is_none() {
-            return;
-        }
         self.app.set_panel_focus(crate::app::PanelFocus::Library);
         let index = self.app.tab.audiobookshelf_index();
-        let wide = self.app.is_right_panel_wide();
         match intent {
             PodcastEpisodeIntent::FocusOrPlay(Some(target)) => {
                 if let Some(index) = index {
@@ -80,22 +68,18 @@ impl Model {
                         .play_selected_audiobookshelf_episode_target(index, &target);
                 }
             }
-            PodcastEpisodeIntent::FocusOrPlay(None) => {
-                self.abs_podcast_owner_mut().unwrap().enter_episode_focus();
-            }
+            // The flat episode browser always resolves a target once rows
+            // exist; a selectionless activation is a no-op (the episode
+            // selection / hero-overlay paths left with the show browser,
+            // reorganize-podcast-pill-navigation 3.1).
+            PodcastEpisodeIntent::FocusOrPlay(None) => {}
             PodcastEpisodeIntent::OpenOrPlay(Some(target)) => {
                 if let Some(index) = index {
                     self.app
                         .play_selected_audiobookshelf_episode_target(index, &target);
                 }
             }
-            PodcastEpisodeIntent::OpenOrPlay(None) => {
-                if wide {
-                    self.abs_podcast_owner_mut().unwrap().enter_episode_focus();
-                } else {
-                    self.open_library_hero_overlay();
-                }
-            }
+            PodcastEpisodeIntent::OpenOrPlay(None) => {}
             PodcastEpisodeIntent::Enqueue(Some(target)) => {
                 if let Some(index) = index {
                     self.app
