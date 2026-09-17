@@ -72,6 +72,11 @@ pub const PILL_OVERFLOW_FG: Color = primitives::PILL_SELECTOR_OVERFLOW_FG;
 pub const TEXT_PRIMARY: Color = primitives::TEXT;
 pub const TEXT_SECONDARY: Color = primitives::SUBTLE; // paired with TEXT_PRIMARY/TEXT_STRONG
 pub const TEXT_MUTED: Color = primitives::MUTED; // dim text, icons, unfocused state
+/// A played media-list row's title (single-part primary, or a played split
+/// row's item title; the split context keeps `PLAYBACK_CONTEXT_FG`). Its own
+/// role rather than the generic dim `TEXT_MUTED`, so a played row can read as
+/// watched without moving icons and unfocused chrome.
+pub const PLAYED_ROW_FG: Color = primitives::PLAYED_ROW; // #faedcd
 pub const TEXT_STRONG: Color = primitives::WHITE; // bold titles/headings
 pub const TEXT_EMPHASIS: Color = primitives::SOFT_WHITE; // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = primitives::YELLOW; // focused-row title accent
@@ -114,7 +119,7 @@ pub const DURATION: Color = primitives::IRIS; // the sage
 /// rather than `PLAYBACK_TITLE_FG`, the playback strip's own-name role:
 /// browse lists paint their split-row titles in sage while the strip keeps
 /// aqua.
-pub const SPLIT_ROW_TITLE_FG: Color = primitives::IRIS; // the sage
+pub const SPLIT_ROW_TITLE_FG: Color = primitives::SOFT_WHITE; // the sage
 
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = primitives::ORANGE;

@@ -864,7 +864,12 @@ mod wide_row_regression_tests {
             .unwrap();
         let buf = terminal.backend().buffer();
         assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
-        assert_eq!(buf[(2, 1)].fg, palette::TEXT_MUTED);
+        assert_eq!(buf[(2, 1)].fg, palette::PLAYED_ROW_FG);
+        assert_ne!(
+            buf[(2, 1)].fg,
+            palette::TEXT_MUTED,
+            "a played row reads as watched, not as generic dim text"
+        );
     }
 
     /// A played split row mutes only the item title (sage → muted) while the
@@ -892,7 +897,7 @@ mod wide_row_regression_tests {
         assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
-            palette::TEXT_MUTED
+            palette::PLAYED_ROW_FG
         );
     }
 

@@ -87,7 +87,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 // split-row producer, emits `Ordinary` rows), so the palette
                 // below never applies to one.
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
-                MediaSemanticState::Played => (palette::TEXT_MUTED, None, None),
+                MediaSemanticState::Played => (palette::PLAYED_ROW_FG, None, None),
                 MediaSemanticState::Active { progress } => (
                     palette::TEXT_EMPHASIS,
                     (*progress).map(|value| format!("{}%", value.percent())),
@@ -148,7 +148,7 @@ pub(in crate::app) fn media_list_row<Target>(
             // title role. (`parts` feeds the selected-row marquee path;
             // unselected split rows paint the same roles below.)
             let secondary_color = match semantic_state {
-                MediaSemanticState::Played => palette::TEXT_MUTED,
+                MediaSemanticState::Played => palette::PLAYED_ROW_FG,
                 _ => palette::SPLIT_ROW_TITLE_FG,
             };
             let parts: Vec<(String, Color)> =

@@ -65,6 +65,10 @@ pub(super) const PLAYBACK_CONTEXT: Color = Color::Rgb(219, 188, 127); // now-pla
 pub(super) const SELECTED_ROW_BAR: Color = Color::Rgb(45, 53, 59);
 
 pub(super) const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey for detail/label text (#6c766c)
+/// A played media-list row's title. A primitive of its own, not the generic
+/// dim `MUTED`: a played row reads as watched, not disabled, so the two must
+/// be able to move independently.
+pub(super) const PLAYED_ROW: Color = Color::Rgb(250, 237, 205); // played media-list row title (#faedcd)
 pub(super) const SOFT_WHITE: Color = Color::Rgb(190, 197, 178); // pale sage-grey emphasis text (#bec5b2)
 pub(super) const PILL_SELECTOR_ROW_BG: Color = Color::Rgb(30, 35, 38); // pill-selector row background (#1e2326)
 pub(super) const PILL_SELECTOR_BG: Color = Color::Rgb(30, 35, 38); // unselected pill-selector surface (#1e2326)
