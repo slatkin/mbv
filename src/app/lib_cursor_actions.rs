@@ -44,18 +44,14 @@ impl App {
         } else {
             None
         };
-        let filtered: Vec<EmbyItem> = match &filter {
-            Some(filter) => corpus
-                .iter()
-                .filter(|candidate| {
-                    let key = effective_sort_str(candidate);
-                    filter.name_ge.is_none_or(|ge| key >= ge)
-                        && filter.name_lt.is_none_or(|lt| key < lt)
-                })
-                .cloned()
-                .collect(),
-            None => corpus.clone(),
-        };
+        let mut filtered = corpus.clone();
+        if let Some(filter) = &filter {
+            filtered.retain(|candidate| {
+                let key = effective_sort_str(candidate);
+                filter.name_ge.is_none_or(|ge| key >= ge)
+                    && filter.name_lt.is_none_or(|lt| key < lt)
+            });
+        }
         let Some(cursor) = filtered.iter().position(|i| i.id == item.id) else {
             return false;
         };

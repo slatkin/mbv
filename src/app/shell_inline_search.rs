@@ -57,9 +57,8 @@ impl Model {
     /// the flat whole-library fetch, or the recursive album index.
     fn inline_search_corpus_loading(&self, index: usize) -> bool {
         if self.app.recursive_album_search_enabled(index) {
-            let library_id = self.app.libs[index].library.id.clone();
             matches!(
-                self.app.album_indexes.get(&library_id),
+                self.app.album_indexes.get(&self.app.libs[index].library.id),
                 Some(AlbumIndexState::Loading { .. })
             )
         } else {

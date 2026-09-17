@@ -151,16 +151,10 @@ impl LetterFilter {
         LETTER_FILTER_BUCKETS
             .iter()
             .enumerate()
-            .find_map(|(index, &(label, name_ge, name_lt))| {
-                let ge_ok = name_ge.is_none_or(|ge| key >= ge);
-                let lt_ok = name_lt.is_none_or(|lt| key < lt);
-                (ge_ok && lt_ok).then_some(LetterFilter {
-                    index,
-                    label,
-                    name_ge,
-                    name_lt,
-                })
+            .find(|&(_, &(_, name_ge, name_lt))| {
+                name_ge.is_none_or(|ge| key >= ge) && name_lt.is_none_or(|lt| key < lt)
             })
+            .and_then(|(index, _)| Self::for_index(index))
     }
 
     /// All pill labels in bucket order, for building a `PillBar`.
