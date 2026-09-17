@@ -11,19 +11,19 @@ follow-up units; coordinate before editing the same file.
 
 ## 1. Owner: the viewport step (D1, D3)
 
-- [ ] 1.1 Add `MediaListOperation::ScrollViewport(i64)` and the owner method that applies it for a
+- [x] 1.1 Add `MediaListOperation::ScrollViewport(i64)` and the owner method that applies it for a
   painted height: move the window one display row, clamp to the first/last display row, and drag the
   selection into the window only when the step would leave it outside (nearest selectable row inside;
   `Heading`/`Spacer` rows are never selected).
   (Verify: owner unit tests — step inside the window moves only the window; a step at the window's edge
   drags the selection to the nearest shown selectable row; both content ends clamp.)
-- [ ] 1.2 Add the page form of the same operation for a painted height, reusing the clamp and drag rule.
+- [x] 1.2 Add the page form of the same operation for a painted height, reusing the clamp and drag rule.
   This is a height-taking owner method, NOT a reuse of `MediaListOperation::Page` — that variant keeps its
   five-item selection meaning until 6.2 converts the last `PgUp`/`PgDn` arm (Queue, Home, Feeds, podcast,
   book, and Inline Search still route through the variant) and deletes it.
   (Verify: unit tests — a page moves by the height, a page longer than the remaining content clamps, and
   a page drags the selection the same way.)
-- [ ] 1.3 Handle the new operation exhaustively in `delegate_operation` and count a window-only move as a
+- [x] 1.3 Handle the new operation exhaustively in `delegate_operation` and count a window-only move as a
   consumed step while a boundary no-op stays unhandled, so a viewport-only wheel step reports no selection
   move. A step never extends the live range: `multi_selection` and the anchored range are untouched even
   when the drag fires.
