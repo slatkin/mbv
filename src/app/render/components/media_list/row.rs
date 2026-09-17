@@ -141,18 +141,28 @@ pub(in crate::app) fn media_list_row<Target>(
                 LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
             );
             let title_color = fg;
-            // Two-tone episode rows: an optional secondary title (the
-            // episode title) paints in the selected-row role after the
-            // primary title, with one separating space. (`parts` feeds the
-            // marquee path, which only paints selected rows; unselected
-            // two-tone rows keep the yellow focus-accent secondary via the
-            // truncation branch below.)
+            // Split rows (a secondary title after the primary text) paint the
+            // now-playing two-tone palette: the primary text is the
+            // container/context name in the playback-context gold role and
+            // the secondary title (the item's own name) in the playback-title
+            // aqua role, with one separating space. The mute follows the
+            // title role, not the position: a played split row mutes the
+            // item title while the context keeps gold; no other semantic
+            // state moves the split-row palette. Single-part rows keep the
+            // ordinary title role for their semantic state. (`parts` feeds
+            // the marquee path, which only paints selected rows; unselected
+            // split rows paint the same roles via the truncation branch
+            // below.)
+            let secondary_color = match semantic_state {
+                MediaSemanticState::Played => palette::TEXT_MUTED,
+                _ => palette::PLAYBACK_TITLE_FG,
+            };
             let parts: Vec<(String, Color)> =
                 match secondary.as_deref().filter(|sec| !sec.is_empty()) {
                     Some(sec) => vec![
-                        (primary.clone(), title_color),
-                        (" ".into(), title_color),
-                        (sec.to_owned(), palette::TEXT_FOCUS_ACCENT),
+                        (primary.clone(), palette::PLAYBACK_CONTEXT_FG),
+                        (" ".into(), palette::PLAYBACK_CONTEXT_FG),
+                        (sec.to_owned(), secondary_color),
                     ],
                     None => vec![(primary.clone(), title_color)],
                 };
@@ -170,15 +180,23 @@ pub(in crate::app) fn media_list_row<Target>(
                     // episode title is dropped.
                     let sec = secondary.as_deref().filter(|sec| !sec.is_empty());
                     let sec_w = sec.map_or(0, |text| text.width().min(title_width));
+                    // A split row's primary text paints the playback-context
+                    // gold role even when the secondary title is truncated
+                    // away; a single-part row keeps the ordinary title role.
+                    let primary_color = if sec.is_some() {
+                        palette::PLAYBACK_CONTEXT_FG
+                    } else {
+                        title_color
+                    };
                     let mut spans = vec![Span::styled(
                         trunc_str(primary, title_width - sec_w),
-                        Style::default().fg(title_color),
+                        Style::default().fg(primary_color),
                     )];
                     if let Some(sec) = sec.filter(|_| sec_w > 0) {
                         spans.push(Span::raw(" "));
                         spans.push(Span::styled(
                             trunc_str(sec, sec_w),
-                            Style::default().fg(palette::TEXT_FOCUS_ACCENT),
+                            Style::default().fg(secondary_color),
                         ));
                     }
                     spans

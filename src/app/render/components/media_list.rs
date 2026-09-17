@@ -19,6 +19,7 @@ mod wide_row_regression_tests {
     use ratatui::style::{Color, Modifier};
     use ratatui::Terminal;
     use std::time::{Duration, Instant};
+    use unicode_width::UnicodeWidthStr;
 
     /// The zebra pair a surface resolves to for its focused and unfocused fills.
     fn stripe(surface: palette::Surface) -> ZebraStripe {
@@ -786,13 +787,13 @@ mod wide_row_regression_tests {
         );
     }
 
-    /// Episode rows split into a two-tone title: the series title paints in
-    /// the ordinary emphasis role and the episode title after it in the
-    /// yellow focus-accent role, so the two are visually delineated. On a
-    /// slot too narrow for both, the episode title keeps its budget and the
-    /// series name ellipsises first.
+    /// Split rows paint the now-playing two-tone palette: the series/context
+    /// title paints in the playback-context gold role and the episode/item
+    /// title after it in the playback-title aqua role, so the two are
+    /// visually delineated. On a slot too narrow for both, the item title
+    /// keeps its budget and the context name ellipsises first.
     #[test]
-    fn episode_row_paints_secondary_title_in_the_focus_accent_role() {
+    fn episode_row_paints_the_split_row_playback_palette() {
         use crate::app::components::media_list::{MediaListRow, MediaSemanticState};
 
         let rect = Rect::new(0, 0, 40, 1);
@@ -822,10 +823,10 @@ mod wide_row_regression_tests {
         );
         // The series title is at the 2-column quiet indent; the episode
         // title starts after it and the one separating space.
-        assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
+        assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
-            palette::TEXT_FOCUS_ACCENT
+            palette::PLAYBACK_TITLE_FG
         );
 
         // Narrow slot on an unselected row (the selected row marquees):
@@ -869,6 +870,81 @@ mod wide_row_regression_tests {
         assert!(
             row_text.contains('\u{2026}'),
             "long series name ellipsises first: {row_text:?}"
+        );
+        // The unselected (truncation-branch) split row paints the same
+        // two-tone roles as the selected one.
+        assert_eq!(buf[(2, 1)].fg, palette::PLAYBACK_CONTEXT_FG);
+        let sec_x = 2 + row_text[2..row_text.find("Episode").unwrap()].width() as u16;
+        assert_eq!(buf[(sec_x, 1)].fg, palette::PLAYBACK_TITLE_FG);
+    }
+
+    /// A row with no secondary title is not a split row: its primary text
+    /// keeps the ordinary title role for its semantic state (soft white
+    /// emphasis, played muted) — the split-row palette never leaks onto
+    /// title-only rows.
+    #[test]
+    fn single_part_rows_keep_the_ordinary_title_role() {
+        let rect = Rect::new(0, 0, 40, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "ordinary".into(),
+                primary: "Ordinary Movie".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "played".into(),
+                primary: "Played Movie".into(),
+                secondary: None,
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Played,
+            },
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_MUTED);
+    }
+
+    /// The mute follows the title role, not the position: a played split row
+    /// mutes the item title (aqua → played muted) while the context part
+    /// keeps the playback-context gold, so the container name stays legible
+    /// on watched rows.
+    #[test]
+    fn played_split_row_mutes_the_item_title_while_context_keeps_gold() {
+        let rect = Rect::new(0, 0, 40, 1);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "ep".into(),
+            primary: "Severance".into(),
+            secondary: Some("Episode Title".into()),
+            trailing: None,
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Played,
+        }]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
+        assert_eq!(
+            buf[(2 + "Severance ".len() as u16, 0)].fg,
+            palette::TEXT_MUTED
         );
     }
 
