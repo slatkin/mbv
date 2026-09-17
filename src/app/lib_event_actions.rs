@@ -644,14 +644,12 @@ impl App {
                     NavigateLanding::Chain { nav_stack } => {
                         if let Some(lib) = self.libs.get_mut(lib_idx) {
                             lib.nav_stack = nav_stack;
-                        }
-                        // A completed navigation IS the saved position from now on;
-                        // without this the `switch_tab` activation below compares the
-                        // navigated stack against the stale saved position, takes the
-                        // restore branch, and clobbers the navigation the user asked
-                        // for (queue "Go to Library" / search-sidebar activation
-                        // degraded to a bare tab switch).
-                        if self.libs.get(lib_idx).is_some() {
+                            // A completed navigation IS the saved position from now on;
+                            // without this the `switch_tab` activation below compares the
+                            // navigated stack against the stale saved position, takes the
+                            // restore branch, and clobbers the navigation the user asked
+                            // for (queue "Go to Library" / search-sidebar activation
+                            // degraded to a bare tab switch).
                             self.save_default_library_position(lib_idx);
                         }
                         if switch_tab {
@@ -660,7 +658,7 @@ impl App {
                     }
                     NavigateLanding::Series { reveal, episode_id } => {
                         let name = reveal.name.clone();
-                        if !self.libs.get(lib_idx).is_some() {
+                        if self.libs.get(lib_idx).is_none() {
                             self.flash_error(format!("Could not land on '{name}' in its library"));
                         } else if self.activate_searched_series(lib_idx, &reveal) {
                             // D4: the landed root level (pill + cursor) is the
@@ -710,8 +708,7 @@ impl App {
                             // chosen track rides the activation; the shell
                             // binds it to the activated album at the
                             // `RecursiveAlbumActivated` drain.
-                            self.pending_track_selection =
-                                track_id.map(|track_id| (lib_idx, track_id));
+                            self.pending_track_selection = track_id.map(|id| (lib_idx, id));
                         } else {
                             self.flash_error("Could not start the album navigation".to_string());
                         }

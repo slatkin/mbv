@@ -68,13 +68,10 @@ fn owning_ancestor<'a>(ancestors: Option<&'a [EmbyItem]>, item_type: &str) -> Op
 /// failure (deleted item, task 4.2).
 fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, String> {
     client
-        .get_items_by_ids(&[item_id.to_string()])
-        .and_then(|items| {
-            items
-                .into_iter()
-                .next()
-                .ok_or_else(|| format!("Item {item_id} no longer exists"))
-        })
+        .get_items_by_ids(&[item_id.to_string()])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("Item {item_id} no longer exists"))
 }
 
 /// D1+D2: resolve the reveal target for `item` and build the landing payload
@@ -94,14 +91,11 @@ fn build_navigate_landing(
     // Ancestors are ordered nearest→root: [Season, Series, physical_folder, AggregateFolder].
     // The pure table decides first from the item's own back-references; the
     // round trip is paid only when a kind's fallback needs the chain.
-    let reveal = match resolve_reveal_target(item_type, &item, None) {
-        Ok(reveal) => reveal,
-        Err(_) => {
-            let ancestors = client.get_ancestors(item_id)?;
-            log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
-            resolve_reveal_target(item_type, &item, Some(&ancestors))?
-        }
-    };
+    let reveal = resolve_reveal_target(item_type, &item, None).or_else(|_| {
+        let ancestors = client.get_ancestors(item_id)?;
+        log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
+        resolve_reveal_target(item_type, &item, Some(&ancestors))
+    })?;
     landing_for_target(client, &item, reveal, lib_id)
 }
 

@@ -112,9 +112,12 @@ impl App {
                 reveal,
                 episode_id,
             });
-        } else if !self.arm_pending_series_landing(lib_idx, reveal, pending.switch_tab, episode_id)
-        {
-            self.flash_error(format!("Could not land on '{name}' in its library"));
+        } else {
+            let rearmed =
+                self.arm_pending_series_landing(lib_idx, reveal, pending.switch_tab, episode_id);
+            if !rearmed {
+                self.flash_error(format!("Could not land on '{name}' in its library"));
+            }
         }
     }
 

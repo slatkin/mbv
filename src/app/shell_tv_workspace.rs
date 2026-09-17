@@ -177,24 +177,22 @@ impl Model {
         }
         let step = match self.app.series_detail_cache.get(&sel.series_id) {
             None => Step::Wait,
-            Some(detail) => {
-                let mut step = Step::Absent;
-                for (season_index, season) in detail.seasons.iter().enumerate() {
-                    match detail.episodes.get(&season.id) {
-                        Some(episodes) => {
-                            if episodes.iter().any(|episode| episode.id == sel.episode_id) {
-                                step = Step::Select(season_index);
-                                break;
-                            }
+            Some(detail) => detail
+                .seasons
+                .iter()
+                .enumerate()
+                .find_map(
+                    |(season_index, season)| match detail.episodes.get(&season.id) {
+                        None => Some(Step::Fetch(season.id.clone())),
+                        Some(episodes)
+                            if episodes.iter().any(|episode| episode.id == sel.episode_id) =>
+                        {
+                            Some(Step::Select(season_index))
                         }
-                        None => {
-                            step = Step::Fetch(season.id.clone());
-                            break;
-                        }
-                    }
-                }
-                step
-            }
+                        Some(_) => None,
+                    },
+                )
+                .unwrap_or(Step::Absent),
         };
         match step {
             Step::Wait => {}

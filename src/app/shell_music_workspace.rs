@@ -67,9 +67,9 @@ impl Model {
                     .get(level.resting().cursor())
                     .map(|item| item.id.clone())
             });
-        // Bind the enter request to the activated album (the resting cursor of
-        // the replaced nav stack) so it can retry once the album's tracks
-        // arrive without ever firing on an album the user moved to meanwhile.
+        // Bind the enter request to the activated album so it can retry once
+        // the album's tracks arrive without ever firing on an album the user
+        // moved to meanwhile.
         self.music_track_focus_request = activated_album_id
             .clone()
             .map(|album_id| MusicTrackFocusRequest::Enter { album_id });
@@ -191,20 +191,23 @@ impl Model {
         // absent track drops the pending silently (no error -- the
         // navigation target was reached).
         if let Some(sel) = self.pending_music_track_selection.clone() {
-            let mut resolved = false;
-            self.update_music_owner(|owner| {
-                if owner
-                    .selected_item()
-                    .is_some_and(|album| album.id == sel.album_id)
-                {
-                    if !owner.track_list.rows().is_empty() {
-                        owner.track_list.select_target(&sel.track_id);
-                        resolved = true;
+            let resolved = self
+                .update_music_owner(|owner| {
+                    if !owner
+                        .selected_item()
+                        .is_some_and(|album| album.id == sel.album_id)
+                    {
+                        // Superseded: the owner moved to another album.
+                        return true;
                     }
-                } else {
-                    resolved = true;
-                }
-            });
+                    if owner.track_list.rows().is_empty() {
+                        // Rows not here yet; stay armed for the re-push.
+                        return false;
+                    }
+                    owner.track_list.select_target(&sel.track_id);
+                    true
+                })
+                .unwrap_or(false);
             if resolved {
                 self.pending_music_track_selection = None;
             }

@@ -509,12 +509,11 @@ impl TvContent {
         if self.current_season_episodes_key_present() {
             self.refresh_episode_rows();
         }
-        if self.episodes.select_target(&episode_id.to_string()) {
+        let selected = self.episodes.select_target(&episode_id.to_string());
+        if selected {
             self.pane = Pane::Episodes;
-            true
-        } else {
-            false
         }
+        selected
     }
     /// The series item under the component's own cursor, cloned out of the
     /// cached render context. `handle_key`'s Series Enter attaches this to
