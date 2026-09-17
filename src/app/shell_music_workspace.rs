@@ -6,6 +6,7 @@ use super::components::library_panel::LibraryKey;
 use super::components::music_content::MusicContent;
 use super::components::LibraryKind;
 use super::shell::{Model, MusicTrackFocusRequest};
+use super::BrowseLevel;
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
@@ -33,6 +34,46 @@ impl Model {
     fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
         let key = self.music_owner_key()?;
         self.update_library_owner(key, || Box::new(MusicContent::new()), f)
+    }
+
+    /// The shell's reaction to a completed recursive album activation
+    /// (`LibEvent::RecursiveAlbumActivated`): install the landed path through
+    /// App, bind the one-shot inline track-focus request to the activated
+    /// album, and re-anchor the workspace regardless of any prior local move.
+    /// Sole owner of the return to the standard Music presentation, shared by
+    /// Inline Search activation and a navigated `NavigateLanding::Album`
+    /// (task 3.2: the arm already covers the navigated case).
+    pub(in crate::app) fn on_recursive_album_activated(
+        &mut self,
+        library_id: String,
+        nav_stack: Vec<BrowseLevel>,
+    ) {
+        let library_id_lookup = library_id.clone();
+        self.app
+            .handle_lib_event(super::LibEvent::RecursiveAlbumActivated {
+                library_id,
+                nav_stack,
+            });
+        // Bind the enter request to the activated album (the resting cursor of
+        // the replaced nav stack) so it can retry once the album's tracks
+        // arrive without ever firing on an album the user moved to meanwhile.
+        self.music_track_focus_request = self
+            .app
+            .libs
+            .iter()
+            .find(|lib| lib.library.id == library_id_lookup)
+            .and_then(|lib| {
+                let level = lib.nav_stack.last()?;
+                level
+                    .items
+                    .get(level.resting().cursor())
+                    .map(|item| item.id.clone())
+            })
+            .map(|album_id| MusicTrackFocusRequest::Enter { album_id });
+        // Nav stack was replaced wholesale; its resting cursor now points at
+        // the activated album. Re-anchor the component explicitly, regardless
+        // of prior local moves.
+        self.music_workspace_reanchor = true;
     }
 
     pub(super) fn push_music_workspace_content(&mut self) {

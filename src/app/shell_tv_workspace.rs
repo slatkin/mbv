@@ -22,6 +22,7 @@ use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
 use super::shell::Model;
 use super::TabSelection;
+use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -99,6 +100,40 @@ impl Model {
     /// local focus (the same state the ordinary second Enter enters).
     pub(super) fn focus_tv_owner_episodes(&mut self) {
         self.update_tv_owner(TvContent::enter_episode_selection);
+    }
+
+    /// The series detail hand-off shared by Inline Search's series activation
+    /// and a completed `NavigateLanding::Series` (task 3.1, design D3): the
+    /// owner re-anchors onto the series, the workspace content is pushed, the
+    /// Wide workspace / Narrow Library Hero overlay opens, and the content is
+    /// re-pushed so the opened presentation reads the re-anchored selection.
+    pub(super) fn open_series_workspace_handoff(&mut self, lib_idx: usize, item: &EmbyItem) {
+        // Re-anchor the owner's selection onto the navigated-to series before
+        // the presentation push reads it (the owner otherwise preserves its
+        // prior stable target).
+        self.reanchor_tv_owner_selection(&item.id);
+        self.push_tv_workspace_content();
+        if self.app.wide_tv_library_area(lib_idx).is_some() {
+            self.app.activate_selected_series_item(lib_idx, item);
+            // The workspace is active: episode selection takes the local
+            // focus, like music's track-selection mode.
+            self.focus_tv_owner_episodes();
+        } else {
+            self.open_library_hero_overlay();
+        }
+        self.push_tv_workspace_content();
+    }
+
+    /// Consume a landing that completed since the last drain (task 3.1): the
+    /// App arms the hand-off at the actual landing completion -- the immediate
+    /// `NavigateTo` arm or the deferred pending-landing retry -- and this
+    /// runs the same presentation sequence Inline Search's series activation
+    /// runs. A no-op when no landing completed.
+    pub(in crate::app) fn drain_series_navigation_handoff(&mut self) {
+        let Some(handoff) = self.app.pending_series_handoff.take() else {
+            return;
+        };
+        self.open_series_workspace_handoff(handoff.lib_idx, &handoff.reveal);
     }
 
     /// The active TV library's owner key (design D2's

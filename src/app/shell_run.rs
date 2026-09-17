@@ -39,6 +39,11 @@ impl Model {
         // drives its owner map (retention + the active pointer) before the
         // focus pass routes to the active surface.
         self.sync_library_panel();
+        // Task 3.1: a landing that completed during this iteration's lib-event
+        // drain owes the Series detail hand-off. Consume it here, after the
+        // panel's active pointer follows the landed tab and before the hero
+        // image / focus passes so they see the opened presentation.
+        self.drain_series_navigation_handoff();
         // Task 5.10 (design D9): the active owner's hero image projection —
         // the fetches and the cover-fit box re-encode — runs here, before the
         // draw, so painting reads projected state only.
@@ -322,34 +327,7 @@ impl Model {
                         library_id,
                         nav_stack,
                     } => {
-                        let library_id_lookup = library_id.clone();
-                        self.app.handle_lib_event(
-                            super::super::LibEvent::RecursiveAlbumActivated {
-                                library_id,
-                                nav_stack,
-                            },
-                        );
-                        // Bind the enter request to the activated album (the
-                        // resting cursor of the replaced nav stack) so it can
-                        // retry once the album's tracks arrive without ever
-                        // firing on an album the user moved to meanwhile.
-                        self.music_track_focus_request = self
-                            .app
-                            .libs
-                            .iter()
-                            .find(|lib| lib.library.id == library_id_lookup)
-                            .and_then(|lib| {
-                                let level = lib.nav_stack.last()?;
-                                level
-                                    .items
-                                    .get(level.resting().cursor())
-                                    .map(|item| item.id.clone())
-                            })
-                            .map(|album_id| MusicTrackFocusRequest::Enter { album_id });
-                        // Nav stack was replaced wholesale; its resting cursor
-                        // now points at the activated album. Re-anchor the
-                        // component explicitly, regardless of prior local moves.
-                        self.music_workspace_reanchor = true;
+                        self.on_recursive_album_activated(library_id, nav_stack);
                     }
                     // Position restore used to clear the deleted track-focus
                     // field; route the same reset to the component at the

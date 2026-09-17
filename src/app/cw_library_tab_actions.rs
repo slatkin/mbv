@@ -54,6 +54,7 @@ impl App {
         // after it consumed its pending state, so it is unaffected.
         self.pending_navigate_tab_switch = None;
         self.pending_series_landing = None;
+        self.pending_series_handoff = None;
         self.tab = TabSelection::from_position_with_counts(
             pos,
             self.libs.len(),

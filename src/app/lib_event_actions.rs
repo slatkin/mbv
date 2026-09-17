@@ -1,4 +1,4 @@
-use super::types_events::NavigateLanding;
+use super::types_events::{NavigateLanding, PendingSeriesHandoff};
 use super::ui_util::sort_audio_tracks;
 use super::{
     notify_actions::ToastSeverity, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
@@ -663,6 +663,10 @@ impl App {
                             if switch_tab {
                                 self.set_library_tab(lib_idx + 1);
                             }
+                            // The landing completed; the Model drain owes the
+                            // detail hand-off (task 3.1, design D3).
+                            self.pending_series_handoff =
+                                Some(PendingSeriesHandoff { lib_idx, reveal });
                         } else if !self.arm_pending_series_landing(lib_idx, reveal, switch_tab) {
                             // Miss against a complete corpus (absent item, an
                             // unloadable library): flash the library-error
@@ -750,6 +754,7 @@ impl App {
                 // correction).
                 self.pending_navigate_tab_switch = None;
                 self.pending_series_landing = None;
+                self.pending_series_handoff = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
         }

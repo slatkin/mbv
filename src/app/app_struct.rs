@@ -6,7 +6,7 @@ use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
-use super::types_events::{LibEvent, PendingSeriesLanding, SessionEvent};
+use super::types_events::{LibEvent, PendingSeriesHandoff, PendingSeriesLanding, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
@@ -192,6 +192,13 @@ pub struct App {
     /// `AllItemsPrefetched` and restored-position drains. See
     /// `PendingSeriesLanding` for the full lifecycle.
     pub(super) pending_series_landing: Option<PendingSeriesLanding>,
+    /// A landing that completed and still owes the shell's Series detail
+    /// hand-off (task 3.1, design D3): armed by the landing success path and
+    /// consumed by the shell's sync pass, which runs the Inline Search series
+    /// presentation sequence. The deferred `PendingSeriesLanding` retry arms
+    /// it the same way, so the hand-off fires at the actual landing
+    /// completion, not at the original `NavigateTo` drain.
+    pub(super) pending_series_handoff: Option<PendingSeriesHandoff>,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,

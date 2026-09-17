@@ -45,6 +45,18 @@ pub(super) struct PendingSeriesLanding {
     pub(super) switch_tab: bool,
 }
 
+/// A completed `NavigateLanding::Series` that still owes the shell's detail
+/// hand-off (task 3.1, design D3): armed by the per-kind landing on success --
+/// the immediate `NavigateTo` arm or the deferred
+/// `retry_pending_series_landing` -- and consumed by the shell's sync pass
+/// (`Model::drain_series_navigation_handoff`), which runs the same
+/// presentation sequence Inline Search's series activation runs. One shot:
+/// consumed on read.
+pub(super) struct PendingSeriesHandoff {
+    pub(super) lib_idx: usize,
+    pub(super) reveal: Box<EmbyItem>,
+}
+
 pub(super) enum LibEvent {
     Loaded {
         lib_idx: usize,

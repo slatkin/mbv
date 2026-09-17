@@ -195,20 +195,10 @@ impl Model {
             // the existing activation (folder drill-in / playback).
             if self.app.activate_searched_series(lib_idx, &item) {
                 self.dismiss_active_inline_search();
-                // Re-anchor the owner's selection onto the navigated-to
-                // series before the presentation push reads it (the owner
-                // otherwise preserves its prior stable target).
-                self.reanchor_tv_owner_selection(&item.id);
-                self.push_tv_workspace_content();
-                if self.app.wide_tv_library_area(lib_idx).is_some() {
-                    self.app.activate_selected_series_item(lib_idx, &item);
-                    // The workspace is active: episode selection takes the
-                    // local focus, like music's track-selection mode.
-                    self.focus_tv_owner_episodes();
-                } else {
-                    self.open_library_hero_overlay();
-                }
-                self.push_tv_workspace_content();
+                // The same hand-off a completed `NavigateLanding::Series`
+                // runs (task 3.1, design D3): owner re-anchor, workspace
+                // push, Wide workspace / Narrow Library Hero overlay, re-push.
+                self.open_series_workspace_handoff(lib_idx, &item);
                 return;
             }
             self.app.select_item(lib_idx, item);

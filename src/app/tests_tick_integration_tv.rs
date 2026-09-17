@@ -12,7 +12,8 @@ use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::render::make_movie_app;
 use crate::app::tests_tick_harness::TickHarness;
-use crate::app::{PanelFocus, PanelMode, TabSelection};
+use crate::app::types_events::NavigateLanding;
+use crate::app::{LibEvent, PanelFocus, PanelMode, TabSelection};
 use std::time::{Duration, Instant};
 
 fn tv_harness() -> TickHarness {
@@ -408,4 +409,146 @@ fn tv_wide_tick_click_resolves_episode_row() {
             hit: TvHit::EpisodeRow(target)
         }) if target == "episode-1"
     )), "tick messages: {:?}", messages);
+}
+
+fn navigated_series(id: &str, name: &str) -> Box<mbv_core::api::EmbyItem> {
+    let mut item = crate::app::tests::make_item(name, "Series");
+    item.id = id.into();
+    Box::new(item)
+}
+
+/// Task 3.1: a landing on a Series runs the same detail hand-off Inline
+/// Search runs -- the retained TV owner re-anchors, the Wide workspace opens
+/// with episode selection focused -- driven through the shell drain and the
+/// `Application::tick()` sync pass.
+#[test]
+fn navigated_series_opens_the_wide_workspace() {
+    let mut harness = tv_harness();
+    // The retained owner starts on series-0; the navigation targets series-1.
+    harness.model_mut().handle_inline_search_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Series {
+            reveal: navigated_series("series-1", "Second"),
+        },
+        switch_tab: true,
+    });
+    harness.step();
+
+    assert_eq!(
+        harness.model().app.tab,
+        TabSelection::EmbyLibrary(0),
+        "the landing switches to the target library"
+    );
+    assert_eq!(
+        tv(&harness).selected_item().map(|item| item.id),
+        Some("series-1".to_string()),
+        "the retained TV owner re-anchors onto the navigated series"
+    );
+    assert!(
+        tv(&harness).episode_pane_focused(),
+        "the Wide workspace is open with episode selection focused"
+    );
+}
+
+/// Task 3.1: the Narrow landing opens the Library Hero overlay for the
+/// navigated show, through the same hand-off.
+#[test]
+fn navigated_series_opens_the_hero_overlay_narrow() {
+    let mut harness = tv_harness();
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+
+    harness.model_mut().handle_inline_search_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Series {
+            reveal: navigated_series("series-1", "Second"),
+        },
+        switch_tab: true,
+    });
+    harness.step();
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+
+    assert!(harness.model().app.wide_tv_library_area(0).is_none());
+    assert!(
+        panel(&harness).test_hero_overlay_open(),
+        "narrow navigation opens the Library Hero overlay for the show"
+    );
+    assert_eq!(
+        tv(&harness).selected_item().map(|item| item.id),
+        Some("series-1".to_string()),
+        "the retained TV owner re-anchors onto the navigated series"
+    );
+}
+
+/// Task 3.1 design watch: when the target library's corpus cannot satisfy the
+/// landing yet, the hand-off must fire on the pending-landing retry drain --
+/// not at the original `NavigateTo` -- and still open the Wide workspace.
+#[test]
+fn deferred_series_landing_runs_the_handoff_on_its_retry_drain() {
+    let mut harness = tv_harness();
+    harness.model_mut().app.tab = TabSelection::Home;
+    {
+        // A paginated root: the whole-library corpus (`all_items`) is absent,
+        // so the show can still be satisfied by the prefetch drain.
+        let level = harness
+            .model_mut()
+            .app
+            .libs[0]
+            .nav_stack
+            .last_mut()
+            .expect("root level");
+        level.total_count = 5;
+        level.all_items = None;
+    }
+    harness.model_mut().sync_mounted_surfaces();
+
+    harness.model_mut().handle_inline_search_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: NavigateLanding::Series {
+            reveal: navigated_series("series-9", "Ninth"),
+        },
+        switch_tab: true,
+    });
+    assert!(
+        harness.model().app.pending_series_landing.is_some(),
+        "an unsaturated corpus arms the pending landing"
+    );
+    assert!(
+        harness.model().app.pending_series_handoff.is_none(),
+        "no hand-off before the landing actually completes"
+    );
+    assert_eq!(
+        harness.model().app.tab,
+        TabSelection::Home,
+        "the tab switch is deferred with the landing"
+    );
+
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(LibEvent::AllItemsPrefetched {
+            lib_idx: 0,
+            parent_id: "lib-movies".into(),
+            items: vec![
+                *navigated_series("series-0", "First"),
+                *navigated_series("series-9", "Ninth"),
+            ],
+        });
+    assert!(
+        harness.model().app.pending_series_landing.is_none(),
+        "the retry landed"
+    );
+    assert_eq!(harness.model().app.tab, TabSelection::EmbyLibrary(0));
+    harness.step();
+
+    assert_eq!(
+        tv(&harness).selected_item().map(|item| item.id),
+        Some("series-9".to_string()),
+        "the deferred landing's hand-off re-anchors the owner"
+    );
+    assert!(
+        tv(&harness).episode_pane_focused(),
+        "the deferred landing opens the Wide workspace"
+    );
 }

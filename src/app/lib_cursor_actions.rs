@@ -1,5 +1,5 @@
 use super::render::{effective_sort_str, LetterFilter};
-use super::types_events::PendingSeriesLanding;
+use super::types_events::{PendingSeriesHandoff, PendingSeriesLanding};
 use super::{App, SeriesDetail};
 use mbv_core::api::EmbyItem;
 
@@ -101,6 +101,9 @@ impl App {
             if pending.switch_tab {
                 self.set_library_tab(lib_idx + 1);
             }
+            // The deferred landing completed on THIS drain: arm the same
+            // hand-off the immediate arm arms (task 3.1).
+            self.pending_series_handoff = Some(PendingSeriesHandoff { lib_idx, reveal });
         } else if !self.arm_pending_series_landing(lib_idx, reveal, pending.switch_tab) {
             self.flash_error(format!("Could not land on '{name}' in its library"));
         }

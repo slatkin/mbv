@@ -485,3 +485,119 @@ fn tick_routes_dot_to_focused_queue_and_opens_the_context_menu() {
         "dispatching RowContextMenu opens a context-menu overlay"
     );
 }
+
+fn landed_album_level(
+    parent_id: &str,
+    title: &str,
+    items: Vec<mbv_core::api::EmbyItem>,
+) -> crate::app::BrowseLevel {
+    crate::app::BrowseLevel {
+        parent_id: parent_id.into(),
+        title: title.into(),
+        total_count: items.len(),
+        items,
+        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        music_grouping: None,
+    }
+}
+
+/// The landed nav stack the recursive album activation builds for a grouped
+/// library: root artist level + the artist's album level, the navigated album
+/// at the album level's resting cursor. The sibling album is present (the
+/// activation fetches the whole parent listing), so preserving the owner's
+/// prior target would miss the navigated album without the re-anchor.
+fn landed_grouped_album_stack(album_id: &str) -> Vec<crate::app::BrowseLevel> {
+    let mut artist = crate::app::tests::make_item("Alpha", "MusicArtist");
+    artist.id = "group-0".into();
+    artist.is_folder = true;
+    let mut album = crate::app::tests::make_item("First Album", "MusicAlbum");
+    album.id = album_id.into();
+    album.artist = "Alpha".into();
+    let mut sibling = crate::app::tests::make_item("Second Album", "MusicAlbum");
+    sibling.id = "album-2".into();
+    sibling.artist = "Alpha".into();
+    vec![
+        landed_album_level("lib-music", "Music", vec![artist]),
+        landed_album_level("group-0", "Alpha", vec![album, sibling]),
+    ]
+}
+
+/// Task 3.2 (grouped shape): a navigated album lands through the same
+/// `RecursiveAlbumActivated` shell arm Inline Search activation uses, so the
+/// retained Music owner's workspace re-anchors onto the navigated album and
+/// shows its track list -- even after the user moved the owner's own cursor
+/// elsewhere.
+#[test]
+fn navigated_album_reanchors_the_grouped_owner_workspace() {
+    let (mut harness, id) = wide_music_harness();
+    // A sibling album so the owner's own cursor can move off the navigated
+    // one before the landing.
+    {
+        let app = &mut harness.model_mut().app;
+        let mut second = crate::app::tests::make_item("Second Album", "MusicAlbum");
+        second.id = "album-2".into();
+        second.artist = "Alpha".into();
+        let level = app.libs[0].nav_stack.last_mut().expect("album level");
+        level.items.push(second);
+        level.total_count = 2;
+        app.album_tracks_cache
+            .insert("album-2".into(), vec![crate::app::tests::make_item("Other Track", "Audio")]);
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    harness.inject(key(Key::Down));
+    harness.step();
+    assert_eq!(
+        music_selected_album_id(&harness, &id).as_deref(),
+        Some("album-2"),
+        "the owner's local cursor moved off the navigated album"
+    );
+
+    harness
+        .model_mut()
+        .on_recursive_album_activated("lib-music".into(), landed_grouped_album_stack("album-1"));
+    harness.step();
+
+    assert_eq!(
+        music_selected_album_id(&harness, &id).as_deref(),
+        Some("album-1"),
+        "the owner workspace re-anchors onto the navigated album"
+    );
+    assert_eq!(
+        music_track_focus_row(&harness, &id),
+        Some(0),
+        "track-selection mode is entered for the navigated album's track list"
+    );
+}
+
+/// Task 3.2 (flat shape): an album directly under the library root lands as a
+/// one-level stack whose resting cursor is on the album. The group-view owner
+/// only exists above a group level, so the flat surface is the library
+/// browser; the arm still lands the album at the root cursor.
+#[test]
+fn navigated_flat_album_lands_the_album_at_the_root_cursor() {
+    let (mut harness, _id) = wide_music_harness();
+    let mut album = crate::app::tests::make_item("First Album", "MusicAlbum");
+    album.id = "album-1".into();
+    harness.model_mut().on_recursive_album_activated(
+        "lib-music".into(),
+        vec![landed_album_level("lib-music", "Music", vec![album])],
+    );
+    harness.step();
+
+    let level = harness.model().app.libs[0]
+        .nav_stack
+        .last()
+        .expect("landed level");
+    assert_eq!(level.items[level.resting().cursor()].id, "album-1");
+    assert!(
+        harness.model().music_owner().is_none(),
+        "the flat shape has no group-view owner to re-anchor"
+    );
+}
