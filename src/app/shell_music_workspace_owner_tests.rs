@@ -749,3 +749,127 @@ fn narrow_enter_requests_album_activation_with_the_tracks_already_cached() {
         "the opened overlay focuses the cached Tracklist"
     );
 }
+
+// ── Grouping settle reorder (task 3.2 / design D5) ───────────────────────
+
+/// A music album level whose albums carry no artist tag, so the grouping
+/// candidate starts fully unresolved and the pre-settle flow paints the
+/// fallback grouping (one `Heading`, albums in raw order).
+fn music_albums_without_artist_tags() -> crate::app::App {
+    let mut app = crate::app::tests::make_app_stub();
+    app.tab = TabSelection::EmbyLibrary(0);
+    app.panel_focus = PanelFocus::Library;
+    app.music_levels = vec!["group".into(), "album".into()];
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.is_folder = true;
+    library.collection_type = "music".into();
+    let mut group = make_item("Alpha", "MusicArtist");
+    group.id = "group-0".into();
+    group.is_folder = true;
+    let albums: Vec<_> = (0..30)
+        .map(|i| {
+            let mut album = make_item(&format!("Album {i}"), "MusicAlbum");
+            album.id = format!("album-{i}");
+            album.artist = String::new();
+            album.is_folder = true;
+            album
+        })
+        .collect();
+    app.libs.push(LibraryTab {
+        nav_stack: vec![
+            BrowseLevel {
+                parent_id: "lib-music".into(),
+                title: "Music".into(),
+                items: vec![group],
+                total_count: 1,
+                resting: crate::app::types_browse::BrowseResting::new(0, 0),
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                music_grouping: None,
+            },
+            BrowseLevel {
+                parent_id: "group-0".into(),
+                title: "Alpha".into(),
+                items: albums,
+                total_count: 30,
+                resting: crate::app::types_browse::BrowseResting::new(0, 0),
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+                music_grouping: None,
+            },
+        ],
+        ..LibraryTab::new(library)
+    });
+    app
+}
+
+/// Task 3.2 / D5: the asynchronous Music grouping settle reorders the albums
+/// under the user. The settle is driven deterministically — the resolved
+/// artists are committed through the candidate path, which commits
+/// synchronously once the last lookup arrives, with no settle-window wait —
+/// and the window keeps its place: the album the window showed at its top is
+/// still the album at the top after the re-push, while the selection keeps
+/// its stable target.
+#[test]
+fn music_grouping_settle_reorder_keeps_the_window_on_its_top_album() {
+    let mut app = music_albums_without_artist_tags();
+    // Arm the grouping candidate: every album is unresolved.
+    app.start_or_supersede_music_grouping(0);
+    let mut model = Model::new(app);
+    wide(&mut model);
+    model.sync_mounted_surfaces();
+
+    // Pre-settle flow: one fallback-artist `Heading`, then the albums in raw
+    // order. Park the window with album-20 on top (display row 21) and the
+    // selection on album-22 (row 23, inside the window).
+    model.test_music_owner_mut().re_anchor(22, 21);
+    assert_eq!(model.test_music_owner().album_scroll(), 21);
+    assert_eq!(
+        model
+            .test_music_owner()
+            .selected_item()
+            .map(|item| item.id)
+            .as_deref(),
+        Some("album-22")
+    );
+
+    // Commit the settled catalog directly: resolving every album's artist
+    // empties the candidate's unresolved set, which commits synchronously.
+    // Two albums swap artist identities, so the settled flow reorders the
+    // rows under the window: one `Heading` per artist, with group k's album
+    // at display row 3k + 1 (group 0 has no leading spacer).
+    for index in 0..30 {
+        let artist = match index {
+            5 => "Artist 25".to_string(),
+            25 => "Artist 5".to_string(),
+            other => format!("Artist {other}"),
+        };
+        model
+            .app
+            .advance_music_grouping_candidates(&format!("album-{index}"), &artist);
+    }
+
+    // The re-push replaces the row flow with the settled grouping.
+    model.push_music_workspace_content();
+    let owner = model.test_music_owner();
+    // album-20's artist sorts to group 20, whose album row is 61: the window
+    // is restored to the same stable target it showed before the settle —
+    // not to the stale index (21) and not onto the re-anchored resting row.
+    assert_eq!(owner.album_scroll(), 61);
+    assert_eq!(
+        owner.selected_item().map(|item| item.id).as_deref(),
+        Some("album-22"),
+        "the selection keeps its stable target across the reorder"
+    );
+}

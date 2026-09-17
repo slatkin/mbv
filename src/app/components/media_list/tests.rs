@@ -493,3 +493,115 @@ fn height_free_delegate_leaves_a_viewport_step_unhandled() {
     assert_eq!(list.scroll(), 0);
     assert_eq!(list.selected_target(), Some(&"0".to_string()));
 }
+
+// Task 3.1 / D5: a reordered row flow keeps the window on the same target —
+// the previous flow's window-top target is re-found in the new flow and the
+// window is restored to its row, with no display-row index carried over.
+#[test]
+fn set_content_reordered_flow_keeps_the_window_on_the_same_target() {
+    let mut list = MediaList::new();
+    list.set_content(numbered_items(8));
+    list.select_target(&"2".to_string());
+    list.set_scroll(5);
+    let reordered: Vec<_> = (0..8).rev().map(|i| item(&i.to_string())).collect();
+    list.set_content(reordered);
+    // "5" was the previous window top; in the reversed flow it sits at
+    // display row 2, so the window anchors there, not at the old index 5.
+    assert_eq!(list.scroll(), 2);
+    assert_eq!(list.selected_target(), Some(&"2".to_string()));
+}
+
+// Task 3.1 / D5: a regrouped flow restores the label — the previous flow
+// showed a `Heading` directly above the window-top target and the new flow
+// still places one above it, so the window anchors to that `Heading`.
+#[test]
+fn set_content_regrouped_flow_restores_the_heading_above_the_target() {
+    let mut list = MediaList::new();
+    list.set_content(vec![
+        item("a1"),
+        item("a2"),
+        MediaListRow::Heading {
+            text: "M–O".into()
+        },
+        item("m1"),
+        item("m2"),
+        item("m3"),
+    ]);
+    // Display rows: 0=a1, 1=a2, 2=Heading, 3=m1, 4=m2, 5=m3. The window top
+    // is "m1" with its labelling `Heading` directly above, and the selection
+    // sits inside the window.
+    list.select_target(&"m2".to_string());
+    list.set_scroll(3);
+    list.set_content(vec![
+        item("a1"),
+        item("a2"),
+        item("a3"),
+        MediaListRow::Heading {
+            text: "M–O".into()
+        },
+        item("m0"),
+        item("m1"),
+        item("m2"),
+        item("m3"),
+    ]);
+    // Display rows: 0..2=a1..a3, 3=Heading, 4=m0, 5=m1, 6=m2, 7=m3. "m1" is
+    // now at row 5 with a `Heading` directly above, so the window anchors to
+    // that `Heading` and the label and the target paint together.
+    assert_eq!(list.scroll(), 4);
+    assert_eq!(list.selected_target(), Some(&"m2".to_string()));
+}
+
+// Task 3.1 / D5: when the new flow no longer places a `Heading` directly
+// above the re-found target, the window anchors to the target's own row.
+#[test]
+fn set_content_anchors_to_the_target_row_when_the_new_flow_has_no_leading_heading() {
+    let mut list = MediaList::new();
+    list.set_content(vec![
+        item("a1"),
+        MediaListRow::Heading {
+            text: "M–O".into()
+        },
+        item("m1"),
+        item("m2"),
+    ]);
+    // Display rows: 0=a1, 1=Heading, 2=m1, 3=m2. Window top "m1", label above.
+    list.select_target(&"m2".to_string());
+    list.set_scroll(2);
+    // The regrouped flow puts "m1" first with no `Heading` above it.
+    list.set_content(vec![item("m1"), item("m2"), item("a1")]);
+    assert_eq!(list.scroll(), 0);
+    assert_eq!(list.selected_target(), Some(&"m2".to_string()));
+}
+
+// Task 3.1 / D5: a window-top target that is gone from the new flow falls
+// back to keeping the selection inside the window and clamping.
+#[test]
+fn set_content_missing_target_falls_back_to_keeping_the_selection_inside_the_window() {
+    let mut list = MediaList::new();
+    list.set_content(numbered_items(8));
+    list.select_target(&"2".to_string());
+    list.set_scroll(5);
+    // Drop "5", the previous window-top target, from the replacement.
+    let without_five: Vec<_> = (0..8)
+        .filter(|i| *i != 5)
+        .map(|i| item(&i.to_string()))
+        .collect();
+    list.set_content(without_five);
+    // The selection ("2", display row 2) stays inside the window: the
+    // fallback window raises to it from the clamped stale offset instead of
+    // pointing at unrelated rows.
+    assert_eq!(list.scroll(), 2);
+    assert_eq!(list.selected_target(), Some(&"2".to_string()));
+}
+
+// Task 3.1 / D5: an append far from the window leaves it unchanged.
+#[test]
+fn set_content_append_far_from_the_window_leaves_it_unchanged() {
+    let mut list = MediaList::new();
+    list.set_content(numbered_items(6));
+    list.select_target(&"2".to_string());
+    list.set_scroll(2);
+    list.set_content(numbered_items(30));
+    assert_eq!(list.scroll(), 2);
+    assert_eq!(list.selected_target(), Some(&"2".to_string()));
+}

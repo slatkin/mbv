@@ -896,9 +896,17 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
 
     /// Replace the display rows. The selected target is preserved when it is
     /// still present; otherwise the cursor and scroll are locally clamped
-    /// (design.md D3). Structural rows are filtered out of the selectable
-    /// index here so they can never become selected.
+    /// (design.md D3). The window re-anchors by stable identity across the
+    /// replacement (design.md D5, task 3.1): before the rows are replaced the
+    /// owner records the first selectable target the previous flow showed at
+    /// the window's top — plus whether a `Heading` sat directly above it —
+    /// and after installing the new rows restores the window to that
+    /// target's row, or to the `Heading` directly above it when the new flow
+    /// still places one (a structural match; a `Heading` has no stable
+    /// identity). When that target is gone, the window falls back to keeping
+    /// the selection inside it and clamping.
     fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
+        let anchor = self.flow_anchor();
         let previous = self.selected_target().cloned();
         let selectable: Vec<usize> = rows
             .iter()
@@ -941,6 +949,20 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
             self.selection_anchor = None;
             self.live_range = false;
         }
-        self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
+        // D5: restore the window by stable identity. When the restore cannot
+        // run — nothing selectable was showing at the window's top, or that
+        // target is gone from the new flow — the window falls back to keeping
+        // the selection inside it: the stored offset survives only clamped,
+        // and the window raises to the selection when the replacement moved
+        // it above the window top (the paint-time clamp covers the side below
+        // the window, which needs the painted height).
+        if !anchor.is_some_and(|anchor| self.apply_flow_anchor(&anchor)) {
+            self.scroll = self.scroll.min(self.rows.len().saturating_sub(1));
+            if let Some(row) = self.selected_display_row() {
+                if row < self.scroll {
+                    self.scroll = row;
+                }
+            }
+        }
     }
 }
