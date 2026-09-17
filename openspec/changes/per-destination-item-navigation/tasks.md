@@ -54,7 +54,7 @@
 
 ## 5. Gates and sync
 
-- [ ] 5.1 Full gates: `cargo nextest run -p mbv` and `-p mbv-core`, clippy
+- [x] 5.1 Full gates: `cargo nextest run -p mbv` and `-p mbv-core`, clippy
   `-D warnings`, `cargo fmt --check`, `openspec validate --all`.
 - [ ] 5.2 Manual check (single-user system): queue → right-click an episode →
   "Go to Library" lands on the show with its Workspace/overlay open; a queued
