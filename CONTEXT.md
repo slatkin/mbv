@@ -330,6 +330,14 @@ _Avoid_: wide media row, wide_media_row
 The non-selectable Heading row labelling a group of media-list Item rows (artist, feed age bucket, letter or surname bucket, season). Painted bold in the FOAM metadata role; unlike a media-list Item row it keeps the surface fill and never paints the selected-row bar. It is a visual label, never a selection or action target, and it takes its own place in the zebra alternation.
 _Avoid_: artist header, group title, section label
 
+**Viewport**:
+The window of display rows a MediaList flow paints: the owner's stored top display-row offset plus the painted row-flow height, with a display row counting non-selectable Group heading and Spacer rows like any other. The viewport has one writer — the owner's cursor and step rules; the painter reads it and never writes back, and a step's height enters from the retained painted frame. Distinct from the selection: a window-only step moves nothing but the window, and the selection is dragged into the window only when a step would otherwise leave it outside.
+_Avoid_: scroll position (bare), window offset, viewport offset (bare), visible range
+
+**Viewport step**:
+The viewport's movement by one display row, or by one painted page, applied by the MediaList owner for a painted height. The wheel, the `Ctrl+e`/`Ctrl+y` chords, and `PgUp`/`PgDn` all convert to it — the wheel and the one-row chords in one shared conversion. A step at a content end clamps and reports unhandled; a step never extends a live multi-selection.
+_Avoid_: scroll gesture (bare), page jump, scroll event
+
 **Inline Search**:
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. EmbyLibraryContent, MusicContent, or TvContent is the sole owner and painter for the current presentation; TV transfers one snapshot between Narrow and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
 _Avoid_: global search, Search sidebar, search overlay

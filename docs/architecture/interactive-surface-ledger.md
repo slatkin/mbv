@@ -49,6 +49,35 @@ Hero header arm, style, or slot. The Library panel derives Wide/Narrow and the
 artwork policy derives Landscape/Portrait/Square. One Panel painter runs for each
 surface and breakpoint.
 
+## Embedded content owners
+
+Library content owners remain mounted while their Service library is in the
+catalog and preserve cursor, scroll, local focus, drafts, and provider intent
+translation. They are not root-composed surfaces and do not select a skeleton,
+Hero header arm, style, or slot. The Library panel derives Wide/Narrow and the
+artwork policy derives Landscape/Portrait/Square. One Panel painter runs for each
+surface and breakpoint.
+
+### Viewport step (media-list-viewport-scroll)
+
+Every carrier-backed canonical surface interprets the wheel and the `Ctrl+e`/
+`Ctrl+y`/`PgUp`/`PgDn` chords as viewport steps (design D1/D6): the window moves
+one display row (or one painted page), the selection rides only when the step
+would leave it outside, and the first and last display rows are reachable. Each
+converted surface names its viewport-step proof:
+
+| Converted surface | Viewport-step proof |
+| --- | --- |
+| Emby library (plain kinds: Movies / Home videos / Generic) | `tests_tick_integration_library_scroll::viewport_step_inputs_walk_a_grouped_list_to_display_row_0_wide_and_narrow` (wheel and chord each step the letter-grouped window one row, drag the selection only at the window's edge, and reach display row 0 where the first group's `Heading` paints, at Wide and non-Wide heights); `tests_tick_integration_emby_library::browser_viewport_chords_step_the_window_at_wide_and_narrow_heights`; `tests_tick_integration_library_scroll::library_panel_viewport_wheel_reports_position_without_a_cursor_echo` |
+| Wide TV | `tests_tick_integration_library_panel::tv_series_rail_viewport_chords_step_the_window_at_wide_and_narrow_heights` |
+| Home | `tests_tick_integration_home::home_viewport_chords_step_the_window_at_wide_and_narrow_heights`; wheel delivery over current inline geometry: `home_narrow_tick_wheel_and_click_use_current_inline_geometry` |
+| Queue | `queue_component_tests::queue_viewport_ctrl_chords_step_the_window`; wheel steps through the shared conversion — `queue.rs` delegates `Wheel` to `delegate_row_local_input` |
+| Music | `music_content_tests::album_wheel_steps_the_viewport_and_requests_the_cursor_only_when_dragged`, `album_viewport_chords_step_the_rail_and_report_only_drags`, `track_viewport_chords_step_the_focused_track_list`; live-tick rail: `tests_tick_integration_music_mouse::music_wide_album_rail_wheel_steps_the_viewport_and_requests_the_cursor_only_when_dragged` |
+| Feeds | `feeds_component_tests::feeds_admits_the_two_viewport_ctrl_chords_and_rejects_others`; live-tick wheel claim: `tests_tick_integration_feeds::feeds_tick_wheel_is_claimed_only_over_active_control` |
+| Audiobookshelf podcast | `tests_tick_integration_podcast::podcast_wheel_steps_the_show_viewport_without_a_selection_move`; `podcast_viewport_chords_step_the_show_window` |
+| Audiobookshelf books | `tests_tick_integration_book::books_panel_is_focused_and_mouse_eligible` (wheel steps the book window one row); `book_viewport_chords_step_the_book_window` |
+| Inline Search | `inline_search::tests::wheel_steps_the_viewport_and_the_selection_rides_only_at_the_edge`; `viewport_ctrl_chords_step_the_results_window_and_other_ctrl_chords_stay_rejected` |
+
 This replaces the former destination-row inventory: Home, generic Emby/Movies/
 home videos, TV, grouped Music, Audiobookshelf books/podcasts, and Feeds all
 compose through Library panel slots. Queue rows compose through Queue panel
