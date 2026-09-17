@@ -5,7 +5,7 @@ use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
 use crate::app::components::library_panel::content::{ListSlot, PanelList, PanelListPaintPolicy};
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use crate::app::components::library_panel::LibraryKind;
-use crate::app::components::media_list::MediaListSurfaceInput;
+use crate::app::components::media_list::{MediaListOperation, MediaListSurfaceInput};
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::tests::{make_item, make_items};
 use ratatui::backend::TestBackend;
@@ -87,6 +87,97 @@ fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
     assert_eq!(
         message, None,
         "only the empty-to-non-empty edge emits the request"
+    );
+}
+
+/// Hit geometry follows the carrier's latest retained rects (task 6.3): a
+/// repaint re-anchors the flow's rect, a click resolves against what the
+/// carrier retained from the newest paint, and a point from the previous
+/// frame's geometry resolves nothing.
+#[test]
+fn browser_owner_search_pointer_resolves_against_the_latest_repaint() {
+    let mut owner = BrowserOwner::new(LibraryKind::Movies);
+    owner.set_content(owner_push(make_items(2)));
+    owner.on_key(&TuiKeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    });
+    let mut alpha = make_item("Search Result Alpha", "Movie");
+    alpha.id = "ida".into();
+    let mut beta = make_item("Search Result Beta", "Movie");
+    beta.id = "idb".into();
+    owner
+        .inline_search_mut()
+        .set_pool(SearchPool::Items(vec![alpha, beta]));
+    owner.on_key(&TuiKeyEvent {
+        code: Key::Char('a'),
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(
+        owner
+            .inline_search_mut()
+            .handle_clock(Instant::now() + Duration::from_millis(301)),
+        "the deadline fires the armed re-score"
+    );
+
+    let paint = |owner: &mut BrowserOwner, rect: Rect| {
+        let height = rect.y + rect.height;
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, height)).unwrap();
+        terminal
+            .draw(|f| {
+                let search = owner.inline_search_mut();
+                search.sync_viewport(rect.height as usize);
+                search.set_paint_policy(PanelListPaintPolicy::Wide { focused: true });
+                search.set_geometry(rect, rect);
+                search.view(f, rect);
+            })
+            .unwrap();
+    };
+
+    // First paint, then move the cursor to the second row.
+    paint(&mut owner, Rect::new(0, 0, 40, 10));
+    owner
+        .inline_search_mut()
+        .results_mut()
+        .delegate_operation(MediaListOperation::Move(1));
+    assert_eq!(owner.inline_search().test_cursor(), 1);
+
+    // Repaint with new geometry; the carrier's retained rects re-anchor.
+    paint(&mut owner, Rect::new(0, 5, 40, 5));
+
+    // A stale point from the previous frame's geometry resolves nothing.
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+        Position::new(0, 0),
+    )));
+    assert!(message.is_none());
+    assert_eq!(
+        owner.inline_search().test_cursor(),
+        1,
+        "a point from the previous frame's geometry does not move the selection"
+    );
+
+    // A click resolves against the newest retained rects: row 0 sits at y=5.
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(
+        Position::new(0, 5),
+    )));
+    assert!(message.is_none(), "a plain click emits no Msg");
+    assert_eq!(
+        owner.inline_search().test_cursor(),
+        0,
+        "the click selected the repainted row 0"
+    );
+
+    // A double-click on the repainted row 1 activates that row's target.
+    let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
+        Position::new(0, 6),
+    )));
+    assert_eq!(
+        message,
+        Some(Msg::Shell(ShellRequest::InlineSearchActivate {
+            id: "idb".into(),
+            item_type: "Movie".into(),
+        })),
+        "the double-click activated the row the latest paint retained"
     );
 }
 

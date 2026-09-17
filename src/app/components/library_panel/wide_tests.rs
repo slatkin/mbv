@@ -733,6 +733,145 @@ fn zero_row_search_paints_the_placeholder_strings_and_no_anchor() {
     assert!(geo.selected.is_none());
 }
 
+/// A responsive Wide/Narrow transition keeps one session and one owner
+/// (canonical-media-lists delta: presentation transition reuses the shared
+/// owner): the same control's carrier retains the new geometry, the
+/// selection survives, and the viewport clamps so the selection stays
+/// visible — carrier-native, no row-local state copied into a second
+/// control.
+#[test]
+fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
+    let mut search = InlineSearch::new();
+    search.open();
+    search.set_pool(SearchPool::Items(crate::app::tests::make_items(10)));
+    search.restore_query("ite".into());
+    search
+        .results_mut()
+        .delegate_operation(crate::app::components::media_list::MediaListOperation::Last);
+    let target = search
+        .results()
+        .selected_target()
+        .cloned()
+        .expect("a selected result after moving to the last row");
+
+    // Wide: the session paints through the panel's one canonical list box.
+    let wide_list_area;
+    {
+        let mut content = LibraryPanelContent {
+            selector: None,
+            controls: None,
+            list: ListSlot::Search(&mut search),
+            hero: None,
+        };
+        let (_buf, wide_geo, _hits) = draw_skeleton(&mut content, true);
+        wide_list_area = wide_geo.list_area;
+    }
+    assert_eq!(
+        search.results().current_content_rect(),
+        Some(wide_list_area)
+    );
+    assert_eq!(search.results().selected_target(), Some(&target));
+
+    // Narrow: the same owner, the selection preserved, the viewport clamped
+    // in place by the carrier's ordinary geometry-change rule.
+    let narrow_area = Rect::new(0, 0, 60, 20);
+    let mut terminal =
+        Terminal::new(TestBackend::new(narrow_area.width, narrow_area.height)).unwrap();
+    let mut hits = SkeletonHits::default();
+    let mut windows = SkeletonPillWindows::default();
+    let mut narrow_geo = None;
+    {
+        let mut content = LibraryPanelContent {
+            selector: None,
+            controls: None,
+            list: ListSlot::Search(&mut search),
+            hero: None,
+        };
+        terminal
+            .draw(|f| {
+                narrow_geo = Some(
+                    crate::app::components::library_panel::render_narrow_skeleton(
+                        f,
+                        narrow_area,
+                        &mut content,
+                        true,
+                        None,
+                        &mut hits,
+                        &mut windows,
+                    ),
+                );
+            })
+            .unwrap();
+    }
+    let narrow_geo = narrow_geo.expect("narrow skeleton painted");
+    assert_ne!(narrow_geo.list_area, wide_list_area, "the geometry changed");
+    assert_eq!(
+        search.results().current_content_rect(),
+        Some(narrow_geo.list_area),
+        "the same owner retained the narrow geometry"
+    );
+    assert_eq!(
+        search.results().selected_target(),
+        Some(&target),
+        "the selection survived the transition"
+    );
+    let offset = search
+        .results()
+        .current_flow_offset()
+        .expect("the narrow paint retained the row flow");
+    let selected_index = 9;
+    assert!(
+        offset <= selected_index && selected_index < offset + narrow_geo.list_area.height as usize,
+        "the clamped viewport keeps the selection visible"
+    );
+    assert_eq!(
+        search.query(),
+        "ite",
+        "the session stayed open with its query"
+    );
+}
+
+/// A closed search session paints no search surface anywhere in the frame
+/// and retains no hit geometry (task 6.3): the Selector row paints its
+/// pills, the list box is the browse list's, and the search carrier holds no
+/// retained rect because the panel never drove its surface.
+#[test]
+fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
+    let mut search = InlineSearch::new();
+    search.open();
+    search.set_pool(SearchPool::Items(vec![crate::app::tests::make_item(
+        "Alpha", "Movie",
+    )]));
+    search.restore_query("Alp".into());
+    search.close();
+
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut content = LibraryPanelContent {
+        selector: Some(SelectorRow {
+            pills: vec!["All".into()],
+            active: Some(0),
+        }),
+        controls: None,
+        list: ListSlot::Media(&mut list),
+        hero: None,
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let frame = Rect::new(0, 0, AREA.width, AREA.height);
+    assert!(!text_in(&buf, frame, "SEARCH:"), "no search bar anywhere");
+    assert!(
+        text_in(&buf, geo.selector_bar, "\u{25e2}"),
+        "the selector row paints its pill"
+    );
+    assert!(
+        text_in(&buf, geo.list_area, "Alpha"),
+        "the browse list paints"
+    );
+    assert!(
+        search.results().current_content_rect().is_none(),
+        "the closed session retained no painted hit geometry"
+    );
+}
+
 #[test]
 fn empty_list_slot_paints_its_placeholder_in_the_list_box() {
     let mut content = LibraryPanelContent {

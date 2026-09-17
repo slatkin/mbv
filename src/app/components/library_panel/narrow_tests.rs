@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::components::inline_search::{InlineSearch, SearchPool};
 use crate::app::components::library_panel::{
     LibraryPanelContent, ListControls, ListSlot, SelectorRow,
 };
@@ -108,6 +109,76 @@ fn fixed_row_owner_clamps_when_narrow_viewport_shrinks_and_restores() {
 /// `LibraryPanel` fill pair on the box and the `MainContentBox` stripe pair on
 /// the alternating rows, in both focus states, with no body or scrollbar
 /// override of its own.
+/// A search session at the non-Wide breakpoint paints the same one-bar +
+/// one-list composition as Wide (task 6.3): the search box takes the
+/// Selector row, the scored results flow through the one canonical fixed-row
+/// list box, and the carrier retains exactly that rect as its hit geometry.
+#[test]
+fn narrow_search_paints_one_search_bar_and_one_result_list() {
+    let mut search = InlineSearch::new();
+    search.open();
+    search.set_pool(SearchPool::Items(crate::app::tests::make_items(3)));
+    search.restore_query("ite".into());
+    let mut content = LibraryPanelContent {
+        selector: Some(SelectorRow {
+            pills: vec!["All".into()],
+            active: Some(0),
+        }),
+        controls: Some(ListControls {
+            label: "3 items".into(),
+        }),
+        list: ListSlot::Search(&mut search),
+        hero: None,
+    };
+    let area = Rect::new(0, 0, 60, 30);
+    let mut terminal = Terminal::new(TestBackend::new(60, 30)).unwrap();
+    let mut hits = super::super::wide::SkeletonHits::default();
+    let mut windows = super::super::wide::SkeletonPillWindows::default();
+    let mut geometry = None;
+    terminal
+        .draw(|f| {
+            geometry = Some(render_narrow_skeleton(
+                f,
+                area,
+                &mut content,
+                false,
+                None,
+                &mut hits,
+                &mut windows,
+            ));
+        })
+        .unwrap();
+    let geometry = geometry.expect("narrow skeleton painted");
+    let buf = terminal.backend().buffer();
+    // One search bar in the Selector row's place, with no selector pill.
+    assert!(text_in(buf, geometry.selector_bar, "SEARCH:"));
+    assert!(text_in(buf, geometry.selector_bar, "ite"));
+    assert!(
+        !text_in(buf, geometry.selector_bar, "\u{25e2}"),
+        "no selector pill under the search box"
+    );
+    // One result list in the list box, through the canonical fixed-row
+    // presentation; the carrier retained that rect as its hit geometry.
+    assert!(text_in(buf, geometry.list_area, "Item 0"));
+    assert_eq!(
+        search.results().current_content_rect(),
+        Some(geometry.list_area)
+    );
+}
+
+fn text_in(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> bool {
+    for y in area.top()..area.bottom() {
+        let mut line = String::new();
+        for x in area.left()..area.right() {
+            line.push_str(buf[(x, y)].symbol());
+        }
+        if line.contains(needle) {
+            return true;
+        }
+    }
+    false
+}
+
 #[test]
 fn narrow_list_box_uses_the_wide_browser_pane_fill_and_stripes() {
     for focused in [false, true] {
