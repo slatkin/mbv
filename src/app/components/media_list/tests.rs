@@ -244,9 +244,11 @@ fn viewport_step_leaves_the_selection_when_the_window_shows_no_selectable_row() 
     // Step down from window [1, 3) with the selection on its first visible
     // row: the new window [2, 4) holds only the `Heading` and the `Spacer`,
     // and the nearest selectable row past the top ("b", row 4) is outside it,
-    // so the selection stays on "a" while the window alone moves.
-    list.set_scroll(1);
+    // so the selection stays on "a" while the window alone moves. (The window
+    // is stored after the selection so the D4 cursor rule does not back it up
+    // onto the `Heading` — this is a step, not a cursor move.)
     list.select_target(&"a".to_string());
+    list.set_scroll(1);
     assert!(list.scroll_viewport(1, 2));
     assert_eq!(list.scroll(), 2);
     assert_eq!(list.selected_target(), Some(&"a".to_string()));
@@ -264,8 +266,8 @@ fn viewport_step_leaves_the_selection_when_the_window_shows_no_selectable_row() 
         item("b"),
     ]);
     // Display rows: 0=a, 1=Heading, 2=Spacer, 3=Heading, 4=Spacer, 5=b.
-    list.set_scroll(2);
     list.select_target(&"b".to_string());
+    list.set_scroll(2);
     assert!(list.scroll_viewport(-1, 2));
     assert_eq!(list.scroll(), 1);
     // The new window [1, 3) holds only structural rows and the nearest
@@ -361,6 +363,77 @@ fn viewport_page_transition_moves_by_the_height_and_reports_the_drag() {
     assert_eq!(boundary.disposition, MediaListDisposition::Unhandled);
     assert_eq!(boundary.selected_target, None);
     assert_eq!(list.scroll(), 0);
+}
+
+// Task 2.1 / D4: a cursor move that raises the window onto the first
+// selectable row backs up one row further so its labelling `Heading` stays
+// inside the window.
+#[test]
+fn cursor_move_to_the_first_selectable_row_keeps_its_heading_in_the_window() {
+    let mut list = MediaList::new();
+    list.set_content(vec![
+        MediaListRow::Heading { text: "A".into() },
+        item("a1"),
+        item("a2"),
+        MediaListRow::Heading { text: "B".into() },
+        item("b1"),
+        item("b2"),
+    ]);
+    // Display rows: 0=Heading A, 1=a1, 2=a2, 3=Heading B, 4=b1, 5=b2.
+    list.select_target(&"a2".to_string());
+    list.set_scroll(2);
+    let transition = list.delegate_operation(MediaListOperation::Move(-1));
+    assert_eq!(transition.selected_target, Some("a1".to_string()));
+    // The minimum move would pin a1 on the window's first row with its
+    // `Heading` directly above; the window moves one row further instead.
+    assert_eq!(list.scroll(), 0);
+    assert_eq!(list.resolve_viewport(3).offset, 0);
+    assert_eq!(list.selected_target(), Some(&"a1".to_string()));
+}
+
+// Task 2.1 / D4: a stored window whose top sits above the selection is
+// preserved — a cursor move that keeps the selection inside it does not
+// raise the window onto the cursor.
+#[test]
+fn cursor_move_preserves_a_stored_window_above_the_selection() {
+    let mut list = MediaList::new();
+    list.set_content(numbered_items(6));
+    list.select_target(&"2".to_string());
+    list.set_scroll(1);
+    assert_eq!(
+        list.delegate_operation(MediaListOperation::Move(1))
+            .selected_target,
+        Some("3".to_string())
+    );
+    assert_eq!(list.scroll(), 1);
+    assert_eq!(
+        list.delegate_operation(MediaListOperation::Move(-1))
+            .selected_target,
+        Some("2".to_string())
+    );
+    assert_eq!(list.scroll(), 1);
+}
+
+// Task 2.1 / D4: the step path stays clamped solely by the content ends —
+// a step may leave the selection on the window's first row with its
+// labelling `Heading` scrolled off, because a step is reversible.
+#[test]
+fn viewport_step_may_still_scroll_the_label_off() {
+    let mut list = MediaList::new();
+    list.set_content(vec![
+        MediaListRow::Heading { text: "A".into() },
+        item("a"),
+        item("b"),
+        item("c"),
+        item("d"),
+        item("e"),
+    ]);
+    list.select_target(&"a".to_string());
+    assert!(list.scroll_viewport(1, 3));
+    // The step moves the window onto the selection's row without backing up
+    // over the `Heading`, and the selection does not move.
+    assert_eq!(list.scroll(), 1);
+    assert_eq!(list.selected_target(), Some(&"a".to_string()));
 }
 
 // Task 1.3: a step never extends the live range — the multi-selection is

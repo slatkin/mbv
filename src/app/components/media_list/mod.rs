@@ -517,6 +517,7 @@ impl<Target> MediaList<Target> {
     fn move_selection(&mut self, delta: i64) {
         if !self.selectable.is_empty() {
             self.cursor = move_cursor(self.cursor, delta, self.selectable.len());
+            self.follow_cursor();
         }
     }
 
@@ -597,17 +598,46 @@ impl<Target> MediaList<Target> {
         self.cursor = cursor;
     }
 
+    /// Keep the selection's leading context on the cursor path (design D4):
+    /// a cursor move that would leave the selection above the window moves
+    /// the window the minimum distance that shows it — and when that places
+    /// the selection on the window's first row with its labelling `Heading`
+    /// directly above, the window moves one row further so the label stays
+    /// visible (the generalisation of the July power-view fix `510fe59`).
+    /// Otherwise the stored window is preserved: a cursor move that keeps
+    /// the selection inside it moves nothing. The step path
+    /// (`scroll_viewport`) never calls this — a step is clamped solely by
+    /// the content ends and may scroll the label off, since it can always
+    /// be reversed.
+    fn follow_cursor(&mut self) {
+        let Some(row) = self.selected_display_row() else {
+            return;
+        };
+        if row < self.scroll {
+            self.scroll = row;
+        }
+        if self.scroll == row
+            && row > 0
+            && matches!(self.rows.get(row - 1), Some(MediaListRow::Heading { .. }))
+        {
+            self.scroll = row - 1;
+        }
+    }
+
     fn select_first(&mut self) {
         self.cursor = 0;
+        self.follow_cursor();
     }
 
     fn select_last(&mut self) {
         self.cursor = self.selectable.len().saturating_sub(1);
+        self.follow_cursor();
     }
 
     /// Place the cursor at selectable index `index`, clamped to the last row.
     fn select_index(&mut self, index: usize) {
         self.cursor = index.min(self.selectable.len().saturating_sub(1));
+        self.follow_cursor();
     }
 
     /// The clamped viewport for a painted `viewport_height`, keeping the
@@ -795,6 +825,7 @@ impl<Target: PartialEq> MediaList<Target> {
         match self.position_of(target) {
             Some(index) => {
                 self.cursor = index;
+                self.follow_cursor();
                 true
             }
             None => false,
