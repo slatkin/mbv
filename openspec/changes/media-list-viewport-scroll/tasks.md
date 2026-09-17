@@ -44,7 +44,7 @@ follow-up units; coordinate before editing the same file.
 
 ## 3. Owner: row-flow replacement anchor (D5)
 
-- [ ] 3.1 On `set_content`, record the first selectable target the previous flow showed at the window's top
+- [x] 3.1 On `set_content`, record the first selectable target the previous flow showed at the window's top
   plus whether a `Heading` sat directly above it; after installing the new rows re-find that target and
   restore the window to its row — or to the `Heading` directly above it when the previous flow showed one
   there and the new flow still places one (structural match only; `Heading` has no stable identity). When
@@ -53,7 +53,7 @@ follow-up units; coordinate before editing the same file.
   (Verify: unit tests — a reordered flow keeps the window on the same target; a regrouped flow restores
   the label above the target; a target whose new flow has no leading `Heading` anchors to the target's
   row; a missing target falls back; an append far from the window leaves it unchanged.)
-- [ ] 3.2 Drive the Music grouping settle case deterministically (commit the settled catalog directly; no
+- [x] 3.2 Drive the Music grouping settle case deterministically (commit the settled catalog directly; no
   waits) and assert the window keeps its place while the albums reorder.
   (Verify: an app-level test with a reordering settled catalog; the test must not sleep.)
 
