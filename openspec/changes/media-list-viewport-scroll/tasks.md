@@ -107,16 +107,16 @@ follow-up units; coordinate before editing the same file.
 
 ## 7. Retire the hand-patches (D9)
 
-- [ ] 7.1 Delete the Queue's `scroll.min(cursor)` hand clamp, keeping the explicit scope reset.
+- [x] 7.1 Delete the Queue's `scroll.min(cursor)` hand clamp, keeping the explicit scope reset.
   (Verify: updated Queue tests, including the `set_cursor` cases.)
-- [ ] 7.2 Replace the item-index restore derivation (`BrowseLevel::scroll_for_cursor`) with seeding the
+- [x] 7.2 Replace the item-index restore derivation (`BrowseLevel::scroll_for_cursor`) with seeding the
   selection and deriving the window from its display row at the restore boundary; update the position tests
   that pinned the old derivation.
   (Verify: `tests_library_position*.rs` and `actions_tests_letter.rs` green with the new expectations.)
-- [ ] 7.3 Make the Music re-anchor adopt the target and window it is given, with no bottom-edge
+- [x] 7.3 Make the Music re-anchor adopt the target and window it is given, with no bottom-edge
   derivation; update the re-anchor characterization and owner tests.
   (Verify: `tests_music_wide_reanchor_characterization.rs` and the owner tests green.)
-- [ ] 7.4 Update the remaining carrier/window tests that used the write-back or `set_scroll` as their seam
+- [x] 7.4 Update the remaining carrier/window tests that used the write-back or `set_scroll` as their seam
   (non-Wide library list, feeds, TV, library-panel integration).
   (Verify: `cargo nextest run -p mbv` green.)
 
