@@ -271,3 +271,22 @@ fn tv_grouped_rows_flatten_while_search_is_open_and_restore_after_close() {
         "grouped shape restored after close: {rows:?}"
     );
 }
+
+/// A played episode projects the shared `Played` state, so the episode list
+/// paints the one played-row colour used by every other tab.
+#[test]
+fn played_episode_rows_project_the_shared_played_state() {
+    let mut played = make_item("Watched Episode", "Episode");
+    played.played = true;
+    let fresh = make_item("Unwatched Episode", "Episode");
+    let rows = build_episode_rows(&[played, fresh]);
+    let states: Vec<&MediaSemanticState> = rows
+        .iter()
+        .map(|row| match row {
+            MediaListRow::Item { semantic_state, .. } => semantic_state,
+            _ => panic!("episode rows are items"),
+        })
+        .collect();
+    assert_eq!(states[0], &MediaSemanticState::Played);
+    assert_eq!(states[1], &MediaSemanticState::Ordinary);
+}

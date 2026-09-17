@@ -111,8 +111,7 @@ fn search_row_label(item: &mbv_core::api::EmbyItem) -> String {
 
 /// One canonical row for a scored result (design.md D2): stable item-id
 /// target, legacy label parity, a trailing year on playable leaves, no
-/// secondary/duration, and the `Ordinary` semantic state the legacy rows
-/// never dimmed past.
+/// secondary/duration. A played result paints the one played-row colour.
 fn search_result_row(item: &mbv_core::api::EmbyItem) -> MediaListRow<String> {
     MediaListRow::Item {
         target: item.id.clone(),
@@ -126,7 +125,11 @@ fn search_result_row(item: &mbv_core::api::EmbyItem) -> MediaListRow<String> {
         } else {
             MediaKind::Media
         },
-        semantic_state: MediaSemanticState::Ordinary,
+        semantic_state: if item.played {
+            MediaSemanticState::Played
+        } else {
+            MediaSemanticState::Ordinary
+        },
     }
 }
 
@@ -563,5 +566,20 @@ mod tests {
         search.handle_key(&key(Key::Up));
         assert_eq!(search.test_cursor(), 0, "movement clamps at the ends");
         assert_eq!(search.selected_target().map(|(id, _)| id), Some("a".into()));
+    }
+
+    /// A played search result projects the shared `Played` state, so the one
+    /// played-row colour is used in the search list too.
+    #[test]
+    fn played_search_results_project_the_shared_played_state() {
+        let mut played = make_item("Watched", "Movie");
+        played.played = true;
+        let fresh = make_item("Fresh", "Movie");
+        let state = |item| match search_result_row(&item) {
+            MediaListRow::Item { semantic_state, .. } => semantic_state,
+            _ => panic!("search rows are items"),
+        };
+        assert_eq!(state(played), MediaSemanticState::Played);
+        assert_eq!(state(fresh), MediaSemanticState::Ordinary);
     }
 }

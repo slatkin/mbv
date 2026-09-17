@@ -683,3 +683,28 @@ fn queue_footer_hides_scope_pills_when_disconnected() {
     assert_eq!(component.test_scope_pill_areas(), (None, None));
     assert_eq!(component.on(&click(37, 10)), None);
 }
+
+/// A played slot in the queue projects the shared `Played` state, so the one
+/// played-row colour is used in the queue like every other list.
+#[test]
+fn played_queue_slots_project_the_shared_played_state() {
+    let mut played = crate::app::tests::make_item("finished", "Movie");
+    played.played = true;
+    let fresh = crate::app::tests::make_item("fresh", "Movie");
+    let slots = PlaybackQueue::from_queue_items(
+        vec![
+            QueueItem::Emby(Box::new(played)),
+            QueueItem::Emby(Box::new(fresh)),
+        ],
+        None,
+    )
+    .slots()
+    .to_vec();
+    let rows = queue_media_rows(&slots, PlaybackState::default(), None);
+    let state = |index: usize| match &rows[index] {
+        MediaListRow::Item { semantic_state, .. } => semantic_state.clone(),
+        other => panic!("queue rows are items, got {other:?}"),
+    };
+    assert_eq!(state(0), MediaSemanticState::Played);
+    assert_eq!(state(1), MediaSemanticState::Ordinary);
+}

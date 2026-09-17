@@ -103,7 +103,9 @@ fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
 }
 /// Build the embedded episode `WideMediaList`'s rows from a season's
 /// episodes (task 4.2d): the canonical control's row content. Library lists
-/// carry no time column, so no duration is projected.
+/// carry no time column, so no duration is projected. A played episode
+/// carries the shared played state so its title paints the one played-row
+/// colour everywhere.
 fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
         .iter()
@@ -121,7 +123,11 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 trailing: None,
                 duration: None,
                 kind: MediaKind::Media,
-                semantic_state: MediaSemanticState::Ordinary,
+                semantic_state: if episode.played {
+                    MediaSemanticState::Played
+                } else {
+                    MediaSemanticState::Ordinary
+                },
             }
         })
         .collect()
@@ -220,14 +226,15 @@ impl TvContent {
                         .then(|| MediaListTrailing::Year(item.production_year.to_string())),
                     duration: None,
                     kind: MediaKind::Collection,
-                    // Deliberate, known divergence (not a bug to unify away):
-                    // Wide's series rail never dimmed on watched/played state
-                    // pre-merge (legacy rail parity), so it stays
-                    // `Ordinary` here. Narrow was painted by
-                    // the prior TV browse row projection, which did
-                    // dim watched/in-progress rows via `emby_semantic_state`
-                    // (legacy detail-list parity); this reproduces that.
-                    semantic_state: if is_wide {
+                    // A played series paints the one played-row colour in
+                    // both geometries. In-progress dimming keeps the
+                    // established per-geometry behaviour: Wide's series rail
+                    // never dimmed on in-progress state (legacy rail parity)
+                    // while Narrow reproduced the prior TV browse row
+                    // projection's `emby_semantic_state` dimming.
+                    semantic_state: if item.played {
+                        MediaSemanticState::Played
+                    } else if is_wide {
                         MediaSemanticState::Ordinary
                     } else {
                         emby_semantic_state(item)

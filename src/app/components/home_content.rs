@@ -238,7 +238,14 @@ impl HomeContent {
                     // and the sessions modal show one).
                     duration: None,
                     kind: MediaKind::Media,
-                    semantic_state: MediaSemanticState::Ordinary,
+                    // A played item paints the one played-row colour in every
+                    // tab; in-progress items keep the ordinary title with the
+                    // trailing resume badge.
+                    semantic_state: if item.played() {
+                        MediaSemanticState::Played
+                    } else {
+                        MediaSemanticState::Ordinary
+                    },
                 }
             })
             .collect();
@@ -807,6 +814,38 @@ mod tests {
         );
         assert_eq!(row_parts(&owner, 0), ("The Film".into(), None));
         assert_eq!(row_parts(&owner, 1), ("The Book".into(), None));
+    }
+
+    /// One played colour in every tab: a finished Home item projects the
+    /// shared `Played` state, while an in-progress item stays `Ordinary` (its
+    /// trailing resume badge carries progress).
+    #[test]
+    fn played_home_rows_project_the_shared_played_state() {
+        let mut played = make_item("Finished Film", "Movie");
+        played.id = "played".into();
+        played.played = true;
+        let mut in_progress = make_item("Half-Watched Film", "Movie");
+        in_progress.id = "in-progress".into();
+        in_progress.runtime_ticks = 1000;
+        in_progress.playback_position_ticks = 500;
+        let owner = owner_with_section(
+            HomeLatestSource::Emby("emby".into()),
+            vec![
+                QueueItem::Emby(Box::new(played)),
+                QueueItem::Emby(Box::new(in_progress)),
+            ],
+            &[],
+        );
+        let states: Vec<MediaSemanticState> = owner
+            .test_active_rows()
+            .iter()
+            .filter_map(|row| match row {
+                MediaListRow::Item { semantic_state, .. } => Some(semantic_state.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(states[0], MediaSemanticState::Played);
+        assert_eq!(states[1], MediaSemanticState::Ordinary);
     }
 
     /// Truncation is the canonical painter's contract (a split row is cut

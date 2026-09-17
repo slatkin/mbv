@@ -83,7 +83,7 @@ fn mouse(kind: MouseEventKind, column: u16, row: u16) -> Event<super::UserEvent>
 }
 
 #[test]
-fn narrow_tv_dims_watched_and_in_progress_rows_but_wide_never_does() {
+fn played_tv_series_dim_in_both_geometries_but_in_progress_only_narrows() {
     let mut watched = make_item("Watched Series", "Series");
     watched.id = "series-watched".into();
     watched.played = true;
@@ -117,9 +117,18 @@ fn narrow_tv_dims_watched_and_in_progress_rows_but_wide_never_does() {
     wide.set_is_wide(true);
     wide.set_content(content);
     let wide_states = wide.test_row_semantic_states();
-    assert!(wide_states
-        .iter()
-        .all(|state| matches!(state, MediaSemanticState::Ordinary)));
+    assert!(
+        wide_states
+            .iter()
+            .any(|state| matches!(state, MediaSemanticState::Played)),
+        "a played series paints the shared played state in Wide too"
+    );
+    assert!(
+        !wide_states
+            .iter()
+            .any(|state| matches!(state, MediaSemanticState::Active { .. })),
+        "Wide's series rail still never dims in-progress rows"
+    );
 }
 
 #[test]

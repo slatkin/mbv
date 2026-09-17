@@ -177,3 +177,22 @@ fn resolved_hero_data_uses_parsed_title_year_and_cached_artist() {
     assert_eq!(data.facts.title, "First Album");
     assert_eq!(data.facts.meta_rows, vec!["Folder Artist", "2024"]);
 }
+
+/// A played track projects the shared `Played` state, so every list paints the
+/// one played-row colour.
+#[test]
+fn played_tracks_project_the_shared_played_state() {
+    let mut played = make_item("Finished Track", "Audio");
+    played.played = true;
+    let fresh = make_item("Fresh Track", "Audio");
+    let rows = build_track_rows(&[played, fresh]);
+    let states: Vec<&MediaSemanticState> = rows
+        .iter()
+        .map(|row| match row {
+            MediaListRow::Item { semantic_state, .. } => semantic_state,
+            _ => panic!("track rows are items"),
+        })
+        .collect();
+    assert_eq!(states[0], &MediaSemanticState::Played);
+    assert_eq!(states[1], &MediaSemanticState::Ordinary);
+}

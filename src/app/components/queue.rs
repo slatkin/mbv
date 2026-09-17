@@ -764,7 +764,14 @@ fn queue_media_row_at(
             }
             _ => None,
         };
-        (MediaSemanticState::Ordinary, pct)
+        // A played slot paints the one played-row colour, in the queue like
+        // every other list.
+        let state = if slot.item.played() {
+            MediaSemanticState::Played
+        } else {
+            MediaSemanticState::Ordinary
+        };
+        (state, pct)
     };
     MediaListRow::Item {
         target: slot.slot_id,
