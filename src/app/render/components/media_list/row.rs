@@ -22,9 +22,7 @@ use unicode_width::UnicodeWidthStr;
 /// and the two-column gutters; callers resolve it to the `SELECTED_ROW_BG`
 /// role, and the surface table's owning-surface identity no longer changes the
 /// row's appearance. Every span keeps the ordinary unselected foreground role,
-/// so the bar introduces no bold title and no accent title colour. The
-/// `gutter_accent` argument is retained for the Wide callers but no longer
-/// changes painting.
+/// so the bar introduces no bold title and no accent title colour.
 ///
 /// `alternate_bg` is the row's position in the list's zebra alternation. It
 /// paints every row type — selectable items, group headings and the blank
@@ -42,7 +40,6 @@ pub(in crate::app) fn media_list_row<Target>(
     focused: bool,
     selected_bg: Color,
     alternate_bg: Option<Color>,
-    _gutter_accent: bool,
     inner_width: usize,
     has_scrollbar: bool,
     mut marquee: Option<(&mut String, &mut std::time::Instant)>,
@@ -134,8 +131,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 .sum();
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
             let selected = selected && focused;
-            // Every selected row paints the opaque bar edge to edge; the
-            // `gutter_accent` callers no longer keep their background.
+            // Every selected row paints the opaque bar edge to edge.
             let paint_selected = selected;
             let secondary_separator_reserve =
                 usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
