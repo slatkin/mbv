@@ -20,8 +20,8 @@ use super::library_panel::{
     LibraryPanelContent, LibrarySlotEvent, ListSlot, SelectorRow, Workspace,
 };
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaSemanticState, RowIntent, ViewportAnchor,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
+    MediaListTrailing, MediaSemanticState, RowIntent, ViewportAnchor,
 };
 use super::mouse::gesture::MouseGestureState;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};

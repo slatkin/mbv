@@ -251,6 +251,16 @@ impl InlineSearch {
         self.publish_rows(false);
     }
 
+    /// The pool item for a resolved row target — the row a delegated
+    /// double-click or context gesture resolved (design.md D4) — independent
+    /// of the carrier's current selection.
+    pub(in crate::app) fn item_for_target(&self, target: &str) -> Option<mbv_core::api::EmbyItem> {
+        self.order
+            .iter()
+            .filter_map(|&(idx, _)| self.pool.resolved_item_at(idx))
+            .find(|item| item.id == target)
+    }
+
     /// The item under the carrier's selection, resolved from the stored order
     /// (design.md D2).
     pub(in crate::app) fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
@@ -275,6 +285,10 @@ impl InlineSearch {
         self.results.set_content(rows);
         if reset {
             self.results.select_first();
+            // The resting viewport returns to the top with the reset
+            // selection; an ordinary refresh keeps the parked offset and
+            // clamps at paint (design.md D2/D3).
+            self.results.set_scroll(0);
         }
     }
 
@@ -488,11 +502,21 @@ mod tests {
         assert_eq!(search.results_len(), 3);
         search.delegate_movement(MediaListSurfaceInput::Move(2));
         assert_eq!(search.test_cursor(), 2);
+        // Park the resting viewport at the bottom the way the panel does at
+        // paint time, so the reset has a stale offset to fall from.
+        search.results_mut().sync_viewport(1);
+        assert_eq!(search.results().scroll(), 2);
 
-        // A changed query re-scores: the selection resets to the first row.
+        // A changed query re-scores: the selection resets to the first row
+        // and the resting viewport rests at the top with it.
         search.handle_key(&key(Key::Char('s')));
         fire_debounce(&mut search);
         assert_eq!(search.test_cursor(), 0, "a re-score resets to the first");
+        assert_eq!(
+            search.results().scroll(),
+            0,
+            "the resting viewport rests at the top after a re-score"
+        );
     }
 
     #[test]
@@ -503,15 +527,23 @@ mod tests {
         search.restore_query("Result".into());
         assert_eq!(search.test_cursor(), 0);
         search.delegate_movement(MediaListSurfaceInput::Last);
+        // Park the resting viewport the way the panel does at paint time.
+        search.results_mut().sync_viewport(1);
         let selected = search.selected_target().clone();
         assert_eq!(selected.map(|(id, _)| id), Some("c".into()));
 
-        // A pool refresh with the query unchanged keeps the stable target.
+        // A pool refresh with the query unchanged keeps the stable target
+        // and leaves the resting viewport alone.
         search.set_pool(pool(&["a", "b", "c", "d"]));
         assert_eq!(
             search.selected_target().map(|(id, _)| id),
             Some("c".into()),
             "the carrier's stable-target preservation survives the refresh"
+        );
+        assert_eq!(
+            search.results().scroll(),
+            2,
+            "an unchanged-query refresh leaves the resting viewport alone"
         );
         // A refresh that drops the selected target clamps instead.
         search.set_pool(pool(&["a", "b"]));

@@ -325,26 +325,38 @@ impl EmbyLibraryContent {
             | MediaListSurfaceInput::ToggleClick(at)
             | MediaListSurfaceInput::RangeClick(at) => {
                 let target = search.results_mut().resolve_current_point(at)?.clone();
-                search.results_mut().delegate_operation(
-                    input
-                        .into_operation(Some(target))
-                        .expect("resolved media-list pointer target"),
-                );
+                // Design D4 non-goal: a search session has no multi-selection
+                // UI, so a modifier click selects exactly the clicked row and
+                // never toggles or extends a range into `multi_selection`.
+                search
+                    .results_mut()
+                    .delegate_operation(MediaListOperation::Select(target));
                 None
             }
             MediaListSurfaceInput::DoubleClick(at) => {
                 let target = search.results_mut().resolve_current_point(at)?.clone();
-                search.results_mut().delegate_operation(
+                let outcome = search.results_mut().delegate_operation(
                     MediaListSurfaceInput::DoubleClick(at)
                         .into_operation(Some(target))
                         .expect("resolved media-list pointer target"),
                 );
-                search.selected_item().map(|item| {
-                    Msg::Shell(ShellRequest::InlineSearchActivate {
-                        id: item.id,
-                        item_type: item.item_type,
-                    })
-                })
+                // The delegated transition's resolved intent is the authority
+                // for which row the gesture activated.
+                match outcome.external_intent {
+                    Some(RowIntent::Activate(target)) => {
+                        search.item_for_target(&target).map(|item| {
+                            Msg::Shell(ShellRequest::InlineSearchActivate {
+                                id: item.id,
+                                item_type: item.item_type,
+                            })
+                        })
+                    }
+                    // A double-click never resolves a context intent, and no
+                    // row resolved when the intent is `None`.
+                    Some(RowIntent::Context(_)) | Some(RowIntent::ContextSelection(_)) | None => {
+                        None
+                    }
+                }
             }
             MediaListSurfaceInput::ContextClick(at) => {
                 let target = search.results_mut().resolve_current_point(at)?.clone();
@@ -362,7 +374,13 @@ impl EmbyLibraryContent {
                             None,
                         )))
                     }
-                    _ => None,
+                    // A context click never resolves an activate intent, a
+                    // search session has no Visual-mode multi-selection so a
+                    // `ContextSelection` cannot arise (D4 non-goal), and no
+                    // row resolved when the intent is `None`.
+                    Some(RowIntent::Activate(_)) | Some(RowIntent::ContextSelection(_)) | None => {
+                        None
+                    }
                 }
             }
             _ => None,

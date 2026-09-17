@@ -17,7 +17,8 @@ use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState, RowIntent,
+    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
+    MediaSemanticState, RowIntent,
 };
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
