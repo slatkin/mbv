@@ -10,8 +10,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTransition,
-    MediaSemanticState, RowIntent,
+    ActiveProgress, MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput,
+    MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
@@ -751,7 +751,7 @@ fn queue_media_row_at(
         let progress = (pos_ticks > 0 && duration_ticks > 0)
             .then(|| (pos_ticks * 100 / duration_ticks).clamp(0, 100) as u16);
         MediaSemanticState::NowPlaying {
-            progress: progress.map(crate::app::components::media_list::ActiveProgress::new),
+            progress: progress.map(ActiveProgress::new),
         }
     } else {
         // The one canonical state derivation: a played slot paints the
