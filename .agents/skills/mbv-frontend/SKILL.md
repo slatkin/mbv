@@ -133,6 +133,18 @@ separate mouse loop, no global hit map/router, and never discard a losing messag
 after its component mutated — the framework mutates a component before it returns
 a message, so a discarded message does not undo the mutation.
 
+## Scrolling and selection (Invariant 6 — hard rule)
+
+`docs/invariants/06-viewport-step-leading-edge.md` is binding for any surface that
+scrolls: a scroll gesture (wheel, `Ctrl+e`/`Ctrl+y`, `PgUp`/`PgDn`) moves the visible
+window; a cursor gesture moves the selection; when a scroll gesture must move the
+selection it lands it on the **leading edge** of the gesture's direction — never on the
+edge it is leaving. An edge-riding scroll (selection pinned to the trailing edge, or a
+window that cannot clear the selection's own row) is a rejected implementation, not a
+detail to tune: it has been reintroduced three times in this app. New scrollable
+surfaces are in scope from the day they are written; route them through the shared
+owner instead of giving one surface its own landing rule.
+
 ## Version scope
 
 `tuirealm = "4.1"` is pinned in `Cargo.toml` alongside `ratatui = "0.30"`.
