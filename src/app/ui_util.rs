@@ -144,24 +144,15 @@ pub fn fmt_duration_short(s: i64) -> String {
     }
 }
 
-/// Format duration without seconds — for video items in the queue and the
-/// hero meta row.
-/// Examples: "<1m", "37m", "1h12m", "2h15m".
-pub fn fmt_duration_approx(s: i64) -> String {
-    let h = s / 3600;
-    let m = (s % 3600) / 60;
-    if h > 0 {
-        if m > 0 {
-            format!("{}h{}m", h, m)
-        } else {
-            format!("{}h", h)
-        }
-    } else if m > 0 {
-        format!("{}m", m)
-    } else if s > 0 {
-        "<1m".to_string()
+/// Format a duration as zero-padded clock time — `HH:MM:SS`, or `MM:SS`
+/// when under an hour. The hero meta-row duration format; the colour is the
+/// painter's `DURATION` role. Examples: "00:45", "03:05", "59:59",
+/// "01:00:00", "12:34:56".
+pub fn fmt_duration_hms(s: i64) -> String {
+    if s >= 3600 {
+        format!("{:02}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
     } else {
-        "0m".to_string()
+        format!("{:02}:{:02}", s / 60, s % 60)
     }
 }
 

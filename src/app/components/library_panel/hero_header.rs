@@ -187,11 +187,11 @@ pub(in crate::app) fn paint_hero_pane_content(
 }
 
 /// The one title/meta painter for all three arms: the title in
-/// [`palette::TEXT_HERO_TITLE`], then meta row *n* in `HERO_META_ROLES[n % 3]`,
-/// wrapped to the text block's width (truncation and wrapping owned here,
-/// design D5). Returns the first unpainted row. The un-migrated legacy
-/// `Hero` painters style the same Emby meta rows by meaning instead
-/// (`hero_model.rs::emby_meta_row_styles`); 9.1 converges the two.
+/// [`palette::TEXT_HERO_TITLE`], then each meta row in
+/// `HERO_META_ROLES[cycle % 3]` — except the duration row
+/// (`HeroFacts::duration_row`), painted the `DURATION` role and skipped by
+/// the cycle — wrapped to the text block's width (truncation and wrapping
+/// owned here, design D5). Returns the first unpainted row.
 fn paint_title_and_meta(
     f: &mut Frame,
     area: Rect,
@@ -204,11 +204,18 @@ fn paint_title_and_meta(
         text: &facts.title,
         style: ratatui::style::Style::default().fg(palette::TEXT_HERO_TITLE),
     });
+    let mut cycle = 0usize;
     for (index, row) in facts.meta_rows.iter().enumerate() {
+        let fg = if facts.duration_row == Some(index) {
+            palette::DURATION
+        } else {
+            let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()];
+            cycle += 1;
+            fg
+        };
         lines.push(WrappedHeroLine {
             text: row,
-            style: ratatui::style::Style::default()
-                .fg(palette::HERO_META_ROLES[index % palette::HERO_META_ROLES.len()]),
+            style: ratatui::style::Style::default().fg(fg),
         });
     }
     let next_row = paint_wide_hero_text(f, area, &lines);
@@ -246,6 +253,7 @@ mod hero_header_tests {
         HeroFacts {
             title: "Dune".into(),
             meta_rows: vec!["2021".into()],
+            duration_row: None,
             links: Vec::new(),
             artwork: HeroArtwork {
                 shape,
@@ -412,6 +420,7 @@ mod hero_header_tests {
             facts: HeroFacts {
                 title: "Dune".into(),
                 meta_rows: vec!["2021".into()],
+                duration_row: None,
                 links: Vec::new(),
                 artwork: HeroArtwork {
                     shape,
@@ -500,6 +509,7 @@ mod hero_header_tests {
         let pane_facts = HeroFacts {
             title: "T".into(),
             meta_rows: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            duration_row: None,
             links: Vec::new(),
             artwork: HeroArtwork {
                 shape: ArtworkShape::Landscape,
@@ -525,6 +535,39 @@ mod hero_header_tests {
                 "meta row {index} colour"
             );
         }
+    }
+
+    /// The duration row paints the `DURATION` role (the sage) and the cycle
+    /// skips it, so the remaining rows keep adjacent cycle colours.
+    #[test]
+    fn duration_row_paints_the_duration_role_and_the_cycle_skips_it() {
+        let mut pane_facts = facts(ArtworkShape::Landscape);
+        pane_facts.meta_rows = vec!["a".into(), "b".into(), "c".into()];
+        pane_facts.duration_row = Some(1);
+        let pane = HeroContent {
+            facts: pane_facts,
+            overview: None,
+            credits: None,
+            workspace: None,
+        };
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
+        let buf = draw_pane(AREA.width, AREA.height, &pane);
+        let row_y = |index: u16| artwork.bottom() + 2 + index;
+        assert_eq!(
+            buf[(AREA.x, row_y(0))].style().fg,
+            Some(palette::HERO_META_ROLES[0]),
+            "row before the duration keeps its cycle colour"
+        );
+        assert_eq!(
+            buf[(AREA.x, row_y(1))].style().fg,
+            Some(palette::DURATION),
+            "duration row paints the DURATION role"
+        );
+        assert_eq!(
+            buf[(AREA.x, row_y(2))].style().fg,
+            Some(palette::HERO_META_ROLES[1]),
+            "the cycle skips the duration row"
+        );
     }
 
     #[test]

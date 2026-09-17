@@ -63,6 +63,7 @@ fn hero_facts(title: &str) -> HeroFacts {
     HeroFacts {
         title: title.into(),
         meta_rows: vec!["2020".into()],
+        duration_row: None,
         links: Vec::new(),
         artwork: HeroArtwork {
             shape: ArtworkShape::Landscape,

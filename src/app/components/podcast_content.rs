@@ -1067,7 +1067,7 @@ mod tests {
         assert_eq!(hero.facts.title, "first");
         assert_eq!(hero.overview.as_deref(), Some("First overview"));
         assert_eq!(hero.facts.meta_rows[0], "Alpha Show");
-        assert_eq!(hero.facts.meta_rows[1], "1h");
+        assert_eq!(hero.facts.meta_rows[1], "01:00:00");
 
         owner.episodes.move_selection(1);
         let hero = owner.content().hero.expect("selected episode hero");
@@ -1076,7 +1076,7 @@ mod tests {
             "the hero follows the new selection"
         );
         assert_eq!(hero.overview.as_deref(), Some("Second overview"));
-        assert_eq!(hero.facts.meta_rows[1], "30m");
+        assert_eq!(hero.facts.meta_rows[1], "30:00");
     }
 
     /// The Wide hero's overview box is one scrollable flow: the panel's

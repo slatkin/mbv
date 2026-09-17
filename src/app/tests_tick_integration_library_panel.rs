@@ -114,6 +114,7 @@ impl LibraryContentOwner for FixtureOwner {
                 facts: HeroFacts {
                     title: "Dune".into(),
                     meta_rows: vec!["2021".into()],
+                    duration_row: None,
                     links: Vec::new(),
                     artwork: HeroArtwork {
                         shape: ArtworkShape::Landscape,

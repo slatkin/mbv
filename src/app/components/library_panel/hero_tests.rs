@@ -367,7 +367,7 @@ fn movie_meta_rows_append_genres_and_links_after_runtime() {
     let data = hero_content_emby(&item);
     assert_eq!(
         data.facts.meta_rows,
-        vec!["22 Oct 2021", "12m", "Action/Drama", "IMDb"]
+        vec!["22 Oct 2021", "12:00", "Action/Drama", "IMDb"]
     );
     assert_eq!(
         data.facts.links,
@@ -385,7 +385,7 @@ fn movie_without_genres_or_links_keeps_only_existing_rows() {
         "RunTimeTicks": 7_200_000_000i64, "UserData": {}
     }));
     let data = hero_content_emby(&item);
-    assert_eq!(data.facts.meta_rows, vec!["22 Oct 2021", "12m"]);
+    assert_eq!(data.facts.meta_rows, vec!["22 Oct 2021", "12:00"]);
     assert!(data.facts.links.is_empty());
 }
 
@@ -490,7 +490,7 @@ fn abs_episode_producer_rows_show_show_duration_and_publish_date() {
     assert_eq!(produced.facts.title, "Ep 1");
     assert_eq!(
         produced.facts.meta_rows,
-        vec!["The Show", "30m", "19 Jul 2025"]
+        vec!["The Show", "30:00", "19 Jul 2025"]
     );
     // The overview is the cleaned plain text.
     assert_eq!(
@@ -622,7 +622,7 @@ fn home_path_and_books_tab_produce_identical_content_for_one_book() {
     assert_eq!(books_tab.facts.title, "Book book-9");
     assert_eq!(
         books_tab.facts.meta_rows,
-        vec!["Author book-9", "1h", "50%"]
+        vec!["Author book-9", "01:00:00", "50%"]
     );
     assert_eq!(books_tab.facts.artwork.shape, ArtworkShape::Portrait);
 }

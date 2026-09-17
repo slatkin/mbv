@@ -179,9 +179,8 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
         2,
         "list row + hero title: {output:?}"
     );
-    assert_eq!(
-        count_in_buffer(&terminal, "1:00:00"),
-        0,
+    assert!(
+        !area_contains(terminal.backend().buffer(), wide.list_area, "01:00:00"),
         "library list rows paint no duration time"
     );
 
@@ -202,7 +201,7 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
     assert!(area_contains(
         terminal.backend().buffer(),
         wide.hero_area,
-        "1h"
+        "01:00:00"
     ));
 }
 

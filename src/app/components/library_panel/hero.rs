@@ -15,7 +15,7 @@ use crate::app::render::components::hero_model::{
     emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES,
 };
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
-use crate::app::ui_util::{clean_overview, fmt_duration_approx, fmt_publish_date};
+use crate::app::ui_util::{clean_overview, fmt_duration_hms, fmt_publish_date};
 
 use super::content::{
     ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroImageState, HeroLink,
@@ -251,7 +251,7 @@ fn emby_source(item: &EmbyItem, chain: &[&str]) -> ArtworkSource {
 /// series line, release date, duration), cleaned overview, policy artwork.
 pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
     let movie = item.item_type == "Movie";
-    let mut meta_rows = emby_hero_meta_rows_plain(item);
+    let (mut meta_rows, duration_row) = emby_hero_meta_rows_plain(item);
     if movie {
         let genres = item
             .genres
@@ -313,6 +313,7 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
         let facts = HeroFacts {
             title: item.name.clone(),
             meta_rows,
+            duration_row,
             links,
             artwork: emby_artwork_policy(item),
         };
@@ -326,6 +327,7 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
     let facts = HeroFacts {
         title: item.name.clone(),
         meta_rows,
+        duration_row,
         links: Vec::new(),
         artwork: emby_artwork_policy(item),
     };
@@ -366,9 +368,11 @@ pub(in crate::app) fn hero_content_queue(item: &QueueItem) -> HeroContentData {
 /// `audiobookshelf_book_queue_item`); narrator/year fields return with the
 /// tab's conversion in task 10.1.
 pub(in crate::app) fn hero_content_abs_book(book: &AudiobookshelfBookQueueItem) -> HeroContentData {
+    let (meta_rows, duration_row) = abs_book_meta_rows(book);
     let facts = HeroFacts {
         title: book.title.clone(),
-        meta_rows: abs_book_meta_rows(book),
+        meta_rows,
+        duration_row,
         links: Vec::new(),
         artwork: abs_book_artwork_policy(book),
     };
@@ -379,13 +383,15 @@ pub(in crate::app) fn hero_content_abs_book(book: &AudiobookshelfBookQueueItem) 
     }
 }
 
-fn abs_book_meta_rows(book: &AudiobookshelfBookQueueItem) -> Vec<String> {
+fn abs_book_meta_rows(book: &AudiobookshelfBookQueueItem) -> (Vec<String>, Option<usize>) {
     let mut rows = Vec::new();
+    let mut duration_row = None;
     if let Some(author) = book.author.as_deref().filter(|a| !a.is_empty()) {
         rows.push(author.to_string());
     }
     if let Some(ticks) = book.duration_ticks.filter(|t| *t > 0) {
-        rows.push(fmt_duration_approx(ticks as i64 / TICKS_PER_SECOND));
+        duration_row = Some(rows.len());
+        rows.push(fmt_duration_hms(ticks as i64 / TICKS_PER_SECOND));
     }
     if book.is_finished {
         rows.push("Finished".into());
@@ -395,7 +401,7 @@ fn abs_book_meta_rows(book: &AudiobookshelfBookQueueItem) -> Vec<String> {
             .clamp(1, 99);
         rows.push(format!("{pct}%"));
     }
-    rows
+    (rows, duration_row)
 }
 
 /// The Audiobookshelf podcast episode producer (design D7, row 3.5): the
@@ -409,11 +415,13 @@ pub(in crate::app) fn hero_content_abs_episode(
     episode: &AudiobookshelfQueueItem,
 ) -> HeroContentData {
     let mut meta_rows = Vec::new();
+    let mut duration_row = None;
     if let Some(show) = episode.show_title.as_deref().filter(|s| !s.is_empty()) {
         meta_rows.push(show.to_string());
     }
     if let Some(ticks) = episode.duration_ticks.filter(|t| *t > 0) {
-        meta_rows.push(fmt_duration_approx(ticks as i64 / TICKS_PER_SECOND));
+        duration_row = Some(meta_rows.len());
+        meta_rows.push(fmt_duration_hms(ticks as i64 / TICKS_PER_SECOND));
     }
     if let Some(secs) = episode.pub_date_secs {
         meta_rows.push(fmt_publish_date(secs));
@@ -421,6 +429,7 @@ pub(in crate::app) fn hero_content_abs_episode(
     let facts = HeroFacts {
         title: episode.title.clone(),
         meta_rows,
+        duration_row,
         links: Vec::new(),
         artwork: abs_episode_artwork_policy(episode),
     };
@@ -440,13 +449,15 @@ pub(in crate::app) fn hero_content_abs_episode(
 /// no artwork source exist for feed entries (design D5 keeps the
 /// placeholder).
 pub(in crate::app) fn hero_content_feed(entry: &FeedEntry) -> HeroContentData {
+    let has_duration = entry.duration_ticks.is_some_and(|t| t > 0);
     let facts = HeroFacts {
         title: entry.title.clone(),
         meta_rows: entry
             .duration_ticks
             .filter(|t| *t > 0)
-            .map(|ticks| vec![fmt_duration_approx(ticks as i64 / TICKS_PER_SECOND)])
+            .map(|ticks| vec![fmt_duration_hms(ticks as i64 / TICKS_PER_SECOND)])
             .unwrap_or_default(),
+        duration_row: has_duration.then_some(0),
         links: Vec::new(),
         artwork: feed_artwork_policy(entry),
     };

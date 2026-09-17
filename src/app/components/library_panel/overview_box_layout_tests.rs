@@ -30,6 +30,7 @@ fn facts(shape: ArtworkShape) -> HeroFacts {
     HeroFacts {
         title: "Dune".into(),
         meta_rows: vec!["2021".into()],
+        duration_row: None,
         links: Vec::new(),
         artwork: HeroArtwork {
             shape,
@@ -247,6 +248,7 @@ fn hovered_link_uses_foam_underline() {
     let facts = HeroFacts {
         title: "Title".into(),
         meta_rows: vec!["IMDb".into()],
+        duration_row: None,
         links: vec![HeroLink {
             name: "IMDb".into(),
             url: "https://imdb.test".into(),
@@ -332,6 +334,7 @@ fn link_outside_box_is_not_overlaid() {
     let facts = HeroFacts {
         title: "Title".into(),
         meta_rows: vec!["Link".into()],
+        duration_row: None,
         links: vec![HeroLink {
             name: "Link".into(),
             url: "https://example.test".into(),

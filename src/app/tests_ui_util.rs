@@ -1,4 +1,4 @@
-use super::ui_util::fmt_duration_short;
+use super::ui_util::{fmt_duration_hms, fmt_duration_short};
 
 // ── fmt_duration_short ───────────────────────────────────────────────────
 
@@ -30,4 +30,21 @@ fn fmt_duration_short_hours() {
     assert_eq!(fmt_duration_short(3661), "1:01:01");
     assert_eq!(fmt_duration_short(7384), "2:03:04");
     assert_eq!(fmt_duration_short(7322), "2:02:02");
+}
+
+// ── fmt_duration_hms ─────────────────────────────────────────────────────
+
+#[test]
+fn fmt_duration_hms_padded_minutes_under_an_hour() {
+    assert_eq!(fmt_duration_hms(0), "00:00");
+    assert_eq!(fmt_duration_hms(45), "00:45");
+    assert_eq!(fmt_duration_hms(185), "03:05");
+    assert_eq!(fmt_duration_hms(3599), "59:59");
+}
+
+#[test]
+fn fmt_duration_hms_hours() {
+    assert_eq!(fmt_duration_hms(3600), "01:00:00");
+    assert_eq!(fmt_duration_hms(3661), "01:01:01");
+    assert_eq!(fmt_duration_hms(45296), "12:34:56");
 }
