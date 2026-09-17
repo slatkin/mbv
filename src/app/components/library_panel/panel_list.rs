@@ -9,6 +9,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
 use tuirealm::component::Component;
 
+use crate::app::components::inline_search::InlineSearch;
 use crate::app::components::media_list::{MediaListCarrier, WideMediaListPaintPolicy, ZebraStripe};
 use crate::app::palette::{self, Surface};
 
@@ -64,6 +65,41 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
 
     fn claims_point(&self, point: Position) -> bool {
         self.claims_current_point(point)
+    }
+}
+
+/// The Inline Search session's PanelList surface (design.md D3, task 2.1):
+/// every method forwards one line to the session's embedded carrier, so the
+/// panel's `ListSlot::Search` arm drives the exact same fixed-row presentation
+/// `ListSlot::Media` does — the search control keeps only its query, pool,
+/// scoring, and debounce.
+impl PanelList for InlineSearch {
+    fn sync_viewport(&mut self, viewport_height: usize) {
+        PanelList::sync_viewport(self.results_mut(), viewport_height);
+    }
+
+    fn clear_selection(&mut self) {
+        PanelList::clear_selection(self.results_mut());
+    }
+
+    fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
+        PanelList::set_paint_policy(self.results_mut(), policy);
+    }
+
+    fn view(&mut self, frame: &mut Frame, rect: Rect) {
+        PanelList::view(self.results_mut(), frame, rect);
+    }
+
+    fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        PanelList::set_geometry(self.results_mut(), claim_rect, content_rect);
+    }
+
+    fn selected_row_rect(&self) -> Option<Rect> {
+        PanelList::selected_row_rect(self.results())
+    }
+
+    fn claims_point(&self, point: Position) -> bool {
+        PanelList::claims_point(self.results(), point)
     }
 }
 

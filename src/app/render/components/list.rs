@@ -2,6 +2,9 @@ use crate::app::render::components::list_rows::LibraryListRenderCtx;
 use ratatui::layout::Rect;
 use ratatui::Frame;
 
+/// Legacy painter (design.md D7): the last live caller went to the canonical
+/// carrier; unit U2 deletes this file.
+#[allow(dead_code)]
 pub(in crate::app) fn render_generic_movies_home_video_rows_with_ctx(
     f: &mut Frame,
     list_area: Rect,

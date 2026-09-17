@@ -7,14 +7,44 @@ impl MusicContent {
             }
             LibrarySlotEvent::List(input) => {
                 if self.inline_search.is_active() {
+                    // Inline Search pointer handling (design.md D4): the
+                    // panel-normalized input delegates to the session's
+                    // embedded carrier like every other list — a click
+                    // selects, a double-click activates, a right-click
+                    // resolves the row's ordinary item-based context-menu
+                    // intent, and a wheel over the painted rows is claimed.
+                    let search = &mut self.inline_search;
                     match input {
-                        MediaListSurfaceInput::Wheel { delta, .. } => {
-                            self.inline_search.move_cursor_by(delta);
+                        MediaListSurfaceInput::Wheel { at, delta } => {
+                            if !search.results_mut().claims_current_point(at) {
+                                return None;
+                            }
+                            search.results_mut().delegate_operation(
+                                MediaListSurfaceInput::Wheel { at, delta }
+                                    .into_operation(None)
+                                    .expect("wheel converts without a target"),
+                            );
                             Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
                         }
+                        MediaListSurfaceInput::Click(at)
+                        | MediaListSurfaceInput::ToggleClick(at)
+                        | MediaListSurfaceInput::RangeClick(at) => {
+                            let target = search.results_mut().resolve_current_point(at)?.clone();
+                            search.results_mut().delegate_operation(
+                                input
+                                    .into_operation(Some(target))
+                                    .expect("resolved media-list pointer target"),
+                            );
+                            None
+                        }
                         MediaListSurfaceInput::DoubleClick(at) => {
-                            self.inline_search.select_row_at_point(at);
-                            self.inline_search.selected_item().map(|item| {
+                            let target = search.results_mut().resolve_current_point(at)?.clone();
+                            search.results_mut().delegate_operation(
+                                MediaListSurfaceInput::DoubleClick(at)
+                                    .into_operation(Some(target))
+                                    .expect("resolved media-list pointer target"),
+                            );
+                            search.selected_item().map(|item| {
                                 Msg::Shell(ShellRequest::InlineSearchActivate {
                                     id: item.id,
                                     item_type: item.item_type,
@@ -22,14 +52,20 @@ impl MusicContent {
                             })
                         }
                         MediaListSurfaceInput::ContextClick(at) => {
-                            self.inline_search.select_row_at_point(at);
-                            self.inline_search.selected_item().map(|item| {
-                                Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]), None))
+                            let target = search.results_mut().resolve_current_point(at)?.clone();
+                            search.results_mut().delegate_operation(
+                                MediaListSurfaceInput::ContextClick(at)
+                                    .into_operation(Some(target))
+                                    .expect("resolved media-list pointer target"),
+                            );
+                            search.selected_item().map(|item| {
+                                Msg::Shell(ShellRequest::RowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(
+                                        vec![item],
+                                    ),
+                                    None,
+                                ))
                             })
-                        }
-                        MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::ToggleClick(at) | MediaListSurfaceInput::RangeClick(at) => {
-                            self.inline_search.select_row_at_point(at);
-                            None
                         }
                         _ => None,
                     }

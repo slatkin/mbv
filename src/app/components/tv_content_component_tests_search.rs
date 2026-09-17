@@ -140,7 +140,7 @@ fn wide_tv_search_paints_in_browser_pane_not_hero_pane() {
 
     let terminal = paint(&mut panel, 100, 20);
 
-    let list_area = *tv(&panel).inline_search().layout();
+    let list_area = panel.test_wide_geometry().unwrap().list_area;
     let geometry = panel.test_wide_geometry().unwrap();
     let browser_pane = geometry.browser;
     let hero_pane = geometry.hero;
@@ -221,7 +221,7 @@ fn wide_tv_search_right_click_on_result_opens_context_menu() {
         .restore_query("Alpha".into());
 
     paint(&mut panel, 100, 20);
-    let list_area = *tv(&panel).inline_search().layout();
+    let list_area = panel.test_wide_geometry().unwrap().list_area;
 
     let message = panel.on(&mouse(
         MouseEventKind::Down(MouseButton::Right),

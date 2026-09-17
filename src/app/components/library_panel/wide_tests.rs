@@ -619,16 +619,118 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
         !text_in(&buf, geo.selector_bar, "\u{25e2}"),
         "no selector pill under the search box"
     );
-    // The results occupy the list box; the search session retained the
-    // row-flow rect the skeleton gave it.
+    // The results occupy the list box through the canonical fixed-row
+    // presentation; the carrier retained the row-flow rect the skeleton
+    // gave it.
     assert!(text_in(&buf, geo.list_area, "Alpha"));
-    assert_eq!(*search.layout(), geo.list_area);
+    assert_eq!(search.results().current_content_rect(), Some(geo.list_area));
     // The rest of the panel is unchanged: hero pane resting with its facts.
     assert_eq!(
         buf[(geo.hero.x, geo.hero.y)].bg,
         palette::surface_colors(palette::Surface::HeroPane, false).fill
     );
     assert!(text_in(&buf, geo.hero_area, "Dune"));
+}
+
+/// The canonical selected-row bar (spec: selected search results use the
+/// canonical selected-row bar): focused, it spans the full row; unfocused,
+/// the bar paints nowhere.
+#[test]
+fn search_results_paint_the_canonical_selected_row_bar() {
+    let mut search = InlineSearch::new();
+    search.open();
+    search.set_pool(SearchPool::Items(vec![
+        crate::app::tests::make_item("Alpha", "Movie"),
+        crate::app::tests::make_item("Beta", "Movie"),
+    ]));
+    search.restore_query("a".into());
+    let mut content = LibraryPanelContent {
+        selector: None,
+        controls: None,
+        list: ListSlot::Search(&mut search),
+        hero: None,
+    };
+    let (focused_buf, focused_geo, _hits) = draw_skeleton(&mut content, true);
+    let selected = focused_geo
+        .selected
+        .expect("the selected row's painted rect");
+    // Full-width bar across the selected row's rect, inside the list box.
+    for x in selected.left()..selected.right() {
+        assert_eq!(
+            focused_buf[(x, selected.y)].bg,
+            palette::SELECTED_ROW_BG,
+            "the selected-row bar spans the full row width"
+        );
+    }
+    assert!(focused_geo.list_panel.x <= selected.x);
+    assert!(selected.right() <= focused_geo.list_panel.right());
+
+    let (resting_buf, _resting_geo, _hits) = draw_skeleton(&mut content, false);
+    // The selected row is row 0, which is never a zebra stripe row, so the
+    // row's own line is the bar's discriminator (the zebra/backdrop fill
+    // shares the bar's RGB value by palette coincidence).
+    for x in selected.left()..selected.right() {
+        assert_ne!(
+            resting_buf[(x, selected.y)].bg,
+            palette::SELECTED_ROW_BG,
+            "unfocused search results paint the bar nowhere on the selected row"
+        );
+    }
+}
+
+/// Result rows zebra-stripe like every other library list (spec): the second
+/// row carries the MainContentBox zebra fill the panel's Wide policy sets.
+#[test]
+fn search_result_rows_zebra_stripe_like_every_library_list() {
+    let mut search = InlineSearch::new();
+    search.open();
+    search.set_pool(SearchPool::Items(vec![
+        crate::app::tests::make_item("Alpha", "Movie"),
+        crate::app::tests::make_item("Beta", "Movie"),
+    ]));
+    search.restore_query("a".into());
+    let mut content = LibraryPanelContent {
+        selector: None,
+        controls: None,
+        list: ListSlot::Search(&mut search),
+        hero: None,
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let zebra = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
+    // The ungrouped flow opens on the primary fill; the second row stripes.
+    assert_eq!(buf[(geo.list_area.x, geo.list_area.y + 1)].bg, zebra);
+}
+
+/// Zero rows paint the placeholder states (spec: loading while the corpus
+/// fetch is outstanding, empty once the query is settled) and retain no
+/// selected-row anchor geometry.
+#[test]
+fn zero_row_search_paints_the_placeholder_strings_and_no_anchor() {
+    let mut search = InlineSearch::new();
+    search.open();
+    search.set_pool(SearchPool::Items(vec![crate::app::tests::make_item(
+        "Alpha", "Movie",
+    )]));
+    let content = |search: &mut InlineSearch| {
+        let mut content = LibraryPanelContent {
+            selector: None,
+            controls: None,
+            list: ListSlot::Search(search),
+            hero: None,
+        };
+        draw_skeleton(&mut content, false)
+    };
+    // Loading: the corpus fetch is outstanding.
+    search.set_loading(true);
+    let (buf, geo, _hits) = content(&mut search);
+    assert!(text_in(&buf, geo.list_area, " Loading\u{2026}"));
+    assert!(geo.selected.is_none(), "zero rows retain no anchor rect");
+
+    // Settled with no matches.
+    search.set_loading(false);
+    let (buf, geo, _hits) = content(&mut search);
+    assert!(text_in(&buf, geo.list_area, " (empty)"));
+    assert!(geo.selected.is_none());
 }
 
 #[test]

@@ -17,6 +17,8 @@ use unicode_width::UnicodeWidthStr;
 /// "Continue Watching" tab, search result sets, small libraries, and
 /// non-album music levels, all of which render identically without letter
 /// grouping. Returns the scroll offset to persist.
+/// Legacy painter (design.md D7): unit U2 deletes this file.
+#[allow(dead_code)]
 pub(in crate::app) fn render_plain_rows(f: &mut Frame, ctx: ListRenderCtx) -> usize {
     let ListRenderCtx {
         content_area,

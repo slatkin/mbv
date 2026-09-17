@@ -14,6 +14,8 @@ use unicode_width::UnicodeWidthStr;
 /// Letter-grouped list kind of `render_list`: non-music library lists with
 /// 50+ items (or an active letter-range pill), bucketed under `LetterHeader`
 /// rows. Returns the scroll offset to persist.
+/// Legacy painter (design.md D7): unit U2 deletes this file.
+#[allow(dead_code)]
 pub(in crate::app) fn render_letter_grouped_rows(
     f: &mut Frame,
     ctx: ListRenderCtx,

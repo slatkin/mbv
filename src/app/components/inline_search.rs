@@ -2,19 +2,23 @@
 //!
 //! [`InlineSearch`] is a plain, unmounted control: active/inactive state,
 //! query, the plain-or-recursive-album candidate pool, scored result order
-//! stored as `(original_index, score)` pairs, result cursor/scroll, loading,
-//! its last painted result geometry, and its private mouse gesture state.
+//! stored as `(original_index, score)` pairs, loading, and the debounce
+//! deadline. The row flow itself (cursor, scroll, selected stable target,
+//! viewport clamping, retained row geometry) lives in the embedded
+//! [`MediaListCarrier`] and is painted by the Library panel through the
+//! object-safe [`PanelList`] surface, exactly like every other list.
 //! [`InlineSearchHost`] is the minimal contract that will expose one embedded
 //! control per destination to shell adapters; it does not choose a
 //! destination or hand out Service/runtime objects.
 //!
 use std::time::{Duration, Instant};
 
-use ratatui::layout::{Position, Rect};
-use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{Key, KeyModifiers};
 
-use super::mouse::gesture::{MouseGesture, MouseGestureState};
-use crate::app::ui_util::move_cursor;
+use super::media_list::{
+    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
+    MediaSemanticState,
+};
 
 /// Quiet period after a query edit before the scored results re-fire (the
 /// shell supplies wall-clock ticks; see [`InlineSearch::handle_clock`]).
@@ -27,13 +31,6 @@ pub(in crate::app) enum SearchPool {
 }
 
 impl SearchPool {
-    fn len(&self) -> usize {
-        match self {
-            Self::Items(items) => items.len(),
-            Self::Albums(entries) => entries.len(),
-        }
-    }
-
     /// The item at a corpus index, with an album's indexed display label
     /// substituted for its bare name (design.md D2).
     fn resolved_item_at(&self, index: usize) -> Option<mbv_core::api::EmbyItem> {
@@ -95,22 +92,49 @@ pub(in crate::app) enum InlineSearchAction {
     QueryStarted,
 }
 
-/// A mouse gesture the shared control resolved onto a result row but cannot
-/// act on itself (design.md D6, decision 1: geometry stays with the owner).
-/// The host translates it into its own item-based context-menu shell request,
-/// resolving the target from [`InlineSearch::selected_item`].
-#[derive(Debug, PartialEq, Eq)]
-pub(in crate::app) enum InlineSearchMouse {
-    /// A right click landed on a result row; the cursor has been moved there.
-    ContextMenu,
-    /// A wheel gesture moved the local result cursor/viewport.
-    Consumed,
+/// The composed row label the search previously rendered (design.md D2:
+/// content parity with the legacy plain-rows path). Folders carry their
+/// item-count / unplayed suffixes; everything else the display label.
+fn search_row_label(item: &mbv_core::api::EmbyItem) -> String {
+    if item.is_folder {
+        if item.item_type == "Folder" && item.total_count > 0 {
+            format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+        } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
+            format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+        } else {
+            item.display_name()
+        }
+    } else {
+        item.display_name()
+    }
+}
+
+/// One canonical row for a scored result (design.md D2): stable item-id
+/// target, legacy label parity, a trailing year on playable leaves, no
+/// secondary/duration, and the `Ordinary` semantic state the legacy rows
+/// never dimmed past.
+fn search_result_row(item: &mbv_core::api::EmbyItem) -> MediaListRow<String> {
+    MediaListRow::Item {
+        target: item.id.clone(),
+        primary: search_row_label(item),
+        secondary: None,
+        trailing: (!item.is_folder && item.production_year > 0)
+            .then(|| MediaListTrailing::Year(item.production_year.to_string())),
+        duration: None,
+        kind: if item.is_folder {
+            MediaKind::Collection
+        } else {
+            MediaKind::Media
+        },
+        semantic_state: MediaSemanticState::Ordinary,
+    }
 }
 
 /// The shared embedded Inline Search control (design.md D1). Never mounted,
 /// focused, subscribed, or given a `ComponentId`; the host that embeds it
-/// paints through `crate::app::render::render_inline_search` and gives it
-/// first refusal on keyboard/mouse events while active.
+/// gives it first refusal on keyboard events while active, and the Library
+/// panel paints its session through the [`super::library_panel::content::PanelList`]
+/// surface over the embedded carrier.
 pub(in crate::app) struct InlineSearch {
     active: bool,
     query: String,
@@ -119,22 +143,15 @@ pub(in crate::app) struct InlineSearch {
     /// query carries no order at all: results appear only once a query is
     /// typed, after the debounce fires.
     order: Vec<(usize, i64)>,
-    cursor: usize,
-    scroll: usize,
     loading: bool,
     /// Debounce deadline armed by the last query edit; the pending re-score
     /// fires when a shell clock tick passes it. `None` when the current
     /// query is already scored.
     deadline: Option<Instant>,
-    /// Last painted result geometry, published by the shared render
-    /// component for column-aware cursor/mouse resolution.
-    layout: Rect,
-    /// Private per-host gesture recognition (ADR 0024, design.md D1).
-    mouse_gestures: MouseGestureState,
-    /// Origin of an unreleased left press, for recognizing a drag that begins
-    /// in the search bar and releases on a result row (P2: kept local so the
-    /// generic `MouseGestureState` stays inert for every other consumer).
-    left_press: Option<Position>,
+    /// The one canonical owner of the result row flow (design.md D1): the
+    /// carrier keeps cursor, scroll, stable-target selection, viewport
+    /// clamping, and retained painted geometry.
+    results: MediaListCarrier<String>,
 }
 
 impl InlineSearch {
@@ -144,13 +161,9 @@ impl InlineSearch {
             query: String::new(),
             pool: SearchPool::Items(Vec::new()),
             order: Vec::new(),
-            cursor: 0,
-            scroll: 0,
             loading: false,
             deadline: None,
-            layout: Rect::default(),
-            mouse_gestures: MouseGestureState::new(),
-            left_press: None,
+            results: MediaListCarrier::new(),
         }
     }
 
@@ -166,10 +179,9 @@ impl InlineSearch {
         self.query.clear();
         self.pool = SearchPool::Items(Vec::new());
         self.order.clear();
-        self.cursor = 0;
-        self.scroll = 0;
         self.loading = false;
         self.deadline = None;
+        self.results.set_content(Vec::new());
     }
 
     /// Dismisses locally, discarding the query and results.
@@ -177,8 +189,7 @@ impl InlineSearch {
         self.active = false;
         self.query.clear();
         self.order.clear();
-        self.cursor = 0;
-        self.scroll = 0;
+        self.results.set_content(Vec::new());
     }
 
     pub(in crate::app) fn query(&self) -> &str {
@@ -189,7 +200,7 @@ impl InlineSearch {
         self.query = query;
         self.deadline = None;
         self.recompute_order();
-        self.cursor = self.cursor.min(self.order.len().saturating_sub(1));
+        self.publish_rows(true);
     }
 
     pub(in crate::app) fn loading(&self) -> bool {
@@ -200,84 +211,71 @@ impl InlineSearch {
         self.loading = loading;
     }
 
-    pub(in crate::app) fn cursor(&self) -> usize {
-        self.cursor
+    /// The embedded canonical row-flow carrier: the panel drives it through
+    /// the [`super::library_panel::content::PanelList`] surface and the owners
+    /// resolve pointer inputs against it (design.md D1/D4).
+    pub(in crate::app) fn results(&self) -> &MediaListCarrier<String> {
+        &self.results
     }
 
-    pub(in crate::app) fn scroll(&self) -> usize {
-        self.scroll
-    }
-
-    pub(in crate::app) fn set_scroll(&mut self, scroll: usize) {
-        self.scroll = scroll;
+    pub(in crate::app) fn results_mut(&mut self) -> &mut MediaListCarrier<String> {
+        &mut self.results
     }
 
     pub(in crate::app) fn selected_target(&self) -> Option<(String, String)> {
         self.selected_item().map(|item| (item.id, item.item_type))
     }
 
-    pub(in crate::app) fn restore_target(
-        &mut self,
-        target: Option<(String, String)>,
-        row_offset: usize,
-    ) {
-        if let Some((id, item_type)) = target {
-            if let Some(cursor) = self.order.iter().position(|&(idx, _)| {
-                self.pool
-                    .resolved_item_at(idx)
-                    .is_some_and(|item| item.id == id && item.item_type == item_type)
-            }) {
-                self.cursor = cursor;
-                self.scroll = row_offset.min(cursor);
-            }
+    /// Restores a session's selected result and viewport: the stable target
+    /// moves the carrier's selection when present; the row offset parks the
+    /// viewport (design.md D5).
+    pub(in crate::app) fn restore_target(&mut self, id: Option<String>, row_offset: usize) {
+        if let Some(id) = id {
+            self.results.select_target(&id);
+            self.results.set_scroll(row_offset);
         }
     }
 
     pub(in crate::app) fn results_len(&self) -> usize {
-        self.order.len()
+        self.results.rows().len()
     }
 
-    pub(in crate::app) fn layout(&self) -> &Rect {
-        &self.layout
-    }
-
-    pub(in crate::app) fn layout_mut(&mut self) -> &mut Rect {
-        &mut self.layout
-    }
-
-    /// Replaces the candidate pool, preserving the selected stable target
-    /// (id + item type) when it is still present and otherwise clamping to
-    /// the first valid result (design.md D2).
+    /// Replaces the candidate pool and re-scores the current query. The
+    /// carrier's ordinary refresh rule preserves the selected stable target
+    /// when it is still present and clamps otherwise (design.md D2: a pool
+    /// refresh never resets the selection).
     pub(in crate::app) fn set_pool(&mut self, pool: SearchPool) {
-        let target = self.selected_item().map(|item| (item.id, item.item_type));
         self.pool = pool;
         self.deadline = None;
         self.recompute_order();
-        self.cursor = target
-            .and_then(|(id, item_type)| {
-                self.order.iter().position(|&(idx, _)| {
-                    self.pool
-                        .resolved_item_at(idx)
-                        .is_some_and(|item| item.id == id && item.item_type == item_type)
-                })
-            })
-            .unwrap_or(0);
+        self.publish_rows(false);
     }
 
-    /// The item under the cursor, resolved from the stored order without
-    /// materializing the whole result set (design.md D2).
+    /// The item under the carrier's selection, resolved from the stored order
+    /// (design.md D2).
     pub(in crate::app) fn selected_item(&self) -> Option<mbv_core::api::EmbyItem> {
-        let &(idx, _) = self.order.get(self.cursor)?;
-        self.pool.resolved_item_at(idx)
-    }
-
-    /// Materializes the ordered result set for one paint; not used for
-    /// cursor movement or selection (design.md D2).
-    pub(in crate::app) fn ordered_items(&self) -> Vec<mbv_core::api::EmbyItem> {
+        let target = self.results.selected_target()?;
         self.order
             .iter()
             .filter_map(|&(idx, _)| self.pool.resolved_item_at(idx))
-            .collect()
+            .find(|item| &item.id == target)
+    }
+
+    /// Materializes the scored order into canonical rows and hands them to
+    /// the carrier (design.md D2). `reset` selects the first result — a
+    /// re-score for a changed query; a pool refresh with an unchanged query
+    /// passes `false` and relies on the carrier's stable-target preservation.
+    fn publish_rows(&mut self, reset: bool) {
+        let rows: Vec<MediaListRow<String>> = self
+            .order
+            .iter()
+            .filter_map(|&(idx, _)| self.pool.resolved_item_at(idx))
+            .map(|item| search_result_row(&item))
+            .collect();
+        self.results.set_content(rows);
+        if reset {
+            self.results.select_first();
+        }
     }
 
     fn recompute_order(&mut self) {
@@ -296,34 +294,6 @@ impl InlineSearch {
         self.order = scored;
     }
 
-    fn move_cursor(&mut self, delta: i64) {
-        self.cursor = move_cursor(self.cursor, delta, self.order.len());
-    }
-
-    /// Move the result cursor by `delta` rows (a Library-panel-slot wheel
-    /// gesture's normalized delta; the panel's own `MouseGestureState` has
-    /// already collapsed the raw event, so this is the position-free
-    /// counterpart of the `MouseGesture::Scroll` arm in
-    /// [`InlineSearch::handle_mouse`]).
-    pub(in crate::app) fn move_cursor_by(&mut self, delta: i64) {
-        self.move_cursor(delta);
-    }
-
-    /// Move the result cursor to the row painted at `at`, if `at` is inside
-    /// the last painted result area (the Library-panel-slot counterpart of
-    /// [`InlineSearch::select_row_at`], exposed for an embedded owner that
-    /// only receives the panel's already-normalized `MediaListSurfaceInput::Click`
-    /// position, not the raw `MouseEvent` `handle_mouse` resolves against).
-    pub(in crate::app) fn select_row_at_point(&mut self, at: Position) -> bool {
-        self.select_row_at(at)
-    }
-
-    /// Page size for PageUp/PageDown, derived from the last painted result
-    /// area (falls back to one row before the first paint).
-    fn page_size(&self) -> i64 {
-        self.layout.height.max(1) as i64
-    }
-
     /// Arms the debounce for the current query: the scored results re-fire
     /// once a shell clock tick passes the deadline.
     fn arm_search(&mut self) {
@@ -331,8 +301,9 @@ impl InlineSearch {
     }
 
     /// Fires the armed re-score once the debounce deadline has passed (the
-    /// shell supplies wall-clock ticks; #609). Resets the selection to the
-    /// first result and reports whether the result set changed.
+    /// shell supplies wall-clock ticks; #609). A fired re-score is a changed
+    /// query's: the selection resets to the first result (design.md D2).
+    /// Returns whether the debounce fired.
     pub(in crate::app) fn handle_clock(&mut self, now: Instant) -> bool {
         match self.deadline {
             Some(deadline) if now >= deadline => {}
@@ -340,14 +311,25 @@ impl InlineSearch {
         }
         self.deadline = None;
         self.recompute_order();
-        self.cursor = 0;
-        self.scroll = 0;
+        self.publish_rows(true);
         true
     }
 
     fn push_char(&mut self, c: char) {
         self.query.push(c);
         self.arm_search();
+    }
+
+    /// Offer one normalized movement input to the embedded carrier. Only the
+    /// target-free movement inputs reach this: the row-local pointer inputs
+    /// are translated by the owning destination against resolved targets
+    /// (design.md D4).
+    fn delegate_movement(&mut self, input: MediaListSurfaceInput) {
+        self.results.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("target-free movement inputs always convert to media-list operations"),
+        );
     }
 
     /// Resolves Up/Down/PageUp/PageDown/Home/End/Enter/Escape/Backspace
@@ -364,18 +346,12 @@ impl InlineSearch {
             return None;
         }
         match key.code {
-            Key::Up => self.move_cursor(-1),
-            Key::Down => self.move_cursor(1),
-            Key::PageUp => {
-                let step = self.page_size();
-                self.move_cursor(-step);
-            }
-            Key::PageDown => {
-                let step = self.page_size();
-                self.move_cursor(step);
-            }
-            Key::Home => self.cursor = 0,
-            Key::End => self.cursor = self.order.len().saturating_sub(1),
+            Key::Up => self.delegate_movement(MediaListSurfaceInput::Move(-1)),
+            Key::Down => self.delegate_movement(MediaListSurfaceInput::Move(1)),
+            Key::PageUp => self.delegate_movement(MediaListSurfaceInput::Page(-1)),
+            Key::PageDown => self.delegate_movement(MediaListSurfaceInput::Page(1)),
+            Key::Home => self.delegate_movement(MediaListSurfaceInput::First),
+            Key::End => self.delegate_movement(MediaListSurfaceInput::Last),
             Key::Enter => {
                 if let Some(item) = self.selected_item() {
                     return Some(InlineSearchAction::Activate {
@@ -401,71 +377,12 @@ impl InlineSearch {
                     // Back to an empty query: no results, no pending score.
                     self.deadline = None;
                     self.order.clear();
-                    self.cursor = 0;
-                    self.scroll = 0;
+                    self.results.set_content(Vec::new());
                 } else {
                     self.arm_search();
                 }
             }
             _ => {}
-        }
-        None
-    }
-
-    /// Move the result cursor to the row painted at `at`, if `at` is inside
-    /// the last painted result area. Returns whether the point was a result
-    /// row.
-    fn select_row_at(&mut self, at: Position) -> bool {
-        if !self.layout.contains(at) {
-            return false;
-        }
-        let row = at.y.saturating_sub(self.layout.y) as usize;
-        self.cursor = move_cursor(row, 0, self.order.len());
-        true
-    }
-
-    /// Mouse handling (ADR 0024, design.md D6): a left click on a result row
-    /// moves the cursor to that row; a left press that begins outside the
-    /// result area (e.g. in the search bar) and releases on a result row does
-    /// the same. A right click on a result row moves the cursor there and asks
-    /// the host to open its context menu. Every other gesture is a no-op.
-    /// Resolved against the last painted result geometry.
-    pub(in crate::app) fn handle_mouse(&mut self, mouse: &MouseEvent) -> Option<InlineSearchMouse> {
-        if matches!(mouse.kind, MouseEventKind::Moved) {
-            return None;
-        }
-        let point = Position {
-            x: mouse.column,
-            y: mouse.row,
-        };
-        match mouse.kind {
-            MouseEventKind::Down(MouseButton::Left) => self.left_press = Some(point),
-            MouseEventKind::Up(MouseButton::Left) => {
-                if let Some(origin) = self.left_press.take() {
-                    if origin != point && !self.layout.contains(origin) {
-                        self.select_row_at(point);
-                    }
-                }
-            }
-            _ => {}
-        }
-        let gesture = self.mouse_gestures.recognize(mouse)?;
-        match gesture {
-            MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
-                self.select_row_at(at);
-            }
-            MouseGesture::RightClick(at) => {
-                if self.select_row_at(at) {
-                    return Some(InlineSearchMouse::ContextMenu);
-                }
-            }
-            MouseGesture::Scroll { at, delta } => {
-                if self.layout.contains(at) {
-                    self.move_cursor(delta);
-                    return Some(InlineSearchMouse::Consumed);
-                }
-            }
-            MouseGesture::Drag { .. } | MouseGesture::DragEnd => {}
         }
         None
     }
@@ -478,6 +395,14 @@ impl InlineSearch {
                 entries.iter().map(|entry| entry.album.id.clone()).collect()
             }
         }
+    }
+
+    /// Test-only: the carrier's selectable cursor, so tests can assert
+    /// movement without depending on target identities (the shared fixtures
+    /// reuse one item id).
+    #[cfg(test)]
+    pub(in crate::app) fn test_cursor(&self) -> usize {
+        self.results.cursor()
     }
 }
 
@@ -512,5 +437,120 @@ pub(in crate::app) trait InlineSearchHost {
         search.set_pool(pool);
         search.set_loading(loading);
         let _ = focused;
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_item;
+    use std::time::{Duration, Instant};
+    use tuirealm::event::KeyEvent;
+
+    fn pool(ids: &[&str]) -> SearchPool {
+        SearchPool::Items(
+            ids.iter()
+                .map(|id| {
+                    let mut item = make_item(&format!("Result {id}"), "Movie");
+                    item.id = (*id).to_string();
+                    item
+                })
+                .collect(),
+        )
+    }
+
+    fn key(code: Key) -> KeyEvent {
+        KeyEvent {
+            code,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    /// Scores the current query immediately (the shell's clock tick past the
+    /// debounce deadline).
+    fn fire_debounce(search: &mut InlineSearch) {
+        assert!(
+            search.handle_clock(Instant::now() + Duration::from_millis(301)),
+            "the deadline fires the armed re-score"
+        );
+    }
+
+    #[test]
+    fn re_score_resets_selection_to_the_first_result() {
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(pool(&["a", "b", "c"]));
+        assert_eq!(search.results_len(), 0, "an empty query shows no rows");
+
+        search.handle_key(&key(Key::Char('r')));
+        fire_debounce(&mut search);
+        assert_eq!(search.results_len(), 3);
+        search.delegate_movement(MediaListSurfaceInput::Move(2));
+        assert_eq!(search.test_cursor(), 2);
+
+        // A changed query re-scores: the selection resets to the first row.
+        search.handle_key(&key(Key::Char('s')));
+        fire_debounce(&mut search);
+        assert_eq!(search.test_cursor(), 0, "a re-score resets to the first");
+    }
+
+    #[test]
+    fn pool_refresh_preserves_the_selected_target() {
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(pool(&["a", "b", "c"]));
+        search.restore_query("Result".into());
+        assert_eq!(search.test_cursor(), 0);
+        search.delegate_movement(MediaListSurfaceInput::Last);
+        let selected = search.selected_target().clone();
+        assert_eq!(selected.map(|(id, _)| id), Some("c".into()));
+
+        // A pool refresh with the query unchanged keeps the stable target.
+        search.set_pool(pool(&["a", "b", "c", "d"]));
+        assert_eq!(
+            search.selected_target().map(|(id, _)| id),
+            Some("c".into()),
+            "the carrier's stable-target preservation survives the refresh"
+        );
+        // A refresh that drops the selected target clamps instead.
+        search.set_pool(pool(&["a", "b"]));
+        assert!(search.selected_target().is_some());
+    }
+
+    #[test]
+    fn empty_query_projects_zero_rows() {
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(pool(&["a", "b"]));
+        assert_eq!(search.results_len(), 0);
+
+        search.handle_key(&key(Key::Char('r')));
+        fire_debounce(&mut search);
+        assert_eq!(search.results_len(), 2);
+
+        // Backspace back to the empty query clears the rows again.
+        search.handle_key(&key(Key::Backspace));
+        assert_eq!(search.results_len(), 0, "an empty query shows no rows");
+        assert_eq!(search.test_cursor(), 0);
+    }
+
+    #[test]
+    fn movement_routes_through_the_carrier() {
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(pool(&["a", "b", "c"]));
+        search.handle_key(&key(Key::Char('r')));
+        fire_debounce(&mut search);
+
+        search.handle_key(&key(Key::Down));
+        assert_eq!(search.test_cursor(), 1);
+        search.handle_key(&key(Key::End));
+        assert_eq!(search.test_cursor(), 2);
+        search.handle_key(&key(Key::Home));
+        assert_eq!(search.test_cursor(), 0);
+        search.handle_key(&key(Key::Up));
+        assert_eq!(search.test_cursor(), 0, "movement clamps at the ends");
+        assert_eq!(search.selected_target().map(|(id, _)| id), Some("a".into()));
     }
 }

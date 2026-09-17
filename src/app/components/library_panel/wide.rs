@@ -18,11 +18,11 @@ use crate::app::palette;
 use crate::app::render::arrangements::library::{wide_library_panes, WideLibraryPanes};
 use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
 use crate::app::render::{
-    render_inline_search, render_placeholder, wide_hero_browser_pane, wide_hero_hero_pane,
+    render_placeholder, render_search_box, wide_hero_browser_pane, wide_hero_hero_pane,
     PillBarWindow, PANE_PAD_X, PANE_PAD_Y,
 };
 
-use super::content::{LibraryPanelContent, ListSlot};
+use super::content::{LibraryPanelContent, ListSlot, PanelList, PanelListPaintPolicy};
 use super::hero_composition::{full_width_claim, paint_library_hero_content};
 use super::slots::{
     paint_list_controls_row, paint_pill_bar_row, paint_pill_row_gap, paint_selector_row,
@@ -209,25 +209,31 @@ pub(in crate::app) fn paint_browser_pane(
     };
     match &mut content.list {
         ListSlot::Search(search) => {
-            let items = search.ordered_items();
+            // The search bar is the Selector row's chrome; the result rows are
+            // the session's embedded canonical carrier painted through the
+            // same PanelList surface as `ListSlot::Media` (design D3).
             let query = search.query().to_string();
             let loading = search.loading();
-            let cursor = search.cursor();
-            let scroll_in = search.scroll();
-            let new_scroll = render_inline_search(
-                f,
-                pane.pills_area,
-                list_area,
-                &query,
-                loading,
-                items,
-                cursor,
-                scroll_in,
-                list_focused,
-                1,
-                search.layout_mut(),
-            );
-            search.set_scroll(new_scroll);
+            render_search_box(f, pane.pills_area, &query, loading);
+            if search.results_len() == 0 {
+                // Zero rows: the same placeholder states an empty list box
+                // paints (string parity with the legacy empty branch).
+                let msg = if loading {
+                    " Loading\u{2026}"
+                } else {
+                    " (empty)"
+                };
+                render_placeholder(f, list_area, msg);
+            } else {
+                search.sync_viewport(list_area.height.max(1) as usize);
+                search.set_paint_policy(PanelListPaintPolicy::Wide {
+                    focused: list_focused,
+                });
+                // The canonical rail owns the full panel row, exactly as for
+                // `ListSlot::Media` (see that arm below).
+                search.set_geometry(full_width_claim(list_panel, list_area), list_area);
+                search.view(f, list_area);
+            }
         }
         ListSlot::Media(list) => {
             // The panel drives the viewport clamp and the paint policy
@@ -262,6 +268,7 @@ pub(in crate::app) fn paint_browser_pane(
     // truth.
     let selected = match &mut content.list {
         ListSlot::Media(list) => list.selected_row_rect(),
+        ListSlot::Search(search) => search.selected_row_rect(),
         _ => None,
     };
 

@@ -22,6 +22,9 @@ use ratatui::Frame;
 pub(in crate::app) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
 
 /// Returns `palette::TEXT_EMPHASIS` when `focused`, `palette::TEXT_SECONDARY` otherwise.
+/// Legacy painter plumbing kept alive only by the legacy painters unit U2
+/// deletes (design.md D7); the allows below are the temporary bridge.
+#[allow(dead_code)]
 pub(in crate::app::render) fn focused_or_subtle(focused: bool) -> Color {
     if focused {
         palette::TEXT_EMPHASIS

@@ -11,6 +11,10 @@ use crate::app::render::{render_generic_movies_home_video_rows_with_ctx, Library
 /// `render_generic_movies_home_video_rows_with_ctx`). `items` is the
 /// caller's already-scored, already-ordered result set (design.md D2); this
 /// function only places and paints.
+/// Legacy Inline Search painter (design.md D7): the Library panel's search
+/// paint arm drives the session's embedded canonical carrier directly now;
+/// unit U2 deletes this painter and its re-export.
+#[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
 pub(in crate::app) fn render_inline_search(
     f: &mut Frame,

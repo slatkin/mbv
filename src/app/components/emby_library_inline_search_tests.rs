@@ -2,13 +2,15 @@ use crate::app::components::emby_library_content::{
     BrowserOwnerPush, EmbyLibraryContent as BrowserOwner,
 };
 use crate::app::components::inline_search::{InlineSearchHost, SearchPool};
-use crate::app::components::library_panel::content::ListSlot;
+use crate::app::components::library_panel::content::{ListSlot, PanelList, PanelListPaintPolicy};
 use crate::app::components::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use crate::app::components::library_panel::LibraryKind;
 use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::tests::{make_item, make_items};
+use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
+use ratatui::Terminal;
 use std::time::{Duration, Instant};
 use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers};
 
@@ -120,21 +122,32 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
             .handle_clock(Instant::now() + Duration::from_millis(301)),
         "the deadline fires the armed re-score"
     );
-    // The panel would have set this from its own paint; seed it directly so
-    // the owner's point resolution has real painted geometry to read.
-    *owner.inline_search_mut().layout_mut() = Rect::new(0, 0, 40, 10);
+    // The panel would have painted the session through its PanelList surface;
+    // seed the carrier's retained geometry the same way so the owner's point
+    // resolution has real painted rows to read.
+    let row_area = Rect::new(0, 0, 40, 10);
+    let mut terminal = Terminal::new(TestBackend::new(40, 10)).unwrap();
+    terminal
+        .draw(|f| {
+            let search = owner.inline_search_mut();
+            search.sync_viewport(row_area.height as usize);
+            search.set_paint_policy(PanelListPaintPolicy::Wide { focused: true });
+            search.set_geometry(row_area, row_area);
+            search.view(f, row_area);
+        })
+        .unwrap();
 
     let at = Position::new(0, 0);
     let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Click(at)));
     assert!(message.is_none(), "a plain click emits no Msg");
-    assert_eq!(owner.inline_search().cursor(), 0);
+    assert_eq!(owner.inline_search().test_cursor(), 0);
 
     let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
         at,
         delta: 1,
     }));
     assert!(matches!(message, Some(Msg::TerminalEvent(_))));
-    assert_eq!(owner.inline_search().cursor(), 1);
+    assert_eq!(owner.inline_search().test_cursor(), 1);
 
     let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
         at,

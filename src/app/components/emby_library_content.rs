@@ -302,27 +302,44 @@ impl EmbyLibraryContent {
         Some(Msg::Shell(request))
     }
 
-    /// Pointer input against the active Inline Search session (design D3:
-    /// "the search component keeps its session and painter"). A reasonable,
-    /// deliberately reduced-fidelity translation of
-    /// `InlineSearch::handle_mouse`'s raw-event gesture recognition — the
-    /// panel's own gesture recognizer already collapsed the raw event into a
-    /// normalized `MediaListSurfaceInput` before this owner sees it, so the
-    /// "press starts in the bar, releases on a row" cross-region gesture
-    /// (`InlineSearch::handle_mouse`'s `left_press` tracking) is not
-    /// reproduced here; click/double-click/right-click/wheel against a
-    /// painted result row are.
+    /// Pointer input against the active Inline Search session (design.md D4):
+    /// the panel-normalized `MediaListSurfaceInput` delegates to the session's
+    /// embedded carrier like every other list — a click selects, a double-click
+    /// activates, a right-click resolves the row's ordinary item-based
+    /// context-menu intent, and a wheel over the painted rows is claimed.
     fn handle_search_pointer(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let search = &mut self.inline_search;
         match input {
+            MediaListSurfaceInput::Wheel { at, delta } => {
+                if !search.results_mut().claims_current_point(at) {
+                    return None;
+                }
+                search.results_mut().delegate_operation(
+                    MediaListSurfaceInput::Wheel { at, delta }
+                        .into_operation(None)
+                        .expect("wheel converts without a target"),
+                );
+                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+            }
             MediaListSurfaceInput::Click(at)
             | MediaListSurfaceInput::ToggleClick(at)
             | MediaListSurfaceInput::RangeClick(at) => {
-                self.inline_search.select_row_at_point(at);
+                let target = search.results_mut().resolve_current_point(at)?.clone();
+                search.results_mut().delegate_operation(
+                    input
+                        .into_operation(Some(target))
+                        .expect("resolved media-list pointer target"),
+                );
                 None
             }
             MediaListSurfaceInput::DoubleClick(at) => {
-                self.inline_search.select_row_at_point(at);
-                self.inline_search.selected_item().map(|item| {
+                let target = search.results_mut().resolve_current_point(at)?.clone();
+                search.results_mut().delegate_operation(
+                    MediaListSurfaceInput::DoubleClick(at)
+                        .into_operation(Some(target))
+                        .expect("resolved media-list pointer target"),
+                );
+                search.selected_item().map(|item| {
                     Msg::Shell(ShellRequest::InlineSearchActivate {
                         id: item.id,
                         item_type: item.item_type,
@@ -330,17 +347,23 @@ impl EmbyLibraryContent {
                 })
             }
             MediaListSurfaceInput::ContextClick(at) => {
-                self.inline_search.select_row_at_point(at);
-                self.inline_search.selected_item().map(|item| {
-                    Msg::Shell(ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Browser(vec![item.id]),
-                        None,
-                    ))
-                })
-            }
-            MediaListSurfaceInput::Wheel { delta, .. } => {
-                self.inline_search.move_cursor_by(delta);
-                Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                let target = search.results_mut().resolve_current_point(at)?.clone();
+                let outcome = search.results_mut().delegate_operation(
+                    MediaListSurfaceInput::ContextClick(at)
+                        .into_operation(Some(target))
+                        .expect("resolved media-list pointer target"),
+                );
+                match outcome.external_intent {
+                    Some(RowIntent::Context(target)) => {
+                        Some(Msg::Shell(ShellRequest::RowContextMenu(
+                            crate::app::types_context_menu::ContextMenuTargets::Browser(vec![
+                                target,
+                            ]),
+                            None,
+                        )))
+                    }
+                    _ => None,
+                }
             }
             _ => None,
         }

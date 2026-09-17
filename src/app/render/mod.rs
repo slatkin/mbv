@@ -35,7 +35,7 @@ pub(in crate::app) use arrangements::wide_hero::{
     paint_wide_hero_text, place_media_list_below, wide_hero_browser_pane, wide_hero_fits,
     wide_hero_hero_pane, WrappedHeroLine, PANE_PAD_X, PANE_PAD_Y,
 };
-pub(in crate::app) use components::inline_search::render_inline_search;
+pub(in crate::app) use components::hero::render_search_box;
 pub(in crate::app) use components::library_routes::{
     render_library_routes_content, save_route_config, LibraryRoutesRenderModel,
 };
