@@ -383,6 +383,14 @@ impl LibraryPanel {
         self.narrow_geometry.clone()
     }
 
+    /// Test seam: forget the last wheel gesture so the next tick's wheel is
+    /// recognized despite the 30 ms burst throttle (tests drive one wheel
+    /// step per tick without sleeping through the throttle window).
+    #[cfg(test)]
+    pub(in crate::app) fn test_reset_wheel_throttle(&mut self) {
+        self.gestures.reset_for_test();
+    }
+
     #[cfg(test)]
     pub(in crate::app) fn test_hero_scroll_offset(&self) -> usize {
         self.owners
