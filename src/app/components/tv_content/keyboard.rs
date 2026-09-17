@@ -43,6 +43,9 @@ impl TvContent {
                     self.inline_search.close();
                     None
                 }
+                Some(InlineSearchAction::QueryStarted) => {
+                    Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
+                }
                 // Ctrl+P/S/A that the shared control does not consume act on
                 // the selected result row via the ordinary result-row effects.
                 None => self.inline_search_result_action(key),

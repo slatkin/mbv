@@ -85,6 +85,22 @@ impl Model {
         }
     }
 
+    /// One-shot shell-driven selection re-anchor: point the active TV
+    /// owner's series selection at a stable target (a navigation the shell
+    /// performed, e.g. an Inline Search activation); the next content push
+    /// preserves it.
+    pub(super) fn reanchor_tv_owner_selection(&mut self, target: &str) {
+        self.update_tv_owner(|owner| {
+            owner.select_series_target(target);
+        });
+    }
+
+    /// Make the TV owner's workspace active: episode selection holds the
+    /// local focus (the same state the ordinary second Enter enters).
+    pub(super) fn focus_tv_owner_episodes(&mut self) {
+        self.update_tv_owner(TvContent::enter_episode_selection);
+    }
+
     /// The active TV library's owner key (design D2's
     /// `LibraryKey::Service(LibraryKey)`), or `None` for every other tab.
     fn tv_owner_key(&self) -> Option<LibraryKey> {

@@ -69,6 +69,9 @@ impl TickHarness {
         if let Some(Msg::Service(request)) = self.model.tick_search_clock(Instant::now()) {
             self.model.handle_service_request(request);
         }
+        // Mirror the run loop's Inline Search debounce sweep (shell-supplied
+        // wall clock into the embedded control).
+        self.model.tick_inline_search_clock(Instant::now());
         self.model.app.expire_bare_transition(Instant::now());
         let pre_fold_focus = self.model.application.focus().cloned();
         let raw_messages = self

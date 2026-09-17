@@ -362,6 +362,9 @@ impl EmbyLibraryContent {
                     self.inline_search.close();
                     None
                 }
+                Some(InlineSearchAction::QueryStarted) => {
+                    Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
+                }
                 None => self.inline_search_result_action(key),
             };
         }

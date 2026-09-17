@@ -109,6 +109,10 @@ pub enum ShellRequest {
     },
     /// Open the inline library Search child for the focused Emby browser.
     OpenInlineSearch,
+    /// The first query character landed in an open inline Search session:
+    /// start the destination's corpus load (whole-library fetch or recursive
+    /// album index), deferred from open so an empty box loads nothing.
+    InlineSearchQueryStarted,
     /// Close the Sessions sidebar without changing the selected destination.
     DismissSessions,
     /// Refresh the Emby session and Cast receiver snapshots.

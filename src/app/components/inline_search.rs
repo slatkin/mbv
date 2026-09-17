@@ -8,11 +8,17 @@
 //! control per destination to shell adapters; it does not choose a
 //! destination or hand out Service/runtime objects.
 //!
+use std::time::{Duration, Instant};
+
 use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use super::mouse::gesture::{MouseGesture, MouseGestureState};
 use crate::app::ui_util::move_cursor;
+
+/// Quiet period after a query edit before the scored results re-fire (the
+/// shell supplies wall-clock ticks; see [`InlineSearch::handle_clock`]).
+const SEARCH_DEBOUNCE_MS: u64 = 300;
 
 #[derive(Clone)]
 pub(in crate::app) enum SearchPool {
@@ -78,8 +84,15 @@ impl SearchPool {
 /// depends on the shell's `Msg` type.
 #[derive(Debug, PartialEq, Eq)]
 pub(in crate::app) enum InlineSearchAction {
-    Activate { id: String, item_type: String },
+    Activate {
+        id: String,
+        item_type: String,
+    },
     Dismiss,
+    /// The first query character landed in an open session: the host asks
+    /// the shell to start the corpus load (whole-library fetch or recursive
+    /// album index).
+    QueryStarted,
 }
 
 /// A mouse gesture the shared control resolved onto a result row but cannot
@@ -102,12 +115,17 @@ pub(in crate::app) struct InlineSearch {
     active: bool,
     query: String,
     pool: SearchPool,
-    /// Stable-sorted (ties keep corpus order) descending by score; an empty
-    /// query is every corpus index in corpus order (design.md D2).
+    /// Stable-sorted (ties keep corpus order) descending by score. An empty
+    /// query carries no order at all: results appear only once a query is
+    /// typed, after the debounce fires.
     order: Vec<(usize, i64)>,
     cursor: usize,
     scroll: usize,
     loading: bool,
+    /// Debounce deadline armed by the last query edit; the pending re-score
+    /// fires when a shell clock tick passes it. `None` when the current
+    /// query is already scored.
+    deadline: Option<Instant>,
     /// Last painted result geometry, published by the shared render
     /// component for column-aware cursor/mouse resolution.
     layout: Rect,
@@ -129,6 +147,7 @@ impl InlineSearch {
             cursor: 0,
             scroll: 0,
             loading: false,
+            deadline: None,
             layout: Rect::default(),
             mouse_gestures: MouseGestureState::new(),
             left_press: None,
@@ -139,8 +158,9 @@ impl InlineSearch {
         self.active
     }
 
-    /// Starts a session locally with an empty query (design.md D4); reopening
-    /// after a dismissal always starts empty.
+    /// Starts a session locally with an empty query; reopening after a
+    /// dismissal always starts empty. Nothing is searched or loaded until
+    /// the first keystroke.
     pub(in crate::app) fn open(&mut self) {
         self.active = true;
         self.query.clear();
@@ -149,6 +169,7 @@ impl InlineSearch {
         self.cursor = 0;
         self.scroll = 0;
         self.loading = false;
+        self.deadline = None;
     }
 
     /// Dismisses locally, discarding the query and results.
@@ -166,6 +187,7 @@ impl InlineSearch {
 
     pub(in crate::app) fn restore_query(&mut self, query: String) {
         self.query = query;
+        self.deadline = None;
         self.recompute_order();
         self.cursor = self.cursor.min(self.order.len().saturating_sub(1));
     }
@@ -229,6 +251,7 @@ impl InlineSearch {
     pub(in crate::app) fn set_pool(&mut self, pool: SearchPool) {
         let target = self.selected_item().map(|item| (item.id, item.item_type));
         self.pool = pool;
+        self.deadline = None;
         self.recompute_order();
         self.cursor = target
             .and_then(|(id, item_type)| {
@@ -259,7 +282,9 @@ impl InlineSearch {
 
     fn recompute_order(&mut self) {
         if self.query.is_empty() {
-            self.order = (0..self.pool.len()).map(|i| (i, 0)).collect();
+            // An empty query shows nothing: search starts with the first
+            // typed character, never with the whole corpus.
+            self.order.clear();
             return;
         }
         use fuzzy_matcher::skim::SkimMatcherV2;
@@ -299,11 +324,30 @@ impl InlineSearch {
         self.layout.height.max(1) as i64
     }
 
-    fn push_char(&mut self, c: char) {
-        self.query.push(c);
+    /// Arms the debounce for the current query: the scored results re-fire
+    /// once a shell clock tick passes the deadline.
+    fn arm_search(&mut self) {
+        self.deadline = Some(Instant::now() + Duration::from_millis(SEARCH_DEBOUNCE_MS));
+    }
+
+    /// Fires the armed re-score once the debounce deadline has passed (the
+    /// shell supplies wall-clock ticks; #609). Resets the selection to the
+    /// first result and reports whether the result set changed.
+    pub(in crate::app) fn handle_clock(&mut self, now: Instant) -> bool {
+        match self.deadline {
+            Some(deadline) if now >= deadline => {}
+            _ => return false,
+        }
+        self.deadline = None;
         self.recompute_order();
         self.cursor = 0;
         self.scroll = 0;
+        true
+    }
+
+    fn push_char(&mut self, c: char) {
+        self.query.push(c);
+        self.arm_search();
     }
 
     /// Resolves Up/Down/PageUp/PageDown/Home/End/Enter/Escape/Backspace
@@ -341,15 +385,27 @@ impl InlineSearch {
                 }
             }
             Key::Esc => return Some(InlineSearchAction::Dismiss),
-            Key::Char(c) => self.push_char(c),
+            Key::Char(c) => {
+                let started = self.query.is_empty();
+                self.push_char(c);
+                // The first keystroke starts the search: the host tells the
+                // shell to begin the corpus load (deferred from open).
+                return started.then_some(InlineSearchAction::QueryStarted);
+            }
             Key::Backspace => {
                 if self.query.is_empty() {
                     return Some(InlineSearchAction::Dismiss);
                 }
                 self.query.pop();
-                self.recompute_order();
-                self.cursor = 0;
-                self.scroll = 0;
+                if self.query.is_empty() {
+                    // Back to an empty query: no results, no pending score.
+                    self.deadline = None;
+                    self.order.clear();
+                    self.cursor = 0;
+                    self.scroll = 0;
+                } else {
+                    self.arm_search();
+                }
             }
             _ => {}
         }

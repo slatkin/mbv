@@ -1,3 +1,4 @@
+use super::render::{effective_sort_str, LetterFilter};
 use super::{App, SeriesDetail};
 use mbv_core::api::EmbyItem;
 
@@ -18,6 +19,60 @@ impl App {
             .get(stack_len - 1)
             .map(|s| s == "album")
             .unwrap_or(false)
+    }
+
+    /// Enter on an Inline Search Series result: navigate the library list to
+    /// the series' natural place -- cursor on it, its letter-range pill
+    /// marked when pills are shown -- using the search corpus already in
+    /// hand, with no refetch. Returns false when the corpus doesn't hold the
+    /// item; the caller keeps the ordinary folder activation.
+    pub(super) fn activate_searched_series(&mut self, lib_idx: usize, item: &EmbyItem) -> bool {
+        if item.item_type != "Series" || item.id.is_empty() {
+            return false;
+        }
+        let Some(level) = self.libs[lib_idx].nav_stack.last() else {
+            return false;
+        };
+        let corpus = level
+            .all_items
+            .clone()
+            .unwrap_or_else(|| level.items.clone());
+        // The pill group the series sorts into (pills only exist at the
+        // top level of pill-eligible libraries).
+        let filter = if self.should_show_letter_pills(lib_idx) {
+            LetterFilter::for_sort_key(effective_sort_str(item))
+        } else {
+            None
+        };
+        let filtered: Vec<EmbyItem> = match &filter {
+            Some(filter) => corpus
+                .iter()
+                .filter(|candidate| {
+                    let key = effective_sort_str(candidate);
+                    filter.name_ge.is_none_or(|ge| key >= ge)
+                        && filter.name_lt.is_none_or(|lt| key < lt)
+                })
+                .cloned()
+                .collect(),
+            None => corpus.clone(),
+        };
+        let Some(cursor) = filtered.iter().position(|i| i.id == item.id) else {
+            return false;
+        };
+        let Some(level) = self.libs[lib_idx].nav_stack.last_mut() else {
+            return false;
+        };
+        level.letter_filter = filter;
+        level.items = filtered;
+        level.total_count = level.items.len();
+        level.all_items = Some(corpus);
+        level.set_resting_cursor(cursor);
+        level.set_resting_scroll(0);
+        level.loading = false;
+        // Ensure the series detail (seasons + episodes) is fetched.
+        self.fetch_series_detail(item.id.clone());
+        self.save_default_library_position(lib_idx);
+        true
     }
 
     /// Ensures the series detail is fetched for the wide TV component.

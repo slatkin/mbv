@@ -416,6 +416,11 @@ impl Model {
                 self.handle_service_request(request);
             }
 
+            // Inline Search debounce sweep: same shell-supplied wall clock,
+            // pumped into the embedded control of the active session. A
+            // fired debounce re-scored the results and needs a redraw.
+            had_events |= self.tick_inline_search_clock(Instant::now());
+
             had_events |= self.app.drain_session_events();
 
             had_events |= self.app.expire_bare_transition(Instant::now());

@@ -122,7 +122,8 @@ fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
     assert!(harness.model().active_inline_search_is_open());
 
     // Seed a known result row (the shell content push would otherwise supply
-    // the library's own albums); the cursor rests on it.
+    // the library's own albums); an empty query shows no results, so type a
+    // character and fire the debounce to score the row before acting on it.
     {
         let workspace = harness.model_mut().test_music_owner_mut();
         let mut result = crate::app::tests::make_item("Result Album", "MusicAlbum");
@@ -131,6 +132,11 @@ fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
             .inline_search_mut()
             .set_pool(SearchPool::Items(vec![result]));
     }
+    harness.inject(key(Key::Char('a')));
+    harness.step();
+    harness
+        .model_mut()
+        .tick_inline_search_clock(Instant::now() + Duration::from_millis(301));
 
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('a'),

@@ -10,6 +10,7 @@ use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
 
 use crate::app::tests::{install_test_emby, make_session};
+use std::time::{Duration, Instant};
 use crate::app::tests_tick_harness::TickHarness;
 
 /// The migrated Movies/HomeVideos/Generic owner inside the mounted
@@ -100,7 +101,9 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
         outcome.messages
     );
     // Drain the step's shell requests like the run loop: the open request
-    // loads/pushes the pool into the owner's session.
+    // loads/pushes the pool into the owner's session. The fetch is NOT one
+    // of them: an open box with an empty query loads nothing and shows no
+    // results (search starts with the first typed character).
     let (mut music_resize, mut tv_resize) = (false, false);
     for message in outcome.messages {
         harness
@@ -109,14 +112,35 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
     }
     harness.model_mut().sync_mounted_surfaces();
     assert!(harness.model().active_inline_search_is_open());
+    assert_eq!(
+        browser_owner(&harness).inline_search().results_len(),
+        0,
+        "an open box with an empty query shows no results"
+    );
 
-    // A typed query scores against the pushed pool: "o" matches both rows
-    // of the two-item nav-stack level.
+    // A typed query arms the debounce; the first keystroke also asks the
+    // shell to start the corpus load (deferred from open).
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Char('o'),
         modifiers: KeyModifiers::NONE,
     }));
-    harness.step();
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .messages
+            .iter()
+            .any(|message| matches!(
+                message,
+                Msg::Shell(ShellRequest::InlineSearchQueryStarted)
+            )),
+        "the first keystroke emits the corpus-load request: {:?}",
+        outcome.messages
+    );
+    // Fire the debounce with a clock tick past the deadline: "o" matches
+    // both rows of the two-item nav-stack level.
+    harness
+        .model_mut()
+        .tick_inline_search_clock(Instant::now() + Duration::from_millis(301));
     let owner = browser_owner(&harness);
     assert_eq!(owner.inline_search().query(), "o");
     assert_eq!(

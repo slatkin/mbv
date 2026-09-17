@@ -13,6 +13,7 @@ use crate::app::shell::{fold_keyboard_messages, fold_mouse_messages};
 use crate::app::render::make_movie_app;
 use crate::app::tests_tick_harness::TickHarness;
 use crate::app::{PanelFocus, PanelMode, TabSelection};
+use std::time::{Duration, Instant};
 
 fn tv_harness() -> TickHarness {
     let mut app = make_movie_app();
@@ -90,6 +91,106 @@ fn step_without_sync(harness: &mut TickHarness) -> Vec<Msg> {
     let folded = fold_mouse_messages(raw_messages);
     let router = harness.model_mut().router_outcome(&folded);
     fold_keyboard_messages(folded, pre_fold_focus.as_ref(), &router)
+}
+
+/// One tick whose shell requests are handled like the run loop's.
+fn step_and_drain(harness: &mut TickHarness) {
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+}
+
+/// Opens Inline Search, types a query, and fires its debounce with a clock
+/// tick past the deadline (no wall-clock waiting).
+fn search_series(harness: &mut TickHarness, query: &str) {
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(harness);
+    for ch in query.chars() {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Char(ch),
+            modifiers: KeyModifiers::NONE,
+        }));
+        step_and_drain(harness);
+    }
+    harness
+        .model_mut()
+        .tick_inline_search_clock(Instant::now() + Duration::from_millis(301));
+}
+
+/// Enter on a Series search result navigates the library list to the
+/// series' natural place and opens its workspace (Wide) / the Library Hero
+/// overlay (Narrow) -- the ordinary browser Enter flow, launched from
+/// search (inline-library-search spec, "Enter on a Series result").
+#[test]
+fn enter_on_a_series_search_result_navigates_and_opens_the_workspace() {
+    let mut harness = tv_harness();
+    search_series(&mut harness, "Second");
+    assert!(harness.model().active_inline_search_is_open());
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(
+        !harness.model().active_inline_search_is_open(),
+        "activation dismisses Inline Search"
+    );
+    let level = harness.model().app.libs[0].nav_stack.last().unwrap();
+    assert_eq!(
+        level.resting().cursor(),
+        1,
+        "the list cursor rests on the activated series"
+    );
+    assert_eq!(
+        tv(&harness).selected_item().map(|item| item.id),
+        Some("series-1".to_string()),
+        "the workspace targets the activated series"
+    );
+    assert!(
+        tv(&harness).episode_pane_focused(),
+        "the workspace is active: episode selection holds the focus"
+    );
+}
+
+#[test]
+fn enter_on_a_series_search_result_narrow_opens_the_hero_overlay() {
+    let mut harness = tv_harness();
+    harness.model_mut().app.terminal_width = 80;
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+    search_series(&mut harness, "Second");
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    step_and_drain(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert!(
+        !harness.model().active_inline_search_is_open(),
+        "activation dismisses Inline Search"
+    );
+    assert!(
+        panel(&harness).test_hero_overlay_open(),
+        "narrow activation opens the Library Hero overlay"
+    );
+    let level = harness.model().app.libs[0].nav_stack.last().unwrap();
+    assert_eq!(level.resting().cursor(), 1);
+    assert!(
+        tv(&harness).episode_pane_focused(),
+        "the overlay's workspace is active: episode selection holds the focus"
+    );
 }
 
 #[test]

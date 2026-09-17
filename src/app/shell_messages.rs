@@ -190,6 +190,9 @@ impl Model {
                     ShellRequest::OpenInlineSearch => {
                         self.open_inline_search();
                     }
+                    ShellRequest::InlineSearchQueryStarted => {
+                        self.inline_search_query_started();
+                    }
                     ShellRequest::InlineSearchActivate { id, item_type } => {
                         self.activate_inline_search_item(id, item_type);
                     }

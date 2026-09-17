@@ -9,6 +9,7 @@ use crate::app::components::media_list::MediaListSurfaceInput;
 use crate::app::components::msg::{Msg, ShellRequest};
 use crate::app::tests::{make_item, make_items};
 use ratatui::layout::{Position, Rect};
+use std::time::{Duration, Instant};
 use tuirealm::event::{Key, KeyEvent as TuiKeyEvent, KeyModifiers};
 
 // The wide-Movies right-rail Inline Search painting this file used to cover
@@ -53,8 +54,8 @@ fn browser_owner_slash_opens_inline_search_as_a_list_slot() {
 
 /// While search is open, a character that is otherwise a list shortcut (`r`
 /// -> `EmbyLibraryRefresh`) is appended to the query instead of running the
-/// shortcut, and the owner returns immediately without an ordinary `Msg`
-/// (design.md D4).
+/// shortcut; the first keystroke reports the query-start edge the shell
+/// turns into the corpus load (design.md D4).
 #[test]
 fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
     let mut owner = BrowserOwner::new(LibraryKind::Generic);
@@ -71,8 +72,19 @@ fn browser_owner_search_open_shortcut_letter_becomes_query_text() {
 
     assert_eq!(owner.inline_search().query(), "r");
     assert_eq!(
+        message,
+        Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted)),
+        "the first keystroke reports the query-start edge"
+    );
+    // Subsequent keystrokes are not edges: no repeat corpus-load request.
+    let message = owner.on_key(&TuiKeyEvent {
+        code: Key::Char('u'),
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(owner.inline_search().query(), "ru");
+    assert_eq!(
         message, None,
-        "shortcut letter must not reach the ordinary handler while search is open"
+        "only the empty-to-non-empty edge emits the request"
     );
 }
 
@@ -95,6 +107,19 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
         make_item("Search Result Alpha", "Movie"),
         make_item("Search Result Beta", "Movie"),
     ]));
+    // Score a query so the result rows exist (an empty query shows none):
+    // type a character, then fire the debounce with a clock tick past the
+    // deadline.
+    owner.on_key(&TuiKeyEvent {
+        code: Key::Char('a'),
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(
+        owner
+            .inline_search_mut()
+            .handle_clock(Instant::now() + Duration::from_millis(301)),
+        "the deadline fires the armed re-score"
+    );
     // The panel would have set this from its own paint; seed it directly so
     // the owner's point resolution has real painted geometry to read.
     *owner.inline_search_mut().layout_mut() = Rect::new(0, 0, 40, 10);

@@ -133,6 +133,10 @@ fn wide_tv_search_paints_in_browser_pane_not_hero_pane() {
             "Search Result Alpha",
             "Series",
         )]));
+    // An empty query shows no results; score one so the row paints.
+    tv_mut(&mut panel)
+        .inline_search_mut()
+        .restore_query("Alpha".into());
 
     let terminal = paint(&mut panel, 100, 20);
 
@@ -211,6 +215,10 @@ fn wide_tv_search_right_click_on_result_opens_context_menu() {
             "Search Result Alpha",
             "Series",
         )]));
+    // An empty query shows no results; score one so the row is a target.
+    tv_mut(&mut panel)
+        .inline_search_mut()
+        .restore_query("Alpha".into());
 
     paint(&mut panel, 100, 20);
     let list_area = *tv(&panel).inline_search().layout();

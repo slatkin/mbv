@@ -53,6 +53,20 @@ impl Model {
         })
     }
 
+    /// Whether the active destination's search corpus is still being built:
+    /// the flat whole-library fetch, or the recursive album index.
+    fn inline_search_corpus_loading(&self, index: usize) -> bool {
+        if self.app.recursive_album_search_enabled(index) {
+            let library_id = self.app.libs[index].library.id.clone();
+            matches!(
+                self.app.album_indexes.get(&library_id),
+                Some(AlbumIndexState::Loading { .. })
+            )
+        } else {
+            self.inline_search_needs_full_load(index)
+        }
+    }
+
     pub(super) fn dismiss_active_inline_search(&mut self) {
         let _ = self.with_active_inline_search_host(|host| host.close_inline_search());
     }
@@ -67,12 +81,16 @@ impl Model {
         if !has_session {
             return;
         }
-        // Flat path: this push only projects the flat `Items` pool. Loading
-        // is exactly while the whole-library fetch backing `all_items` is
-        // outstanding (see `inline_search_needs_full_load`). Intermediate
-        // pushes -- resize, browse completion, activation -- keep the spinner
-        // up; the completion push (all_items now present) clears it.
-        let loading = self.inline_search_needs_full_load(index);
+        // Loading is a started query's outstanding corpus load: an empty
+        // query has nothing to load for (the fetch is deferred to the first
+        // keystroke), and the corpus source depends on the flat/recursive
+        // mode (see `inline_search_corpus_loading`). Intermediate pushes --
+        // resize, browse completion, activation -- keep the spinner up; the
+        // completion push (corpus now present) clears it.
+        let query_started = self
+            .active_inline_search_session_ref()
+            .is_some_and(|host| !host.inline_search().query().is_empty());
+        let loading = query_started && self.inline_search_corpus_loading(index);
         let recursive = self.app.recursive_album_search_enabled(index);
         let pool = if recursive {
             let library_id = self.app.libs[index].library.id.clone();
@@ -103,31 +121,39 @@ impl Model {
         if !self.with_active_inline_search_host(|host| host.open_inline_search()) {
             return;
         }
+        // Initial pool/focus push only; the corpus load is deferred to the
+        // first keystroke (`InlineSearchQueryStarted`), so an open box with
+        // an empty query shows no results and no loading indicator.
+        self.push_inline_search_content();
+    }
+
+    /// The first keystroke landed in an open Inline Search session (the
+    /// control reports the empty→non-empty edge): start the corpus load for
+    /// the active destination, then re-push so the loading indicator and any
+    /// partial pool reflect the started query.
+    pub(super) fn inline_search_query_started(&mut self) {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
-        let recursive = self.app.recursive_album_search_enabled(index);
-        let mut needs_full_load = false;
-        if recursive {
+        if self.app.recursive_album_search_enabled(index) {
             self.app.start_album_index(index, false);
-        } else {
-            needs_full_load = self.inline_search_needs_full_load(index);
-            if needs_full_load {
-                self.app.spawn_search_items_load(index);
-            }
+        } else if self.inline_search_needs_full_load(index) {
+            self.app.spawn_search_items_load(index);
         }
-        // Initial pool/loading/focus push (the deleted mirror's first-frame
-        // projection, at the open event).
         self.push_inline_search_content();
-        if (recursive
-            && matches!(
-                self.app.album_indexes.get(&self.app.libs[index].library.id),
-                Some(AlbumIndexState::Loading { .. })
-            ))
-            || needs_full_load
-        {
-            self.set_inline_search_loading(true);
-        }
+    }
+
+    /// Advances the embedded control's search debounce. Production never
+    /// wired a `UserEvent::Clock` publisher (#609), so the shell supplies
+    /// wall-clock ticks directly, mirroring `tick_search_clock`. Returns
+    /// whether a debounce fired and the scored results changed (a redraw
+    /// signal).
+    pub(super) fn tick_inline_search_clock(&mut self, now: std::time::Instant) -> bool {
+        let mut changed = false;
+        self.with_active_inline_search_host(|host| {
+            changed = host.inline_search_mut().handle_clock(now);
+        });
+        changed
     }
 
     pub(super) fn activate_inline_search_item(&mut self, id: String, item_type: String) {
@@ -163,18 +189,35 @@ impl Model {
         } else if let Some(item) =
             selected.filter(|item| item.id == id && item.item_type == item_type)
         {
+            // A workspace-bearing result (a Series) navigates the library
+            // list to its natural place -- letter pill included -- and opens
+            // its workspace (Wide) or the Library Hero overlay (Narrow),
+            // exactly the ordinary browser Enter flow. Everything else keeps
+            // the existing activation (folder drill-in / playback).
+            if self.app.activate_searched_series(lib_idx, &item) {
+                self.dismiss_active_inline_search();
+                // Re-anchor the owner's selection onto the navigated-to
+                // series before the presentation push reads it (the owner
+                // otherwise preserves its prior stable target).
+                self.reanchor_tv_owner_selection(&item.id);
+                self.push_tv_workspace_content();
+                if self.app.wide_tv_library_area(lib_idx).is_some() {
+                    self.app.activate_selected_series_item(lib_idx, &item);
+                    // The workspace is active: episode selection takes the
+                    // local focus, like music's track-selection mode.
+                    self.focus_tv_owner_episodes();
+                } else {
+                    self.open_library_hero_overlay();
+                }
+                self.push_tv_workspace_content();
+                return;
+            }
             self.app.select_item(lib_idx, item);
         }
         // Activation may have navigated (flat folder push) or queued
         // playback; re-project the pool/focus at this event point, exactly
         // as the deleted per-frame mirror did on the following tick.
         self.push_inline_search_content();
-    }
-
-    fn set_inline_search_loading(&mut self, loading: bool) {
-        self.with_active_inline_search_host(|host| {
-            host.inline_search_mut().set_loading(loading);
-        });
     }
 
     /// Drain tail for the inline search (called from the shell's `lib_rx`

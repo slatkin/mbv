@@ -480,6 +480,19 @@ impl TvContent {
             .find(|item| &item.id == target)
             .map(|item| item.id.clone())
     }
+    /// Shell-driven selection re-anchor (a navigation the shell performed,
+    /// e.g. an Inline Search activation): point the series selection at a
+    /// stable target; the next content push preserves it.
+    pub(in crate::app) fn select_series_target(&mut self, target: &str) {
+        self.carrier.select_target(&target.to_string());
+    }
+    /// Enter episode selection (the wide second-Enter move; the same
+    /// "workspace is active" state the Hero overlay's focused Workspace
+    /// holds in Narrow).
+    pub(in crate::app) fn enter_episode_selection(&mut self) {
+        self.episodes.select_first();
+        self.pane = Pane::Episodes;
+    }
     /// The series item under the component's own cursor, cloned out of the
     /// cached render context. `handle_key`'s Series Enter attaches this to
     /// `ShellRequest::TvActivate` so the shell effect targets the component
@@ -520,6 +533,12 @@ impl TvContent {
     #[cfg(test)]
     pub(in crate::app) fn episode_scroll(&self) -> usize {
         self.episodes.scroll()
+    }
+    /// Test-only: whether the Episodes pane holds the local focus (the
+    /// "workspace is active" state).
+    #[cfg(test)]
+    pub(in crate::app) fn episode_pane_focused(&self) -> bool {
+        self.pane == Pane::Episodes
     }
     pub(in crate::app) fn selected_season(&self) -> Option<(String, String)> {
         let series_id = self.context.selected_series.as_ref()?.id.clone();

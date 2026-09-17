@@ -53,15 +53,17 @@ The search key SHALL have no effect while the library panel is not the focused p
 
 While the input box is open, printable characters SHALL be appended to the query and SHALL NOT be interpreted as library list shortcuts. Each change to the query SHALL re-score the corpus and replace the rendered list contents with the matches.
 
-Matching SHALL be fuzzy, scored against each item's display name, and results SHALL be ordered by descending match score. An empty query SHALL show the whole corpus in its original order.
+Matching SHALL be fuzzy, scored against each item's display name, and results SHALL be ordered by descending match score. An empty query SHALL show no results: the result list SHALL stay empty, without a loading indicator, until the first query character is typed.
 
-The selection SHALL reset to the first result whenever the query changes.
+The scored results SHALL update after typing pauses for a short debounce interval (300 ms) rather than on every keystroke; the typed characters themselves SHALL appear in the input box immediately.
+
+The selection SHALL reset to the first result whenever the scored results re-fire.
 
 #### Scenario: Typing a query
 
 - **WHEN** the user types characters into the open search box
-- **THEN** the characters SHALL appear in the input box
-- **AND** the list below SHALL show only items whose names fuzzy-match the query, ordered by descending score
+- **THEN** the characters SHALL appear in the input box immediately
+- **AND** after the typing debounce elapses, the list below SHALL show only items whose names fuzzy-match the query, ordered by descending score
 
 #### Scenario: A list shortcut letter is typed
 
@@ -69,20 +71,25 @@ The selection SHALL reset to the first result whenever the query changes.
 - **THEN** it SHALL be inserted into the query
 - **AND** the library list action bound to that character SHALL NOT run
 
+#### Scenario: Opening search with an empty query
+
+- **WHEN** the user opens Inline Search and has not typed anything
+- **THEN** the result list SHALL be empty and no corpus load SHALL start
+
 #### Scenario: Query emptied by deletion
 
 - **WHEN** the user deletes back to an empty query without dismissing the search
-- **THEN** the list SHALL show the whole corpus in its original order
+- **THEN** the result list SHALL be empty and no loading indicator SHALL show
 
 ### Requirement: The corpus spans the whole library, not the visible page
 
-The corpus SHALL be the library's full item set, independent of lazy pagination and independent of any active letter-range filter. When the full set is not yet loaded at the moment search opens, the full-library fetch SHALL be started and the input box SHALL show a loading indicator until it completes.
+The corpus SHALL be the library's full item set, independent of lazy pagination and independent of any active letter-range filter. Opening search SHALL NOT start the full-library fetch; the fetch SHALL start with the first query character, and once it is running the input box SHALL show a loading indicator until it completes.
 
 A library configured for recursive album search SHALL use its album index as the corpus, matching against each album's indexed search text rather than its bare display name.
 
 #### Scenario: Only part of the library has been paged in
 
-- **WHEN** the user opens search on a library whose items are only partly loaded
+- **WHEN** the user types the first query character on a library whose items are only partly loaded
 - **THEN** the full item set SHALL be fetched
 - **AND** the input box SHALL show a loading indicator until the fetch completes
 
@@ -127,7 +134,7 @@ Cursor movement SHALL NOT alter the query, and typing SHALL NOT alter the cursor
 
 A result row reached by a mouse-down that began in the Inline Search bar SHALL retain its ordinary row context-menu actions and its Ctrl+P, Ctrl+S, and Ctrl+A shortcut actions.
 
-Pressing Enter on a selected album result SHALL dismiss Inline Search, restore the standard library presentation, focus that album at its ordinary natural pill/list position, and enable that album's track-selection mode. Results that are not album results SHALL retain their existing activation behavior.
+Pressing Enter on a selected album result SHALL dismiss Inline Search, restore the standard library presentation, focus that album at its ordinary natural pill/list position, and enable that album's track-selection mode. Pressing Enter on a selected Series result SHALL dismiss Inline Search, navigate the library list to the Series' natural place -- the cursor resting on it and its letter-range pill group marked when the pill row is shown -- and open the Series' workspace in Wide presentation or the Library Hero overlay in Narrow presentation. Results that are neither album nor Series results SHALL retain their existing activation behavior.
 
 #### Scenario: Moving through results
 
@@ -151,6 +158,13 @@ Pressing Enter on a selected album result SHALL dismiss Inline Search, restore t
 - **THEN** Inline Search SHALL close
 - **AND** the standard library presentation SHALL focus that album in its ordinary natural pill/list position
 - **AND** track-selection mode SHALL be enabled for that album
+
+#### Scenario: Enter on a Series result
+
+- **WHEN** the user presses Enter on a selected Series result
+- **THEN** Inline Search SHALL close
+- **AND** the library list SHALL rest its cursor on that Series with its letter-range pill group marked
+- **AND** the Series' workspace SHALL open in Wide presentation, or the Library Hero overlay SHALL open in Narrow presentation, with the workspace's episode selection active in both
 
 #### Scenario: Navigating an empty result set
 

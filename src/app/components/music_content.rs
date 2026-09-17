@@ -476,6 +476,9 @@ impl LibraryContentOwner for MusicContent {
                     self.inline_search.close();
                     None
                 }
+                Some(super::inline_search::InlineSearchAction::QueryStarted) => {
+                    Some(Msg::Shell(ShellRequest::InlineSearchQueryStarted))
+                }
                 None => None,
             };
         }

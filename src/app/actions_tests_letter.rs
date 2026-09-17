@@ -274,6 +274,88 @@ fn should_show_letter_pills_true_for_tvshows_total(#[case] total: usize) {
     assert!(app.should_show_letter_pills(0));
 }
 
+fn series(id: &str, name: &str) -> EmbyItem {
+    let mut item = make_item(name, "Series");
+    item.id = id.into();
+    item.is_folder = true;
+    item
+}
+
+#[test]
+fn activate_searched_series_marks_the_series_pill_and_cursor() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 1);
+    app.libs[0].library_total = Some(1000);
+    let corpus = vec![series("series-a", "Antelope"), series("series-z", "Zebra")];
+    {
+        let level = app.libs[0].nav_stack.last_mut().unwrap();
+        level.all_items = Some(corpus.clone());
+        level.items = corpus.clone();
+        level.total_count = 2;
+    }
+    let zebra = series("series-z", "Zebra");
+
+    assert!(app.activate_searched_series(0, &zebra));
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    let filter = level.letter_filter.as_ref().expect("pill group marked");
+    assert_eq!(filter.label, "V\u{2013}Z");
+    assert_eq!(
+        level
+            .items
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["series-z"],
+        "the level list narrows to the marked pill's range"
+    );
+    assert_eq!(level.total_count, 1);
+    assert_eq!(level.resting().cursor(), 0, "cursor rests on the series");
+    assert_eq!(
+        level.all_items.as_ref().unwrap().len(),
+        2,
+        "the search corpus is retained for later searches"
+    );
+    assert!(!level.loading);
+}
+
+#[test]
+fn activate_searched_series_without_pills_keeps_the_whole_list() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 1);
+    let corpus = vec![series("series-a", "Antelope"), series("series-z", "Zebra")];
+    {
+        let level = app.libs[0].nav_stack.last_mut().unwrap();
+        level.all_items = Some(corpus.clone());
+        level.items = corpus.clone();
+        level.total_count = 2;
+    }
+    let zebra = series("series-z", "Zebra");
+
+    assert!(app.activate_searched_series(0, &zebra));
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert!(level.letter_filter.is_none(), "no pill row, no filter");
+    assert_eq!(level.items.len(), 2);
+    assert_eq!(level.resting().cursor(), 1);
+}
+
+#[test]
+fn activate_searched_series_miss_returns_false_and_changes_nothing() {
+    let mut app = make_app_stub();
+    app.libs.push(lib_tab("tvshows"));
+    push_top_level_tv(&mut app.libs[0], 1);
+    let absent = series("series-x", "Vanishing");
+
+    assert!(!app.activate_searched_series(0, &absent));
+    assert!(
+        !app.activate_searched_series(0, &series("s", "Antelope")),
+        "a non-Series item never activates as a series"
+    );
+}
+
 #[test]
 fn select_letter_pill_scopes_tv_to_series() {
     let mut app = make_app_stub();

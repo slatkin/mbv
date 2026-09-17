@@ -143,6 +143,26 @@ impl LetterFilter {
         Self::for_index(0).expect("LETTER_FILTER_BUCKETS is non-empty")
     }
 
+    /// The bucket whose fetch bounds contain `key` (an effective sort
+    /// string), or `None` when no bucket matches. Mirrors the server's
+    /// `NameStartsWithOrGreater`/`NameLessThan` scoping so a client-side
+    /// filter agrees with the pill's own fetch.
+    pub(crate) fn for_sort_key(key: &str) -> Option<Self> {
+        LETTER_FILTER_BUCKETS
+            .iter()
+            .enumerate()
+            .find_map(|(index, &(label, name_ge, name_lt))| {
+                let ge_ok = name_ge.is_none_or(|ge| key >= ge);
+                let lt_ok = name_lt.is_none_or(|lt| key < lt);
+                (ge_ok && lt_ok).then_some(LetterFilter {
+                    index,
+                    label,
+                    name_ge,
+                    name_lt,
+                })
+            })
+    }
+
     /// All pill labels in bucket order, for building a `PillBar`.
     pub(crate) fn labels() -> Vec<String> {
         LETTER_FILTER_BUCKETS
