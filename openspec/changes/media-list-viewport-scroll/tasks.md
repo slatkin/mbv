@@ -33,12 +33,12 @@ follow-up units; coordinate before editing the same file.
 
 ## 2. Owner: reachability and leading context (D4)
 
-- [ ] 2.1 Stop raising the window onto the cursor: a cursor move moves the window the minimum distance that
+- [x] 2.1 Stop raising the window onto the cursor: a cursor move moves the window the minimum distance that
   shows the selection, and when that would place the selection on the window's first row with its labelling
   `Heading` directly above, the window moves one row further.
   (Verify: unit tests on a grouped fixture — a move to the first selectable row leaves the `Heading`
   painted; a stored window above the selection is preserved; a step may still scroll the label off.)
-- [ ] 2.2 Reconcile the existing clamp tests with the new rule and delete the assertions that pinned the
+- [x] 2.2 Reconcile the existing clamp tests with the new rule and delete the assertions that pinned the
   edge-pinned window.
   (Verify: `cargo nextest run -p mbv` with the updated `components/media_list/tests.rs`.)
 
