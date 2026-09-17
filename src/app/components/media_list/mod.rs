@@ -574,12 +574,22 @@ impl<Target> MediaList<Target> {
             if index == self.selectable.len() {
                 return;
             }
+            // The nearest candidate may still sit beyond the window's last row
+            // (e.g. a `Heading`/`Spacer` run fills the window): a row outside
+            // `[top, top + height)` is not one the window shows, so the
+            // selection stays where it is.
+            if self.selectable[index] >= top + height {
+                return;
+            }
             index
         } else {
             let index = self
                 .selectable
                 .partition_point(|&candidate| candidate <= top + height - 1);
             if index == 0 {
+                return;
+            }
+            if self.selectable[index - 1] < top {
                 return;
             }
             index - 1

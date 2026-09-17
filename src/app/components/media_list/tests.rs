@@ -227,6 +227,53 @@ fn viewport_drag_skips_structural_rows_in_both_directions() {
     assert_eq!(list.selected_target(), Some(&"b".to_string()));
 }
 
+// Task 1.1 / D3: a window whose rows are all structural (`Heading`/`Spacer`)
+// shows no selectable row, so the selection stays where it is even though the
+// nearest selectable candidate lies outside the moved window.
+#[test]
+fn viewport_step_leaves_the_selection_when_the_window_shows_no_selectable_row() {
+    let mut list = MediaList::new();
+    list.set_content(vec![
+        MediaListRow::Heading { text: "A".into() },
+        item("a"),
+        MediaListRow::Heading { text: "B".into() },
+        MediaListRow::Spacer,
+        item("b"),
+    ]);
+    // Display rows: 0=Heading, 1=a, 2=Heading, 3=Spacer, 4=b.
+    // Step down from window [1, 3) with the selection on its first visible
+    // row: the new window [2, 4) holds only the `Heading` and the `Spacer`,
+    // and the nearest selectable row past the top ("b", row 4) is outside it,
+    // so the selection stays on "a" while the window alone moves.
+    list.set_scroll(1);
+    list.select_target(&"a".to_string());
+    assert!(list.scroll_viewport(1, 2));
+    assert_eq!(list.scroll(), 2);
+    assert_eq!(list.selected_target(), Some(&"a".to_string()));
+    // Mirrored upward: step up from window [2, 4) with the selection on its
+    // last visible row; the new window [1, 3) holds the `Heading` and the
+    // `Spacer`, and the nearest selectable row before the bottom ("a", row 1)
+    // is inside it, so use a list whose nearest candidate falls below instead.
+    let mut list = MediaList::new();
+    list.set_content(vec![
+        item("a"),
+        MediaListRow::Heading { text: "B".into() },
+        MediaListRow::Spacer,
+        MediaListRow::Heading { text: "C".into() },
+        MediaListRow::Spacer,
+        item("b"),
+    ]);
+    // Display rows: 0=a, 1=Heading, 2=Spacer, 3=Heading, 4=Spacer, 5=b.
+    list.set_scroll(2);
+    list.select_target(&"b".to_string());
+    assert!(list.scroll_viewport(-1, 2));
+    assert_eq!(list.scroll(), 1);
+    // The new window [1, 3) holds only structural rows and the nearest
+    // selectable row before its bottom ("a", row 0) is outside it, so the
+    // selection stays on "b".
+    assert_eq!(list.selected_target(), Some(&"b".to_string()));
+}
+
 // Task 1.2: a page moves by the painted height and drags the selection.
 #[test]
 fn viewport_page_moves_by_the_painted_height_and_drags() {

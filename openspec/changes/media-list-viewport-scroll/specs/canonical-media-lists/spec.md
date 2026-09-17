@@ -18,14 +18,14 @@ window, and the wheel and page chords SHALL move the selection only through the 
 
 #### Scenario: A step inside the window moves only the viewport
 
-- **WHEN** the user steps the viewport down while the selection is not on the window's last visible row
+- **WHEN** the user steps the viewport down while the selection is not on the window's first visible row
 - **THEN** the window moves one display row
 - **AND** the selection keeps its stable target and its painted screen row
 
 #### Scenario: A step at the window edge drags the selection
 
-- **WHEN** the user steps the viewport up while the selection is on the window's first visible row
-- **THEN** the window moves up one display row
+- **WHEN** the user steps the viewport down while the selection is on the window's first visible row
+- **THEN** the window moves down one display row
 - **AND** the selection moves with it so it stays inside the window
 
 #### Scenario: Stepping back to the top restores the leading heading
