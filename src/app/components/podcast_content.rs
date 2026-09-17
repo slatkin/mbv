@@ -64,7 +64,6 @@ impl PodcastContent {
         // snapshot's selected_id can lag a provider refresh, so do not use it
         // to decide whether the open Hero still represents the same show.
         let prior_target = self.carrier.selected_target().cloned();
-        let projected_detail_loading = snapshot.detail_loading;
         let survived = self.initialized
             && prior_target.as_ref().is_some_and(|prior| {
                 snapshot
@@ -97,11 +96,9 @@ impl PodcastContent {
         } else if survived {
             // Re-anchor through the same target-to-state selection seam used
             // by list movement; it resets the episode workspace only when the
-            // show identity actually changes.
+            // show identity actually changes. The workspace reads the
+            // per-show episode cache directly through the snapshot.
             self.sync_show_selection();
-            if let Some(target) = self.carrier.selected_target() {
-                self.state.episodes = self.state.detail_cache.get(target).cloned();
-            }
         } else {
             self.episode_filter = AudiobookshelfEpisodeFilter::All;
             self.episode_focused = false;
@@ -109,18 +106,18 @@ impl PodcastContent {
             self.state.select(0);
             self.episode_list.select_first();
         }
-        // `sync_show_selection` uses the ordinary selection seam, which
-        // clears its local loading bit. Restore the provider projection so a
-        // delayed detail completion remains visible to the mounted owner.
-        self.state.detail_loading = projected_detail_loading;
         self.initialized = true;
         self.project_episode_rows();
     }
 
     fn project_episode_rows(&mut self) {
+        // Transitional workspace view: the selected show's cached episodes.
+        // The flat grouped episode browser across shows lands with the owner
+        // rewrite; the grouping builder is already state-level
+        // (`podcast_display_rows`).
         let rows = self
             .state
-            .visible_episodes(self.episode_filter)
+            .visible_episodes_from(self.state.selected_episodes(), self.episode_filter)
             .into_iter()
             .map(|episode| MediaListRow::Item {
                 target: episode.episode_id.clone(),
@@ -217,12 +214,11 @@ impl PodcastContent {
         }))
     }
 
-    fn select_bucket(&mut self, position: usize) -> Option<Msg> {
-        let bucket =
-            crate::app::types_audiobookshelf_browse::build_show_title_buckets(&self.state.shows)
-                .get(position)?
-                .start;
-        let target = self.state.shows.get(bucket)?.library_item_id.clone();
+    /// Transitional pill row: one pill per show in show order (the surname
+    /// buckets left this tab). The state pills join the bar with the owner
+    /// rewrite; the state already keys shows by identity.
+    fn select_show_pill(&mut self, position: usize) -> Option<Msg> {
+        let target = self.state.shows.get(position)?.library_item_id.clone();
         self.carrier.select_target(&target);
         self.sync_show_selection();
         self.show_move()
@@ -284,9 +280,7 @@ impl PodcastContent {
                 }),
             }
         });
-        let buckets =
-            crate::app::types_audiobookshelf_browse::build_show_title_buckets(&self.state.shows);
-        let active_bucket = self
+        let active_show = self
             .state
             .selected_id
             .as_ref()
@@ -296,18 +290,15 @@ impl PodcastContent {
                     .iter()
                     .position(|show| &show.library_item_id == id)
             })
-            .and_then(|cursor| {
-                buckets
-                    .iter()
-                    .position(|bucket| (bucket.start..bucket.end).contains(&cursor))
-            })
             .unwrap_or(0);
-        let selector = (!buckets.is_empty()).then(|| SelectorRow {
-            pills: buckets
+        let selector = (!self.state.shows.is_empty()).then(|| SelectorRow {
+            pills: self
+                .state
+                .shows
                 .iter()
-                .map(|bucket| bucket.label.to_string())
+                .map(|show| show.title.clone())
                 .collect(),
-            active: Some(active_bucket),
+            active: Some(active_show),
         });
         let list = if self.state.shows.is_empty() {
             ListSlot::Empty {
@@ -361,7 +352,7 @@ impl LibraryContentOwner for PodcastContent {
     }
     fn on_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
         match event {
-            LibrarySlotEvent::SelectorPicked(index) => self.select_bucket(index),
+            LibrarySlotEvent::SelectorPicked(index) => self.select_show_pill(index),
             LibrarySlotEvent::WorkspaceSelectorPicked(index)
             | LibrarySlotEvent::ControlPicked(index) => {
                 let filter = *AudiobookshelfEpisodeFilter::ALL.get(index)?;

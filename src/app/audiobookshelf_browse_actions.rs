@@ -33,15 +33,12 @@ impl App {
         let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
             return;
         };
-        if let Some(cached) = state.detail_cache.get(&library_item_id).cloned() {
-            state.episodes = Some(cached);
-            state.detail_loading = false;
+        if state.detail_cache.contains_key(&library_item_id)
+            || state.detail_loading_ids.contains(&library_item_id)
+        {
             return;
         }
-        if state.episodes.is_some() || state.detail_loading {
-            return;
-        }
-        state.detail_loading = true;
+        state.detail_loading_ids.insert(library_item_id.clone());
         let config_snapshot = self.config.lock().unwrap().clone();
         let Some((setup, key)) =
             super::service_startup::audiobookshelf_setup_and_key(&config_snapshot)
@@ -126,8 +123,7 @@ impl App {
             state.total = 0;
             state.next_page = 0;
             state.error = None;
-            state.detail_cache.clear();
-            state.episodes = None;
+            state.clear_episodes();
             // `episode_filter` / episode-pane focus / `scroll` are
             // component-owned now (split-browse-state-interaction-fields task
             // 3.2); the content push after this reset drops the selected show,
@@ -346,14 +342,18 @@ impl App {
         let state = self
             .audiobookshelf_browse
             .get(audiobookshelf_library_index)?;
-        let episode = state.episodes.as_deref()?.iter().find(|episode| {
-            episode.library_item_id == target.library_item_id()
-                && episode.episode_id == target.episode_id()
-        })?;
+        // The episode is resolved by its own `(library_item_id, episode_id)`
+        // identity from the per-show cache, never from the tab's current
+        // selection: selection is pill/episode identity now, and the queue
+        // item's parent-show metadata follows the episode (design D6).
+        let episode = state.episode_by_identity(target.library_item_id(), target.episode_id())?;
         if episode.library_item_id.trim().is_empty() || episode.episode_id.trim().is_empty() {
             return None;
         }
-        let show = state.selected_show();
+        let show = state
+            .shows
+            .iter()
+            .find(|show| show.library_item_id == episode.library_item_id);
         let progress = state
             .progress
             .get(&(episode.library_item_id.clone(), episode.episode_id.clone()));

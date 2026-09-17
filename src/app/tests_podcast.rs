@@ -22,16 +22,17 @@ pub(crate) fn audiobookshelf_app() -> App {
             cover_path: None,
         }],
     );
-    state.episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    state.detail_cache.insert(
+        "show-a".into(),
+        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),
             description: None,
             published_at: None,
             duration_seconds: None,
-        },
-    ]);
+        }],
+    );
     app.audiobookshelf_libraries.push(library);
     app.audiobookshelf_browse.push(state);
     app.tab = TabSelection::AudiobookshelfLibrary(0);
@@ -178,16 +179,17 @@ fn audiobookshelf_episode_activation_seams_do_not_mutate_queue() {
 fn audiobookshelf_episode_handlers_build_native_item_from_read_only_snapshot() {
     let mut app = audiobookshelf_app();
     let state = &mut app.audiobookshelf_browse[0];
-    state.episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    state.detail_cache.insert(
+        "show-a".into(),
+        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),
             description: None,
             published_at: Some(1_704_153_600),
             duration_seconds: Some(1234.5),
-        },
-    ]);
+        }],
+    );
     state.progress.insert(
         ("show-a".into(), "episode-a".into()),
         mbv_core::audiobookshelf::AudiobookshelfProgress {
@@ -241,7 +243,9 @@ fn audiobookshelf_episode_handlers_leave_unselected_rows_without_queue_items() {
     assert_eq!(app.player_tab.total_queue_len(), 0);
 
     // Empty visible list.
-    app.audiobookshelf_browse[0].episodes = Some(Vec::new());
+    app.audiobookshelf_browse[0]
+        .detail_cache
+        .insert("show-a".into(), Vec::new());
     assert!(app.activate_audiobookshelf_episode(0, 0).is_none());
     assert!(app.enqueue_audiobookshelf_episode(0, 0).is_none());
     assert_eq!(app.player_tab.total_queue_len(), 0);
@@ -256,6 +260,44 @@ fn audiobookshelf_episode_seams_noop_on_absent_index() {
     assert_eq!(app.player_tab.total_queue_len(), 0);
     assert_eq!(app.audiobookshelf_browse.len(), 1);
     assert!(matches!(app.tab, TabSelection::AudiobookshelfLibrary(0)));
+}
+
+/// The saved-position path no longer treats a show id as the tab's
+/// selection (task 2.3): saving writes no focused item even with a selected
+/// show, and restoring a legacy show-id position does not adopt it.
+#[test]
+fn podcast_saved_positions_do_not_record_or_restore_a_show_id() {
+    let mut app = audiobookshelf_app();
+    app.config.lock().unwrap().audiobookshelf_setup =
+        Some(mbv_core::config::AudiobookshelfSetup::new("https://podcasts.example"));
+
+    // A selected show is still not recorded as the position's focused item.
+    assert_eq!(app.audiobookshelf_browse[0].selected_id.as_deref(), Some("show-a"));
+    app.save_audiobookshelf_position(0);
+    let saved = &app.library_position_state.libraries["audiobookshelf:https://podcasts.example:abs-podcasts"];
+    assert_eq!(saved.levels[0].focused_item_id, None);
+
+    // A legacy saved position names a show id; restore ignores it instead of
+    // treating it as the tab's selection.
+    let mut app = audiobookshelf_app();
+    app.library_position_state.libraries.insert(
+        "audiobookshelf:https://podcasts.example:abs-podcasts".into(),
+        crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                focused_item_id: Some("show-old".into()),
+                ..Default::default()
+            }],
+            ..Default::default()
+        },
+    );
+    // Tab off the library so restore performs no episode fetch.
+    app.tab = TabSelection::Home;
+    app.activate_audiobookshelf_position(0);
+    assert_eq!(
+        app.audiobookshelf_browse[0].selected_id.as_deref(),
+        Some("show-a"),
+        "restore starts on the first show, never the saved show id"
+    );
 }
 
 /// F5 on the Audiobookshelf destination clears the current catalog and then
@@ -274,7 +316,7 @@ fn audiobookshelf_f5_restarts_catalog_after_clear() {
     let state = &app.audiobookshelf_browse[0];
     assert!(state.shows.is_empty(), "catalog must be cleared on refresh");
     assert_eq!(state.total, 0);
-    assert!(state.episodes.is_none());
+    assert!(state.detail_cache.is_empty());
     assert!(
         state.loading_pages.contains(&0),
         "page 0 must be marked pending so the catalog request restarts"

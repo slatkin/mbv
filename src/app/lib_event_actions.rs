@@ -311,16 +311,13 @@ impl App {
             match result {
                 Ok(episodes) => {
                     if let Some(state) = state {
-                        state.detail_loading = false;
-                        state.cache_detail(library_item_id.clone(), episodes.clone());
-                        if state.selected_id.as_deref() == Some(&library_item_id) {
-                            state.episodes = Some(episodes);
-                        }
+                        state.detail_loading_ids.remove(&library_item_id);
+                        state.cache_detail(library_item_id, episodes);
                     }
                 }
                 Err(_error) => {
                     if let Some(state) = state {
-                        state.detail_loading = false;
+                        state.detail_loading_ids.remove(&library_item_id);
                     }
                 }
             }
@@ -347,9 +344,11 @@ impl App {
                         Ok(page) => {
                             state.append_page(page.page, page.limit, page.total, page.items);
                             next_page = state.needs_page();
-                            if state.episodes.is_none() && !state.detail_loading {
-                                selected_detail = state.selected_id.clone();
-                            }
+                            // The selected show's episodes feed the per-show
+                            // cache; the detail start re-checks the cache and
+                            // the in-flight marks, so a show is fetched at
+                            // most once per session.
+                            selected_detail = state.selected_id.clone();
                         }
                         Err(error) => state.error = Some(error.to_string()),
                     }

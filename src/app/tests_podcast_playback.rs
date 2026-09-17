@@ -109,16 +109,17 @@ fn audiobookshelf_ordinary_actions_reject_unsupported_owner_without_side_effects
 #[test]
 fn audiobookshelf_unavailable_episode_row_has_no_queue_or_playback_side_effects() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.audiobookshelf_browse[0].episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    app.audiobookshelf_browse[0].detail_cache.insert(
+        "show-a".into(),
+        vec![mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
             library_item_id: "show-a".into(),
             episode_id: String::new(),
             title: "Unavailable".into(),
             description: None,
             published_at: None,
             duration_seconds: None,
-        },
-    ]);
+        }],
+    );
 
     app.play_selected_audiobookshelf_episode(
         0,
@@ -138,24 +139,27 @@ fn audiobookshelf_unavailable_episode_row_has_no_queue_or_playback_side_effects(
 #[test]
 fn audiobookshelf_progress_ack_updates_matching_queue_slots_and_browse_state() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.audiobookshelf_browse[0].episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            title: "Episode A".into(),
-            description: None,
-            published_at: None,
-            duration_seconds: Some(120.0),
-        },
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-b".into(),
-            title: "Episode B".into(),
-            description: None,
-            published_at: None,
-            duration_seconds: Some(120.0),
-        },
-    ]);
+    app.audiobookshelf_browse[0].detail_cache.insert(
+        "show-a".into(),
+        vec![
+            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                title: "Episode A".into(),
+                description: None,
+                published_at: None,
+                duration_seconds: Some(120.0),
+            },
+            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-b".into(),
+                title: "Episode B".into(),
+                description: None,
+                published_at: None,
+                duration_seconds: Some(120.0),
+            },
+        ],
+    );
     enable_audiobookshelf_owner(&app);
     app.play_selected_audiobookshelf_episode(
         0,
@@ -336,24 +340,27 @@ fn stale_audiobookshelf_progress_ack_is_ignored_after_generation_advance() {
 #[test]
 fn audiobookshelf_progress_via_daemon_route_updates_queue_and_browse() {
     let mut app = super::tests_podcast::audiobookshelf_app();
-    app.audiobookshelf_browse[0].episodes = Some(vec![
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-a".into(),
-            title: "Episode A".into(),
-            description: None,
-            published_at: None,
-            duration_seconds: Some(120.0),
-        },
-        mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
-            library_item_id: "show-a".into(),
-            episode_id: "episode-b".into(),
-            title: "Episode B".into(),
-            description: None,
-            published_at: None,
-            duration_seconds: Some(120.0),
-        },
-    ]);
+    app.audiobookshelf_browse[0].detail_cache.insert(
+        "show-a".into(),
+        vec![
+            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                title: "Episode A".into(),
+                description: None,
+                published_at: None,
+                duration_seconds: Some(120.0),
+            },
+            mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-b".into(),
+                title: "Episode B".into(),
+                description: None,
+                published_at: None,
+                duration_seconds: Some(120.0),
+            },
+        ],
+    );
     enable_audiobookshelf_owner(&app);
     app.play_selected_audiobookshelf_episode(
         0,

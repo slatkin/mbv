@@ -127,8 +127,11 @@ fn podcast_panel_owns_one_surface_at_wide_and_normal_breakpoints() {
 fn podcast_narrow_hero_workspace_completes_and_reanchors_stably() {
     let mut app = audiobookshelf_app();
     let browse = &mut app.audiobookshelf_browse[0];
-    browse.episodes = None;
-    browse.detail_loading = true;
+    // Under the per-show cache the fixture's pre-cached episodes would
+    // already be the view; a fetch in flight means the show is not cached
+    // yet, so drop the fixture's entry for this scenario.
+    browse.detail_cache.clear();
+    browse.detail_loading_ids.insert("show-a".into());
     let mut harness = TickHarness::new(app);
 
     // The mounted tick opens the selected parent in Narrow geometry even
@@ -148,7 +151,9 @@ fn podcast_narrow_hero_workspace_completes_and_reanchors_stably() {
         .expect("Library panel");
     assert!(panel.test_hero_overlay_open());
     assert!(panel.test_overlay_geometry().is_some());
-    assert!(harness.model().app.audiobookshelf_browse[0].detail_loading);
+    assert!(harness.model().app.audiobookshelf_browse[0]
+        .detail_loading_ids
+        .contains("show-a"));
     assert!(podcast(&mut harness).episode_rows().is_empty());
 
     // Provider completion is injected at the state boundary; the same owner
@@ -162,13 +167,14 @@ fn podcast_narrow_hero_workspace_completes_and_reanchors_stably() {
         duration_seconds: None,
     };
     let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
-    browse.detail_loading = false;
+    browse.detail_loading_ids.remove("show-a");
     browse.cache_detail("show-a".into(), vec![episode]);
-    browse.episodes = browse.detail_cache.get("show-a").cloned();
     harness.model_mut().push_audiobookshelf_podcast_content();
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness, 80);
-    assert!(!harness.model().app.audiobookshelf_browse[0].detail_loading);
+    assert!(!harness.model().app.audiobookshelf_browse[0]
+        .detail_loading_ids
+        .contains("show-a"));
     assert!(matches!(
         podcast(&mut harness).episode_rows().first(),
         Some(MediaListRow::Item { target, .. }) if target == "episode-ready"
@@ -206,13 +212,14 @@ fn podcast_narrow_hero_workspace_completes_and_reanchors_stably() {
     // An empty provider completion remains an empty Workspace, not a stale
     // copy of the previous child list.
     let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
-    browse.detail_loading = false;
+    browse.detail_loading_ids.remove("show-a");
     browse.cache_detail("show-a".into(), Vec::new());
-    browse.episodes = Some(Vec::new());
     harness.model_mut().push_audiobookshelf_podcast_content();
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness, 80);
-    assert!(!harness.model().app.audiobookshelf_browse[0].detail_loading);
+    assert!(!harness.model().app.audiobookshelf_browse[0]
+        .detail_loading_ids
+        .contains("show-a"));
     assert!(podcast(&mut harness).episode_rows().is_empty());
 }
 

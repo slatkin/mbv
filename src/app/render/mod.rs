@@ -41,7 +41,8 @@ pub(in crate::app) use components::library_routes::{
 };
 pub(in crate::app) use components::list_rows::LibraryListRenderCtx;
 pub(in crate::app) use screens::feeds_model::{
-    current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
+    current_time_secs, feed_age_group, feed_display_rows, feed_duration_text, FeedAgeGroup,
+    FeedDisplayRow,
 };
 // `LetterFilter` is already `pub(crate)` re-exported below (screens::sort_filter).
 pub(in crate::app) use components::media_list::render_wide_media_list_component;
