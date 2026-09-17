@@ -144,12 +144,43 @@ this test.
 
 ## 6. Gates + integration evidence
 
-- [ ] 6.1 `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D
+- [x] 6.1 `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D
   warnings`, `cargo nextest run -p mbv` and `-p mbv-core`, `openspec
   validate --all`.
-- [ ] 6.2 Rerun the search-path tick-integration tests (TV wide/narrow Series
+  (Accepted: `bef854a0`; fmt clean, workspace clippy clean, `nextest -p mbv`
+  1536/1536, `-p mbv-core` 543/543, `openspec validate --all` 77/77 —
+  including the two other sessions' changes in this shared checkout.
+  Re-checked at the final HEAD `ea836da7`: fmt clean, validate 77/77.)
+- [x] 6.2 Rerun the search-path tick-integration tests (TV wide/narrow Series
   activation, Music ctrl+A/album activation, Movies pool push) through
   real `Application::tick()`; adjust only seed calls, not the flows.
-- [ ] 6.3 Buffer-coverage check per AGENTS.md TUI rules: Wide and Narrow each
+  (Accepted: `bef854a0`; all pass with zero edits —
+  `enter_on_a_series_search_result_navigates_and_opens_the_workspace` (TV
+  wide), `enter_on_a_series_search_result_narrow_opens_the_hero_overlay`
+  (TV narrow), `ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick`
+  and `enter_on_inline_search_album_result_defers_to_async_activation`
+  (Music), `inline_search_on_movies_library_receives_the_shell_pool_push`
+  (Movies).)
+- [x] 6.3 Buffer-coverage check per AGENTS.md TUI rules: Wide and Narrow each
   paint one bar + one result list; absent panels unmounted with empty
   areas; hit geometry follows the carrier's retained rects.
+  (Accepted: `ea836da7`, from `bef854a0`; four new evidence tests. One bar +
+  one list: existing wide `active_search_takes_the_selector_row_and_the_list_box`
+  + new `narrow_search_paints_one_search_bar_and_one_result_list`. Absence:
+  `closed_search_paints_no_search_surface_and_no_hit_geometry` now paints the
+  session first, closes it, and proves the retained rect drops, no search text
+  paints, a stale point no-ops and the browse list still paints; the change
+  adds/removes no Panel (`sub_breakpoint_area_paints_nothing` covers the rest).
+  Hit geometry after a repaint: `browser_owner_search_pointer_resolves_against_the_latest_repaint`
+  (stale point no-ops, newest rect resolves). Transition:
+  `presentation_transition_keeps_one_search_owner_across_wide_and_narrow`
+  (40 overflow rows, exact clamped offset `selected_row + 1 - viewport_height`,
+  selection and same owner preserved). Both delta specs' scenarios are mapped;
+  re-score reset and corpus-arrival preservation are U1's
+  `re_score_resets_selection_to_the_first_result` and
+  `pool_refresh_preserves_the_selected_target`.
+
+Recorded note (accepted, not fixed): in the closed-search test the
+claims/resolve assertions follow from the cleared retained rect, and the old
+rect coincides with the browse list box, so a hypothetical
+both-owners-claim-the-point regression would not be caught by it.
