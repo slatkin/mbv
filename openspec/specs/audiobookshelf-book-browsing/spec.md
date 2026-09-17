@@ -112,7 +112,7 @@ The selected book hero SHALL place the selected book's Audiobookshelf cover in t
 - **THEN** the hero SHALL display it as unstarted rather than borrowing progress from another book
 
 ### Requirement: Chapters render as first-class rows in the persistent list
-The book tab's persistent list (the Music track list's analog) SHALL render one row per chapter from the selected book's Audiobookshelf `chapters[]`, using the book-relative chapter title and duration. Chapter rows SHALL use provider-native identity and SHALL NOT be converted to an Emby or podcast episode row shape. Chapter or audio-file detail SHALL be fetched as soon as the browser cursor moves onto a book, mirroring the Music tab's eager track fetch, rather than only after an explicit book-open action.
+The book tab's persistent list (the Music track list's analog) SHALL render one row per chapter from the selected book's Audiobookshelf `chapters[]`, using the book-relative chapter title, with no duration time. Chapter rows SHALL use provider-native identity and SHALL NOT be converted to an Emby or podcast episode row shape. Chapter or audio-file detail SHALL be fetched as soon as the browser cursor moves onto a book, mirroring the Music tab's eager track fetch, rather than only after an explicit book-open action.
 
 #### Scenario: Selected book has chapters
 - **WHEN** the selected book has one or more chapters
