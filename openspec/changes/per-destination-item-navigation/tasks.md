@@ -2,12 +2,12 @@
 
 ## 1. Reveal-item resolution (worker side)
 
-- [ ] 1.1 In `spawn_navigate_to_item` (`src/app/library_browse_actions.rs`), resolve
+- [x] 1.1 In `spawn_navigate_to_item` (`src/app/library_browse_actions.rs`), resolve
   the reveal item per design D1 before building state: Episode/Season → owning
   Series via `series_id` (`get_ancestors` fallback), Audio track → `album_id`
   album, Series → itself, Movie/generic → itself. Verify with a unit table test
   over item_type → reveal kind resolution (mocked Emby boundary).
-- [ ] 1.2 Carry the reveal item in the `LibEvent::NavigateTo` payload (design D2):
+- [x] 1.2 Carry the reveal item in the `LibEvent::NavigateTo` payload (design D2):
   the Movie/generic arm keeps the built nav stack; show/album arms send the
   reveal item. Verify the exhaustive dispatch compiles with the new field and
   `cargo check -p mbv` is clean.
@@ -48,7 +48,7 @@
   (landing replaces the saved Library position; stale restore discarded).
   Verify by extending `navigate_to_item_keeps_navigated_cursor_across_tab_switch`
   with a late in-flight `RestoreLibraryPosition` for the pre-navigation state.
-- [ ] 4.2 Resolve-failure path: reveal-item resolution failure sends
+- [x] 4.2 Resolve-failure path: reveal-item resolution failure sends
   `LibEvent::Error`, flashes, and leaves the active tab unchanged. Verify with a
   unit test on the drained error event.
 
