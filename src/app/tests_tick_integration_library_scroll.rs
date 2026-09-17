@@ -436,13 +436,6 @@ fn viewport_step_inputs_walk_a_grouped_list_to_display_row_0_wide_and_narrow() {
         // selection rides nowhere, and no cursor echo is emitted (design D8).
         let before_cursor = cursor_of(&harness);
         assert_eq!(scroll_of(&harness), 0, "test setup at width {width}");
-        {
-            let buf = terminal.backend().buffer();
-            for y in list.y..list.y + 4 {
-                let row: String = (list.x..list.x + list.width).map(|x| buf[(x, y)].symbol().to_string()).collect();
-                eprintln!("DBG w{width} row{y}: {row:?}");
-            }
-        }
         step_input(&mut harness, wheel, false, list);
         assert_eq!(
             scroll_of(&harness),
