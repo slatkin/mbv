@@ -7,11 +7,13 @@ has to work with:
   index, the cursor, and a `scroll` display-row offset. `resolve_viewport(height)` is the single rule
   today: the stored offset is clamped to `total - height`, then raised to the cursor's display row when
   the cursor is above it, or lowered so the cursor sits on the last row when it is below. The painter
-  (`render/components/media_list/wide.rs:154`) stores the resolved offset back into the owner, and
+  (`render/components/media_list/wide.rs`, via `WideMediaList::set_scroll`) stores the resolved offset back
+  into the owner, and
   `MediaListCarrier::sync_viewport` stores a second, pre-paint clamped copy.
 - Every list input is a selection move. `MediaListSurfaceInput::Wheel` converts to
-  `MediaListOperation::Move` in one place (`into_operation`, mod.rs:281), except one owner
-  (`emby_library_content.rs:641`) that builds `Move` directly. The keyboard chords (`↑/↓`, `j/k`,
+  `MediaListOperation::Move` in one place (`MediaListSurfaceInput::into_operation` in
+  `components/media_list/mod.rs`), except the Emby owner's wheel arm (`EmbyLibraryContent::handle_key`),
+  which builds `Move` directly. The keyboard chords (`↑/↓`, `j/k`,
   `PgUp/PgDn` = `Page` = five items, `Home/End` = `First/Last`) are handled per destination and all route
   through the same owner. No chord anywhere in a list moves a viewport.
 - `WideMediaList` already retains the frame it painted — claim rectangle, content rectangle, row geometry,
@@ -105,7 +107,7 @@ the list components; the only `e` binding is Feeds' unmodified enqueue). `Ctrl+d
 because they mean *half page* in the same tradition and would be ambiguous with a one-row step.
 
 Feeds' handler currently returns early for any Ctrl or Alt chord before its match
-(`feeds_content.rs:322-327`); it needs a narrow exception for these two chords (Feeds has no Ctrl
+(`FeedsComponent::handle_key`); it needs a narrow exception for these two chords (Feeds has no Ctrl
 bindings to collide with), with a test.
 
 ### D8 A step reports the position it reached, not a selection move

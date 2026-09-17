@@ -4,9 +4,10 @@ Reference: `design.md` decisions D1–D9; spec deltas in `specs/mouse-input/` an
 `specs/canonical-media-lists/`.
 Run `cargo nextest run -p mbv` after each task; keep it green.
 
-Sequencing note: the in-flight `inline-search-media-list-rows` change deletes the legacy painter and its
-copy of the window rule (`plain_rows.rs`, `FixedRowPlan`) while touching several of the same files. Land
-this change after that one's U2, or coordinate the file set explicitly.
+Sequencing note: `inline-search-media-list-rows` U2 has landed (legacy search painters, the ctx search
+plumbing, and the second copy of the window rule in `plain_rows.rs`/`FixedRowPlan` are gone), so the rule
+this change owns now has exactly one home in the tree. Rows below still share files with that change's
+follow-up units; coordinate before editing the same file.
 
 ## 1. Owner: the viewport step (D1, D3)
 
