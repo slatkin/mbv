@@ -302,7 +302,7 @@ impl App {
             if !self.audiobookshelf_runtime.accepts(generation) {
                 return;
             }
-            let state = self.audiobookshelf_browse.iter_mut().find(|state| {
+            let index = self.audiobookshelf_browse.iter().position(|state| {
                 state
                     .shows
                     .iter()
@@ -310,16 +310,30 @@ impl App {
             });
             match result {
                 Ok(episodes) => {
-                    if let Some(state) = state {
+                    if let Some(state) =
+                        index.and_then(|index| self.audiobookshelf_browse.get_mut(index))
+                    {
                         state.detail_loading_ids.remove(&library_item_id);
                         state.cache_detail(library_item_id, episodes);
                     }
                 }
                 Err(_error) => {
-                    if let Some(state) = state {
+                    if let Some(state) =
+                        index.and_then(|index| self.audiobookshelf_browse.get_mut(index))
+                    {
                         state.detail_loading_ids.remove(&library_item_id);
+                        // A failed fetch consumed the show's once-per-session
+                        // request: caching an empty result keeps the bounded
+                        // fan-out from re-issuing it forever (design D5);
+                        // the refresh key re-requests everything.
+                        state.cache_detail(library_item_id, Vec::new());
                     }
                 }
+            }
+            // The fan-out continues its bounded batch: the next required
+            // show's request starts as this one retires (design D5).
+            if let Some(index) = index {
+                self.start_audiobookshelf_podcast_fan_out(index);
             }
             return;
         }
@@ -338,24 +352,19 @@ impl App {
                 .position(|library| library.id == library_id)
             {
                 let mut next_page = None;
-                let mut selected_detail = None;
                 if let Some(state) = self.audiobookshelf_browse.get_mut(index) {
                     match result {
                         Ok(page) => {
                             state.append_page(page.page, page.limit, page.total, page.items);
                             next_page = state.needs_page();
-                            // The selected show's episodes feed the per-show
-                            // cache; the detail start re-checks the cache and
-                            // the in-flight marks, so a show is fetched at
-                            // most once per session.
-                            selected_detail = state.selected_id.clone();
                         }
                         Err(error) => state.error = Some(error.to_string()),
                     }
                 }
-                if let Some(selected_detail) = selected_detail {
-                    self.start_audiobookshelf_detail(selected_detail);
-                }
+                // A landed page may list shows the active pill's fan-out has
+                // not requested yet (a state pill requires every show); the
+                // scheduler re-arms idempotently and stays bounded (design D5).
+                self.start_audiobookshelf_podcast_fan_out(index);
                 if let Some(next_page) = next_page {
                     super::service_startup::start_audiobookshelf_shows(
                         self.config.lock().unwrap().clone(),

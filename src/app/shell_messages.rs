@@ -283,6 +283,11 @@ impl Model {
                         self.app.set_panel_focus(crate::app::PanelFocus::Library);
                         if let Some(library_item_id) = library_item_id.as_deref() {
                             self.app.select_audiobookshelf_show_target(library_item_id);
+                        } else {
+                            // A state-pill scope (or its list interaction): the
+                            // fan-out's required shows are every listed show
+                            // (design D5).
+                            self.app.commit_audiobookshelf_podcast_state_scope();
                         }
                         // The component owns the painted cursor; persist the
                         // active tab's slot once after the movement lands so

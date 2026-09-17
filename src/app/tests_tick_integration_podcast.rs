@@ -221,3 +221,123 @@ fn podcast_owner_survives_tab_reselection_with_the_remembered_pill() {
     assert_eq!(podcast(&mut harness).pill(), &before);
     let _ = TerminalObserverEvent::NoOp;
 }
+
+/// A keyboard show-pill commit scopes the shell's episode fan-out to that
+/// show (reorganize-podcast-pill-navigation 3.3, design D5): the committed
+/// pill's identity lands in the App's browse state through the shell sync
+/// pass and its message dispatch, and wrapping back to a state pill returns
+/// the scope to every listed show.
+#[test]
+fn keyboard_show_pill_commit_scopes_the_fan_out_through_the_shell() {
+    let mut app = audiobookshelf_app();
+    // A second show and no cached episodes: the pill bar has two show pills
+    // and neither show's episodes are fetched.
+    app.audiobookshelf_browse[0].append_page(0, 20, 2, vec![mbv_core::audiobookshelf::AudiobookshelfShow {
+        library_item_id: "show-b".into(), title: "Show B".into(), author: None, description: None, cover_path: None,
+    }]);
+    app.audiobookshelf_browse[0].detail_cache.clear();
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let step_and_dispatch = |harness: &mut TickHarness| {
+        let outcome = harness.step();
+        let (mut music, mut tv) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music, &mut tv);
+        }
+    };
+
+    // Walk to the first show pill (All -> Unplayed -> Played -> Show A).
+    for _ in 0..3 {
+        harness.inject(Event::Keyboard(KeyEvent { code: Key::Char(']'), modifiers: KeyModifiers::NONE }));
+        step_and_dispatch(&mut harness);
+    }
+    assert_eq!(
+        harness.model().app.audiobookshelf_browse[0].committed_show_pill.as_deref(),
+        Some("show-a"),
+        "the committed show pill scopes the fan-out"
+    );
+
+    // Wrapping forward past the last show pill (Show B) lands on `All`: the
+    // scope follows the state pill.
+    for _ in 0..2 {
+        harness.inject(Event::Keyboard(KeyEvent { code: Key::Char(']'), modifiers: KeyModifiers::NONE }));
+        step_and_dispatch(&mut harness);
+    }
+    assert_eq!(
+        harness.model().app.audiobookshelf_browse[0].committed_show_pill,
+        None,
+        "a state pill's scope is every listed show"
+    );
+}
+
+/// Narrow-geometry Enter on a podcast episode plays immediately: no Library
+/// Hero overlay opens (row 3.4, design D6 — podcast episodes are not
+/// hero-bearing rows).
+#[test]
+fn narrow_enter_plays_the_selected_episode_without_an_overlay() {
+    let mut harness = TickHarness::new(audiobookshelf_app());
+    draw(&mut harness, 80);
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .expect("library panel");
+    assert!(panel.test_narrow_geometry().is_some());
+    assert!(!panel.test_hero_overlay_open());
+
+    harness.inject(Event::Keyboard(KeyEvent { code: Key::Enter, modifiers: KeyModifiers::NONE }));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+            crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
+        ))
+    )));
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .expect("library panel");
+    assert!(!panel.test_hero_overlay_open(), "no overlay opened");
+}
+
+/// Narrow-geometry double-click activates the episode directly (row 3.4):
+/// the not-hero-bearing owner skips the overlay attempt and the resolved
+/// row's OpenOrPlay intent crosses the shell.
+#[test]
+fn narrow_double_click_plays_the_selected_episode_without_an_overlay() {
+    let mut harness = TickHarness::new(audiobookshelf_app());
+    draw(&mut harness, 80);
+    let list = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .expect("library panel")
+        .test_list_rect()
+        .expect("podcast list paints");
+    let point = (list.x + 1, list.y + 1);
+
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), point.0, point.1));
+    harness.step();
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), point.0, point.1));
+    let outcome = harness.step();
+    assert!(outcome.raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::AudiobookshelfPodcastEpisodeIntent(
+            crate::app::components::msg::PodcastEpisodeIntent::OpenOrPlay(Some(_))
+        ))
+    )));
+    let panel = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .expect("library panel");
+    assert!(!panel.test_hero_overlay_open(), "no overlay opened");
+}

@@ -88,6 +88,10 @@ mod tests_audiobookshelf_runtime;
 mod tests_podcast;
 
 #[cfg(test)]
+#[path = "tests_podcast_loading.rs"]
+mod tests_podcast_loading;
+
+#[cfg(test)]
 #[path = "tests_podcast_playback.rs"]
 mod tests_podcast_playback;
 

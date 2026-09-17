@@ -280,22 +280,37 @@ impl App {
 
     pub(super) fn activate_audiobookshelf_position(&mut self, index: usize) {
         // A saved position names a show id under the retired show-browser
-        // model; the tab's selection is now the active pill plus the selected
-        // episode, so restore ignores the saved value entirely (design: no
-        // migration) and the tab starts on the first show until the
-        // remembered pill lands with the owner rewrite.
+        // model; restore ignores the saved value entirely (design: no
+        // migration). Tab activation is a refresh trigger (design D5): the
+        // active pill's required shows are re-requested and their episodes
+        // replaced.
+        if self.tab.audiobookshelf_index() != Some(index) {
+            return;
+        }
+        self.refresh_audiobookshelf_podcast_pill_shows(index);
+    }
+
+    /// Tab-activation refresh for the podcast tab (design D5): drop the
+    /// committed pill's required shows' cached episodes and in-flight marks,
+    /// then re-arm the bounded fan-out. A show pill re-requests that show
+    /// only; a state pill re-requests every listed show.
+    fn refresh_audiobookshelf_podcast_pill_shows(&mut self, index: usize) {
         let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
             return;
         };
-        if state.selected_id.is_none() && !state.shows.is_empty() {
-            state.select(0);
-        }
-        let Some(id) = state.selected_id.clone() else {
-            return;
+        let required: Vec<String> = match state.committed_show_pill.as_ref() {
+            Some(id) => vec![id.clone()],
+            None => state
+                .shows
+                .iter()
+                .map(|show| show.library_item_id.clone())
+                .collect(),
         };
-        if self.tab.audiobookshelf_index() == Some(index) {
-            self.start_audiobookshelf_detail(id);
+        for id in &required {
+            state.detail_cache.remove(id);
+            state.detail_loading_ids.remove(id);
         }
+        self.start_audiobookshelf_podcast_fan_out(index);
     }
 
     /// Book-shaped sibling of `activate_audiobookshelf_position`. A saved

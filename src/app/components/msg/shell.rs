@@ -179,13 +179,14 @@ pub enum ShellRequest {
     HomePillClick {
         target: usize,
     },
-    /// The podcast tab's committed pill selection: the resolved show pill's
-    /// provider-native `library_item_id` (the owner stores the selection by
-    /// value; reorganize-podcast-pill-navigation D3/D4). The shell applies it
-    /// via `App::select_audiobookshelf_show_target` (per-show episode
-    /// fetch, until row 3.3 reshapes the trigger), saves the position, and
-    /// re-projects podcast content. `None` carries a show-less list
-    /// interaction (row click-to-focus and position persistence).
+    /// The podcast tab's committed pill or pill-scoped list interaction
+    /// (reorganize-podcast-pill-navigation D3/D5): `Some(id)` carries a show
+    /// pill's resolved identity — the shell applies it via
+    /// `App::select_audiobookshelf_show_target`, which scopes the episode
+    /// fan-out to that show (fetched at most once per session), saves the
+    /// position, and re-projects podcast content. `None` carries a state
+    /// pill scope (or its list interaction): the fan-out's required shows
+    /// are every listed show.
     AudiobookshelfPodcastShowMove {
         library_item_id: Option<String>,
     },

@@ -686,7 +686,17 @@ impl LibraryPanel {
                 self.slot_event(LibrarySlotEvent::List(input))
             }
             MouseGesture::DoubleClick(at) if inside_list => {
-                if self.narrow_geometry.is_some() {
+                // Only a destination whose browser rows are hero-bearing
+                // opens the Library Hero overlay on double-click; a
+                // not-hero-bearing owner (the podcast tab) activates the
+                // resolved row directly, and its first click's message was
+                // already delivered by its own gesture.
+                let overlay_attempt = self.narrow_geometry.is_some()
+                    && self
+                        .owners
+                        .active_mut()
+                        .is_some_and(|owner| owner.browser_rows_are_hero_bearing());
+                if overlay_attempt {
                     if let Some(message) = self.open_hero_from_browser(Some(at)) {
                         return Some(message);
                     }

@@ -161,6 +161,15 @@ pub(in crate::app) trait LibraryContentOwner {
         false
     }
 
+    /// Whether this destination's browser rows are hero-bearing in non-Wide
+    /// geometry, so Enter/double-click may open the Library Hero overlay
+    /// (default). Owners whose rows are themselves the leaf content — the
+    /// podcast tab's episode rows — return `false`: there is no overlay flow,
+    /// and activation happens directly.
+    fn browser_rows_are_hero_bearing(&mut self) -> bool {
+        true
+    }
+
     fn inline_search_active(&self) -> bool {
         false
     }

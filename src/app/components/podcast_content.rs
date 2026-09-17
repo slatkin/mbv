@@ -267,13 +267,13 @@ impl PodcastContent {
         self.pill_effect_msg(changed)
     }
 
-    /// The shell effect every committed pill keeps alive until the loading
-    /// unit (row 3.3) reshapes the fetch triggers. A show pill carries its
-    /// resolved identity: the per-show episode fetch, position persistence,
-    /// and re-projection. A state pill sends the same message shape a plain
-    /// row click sends — click-to-focus, position persistence, and
-    /// re-projection with no show identity — the state-pill fan-out
-    /// triggers themselves are row 3.3.
+    /// The shell effect a committed pill keeps alive: a show pill carries
+    /// its resolved identity — the per-show episode fetch (design D5's
+    /// once-per-session scope), position persistence, and re-projection. A
+    /// state pill sends the same message shape a plain row interaction
+    /// sends — click-to-focus, position persistence, and re-projection with
+    /// no show identity — and the shell's handler scopes the fan-out to
+    /// every listed show.
     fn pill_effect_msg(&self, changed: bool) -> Option<Msg> {
         if !changed {
             return None;
@@ -289,10 +289,15 @@ impl PodcastContent {
 
     /// Keyboard list movement resolves like a row click: the landed cursor
     /// persists and re-projects through the same request the pointer path
-    /// sends (click-to-focus + saved position, no show identity).
-    fn move_effect() -> Option<Msg> {
+    /// sends (click-to-focus + saved position), scoped to the active pill —
+    /// a show pill's identity rides along so the shell keeps its fan-out
+    /// scope (design D5).
+    fn move_effect(&self) -> Option<Msg> {
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-            library_item_id: None,
+            library_item_id: match &self.pill {
+                PillSelection::Show(id) => Some(id.clone()),
+                PillSelection::State(_) => None,
+            },
         }))
     }
 
@@ -497,9 +502,7 @@ impl LibraryContentOwner for PodcastContent {
                     // Click-to-focus (task 4.5): pull panel focus to the
                     // Library and persist the tab's slot, as the Feeds row
                     // click does.
-                    Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
-                        library_item_id: None,
-                    }))
+                    self.move_effect()
                 }
                 MediaListSurfaceInput::DoubleClick(at) => {
                     // Resolve once, then delegate the target-bearing activation.
@@ -549,7 +552,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Self::move_effect()
+                self.move_effect()
             }
             Key::Down | Key::Char('j') => {
                 self.episodes.delegate_operation(
@@ -557,7 +560,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Self::move_effect()
+                self.move_effect()
             }
             Key::PageUp => {
                 self.episodes.delegate_operation(
@@ -565,7 +568,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Self::move_effect()
+                self.move_effect()
             }
             Key::PageDown => {
                 self.episodes.delegate_operation(
@@ -573,7 +576,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Self::move_effect()
+                self.move_effect()
             }
             Key::Home => {
                 self.episodes.delegate_operation(
@@ -581,7 +584,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Self::move_effect()
+                self.move_effect()
             }
             Key::End => {
                 self.episodes.delegate_operation(
@@ -589,7 +592,7 @@ impl LibraryContentOwner for PodcastContent {
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );
-                Self::move_effect()
+                self.move_effect()
             }
             Key::Char('[') if key.modifiers.is_empty() => self.cycle_pill(-1),
             Key::Char(']') if key.modifiers.is_empty() => self.cycle_pill(1),
@@ -617,6 +620,15 @@ impl LibraryContentOwner for PodcastContent {
     }
     fn set_hero_image(&mut self, image: HeroImageState) {
         self.set_hero_image(image);
+    }
+    // Podcast episodes are not hero-bearing browser rows (design D6, rows
+    // 3.4): Enter plays immediately in every geometry and no Library Hero
+    // overlay ever opens for the tab.
+    fn hero_overlay_available(&mut self) -> bool {
+        false
+    }
+    fn browser_rows_are_hero_bearing(&mut self) -> bool {
+        false
     }
     fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
@@ -677,7 +689,7 @@ mod tests {
 
     /// Two shows: Alpha's cache holds a dated played episode and an undated
     /// in-progress one; Beta's cache holds one unplayed episode.
-    fn state() -> AudiobookshelfBrowseState {
+    fn fixture_state() -> AudiobookshelfBrowseState {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(
             0,
@@ -720,7 +732,7 @@ mod tests {
     fn owner() -> PodcastContent {
         let mut owner = PodcastContent::new();
         owner.set_now_secs(NOW);
-        owner.set_content(&state(), false);
+        owner.set_content(&fixture_state(), false);
         owner
     }
 
@@ -810,7 +822,7 @@ mod tests {
 
         // A new show page that sorts before Beta shifts Beta's painted
         // position; the value keeps identifying the same pill.
-        let mut state = state();
+        let mut state = fixture_state();
         state.append_page(1, 20, 3, vec![show("aardvark", "Aardvark Show")]);
         owner.set_content(&state, false);
         assert_eq!(owner.pill, PillSelection::Show("beta".into()));
@@ -837,7 +849,7 @@ mod tests {
         let mut owner = owner();
         owner.set_focused(true);
         owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
-        owner.set_content(&state(), false);
+        owner.set_content(&fixture_state(), false);
         assert_eq!(
             owner.pill,
             PillSelection::State(AudiobookshelfEpisodeFilter::Unplayed)
@@ -1036,6 +1048,108 @@ mod tests {
     }
 
     #[test]
+    fn list_movement_under_a_show_pill_carries_the_show_identity() {
+        let mut owner = owner();
+        owner.set_focused(true);
+        // Land on the Beta show pill, then move the episode cursor: the
+        // movement's persistence effect keeps the pill's fan-out scope
+        // (design D5) so the shell never re-derives it.
+        for _ in 0..4 {
+            owner.on_key(&KeyEvent::new(Key::Char(']'), KeyModifiers::NONE));
+        }
+        assert!(matches!(
+            owner.on_key(&KeyEvent::new(Key::Down, KeyModifiers::NONE)),
+            Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
+                library_item_id: Some(ref id)
+            })) if id == "beta"
+        ));
+    }
+
+    /// The scoped loading projection (row 3.3): a state pill is loading
+    /// while its required shows fetch (and shows nothing stale meanwhile);
+    /// a show pill only while its own show's fetch is in flight, and
+    /// partially arrived results keep painting as the rest loads (design
+    /// D5: no visible reload of already-listed rows).
+    #[test]
+    fn scoped_loading_projection_follows_the_active_pill() {
+        // State pill (All) with no results yet and a fetch in flight: the
+        // scoped loading state.
+        let mut state = fixture_state();
+        state.detail_cache.clear();
+        state.detail_loading_ids.insert("beta".into());
+        let mut owner = PodcastContent::new();
+        owner.set_now_secs(NOW);
+        owner.set_content(&state, false);
+        assert!(matches!(
+            owner.content().list,
+            ListSlot::Empty { loading: true, .. }
+        ));
+
+        // A partial arrival under the state pill (All): the landed shows'
+        // rows paint while beta's fetch is still in flight (no visible
+        // reload).
+        let mut state = fixture_state();
+        state.detail_loading_ids.insert("beta".into());
+        let mut owner = PodcastContent::new();
+        owner.set_now_secs(NOW);
+        owner.set_content(&state, false);
+        assert!(matches!(owner.content().list, ListSlot::Media(_)));
+
+        // Show pill for a fetched show: not loading, its rows paint.
+        let mut owner = PodcastContent::new();
+        owner.set_now_secs(NOW);
+        owner.set_content(&state, false);
+        owner.on_slot_event(LibrarySlotEvent::SelectorPicked(3));
+        assert!(matches!(owner.content().list, ListSlot::Media(_)));
+
+        // Show pill for an in-flight, unfetched show: the scoped loading
+        // state.
+        let mut fresh = AudiobookshelfBrowseState::new(library());
+        fresh.append_page(
+            0,
+            20,
+            2,
+            vec![show("alpha", "Alpha Show"), show("beta", "Beta Show")],
+        );
+        fresh.detail_loading_ids.insert("alpha".into());
+        let mut owner = PodcastContent::new();
+        owner.set_now_secs(NOW);
+        owner.set_content(&fresh, false);
+        owner.on_slot_event(LibrarySlotEvent::SelectorPicked(3));
+        assert!(matches!(
+            owner.content().list,
+            ListSlot::Empty { loading: true, .. }
+        ));
+    }
+
+    #[test]
+    fn ctrl_a_emits_enqueue_with_the_selected_episode_target() {
+        let mut owner = owner();
+        owner.set_focused(true);
+        assert!(matches!(
+            owner.on_key(&KeyEvent::new(
+                Key::Char('a'),
+                KeyModifiers::CONTROL
+            )),
+            Some(Msg::Shell(
+                ShellRequest::AudiobookshelfPodcastEpisodeIntent(PodcastEpisodeIntent::Enqueue(
+                    Some(target)
+                ))
+            )) if target.episode_id() == "dated"
+        ));
+    }
+
+    /// Podcast episodes are not hero-bearing browser rows (row 3.4, design
+    /// D6): Enter plays immediately and no Library Hero overlay opens, in
+    /// every geometry.
+    #[test]
+    fn podcast_episodes_are_not_hero_bearing_rows() {
+        let mut owner = owner();
+        assert!(!owner.hero_overlay_available());
+        assert!(!owner.browser_rows_are_hero_bearing());
+    }
+
+    #[test]
     fn unfocused_owner_leaves_movement_and_unhandled_keys_to_the_router() {
         let mut owner = owner();
         assert_eq!(
@@ -1080,7 +1194,7 @@ mod tests {
         ));
         // A state-pill pick re-projects and persists through the same
         // request shape a plain row click sends (no show identity); the
-        // fan-out triggers themselves are row 3.3.
+        // shell scopes the fan-out to every listed show (row 3.3).
         assert!(matches!(
             owner.on_slot_event(LibrarySlotEvent::SelectorPicked(1)),
             Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {

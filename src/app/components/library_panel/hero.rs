@@ -15,7 +15,7 @@ use crate::app::render::components::hero_model::{
     emby_hero_meta_rows_plain, SERIES_LANDSCAPE_IMAGE_TYPES,
 };
 use crate::app::render::components::widgets::MUSIC_ALBUM_IMAGE_TYPES;
-use crate::app::ui_util::{clean_overview, fmt_duration_approx};
+use crate::app::ui_util::{clean_overview, fmt_duration_approx, fmt_publish_date};
 
 use super::content::{
     ArtworkShape, ArtworkSource, HeroArtwork, HeroCredit, HeroFacts, HeroImageState, HeroLink,
@@ -398,8 +398,13 @@ fn abs_book_meta_rows(book: &AudiobookshelfBookQueueItem) -> Vec<String> {
     rows
 }
 
-/// The Audiobookshelf podcast episode producer (design D5): show and author
-/// as plain meta rows, cleaned overview, Square cover.
+/// The Audiobookshelf podcast episode producer (design D7, row 3.5): the
+/// episode title, then the parent show's name, duration and publish date as
+/// plain meta rows, the cleaned episode description as the overview, and the
+/// parent show's Square cover. There is no credits block and no author row:
+/// no such field exists on the episode payload. One producer for every
+/// destination that presents the episode (podcast tab, queue panel, Home
+/// rows), so the facts cannot drift.
 pub(in crate::app) fn hero_content_abs_episode(
     episode: &AudiobookshelfQueueItem,
 ) -> HeroContentData {
@@ -407,11 +412,11 @@ pub(in crate::app) fn hero_content_abs_episode(
     if let Some(show) = episode.show_title.as_deref().filter(|s| !s.is_empty()) {
         meta_rows.push(show.to_string());
     }
-    if let Some(author) = episode.author.as_deref().filter(|a| !a.is_empty()) {
-        meta_rows.push(author.to_string());
-    }
     if let Some(ticks) = episode.duration_ticks.filter(|t| *t > 0) {
         meta_rows.push(fmt_duration_approx(ticks as i64 / TICKS_PER_SECOND));
+    }
+    if let Some(secs) = episode.pub_date_secs {
+        meta_rows.push(fmt_publish_date(secs));
     }
     let facts = HeroFacts {
         title: episode.title.clone(),

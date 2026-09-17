@@ -81,6 +81,13 @@ pub(super) struct AudiobookshelfBrowseState {
     pub detail_cache: HashMap<String, Vec<AudiobookshelfDownloadedEpisode>>,
     /// Show ids with an episode fetch in flight.
     pub detail_loading_ids: HashSet<String>,
+    /// The committed show-pill scope for the lazy episode fan-out (design
+    /// D5): `Some(id)` = a show pill is active, so that show's episodes are
+    /// the view's only requirement; `None` = a state pill (or the tab's
+    /// default) is active, so every listed show is required. Written by the
+    /// shell from the component's resolved pill movement, read by the
+    /// fan-out scheduler — never a mirror of the owner's painted selection.
+    pub committed_show_pill: Option<String>,
     /// The tab's selected episode, by `(library_item_id, episode_id)`
     /// identity — the same identity as the progress map. A refresh that
     /// removes the episode from the views clears it.
@@ -100,6 +107,7 @@ impl AudiobookshelfBrowseState {
             error: None,
             detail_cache: HashMap::new(),
             detail_loading_ids: HashSet::new(),
+            committed_show_pill: None,
             selected_episode: None,
             progress: HashMap::new(),
         }

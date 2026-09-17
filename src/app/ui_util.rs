@@ -1,6 +1,29 @@
 use mbv_core::api::EmbyItem;
 use unicode_width::UnicodeWidthStr;
 
+/// Three-letter month names, indexed 0 = January (the same abbreviation
+/// style `render::components::home_video::format_release_date` renders).
+const MONTH_ABBREVIATIONS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Format a publish date given as unix seconds (UTC) as a hero meta row:
+/// "19 Jun 2015" — the same shape the Emby hero's release date uses.
+/// Saturation-free: a seconds value beyond `time`'s range renders as the
+/// empty string rather than panicking.
+pub fn fmt_publish_date(secs: u64) -> String {
+    let Ok(date) = time::OffsetDateTime::from_unix_timestamp(i64::try_from(secs).unwrap_or(0))
+    else {
+        return String::new();
+    };
+    let month = u8::from(date.month());
+    let month = MONTH_ABBREVIATIONS
+        .get(usize::from(month - 1))
+        .copied()
+        .unwrap_or("");
+    format!("{} {month} {}", date.day(), date.year())
+}
+
 /// Advance subtitle mode through the standard cycle.
 pub(super) fn next_subtitle_mode(current: &str) -> &'static str {
     match current {
