@@ -197,6 +197,8 @@ mod tests_conformance_matrix;
 #[cfg(test)]
 mod tests_feeds;
 #[cfg(test)]
+mod tests_podcast_panel;
+#[cfg(test)]
 mod tests_surface_conformance;
 #[cfg(test)]
 mod tests_surface_conformance_component_views;

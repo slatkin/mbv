@@ -12,7 +12,13 @@
 //!   if both the legacy painter and the component `view` run for one surface.
 //! - `feed_home_video_group_*`: shared inline/wide hero placement, scroll, and
 //!   frame completeness for the Home feed video group.
-//! - `wide_podcast_*`: wide Audiobookshelf podcast body snapshot/paint.
+//!
+//! The `wide_podcast_*` group (wide Audiobookshelf podcast show-row
+//! snapshot/paint) was deleted with the show browser
+//! (reorganize-podcast-pill-navigation 4.3): the surname-bucket pills and
+//! show rows it pinned no longer exist, and the tab's paint ownership lives
+//! on in `src/app/render/tests_podcast_panel.rs` (one pill bar, grouped
+//! split episode rows, Workspace-free Wide hero, one painter per surface).
 
 use super::*;
 use crate::app::components::emby_library_content::EmbyLibraryContent as BrowserOwner;

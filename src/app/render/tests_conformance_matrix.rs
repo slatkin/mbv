@@ -256,6 +256,50 @@ fn render_feeds_panel(
     (terminal, layout)
 }
 
+/// The embedded `PodcastContent` owner's painted geometry through the mounted
+/// `LibraryPanel` (reorganize-podcast-pill-navigation 4.3), surfaced as a
+/// `PaintedRowGeometry` so the shared conformance assertions hold — the same
+/// mounted-panel shape `render_feeds_panel` uses.
+fn render_podcast_panel(
+    owner: crate::app::components::podcast_content::PodcastContent,
+    width: u16,
+    height: u16,
+) -> (Terminal<TestBackend>, PaintedRowGeometry) {
+    let mut panel = LibraryPanel::new();
+    let key = super::tests_podcast_panel::podcast_key();
+    panel.insert_owner(key.clone(), Box::new(owner));
+    panel.set_active(Some(key));
+    tuirealm::component::Component::attr(
+        &mut panel,
+        tuirealm::props::Attribute::Focus,
+        tuirealm::props::AttrValue::Flag(true),
+    );
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|frame| {
+            tuirealm::component::Component::view(&mut panel, frame, Rect::new(0, 0, width, height))
+        })
+        .unwrap();
+    let selector_tabs = panel.test_selector_hits().regions().to_vec();
+    let layout = if let Some(wide) = panel.test_wide_geometry() {
+        PaintedRowGeometry {
+            left_area: wide.list_area,
+            selected_item_rect: wide.selected,
+            selector_tabs,
+        }
+    } else {
+        let narrow = panel
+            .test_narrow_geometry()
+            .expect("the panel painted a Wide or Narrow skeleton");
+        PaintedRowGeometry {
+            left_area: narrow.list_area,
+            selected_item_rect: narrow.selected,
+            selector_tabs,
+        }
+    };
+    (terminal, layout)
+}
+
 fn mixed_home_app() -> App {
     let mut app = crate::app::tests::make_app_stub();
     app.tab = TabSelection::Home;
@@ -459,6 +503,17 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
     assert!(
         !buffer_to_string(&terminal).is_empty(),
         "Feeds did not paint a buffer"
+    );
+
+    // The Audiobookshelf Podcasts destination (reorganize-podcast-pill-
+    // navigation 4.3): the same one-pill-bar conformance through the mounted
+    // panel's own Selector hits.
+    let (terminal, layout) =
+        render_podcast_panel(super::tests_podcast_panel::podcast_owner(), 240, 30);
+    assert_one_pill_row_and_spacer("Podcasts", &terminal, &layout);
+    assert!(
+        !buffer_to_string(&terminal).is_empty(),
+        "Podcasts did not paint a buffer"
     );
 }
 

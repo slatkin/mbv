@@ -214,6 +214,13 @@ fn podcast_owner_survives_tab_reselection_with_the_remembered_pill() {
     harness.inject(Event::Keyboard(KeyEvent { code: Key::Char(']'), modifiers: KeyModifiers::NONE }));
     harness.step();
     let before = podcast(&mut harness).pill().clone();
+    // Switching to another Service destination in the same column must not
+    // disturb the pill either (the owner is retained while its library stays
+    // in the catalog; only the list selection re-anchors on reactivation).
+    harness.model_mut().app.tab = crate::app::TabSelection::AudiobookshelfLibrary(1);
+    harness.model_mut().sync_mounted_surfaces();
+    harness.model_mut().app.tab = crate::app::TabSelection::AudiobookshelfLibrary(0);
+    harness.model_mut().sync_mounted_surfaces();
     harness.model_mut().app.tab = crate::app::TabSelection::Home;
     harness.model_mut().sync_mounted_surfaces();
     harness.model_mut().app.tab = crate::app::TabSelection::AudiobookshelfLibrary(0);
@@ -271,6 +278,73 @@ fn keyboard_show_pill_commit_scopes_the_fan_out_through_the_shell() {
         None,
         "a state pill's scope is every listed show"
     );
+}
+
+/// The shell's hero image projection (row 4.1, design D7): the podcast
+/// episode hero's cover is projected keyed by the parent show's
+/// `library_item_id` — the episode's own identity, not a show selection —
+/// and the Ready state lands on the owner through the shell sync pass. The
+/// image cache is pre-seeded under exactly that key so the proof is
+/// hermetic: the projection finds the cache hit the episode's identity
+/// dictates and never issues a fetch.
+#[test]
+fn podcast_hero_image_projection_keys_the_parent_show_cover_through_the_sync_pass() {
+    let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0].shows[0].cover_path = Some("cover".into());
+    app.config.lock().unwrap().audiobookshelf_setup =
+        Some(mbv_core::config::AudiobookshelfSetup::new("http://abs.test"));
+    app.image_protocol_enabled = true;
+    app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+    let cache_key = crate::app::images::audiobookshelf_cover_cache_key(
+        "http://abs.test",
+        "show-a",
+        app.current_protocol_suffix(),
+    );
+
+    let mut harness = TickHarness::new(app);
+    // The first draw settles the terminal size (its sync pass also clears
+    // the image caches on the resize) and registers the podcast owner; the
+    // seed below lands after that, so the projection that follows reads a
+    // warm cache instead of issuing a fetch.
+    draw(&mut harness, 80);
+    harness.model_mut().app.card_image_states.insert(
+        cache_key.clone(),
+        crate::app::images::CachedImage {
+            img: Some(image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+                8,
+                8,
+                image::Rgba([10, 20, 30, 255]),
+            ))),
+            protocols: std::collections::HashMap::new(),
+            cover_box: None,
+            applied_logo_key: None,
+        },
+    );
+    harness.model_mut().sync_mounted_surfaces();
+
+    let image = harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|c| c.as_any_mut().downcast_mut::<LibraryPanel>())
+        .and_then(|panel| panel.active_hero_data())
+        .expect("the podcast hero projects")
+        .facts
+        .artwork
+        .image;
+    assert!(
+        matches!(
+            &image,
+            crate::app::components::library_panel::HeroImageState::Ready {
+                cache_key: key,
+                ..
+            } if key == &cache_key
+        ),
+        "the hero image state is Ready under the parent show's cover key: {image:?}"
+    );
+    // The pre-seeded cache entry means the projection issued no fetch: the
+    // once-per-key discipline holds through the sync pass.
+    assert!(harness.model().app.card_image_loading.is_empty());
 }
 
 /// Narrow-geometry Enter on a podcast episode plays immediately: no Library
