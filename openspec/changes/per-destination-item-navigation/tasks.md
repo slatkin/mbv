@@ -29,16 +29,16 @@
 
 ## 3. Shell hand-off (Model drain)
 
-- [ ] 3.1 On a navigated show, run the Inline Search series hand-off in the Model
+- [x] 3.1 On a navigated show, run the Inline Search series hand-off in the Model
   drain: `reanchor_tv_owner_selection` + `push_tv_workspace_content`, then
   `activate_selected_series_item` (Wide) or `open_library_hero_overlay`
   (Narrow), re-push. Verify with a tick-integration test through
   `Application::tick()` for both Wide and Narrow (`tests_tick_integration_tv.rs`
   family): workspace visible in Wide, overlay open in Narrow.
-- [ ] 3.2 On a navigated album, set `music_workspace_reanchor` and push; verify
+- [x] 3.2 On a navigated album, set `music_workspace_reanchor` and push; verify
   the retained Music owner's workspace shows the album's track list
   (`shell_music_workspace_owner_tests.rs` pattern).
-- [ ] 3.3 Keep the Movie/generic re-anchor from 34dbbd55 (owner identity change
+- [x] 3.3 Keep the Movie/generic re-anchor from 34dbbd55 (owner identity change
   re-seeds via `apply_position`); verify the retained browser lands with the
   cursor on the movie.
 
