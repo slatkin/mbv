@@ -142,7 +142,7 @@ impl PodcastContent {
     fn pill_fetch_in_flight(&self) -> bool {
         match &self.pill {
             PillSelection::State(_) => !self.state.detail_loading_ids.is_empty(),
-            PillSelection::Show(id) => self.state.detail_loading_ids.contains(id),
+            PillSelection::Show(id) => self.state.detail_loading_ids.contains_key(id),
         }
     }
 
@@ -973,7 +973,7 @@ mod tests {
         // scoped empty state, loading while the show's fetch is in flight.
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(0, 20, 1, vec![show("alpha", "Alpha Show")]);
-        state.detail_loading_ids.insert("alpha".into());
+        state.detail_loading_ids.insert("alpha".into(), 0);
         owner.set_content(&state, false);
         match owner.content().list {
             ListSlot::Empty { loading, text } => {
@@ -996,6 +996,39 @@ mod tests {
         );
         assert_eq!(hero.overview, None);
         assert!(matches!(content.list, ListSlot::Media(_)));
+    }
+
+    /// Row 3.5: changing the selected episode refreshes the hero — title,
+    /// meta rows and overview follow the new selection through the one
+    /// producer.
+    #[test]
+    fn selection_change_refreshes_the_episode_hero() {
+        let mut state = AudiobookshelfBrowseState::new(library());
+        state.append_page(0, 20, 1, vec![show("alpha", "Alpha Show")]);
+        let mut first = episode("alpha", "first", Some(NOW - DAY), Some(3600.0));
+        first.description = Some("First overview".into());
+        let mut second = episode("alpha", "second", Some(NOW - 2 * DAY), Some(1800.0));
+        second.description = Some("Second overview".into());
+        state.cache_detail("alpha".into(), vec![first, second]);
+
+        let mut owner = PodcastContent::new();
+        owner.set_now_secs(NOW);
+        owner.set_content(&state, false);
+
+        let hero = owner.content().hero.expect("selected episode hero");
+        assert_eq!(hero.facts.title, "first");
+        assert_eq!(hero.overview.as_deref(), Some("First overview"));
+        assert_eq!(hero.facts.meta_rows[0], "Alpha Show");
+        assert_eq!(hero.facts.meta_rows[1], "1h");
+
+        owner.episodes.move_selection(1);
+        let hero = owner.content().hero.expect("selected episode hero");
+        assert_eq!(
+            hero.facts.title, "second",
+            "the hero follows the new selection"
+        );
+        assert_eq!(hero.overview.as_deref(), Some("Second overview"));
+        assert_eq!(hero.facts.meta_rows[1], "30m");
     }
 
     #[test]
@@ -1076,7 +1109,7 @@ mod tests {
         // scoped loading state.
         let mut state = fixture_state();
         state.detail_cache.clear();
-        state.detail_loading_ids.insert("beta".into());
+        state.detail_loading_ids.insert("beta".into(), 0);
         let mut owner = PodcastContent::new();
         owner.set_now_secs(NOW);
         owner.set_content(&state, false);
@@ -1089,7 +1122,7 @@ mod tests {
         // rows paint while beta's fetch is still in flight (no visible
         // reload).
         let mut state = fixture_state();
-        state.detail_loading_ids.insert("beta".into());
+        state.detail_loading_ids.insert("beta".into(), 0);
         let mut owner = PodcastContent::new();
         owner.set_now_secs(NOW);
         owner.set_content(&state, false);
@@ -1111,7 +1144,7 @@ mod tests {
             2,
             vec![show("alpha", "Alpha Show"), show("beta", "Beta Show")],
         );
-        fresh.detail_loading_ids.insert("alpha".into());
+        fresh.detail_loading_ids.insert("alpha".into(), 0);
         let mut owner = PodcastContent::new();
         owner.set_now_secs(NOW);
         owner.set_content(&fresh, false);

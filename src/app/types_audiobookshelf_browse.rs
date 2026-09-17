@@ -79,8 +79,15 @@ pub(super) struct AudiobookshelfBrowseState {
     /// `library_item_id`. A re-arrival replaces the entry (append at most
     /// once); the flat episode views concatenate the entries in show order.
     pub detail_cache: HashMap<String, Vec<AudiobookshelfDownloadedEpisode>>,
-    /// Show ids with an episode fetch in flight.
-    pub detail_loading_ids: HashSet<String>,
+    /// Show ids with an episode fetch in flight, holding the request serial
+    /// each fetch was issued under (the state's monotonically increasing
+    /// `next_detail_request`). A response retires — and may write the cache
+    /// from — its own serial only, so an orphaned or superseded response can
+    /// neither retire a newer request's mark nor overwrite a newer cache
+    /// entry.
+    pub detail_loading_ids: HashMap<String, u64>,
+    /// The serial issued to the most recent per-show episode fetch.
+    pub next_detail_request: u64,
     /// The committed show-pill scope for the lazy episode fan-out (design
     /// D5): `Some(id)` = a show pill is active, so that show's episodes are
     /// the view's only requirement; `None` = a state pill (or the tab's
@@ -106,7 +113,8 @@ impl AudiobookshelfBrowseState {
             selected_id: None,
             error: None,
             detail_cache: HashMap::new(),
-            detail_loading_ids: HashSet::new(),
+            detail_loading_ids: HashMap::new(),
+            next_detail_request: 0,
             committed_show_pill: None,
             selected_episode: None,
             progress: HashMap::new(),

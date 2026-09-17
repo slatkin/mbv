@@ -291,9 +291,13 @@ impl App {
     }
 
     /// Tab-activation refresh for the podcast tab (design D5): drop the
-    /// committed pill's required shows' cached episodes and in-flight marks,
-    /// then re-arm the bounded fan-out. A show pill re-requests that show
-    /// only; a state pill re-requests every listed show.
+    /// committed pill's required shows' landed episode caches, then re-arm
+    /// the bounded fan-out. A show with a fetch still in flight keeps its
+    /// single request: stripping its mark here would re-request it and let
+    /// the orphaned response clear the new request's mark, multiplying
+    /// requests across tab ping-pong — the in-flight response lands into the
+    /// cache instead. A show pill re-requests that show only; a state pill
+    /// re-requests every listed show.
     fn refresh_audiobookshelf_podcast_pill_shows(&mut self, index: usize) {
         let Some(state) = self.audiobookshelf_browse.get_mut(index) else {
             return;
@@ -307,8 +311,9 @@ impl App {
                 .collect(),
         };
         for id in &required {
-            state.detail_cache.remove(id);
-            state.detail_loading_ids.remove(id);
+            if !state.detail_loading_ids.contains_key(id) {
+                state.detail_cache.remove(id);
+            }
         }
         self.start_audiobookshelf_podcast_fan_out(index);
     }

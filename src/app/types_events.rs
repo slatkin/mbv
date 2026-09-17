@@ -75,6 +75,11 @@ pub(super) enum LibEvent {
     },
     AudiobookshelfDetailFetched {
         generation: mbv_core::service_runtime::SetupGeneration,
+        /// The fetch's request serial (the browse state's
+        /// `next_detail_request` at spawn): an arrival retires its in-flight
+        /// mark and may write the cache only when the show's current mark
+        /// still carries this serial.
+        request: u64,
         library_item_id: String,
         result: Result<
             Vec<mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode>,

@@ -530,6 +530,35 @@ fn abs_episode_producer_collapses_missing_metadata() {
     );
 }
 
+/// Images-disabled budgeting on the episode hero path (row 3.5), explicit
+/// rather than implied by the missing-cover case: the episode's Square cover
+/// source exists, but with the image protocol disabled the projection returns
+/// `HeroImageState::None` — the placeholder is final and no cover fetch is
+/// keyed by anything.
+#[test]
+fn images_disabled_budgets_no_cover_fetch_for_the_episode_hero() {
+    use crate::app::tests::make_app_stub;
+
+    let produced = hero_content_abs_episode(&episode_item(Some("cover")));
+    assert!(produced.facts.artwork.source.is_some());
+    assert_eq!(
+        produced.facts.artwork.painted_shape(),
+        ArtworkShape::Square,
+        "the Square placeholder stands in"
+    );
+
+    let mut app = make_app_stub();
+    app.image_protocol_enabled = false;
+    let area = ratatui::layout::Rect::new(0, 0, 40, 12);
+    let state = app.project_hero_image(&produced.facts, false, area, None);
+    assert!(matches!(state, HeroImageState::None));
+    assert!(app.card_image_loading.is_empty());
+    assert!(
+        app.card_image_states.is_empty(),
+        "no cover fetch is keyed by anything"
+    );
+}
+
 #[test]
 fn feed_producer_rows_and_policy_shape() {
     let entry = feed_entry(Some(mbv_core::config::FeedKind::Video));

@@ -49,11 +49,15 @@ impl App {
             return;
         };
         if state.detail_cache.contains_key(&library_item_id)
-            || state.detail_loading_ids.contains(&library_item_id)
+            || state.detail_loading_ids.contains_key(&library_item_id)
         {
             return;
         }
-        state.detail_loading_ids.insert(library_item_id.clone());
+        state.next_detail_request += 1;
+        let request = state.next_detail_request;
+        state
+            .detail_loading_ids
+            .insert(library_item_id.clone(), request);
         let generation = self.audiobookshelf_runtime.generation();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
@@ -67,6 +71,7 @@ impl App {
                 });
             let _ = tx.send(super::types_events::LibEvent::AudiobookshelfDetailFetched {
                 generation,
+                request,
                 library_item_id,
                 result,
             });

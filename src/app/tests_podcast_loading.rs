@@ -43,9 +43,20 @@ fn unfetched_podcast_app(shows: usize) -> App {
 }
 
 fn loading(state: &crate::app::types_audiobookshelf_browse::AudiobookshelfBrowseState) -> Vec<String> {
-    let mut ids: Vec<String> = state.detail_loading_ids.iter().cloned().collect();
+    let mut ids: Vec<String> = state.detail_loading_ids.keys().cloned().collect();
     ids.sort();
     ids
+}
+
+fn episode(show: &str, id: &str) -> mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        library_item_id: show.into(),
+        episode_id: id.into(),
+        title: id.into(),
+        description: None,
+        published_at: None,
+        duration_seconds: None,
+    }
 }
 
 #[test]
@@ -117,7 +128,7 @@ fn fan_out_skips_cached_and_in_flight_shows() {
     app.audiobookshelf_browse[0].cache_detail("show-0".into(), Vec::new());
     app.audiobookshelf_browse[0]
         .detail_loading_ids
-        .insert("show-1".into());
+        .insert("show-1".into(), 0);
 
     app.commit_audiobookshelf_podcast_state_scope();
 
@@ -135,6 +146,7 @@ fn detail_completion_continues_the_bounded_batch() {
 
     app.handle_lib_event(LibEvent::AudiobookshelfDetailFetched {
         generation: app.audiobookshelf_runtime.generation(),
+        request: app.audiobookshelf_browse[0].detail_loading_ids["show-0"],
         library_item_id: "show-0".into(),
         result: Ok(Vec::new()),
     });
@@ -155,6 +167,7 @@ fn failed_fetch_consumes_the_session_request_instead_of_looping() {
 
     app.handle_lib_event(LibEvent::AudiobookshelfDetailFetched {
         generation: app.audiobookshelf_runtime.generation(),
+        request: app.audiobookshelf_browse[0].detail_loading_ids["show-0"],
         library_item_id: "show-0".into(),
         result: Err(
             match mbv_core::audiobookshelf::AudiobookshelfClient::new("") {
@@ -186,6 +199,7 @@ fn stale_fetch_after_service_replacement_is_rejected() {
 
     app.handle_lib_event(LibEvent::AudiobookshelfDetailFetched {
         generation: stale_generation,
+        request: 0,
         library_item_id: "show-0".into(),
         result: Ok(Vec::new()),
     });
@@ -227,6 +241,112 @@ fn tab_activation_rerequests_the_active_pills_required_shows() {
     assert!(state.detail_cache.contains_key("show-0"));
     assert!(state.detail_cache.contains_key("show-2"));
     assert!(loading(state) == ["show-1"], "only the pill's show re-requests");
+}
+
+#[test]
+fn rejected_generation_result_frees_its_slot_and_the_batch_continues() {
+    let mut app = unfetched_podcast_app(6);
+    app.commit_audiobookshelf_podcast_state_scope();
+    let retired_generation = app.audiobookshelf_runtime.generation();
+    // The Service is replaced while the batch is in flight; the response
+    // below carries the generation it was spawned under.
+    app.audiobookshelf_runtime.begin_setup();
+
+    let retired_serial = app.audiobookshelf_browse[0].detail_loading_ids["show-3"];
+    app.handle_lib_event(LibEvent::AudiobookshelfDetailFetched {
+        generation: retired_generation,
+        request: retired_serial,
+        library_item_id: "show-3".into(),
+        result: Ok(vec![episode("show-3", "rejected")]),
+    });
+
+    let state = &app.audiobookshelf_browse[0];
+    assert!(
+        !state.detail_cache.contains_key("show-3"),
+        "the rejected-generation payload is discarded, never cached"
+    );
+    assert_ne!(
+        state.detail_loading_ids.get("show-3"),
+        Some(&retired_serial),
+        "the rejected result retired its in-flight slot: the show re-requests under the live runtime instead of leaking the mark"
+    );
+    assert_eq!(
+        loading(state),
+        ["show-0", "show-1", "show-2", "show-3"],
+        "the batch continues at the bounded cap"
+    );
+}
+
+#[test]
+fn activation_with_a_fetch_in_flight_does_not_double_fetch_and_the_newer_result_wins() {
+    let mut app = unfetched_podcast_app(3);
+    // show-1 landed; show-2's fetch thread is still running from the
+    // pre-activation fan-out.
+    app.audiobookshelf_browse[0].cache_detail("show-1".into(), Vec::new());
+    app.start_audiobookshelf_detail("show-2".into());
+    let in_flight = app.audiobookshelf_browse[0].detail_loading_ids["show-2"];
+
+    app.activate_audiobookshelf_position(0);
+
+    let state = &app.audiobookshelf_browse[0];
+    assert_eq!(
+        state.detail_loading_ids.get("show-2"),
+        Some(&in_flight),
+        "activation keeps the running fetch's own request: it is never re-requested"
+    );
+    assert!(
+        !state.detail_cache.contains_key("show-1"),
+        "the landed shows' caches are replaced"
+    );
+    assert_eq!(loading(state), ["show-0", "show-1", "show-2"]);
+
+    // The still-running pre-activation fetch lands after the activation: it
+    // is the show's one cache write.
+    app.handle_lib_event(LibEvent::AudiobookshelfDetailFetched {
+        generation: app.audiobookshelf_runtime.generation(),
+        request: in_flight,
+        library_item_id: "show-2".into(),
+        result: Ok(vec![episode("show-2", "fresh")]),
+    });
+
+    // A replay of the retired request cannot overwrite the newer result.
+    app.handle_lib_event(LibEvent::AudiobookshelfDetailFetched {
+        generation: app.audiobookshelf_runtime.generation(),
+        request: in_flight,
+        library_item_id: "show-2".into(),
+        result: Ok(vec![episode("show-2", "replayed")]),
+    });
+    let state = &app.audiobookshelf_browse[0];
+    assert_eq!(
+        state.detail_cache.get("show-2").map(|episodes| episodes
+            .iter()
+            .map(|episode| episode.episode_id.as_str())
+            .collect::<Vec<_>>()),
+        Some(vec!["fresh"]),
+        "the newer result wins: the stale response never overwrites it"
+    );
+
+    // A superseded serial cannot retire a live request's mark either:
+    // show-0's re-request keeps its own serial and its slot.
+    let show0_serial = app.audiobookshelf_browse[0].detail_loading_ids["show-0"];
+    app.handle_lib_event(LibEvent::AudiobookshelfDetailFetched {
+        generation: app.audiobookshelf_runtime.generation(),
+        request: in_flight,
+        library_item_id: "show-0".into(),
+        result: Ok(vec![episode("show-0", "misdelivered")]),
+    });
+    let state = &app.audiobookshelf_browse[0];
+    assert_eq!(
+        state.detail_loading_ids.get("show-0"),
+        Some(&show0_serial),
+        "the superseded response leaves the live request's mark alone"
+    );
+    assert!(!state.detail_cache.contains_key("show-0"));
+    assert_eq!(
+        loading(state),
+        ["show-0", "show-1"],
+        "the show was fetched exactly once per session"
+    );
 }
 
 #[test]

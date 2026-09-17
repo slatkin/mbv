@@ -155,13 +155,13 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
     // already be the view; a fetch in flight means the show is not cached
     // yet, so drop the fixture's entry for this scenario.
     browse.detail_cache.clear();
-    browse.detail_loading_ids.insert("show-a".into());
+    browse.detail_loading_ids.insert("show-a".into(), 0);
     let mut harness = TickHarness::new(app);
     draw(&mut harness, 160);
     assert!(podcast(&mut harness).episode_rows().is_empty());
     assert!(harness.model().app.audiobookshelf_browse[0]
         .detail_loading_ids
-        .contains("show-a"));
+        .contains_key("show-a"));
 
     // Provider completion is injected at the state boundary; the same owner
     // remains mounted and updates its rows in place without a sleep.
@@ -181,7 +181,7 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
     draw(&mut harness, 160);
     assert!(!harness.model().app.audiobookshelf_browse[0]
         .detail_loading_ids
-        .contains("show-a"));
+        .contains_key("show-a"));
     // The arrival joined the grouped flow as a selectable episode row and
     // the selection landed on it.
     let rows = podcast(&mut harness).episode_rows().to_vec();
@@ -201,7 +201,7 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
     draw(&mut harness, 160);
     assert!(!harness.model().app.audiobookshelf_browse[0]
         .detail_loading_ids
-        .contains("show-a"));
+        .contains_key("show-a"));
     assert!(podcast(&mut harness).episode_rows().is_empty());
 }
 
