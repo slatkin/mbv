@@ -30,7 +30,7 @@ pub(in crate::app) struct PodcastContent {
     episode_focused: bool,
     initialized: bool,
     focused: bool,
-    carrier: MediaListCarrier<String>,
+    pub(in crate::app) carrier: MediaListCarrier<String>,
     episode_list: MediaListCarrier<String>,
     hero_image: HeroImageState,
 }
@@ -377,13 +377,24 @@ impl LibraryContentOwner for PodcastContent {
                     if !self.carrier.claims_current_point(at) {
                         return None;
                     }
-                    self.carrier.delegate_operation(
+                    // The shared conversion steps the viewport (design D1);
+                    // the show-move echo is a selection-move report (design
+                    // D8) — its shell arm pulls panel focus and re-projects —
+                    // so a window-only step emits none and keeps only the
+                    // framework-visible claim.
+                    let outcome = self.carrier.delegate_operation(
                         MediaListSurfaceInput::Wheel { at, delta }
                             .into_operation(None)
                             .expect("resolved media-list pointer target"),
                     );
-                    self.sync_show_selection();
-                    self.show_move()
+                    if outcome.selected_target.is_some() {
+                        self.sync_show_selection();
+                        self.show_move()
+                    } else {
+                        Some(Msg::TerminalEvent(
+                            crate::app::components::msg::TerminalObserverEvent::MouseClaimed,
+                        ))
+                    }
                 }
                 MediaListSurfaceInput::Click(at)
                 | MediaListSurfaceInput::ToggleClick(at)

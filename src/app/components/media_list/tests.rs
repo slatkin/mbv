@@ -1,6 +1,7 @@
 use super::{
     MediaKind, MediaList, MediaListCarrier, MediaListDisposition, MediaListOperation, MediaListRow,
-    MediaSemanticState, ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
+    MediaListSurfaceInput, MediaSemanticState, ViewportAnchor, WideMediaList,
+    WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -269,10 +270,12 @@ fn viewport_step_leaves_the_selection_when_the_window_shows_no_selectable_row() 
     list.select_target(&"b".to_string());
     list.set_scroll(2);
     assert!(list.scroll_viewport(-1, 2));
-    assert_eq!(list.scroll(), 1);
-    // The new window [1, 3) holds only structural rows and the nearest
-    // selectable row before its bottom ("a", row 0) is outside it, so the
-    // selection stays on "b".
+    // The displayed window had lowered onto the selection (the paint shows
+    // [4, 6)); the step steps from the visible window, so the new window
+    // [3, 5) holds only structural rows and the nearest selectable row
+    // before its bottom ("a", row 0) is outside it — the selection stays
+    // on "b".
+    assert_eq!(list.scroll(), 3);
     assert_eq!(list.selected_target(), Some(&"b".to_string()));
 }
 
@@ -286,9 +289,11 @@ fn viewport_page_moves_by_the_painted_height_and_drags() {
     assert_eq!(list.scroll(), 3);
     assert_eq!(list.selected_target(), Some(&"3".to_string()));
     list.select_target(&"6".to_string());
+    // select_target lowered the window for display only (stored scroll 3,
+    // displayed [4, 7)); the page steps from the visible window.
     assert!(list.scroll_viewport_page(-1, 3));
-    assert_eq!(list.scroll(), 0);
-    assert_eq!(list.selected_target(), Some(&"2".to_string()));
+    assert_eq!(list.scroll(), 1);
+    assert_eq!(list.selected_target(), Some(&"3".to_string()));
 }
 
 // Task 1.2: a page longer than the remaining content clamps.
@@ -466,16 +471,19 @@ fn viewport_step_may_still_scroll_the_label_off() {
 #[test]
 fn viewport_step_during_visual_mode_leaves_the_multi_selection_unchanged() {
     let mut list = MediaList::new();
-    list.set_content(numbered_items(6));
+    list.set_content(numbered_items(10));
     list.select_target(&"2".to_string());
     list.enter_visual_mode();
     list.delegate_operation(MediaListOperation::Move(2));
     assert_eq!(list.multi_selection(), &["2", "3", "4"]);
-    // The selection ("4", display row 4) sits outside the new window [1, 4),
-    // so the step drags the cursor to "3" without touching the range.
+    // The selection ("4", display row 4) sits on the displayed window's
+    // top edge (the stored window [4, 7) shows it on its first row), so the
+    // step leaves it above the new window and drags the cursor to the
+    // nearest shown selectable row without touching the range.
+    list.set_scroll(4);
     let stepped = list.delegate_viewport_operation(MediaListOperation::ScrollViewport(1), Some(3));
     assert_eq!(stepped.disposition, MediaListDisposition::Consumed);
-    assert_eq!(stepped.selected_target, Some("3".to_string()));
+    assert_eq!(stepped.selected_target, Some("5".to_string()));
     assert_eq!(stepped.selection_summary, None);
     assert_eq!(list.multi_selection(), &["2", "3", "4"]);
 }
@@ -634,6 +642,51 @@ fn carrier_step_resolves_its_height_from_the_retained_frame() {
         transition.selected_target, None,
         "a window-only step reports no selection move"
     );
+}
+
+// Task 5.1: the shared conversion maps the wheel to the viewport step, so
+// every carrier-backed surface steps its window one display row at every
+// painted height — Wide and Narrow alike — and the selection rides only
+// through the drag rule.
+#[test]
+fn wheel_input_steps_the_viewport_one_row_at_wide_and_narrow_heights() {
+    for height in [3, 8] {
+        let mut carrier = MediaListCarrier::new();
+        carrier.set_content((0..12).map(|i| item(&i.to_string())).collect());
+        carrier.select_target(&"2".to_string());
+        paint(carrier.wide_mut(), Rect::new(0, 0, 20, height));
+
+        let wheel = |delta| {
+            MediaListSurfaceInput::Wheel {
+                at: Position { x: 1, y: 1 },
+                delta,
+            }
+            .into_operation(None)
+            .expect("wheel converts without a target")
+        };
+        // The selection (display row 2) sits inside the window, so the step
+        // is window-only: the window moves one row, no selection is reported.
+        let transition = carrier.delegate_operation(wheel(1));
+        assert_eq!(transition.disposition, MediaListDisposition::Consumed);
+        assert_eq!(carrier.scroll(), 1);
+        assert_eq!(transition.selected_target, None);
+        assert_eq!(carrier.selected_target(), Some(&"2".to_string()));
+
+        // Stepping back up restores the window.
+        assert_eq!(
+            carrier.delegate_operation(wheel(-1)).disposition,
+            MediaListDisposition::Consumed
+        );
+        assert_eq!(carrier.scroll(), 0);
+
+        // With the selection on the window's top edge, the step drags it —
+        // the wheel moves the selection only through the drag rule.
+        carrier.select_target(&"0".to_string());
+        let dragged = carrier.delegate_operation(wheel(1));
+        assert_eq!(dragged.disposition, MediaListDisposition::Consumed);
+        assert_eq!(carrier.scroll(), 1);
+        assert_eq!(dragged.selected_target, Some("1".to_string()));
+    }
 }
 
 // Task 4.2 / D9: `sync_viewport` is the panel's geometry clamp — it lowers an

@@ -578,8 +578,9 @@ fn inactive_owner_keeps_cursor_scroll_across_a_tab_change() {
     let _ = harness.step();
     assert_eq!(
         log.borrow().selections.last(),
-        Some(&Some("gamma".into())),
-        "the wheel step continues from the selection made before the tab change"
+        Some(&Some("beta".into())),
+        "the wheel steps the retained owner's viewport (design D1): the \n         selection survives the tab change and is not moved by a step whose \
+         window still shows it"
     );
 }
 
@@ -737,8 +738,9 @@ fn owner_state_survives_a_queue_only_round_trip() {
     let _ = harness.step();
     assert_eq!(
         log.borrow().selections.last(),
-        Some(&Some("gamma".into())),
-        "the wheel step continues from the selection made before the mode switch"
+        Some(&Some("beta".into())),
+        "the wheel steps the retained owner's viewport (design D1): the \n         selection survives the mode switch and is not moved by a step whose \
+         window still shows it"
     );
 }
 
@@ -1419,9 +1421,9 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
         .is_some());
 
     // Walk the cursor into the overflow first (the keyboard path, already
-    // covered above): the wheel's single notch must then scroll a following
-    // viewport, not a reset one. One notch = one cursor step (the canonical
-    // wheel = Move translation); the 30 ms burst throttle collapses rapid
+    // covered above): the wheel's single notch must then scroll the following
+    // viewport, not a reset one. One notch = one viewport step (the wheel is
+    // the viewport step, design D1); the 30 ms burst throttle collapses rapid
     // notches, so the test drives exactly one recognized gesture.
     for _ in 0..14 {
         harness.inject(Event::Keyboard(KeyEvent {
@@ -1454,8 +1456,8 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     )));
     assert_eq!(
         tv_owner_of(&harness).episode_cursor(),
-        15,
-        "the wheel stepped the Workspace cursor"
+        14,
+        "the wheel steps the viewport alone: the selection rides nowhere when the stepped window still shows it"
     );
     drop(draw_frame_at_model_size(&mut harness));
     let painted_after = tv_owner_of(&harness)
@@ -1467,8 +1469,8 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     );
     assert_eq!(
         tv_owner_of(&harness).episode_scroll(),
-        0,
-        "the paint never writes the resolved offset back into the owner"
+        tv_owner_of(&harness).episode_painted_scroll().unwrap_or(0),
+        "the stepped owner window is what the next paint shows"
     );
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())

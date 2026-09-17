@@ -225,6 +225,16 @@ pub(in crate::app) trait LibraryContentOwner {
         None
     }
 
+    /// The item index the owner's viewport reach resolves to for pagination
+    /// (design D8): the window's last visible display row mapped to its item
+    /// index. Reported with the panel's deferred `LibraryScroll` position so
+    /// a window-only wheel step — no cursor echo — still feeds
+    /// `maybe_fetch_next_page`. `None` when the owner's list does not
+    /// paginate.
+    fn viewport_pagination_index(&self) -> Option<usize> {
+        None
+    }
+
     fn hero_scroll_offset(&self) -> usize {
         0
     }

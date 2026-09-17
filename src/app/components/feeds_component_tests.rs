@@ -260,7 +260,17 @@ fn group_change_reflects_active_filter() {
 
 #[test]
 fn unfocused_component_handles_mouse_input() {
-    let mut panel = panel_with(grouped_component(), false);
+    // The second group holds more entries than the painted narrow list shows,
+    // so the claimed wheel can step the viewport (design D1).
+    let subscriptions = vec![subscription("A"), subscription("B")];
+    let entries = vec![
+        (0..16)
+            .map(|i| entry(&format!("A-{i}"), false))
+            .collect::<Vec<_>>(),
+        vec![entry("B-unplayed", false), entry("B-played", true)],
+    ];
+    let all_entries = entries.iter().flatten().cloned().collect::<Vec<_>>();
+    let mut panel = panel_with(owner_with(subscriptions, entries, all_entries), false);
     let _ = paint(&mut panel, 60, 20);
     let selector = panel
         .test_selector_hits()
@@ -289,7 +299,11 @@ fn unfocused_component_handles_mouse_input() {
         modifiers: KeyModifiers::NONE,
     }));
     assert_eq!(feeds(&panel).selected_group(), 1);
-    assert_eq!(feeds(&panel).cursor(), 1);
+    // The wheel steps the viewport one row (design D1): the window moves
+    // while the selection — a display row below the group's `Heading`, not
+    // on the window's edge — rides nowhere.
+    assert_eq!(feeds(&panel).scroll(), 1);
+    assert_eq!(feeds(&panel).cursor(), 0);
 }
 
 #[test]

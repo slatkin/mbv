@@ -231,6 +231,28 @@ impl EmbyLibraryContent {
         self.carrier.scroll()
     }
 
+    /// The window's last visible display row resolved to its `items` index
+    /// (design D8): pagination feeds `maybe_fetch_next_page` with the reach
+    /// the window — not the selection — arrived at, because a window-only
+    /// wheel step may park the window at the loaded end while the selection
+    /// rides rows behind it.
+    fn viewport_pagination_index(&self) -> Option<usize> {
+        let height = self.carrier.current_content_rect()?.height as usize;
+        let rows = self.carrier.rows();
+        let offset = self.carrier.wide().resolve_viewport(height).offset;
+        let mut row = (offset + height.saturating_sub(1)).min(rows.len().saturating_sub(1));
+        while !rows
+            .get(row)
+            .is_some_and(|row| row.selectable_target().is_some())
+        {
+            row = row.checked_sub(1)?;
+        }
+        let target = rows[row].selectable_target()?;
+        self.items
+            .iter()
+            .position(|item| Some(&item.id) == Some(target))
+    }
+
     fn true_total(&self) -> usize {
         self.library_total.unwrap_or(self.total_count)
     }
@@ -557,6 +579,10 @@ impl LibraryContentOwner for EmbyLibraryContent {
         Some((self.cursor(), self.scroll()))
     }
 
+    fn viewport_pagination_index(&self) -> Option<usize> {
+        self.viewport_pagination_index()
+    }
+
     fn hero_scroll_offset(&self) -> usize {
         self.hero_scroll
     }
@@ -652,18 +678,32 @@ impl LibraryContentOwner for EmbyLibraryContent {
                 };
                 match input {
                     MediaListSurfaceInput::Wheel { .. } => {
-                        // The resolved wheel echo drives the shell's
-                        // `video_cursor`/resting-cursor write and pagination
-                        // through the same typed arm as keyboard movement
-                        // (`shell_emby_library.rs::handle_emby_library_request`).
-                        self.carrier
-                            .delegate_operation(MediaListOperation::Move(match input {
-                                MediaListSurfaceInput::Wheel { delta, .. } => delta,
-                                _ => 0,
-                            }));
-                        Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
-                            index: self.cursor(),
-                        }))
+                        // The shared conversion maps the wheel to the
+                        // viewport step (design D1): the window moves one
+                        // display row and the selection rides only when the
+                        // step would leave it. The `EmbyLibraryCursorIndex`
+                        // echo is a selection-move report (design D8): a
+                        // window-only step emits none — the reached position
+                        // still reports for persistence and pagination
+                        // through the panel's deferred `LibraryScroll`, whose
+                        // pagination reach this owner resolves from the
+                        // window's last visible display row.
+                        let outcome = self.carrier.delegate_operation(
+                            input
+                                .into_operation(None)
+                                .expect("wheel converts without a target"),
+                        );
+                        if outcome.selected_target.is_some() {
+                            Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                                index: self.cursor(),
+                            }))
+                        } else {
+                            // A framework-visible claim after mutating local
+                            // state; dropping the message would let the
+                            // framework's mutation be discarded by the mouse
+                            // fold (ADR 0024).
+                            Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                        }
                     }
                     MediaListSurfaceInput::Click(_at)
                     | MediaListSurfaceInput::ToggleClick(_at)

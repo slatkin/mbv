@@ -19,7 +19,9 @@ fn harness() -> TickHarness {
     let mut state = crate::app::types_audiobookshelf_browse::AudiobookshelfBookBrowseState::new(
         library.clone(),
     );
-    state.books = (0..8)
+    // More books than the painted list shows, so the claimed wheel can step
+    // the viewport (design D1).
+    state.books = (0..20)
         .map(|i| AudiobookshelfBook {
             library_item_id: format!("book-{i}"),
             title: format!("Book {i}"),
@@ -202,12 +204,20 @@ fn books_panel_is_focused_and_mouse_eligible() {
         row: rect.y,
         modifiers: KeyModifiers::NONE,
     }));
+    // The wheel steps the book list's viewport (design D1); the selection sat
+    // on the window's top edge, so the drag rule rides it and the dragged
+    // step reports the book position echo.
     assert!(h.step().raw_messages.iter().any(|m| matches!(
         m,
         Msg::Shell(ShellRequest::AudiobookshelfBookMove(
             AudiobookshelfBookMove::Book(Some(_))
         ))
     )));
+    assert_eq!(
+        h.model().test_abs_book_owner().carrier.scroll(),
+        1,
+        "the window moved one display row"
+    );
 }
 
 #[test]

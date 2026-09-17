@@ -448,10 +448,14 @@ pub enum ShellRequest {
     /// A library list wheel movement resolved by the embedded owner. The
     /// stable library key and owner-resolved cursor/scroll cross the panel
     /// boundary; the shell persists the resting scroll without re-reading it.
+    /// `pagination_index` is the owner's viewport reach resolved to its item
+    /// index (design D8): a window-only wheel step emits no cursor echo but
+    /// still feeds `maybe_fetch_next_page` through this position report.
     LibraryScroll {
         key: crate::app::components::library_panel::LibraryKey,
         index: usize,
         scroll: usize,
+        pagination_index: Option<usize>,
     },
     /// Every local browser cursor key (arrows/hjkl, Page keys, Home/End) on
     /// the focused generic/Movies/home-video library component (task 5.3d,

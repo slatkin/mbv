@@ -94,8 +94,11 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
         Msg::Shell(ShellRequest::RowContextMenu(_, Some((x, y)))) if *x == second_track_point.0 && *y == second_track_point.1
     )));
 
-    // Wheel over the painted table advances exactly one local track row and
-    // emits no shell-side cursor movement.
+    // Wheel over the painted table steps the viewport; the table fits all
+    // three tracks, so the step is a boundary no-op: the selection stays and
+    // no shell-side cursor movement is emitted (design D1/D8). The viewport
+    // step itself is proven per-surface in the album-rail test below and by
+    // the carrier's wheel conversion test.
     harness.inject(Event::Mouse(MouseEvent {
         kind: MouseEventKind::ScrollDown,
         column: second_track_point.0,
@@ -103,7 +106,7 @@ fn music_wide_track_table_uses_retained_geometry_for_live_mouse_gestures() {
         modifiers: tuirealm::event::KeyModifiers::NONE,
     }));
     let outcome = harness.step();
-    assert_eq!(track_state(&harness), (true, Some(2)));
+    assert_eq!(track_state(&harness), (true, Some(1)));
     assert!(outcome
         .messages
         .iter()
@@ -234,4 +237,63 @@ fn music_wide_album_and_group_pill_use_their_own_retained_geometry() {
         message,
         Msg::Shell(ShellRequest::MusicGroupSwitch { delta }) if *delta == group as i64
     )));
+}
+
+/// The Wide album rail's wheel is the viewport step (design D1): the window
+/// moves one display row while a mid-window selection rides nowhere — the
+/// album cursor request reports a selection move only (design D8; the drag
+/// rule itself is proven by the album-rail component test and the carrier's
+/// wheel conversion test).
+#[test]
+fn music_wide_album_rail_wheel_steps_the_viewport_and_requests_the_cursor_only_when_dragged() {
+    let mut app = make_music_group_app();
+    for i in 2..=20 {
+        let mut album = make_item(&format!("Album {i}"), "MusicAlbum");
+        album.id = format!("album-{i}");
+        album.artist = "Alpha".into();
+        app.libs[0].nav_stack[1].items.push(album);
+    }
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    // The rail's rows are the artist `Heading` plus twenty albums; seed the
+    // selection mid-window so the wheel below cannot drag it.
+    harness
+        .model_mut()
+        .test_music_owner_mut()
+        .carrier
+        .select_target(&"album-10".to_string());
+    let mut terminal = Terminal::new(TestBackend::new(100, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+
+    let selected = harness
+        .model()
+        .test_music_owner()
+        .carrier
+        .current_selected_row_rect()
+        .expect("Wide album rail retained its selected row");
+    harness.inject(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::ScrollDown,
+        column: selected.x,
+        row: selected.y,
+        modifiers: tuirealm::event::KeyModifiers::NONE,
+    }));
+    let outcome = harness.step();
+    assert!(outcome.messages.iter().all(|message| !matches!(
+        message,
+        Msg::Shell(ShellRequest::MusicAlbumCursor { .. })
+    )));
+    assert_eq!(harness.model().test_music_owner().carrier.scroll(), 1);
+    assert_eq!(
+        harness
+            .model()
+            .test_music_owner()
+            .carrier
+            .selected_target(),
+        Some(&"album-10".to_string())
+    );
 }

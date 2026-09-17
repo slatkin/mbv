@@ -103,17 +103,36 @@ impl MusicContent {
                     match input {
                         MediaListSurfaceInput::Wheel { at, delta } => {
                             if self.carrier.claims_current_point(at) {
-                                self.carrier.delegate_operation(MediaListSurfaceInput::Wheel { at, delta }.into_operation(None).expect("resolved media-list pointer target"));
-                                let target = self.carrier.selected_target()?;
-                                let index = self
-                                    .context
-                                    .album_targets
-                                    .iter()
-                                    .position(|candidate| candidate == target)?;
-                                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                                    target: index,
-                                    kind: AlbumCursorKind::Move,
-                                }))
+                                // The shared conversion steps the viewport
+                                // (design D1); the album cursor request is a
+                                // selection-move report (design D8), so a
+                                // window-only step emits none — the reached
+                                // album position still persists through the
+                                // shell's ordinary album-cursor path only
+                                // when the step dragged the selection.
+                                let outcome = self.carrier.delegate_operation(
+                                    MediaListSurfaceInput::Wheel { at, delta }
+                                        .into_operation(None)
+                                        .expect("resolved media-list pointer target"),
+                                );
+                                if outcome.selected_target.is_some() {
+                                    let target = self.carrier.selected_target()?;
+                                    let index = self
+                                        .context
+                                        .album_targets
+                                        .iter()
+                                        .position(|candidate| candidate == target)?;
+                                    Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                                        target: index,
+                                        kind: AlbumCursorKind::Move,
+                                    }))
+                                } else {
+                                    // A framework-visible claim after
+                                    // mutating local state (ADR 0024).
+                                    Some(Msg::TerminalEvent(
+                                        TerminalObserverEvent::MouseClaimed,
+                                    ))
+                                }
                             } else {
                                 None
                             }

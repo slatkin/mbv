@@ -400,6 +400,12 @@ impl InlineSearch {
     pub(in crate::app) fn test_cursor(&self) -> usize {
         self.results.cursor()
     }
+
+    /// Test-only: the carrier's stored viewport window.
+    #[cfg(test)]
+    pub(in crate::app) fn test_scroll(&self) -> usize {
+        self.results.scroll()
+    }
 }
 
 impl Default for InlineSearch {
@@ -438,8 +444,14 @@ pub(in crate::app) trait InlineSearchHost {
 mod tests {
     use super::*;
     use crate::app::tests::make_item;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
     use std::time::{Duration, Instant};
+    use tuirealm::component::Component;
     use tuirealm::event::KeyEvent;
+
+    use super::super::media_list::MediaListDisposition;
 
     fn pool(ids: &[&str]) -> SearchPool {
         SearchPool::Items(
@@ -467,6 +479,55 @@ mod tests {
             search.handle_clock(Instant::now() + Duration::from_millis(301)),
             "the deadline fires the armed re-score"
         );
+    }
+
+    #[test]
+    fn wheel_steps_the_viewport_and_the_selection_rides_only_at_the_edge() {
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(pool(&["a", "b", "c", "d", "e", "f", "g", "h"]));
+        search.handle_key(&key(Key::Char('r')));
+        fire_debounce(&mut search);
+        assert_eq!(search.results_len(), 8);
+
+        // Paint a 3-row frame: the step's height is the retained painted
+        // content rectangle (design D2).
+        let area = Rect::new(0, 0, 30, 3);
+        let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
+        terminal
+            .draw(|f| search.results_mut().wide_mut().view(f, area))
+            .unwrap();
+
+        // The selection (result "a", display row 0) rides the window's top
+        // edge, so the downward step drags it one row while the window steps.
+        let transition = search.results_mut().delegate_operation(
+            MediaListSurfaceInput::Wheel {
+                at: ratatui::layout::Position { x: 1, y: 1 },
+                delta: 1,
+            }
+            .into_operation(None)
+            .expect("wheel converts without a target"),
+        );
+        assert_eq!(transition.disposition, MediaListDisposition::Consumed);
+        assert_eq!(search.test_scroll(), 1);
+        assert_eq!(search.test_cursor(), 1);
+
+        // With the selection mid-window a step moves only the viewport.
+        search.handle_key(&key(Key::Down));
+        search.handle_key(&key(Key::Down));
+        assert_eq!(search.test_cursor(), 3);
+        let transition = search.results_mut().delegate_operation(
+            MediaListSurfaceInput::Wheel {
+                at: ratatui::layout::Position { x: 1, y: 1 },
+                delta: 1,
+            }
+            .into_operation(None)
+            .expect("wheel converts without a target"),
+        );
+        assert_eq!(transition.disposition, MediaListDisposition::Consumed);
+        assert_eq!(transition.selected_target, None);
+        assert_eq!(search.test_scroll(), 2);
+        assert_eq!(search.test_cursor(), 3);
     }
 
     #[test]

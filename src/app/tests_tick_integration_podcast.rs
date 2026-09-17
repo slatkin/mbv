@@ -236,3 +236,69 @@ fn podcast_owner_survives_tab_reselection() {
     );
     let _ = TerminalObserverEvent::NoOp;
 }
+
+/// The show list's wheel is the viewport step (design D1): the window moves
+/// one display row while a mid-window selection rides nowhere — the show-move
+/// echo reports a selection move only (design D8; the drag rule itself is
+/// proven by the carrier's wheel conversion test).
+#[test]
+fn podcast_wheel_steps_the_show_viewport_without_a_selection_move() {
+    let mut app = audiobookshelf_app();
+    {
+        let state = &mut app.audiobookshelf_browse[0];
+        for i in 1..90 {
+            state.shows.push(mbv_core::audiobookshelf::AudiobookshelfShow {
+                library_item_id: format!("show-{i}"),
+                title: format!("Show {i}"),
+                author: None,
+                description: None,
+                cover_path: None,
+            });
+        }
+    }
+    let mut harness = TickHarness::new(app);
+    draw(&mut harness, 140);
+    // Seed the selection mid-window so the wheel below cannot drag it.
+    podcast(&mut harness)
+        .carrier
+        .select_target(&"show-20".to_string());
+    draw(&mut harness, 140);
+
+    let selected = podcast(&mut harness)
+        .carrier
+        .current_selected_row_rect()
+        .expect("the show list retained its selected row");
+    harness.inject(mouse(
+        MouseEventKind::ScrollDown,
+        selected.x,
+        selected.y,
+    ));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))),
+        "the wheel over the painted show rows is claimed"
+    );
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|message| !matches!(
+                message,
+                Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { .. })
+            )),
+        "a window-only wheel step emits no selection echo"
+    );
+    assert_eq!(
+        podcast(&mut harness).carrier.scroll(),
+        1,
+        "the window stepped one display row"
+    );
+    assert_eq!(
+        podcast(&mut harness).carrier.selected_target(),
+        Some(&"show-20".to_string()),
+        "the selection rides nowhere when the stepped window still shows it"
+    );
+}

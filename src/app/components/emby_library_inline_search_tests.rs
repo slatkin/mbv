@@ -237,8 +237,11 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
         at,
         delta: 1,
     }));
+    // The wheel is the viewport step (design D1): the two results fit the
+    // painted frame, so the step is a boundary no-op — the gesture is still
+    // claimed, and the selection moves nowhere (design D8).
     assert!(matches!(message, Some(Msg::TerminalEvent(_))));
-    assert_eq!(owner.inline_search().test_cursor(), 1);
+    assert_eq!(owner.inline_search().test_cursor(), 0);
 
     let message = owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::DoubleClick(
         at,

@@ -117,13 +117,33 @@ fn hero_double_click_activates_the_selected_track() {
 }
 
 #[test]
-fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
+fn album_wheel_steps_the_viewport_and_requests_the_cursor_only_when_dragged() {
+    let albums: Vec<EmbyItem> = (0..8)
+        .map(|i| {
+            let mut album = make_item(&format!("Album {i}"), "MusicAlbum");
+            album.id = format!("album-{i}");
+            album
+        })
+        .collect();
+    let selected = albums[0].clone();
     let mut owner = MusicContent::new();
-    owner.set_content(context(make_item("Album", "MusicAlbum"), "overview"));
+    let album_info: Vec<(String, String, String)> = (0..8)
+        .map(|i| ("Artist".to_string(), String::new(), format!("Album {i}")))
+        .collect();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(albums, 0),
+        Some(selected),
+        "Artist".into(),
+        vec![make_item("Artist", "MusicArtist")],
+        0,
+        album_info,
+        (0..8).collect(),
+        None,
+    ));
 
-    let area = Rect::new(0, 0, 30, 1);
+    let area = Rect::new(0, 0, 30, 3);
     owner.carrier.wide_mut().set_geometry(area, area);
-    let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
     terminal
         .draw(|frame| owner.carrier.wide_mut().view(frame, area))
         .unwrap();
@@ -132,14 +152,42 @@ fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
         at: Position { x: 0, y: 0 },
         delta: 1,
     });
+    // The rows are the artist's `Heading` plus eight albums, so "album-2" is
+    // display row 3. The window displays [1, 4) around it, so the wheel
+    // steps the viewport alone: no album cursor request is emitted (design
+    // D8) and the framework-visible claim survives (ADR 0024).
+    owner.carrier.select_target(&"album-2".to_string());
     assert!(matches!(
         owner.on_slot_event(event),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+    assert_eq!(owner.carrier.scroll(), 2);
+    assert_eq!(
+        owner.carrier.selected_target(),
+        Some(&"album-2".to_string())
+    );
+
+    // The selection now rides the window's top edge — still inside, so the
+    // next step is still a viewport gesture.
+    assert!(matches!(
+        owner.on_slot_event(event),
+        Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+    ));
+    assert_eq!(owner.carrier.scroll(), 3);
+    // Stepping past it drags the selection with the window: the album cursor
+    // request fires only then, resolved against the dragged owner target.
+    let dragged = owner.on_slot_event(event);
+    assert_eq!(owner.carrier.scroll(), 4);
+    assert!(matches!(
+        dragged,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: 0,
+            target: 3,
             kind: AlbumCursorKind::Move,
         }))
     ));
 
+    // A dragged step whose target the context cannot resolve reports
+    // nothing.
     owner.context.album_targets.clear();
     assert_eq!(owner.on_slot_event(event), None);
 }

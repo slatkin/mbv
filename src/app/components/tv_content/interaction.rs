@@ -73,11 +73,17 @@ impl TvContent {
         match input {
             MediaListSurfaceInput::Wheel { at, delta } => {
                 // The series rail is the only scrollable TV surface. Its
-                // canonical control claims the painted region.
+                // canonical control claims the painted region, and the wheel
+                // steps its viewport through the shared conversion (design
+                // D1); TV reports no wheel relay (the delta's surface table).
                 if !self.carrier.claims_current_point(at) {
                     return None;
                 }
-                self.move_rows(delta);
+                self.carrier.delegate_operation(
+                    MediaListSurfaceInput::Wheel { at, delta }
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
                 // Return a framework-visible claim after mutating local
                 // state; dropping the message would let the framework's
                 // mutation be discarded by the mouse fold.

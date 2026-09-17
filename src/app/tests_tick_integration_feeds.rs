@@ -43,7 +43,12 @@ fn harness(width: u16) -> TickHarness {
         url: "https://example.test/feed".into(),
         kind: FeedKind::Audio,
     }];
-    app.feed_tab.entries = vec![vec![entry("one", "One"), entry("two", "Two")]];
+    app.feed_tab.entries = vec![vec![entry("one", "One"), entry("two", "Two")]
+        .into_iter()
+        .chain(
+            (2..24).map(|i| entry(&format!("row-{i}"), &format!("Row {i}"))),
+        )
+        .collect()];
     app.feed_tab.rebuild_all_entries();
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
@@ -228,12 +233,13 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
         let outcome = harness.step();
         assert!(!outcome.raw_messages.is_empty());
         draw(&mut harness, width);
-        // A claimed wheel over the control moves through the shared owner's
-        // Wheel→Move path now that an identical sync no longer invalidates the
-        // painted frame (the 6.1 `last_projected_rows` skip).
-        assert_eq!(feeds_owner(&harness).cursor(), before_cursor + 1);
-        // The claimed move re-selects the next row, so the painted selected-row
-        // rect necessarily moves with it.
+        // A claimed wheel over the control steps the shared owner's viewport
+        // (design D1): the window moves one display row. The selection sits a
+        // display row below the group's `Heading` — inside the window — so a
+        // step moves no selection: the wheel is a viewport gesture.
+        assert_eq!(feeds_owner(&harness).scroll(), 1);
+        assert_eq!(feeds_owner(&harness).cursor(), before_cursor);
+        // The stepped window paints the selection one screen row higher.
         assert_ne!(selected_rect(&harness), before_paint);
     }
 }

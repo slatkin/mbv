@@ -336,7 +336,12 @@ impl Model {
                             }
                         }
                     }
-                    ShellRequest::LibraryScroll { key, index, scroll } => {
+                    ShellRequest::LibraryScroll {
+                        key,
+                        index,
+                        scroll,
+                        pagination_index,
+                    } => {
                         let active_key = self
                             .active_emby_library_owner()
                             .map(|(_, active, _)| active);
@@ -370,6 +375,15 @@ impl Model {
                                         .expect("validated nav stack")
                                         .set_resting_cursor(index);
                                 }
+                            }
+                            // The wheel's reached position also feeds
+                            // pagination (design D8): the owner resolved the
+                            // window's last visible display row to the item
+                            // index; the pending-fetch guard keeps repeated
+                            // reports at the loaded end to one in-flight
+                            // fetch.
+                            if let Some(index) = pagination_index {
+                                self.app.maybe_fetch_next_page(lib_idx, index);
                             }
                         }
                     }

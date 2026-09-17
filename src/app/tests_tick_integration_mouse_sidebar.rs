@@ -143,7 +143,9 @@ fn tick_help_sidebar_scrolls_immediately_after_open_without_click() {
 
 #[test]
 fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
-    let mut app = crate::app::render::make_queue_app(8);
+    // More queue rows than the painted panel shows, so the claimed wheel can
+    // step the viewport (design D1).
+    let mut app = crate::app::render::make_queue_app(20);
     app.terminal_width = 70;
     app.mini_view_focus = PanelFocus::Queue;
     let mut harness = TickHarness::new(app);
@@ -197,18 +199,22 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
-    assert_eq!(
-        harness
+    // The wheel steps the queue's viewport (design D1): the selection sat on
+    // the window's top edge, so the drag rule rides it to the next row — the
+    // wheel moves the selection only through that drag.
+    let mut queue_scroll_cursor = || -> (usize, usize) {
+        let component = harness
             .model_mut()
             .application
             .get_component_mut(&queue_id)
-            .unwrap()
+            .unwrap();
+        let queue = component
             .as_any_mut()
             .downcast_mut::<QueueComponent>()
-            .unwrap()
-            .test_cursor(),
-        1
-    );
+            .unwrap();
+        (queue.test_scroll(), queue.test_cursor())
+    };
+    assert_eq!(queue_scroll_cursor(), (1, 1));
     assert!(outcome
         .raw_messages
         .iter()

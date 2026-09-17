@@ -17,7 +17,7 @@ use super::media_list::{
 };
 use super::msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
-    ShellRequest,
+    ShellRequest, TerminalObserverEvent,
 };
 use crate::app::audiobookshelf_browse_actions::audiobookshelf_book_queue_item;
 use crate::app::types_audiobookshelf_browse::{AudiobookshelfBookBrowseState, BookRow};
@@ -459,7 +459,21 @@ impl BookContent {
             LibrarySlotEvent::List(input) => match input {
                 MediaListSurfaceInput::Wheel { at, delta } => {
                     if self.carrier.claims_current_point(at) {
-                        self.move_book(MediaListSurfaceInput::Wheel { at, delta })
+                        // The shared conversion steps the viewport (design
+                        // D1); the book position echo is a selection-move
+                        // report (design D8), so a window-only step emits
+                        // none and keeps only the framework-visible claim.
+                        let outcome = self.carrier.delegate_operation(
+                            MediaListSurfaceInput::Wheel { at, delta }
+                                .into_operation(None)
+                                .expect("resolved media-list pointer target"),
+                        );
+                        if outcome.selected_target.is_some() {
+                            self.sync_book_from_owner();
+                            self.book_request()
+                        } else {
+                            Some(Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))
+                        }
                     } else {
                         None
                     }

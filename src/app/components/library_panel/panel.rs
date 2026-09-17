@@ -567,10 +567,18 @@ impl LibraryPanel {
                     .active_mut()
                     .and_then(|owner| owner.scroll_position()),
             ) {
+                // The reached position also carries the owner's pagination
+                // reach (design D8): a window-only wheel step emits no cursor
+                // echo but still feeds `maybe_fetch_next_page` through here.
+                let pagination_index = self
+                    .owners
+                    .active_mut()
+                    .and_then(|owner| owner.viewport_pagination_index());
                 self.deferred_msg = Some(Msg::Shell(ShellRequest::LibraryScroll {
                     key,
                     index,
                     scroll,
+                    pagination_index,
                 }));
             }
         }

@@ -248,7 +248,6 @@ pub enum MediaListOperation<Target> {
     /// the selection is dragged along only when it would otherwise leave
     /// the window. Height-taking (design D2): the painted height enters
     /// where the operation is applied, not in this variant.
-    #[cfg_attr(not(test), allow(dead_code))]
     ScrollViewport(i64),
     /// Signed page form of the viewport step (design D6): the window moves
     /// by the painted height in the step direction, reusing the clamp and
@@ -277,7 +276,12 @@ impl MediaListSurfaceInput {
             Self::Last => MediaListOperation::Last,
             Self::Activate => MediaListOperation::ActivateCurrent,
             Self::Context => MediaListOperation::ContextCurrent,
-            Self::Wheel { delta, .. } => MediaListOperation::Move(delta),
+            Self::Wheel { delta, .. } => {
+                // Design D1: the wheel is the viewport step, converted in
+                // this one place so every carrier-backed surface steps its
+                // window. The selection rides only through the drag rule.
+                MediaListOperation::ScrollViewport(delta)
+            }
             Self::Click(_) => MediaListOperation::Select(target?),
             Self::ToggleClick(_) => MediaListOperation::Toggle(target?),
             Self::RangeClick(_) => MediaListOperation::Range(target?),
@@ -537,9 +541,16 @@ impl<Target> MediaList<Target> {
         }
         let height = painted_height.max(1) as i64;
         let max_offset = (total_rows as i64 - height).max(0);
-        let current = (self.scroll as i64).min(max_offset);
-        let target = (current + delta).clamp(0, max_offset);
-        if target == current {
+        // The step moves the VISIBLE window: its base is the resolved
+        // viewport — the stored window clamped to the height and brought
+        // onto the selection the way the paint shows it — so a step composes
+        // with a cursor move (End, a breakpoint clamp) that lowered the
+        // window for display only. The height enters from the retained
+        // painted frame (design D2); a stale height's overshoot is
+        // display-only until the next paint clamp.
+        let base = self.resolve_viewport(height as usize).offset as i64;
+        let target = (base + delta).clamp(0, max_offset);
+        if target == base {
             return false;
         }
         self.scroll = target as usize;
