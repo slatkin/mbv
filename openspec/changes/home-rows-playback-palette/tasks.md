@@ -18,5 +18,5 @@
 
 ## 4. Gates
 
-- [ ] 4.1 Full gates: `cargo nextest run -p mbv`, `cargo nextest run -p mbv-core` (expect unchanged), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt`, `openspec validate --all`. Verify: all clean.
-- [ ] 4.2 Tick-integration check that a Home section render through the shell sync pass paints the new palette on split rows and the ordinary role on single-part rows (extend `tests_tick_integration_home.rs` style). Verify: `cargo nextest run -p mbv tests_tick_integration_home`.
+- [x] 4.1 Full gates: `cargo nextest run -p mbv`, `cargo nextest run -p mbv-core` (expect unchanged), `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt`, `openspec validate --all`. Verify: all clean.
+- [x] 4.2 Tick-integration check that a Home section render through the shell sync pass paints the new palette on split rows and the ordinary role on single-part rows (extend `tests_tick_integration_home.rs` style). Verify: `cargo nextest run -p mbv tests_tick_integration_home`.
