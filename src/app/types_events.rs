@@ -4,6 +4,26 @@ use super::types_playback::{HomeContent, HomeLatestSource};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 
+/// Per-kind landing payload for cross-surface item navigation (design D2 of
+/// change `per-destination-item-navigation`): the Movie/generic arm keeps the
+/// built ancestor-chain nav stack, while the show/album arms carry the single
+/// resolved reveal item and the App applies the per-kind landing at drain
+/// time (tasks 2.2/2.3). Each kind is an explicit variant so every dispatch
+/// site resolves the landing exhaustively.
+pub(super) enum NavigateLanding {
+    /// Movie/generic video: the ancestor-chain nav stack with the cursor
+    /// resting on the item (the pre-change shape, kept verbatim).
+    Chain { nav_stack: Vec<BrowseLevel> },
+    /// TV: land the owning Series via the searched-series activation flow
+    /// (task 2.2). `reveal` is the full series item.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Series { reveal: Box<EmbyItem> },
+    /// Music: land the owning album via recursive album activation
+    /// (task 2.3). `reveal` is the full album item.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Album { reveal: Box<EmbyItem> },
+}
+
 pub(super) enum LibEvent {
     Loaded {
         lib_idx: usize,
@@ -122,7 +142,7 @@ pub(super) enum LibEvent {
     /// false for startup restore (just populate nav_stack, stay on current tab).
     NavigateTo {
         lib_idx: usize,
-        nav_stack: Vec<BrowseLevel>,
+        landing: NavigateLanding,
         switch_tab: bool,
     },
     RestoreLibraryPosition {

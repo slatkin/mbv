@@ -1,3 +1,4 @@
+use super::types_events::NavigateLanding;
 use super::ui_util::sort_audio_tracks;
 use super::{
     notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
@@ -589,23 +590,35 @@ impl App {
             }
             LibEvent::NavigateTo {
                 lib_idx,
-                nav_stack,
+                landing,
                 switch_tab,
             } => {
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    lib.nav_stack = nav_stack;
-                }
-                // A completed navigation IS the saved position from now on;
-                // without this the `switch_tab` activation below compares the
-                // navigated stack against the stale saved position, takes the
-                // restore branch, and clobbers the navigation the user asked
-                // for (queue "Go to Library" / search-sidebar activation
-                // degraded to a bare tab switch).
-                if self.libs.get(lib_idx).is_some() {
-                    self.save_default_library_position(lib_idx);
-                }
-                if switch_tab {
-                    self.set_library_tab(lib_idx + 1);
+                match landing {
+                    NavigateLanding::Chain { nav_stack } => {
+                        if let Some(lib) = self.libs.get_mut(lib_idx) {
+                            lib.nav_stack = nav_stack;
+                        }
+                        // A completed navigation IS the saved position from now on;
+                        // without this the `switch_tab` activation below compares the
+                        // navigated stack against the stale saved position, takes the
+                        // restore branch, and clobbers the navigation the user asked
+                        // for (queue "Go to Library" / search-sidebar activation
+                        // degraded to a bare tab switch).
+                        if self.libs.get(lib_idx).is_some() {
+                            self.save_default_library_position(lib_idx);
+                        }
+                        if switch_tab {
+                            self.set_library_tab(lib_idx + 1);
+                        }
+                    }
+                    // The per-kind landings (searched-series / recursive-album
+                    // activation) are tasks 2.2/2.3; until they land, the
+                    // show/album arms only perform the tab switch.
+                    NavigateLanding::Series { .. } | NavigateLanding::Album { .. } => {
+                        if switch_tab {
+                            self.set_library_tab(lib_idx + 1);
+                        }
+                    }
                 }
             }
             LibEvent::PlaylistsLoaded(items) => {

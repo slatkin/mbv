@@ -241,7 +241,9 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
     };
     app.handle_lib_event(LibEvent::NavigateTo {
         lib_idx: 0,
-        nav_stack: vec![navigated],
+        landing: crate::app::types_events::NavigateLanding::Chain {
+            nav_stack: vec![navigated],
+        },
         switch_tab: true,
     });
 

@@ -23,6 +23,10 @@ mod tests_library_position_restore;
 mod tests_library_position_activation;
 
 #[cfg(test)]
+#[path = "tests_library_navigate_reveal.rs"]
+mod tests_library_navigate_reveal;
+
+#[cfg(test)]
 #[path = "split_browse_state_browse_level_tests.rs"]
 mod split_browse_state_browse_level_tests;
 

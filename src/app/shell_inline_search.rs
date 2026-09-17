@@ -239,10 +239,12 @@ impl Model {
         // activation) replaces the nav stack wholesale: retained destination
         // owners would otherwise keep their pre-navigation selection. Re-anchor
         // them once, against the navigated resting cursor, before the drain's
-        // content pushes read it.
+        // content pushes read it. The re-anchor is kept for the Movie/generic
+        // Chain arm (design D3); the show/album arms carry the reveal item and
+        // the shell hand-off (task 3.1/3.2) subsumes it.
         if let super::LibEvent::NavigateTo {
             lib_idx,
-            ref nav_stack,
+            landing: super::types_events::NavigateLanding::Chain { ref nav_stack },
             switch_tab: true,
         } = ev
         {
