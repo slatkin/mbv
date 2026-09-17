@@ -225,6 +225,10 @@ impl MusicContent {
         }
     }
 
+    /// Adopt the shell's resting position at an explicit re-anchor boundary
+    /// (design D9): the target and window are taken exactly as given — no
+    /// bottom-edge derivation — and the stored window stays authoritative
+    /// between paints (the display clamp is read-only).
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
         let cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
         if let Some(target) = self.context.album_targets.get(cursor).cloned() {

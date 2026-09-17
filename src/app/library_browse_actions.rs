@@ -201,13 +201,12 @@ impl App {
         lib_idx: usize,
         saved: crate::config::LibraryPosition,
     ) {
-        let visible_rows = self.lib_page_size();
         let Some(client) = self.emby_snapshot() else {
             return;
         };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
+            let restored = super::restore_library_position(&saved, |saved_level| {
                 let letter_filter = saved_level
                     .letter_filter_index
                     .and_then(super::render::LetterFilter::for_index);

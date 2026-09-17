@@ -56,7 +56,7 @@ fn entering_library_restores_cursor_from_saved_focused_item_and_round_trips() {
         library_total: None,
     };
 
-    let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
+    let level = BrowseLevel::from_position_level(&saved, make_items(5), 5);
     assert_eq!(
         level.resting().cursor(),
         2,

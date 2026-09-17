@@ -474,6 +474,39 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
 }
 
 #[test]
+fn queue_cursor_push_never_hand_clamps_the_window() {
+    // D9 retirement: `set_cursor`'s `scroll.min(cursor)` hand clamp is gone.
+    // The cursor path (`select_index` -> `follow_cursor`) is the only window
+    // movement a cursor push needs: a Set below the window lowers it through
+    // the cursor path, and a Set inside the stored window leaves it where it
+    // is (an explicit scope reset remains the only other writer).
+    let mut component = QueueComponent::new();
+    component.set_content(
+        long_queue(),
+        QueueCursorUpdate::Set(0),
+        QueueScope::Local,
+        PlaybackState::default(),
+    );
+    component.test_seed_scroll(12);
+    component.set_cursor(QueueCursorUpdate::Set(4));
+    assert_eq!(component.test_cursor(), 4);
+    assert_eq!(
+        component.test_scroll(),
+        4,
+        "the cursor path lowers the window"
+    );
+
+    component.test_seed_scroll(4);
+    component.set_cursor(QueueCursorUpdate::Set(6));
+    assert_eq!(component.test_cursor(), 6);
+    assert_eq!(
+        component.test_scroll(),
+        4,
+        "a Set inside the window leaves the stored window untouched"
+    );
+}
+
+#[test]
 fn queue_movement_uses_single_row_stride_and_follows_focus() {
     let mut component = QueueComponent::new();
     component.set_content(

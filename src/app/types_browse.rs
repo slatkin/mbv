@@ -90,20 +90,23 @@ impl BrowseLevel {
         saved: &crate::config::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
-        visible_rows: usize,
     ) -> Self {
         let cursor = saved
             .focused_item_id
             .as_ref()
             .and_then(|id| items.iter().position(|item| &item.id == id))
             .unwrap_or_else(|| saved.cursor_index.min(items.len().saturating_sub(1)));
-        let scroll = Self::scroll_for_cursor(cursor, visible_rows);
+        // The on-disk position is cursor-only (design D9): the restore seeds
+        // the selection and parks the window at the top; the visible window
+        // derives from the selection's display row once the flow exists (the
+        // paint-time clamp), and the boundary's explicit seed (the shell's
+        // `apply_position`/re-anchor) is the only writer after that.
         Self {
             parent_id: saved.parent_id.clone(),
             title: saved.title.clone(),
             items,
             total_count,
-            resting: BrowseResting::new(cursor, scroll),
+            resting: BrowseResting::new(cursor, 0),
             item_types: saved.item_types.clone(),
             unplayed_only: saved.unplayed_only,
             sort_by: saved.sort_by.clone(),
@@ -149,19 +152,10 @@ impl BrowseLevel {
             library_total: None,
         }
     }
-
-    pub(super) fn scroll_for_cursor(cursor: usize, visible_rows: usize) -> usize {
-        if visible_rows == 0 || cursor < visible_rows {
-            0
-        } else {
-            cursor + 1 - visible_rows
-        }
-    }
 }
 
 pub(super) fn restore_library_position<F>(
     saved: &crate::config::LibraryPosition,
-    visible_rows: usize,
     mut fetch_level: F,
 ) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
 where
@@ -181,7 +175,7 @@ where
 
     for (idx, saved_level) in saved.levels.iter().enumerate() {
         let (items, total_count) = fetch_level(saved_level)?;
-        let level = BrowseLevel::from_position_level(saved_level, items, total_count, visible_rows);
+        let level = BrowseLevel::from_position_level(saved_level, items, total_count);
         let can_descend = saved
             .levels
             .get(idx + 1)

@@ -56,19 +56,23 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
         library_total: None,
     };
 
-    let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
+    let level = BrowseLevel::from_position_level(&saved, make_items(5), 5);
 
     assert_eq!(level.resting().cursor(), 3);
-    assert_eq!(level.resting().scroll(), 1);
+    // Design D9: the restore is cursor-only — the saved position no longer
+    // derives a bottom-anchored window from the item index; the boundary
+    // seeds the window at the top and the visible window derives from the
+    // selection's display row at paint time.
+    assert_eq!(level.resting().scroll(), 0);
     assert_eq!(level.item_types.as_deref(), Some("Movie"));
     assert!(!level.loading);
     assert!(level.all_items.is_none());
 
     saved.focused_item_id = Some("missing".into());
-    let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
+    let level = BrowseLevel::from_position_level(&saved, make_items(5), 5);
 
     assert_eq!(level.resting().cursor(), 4);
-    assert_eq!(level.resting().scroll(), 2);
+    assert_eq!(level.resting().scroll(), 0);
 }
 
 #[test]
@@ -112,7 +116,7 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
         ..Default::default()
     };
 
-    let restored = restore_library_position(&saved, 3, |level| match level.parent_id.as_str() {
+    let restored = restore_library_position(&saved, |level| match level.parent_id.as_str() {
         "lib-movies" => Ok((vec![root_a.clone(), root_b.clone()], 2)),
         "folder-b" => Ok((vec![leaf.clone()], 1)),
         other => panic!("unexpected level fetch: {other}"),
@@ -176,7 +180,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
         ..Default::default()
     };
 
-    let restored = restore_library_position(&saved, 3, |level| match level.parent_id.as_str() {
+    let restored = restore_library_position(&saved, |level| match level.parent_id.as_str() {
         "lib-movies" => Ok((vec![root.clone()], 1)),
         "folder-b" => Ok((vec![leaf0.clone(), leaf1.clone()], 2)),
         other => panic!("unexpected level fetch: {other}"),
@@ -230,7 +234,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
         ..Default::default()
     };
 
-    let restored = restore_library_position(&saved, 3, |level| match level.parent_id.as_str() {
+    let restored = restore_library_position(&saved, |level| match level.parent_id.as_str() {
         "lib-movies" => Ok((vec![root_a.clone(), root_c.clone()], 2)),
         other => panic!("unexpected level fetch: {other}"),
     })

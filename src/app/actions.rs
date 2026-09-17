@@ -263,15 +263,6 @@ impl App {
             .unwrap_or_default()
     }
 
-    pub(super) fn lib_page_size(&self) -> usize {
-        // The library list is rendered into the right panel; use the panel
-        // height directly (rows are single-line; subtract 1 for the
-        // count/search header line).
-        (self.layout.left_area.height as usize)
-            .saturating_sub(1)
-            .max(1)
-    }
-
     /// Resolve the item the library panel currently selects. `cursor` is the
     /// resolved index the caller owns (component-resolved for the generic
     /// browser, or the App nav-level cursor on the legacy context-menu/mouse

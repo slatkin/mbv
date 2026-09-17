@@ -82,7 +82,7 @@ fn narrow_tv_library_restores_saved_series_position() {
     app.replace_saved_library_position(0, position.clone());
 
     let level =
-        BrowseLevel::from_position_level(&saved, folder_items("Series", "Series", 5), 5, 10);
+        BrowseLevel::from_position_level(&saved, folder_items("Series", "Series", 5), 5);
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
         requested_position: position.clone(),
@@ -131,8 +131,8 @@ fn narrow_grouped_music_library_restores_saved_album_position() {
         })
         .collect();
     let nav_stack = vec![
-        BrowseLevel::from_position_level(&group_level, groups, 3, 10),
-        BrowseLevel::from_position_level(&album_level, albums, 4, 10),
+        BrowseLevel::from_position_level(&group_level, groups, 3),
+        BrowseLevel::from_position_level(&album_level, albums, 4),
     ];
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,

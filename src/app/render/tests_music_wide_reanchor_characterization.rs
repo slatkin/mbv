@@ -104,10 +104,19 @@ fn grouped_music_wide_reanchor_characterization() {
         );
     }
 
-    // ---- Wide: re-anchor to the last album settles a non-zero scroll --------
+    // ---- Wide: re-anchor to the last album adopts the given window --------
     re_anchor_to(&mut model, last, 0);
     let _ = draw_mounted_frame(&mut model, 160, 40);
     assert_eq!(album_cursor(&model, &id), last);
+    // Design D9: the re-anchor adopts the target and window it is given — no
+    // bottom-edge derivation of the stored window. The bottom album still
+    // paints at the flow's last row through the display clamp (design D2),
+    // which keeps the selection visible without ever writing the window.
+    assert_eq!(
+        mounted_music_scroll(&model),
+        0,
+        "the re-anchor stores the window it was given, un-derived"
+    );
     // The paint is read-only (design D2): the bottom album's display clamp
     // anchors it to the flow's last painted row; the owner's stored window
     // is never corrected from the paint.
@@ -126,8 +135,8 @@ fn grouped_music_wide_reanchor_characterization() {
 
     // ---- Wide -> Narrow -> Wide: bare presentation flips keep the selection -
     // No shell re-anchor fires, so the kept-mounted component holds its
-    // album_cursor across the round trip and the wide display clamp
-    // recomputes the identical bottom-anchored offset.
+    // album_cursor and its adopted stored window across the round trip; the
+    // wide display clamp recomputes the identical bottom-anchored offset.
     let _ = draw_mounted_frame(&mut model, 60, 30);
     assert_eq!(
         album_cursor(&model, &id),

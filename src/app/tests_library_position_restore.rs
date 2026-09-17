@@ -23,7 +23,7 @@ fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
     };
     app.replace_saved_library_position(0, position.clone());
     // 2 items / 50 total: not fully loaded, so `spawn_all_items_prefetch` would do I/O.
-    let level = BrowseLevel::from_position_level(&level, make_items(2), 50, 10);
+    let level = BrowseLevel::from_position_level(&level, make_items(2), 50);
     app.handle_lib_event(LibEvent::RestoreLibraryPosition {
         lib_idx: 0,
         requested_position: position.clone(),

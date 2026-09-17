@@ -158,16 +158,13 @@ impl QueueComponent {
 
     /// Deliver an authoritative cursor command independently of row delivery.
     /// This is the adjudicated Queue shell-push seam (design.md D5): the shell
-    /// owns the Queue cursor command, so this one numeric re-anchor and its
-    /// resting-scroll clamp are sanctioned rather than delegated.
+    /// owns the Queue cursor command, so this one numeric re-anchor is
+    /// sanctioned rather than delegated. The window is not hand-clamped here
+    /// (design D9): `select_index`'s cursor path keeps the selection inside
+    /// the window, and the stored window stays authoritative between paints.
     pub(in crate::app) fn set_cursor(&mut self, cursor: QueueCursorUpdate) {
         if let QueueCursorUpdate::Set(idx) = cursor {
             self.carrier.select_index(idx);
-        }
-        let scroll = self.carrier.scroll();
-        let clamped = scroll.min(self.carrier.cursor());
-        if clamped != scroll {
-            self.carrier.set_scroll(clamped);
         }
     }
 
