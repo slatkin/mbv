@@ -59,18 +59,18 @@ follow-up units; coordinate before editing the same file.
 
 ## 4. Paint read-only (D2, D9)
 
-- [ ] 4.1 Delete the fixed-row painter's write-back of the resolved offset (`render/components/media_list/wide.rs`)
+- [x] 4.1 Delete the fixed-row painter's write-back of the resolved offset (`render/components/media_list/wide.rs`)
   and keep the display clamp only; replace `painter_persists_resolved_scroll_offset_across_frames` with a
   pin that a paint does not change the window and a shorter paint does not raise it.
   (Verify: the replaced test plus `cargo nextest run -p mbv`.)
-- [ ] 4.2 Resolve the step's height from the retained painted content rectangle in the carrier, and make
+- [x] 4.2 Resolve the step's height from the retained painted content rectangle in the carrier, and make
   `sync_viewport` a geometry clamp that no longer stores a resolved offset. With no retained frame the
   step is a no-op (`Unhandled`); a stale height's overshoot is display-only until the next paint clamp —
   the owner's window is never corrected from a stale height.
   (Verify: carrier unit tests — the height comes from the retained frame; a step with no retained frame
   changes nothing; a height change clamps without raising the window; the shared owner survives the
   transition.)
-- [ ] 4.3 Keep the panel's per-frame height sync as the single geometry seam and update its tests.
+- [x] 4.3 Keep the panel's per-frame height sync as the single geometry seam and update its tests.
   (Verify: `library_panel/panel_list.rs` and `panel_tests` green.)
 
 ## 5. Wheel conversion (D1, D8)
