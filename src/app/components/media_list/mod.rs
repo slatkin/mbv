@@ -532,6 +532,12 @@ impl<Target> MediaList<Target> {
         if let Some(row) = self.selected_display_row() {
             if row < offset {
                 offset = row;
+                // Keep the label of the selection's group visible: the raise
+                // continues over the contiguous Heading/Spacer rows directly
+                // above it and stops at the previous selectable row (#731).
+                while offset > 0 && self.rows[offset - 1].selectable_target().is_none() {
+                    offset -= 1;
+                }
             } else if row >= offset + height {
                 offset = row + 1 - height;
             }
