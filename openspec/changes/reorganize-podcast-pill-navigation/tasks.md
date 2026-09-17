@@ -25,5 +25,5 @@
 
 ## 5. Cleanup and gates
 
-- [ ] 5.1 Delete dead podcast machinery: surname/title bucket use in this tab, the show hero workspace, the selection modal path, `hero_content_abs_show`, and now-unfed shell message arms (every boundary-crossing request variant gets an exhaustive arm or a documented no-op). Inline Search is a non-goal: this tab gains no `InlineSearchHost`, so no search work is in scope. Verify `cargo clippy --workspace --all-targets -- -D warnings` and no `#[cfg_attr(not(test), allow(dead_code))]` gates left on deleted items.
-- [ ] 5.2 Full gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv` and `-p mbv-core`, and `openspec validate --all` green; then sync deltas and archive the change.
+- [x] 5.1 Delete dead podcast machinery: surname/title bucket use in this tab, the show hero workspace, the selection modal path, `hero_content_abs_show`, and now-unfed shell message arms (every boundary-crossing request variant gets an exhaustive arm or a documented no-op). Inline Search is a non-goal: this tab gains no `InlineSearchHost`, so no search work is in scope. Verify `cargo clippy --workspace --all-targets -- -D warnings` and no `#[cfg_attr(not(test), allow(dead_code))]` gates left on deleted items.
+- [x] 5.2 Full gates: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv` and `-p mbv-core`, and `openspec validate --all` green; then sync deltas and archive the change.
