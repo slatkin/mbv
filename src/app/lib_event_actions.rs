@@ -611,14 +611,10 @@ impl App {
                             self.set_library_tab(lib_idx + 1);
                         }
                     }
-                    // The per-kind landings (searched-series / recursive-album
-                    // activation) are tasks 2.2/2.3; until they land, the
-                    // show/album arms only perform the tab switch.
-                    NavigateLanding::Series { .. } | NavigateLanding::Album { .. } => {
-                        if switch_tab {
-                            self.set_library_tab(lib_idx + 1);
-                        }
-                    }
+                    // Unreachable until tasks 2.2/2.3 wire emission of these variants.
+                    NavigateLanding::Series { .. } => {}
+                    // Unreachable until tasks 2.2/2.3 wire emission of these variants.
+                    NavigateLanding::Album { .. } => {}
                 }
             }
             LibEvent::PlaylistsLoaded(items) => {

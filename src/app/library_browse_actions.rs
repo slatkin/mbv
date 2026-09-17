@@ -6,8 +6,10 @@ use mbv_core::api::{EmbyClient, EmbyItem};
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.
 /// `Chain` keeps the built ancestor-chain nav stack (Movie/generic);
-/// `Series`/`Album` name the single reveal item that the App lands per kind
-/// at drain time (tasks 2.2/2.3).
+/// `Series`/`Album` name the single reveal item that the App will land per
+/// kind at drain time once tasks 2.2/2.3 wire the emission. Until then the
+/// resolved kind gates only the 4.2 failure semantics; every kind emits
+/// `Chain` (see `landing_for_target`).
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum RevealTarget {
     Chain,
@@ -63,20 +65,6 @@ fn owning_ancestor<'a>(ancestors: Option<&'a [EmbyItem]>, item_type: &str) -> Op
     ancestors.and_then(|chain| chain.iter().find(|a| a.item_type == item_type))
 }
 
-/// The reveal item is the already-fetched item when the target is its own id
-/// (Series, MusicAlbum); otherwise one round trip fetches it, and a miss is
-/// a resolve failure (task 4.2).
-fn reveal_item_or_fetch(
-    client: &EmbyClient,
-    item: EmbyItem,
-    reveal_id: &str,
-) -> Result<EmbyItem, String> {
-    if item.id == reveal_id {
-        return Ok(item);
-    }
-    fetch_reveal_item(client, reveal_id)
-}
-
 /// Fetch one item by id; a miss (empty result, server error) is a resolve
 /// failure (deleted item, task 4.2).
 fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, String> {
@@ -91,9 +79,7 @@ fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, Str
 }
 
 /// D1+D2: resolve the reveal target for `item` and build the landing payload
-/// the App applies at drain time. The Movie/generic arm keeps the
-/// ancestor-chain rebuild (fetching the ancestors it needs); show/album arms
-/// carry the single resolved reveal item. Every failure mode (no ancestors,
+/// the App applies at drain time. Every failure mode (no ancestors,
 /// unresolvable kind, fetch error, deleted item) returns the error that
 /// `LibEvent::Error` flashes, leaving the active tab unchanged (task 4.2).
 fn build_navigate_landing(
@@ -119,29 +105,25 @@ fn build_navigate_landing(
     }
 }
 
+/// INTERIM (U1 correction): until tasks 2.2/2.3 wire emission of the
+/// per-kind variants, EVERY resolved kind emits `Chain` — the pre-change
+/// full ancestor-chain build for the original item id — so each kind keeps
+/// today's reachable landing. The resolution above still runs for its 4.2
+/// failure semantics (an unresolvable kind errors instead of silently
+/// chain-landing).
+///
+/// U2 rule (design D1): when 2.2/2.3 wire the variants, the landing kind is
+/// chosen from the RESOLVED `RevealTarget` kind, and an unexpected fetched
+/// item type is a resolve failure (`LibEvent::Error`), never a silent
+/// misroute.
 fn landing_for_target(
     client: &EmbyClient,
     item: &EmbyItem,
-    reveal: RevealTarget,
+    _reveal: RevealTarget,
     lib_id: &str,
 ) -> Result<NavigateLanding, String> {
-    match reveal {
-        RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
-            .map(|nav_stack| NavigateLanding::Chain { nav_stack }),
-        RevealTarget::Series(series_id) | RevealTarget::Album(series_id) => {
-            reveal_item_or_fetch(client, item.clone(), &series_id).map(|reveal_item| {
-                if reveal_item.item_type == "Series" {
-                    NavigateLanding::Series {
-                        reveal: Box::new(reveal_item),
-                    }
-                } else {
-                    NavigateLanding::Album {
-                        reveal: Box::new(reveal_item),
-                    }
-                }
-            })
-        }
-    }
+    build_chain_nav_stack(client, item, lib_id)
+        .map(|nav_stack| NavigateLanding::Chain { nav_stack })
 }
 
 /// Movie/generic ancestor-chain rebuild (D2: the Chain arm keeps this

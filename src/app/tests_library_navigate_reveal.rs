@@ -103,10 +103,12 @@ fn app_with_mock_emby(http: &MockHttp) -> App {
 }
 
 #[test]
-fn episode_navigation_drains_a_series_landing_payload() {
-    // Task 1.1/1.2: an Episode resolves its owning Series via `series_id`
-    // (exactly the two scripted fetches — no ancestors round trip) and the
-    // drained event carries the reveal item for the task 2.2 landing arm.
+fn episode_navigation_drains_the_pre_change_chain_landing() {
+    // Tasks 1.1/1.2, INTERIM U1: an Episode resolves its owning Series via
+    // `series_id` (no ancestors round trip in the resolution), but until
+    // task 2.2 wires the Series emission every kind drains the pre-change
+    // landing — the full ancestor-chain nav stack built for the original
+    // item, cursor resting on it.
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let app = app_with_mock_emby(&http);
@@ -114,9 +116,15 @@ fn episode_navigation_drains_a_series_landing_payload() {
         200,
         r#"{"Items":[{"Id":"ep1","Name":"Pilot","Type":"Episode","SeriesId":"ser1"}]}"#,
     );
+    // get_ancestors: physical folder + AggregateFolder only → root-level landing.
     http.respond(
         200,
-        r#"{"Items":[{"Id":"ser1","Name":"The Show","Type":"Series","SortName":"the show"}]}"#,
+        r#"[{"Id":"folder1","Name":"TV","Type":"Folder"},{"Id":"root","Name":"root","Type":"AggregateFolder"}]"#,
+    );
+    // The root browse level fetch: the episode itself, at cursor 1.
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"other","Name":"Other","Type":"Episode"},{"Id":"ep1","Name":"Pilot","Type":"Episode"}],"TotalRecordCount":2}"#,
     );
 
     app.spawn_navigate_to_item(
@@ -137,25 +145,28 @@ fn episode_navigation_drains_a_series_landing_payload() {
         } => {
             assert_eq!(lib_idx, 0);
             assert!(switch_tab);
-            let NavigateLanding::Series { reveal } = landing else {
-                panic!("expected a Series landing");
+            let NavigateLanding::Chain { nav_stack } = landing else {
+                panic!("expected a Chain landing (interim: every kind chains)");
             };
-            assert_eq!(reveal.id, "ser1");
-            assert_eq!(reveal.item_type, "Series");
+            assert_eq!(nav_stack.len(), 1);
+            assert_eq!(nav_stack[0].parent_id, "lib-tv");
+            assert_eq!(nav_stack[0].resting().cursor(), 1, "cursor on the episode");
         }
         _ => panic!("expected NavigateTo"),
     }
     assert_eq!(
         http.request_count(),
-        2,
-        "series_id resolves the reveal without the ancestors round trip"
+        3,
+        "item fetch + chain ancestors + level fetch: no reveal round trip"
     );
 }
 
 #[test]
-fn track_navigation_drains_an_album_landing_payload() {
-    // Task 1.1/1.2: an Audio track resolves its album via `album_id` and the
-    // drained event carries the reveal album for the task 2.3 landing arm.
+fn track_navigation_drains_the_pre_change_chain_landing() {
+    // Tasks 1.1/1.2, INTERIM U1: an Audio track resolves its album via
+    // `album_id`, but until task 2.3 wires the Album emission every kind
+    // drains the pre-change landing — the full ancestor-chain nav stack
+    // built for the track, cursor resting on it.
     let _guard = crate::config::TestStateDirGuard::new();
     let http = MockHttp::new();
     let app = app_with_mock_emby(&http);
@@ -165,7 +176,11 @@ fn track_navigation_drains_an_album_landing_payload() {
     );
     http.respond(
         200,
-        r#"{"Items":[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"}]}"#,
+        r#"[{"Id":"alb1","Name":"The Album","Type":"MusicAlbum"},{"Id":"root","Name":"root","Type":"AggregateFolder"}]"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"other","Name":"Other","Type":"Audio"},{"Id":"trk1","Name":"Song","Type":"Audio"}],"TotalRecordCount":2}"#,
     );
 
     app.spawn_navigate_to_item(
@@ -180,14 +195,57 @@ fn track_navigation_drains_an_album_landing_payload() {
         .expect("navigate event");
     match ev {
         LibEvent::NavigateTo { landing, .. } => {
-            let NavigateLanding::Album { reveal } = landing else {
-                panic!("expected an Album landing");
+            let NavigateLanding::Chain { nav_stack } = landing else {
+                panic!("expected a Chain landing (interim: every kind chains)");
             };
-            assert_eq!(reveal.id, "alb1");
-            assert_eq!(reveal.item_type, "MusicAlbum");
+            assert_eq!(nav_stack.len(), 1);
+            assert_eq!(nav_stack[0].resting().cursor(), 1, "cursor on the track");
         }
         _ => panic!("expected NavigateTo"),
     }
+}
+
+#[test]
+fn series_and_album_defensive_arms_drain_as_documented_no_ops() {
+    // INTERIM U1: production emits only `Chain` until tasks 2.2/2.3 wire
+    // the per-kind emission, so these constructions exist in tests only —
+    // they keep the variants alive in test builds and pin the defensive
+    // dispatch arms' documented interim no-op (no landing, no tab change).
+    let _guard = crate::config::TestStateDirGuard::new();
+    let mut app = make_app_stub();
+    app.tab = TabSelection::Home;
+
+    let mut series_item = make_item("The Show", "Series");
+    series_item.id = "ser1".into();
+    let mut album_item = make_item("The Album", "MusicAlbum");
+    album_item.id = "alb1".into();
+    let series_landing = NavigateLanding::Series {
+        reveal: Box::new(series_item),
+    };
+    let album_landing = NavigateLanding::Album {
+        reveal: Box::new(album_item),
+    };
+    // The variants' `reveal` payloads are consumed only by tests until
+    // 2.2/2.3 read them at drain time; assert the carried identity here.
+    if let NavigateLanding::Series { reveal } = &series_landing {
+        assert_eq!(reveal.id, "ser1");
+    }
+    if let NavigateLanding::Album { reveal } = &album_landing {
+        assert_eq!(reveal.id, "alb1");
+    }
+
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: series_landing,
+        switch_tab: true,
+    });
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: album_landing,
+        switch_tab: true,
+    });
+
+    assert_eq!(app.tab, TabSelection::Home, "defensive arms do nothing");
 }
 
 #[test]

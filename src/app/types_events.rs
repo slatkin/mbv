@@ -6,20 +6,28 @@ use mbv_core::playback_queue::QueueItem;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
 /// change `per-destination-item-navigation`): the Movie/generic arm keeps the
-/// built ancestor-chain nav stack, while the show/album arms carry the single
-/// resolved reveal item and the App applies the per-kind landing at drain
-/// time (tasks 2.2/2.3). Each kind is an explicit variant so every dispatch
-/// site resolves the landing exhaustively.
+/// built ancestor-chain nav stack, while the show/album arms will carry the
+/// single resolved reveal item once tasks 2.2/2.3 wire the emission. Each
+/// kind is an explicit variant so every dispatch site resolves the landing
+/// exhaustively.
 pub(super) enum NavigateLanding {
     /// Movie/generic video: the ancestor-chain nav stack with the cursor
     /// resting on the item (the pre-change shape, kept verbatim).
     Chain { nav_stack: Vec<BrowseLevel> },
     /// TV: land the owning Series via the searched-series activation flow
     /// (task 2.2). `reveal` is the full series item.
+    /// INTERIM (U1 correction): production does not construct this variant
+    /// until 2.2/2.3 flip emission — only tests construct it, so the gate
+    /// masks the variant + its unconsumed `reveal` field in non-test builds
+    /// until then.
     #[cfg_attr(not(test), allow(dead_code))]
     Series { reveal: Box<EmbyItem> },
     /// Music: land the owning album via recursive album activation
     /// (task 2.3). `reveal` is the full album item.
+    /// INTERIM (U1 correction): production does not construct this variant
+    /// until 2.2/2.3 flip emission — only tests construct it, so the gate
+    /// masks the variant + its unconsumed `reveal` field in non-test builds
+    /// until then.
     #[cfg_attr(not(test), allow(dead_code))]
     Album { reveal: Box<EmbyItem> },
 }
