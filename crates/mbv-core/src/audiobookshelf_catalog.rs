@@ -31,7 +31,12 @@ pub struct AudiobookshelfDownloadedEpisode {
     pub library_item_id: String,
     pub episode_id: String,
     pub title: String,
-    pub published_at: Option<String>,
+    /// Episode description, converted to terminal text at the wire boundary
+    /// (feeds the episode hero's overview).
+    pub description: Option<String>,
+    /// Publish instant as unix SECONDS, normalised once at the wire boundary
+    /// (`published_at_secs`). `None` groups as `Unknown date`.
+    pub published_at: Option<u64>,
     pub duration_seconds: Option<f64>,
 }
 
@@ -124,6 +129,8 @@ struct MediaWire {
 struct EpisodeWire {
     id: String,
     title: String,
+    #[serde(default)]
+    description: Option<String>,
     #[serde(rename = "publishedAt")]
     published_at: Option<serde_json::Value>,
     duration: Option<f64>,
@@ -230,14 +237,66 @@ fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
             .map(|seconds| (seconds * crate::api::TICKS_PER_SECOND as f64) as u64),
         position_ticks: 0,
         played: false,
-        pub_date_secs: recent_episode.published_at.and_then(|value| match value {
-            serde_json::Value::Number(number) => number.as_u64(),
-            serde_json::Value::String(parsed) => parsed.parse().ok(),
-            _ => None,
-        }),
+        pub_date_secs: published_at_secs(recent_episode.published_at),
         is_finished: false,
         cover_path,
     })
+}
+
+/// Normalises an Audiobookshelf `publishedAt` wire value to unix seconds.
+/// The ambiguity is resolved exactly once, here: Audiobookshelf 2.36 sends a
+/// downloaded episode's `publishedAt` as an epoch-millisecond number
+/// (`PodcastEpisode.toOldJSONExpanded`), while other wire shapes carry epoch
+/// seconds as a number or numeric string, or ISO-8601 / RFC 2822 text. A
+/// missing or unreadable value is `None` (it groups as `Unknown date`).
+fn published_at_secs(value: Option<serde_json::Value>) -> Option<u64> {
+    match value? {
+        serde_json::Value::Number(number) => {
+            let raw = number.as_u64().or_else(|| {
+                let seconds = number.as_f64()?;
+                (seconds >= 0.0 && seconds.fract() == 0.0).then_some(seconds as u64)
+            })?;
+            epoch_value_to_secs(raw)
+        }
+        serde_json::Value::String(text) => match text.trim().parse::<u64>() {
+            Ok(raw) => epoch_value_to_secs(raw),
+            Err(_) => parse_date_text(&text),
+        },
+        _ => None,
+    }
+}
+
+/// Epoch values below 10^11 are seconds (that instant is year 5138); every
+/// real epoch-millisecond value exceeds it.
+fn epoch_value_to_secs(raw: u64) -> Option<u64> {
+    Some(if raw >= 100_000_000_000 {
+        raw / 1000
+    } else {
+        raw
+    })
+}
+
+/// Parse ISO-8601 or RFC 2822 timestamp text into unix seconds UTC.
+fn parse_date_text(text: &str) -> Option<u64> {
+    use time::format_description::well_known::{Iso8601, Rfc2822};
+    let t = text.trim();
+    // ISO dates are Y-M-D based (at least two dashes); RFC 2822 dates are
+    // month-name based. A plain `contains('T')` is not enough — "GMT"
+    // zones and clock times contain "T"s too.
+    let dt = if t.matches('-').count() >= 2 {
+        // time's Iso8601 accepts "Z" but not lowercase "z"; normalize.
+        let t = match t.strip_suffix('z') {
+            Some(rest) => format!("{rest}Z"),
+            None => t.to_owned(),
+        };
+        time::OffsetDateTime::parse(&t, &Iso8601::DEFAULT).ok()
+    } else {
+        time::OffsetDateTime::parse(t, &Rfc2822).ok()
+    }?;
+    if dt.year() < 1970 {
+        return None;
+    }
+    Some(dt.unix_timestamp() as u64)
 }
 impl AudiobookshelfClient {
     /// Runs `f` against a cloned client on a bounded worker thread. All
@@ -414,11 +473,8 @@ impl AudiobookshelfClient {
                 library_item_id: id.to_owned(),
                 episode_id: x.id,
                 title: x.title,
-                published_at: x.published_at.and_then(|value| match value {
-                    serde_json::Value::String(value) => Some(value),
-                    serde_json::Value::Number(value) => Some(value.to_string()),
-                    _ => None,
-                }),
+                description: x.description.as_deref().map(crate::api::html_to_text),
+                published_at: published_at_secs(x.published_at),
                 duration_seconds: x.duration,
             })
             .collect())

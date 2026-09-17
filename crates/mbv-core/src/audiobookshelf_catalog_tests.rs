@@ -1,4 +1,22 @@
 use super::*;
+use crate::mock_http::MockHttp;
+use rstest::rstest;
+
+fn wire_fixture(name: &str) -> String {
+    std::fs::read_to_string(format!(
+        "{}/tests/fixtures/audiobookshelf/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .unwrap()
+}
+
+fn mock_client(body: &str) -> AudiobookshelfClient {
+    let http = MockHttp::new();
+    http.respond(200, body);
+    AudiobookshelfClient::new("http://127.0.0.1:1")
+        .unwrap()
+        .with_test_agent(http.agent())
+}
 
 fn fixture(name: &str) -> String {
     std::fs::read_to_string(format!(
@@ -35,6 +53,81 @@ fn fixtures_decode_without_losing_native_identity() {
     let expanded: ExpandedWire = serde_json::from_str(&fixture("item-expanded")).unwrap();
     assert_eq!(expanded.id, "show-2");
     assert_eq!(expanded.media.unwrap().episodes.unwrap()[0].id, "episode-1");
+}
+
+#[rstest]
+#[case(Some(serde_json::json!(1_704_153_600_000u64)), Some(1_704_153_600), "epoch-millisecond number (ABS 2.36 downloaded episodes)")]
+#[case(Some(serde_json::json!(1_704_153_600u64)), Some(1_704_153_600), "epoch-second number")]
+#[case(Some(serde_json::json!(1_704_153_600.0)), Some(1_704_153_600), "integral epoch-second float number")]
+#[case(Some(serde_json::json!("1704153600")), Some(1_704_153_600), "epoch-second string")]
+#[case(Some(serde_json::json!("1704153600000")), Some(1_704_153_600), "epoch-millisecond string")]
+#[case(Some(serde_json::json!("2024-01-02T00:00:00.000Z")), Some(1_704_153_600), "ISO-8601 text")]
+#[case(Some(serde_json::json!("Tue, 02 Jan 2024 00:00:00 +0000")), Some(1_704_153_600), "RFC 2822 text")]
+#[case(None, None, "missing value")]
+#[case(Some(serde_json::json!(null)), None, "explicit null")]
+#[case(Some(serde_json::json!("not a date")), None, "unreadable text")]
+#[case(Some(serde_json::json!(true)), None, "non-date scalar")]
+fn published_at_wire_values_normalise_to_unix_seconds(
+    #[case] wire: Option<serde_json::Value>,
+    #[case] expected: Option<u64>,
+    #[case] label: &str,
+) {
+    assert_eq!(published_at_secs(wire), expected, "{label}");
+}
+
+#[test]
+fn expanded_show_fixture_maps_episodes_descriptions_and_milliseconds() {
+    let client = mock_client(&wire_fixture("item-expanded.json"));
+    let episodes = client.podcast_detail("secret", "show-2").unwrap();
+    assert_eq!(episodes.len(), 2);
+    assert_eq!(episodes[0].library_item_id, "show-2");
+    assert_eq!(episodes[0].episode_id, "episode-1");
+    assert_eq!(episodes[0].title, "Downloaded episode");
+    assert_eq!(
+        episodes[0].description.as_deref(),
+        Some("Episode one description."),
+        "episode description HTML is converted to terminal text"
+    );
+    assert_eq!(
+        episodes[0].published_at,
+        Some(1_704_153_600),
+        "epoch-millisecond publishedAt normalises to unix seconds"
+    );
+    assert_eq!(episodes[0].duration_seconds, Some(1234.5));
+    assert_eq!(
+        episodes[1].description, None,
+        "a null description stays None"
+    );
+}
+
+#[test]
+fn show_page_fixture_maps_through_the_client() {
+    let client = mock_client(&wire_fixture("items-page.json"));
+    let page = client
+        .podcast_shows("secret", "lib-podcast", 0, 20)
+        .unwrap();
+    assert_eq!((page.page, page.limit, page.total), (0, 20, 2));
+    assert_eq!(page.items[0].library_item_id, "show-2");
+    assert_eq!(page.items[0].title, "Second Show");
+    assert_eq!(page.items[1].title, "Third Show");
+    assert_eq!(page.items[1].author, None);
+}
+
+#[test]
+fn expanded_show_without_downloaded_episodes_maps_to_no_rows() {
+    let client = mock_client(&wire_fixture("item-expanded-no-episodes.json"));
+    let episodes = client.podcast_detail("secret", "show-3").unwrap();
+    assert!(episodes.is_empty());
+}
+
+#[test]
+fn malformed_expanded_show_response_is_a_malformed_failure() {
+    let client = mock_client(&wire_fixture("malformed-response.txt"));
+    let error = client.podcast_detail("secret", "show-2").unwrap_err();
+    assert_eq!(
+        error.class,
+        super::super::AudiobookshelfFailureClass::MalformedResponse
+    );
 }
 
 #[test]
