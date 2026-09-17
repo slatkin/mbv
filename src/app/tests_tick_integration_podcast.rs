@@ -18,6 +18,17 @@ fn podcast(harness: &mut TickHarness) -> &mut PodcastContent {
         .and_then(|o| o.as_any_mut().downcast_mut::<PodcastContent>()).expect("podcast owner")
 }
 
+fn episode(library_item_id: &str, episode_id: &str) -> mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+        library_item_id: library_item_id.into(),
+        episode_id: episode_id.into(),
+        title: episode_id.into(),
+        description: None,
+        published_at: None,
+        duration_seconds: None,
+    }
+}
+
 fn draw(harness: &mut TickHarness, width: u16) {
     harness.model_mut().app.panel_mode = crate::app::PanelMode::LibraryOnly;
     harness.model_mut().app.terminal_width = width;
@@ -163,19 +174,18 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
         .detail_loading_ids
         .contains_key("show-a"));
 
-    // Provider completion is injected at the state boundary; the same owner
-    // remains mounted and updates its rows in place without a sleep.
-    let episode = mbv_core::audiobookshelf::AudiobookshelfDownloadedEpisode {
+    // Provider completion is dispatched as the shell's `LibEvent::
+    // AudiobookshelfDetailFetched` arrival (the lib-event arm accepts the
+    // generation, retires the in-flight mark, and caches the batch); the
+    // drain's trailing podcast re-projection lands it on the mounted owner
+    // through the sync pass, without a sleep.
+    let generation = harness.model().app.audiobookshelf_runtime.generation();
+    harness.model_mut().app.handle_lib_event(crate::app::LibEvent::AudiobookshelfDetailFetched {
+        generation,
+        request: 0,
         library_item_id: "show-a".into(),
-        episode_id: "episode-ready".into(),
-        title: "Ready Episode".into(),
-        description: None,
-        published_at: None,
-        duration_seconds: None,
-    };
-    let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
-    browse.detail_loading_ids.remove("show-a");
-    browse.cache_detail("show-a".into(), vec![episode]);
+        result: Ok(vec![episode("show-a", "episode-ready")]),
+    });
     harness.model_mut().push_audiobookshelf_podcast_content();
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness, 160);
@@ -192,10 +202,17 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
     )));
 
     // An empty provider completion remains an empty view, not a stale copy
-    // of the previous rows.
+    // of the previous rows — driven through the same lib-event arrival.
     let browse = &mut harness.model_mut().app.audiobookshelf_browse[0];
     browse.detail_cache.remove("show-a");
-    browse.cache_detail("show-a".into(), Vec::new());
+    browse.detail_loading_ids.insert("show-a".into(), 1);
+    let generation = harness.model().app.audiobookshelf_runtime.generation();
+    harness.model_mut().app.handle_lib_event(crate::app::LibEvent::AudiobookshelfDetailFetched {
+        generation,
+        request: 1,
+        library_item_id: "show-a".into(),
+        result: Ok(Vec::new()),
+    });
     harness.model_mut().push_audiobookshelf_podcast_content();
     harness.model_mut().sync_mounted_surfaces();
     draw(&mut harness, 160);
@@ -203,6 +220,55 @@ fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
         .detail_loading_ids
         .contains_key("show-a"));
     assert!(podcast(&mut harness).episode_rows().is_empty());
+}
+
+/// A superseded-generation arrival (its Service setup was replaced after
+/// the request spawned) is rejected by the shell's lib-event arm
+/// (`audiobookshelf_runtime.accepts`): the payload is never cached and the
+/// mounted owner's flat list is unchanged through the sync pass (row 4.1).
+/// The in-flight mark still retires on the rejected path so the bounded
+/// fan-out never stalls behind it.
+#[test]
+fn stale_generation_arrival_never_reaches_the_owner_through_the_sync_pass() {
+    let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0].detail_cache.clear();
+    app.audiobookshelf_browse[0]
+        .detail_loading_ids
+        .insert("show-a".into(), 0);
+    let mut harness = TickHarness::new(app);
+    draw(&mut harness, 160);
+    assert!(podcast(&mut harness).episode_rows().is_empty());
+
+    // The arrival's generation is ahead of the runtime's current one: its
+    // Service setup was replaced after the request spawned. The lib-event
+    // arm rejects the payload whole — it is never cached and never lands on
+    // the mounted owner's flat list through the re-projection and sync pass.
+    let stale_generation = mbv_core::service_runtime::SetupGeneration::new(
+        harness.model().app.audiobookshelf_runtime.generation().value() + 1,
+    );
+    harness.model_mut().app.handle_lib_event(crate::app::LibEvent::AudiobookshelfDetailFetched {
+        generation: stale_generation,
+        request: 0,
+        library_item_id: "show-a".into(),
+        result: Ok(vec![episode("show-a", "episode-stale")]),
+    });
+    harness.model_mut().push_audiobookshelf_podcast_content();
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness, 160);
+
+    let state = &harness.model().app.audiobookshelf_browse[0];
+    assert!(
+        !state.detail_cache.contains_key("show-a"),
+        "a rejected payload is never cached"
+    );
+    assert!(
+        state.detail_loading_ids.is_empty(),
+        "the in-flight mark still retires so the fan-out never stalls"
+    );
+    assert!(
+        podcast(&mut harness).episode_rows().is_empty(),
+        "the rejected arrival never joined the owner's flat list"
+    );
 }
 
 #[test]
@@ -217,8 +283,20 @@ fn podcast_owner_survives_tab_reselection_with_the_remembered_pill() {
     // Switching to another Service destination in the same column must not
     // disturb the pill either (the owner is retained while its library stays
     // in the catalog; only the list selection re-anchors on reactivation).
+    // The crossing really resolves `AudiobookshelfLibrary(1)` to the Books
+    // destination: the shell registers that tab's owner as part of the sync
+    // pass, so the pill survives an actual destination change, not a no-op.
+    let book_key = crate::app::components::LibraryKey::Service {
+        service: ServiceKind::Audiobookshelf,
+        library_id: "abs-books".into(),
+        kind: LibraryKind::AudiobookshelfBook,
+    };
     harness.model_mut().app.tab = crate::app::TabSelection::AudiobookshelfLibrary(1);
     harness.model_mut().sync_mounted_surfaces();
+    assert!(
+        harness.model().library_panel_has_owner(&book_key),
+        "the crossing resolved AudiobookshelfLibrary(1) to the Books destination"
+    );
     harness.model_mut().app.tab = crate::app::TabSelection::AudiobookshelfLibrary(0);
     harness.model_mut().sync_mounted_surfaces();
     harness.model_mut().app.tab = crate::app::TabSelection::Home;

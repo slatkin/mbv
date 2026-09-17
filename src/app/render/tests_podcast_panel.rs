@@ -135,10 +135,14 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
         .expect("the panel painted a Wide skeleton");
     let output = buffer_to_string(&terminal);
 
-    // One Selector pill bar: state pills then one pill per show.
+    // One Selector pill bar: state pills then one pill per show, all
+    // sharing one row (same y — a two-row pill bar fails this).
     let hits = panel.test_selector_hits().regions();
+    let first_y = hits.first().map(|(rect, _)| rect.y);
+    assert!(!hits.is_empty(), "the Selector row is one pill bar");
     assert!(
-        !hits.is_empty() && hits.iter().all(|(rect, _)| rect.height == 1),
+        hits.iter()
+            .all(|(rect, _)| rect.y == first_y.unwrap() && rect.height == 1),
         "the Selector row is one pill bar"
     );
     assert!(
@@ -215,8 +219,11 @@ fn podcast_narrow_paints_ordinary_grouped_rows_and_no_hero() {
     let output = buffer_to_string(&terminal);
 
     let hits = panel.test_selector_hits().regions();
+    let first_y = hits.first().map(|(rect, _)| rect.y);
+    assert!(!hits.is_empty(), "the Selector row is one pill bar");
     assert!(
-        !hits.is_empty() && hits.iter().all(|(rect, _)| rect.height == 1),
+        hits.iter()
+            .all(|(rect, _)| rect.y == first_y.unwrap() && rect.height == 1),
         "the Selector row is one pill bar in Narrow too"
     );
     assert!(

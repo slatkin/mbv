@@ -507,13 +507,22 @@ fn matrix_all_surfaces_paint_one_pill_bar_with_one_parent_spacer() {
 
     // The Audiobookshelf Podcasts destination (reorganize-podcast-pill-
     // navigation 4.3): the same one-pill-bar conformance through the mounted
-    // panel's own Selector hits.
+    // panel's own Selector hits, in both geometries — the Narrow arm pins
+    // that the pill bar shares one row there too.
     let (terminal, layout) =
         render_podcast_panel(super::tests_podcast_panel::podcast_owner(), 240, 30);
     assert_one_pill_row_and_spacer("Podcasts", &terminal, &layout);
     assert!(
         !buffer_to_string(&terminal).is_empty(),
         "Podcasts did not paint a buffer"
+    );
+
+    let (terminal, layout) =
+        render_podcast_panel(super::tests_podcast_panel::podcast_owner(), 80, 30);
+    assert_one_pill_row_and_spacer("Podcasts (Narrow)", &terminal, &layout);
+    assert!(
+        !buffer_to_string(&terminal).is_empty(),
+        "Podcasts (Narrow) did not paint a buffer"
     );
 }
 
