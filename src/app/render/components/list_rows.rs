@@ -1,31 +1,13 @@
 //! The `List` component (design.md "Component catalogue"): shared row-styling
-//! helpers for the renderers that still paint their own rows (Home's video
-//! grid reuses `focused_or_subtle`; the audiobookshelf show grid pins
-//! `SELECTED_BLOCK_SIDE_PADDING`). `LibraryListRenderCtx` is the shell-built
+//! helpers for the renderers that still paint their own rows (the
+//! audiobookshelf show grid pins `SELECTED_BLOCK_SIDE_PADDING`). `LibraryListRenderCtx` is the shell-built
 //! browser input the wide TV/Music render contexts embed; the canonical
 //! media-list painters (`render/components/media_list/{row,wide}.rs`) own
 //! browser row painting, and `render_right_scrollbar` (`widgets.rs`) is the
 //! shared `Scrollbar`.
 
 #[cfg(test)]
-use crate::app::palette;
-#[cfg(test)]
-use ratatui::style::Color;
-
-#[cfg(test)]
 pub(in crate::app) const SELECTED_BLOCK_SIDE_PADDING: u16 = 2;
-
-/// Returns `palette::TEXT_EMPHASIS` when `focused`, `palette::TEXT_SECONDARY` otherwise.
-/// Production callers are gone with the legacy painters; the cfg(test) Home
-/// video renderer pins its selection styling against it.
-#[cfg(test)]
-pub(in crate::app::render) fn focused_or_subtle(focused: bool) -> Color {
-    if focused {
-        palette::TEXT_EMPHASIS
-    } else {
-        palette::TEXT_SECONDARY
-    }
-}
 
 /// Owned browser-list inputs shared by narrow and wide renderers. The shell
 /// builds this once from the active source; owners read their own search

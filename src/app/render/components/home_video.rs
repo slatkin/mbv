@@ -1,6 +1,4 @@
 #[cfg(test)]
-use super::list_rows::focused_or_subtle;
-#[cfg(test)]
 use super::list_rows::SELECTED_BLOCK_SIDE_PADDING;
 #[cfg(test)]
 use crate::app::palette;
@@ -96,8 +94,13 @@ pub(in crate::app::render) fn render_home_video_item(
         palette::TEXT_FOCUS_ACCENT
     } else if selected && focused {
         palette::ACCENT_ACTIVE
+    } else if focused {
+        // The unselected-unfocused title role (was the shared
+        // `focused_or_subtle` helper, inlined when its last consumer became
+        // test-only with the legacy painters' removal).
+        palette::TEXT_EMPHASIS
     } else {
-        focused_or_subtle(focused)
+        palette::TEXT_SECONDARY
     };
     let title_style = if selected && focused {
         Style::default()

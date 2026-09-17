@@ -179,3 +179,95 @@ fn tv_workspace_renders_the_narrow_series_list_without_app() {
         .iter()
         .any(|cell| cell.symbol() == "S"));
 }
+
+/// The grouped-row gate reads the Inline Search session for the first time
+/// (task 4.3, review round 2): with grouping otherwise on, an active search
+/// session flattens the pushed series rows to `Item`-only, and closing it
+/// restores the `Heading`/`Spacer` shape on the next `set_content` — the
+/// shell's per-frame sync pass re-enters `set_content` after the session
+/// closes, so the browse rows are not stuck flat forever.
+#[test]
+fn tv_grouped_rows_flatten_while_search_is_open_and_restore_after_close() {
+    let item = |name: &str, id: &str| {
+        let mut series = make_item(name, "Series");
+        series.id = id.into();
+        series
+    };
+    let context = || {
+        // Grouping predicate on via `show_letter_pills` (the last push arg).
+        TvWideRenderCtx::new(
+            LibraryListRenderCtx::from_items(
+                vec![
+                    item("Alpha Series", "s1"),
+                    item("Beta Series", "s2"),
+                    item("Gamma Series", "s3"),
+                ],
+                0,
+            ),
+            None,
+            None,
+            0,
+            None,
+            true,
+        )
+    };
+    let items = |rows: &[MediaListRow<String>]| {
+        rows.iter()
+            .filter(|row| matches!(row, MediaListRow::Item { .. }))
+            .count()
+    };
+    let headings = |rows: &[MediaListRow<String>]| {
+        rows.iter()
+            .filter(|row| matches!(row, MediaListRow::Heading { .. }))
+            .count()
+    };
+    let spacers = |rows: &[MediaListRow<String>]| {
+        rows.iter()
+            .filter(|row| matches!(row, MediaListRow::Spacer))
+            .count()
+    };
+
+    let mut component = TvContent::new();
+
+    // Session inactive: the pushed rows carry the grouped shape.
+    component.set_content(context());
+    let rows = component.carrier.rows().to_vec();
+    assert_eq!(items(&rows), 3);
+    assert!(
+        headings(&rows) >= 2 && spacers(&rows) >= 1,
+        "grouped shape while idle: {rows:?}"
+    );
+
+    // Open the session through the owner's own chord; the same content now
+    // pushes flat `Item`-only rows.
+    component.set_focused(true);
+    assert!(component
+        .on_key(&KeyEvent {
+            code: Key::Char('/'),
+            modifiers: KeyModifiers::NONE,
+        })
+        .is_some());
+    assert!(component.inline_search.is_active());
+    component.set_content(context());
+    let rows = component.carrier.rows().to_vec();
+    assert!(
+        rows.iter()
+            .all(|row| matches!(row, MediaListRow::Item { .. })),
+        "flat rows while the search session is active: {rows:?}"
+    );
+
+    // Close it with the session's own dismiss (Esc); the next push restores
+    // the grouped shape.
+    component.on_key(&KeyEvent {
+        code: Key::Esc,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert!(!component.inline_search.is_active());
+    component.set_content(context());
+    let rows = component.carrier.rows().to_vec();
+    assert_eq!(items(&rows), 3);
+    assert!(
+        headings(&rows) >= 2 && spacers(&rows) >= 1,
+        "grouped shape restored after close: {rows:?}"
+    );
+}
