@@ -55,6 +55,43 @@ fn wide_list_maps_structural_rows_and_clamps_viewport() {
 }
 
 #[test]
+fn raising_the_window_keeps_the_selections_group_heading_visible() {
+    let mut list = WideMediaList::new();
+    list.set_content(vec![
+        MediaListRow::Heading { text: "A".into() },
+        item("a"),
+        item("b"),
+        MediaListRow::Heading { text: "B".into() },
+        item("c"),
+        item("d"),
+    ]);
+
+    // Scroll away from the top, then walk the cursor back up into view.
+    list.select_last();
+    list.set_scroll(4);
+    assert_eq!(list.resolve_viewport(2).offset, 4); // bottom branch: B's label + c + d
+    list.move_selection(-1); // cursor on "c" (display row 4) — still inside the window
+    assert_eq!(list.resolve_viewport(2).offset, 4);
+    list.move_selection(-1); // cursor on "b" (display row 2), above the window
+    assert_eq!(list.resolve_viewport(2).offset, 2);
+    list.move_selection(-1); // cursor on "a" (display row 1)
+    assert_eq!(list.resolve_viewport(2).offset, 0); // raised over A's Heading
+
+    // The walk stops at the previous selectable row: only the selection's own
+    // group label rides along, never the previous group's rows.
+    list.select_index(3); // "c", first item of group B
+    list.set_scroll(5);
+    assert_eq!(list.resolve_viewport(2).offset, 4); // B's label + c
+
+    // A raise with no label above the selection lands exactly on its row.
+    let mut plain = WideMediaList::new();
+    plain.set_content(vec![item("a"), item("b"), item("c"), item("d")]);
+    plain.select_index(1);
+    plain.set_scroll(2);
+    assert_eq!(plain.resolve_viewport(2).offset, 1);
+}
+
+#[test]
 fn refresh_preserves_target_and_locally_clamps_missing_target() {
     let rows = vec![item("a"), item("b"), item("c"), item("d")];
     let mut list = WideMediaList::new();

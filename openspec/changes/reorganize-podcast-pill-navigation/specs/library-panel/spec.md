@@ -17,6 +17,9 @@ puts under its overview text, then the track rows — all inside the Workspace b
 bottom padding are unchanged. The header SHALL be omitted when the box has no room to keep a list row
 under it.
 
+Audiobookshelf podcast episodes are not constituent items: the podcast tab lists them as the panel's own
+rows, and the selected episode's hero has no Workspace.
+
 #### Scenario: Track list takes focus
 - **WHEN** track selection becomes active in Wide grouped Music
 - **THEN** the track Workspace box renders the accent-soft surface
@@ -41,7 +44,7 @@ under it.
 
 ### Requirement: Narrow workspace lists open only through the Library Hero overlay
 
-The Narrow constituent-list selection modal is removed. In every non-Wide Library panel, constituent items SHALL be reachable through the selected parent's Library Hero overlay, whose Workspace uses the same canonical list and provider-owned content as Wide Hero. Audiobookshelf podcast episodes are not constituent items: the podcast tab lists them directly, and the selected episode's hero is revealed through the Library Hero overlay as a leaf.
+The Narrow constituent-list selection modal is removed. In every non-Wide Library panel, constituent items SHALL be reachable through the selected parent's Library Hero overlay, whose Workspace uses the same canonical list and provider-owned content as Wide Hero. Audiobookshelf podcast episodes are not constituent items: the podcast tab lists them directly as its own rows, and Enter plays the selected episode.
 
 #### Scenario: Narrow Audiobookshelf book
 
@@ -53,5 +56,5 @@ The Narrow constituent-list selection modal is removed. In every non-Wide Librar
 
 - **WHEN** an Audiobookshelf podcast episode is selected where the Wide Hero arrangement does not fit
 - **THEN** the episode remains an ordinary fixed-height media row in the browser list
-- **AND** Enter opens the Library Hero overlay presenting that episode's hero (episode facts, parent-show credits, and the parent show's cover)
-- **AND** a subsequent Enter while the overlay holds Library focus performs the episode's play activation
+- **AND** no filter pills or episode rows render inside a detail block or overlay
+- **AND** Enter plays the episode

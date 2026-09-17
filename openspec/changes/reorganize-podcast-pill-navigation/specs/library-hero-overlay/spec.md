@@ -4,7 +4,9 @@
 
 In every geometry where the Wide Hero arrangement does not apply, pressing Enter on a selected hero-bearing canonical browser row SHALL open a Library Hero overlay for that item. The overlay SHALL present the same Hero header, metadata, overview, artwork, provider links, and optional Workspace content that the item's Wide Hero pane presents. Inline Search results SHALL retain their existing activation behavior and SHALL NOT open the overlay.
 
-For an item with a Workspace, opening the overlay SHALL give focus to its constituent media list. For an item without a Workspace, opening SHALL give focus to the Hero overlay and a subsequent Enter SHALL perform the item's existing activation behavior. Audiobookshelf podcast episodes are hero-bearing leaves without a Workspace; their existing activation is the episode's play action.
+For an item with a Workspace, opening the overlay SHALL give focus to its constituent media list. For an item without a Workspace, opening SHALL give focus to the Hero overlay and a subsequent Enter SHALL perform the item's existing activation behavior.
+
+Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast tab lists downloaded episodes directly, its hero has no Workspace and no inline or overlay presentation, and Enter on a selected episode performs its play activation immediately.
 
 #### Scenario: Parent with constituent media opens focused Workspace
 
@@ -18,12 +20,6 @@ For an item with a Workspace, opening the overlay SHALL give focus to its consti
 - **THEN** the first Enter opens the Library Hero overlay without activating the item
 - **AND** a subsequent Enter while the overlay holds Library focus performs the item's existing activation
 
-#### Scenario: Podcast episode leaf opens its episode hero
-
-- **WHEN** the user presses Enter on a selected podcast episode in non-Wide geometry
-- **THEN** the Library Hero overlay opens presenting that episode's hero (episode facts, parent-show credits, and the parent show's cover, with no Workspace)
-- **AND** a subsequent Enter while the overlay holds Library focus plays the episode
-
 #### Scenario: Browser double-click opens detail first
 
 - **WHEN** the user double-clicks a canonical browser row in non-Wide geometry
@@ -34,4 +30,10 @@ For an item with a Workspace, opening the overlay SHALL give focus to its consti
 
 - **WHEN** Inline Search is active in non-Wide geometry and the user presses Enter on a result
 - **THEN** the result performs its existing navigation or activation behavior
+- **AND** no Library Hero overlay opens
+
+#### Scenario: Podcast episode plays without an overlay
+
+- **WHEN** the user presses Enter on a selected Audiobookshelf podcast episode in non-Wide geometry
+- **THEN** the episode performs its play activation
 - **AND** no Library Hero overlay opens

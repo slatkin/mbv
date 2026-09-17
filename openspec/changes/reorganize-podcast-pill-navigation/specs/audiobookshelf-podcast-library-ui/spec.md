@@ -2,53 +2,64 @@
 
 ### Requirement: Podcast libraries use alphabetical panel pills
 
-**Reason**: Surname-range pills over show titles collapse to near-no-op bars on personal podcast
-libraries and have no keyboard path on this tab; podcast-native organisation (play state and
-publish recency) replaces them.
-**Migration**: The state-and-show pill selector requirement in this delta defines the podcast
-tab's Selector row; Audiobookshelf Books keep their surname ranges unchanged.
+**Reason**: Surname-range pills over show titles collapse to near-no-op bars on personal podcast libraries
+and have no keyboard path on this tab; play state and the subscribed shows replace them.
+**Migration**: The `Podcast tab uses one state-and-show pill selector` requirement in this delta defines the
+podcast tab's Selector row; Audiobookshelf Books keep their surname ranges unchanged.
 
 ### Requirement: The selected podcast hero uses Audiobookshelf cover artwork
 
-**Reason**: The selected-show hero is removed; the hero now presents the selected episode with
-the parent show's cover.
-**Migration**: The episode-hero requirement in this delta defines artwork, content lines, and
-loading/images-disabled behavior.
+**Reason**: The selected-show hero is removed; the hero presents the selected episode over the parent
+show's cover.
+**Migration**: The `The episode hero uses the parent show's cover artwork` requirement in this delta defines
+artwork, hero facts, and images-disabled behavior.
 
 ### Requirement: Podcast libraries use responsive hero presentations
 
-**Reason**: The show-browser composition (show list, show hero workspace, episode workspace,
-selection modal) is retired; the tab becomes a flat episode browser.
-**Migration**: The flat-episode-browser requirement in this delta defines the shared Wide and
-non-Wide presentations the tab now follows.
+**Reason**: The show-browser composition (show list, show hero workspace, episode workspace, selection
+modal) is retired; the tab becomes a flat episode browser.
+**Migration**: The `Podcast libraries render a flat episode browser` requirement in this delta defines the
+shared Wide and non-Wide presentations the tab follows.
 
 ### Requirement: Downloaded episodes use the selection modal
 
-**Reason**: The show browser and its constituent-list modal are removed; episodes are directly
-listed and playable in the flat list.
-**Migration**: Episodes are selectable rows in the flat episode list; activation is defined by
-the `audiobookshelf-podcast-browsing` and `audiobookshelf-podcast-playback` capabilities.
+**Reason**: The show browser and its constituent-list modal are removed; the tab lists episodes directly and
+needs no modal to reach them.
+**Migration**: Episodes are selectable rows in the flat episode list; activation is defined by the
+`audiobookshelf-podcast-browsing` and `audiobookshelf-podcast-playback` capabilities.
 
 ### Requirement: Podcast activation remains read-only
 
-**Reason**: Activation now plays the selected episode through the existing podcast playback
-boundary, matching Feeds.
-**Migration**: Playback and enqueue semantics are owned by `audiobookshelf-podcast-browsing`
-(explicit episode actions) and `audiobookshelf-podcast-playback`.
+**Reason**: Stale. Podcast episode activation has started playback and enqueueing through the
+`audiobookshelf-podcast-playback` capability since that capability landed; this requirement described the
+interim state in which activation only entered a selection modal, which this change deletes.
+**Migration**: Playback and enqueue semantics are owned by `audiobookshelf-podcast-browsing` (explicit
+episode actions) and `audiobookshelf-podcast-playback`.
+
+## MODIFIED Requirements
+
+### Requirement: Personalized shelves are absent from the podcast tab
+
+The Audiobookshelf podcast tab SHALL NOT render or navigate personalized shelf data, and shelf data SHALL
+NOT affect show order, selection, scrolling, hit testing, or pagination.
+
+#### Scenario: Catalog includes personalized shelves
+
+- **WHEN** Audiobookshelf returns personalized shelf data
+- **THEN** the podcast tab's pill row, episode list and hero SHALL remain unaffected
 
 ## ADDED Requirements
 
 ### Requirement: The episode hero uses the parent show's cover artwork
 
-The podcast tab's hero SHALL present the selected episode's information: the episode title, the
-episode description, the duration, and the user's progress (resume position or finished state) as
-hero content lines, with the parent podcast show's name and author as the corresponding credits
-lines. The hero SHALL place the parent show's Audiobookshelf cover in the same right-aligned
-Square image slot, with the same dimensions, scaling, text wrapping, loading treatment, and
-images-disabled behavior as the TV Series image position. The cover SHALL be fetched from the
-configured Audiobookshelf Service using the parent show's provider-native library item identity.
-The hero SHALL NOT present a Workspace, a filter selector row, or an episode list. Missing
-metadata SHALL collapse without moving the image or changing the shared hero's structural rules.
+The podcast tab's hero SHALL present the selected episode's information: the episode title, the parent
+podcast show's name, the duration, and the publish date as hero content lines, with the episode description
+as the overview. The hero SHALL NOT present a credits block, an author row, a Workspace, a filter selector
+row, or an episode list. The hero SHALL place the parent show's Audiobookshelf cover in the same right-aligned
+Square image slot, with the same dimensions, scaling, text wrapping, loading treatment, and images-disabled
+behavior as the TV Series image position. The cover SHALL be fetched from the configured Audiobookshelf
+Service using the parent show's provider-native library item identity. Missing metadata SHALL collapse
+without moving the image or changing the shared hero's structural rules.
 
 #### Scenario: Selected episode has a cover
 
@@ -75,33 +86,32 @@ metadata SHALL collapse without moving the image or changing the shared hero's s
 #### Scenario: Episode selection changes
 
 - **WHEN** the user moves selection between episode rows
-- **THEN** the hero updates to the newly selected episode's facts and parent-show credits
+- **THEN** the hero updates to the newly selected episode's facts and its parent show's name and cover
 
 ### Requirement: Podcast libraries render a flat episode browser
 
-An Audiobookshelf podcast library SHALL render through the Library panel like every Emby library
-as a flat episode browser. The Selector row SHALL carry the podcast tab's pill selector (the
-`All` / `Unplayed` / `Played` state pills followed by one pill per podcast show). The list SHALL
-render one selectable episode row per matching episode, grouped under the five Feeds age-group
-headings. At Wide geometry, the selected episode's hero (facts, credits, cover, no Workspace)
-SHALL occupy the Hero pane while the single-column episode browser occupies the left rail.
-Otherwise episodes SHALL remain ordinary media rows in the non-Wide browser, and the selected
-episode's hero SHALL be revealed through the Library Hero overlay. The podcast tab SHALL obtain
-placement from the shared Library panel and SHALL NOT define a separate fallback or any
-podcast-specific presentation declaration.
+An Audiobookshelf podcast library SHALL render through the Library panel as a flat episode browser. The
+Selector row SHALL carry the podcast tab's pill selector (the `All` / `Unplayed` / `Played` state pills
+followed by one pill per subscribed podcast). The list SHALL render one selectable episode row per matching
+episode, grouped under the five Feeds age-group headings, with every row naming its parent podcast. At Wide
+geometry, the selected episode's hero (facts, cover, no Workspace) SHALL occupy the Hero pane while the
+single-column episode browser occupies the list rail. Otherwise episodes SHALL remain ordinary media rows in
+the non-Wide browser and Enter SHALL play the selected episode. The podcast tab SHALL obtain placement from
+the shared Library panel and SHALL NOT define a separate fallback or any podcast-specific presentation
+declaration.
 
 #### Scenario: Podcast library is displayed wide
 
 - **WHEN** an Audiobookshelf podcast library meets the shared wide geometry conditions
-- **THEN** the selected episode's hero (facts, credits, cover, no Workspace) renders in the Hero pane
-- **AND** grouped episode rows render in the single-column left rail
+- **THEN** the selected episode's hero (facts, cover, no Workspace) renders in the Hero pane
+- **AND** grouped episode rows render in the single-column list rail
 
 #### Scenario: Podcast library is displayed narrow
 
 - **WHEN** an Audiobookshelf podcast library does not meet the shared wide geometry conditions
 - **THEN** grouped episode rows render in one scrolling column
 - **AND** every episode remains an ordinary media row in that column
-- **AND** Enter on the selected episode opens the Library Hero overlay for that episode
+- **AND** Enter on the selected episode plays it
 
 #### Scenario: Podcast selection changes
 
@@ -111,7 +121,7 @@ podcast-specific presentation declaration.
 
 #### Scenario: Selected episode scrolls outside the visible list rows
 
-- **WHEN** the selected episode's row is outside the visible portion of the left rail at Wide geometry
+- **WHEN** the selected episode's row is outside the visible portion of the list rail at Wide geometry
 - **THEN** the hero continues projecting that selected episode
 
 #### Scenario: Terminal height cannot fit Wide hero
@@ -137,20 +147,21 @@ podcast-specific presentation declaration.
 
 ### Requirement: Podcast tab uses one state-and-show pill selector
 
-The podcast tab's Selector row SHALL present one mutually exclusive pill selection: the state
-pills `All`, `Unplayed`, and `Played`, followed by one pill per podcast show in the library. A
-state pill SHALL show matching episodes across all shows; a show pill SHALL show that show's
-episodes regardless of play state. State and show selections SHALL NOT combine in one view.
-`Unplayed` SHALL include episodes with missing or incomplete (in-progress) progress; `Played`
-SHALL include only completed progress. Pills SHALL use the shared `render_pill_bar` widget, follow
-its label truncation and overflow contract, and SHALL write `layout.selector_tabs`. The last
-active pill SHALL be remembered in session memory across tab switches and SHALL reset to `All`
-when mbv restarts.
+The podcast tab's Selector row SHALL present one mutually exclusive pill selection: the state pills `All`,
+`Unplayed`, and `Played`, followed by one pill per subscribed podcast. A state pill SHALL show matching
+episodes across all shows; a show pill SHALL show that show's episodes regardless of play state. Exactly one
+pill SHALL be active, identified by value rather than by position, and state and show selections SHALL NOT
+combine in one view. `Unplayed` SHALL include episodes with missing or incomplete (in-progress) progress;
+`Played` SHALL include only completed progress. Pills SHALL use the shared `render_pill_bar` widget, follow
+its label truncation and overflow contract, and SHALL write `layout.selector_tabs`. `[` and `]` SHALL move
+through the pill bar as one uniform gesture — there is one pill kind, with no per-kind key, ordering, or
+behaviour. The last active pill SHALL be remembered in session memory across tab switches and SHALL reset
+to `All` when mbv restarts.
 
 #### Scenario: Podcast tab renders state-and-show pills
 
 - **WHEN** the Audiobookshelf podcast tab is displayed with shows available
-- **THEN** the Selector row renders `All`, `Unplayed`, and `Played` followed by one pill per podcast show
+- **THEN** the Selector row renders `All`, `Unplayed`, and `Played` followed by one pill per subscribed podcast
 - **AND** no alphabetical range bucket, `#` bucket, or empty-range pill renders
 
 #### Scenario: State filter semantics
@@ -171,6 +182,12 @@ when mbv restarts.
 - **WHEN** the user picks a show pill while a state pill is active (or the reverse)
 - **THEN** the selector moves to the picked pill as the single active selection
 - **AND** no combined state-plus-show view exists
+
+#### Scenario: Keyboard navigation
+
+- **WHEN** the user presses `]` or `[` on the podcast tab
+- **THEN** the active pill moves to the next or previous pill in the bar, wrapping at either end
+- **AND** the movement is identical whether the pill is a state pill or a show pill
 
 #### Scenario: Last pill remembered in session
 

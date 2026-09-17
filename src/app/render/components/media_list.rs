@@ -299,7 +299,6 @@ mod wide_row_regression_tests {
                     true,
                     selected_bg,
                     Some(zebra_bg),
-                    false,
                 );
             })
             .unwrap();
@@ -357,7 +356,6 @@ mod wide_row_regression_tests {
                     true,
                     palette::SURFACE_RESTING,
                     Some(zebra_bg),
-                    false,
                 );
             })
             .unwrap();
@@ -378,48 +376,6 @@ mod wide_row_regression_tests {
             Color::Reset,
             "outer edge remains unstriped"
         );
-    }
-
-    /// A gutter-accent caller (`gutter_accent = true`) gets the same opaque
-    /// bar as any other list: the selected row fills the panel edge to edge
-    /// and keeps its ordinary foreground roles, with no bold title.
-    #[test]
-    fn gutter_policy_selected_row_paints_the_bar_over_its_stripe() {
-        let rect = Rect::new(0, 0, 32, 2);
-        let mut list: WideMediaList<String> = WideMediaList::new();
-        list.set_content(vec![
-            item("other", "Other", None),
-            item("selected", "Selected", Some("1:05".into())),
-        ]);
-        list.select_last();
-        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
-        terminal
-            .draw(|f| {
-                render_wide_media_list_with_zebra(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SELECTED_ROW_BG,
-                    Some(Color::Rgb(60, 72, 65)),
-                    true,
-                );
-            })
-            .unwrap();
-        let buf = terminal.backend().buffer();
-        // The selected title keeps the ordinary emphasis role (no bold) and
-        // the duration keeps its own deep gold; the bar replaces the row's
-        // stripe and reaches both panel edges.
-        assert_eq!(buf[(0, 1)].symbol(), " ");
-        assert_eq!(buf[(2, 1)].fg, palette::TEXT_EMPHASIS);
-        assert!(!buf[(2, 1)].modifier.contains(Modifier::BOLD));
-        assert_eq!(buf[(26, 1)].fg, palette::DURATION);
-        for x in 0..rect.width {
-            assert_eq!(buf[(x, 1)].bg, palette::SELECTED_ROW_BG, "bar at x={x}");
-        }
-        // The unselected first item keeps the primary fill.
-        assert_eq!(buf[(2, 0)].bg, Color::Reset);
     }
 
     /// A grouped list fills its content rows with the secondary colour under its
