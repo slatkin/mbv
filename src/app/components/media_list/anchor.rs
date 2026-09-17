@@ -76,12 +76,13 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
     }
 
     /// Restore a row-flow replacement anchor (design.md D5): place the
-    /// window at the anchored target's row — or one row higher, where the
-    /// anchor recorded a `Heading` directly above it and the new flow still
-    /// places one (the caller matched that structurally into the recorded
-    /// offset; a `Heading` has no stable identity and is never matched by
-    /// text). The selection is untouched. Returns `false` — leaving the
-    /// caller's fallback in charge — when the target is gone from the flow.
+    /// window at the anchored target's row — or one row higher, only when the
+    /// anchor recorded a `Heading` directly above it AND the new flow still
+    /// places a `Heading` in that exact spot (a `Heading` has no stable
+    /// identity and is never matched by text, so the recorded offset is
+    /// verified against the new rows before it is consumed). The selection is
+    /// untouched. Returns `false` — leaving the caller's fallback in charge —
+    /// when the target is gone from the flow.
     pub(super) fn apply_flow_anchor(&mut self, anchor: &ViewportAnchor<Target>) -> bool {
         let Some(&row) = self
             .position_of(&anchor.selected_target)
@@ -89,7 +90,16 @@ impl<Target: Clone + PartialEq> MediaList<Target> {
         else {
             return false;
         };
-        self.scroll = row.saturating_sub(anchor.selected_row_offset);
+        let offset = if anchor.selected_row_offset > 0
+            && matches!(
+                self.rows.get(row.saturating_sub(1)),
+                Some(MediaListRow::Heading { .. })
+            ) {
+            anchor.selected_row_offset
+        } else {
+            0
+        };
+        self.scroll = row.saturating_sub(offset);
         true
     }
 }

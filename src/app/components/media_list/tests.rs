@@ -539,20 +539,20 @@ fn set_content_regrouped_flow_restores_the_heading_above_the_target() {
         MediaListRow::Heading {
             text: "M–O".into()
         },
-        item("m0"),
         item("m1"),
         item("m2"),
         item("m3"),
     ]);
-    // Display rows: 0..2=a1..a3, 3=Heading, 4=m0, 5=m1, 6=m2, 7=m3. "m1" is
-    // now at row 5 with a `Heading` directly above, so the window anchors to
-    // that `Heading` and the label and the target paint together.
-    assert_eq!(list.scroll(), 4);
+    // Display rows: 0..2=a1..a3, 3=Heading, 4=m1, 5=m2, 6=m3. "m1" moved to
+    // row 4 with a `Heading` directly above, so the window anchors to that
+    // `Heading` and the label and the target paint together.
+    assert_eq!(list.scroll(), 3);
     assert_eq!(list.selected_target(), Some(&"m2".to_string()));
 }
 
 // Task 3.1 / D5: when the new flow no longer places a `Heading` directly
-// above the re-found target, the window anchors to the target's own row.
+// above the re-found target, the recorded heading offset is not consumed —
+// the window anchors to the target's own row, not one row higher.
 #[test]
 fn set_content_anchors_to_the_target_row_when_the_new_flow_has_no_leading_heading() {
     let mut list = MediaList::new();
@@ -567,9 +567,11 @@ fn set_content_anchors_to_the_target_row_when_the_new_flow_has_no_leading_headin
     // Display rows: 0=a1, 1=Heading, 2=m1, 3=m2. Window top "m1", label above.
     list.select_target(&"m2".to_string());
     list.set_scroll(2);
-    // The regrouped flow puts "m1" first with no `Heading` above it.
-    list.set_content(vec![item("m1"), item("m2"), item("a1")]);
-    assert_eq!(list.scroll(), 0);
+    // The regrouped flow puts an ordinary row (not a `Heading`) directly
+    // above "m1", so anchoring one row higher would point at "x0".
+    list.set_content(vec![item("x0"), item("m1"), item("m2"), item("a1")]);
+    // Display rows: 0=x0, 1=m1, 2=m2, 3=a1. The window rests on "m1" itself.
+    assert_eq!(list.scroll(), 1);
     assert_eq!(list.selected_target(), Some(&"m2".to_string()));
 }
 
