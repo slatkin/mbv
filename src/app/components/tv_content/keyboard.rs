@@ -108,10 +108,18 @@ impl TvContent {
                 self.move_season(1);
                 Some(ShellRequest::TvSeasonMove { delta: 1 })
             }
-            Key::PageUp => Some(self.move_episode_by(MediaListSurfaceInput::Page(-1))),
-            Key::PageDown => Some(self.move_episode_by(MediaListSurfaceInput::Page(1))),
-            Key::Home => Some(self.move_episode_by(MediaListSurfaceInput::First)),
-            Key::End => Some(self.move_episode_by(MediaListSurfaceInput::Last)),
+            Key::PageUp => self.move_episode_by(MediaListSurfaceInput::Page(-1)),
+            Key::PageDown => self.move_episode_by(MediaListSurfaceInput::Page(1)),
+            // The one-row viewport chord (design D7) on the focused episode
+            // list; the covered browser never receives overlay chords.
+            Key::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.move_episode_by(MediaListSurfaceInput::ScrollViewport(-1))
+            }
+            Key::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                self.move_episode_by(MediaListSurfaceInput::ScrollViewport(1))
+            }
+            Key::Home => self.move_episode_by(MediaListSurfaceInput::First),
+            Key::End => self.move_episode_by(MediaListSurfaceInput::Last),
             _ => None,
         };
         request.map(Msg::Shell)
@@ -169,14 +177,18 @@ impl TvContent {
                 Some(ShellRequest::TvMoveRows { rows: 1 })
             }
             Key::PageUp => {
-                let rows = -(self.painted_viewport_height().saturating_sub(1).max(1) as i64);
-                self.move_rows(rows);
-                Some(ShellRequest::TvMoveRows { rows })
+                return self.viewport_step_rows(MediaListSurfaceInput::Page(-1));
             }
             Key::PageDown => {
-                let rows = self.painted_viewport_height().saturating_sub(1).max(1) as i64;
-                self.move_rows(rows);
-                Some(ShellRequest::TvMoveRows { rows })
+                return self.viewport_step_rows(MediaListSurfaceInput::Page(1));
+            }
+            // The one-row viewport chord (design D7) on the series rail —
+            // pane-independent like the pager/jump chords beside it.
+            Key::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return self.viewport_step_rows(MediaListSurfaceInput::ScrollViewport(-1));
+            }
+            Key::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return self.viewport_step_rows(MediaListSurfaceInput::ScrollViewport(1));
             }
             Key::Home => {
                 self.jump_cursor(false);
@@ -251,14 +263,17 @@ impl TvContent {
                 Some(ShellRequest::EmbyLibraryCursorIndex { index })
             }
             Key::PageUp => {
-                let rows = -self.narrow_page_rows();
-                let index = self.move_by_item_rows_narrow(rows);
-                Some(ShellRequest::EmbyLibraryCursorIndex { index })
+                return self.viewport_step_rows(MediaListSurfaceInput::Page(-1));
             }
             Key::PageDown => {
-                let rows = self.narrow_page_rows();
-                let index = self.move_by_item_rows_narrow(rows);
-                Some(ShellRequest::EmbyLibraryCursorIndex { index })
+                return self.viewport_step_rows(MediaListSurfaceInput::Page(1));
+            }
+            // The one-row viewport chord (design D7) on the flat list.
+            Key::Char('e') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return self.viewport_step_rows(MediaListSurfaceInput::ScrollViewport(-1));
+            }
+            Key::Char('y') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                return self.viewport_step_rows(MediaListSurfaceInput::ScrollViewport(1));
             }
             Key::Home => {
                 let index = self.jump_cursor_narrow(false);

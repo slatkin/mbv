@@ -10,6 +10,7 @@ use super::library_panel::content::{
 use super::library_panel::hero::hero_content_abs_show;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
+use super::media_list::MediaListDisposition;
 use super::media_list::MediaListSurfaceInput;
 use super::media_list::{MediaKind, MediaListCarrier, MediaListRow, MediaSemanticState};
 use super::msg::{
@@ -215,6 +216,40 @@ impl PodcastContent {
         Some(Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove {
             library_item_id: self.selected_id(),
         }))
+    }
+
+    /// A keyboard viewport step on the show list (design D6/D7): the window
+    /// moves by a page or one display row, and the show-move echo reports a
+    /// selection move only (design D8) — a window-only step is a consumed
+    /// key with no shell effect.
+    fn show_viewport(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let outcome = self.carrier.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
+        if outcome.selected_target.is_some() {
+            self.sync_show_selection();
+            self.show_move()
+        } else if outcome.disposition == MediaListDisposition::Consumed {
+            Some(Msg::TerminalEvent(
+                crate::app::components::msg::TerminalObserverEvent::KeyClaimed,
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// A keyboard viewport step on the focused episode list (design D6/D7):
+    /// the window is component-local and reports no echo; an unhandled step
+    /// (nothing painted, a content end) falls through.
+    fn episode_viewport(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        self.episode_list.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
+        None
     }
 
     fn select_bucket(&mut self, position: usize) -> Option<Msg> {
@@ -542,6 +577,38 @@ impl LibraryContentOwner for PodcastContent {
                         PodcastEpisodeTransition::NextFilter,
                     ),
                 ))
+            }
+            // The viewport chords (design D6/D7): the focused list's window
+            // moves by a page or one display row, clamped, and the selection
+            // rides only when the step would leave it outside. The show-move
+            // echo reports a selection move only (design D8).
+            Key::PageUp if !episode => {
+                return self.show_viewport(MediaListSurfaceInput::Page(-1));
+            }
+            Key::PageDown if !episode => {
+                return self.show_viewport(MediaListSurfaceInput::Page(1));
+            }
+            Key::Char('e') if key.modifiers == KeyModifiers::CONTROL => {
+                return if episode {
+                    self.episode_viewport(MediaListSurfaceInput::ScrollViewport(-1))
+                } else {
+                    self.show_viewport(MediaListSurfaceInput::ScrollViewport(-1))
+                };
+            }
+            Key::Char('y') if key.modifiers == KeyModifiers::CONTROL => {
+                return if episode {
+                    self.episode_viewport(MediaListSurfaceInput::ScrollViewport(1))
+                } else {
+                    self.show_viewport(MediaListSurfaceInput::ScrollViewport(1))
+                };
+            }
+            Key::PageUp if episode => {
+                self.episode_viewport(MediaListSurfaceInput::Page(-1));
+                None
+            }
+            Key::PageDown if episode => {
+                self.episode_viewport(MediaListSurfaceInput::Page(1));
+                None
             }
             Key::Esc | Key::Backspace if episode => {
                 self.episode_focused = false;

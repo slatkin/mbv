@@ -1639,7 +1639,10 @@ fn late_overlay_workspace_takes_the_focus_when_its_rows_arrive() {
 fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
     use tuirealm::event::{Key, KeyEvent};
 
-    let mut harness = migrated_tv_with_detail(10);
+    // Enough episodes that a painted page has somewhere to go (design D6:
+    // the page step is the episode list's painted height, resolved from its
+    // retained frame).
+    let mut harness = migrated_tv_with_detail(40);
     drop(draw_frame_at_model_size(&mut harness));
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -1658,17 +1661,21 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        tv_owner_of(&harness).episode_scroll(),
+        "the page step moves the window one painted height and the top-edge \
+         selection rides to the nearest row it shows"
+    );
+    let page = tv_owner_of(&harness).episode_cursor();
+    assert!(page > 0, "the overlay episode list has a painted page");
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: 5 })
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta })
+                if *delta == page as i64
         )),
-        "PageDown moves by the episode list's own page stride"
-    );
-    assert_eq!(
-        tv_owner_of(&harness).episode_cursor(),
-        5,
-        "PageDown lands five rows down"
+        "PageDown reports the applied page stride"
     );
     assert_eq!(
         harness.model().app.libs[0].nav_stack[0].resting().cursor(),
@@ -1684,11 +1691,13 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -5 })
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -1 })
         )),
-        "PageUp reports the applied movement too"
+        "PageUp reports the applied movement too: the window returns to the \
+         top and the selection rides to its last row"
     );
-    assert_eq!(tv_owner_of(&harness).episode_cursor(), 0);
+    assert_eq!(tv_owner_of(&harness).episode_scroll(), 0);
+    assert_eq!(tv_owner_of(&harness).episode_cursor(), page - 1);
 }
 
 /// The overlay Workspace's Home/End mutate the episode list locally AND
@@ -1848,4 +1857,138 @@ fn overlay_workspace_paints_its_cursor_row() {
         Some(first_episode),
         "the cursor row is the Workspace's selected first episode"
     );
+}
+
+/// The TV series rail's keyboard viewport chords (task 6.1, design D6/D7)
+/// at Wide and Narrow heights: `Ctrl+y`/`Ctrl+e` step the shared owner's
+/// window one display row and `PgDn` pages it by the painted height; the
+/// selection rides only when the step would leave it outside.
+#[test]
+fn tv_series_rail_viewport_chords_step_the_window_at_wide_and_narrow_heights() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    for width in [80, 70] {
+        let mut harness = migrated_tv_with_detail(40);
+        // A rail long enough to page: the migrated fixture carries few
+        // series, so extend it before the first paint.
+        {
+            let items = &mut harness.model_mut().app.libs[0].nav_stack[0].items;
+            for index in 0..40 {
+                let mut series =
+                    crate::app::tests::make_item(&format!("Series {index}"), "Series");
+                series.id = format!("series-{index}");
+                series.image_tags.thumb = "tag".into();
+                items.push(series);
+            }
+        }
+        // A short terminal gives the 42-row rail somewhere to scroll.
+        harness.model_mut().app.terminal_height = 20;
+        harness.model_mut().app.terminal_width = width;
+        harness.model_mut().app.mini_view_focus = PanelFocus::Library;
+        harness.model_mut().sync_library_panel();
+        harness.model_mut().sync_mounted_surfaces();
+        drop(draw_frame_at_model_size(&mut harness));
+
+        // Walk the selection mid-window so the chords below ride it nowhere.
+        for _ in 0..6 {
+            harness.inject(Event::Keyboard(KeyEvent {
+                code: Key::Down,
+                modifiers: KeyModifiers::NONE,
+            }));
+            let _ = harness.step();
+        }
+        drop(draw_frame_at_model_size(&mut harness));
+        let before = tv_owner_of(&harness).scroll();
+        let before_cursor = tv_owner_of(&harness).cursor();
+
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Char('y'),
+            modifiers: KeyModifiers::CONTROL,
+        }));
+        let _ = harness.step();
+        let stepped = tv_owner_of(&harness).scroll();
+        assert!(
+            stepped > before,
+            "Ctrl+y steps the rail's window down at width {width}"
+        );
+        assert_eq!(
+            tv_owner_of(&harness).cursor(),
+            before_cursor,
+            "the selection rides nowhere"
+        );
+
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Char('e'),
+            modifiers: KeyModifiers::CONTROL,
+        }));
+        let _ = harness.step();
+        assert_eq!(
+            tv_owner_of(&harness).scroll(),
+            stepped - 1,
+            "Ctrl+e steps the rail's window back one row at width {width}"
+        );
+
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::PageDown,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+        assert!(
+            tv_owner_of(&harness).scroll() > stepped,
+            "PgDn pages the rail's window at width {width}"
+        );
+        drop(draw_frame_at_model_size(&mut harness));
+    }
+}
+
+/// The overlay Workspace's one-row viewport chords (task 6.1, design D7)
+/// move the focused episode list's window like the pager chords beside
+/// them; a mid-window step reports nothing.
+#[test]
+fn overlay_workspace_ctrl_chords_step_the_episode_window() {
+    use tuirealm::event::{Key, KeyEvent};
+
+    let mut harness = migrated_tv_with_detail(40);
+    drop(draw_frame_at_model_size(&mut harness));
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Enter,
+        modifiers: KeyModifiers::NONE,
+    }));
+    let _ = harness.step();
+    drop(draw_frame_at_model_size(&mut harness));
+
+    // Walk the episode selection mid-window first.
+    for _ in 0..3 {
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Down,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+    }
+    drop(draw_frame_at_model_size(&mut harness));
+    let before_cursor = tv_owner_of(&harness).episode_cursor();
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('y'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    let _ = harness.step();
+    assert_eq!(
+        tv_owner_of(&harness).episode_scroll(),
+        1,
+        "Ctrl+y steps the episode window one row"
+    );
+    assert_eq!(
+        tv_owner_of(&harness).episode_cursor(),
+        before_cursor,
+        "the mid-window selection rides nowhere"
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('e'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    let _ = harness.step();
+    assert_eq!(tv_owner_of(&harness).episode_scroll(), 0);
+    assert_eq!(tv_owner_of(&harness).episode_cursor(), before_cursor);
 }

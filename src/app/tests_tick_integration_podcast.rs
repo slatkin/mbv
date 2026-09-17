@@ -302,3 +302,79 @@ fn podcast_wheel_steps_the_show_viewport_without_a_selection_move() {
         "the selection rides nowhere when the stepped window still shows it"
     );
 }
+
+/// The podcast lists' keyboard viewport chords (task 6.2, design D6/D7):
+/// `Ctrl+y`/`Ctrl+e` step the show list's window one display row and `PgDn`
+/// pages it by the painted height; the show-move echo reports an actual
+/// selection move only (design D8).
+#[test]
+fn podcast_viewport_chords_step_the_show_window() {
+    let mut app = audiobookshelf_app();
+    {
+        let state = &mut app.audiobookshelf_browse[0];
+        for i in 1..90 {
+            state.shows.push(mbv_core::audiobookshelf::AudiobookshelfShow {
+                library_item_id: format!("show-{i}"),
+                title: format!("Show {i}"),
+                author: None,
+                description: None,
+                cover_path: None,
+            });
+        }
+    }
+    let mut harness = TickHarness::new(app);
+    draw(&mut harness, 140);
+    // Seed the selection mid-window so the chords below cannot drag it.
+    podcast(&mut harness)
+        .carrier
+        .select_target(&"show-20".to_string());
+    draw(&mut harness, 140);
+
+    let key = |code: tuirealm::event::Key,
+               modifiers: tuirealm::event::KeyModifiers|
+     -> Event<crate::app::components::UserEvent> {
+        Event::Keyboard(tuirealm::event::KeyEvent { code, modifiers })
+    };
+    harness.inject(key(
+        tuirealm::event::Key::Char('y'),
+        tuirealm::event::KeyModifiers::CONTROL,
+    ));
+    let outcome = harness.step();
+    assert_eq!(
+        podcast(&mut harness).carrier.scroll(),
+        1,
+        "Ctrl+y steps the show window one row"
+    );
+    assert_eq!(
+        podcast(&mut harness).carrier.selected_target(),
+        Some(&"show-20".to_string()),
+        "the mid-window selection rides nowhere"
+    );
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|message| !matches!(
+                message,
+                Msg::Shell(ShellRequest::AudiobookshelfPodcastShowMove { .. })
+            )),
+        "a window-only chord step emits no selection echo"
+    );
+
+    harness.inject(key(
+        tuirealm::event::Key::Char('e'),
+        tuirealm::event::KeyModifiers::CONTROL,
+    ));
+    let _ = harness.step();
+    assert_eq!(podcast(&mut harness).carrier.scroll(), 0);
+
+    harness.inject(key(
+        tuirealm::event::Key::PageDown,
+        tuirealm::event::KeyModifiers::NONE,
+    ));
+    let _ = harness.step();
+    assert!(
+        podcast(&mut harness).carrier.scroll() > 1,
+        "PgDn pages the show window"
+    );
+}

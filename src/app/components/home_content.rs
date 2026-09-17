@@ -340,6 +340,16 @@ impl HomeContent {
                 self.delegate_row_local_input(MediaListSurfaceInput::Page(1), None);
                 None
             }
+            // The one-row viewport chord (design D7); like every row-local
+            // chord here the window is component-local and reports no echo.
+            Key::Char('e') if ctrl => {
+                self.delegate_row_local_input(MediaListSurfaceInput::ScrollViewport(-1), None);
+                None
+            }
+            Key::Char('y') if ctrl => {
+                self.delegate_row_local_input(MediaListSurfaceInput::ScrollViewport(1), None);
+                None
+            }
             Key::Home => {
                 self.delegate_row_local_input(MediaListSurfaceInput::First, None);
                 None

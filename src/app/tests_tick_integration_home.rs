@@ -553,3 +553,51 @@ fn home_owner_cursor_survives_a_content_push() {
         "the owner's cursor survives the content projection"
     );
 }
+
+/// The Home list's keyboard viewport chords (task 6.2, design D6/D7):
+/// `Ctrl+y`/`Ctrl+e` step the window one display row and `PgDn` pages it by
+/// the painted height, at Wide and Narrow heights; the selection rides only
+/// when the step would leave it outside.
+#[test]
+fn home_viewport_chords_step_the_window_at_wide_and_narrow_heights() {
+    for (width, height) in [(100, 30), (70, 30)] {
+        let mut harness = home_harness(width, height, 40);
+        let _terminal = draw(&mut harness, width, height);
+
+        // Walk the selection mid-window so the chords below ride it nowhere.
+        for _ in 0..4 {
+            harness.inject(key(Key::Down));
+            let outcome = harness.step();
+            handle_tick_messages(&mut harness, outcome.messages);
+        }
+        drop(draw(&mut harness, width, height));
+        let before = home_owner(&harness).test_active_scroll();
+
+        harness.inject(key_with_modifiers(Key::Char('y'), KeyModifiers::CONTROL));
+        let outcome = harness.step();
+        handle_tick_messages(&mut harness, outcome.messages);
+        let stepped = home_owner(&harness).test_active_scroll();
+        assert!(
+            stepped > before,
+            "Ctrl+y steps Home's window down at width {width}"
+        );
+
+        harness.inject(key_with_modifiers(Key::Char('e'), KeyModifiers::CONTROL));
+        let outcome = harness.step();
+        handle_tick_messages(&mut harness, outcome.messages);
+        assert_eq!(
+            home_owner(&harness).test_active_scroll(),
+            stepped - 1,
+            "Ctrl+e steps Home's window back one row at width {width}"
+        );
+
+        harness.inject(key(Key::PageDown));
+        let outcome = harness.step();
+        handle_tick_messages(&mut harness, outcome.messages);
+        assert!(
+            home_owner(&harness).test_active_scroll() > stepped,
+            "PgDn pages Home's window at width {width}"
+        );
+        drop(draw(&mut harness, width, height));
+    }
+}

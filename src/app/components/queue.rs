@@ -10,8 +10,8 @@ use tuirealm::props::{AttrValue, Attribute, QueryResult};
 use tuirealm::state::State;
 
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaListTrailing,
-    MediaListTransition, MediaSemanticState, RowIntent,
+    MediaKind, MediaListCarrier, MediaListDisposition, MediaListRow, MediaListSurfaceInput,
+    MediaListTrailing, MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::mouse::gesture::{ClickModifier, MouseGesture, MouseGestureState};
 use super::msg::{
@@ -268,6 +268,22 @@ impl QueueComponent {
         }
     }
 
+    /// A keyboard viewport step (design D6/D7): the window moves by a page
+    /// or one display row, clamped, and the selection rides only when the
+    /// step would leave it outside. The cursor echo reports an actual
+    /// selection move (design D8); a window-only step is a consumed key with
+    /// no shell effect.
+    fn viewport_step(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let outcome = self.delegate_row_local_input(input, None);
+        if outcome.selected_target.is_some() {
+            self.cursor_message()
+        } else if outcome.disposition == MediaListDisposition::Consumed {
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        } else {
+            None
+        }
+    }
+
     fn handle_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.handle_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
@@ -341,11 +357,18 @@ impl QueueComponent {
                 return self.move_cursor(1);
             }
             Key::PageUp if key.modifiers.is_empty() => {
-                return self
-                    .move_cursor(-(self.content_area.height.saturating_sub(1).max(1) as i64));
+                return self.viewport_step(MediaListSurfaceInput::Page(-1));
             }
             Key::PageDown if key.modifiers.is_empty() => {
-                return self.move_cursor(self.content_area.height.saturating_sub(1).max(1) as i64);
+                return self.viewport_step(MediaListSurfaceInput::Page(1));
+            }
+            // The one-row viewport chord (design D7): `Ctrl+y` appears
+            // nowhere else in the Queue's keyspace.
+            Key::Char('e') if key.modifiers == tuirealm::event::KeyModifiers::CONTROL => {
+                return self.viewport_step(MediaListSurfaceInput::ScrollViewport(-1));
+            }
+            Key::Char('y') if key.modifiers == tuirealm::event::KeyModifiers::CONTROL => {
+                return self.viewport_step(MediaListSurfaceInput::ScrollViewport(1));
             }
             Key::Home if key.modifiers.is_empty() => {
                 self.delegate_row_local_input(MediaListSurfaceInput::First, None);

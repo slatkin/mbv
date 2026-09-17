@@ -194,3 +194,77 @@ fn library_panel_viewport_wheel_reports_position_without_a_cursor_echo() {
     assert!(level.loading, "the pending fetch is still the one fetch");
     assert_eq!(level.items.len(), 30);
 }
+
+/// Task 6.1 (design D8): a keyboard viewport chord behaves like the wheel —
+/// a window-only `Ctrl+y` step emits no `EmbyLibraryCursorIndex` echo, the
+/// reached position still persists through the panel's deferred
+/// `LibraryScroll`, and pagination fires from the position the window
+/// reached.
+#[test]
+fn library_panel_viewport_chord_reports_position_without_a_cursor_echo() {
+    let mut app = make_movie_app();
+    let mut items = app.libs[0].nav_stack[0].items.clone();
+    for i in 2..30 {
+        let mut item = make_item(&format!("Movie {i}"), "Movie");
+        item.id = format!("movie-{i}");
+        items.push(item);
+    }
+    app.libs[0].nav_stack[0].items = items;
+    // Not fully loaded: pagination must still have work to do at the reach.
+    app.libs[0].nav_stack[0].total_count = 90;
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+    harness.model_mut().sync_mounted_surfaces();
+
+    // Seed the selection mid-window so the chord below cannot drag it.
+    let owner_key = harness
+        .model()
+        .active_emby_library_owner()
+        .map(|(_, key, _)| key)
+        .expect("the Movies owner has migrated");
+    harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        .and_then(|panel| panel.owner_mut(&owner_key))
+        .and_then(|owner| {
+            owner
+                .as_any_mut()
+                .downcast_mut::<crate::app::components::emby_library_content::EmbyLibraryContent>()
+        })
+        .expect("browser owner installed")
+        .set_cursor_for_test(5);
+    let _ = terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .unwrap();
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('y'),
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    let outcome = harness.step();
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|message| !matches!(
+                message,
+                Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { .. })
+            )),
+        "a window-only chord step emits no cursor echo"
+    );
+    apply(&mut harness, outcome);
+    let level = &harness.model().app.libs[0].nav_stack[0];
+    assert!(
+        level.loading,
+        "the chord's position report still feeds pagination at the loaded edge"
+    );
+    assert_eq!(harness.model().app.libs[0].nav_stack[0].items.len(), 30);
+}

@@ -605,3 +605,49 @@ fn feeds_mouse_click_resolves_row_and_right_click_opens_context_menu() {
         ))) if entries.len() == 1
     ));
 }
+
+/// Task 6.3 (design D7): the two viewport chords are admitted ahead of
+/// Feeds' blanket Ctrl/Alt early-return — `Ctrl+y`/`Ctrl+e` step the list
+/// window one row — while every other Ctrl chord stays rejected, and the
+/// unmodified `e` enqueue keeps its meaning.
+#[test]
+fn feeds_admits_the_two_viewport_ctrl_chords_and_rejects_others() {
+    let entries: Vec<FeedEntry> = (0..30)
+        .map(|i| entry(&format!("Entry {i}"), false))
+        .collect();
+    let owner = owner_with(
+        vec![subscription("Test Feed")],
+        vec![entries.clone()],
+        entries,
+    );
+    let mut panel = panel_with(owner, true);
+    let _terminal = paint(&mut panel, 40, 24);
+
+    let feeds = feeds_mut(&mut panel);
+    let ctrl = |code: Key| KeyEvent {
+        code,
+        modifiers: KeyModifiers::CONTROL,
+    };
+
+    // Ctrl+y steps the window one row and is claimed framework-locally.
+    let message = feeds.on_key(&ctrl(Key::Char('y')));
+    assert!(matches!(message, Some(Msg::TerminalEvent(_))));
+    assert_eq!(feeds.scroll(), 1, "Ctrl+y steps Feeds' window one row");
+
+    // Ctrl+e steps the window back — it never enqueues.
+    let message = feeds.on_key(&ctrl(Key::Char('e')));
+    assert!(matches!(message, Some(Msg::TerminalEvent(_))));
+    assert_eq!(feeds.scroll(), 0);
+
+    // Every other Ctrl chord stays rejected ahead of the match arms.
+    assert_eq!(feeds.on_key(&ctrl(Key::Char('a'))), None);
+    assert_eq!(feeds.on_key(&ctrl(Key::Char('w'))), None);
+    assert_eq!(feeds.scroll(), 0);
+
+    // The unmodified `e` enqueue is untouched.
+    let message = feeds.on_key(&key(Key::Char('e')));
+    assert!(matches!(
+        message,
+        Some(Msg::Shell(ShellRequest::FeedsEnqueue(_)))
+    ));
+}

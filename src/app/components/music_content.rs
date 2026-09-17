@@ -196,11 +196,17 @@ impl MusicContent {
     /// `MusicAlbumCursor` request; the owner stays authoritative for the
     /// selected album and scroll.
     fn move_album(&mut self, input: MediaListSurfaceInput, kind: AlbumCursorKind) -> Option<Msg> {
-        self.carrier.delegate_operation(
+        let outcome = self.carrier.delegate_operation(
             input
                 .into_operation(None)
                 .expect("resolved media-list pointer target"),
         );
+        // The album-cursor echo is a selection-move report (design D8): a
+        // window-only viewport step reports nothing — the window is
+        // component-local and pagination waits for a dragged selection.
+        if outcome.selected_target.is_none() {
+            return None;
+        }
         let target = self.carrier.selected_target()?;
         let index = self
             .context
@@ -481,6 +487,17 @@ impl LibraryContentOwner for MusicContent {
                     item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryToggleWatched { item }))
                 }
                 Key::Char('r') => Some(Msg::Shell(ShellRequest::EmbyLibraryRescan)),
+                // The one-row viewport chord (design D7) on the album rail:
+                // the window steps one display row; the album-cursor echo is
+                // a selection-move report (design D8).
+                Key::Char('e') => self.move_album(
+                    MediaListSurfaceInput::ScrollViewport(-1),
+                    AlbumCursorKind::Move,
+                ),
+                Key::Char('y') => self.move_album(
+                    MediaListSurfaceInput::ScrollViewport(1),
+                    AlbumCursorKind::Move,
+                ),
                 _ => None,
             };
         }
@@ -526,10 +543,11 @@ impl LibraryContentOwner for MusicContent {
                 );
                 None
             }
-            // The Library Hero overlay's pager/jump chords move the focused
-            // track list, never the covered album browser (the overlay is
-            // Narrow-only; Wide keeps the album-rail paging arms below).
-            Key::PageUp if self.hero_overlay_open && self.track_focused => {
+            // The focused track list's pager/viewport chords (design D6/D7):
+            // they move the focused track list, never the covered album
+            // browser — the same list the arrow chords beside them move,
+            // at both the Wide inline pane and the Narrow overlay.
+            Key::PageUp if self.track_focused => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Page(-1)
                         .into_operation(None)
@@ -537,9 +555,29 @@ impl LibraryContentOwner for MusicContent {
                 );
                 None
             }
-            Key::PageDown if self.hero_overlay_open && self.track_focused => {
+            Key::PageDown if self.track_focused => {
                 self.track_list.delegate_operation(
                     MediaListSurfaceInput::Page(1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
+                None
+            }
+            Key::Char('e')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_focused =>
+            {
+                self.track_list.delegate_operation(
+                    MediaListSurfaceInput::ScrollViewport(-1)
+                        .into_operation(None)
+                        .expect("resolved media-list pointer target"),
+                );
+                None
+            }
+            Key::Char('y')
+                if key.modifiers.contains(KeyModifiers::CONTROL) && self.track_focused =>
+            {
+                self.track_list.delegate_operation(
+                    MediaListSurfaceInput::ScrollViewport(1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
                 );

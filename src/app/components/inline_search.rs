@@ -349,6 +349,23 @@ impl InlineSearch {
             .modifiers
             .intersects(KeyModifiers::ALT | KeyModifiers::CONTROL)
         {
+            // Design D7: the two viewport chords step the results window
+            // ahead of the blanket Ctrl/Alt rejection; every other Ctrl/Alt
+            // chord stays rejected here, so the hosts' Ctrl+P/S/A result
+            // actions (which fire on the chords this control does not
+            // consume) are unaffected.
+            if key.modifiers == KeyModifiers::CONTROL {
+                match key.code {
+                    Key::Char('e') => {
+                        self.delegate_movement(MediaListSurfaceInput::ScrollViewport(-1));
+                    }
+                    Key::Char('y') => {
+                        self.delegate_movement(MediaListSurfaceInput::ScrollViewport(1));
+                    }
+                    _ => return None,
+                }
+                return None;
+            }
             return None;
         }
         match key.code {
@@ -528,6 +545,50 @@ mod tests {
         assert_eq!(transition.selected_target, None);
         assert_eq!(search.test_scroll(), 2);
         assert_eq!(search.test_cursor(), 3);
+    }
+
+    /// Task 6.2 (design D7): the two viewport chords are admitted ahead of
+    /// the control's blanket Ctrl/Alt rejection — `Ctrl+y`/`Ctrl+e` step the
+    /// results window one row — while every other Ctrl chord stays rejected
+    /// and the hosts' Ctrl+P/S/A result actions keep their chords.
+    #[test]
+    fn viewport_ctrl_chords_step_the_results_window_and_other_ctrl_chords_stay_rejected() {
+        let mut search = InlineSearch::new();
+        search.open();
+        search.set_pool(pool(&[
+            "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
+        ]));
+        search.handle_key(&key(Key::Char('r')));
+        fire_debounce(&mut search);
+        assert_eq!(search.results_len(), 12);
+
+        // Paint a 3-row frame: the step's height is the retained painted
+        // content rectangle (design D2).
+        let area = Rect::new(0, 0, 30, 3);
+        let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
+        terminal
+            .draw(|f| search.results_mut().wide_mut().view(f, area))
+            .unwrap();
+
+        // Ctrl+y steps the window; the top-edge selection is dragged with it.
+        let ctrl = |code: Key| KeyEvent {
+            code,
+            modifiers: KeyModifiers::CONTROL,
+        };
+        search.handle_key(&ctrl(Key::Char('y')));
+        assert_eq!(search.test_scroll(), 1);
+        assert_eq!(search.test_cursor(), 1);
+
+        // Ctrl+e steps the window back over a now mid-window selection.
+        search.handle_key(&ctrl(Key::Char('e')));
+        assert_eq!(search.test_scroll(), 0);
+        assert_eq!(search.test_cursor(), 1);
+
+        // Every other Ctrl chord stays rejected: no step, no consumption
+        // signal beyond `None` (the hosts' result actions keep working).
+        assert_eq!(search.handle_key(&ctrl(Key::Char('a'))), None);
+        assert_eq!(search.test_scroll(), 0);
+        assert_eq!(search.test_cursor(), 1);
     }
 
     #[test]

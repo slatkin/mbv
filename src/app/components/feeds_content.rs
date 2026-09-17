@@ -31,8 +31,8 @@ use super::library_panel::hero::hero_content_feed;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTransition, MediaSemanticState, RowIntent,
+    MediaKind, MediaListCarrier, MediaListDisposition, MediaListOperation, MediaListRow,
+    MediaListSurfaceInput, MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{
@@ -207,6 +207,16 @@ impl FeedsContent {
             })
     }
 
+    /// A keyboard viewport step (design D6/D7): the window moves by a page
+    /// or one display row; a consumed step is a framework-local claim (Feeds
+    /// reports no row-local echo), an unhandled one (nothing painted, a
+    /// content end) falls through.
+    fn viewport_step(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let outcome = self.delegate_row_local_input(input, None);
+        (outcome.disposition == MediaListDisposition::Consumed)
+            .then_some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    }
+
     /// Cycle the Watched filter and re-project (the legacy `w` key).
     pub(in crate::app) fn cycle_watched_filter(&mut self) {
         self.watched_filter = self.watched_filter.cycle();
@@ -259,6 +269,21 @@ impl FeedsContent {
         if key.modifiers.contains(KeyModifiers::CONTROL)
             || key.modifiers.contains(KeyModifiers::ALT)
         {
+            // Design D7: the two viewport chords are admitted ahead of the
+            // blanket Ctrl/Alt rejection — Feeds has no other Ctrl bindings
+            // to collide with (its `e` enqueue is unmodified) — and every
+            // other Ctrl/Alt chord stays rejected.
+            if key.modifiers == KeyModifiers::CONTROL {
+                match key.code {
+                    Key::Char('e') => {
+                        return self.viewport_step(MediaListSurfaceInput::ScrollViewport(-1));
+                    }
+                    Key::Char('y') => {
+                        return self.viewport_step(MediaListSurfaceInput::ScrollViewport(1));
+                    }
+                    _ => {}
+                }
+            }
             return None;
         }
         match key.code {

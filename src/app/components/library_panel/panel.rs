@@ -11,7 +11,7 @@
 //!
 
 use ratatui::layout::Position;
-use tuirealm::event::{MouseButton, MouseEvent, MouseEventKind};
+use tuirealm::event::{KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 
 use crate::app::components::media_list::{
     LibrarySelectionOrigin, MediaListSurfaceInput, SelectionOrigin, SelectionSummary,
@@ -561,28 +561,48 @@ impl LibraryPanel {
             .active_mut()
             .and_then(|owner| owner.on_slot_event(event));
         if is_wheel {
-            if let (Some(key @ LibraryKey::Service { .. }), Some((index, scroll))) = (
-                self.owners.active_key().cloned(),
-                self.owners
-                    .active_mut()
-                    .and_then(|owner| owner.scroll_position()),
-            ) {
-                // The reached position also carries the owner's pagination
-                // reach (design D8): a window-only wheel step emits no cursor
-                // echo but still feeds `maybe_fetch_next_page` through here.
-                let pagination_index = self
-                    .owners
-                    .active_mut()
-                    .and_then(|owner| owner.viewport_pagination_index());
-                self.deferred_msg = Some(Msg::Shell(ShellRequest::LibraryScroll {
-                    key,
-                    index,
-                    scroll,
-                    pagination_index,
-                }));
-            }
+            self.defer_position_report();
         }
         result
+    }
+
+    /// The panel's deferred resting-scroll position report (design D8): the
+    /// reached position also carries the owner's pagination reach, so a
+    /// window-only viewport step — no cursor echo — still persists and feeds
+    /// `maybe_fetch_next_page` through here.
+    fn defer_position_report(&mut self) {
+        if let (Some(key @ LibraryKey::Service { .. }), Some((index, scroll))) = (
+            self.owners.active_key().cloned(),
+            self.owners
+                .active_mut()
+                .and_then(|owner| owner.scroll_position()),
+        ) {
+            let pagination_index = self
+                .owners
+                .active_mut()
+                .and_then(|owner| owner.viewport_pagination_index());
+            self.deferred_msg = Some(Msg::Shell(ShellRequest::LibraryScroll {
+                key,
+                index,
+                scroll,
+                pagination_index,
+            }));
+        }
+    }
+
+    /// Whether this chord is one of the list viewport chords (design D6/D7):
+    /// the page step (`PgUp`/`PgDn`) and the one-row step (`Ctrl+e`/
+    /// `Ctrl+y`). Delivery bookkeeping only — the owner interprets the chord
+    /// and the router keeps precedence; the panel defers the position report
+    /// after a consumed step exactly as it does for a wheel step.
+    fn is_viewport_chord(key: &KeyEvent) -> bool {
+        match key.code {
+            tuirealm::event::Key::PageUp | tuirealm::event::Key::PageDown => {
+                key.modifiers.is_empty()
+            }
+            tuirealm::event::Key::Char('e' | 'y') => key.modifiers == KeyModifiers::CONTROL,
+            _ => false,
+        }
     }
 
     /// The split drag's resolved message: a live-only `ResizeListPaneLive`

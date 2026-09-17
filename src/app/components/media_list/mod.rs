@@ -223,7 +223,14 @@ impl WideMediaListPaintPolicy {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MediaListSurfaceInput {
     Move(i64),
+    /// The keyboard page chord (`PgUp`/`PgDn`, design D6): the page form of
+    /// the viewport step. The variant's former five-item selection meaning
+    /// was deleted with `MediaListOperation::Page` once every `PgUp`/`PgDn`
+    /// arm routed here (task 6.2's migration note).
     Page(i64),
+    /// The keyboard one-row viewport chord (`Ctrl+e`/`Ctrl+y`, design D7) —
+    /// the same step the wheel takes.
+    ScrollViewport(i64),
     First,
     Last,
     Activate,
@@ -233,14 +240,16 @@ pub enum MediaListSurfaceInput {
     RangeClick(Position),
     DoubleClick(Position),
     ContextClick(Position),
-    Wheel { at: Position, delta: i64 },
+    Wheel {
+        at: Position,
+        delta: i64,
+    },
 }
 
 /// Target-resolved operation accepted by the canonical media-list owner.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListOperation<Target> {
     Move(i64),
-    Page(i64),
     First,
     Last,
     /// Signed one-row viewport step (design D1): the visible window moves
@@ -251,9 +260,7 @@ pub enum MediaListOperation<Target> {
     ScrollViewport(i64),
     /// Signed page form of the viewport step (design D6): the window moves
     /// by the painted height in the step direction, reusing the clamp and
-    /// drag rule. Never a reuse of `Page`, which keeps its five-item
-    /// selection meaning until 6.2 deletes it.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// drag rule. Not a reuse of the deleted five-item `Page` variant.
     ScrollViewportPage(i64),
     ActivateCurrent,
     ContextCurrent,
@@ -271,7 +278,17 @@ impl MediaListSurfaceInput {
     ) -> Option<MediaListOperation<Target>> {
         Some(match self {
             Self::Move(delta) => MediaListOperation::Move(delta),
-            Self::Page(delta) => MediaListOperation::Page(delta),
+            Self::Page(delta) => {
+                // Design D6: the page chord is the page form of the viewport
+                // step, converted in this one place. The height enters where
+                // the carrier applies the operation (design D2).
+                MediaListOperation::ScrollViewportPage(delta)
+            }
+            Self::ScrollViewport(delta) => {
+                // Design D7: the one-row chord takes the same viewport step
+                // the wheel takes.
+                MediaListOperation::ScrollViewport(delta)
+            }
             Self::First => MediaListOperation::First,
             Self::Last => MediaListOperation::Last,
             Self::Activate => MediaListOperation::ActivateCurrent,
@@ -708,18 +725,11 @@ impl<Target> MediaList<Target> {
         let before_count = self.multi_selection.len();
         let extends_range = matches!(
             operation,
-            MediaListOperation::Move(_)
-                | MediaListOperation::Page(_)
-                | MediaListOperation::First
-                | MediaListOperation::Last
+            MediaListOperation::Move(_) | MediaListOperation::First | MediaListOperation::Last
         );
         let external_intent = match operation {
             MediaListOperation::Move(delta) => {
                 self.move_selection(delta);
-                None
-            }
-            MediaListOperation::Page(delta) => {
-                self.move_selection(delta.saturating_mul(5));
                 None
             }
             MediaListOperation::First => {

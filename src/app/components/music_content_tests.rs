@@ -225,3 +225,135 @@ fn resolved_hero_data_uses_parsed_title_year_and_cached_artist() {
     assert_eq!(data.facts.title, "First Album");
     assert_eq!(data.facts.meta_rows, vec!["Folder Artist", "2024"]);
 }
+
+/// The album rail's keyboard viewport chords (task 6.1, design D6/D7):
+/// `Ctrl+y`/`Ctrl+e` step the window one display row, `PgDn` pages it by the
+/// painted height, and the album-cursor echo reports an actual selection
+/// move only (design D8) — a window-only step reports nothing.
+#[test]
+fn album_viewport_chords_step_the_rail_and_report_only_drags() {
+    let albums: Vec<EmbyItem> = (0..8)
+        .map(|i| {
+            let mut album = make_item(&format!("Album {i}"), "MusicAlbum");
+            album.id = format!("album-{i}");
+            album
+        })
+        .collect();
+    let selected = albums[0].clone();
+    let mut owner = MusicContent::new();
+    let album_info: Vec<(String, String, String)> = (0..8)
+        .map(|i| ("Artist".to_string(), String::new(), format!("Album {i}")))
+        .collect();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(albums, 0),
+        Some(selected),
+        "Artist".into(),
+        vec![make_item("Artist", "MusicArtist")],
+        0,
+        album_info,
+        (0..8).collect(),
+        None,
+    ));
+
+    // A 3-row painted frame over a `Heading` plus eight albums: "album-2" is
+    // display row 3 and the resolved window shows [1, 4).
+    let area = Rect::new(0, 0, 30, 3);
+    owner.carrier.wide_mut().set_geometry(area, area);
+    let mut terminal = Terminal::new(TestBackend::new(30, 3)).unwrap();
+    terminal
+        .draw(|frame| owner.carrier.wide_mut().view(frame, area))
+        .unwrap();
+    owner.carrier.select_target(&"album-2".to_string());
+
+    // Ctrl+y steps the window down onto the selection's neighbourhood; the
+    // selection stays inside, so no album cursor is reported.
+    let message = owner.on_key(&KeyEvent {
+        code: Key::Char('y'),
+        modifiers: KeyModifiers::CONTROL,
+    });
+    assert_eq!(message, None, "a window-only chord reports no cursor");
+    assert_eq!(owner.carrier.scroll(), 2);
+    assert_eq!(
+        owner.carrier.selected_target(),
+        Some(&"album-2".to_string())
+    );
+
+    // Ctrl+e steps the window back; still a viewport gesture.
+    let message = owner.on_key(&KeyEvent {
+        code: Key::Char('e'),
+        modifiers: KeyModifiers::CONTROL,
+    });
+    assert_eq!(message, None);
+    assert_eq!(owner.carrier.scroll(), 1);
+
+    // PgDn pages the window a full painted height; the left-behind
+    // selection is dragged to the paged window's top and the page-kind
+    // album cursor reports the drag (design D8).
+    let message = owner.on_key(&KeyEvent {
+        code: Key::PageDown,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(owner.carrier.scroll(), 4);
+    match message {
+        Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind })) => {
+            assert_eq!(target, 3);
+            assert_eq!(kind, AlbumCursorKind::Page);
+        }
+        other => panic!("expected the dragged page's album cursor, got {other:?}"),
+    }
+}
+
+/// The focused track list's keyboard viewport chords (task 6.1, design
+/// D6/D7) at the track pane's own painted height: the window steps/pages
+/// and the selection rides only at the window's edge; the track list keeps
+/// no shell echo, so a step reports nothing.
+#[test]
+fn track_viewport_chords_step_the_focused_track_list() {
+    let tracks: Vec<EmbyItem> = (0..30)
+        .map(|i| {
+            let mut track = make_item(&format!("Track {i}"), "Audio");
+            track.id = format!("track-{i}");
+            track
+        })
+        .collect();
+    let mut owner = MusicContent::new();
+    let mut ctx = context(make_item("Album", "MusicAlbum"), "overview");
+    ctx.album_tracks = Some(tracks);
+    owner.set_content(ctx);
+    owner.enter_track_focus();
+
+    let area = Rect::new(0, 0, 20, 4);
+    owner.track_list.wide_mut().set_geometry(area, area);
+    let mut terminal = Terminal::new(TestBackend::new(20, 4)).unwrap();
+    terminal
+        .draw(|frame| owner.track_list.wide_mut().view(frame, area))
+        .unwrap();
+
+    // Ctrl+y steps the window; the top-edge selection is dragged with it.
+    let message = owner.on_key(&KeyEvent {
+        code: Key::Char('y'),
+        modifiers: KeyModifiers::CONTROL,
+    });
+    assert_eq!(message, None, "the track list reports no step echo");
+    assert_eq!(owner.track_list.scroll(), 1);
+    assert_eq!(owner.track_list.cursor(), 1);
+
+    // Ctrl+e steps the window back over a now mid-window selection.
+    let message = owner.on_key(&KeyEvent {
+        code: Key::Char('e'),
+        modifiers: KeyModifiers::CONTROL,
+    });
+    assert_eq!(message, None);
+    assert_eq!(owner.track_list.scroll(), 0);
+    assert_eq!(owner.track_list.cursor(), 1);
+
+    // PgDn pages the window a full painted height and drags the
+    // left-behind selection to the paged window's top.
+    let message = owner.on_key(&KeyEvent {
+        code: Key::PageDown,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(message, None);
+    assert_eq!(owner.track_list.scroll(), 4);
+    assert_eq!(owner.track_list.cursor(), 4);
+}

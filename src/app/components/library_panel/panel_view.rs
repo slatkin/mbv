@@ -214,6 +214,13 @@ impl AppComponent<Msg, UserEvent> for LibraryPanel {
                     .active_mut()
                     .map(|owner| owner.on_key_result(key))
                     .unwrap_or(LeafKeyResult::Unhandled);
+                // A consumed list viewport chord (design D6/D7) reports the
+                // reached position through the same deferred resting-scroll
+                // update the wheel uses: a window-only step emits no cursor
+                // echo (design D8).
+                if matches!(result, LeafKeyResult::Consumed(_)) && Self::is_viewport_chord(key) {
+                    self.defer_position_report();
+                }
                 let hero_overlay_resolvable = self.hero_overlay_open
                     && self
                         .owners

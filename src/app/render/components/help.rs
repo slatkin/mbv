@@ -150,7 +150,11 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         help_line(key_w, "1 – 9", "Jump to tab"),
         help_line(key_w, "↑ / ↓", "Move cursor"),
         help_line(key_w, "← / →", "Switch panels"),
-        help_line(key_w, "PgUp / PgDn", "Page scroll"),
+        // The list viewport chords (design D6/D7): the page chord is the
+        // page step — the row now describes what PgUp/PgDn really do — and
+        // the one-row chord steps the window like the wheel.
+        help_line(key_w, "PgUp / PgDn", "Page the list window"),
+        help_line(key_w, "Ctrl+E / Ctrl+Y", "Scroll one row"),
         help_line(key_w, "Home / End", "First/last item"),
         help_line(key_w, "Enter", "Select/Play/Open"),
         help_line(key_w, ".", "Context menu"),
@@ -312,6 +316,8 @@ pub(in crate::app) fn render_help_panel(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
 
     /// Flatten a section's styled lines to plain text so tests can assert
     /// ordering and exact key strings without comparing full terminal buffers.
@@ -403,6 +409,71 @@ mod tests {
         assert!(
             order.contains(&HelpSection::Audiobookshelf),
             "queue help must retain the selected Audiobookshelf destination below Queue: {order:?}"
+        );
+    }
+
+    /// Task 6.4 (design D6/D7): the Global key list gains the one-row
+    /// viewport chord, and its `PgUp / PgDn` row describes the page step
+    /// truthfully now that the chord pages the painted window.
+    #[test]
+    fn global_key_list_names_the_viewport_chord_and_truthful_page_step() {
+        let sections = build_help_sections(16);
+        let (_, global) = sections
+            .iter()
+            .find(|(name, _)| *name == HelpSection::Global)
+            .expect("a Global section exists");
+        let text = lines_to_text(global);
+        let page_row = text
+            .iter()
+            .find(|line| line.contains("PgUp / PgDn"))
+            .expect("the Global section lists PgUp / PgDn");
+        assert!(
+            page_row.contains("list window"),
+            "the PgUp / PgDn row must describe the page step, got {page_row:?}"
+        );
+        let chord_row = text
+            .iter()
+            .find(|line| line.contains("Ctrl+E / Ctrl+Y"))
+            .expect("the Global section lists the one-row viewport chord");
+        assert!(
+            chord_row.contains("Scroll one row"),
+            "the viewport chord row must describe the one-row step, got {chord_row:?}"
+        );
+    }
+
+    /// The painted Help frame shows the viewport chord row (a painted-frame
+    /// assertion over the key-list test above).
+    #[test]
+    fn painted_help_frame_shows_the_viewport_chord() {
+        let width = 48u16;
+        let height = 40u16;
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        let mut scroll = 0u16;
+        terminal
+            .draw(|frame| {
+                render_help_panel(
+                    frame,
+                    Some(ratatui::layout::Rect::new(0, 0, width, height)),
+                    &mut scroll,
+                    HelpDestination::EmbyLibrary,
+                );
+            })
+            .expect("a painted help frame");
+        let buf = terminal.backend().buffer();
+        let mut rendered = String::new();
+        for y in 0..buf.area.height {
+            for x in 0..buf.area.width {
+                rendered.push_str(buf[(x, y)].symbol());
+            }
+            rendered.push('\n');
+        }
+        assert!(
+            rendered.contains("Ctrl+E / Ctrl+Y"),
+            "the painted Help frame must show the viewport chord row"
+        );
+        assert!(
+            rendered.contains("Page the list window"),
+            "the painted Help frame must show the truthful page-step row"
         );
     }
 }

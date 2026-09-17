@@ -258,3 +258,51 @@ fn book_owner_is_retained_across_tab_change() {
         Some("book-1")
     );
 }
+
+/// The book list's keyboard viewport chords (task 6.2, design D6/D7):
+/// `Ctrl+y`/`Ctrl+e` step the window one display row and `PgDn` pages it by
+/// the painted height; the book-move echo reports an actual selection move
+/// only (design D8) — a window-only step claims without a shell effect.
+#[test]
+fn book_viewport_chords_step_the_book_window() {
+    let mut h = harness();
+    draw(&mut h);
+
+    let key = |code: Key, modifiers: KeyModifiers| {
+        Event::Keyboard(KeyEvent { code, modifiers })
+    };
+    // Walk the selection off the window's top edge so the chords below ride
+    // it nowhere.
+    for _ in 0..3 {
+        h.inject(key(Key::Down, KeyModifiers::NONE));
+        let _ = h.step();
+    }
+    draw(&mut h);
+
+    h.inject(key(Key::Char('y'), KeyModifiers::CONTROL));
+    let outcome = h.step();
+    assert_eq!(
+        h.model().test_abs_book_owner().carrier.scroll(),
+        1,
+        "Ctrl+y steps the book window one row"
+    );
+    assert!(
+        outcome
+            .raw_messages
+            .iter()
+            .all(|message| !matches!(message, Msg::Shell(ShellRequest::AudiobookshelfBookMove(_)))),
+        "a window-only chord step emits no selection echo"
+    );
+
+    h.inject(key(Key::Char('e'), KeyModifiers::CONTROL));
+    let _ = h.step();
+    assert_eq!(h.model().test_abs_book_owner().carrier.scroll(), 0);
+
+    h.inject(key(Key::PageDown, KeyModifiers::NONE));
+    let _ = h.step();
+    assert!(
+        h.model().test_abs_book_owner().carrier.scroll() > 1,
+        "PgDn pages the book window"
+    );
+    draw(&mut h);
+}

@@ -1,5 +1,7 @@
+use super::super::super::components::msg::TerminalObserverEvent;
+use super::super::media_list::{MediaListDisposition, MediaListSurfaceInput};
+use super::super::Msg;
 use super::{ShellRequest, TvContent};
-use crate::app::components::media_list::MediaListSurfaceInput;
 
 impl TvContent {
     pub(super) fn move_episode(&mut self, delta: i64) {
@@ -13,17 +15,18 @@ impl TvContent {
     /// Delegate one pager/jump surface input to the episode owner's own list
     /// -- its page stride and its ends, the same seam the movement chords
     /// use -- and report the applied cursor movement as the component-
-    /// resolved `TvEpisodeMove` delta; the shell never recomputes it.
-    pub(super) fn move_episode_by(&mut self, input: MediaListSurfaceInput) -> ShellRequest {
+    /// resolved `TvEpisodeMove` delta; the shell never recomputes it. A
+    /// window-only viewport step (design D8) reports none: the overlay's
+    /// unhandled-chord claim keeps the key overlay-local.
+    pub(super) fn move_episode_by(&mut self, input: MediaListSurfaceInput) -> Option<ShellRequest> {
         let from = self.episodes.cursor();
         self.episodes.delegate_operation(
             input
                 .into_operation(None)
                 .expect("resolved media-list pointer target"),
         );
-        ShellRequest::TvEpisodeMove {
-            delta: self.episodes.cursor() as i64 - from as i64,
-        }
+        let delta = self.episodes.cursor() as i64 - from as i64;
+        (delta != 0).then_some(ShellRequest::TvEpisodeMove { delta })
     }
 
     pub(super) fn move_season(&mut self, delta: i64) {
@@ -66,12 +69,6 @@ impl TvContent {
         );
     }
 
-    /// Painted item rows the Narrow pager moves per PageUp/PageDown: the
-    /// fixed-row list strides one selectable row per painted row.
-    pub(super) fn narrow_page_rows(&self) -> i64 {
-        self.painted_viewport_height().saturating_sub(1).max(1) as i64
-    }
-
     /// Move the shared owner by `item_rows` painted item rows (Narrow only)
     /// and report the resulting selection as a `context.list.items` index,
     /// the position the shell's `EmbyLibraryCursorIndex` effect persists into
@@ -80,6 +77,38 @@ impl TvContent {
         self.carrier.move_selection(item_rows);
         self.carrier.sync_viewport(self.painted_viewport_height());
         self.browse_cursor()
+    }
+
+    /// A keyboard viewport step on the series rail (design D6/D7): the
+    /// shared owner's window moves by a page (`Page`) or one display row
+    /// (`ScrollViewport`), and the selection rides only when the step would
+    /// leave it outside. The echo reports an actual selection move (design
+    /// D8): Wide reports the applied `TvMoveRows` delta, Narrow the persisted
+    /// `EmbyLibraryCursorIndex`; a window-only step is a consumed key with
+    /// no shell effect — its reached position persists through the panel's
+    /// deferred resting-scroll update.
+    pub(super) fn viewport_step_rows(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let from = self.carrier.cursor();
+        let outcome = self.carrier.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
+        if outcome.selected_target.is_some() {
+            if self.is_wide {
+                Some(Msg::Shell(ShellRequest::TvMoveRows {
+                    rows: self.carrier.cursor() as i64 - from as i64,
+                }))
+            } else {
+                Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                    index: self.browse_cursor(),
+                }))
+            }
+        } else if outcome.disposition == MediaListDisposition::Consumed {
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        } else {
+            None
+        }
     }
 
     /// Home/End select the first/last target in the shared owner (Narrow

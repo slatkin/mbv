@@ -9,7 +9,7 @@ use crate::app::components::library_panel::LibraryPanel;
 use crate::app::components::{ComponentId, Msg, ShellRequest};
 use crate::app::render::make_movie_app;
 
-use crate::app::tests::{install_test_emby, make_session};
+use crate::app::tests::{install_test_emby, make_item, make_session};
 use std::time::{Duration, Instant};
 use crate::app::tests_tick_harness::TickHarness;
 
@@ -354,4 +354,145 @@ fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
                 if intent.action == mbv_core::ctrl::PlaybackIntentAction::Stop
         )
     }));
+}
+
+
+/// The viewport chords (task 6.1, design D6/D7): `Ctrl+e`/`Ctrl+y` step the
+/// window one display row and `PgDn` pages it, at Wide and Narrow heights —
+/// the height enters from the retained painted frame (design D2). A
+/// window-only step emits no cursor echo (design D8): the chord is claimed
+/// framework-locally and the reached position reports through the panel's
+/// deferred resting-scroll update.
+#[test]
+fn browser_viewport_chords_step_the_window_at_wide_and_narrow_heights() {
+    let mut app = make_movie_app();
+    let mut items = app.libs[0].nav_stack[0].items.clone();
+    for i in 2..30 {
+        let mut item = make_item(&format!("Movie {i}"), "Movie");
+        item.id = format!("movie-{i}");
+        items.push(item);
+    }
+    app.libs[0].nav_stack[0].items = items;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    app.panel_focus = crate::app::PanelFocus::Library;
+
+    for width in [100, 70] {
+        let mut harness = {
+            let mut app = make_movie_app();
+            let mut items = app.libs[0].nav_stack[0].items.clone();
+            for i in 2..30 {
+                let mut item = make_item(&format!("Movie {i}"), "Movie");
+                item.id = format!("movie-{i}");
+                items.push(item);
+            }
+            app.libs[0].nav_stack[0].items = items;
+            app.panel_mode = crate::app::PanelMode::LibraryOnly;
+            app.panel_focus = crate::app::PanelFocus::Library;
+            app.mini_view_focus = crate::app::PanelFocus::Library;
+            TickHarness::new(app)
+        };
+        harness.model_mut().sync_mounted_surfaces();
+        let _terminal = draw(&mut harness, width, 30);
+
+        // Seed the selection mid-window so no chord below drags it.
+        {
+            let (_, key, _) = harness
+                .model()
+                .active_emby_library_owner()
+                .expect("the active library's owner has migrated");
+            harness
+                .model_mut()
+                .application
+                .get_component_mut(&ComponentId::Library)
+                .expect("Library panel mounted")
+                .as_any_mut()
+                .downcast_mut::<LibraryPanel>()
+                .expect("Library panel type")
+                .owner_mut(&key)
+                .and_then(|owner| owner.as_any_mut().downcast_mut::<BrowserOwner>())
+                .expect("browser owner installed")
+                .set_cursor_for_test(10);
+        }
+        let _ = draw(&mut harness, width, 30);
+
+        let before = browser_scroll(&harness);
+        let before_cursor = browser_cursor(&harness);
+
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Char('y'),
+            modifiers: KeyModifiers::CONTROL,
+        }));
+        let outcome = harness.step();
+        assert_eq!(
+            browser_scroll(&harness),
+            before + 1,
+            "Ctrl+y steps the window one row at width {width}"
+        );
+        assert_eq!(
+            browser_cursor(&harness),
+            before_cursor,
+            "the selection rides nowhere"
+        );
+        assert!(
+            outcome
+                .raw_messages
+                .iter()
+                .all(|message| !matches!(
+                    message,
+                    Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { .. })
+                )),
+            "a window-only chord step emits no cursor echo"
+        );
+
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::Char('e'),
+            modifiers: KeyModifiers::CONTROL,
+        }));
+        let _ = harness.step();
+        assert_eq!(browser_scroll(&harness), before, "Ctrl+e steps the window back");
+
+        harness.inject(Event::Keyboard(KeyEvent {
+            code: Key::PageDown,
+            modifiers: KeyModifiers::NONE,
+        }));
+        let _ = harness.step();
+        assert!(
+            browser_scroll(&harness) > before + 1,
+            "PgDn pages the window at width {width}"
+        );
+        // The page may drag a left-behind selection to the paged window's
+        // top (design D3's drag rule); it never leaves it outside.
+        let after_cursor = browser_cursor(&harness);
+        assert!(
+            after_cursor == before_cursor || after_cursor == browser_scroll(&harness),
+            "the page leaves the selection inside the paged window"
+        );
+        let _ = draw(&mut harness, width, 30);
+    }
+}
+
+fn browser_scroll(harness: &TickHarness) -> usize {
+    let (_, key, _) = harness.model().active_emby_library_owner().expect("owner");
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.owner(&key))
+        .and_then(|owner| owner.as_any().downcast_ref::<BrowserOwner>())
+        .expect("browser owner installed")
+        .scroll()
+}
+
+fn browser_cursor(harness: &TickHarness) -> usize {
+    let (_, key, _) = harness.model().active_emby_library_owner().expect("owner");
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.owner(&key))
+        .and_then(|owner| owner.as_any().downcast_ref::<BrowserOwner>())
+        .expect("browser owner installed")
+        .cursor()
 }

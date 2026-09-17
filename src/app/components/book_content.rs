@@ -13,7 +13,8 @@ use super::library_panel::hero::hero_content_queue;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListRow, MediaListSurfaceInput, MediaSemanticState,
+    MediaKind, MediaListCarrier, MediaListDisposition, MediaListRow, MediaListSurfaceInput,
+    MediaSemanticState,
 };
 use super::msg::{
     AudiobookshelfBookIntent, AudiobookshelfBookMove, BookChapterTarget, LeafKeyResult, Msg,
@@ -248,6 +249,38 @@ impl BookContent {
         );
         self.sync_book_from_owner();
         self.book_request()
+    }
+
+    /// A keyboard viewport step on the book list (design D6/D7): the window
+    /// moves by a page or one display row, clamped, and the book-move echo
+    /// reports a selection move only (design D8) — a window-only step is a
+    /// consumed key with no shell effect, its reached position reported
+    /// through the panel's deferred resting-scroll update.
+    fn move_book_viewport(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
+        let outcome = self.carrier.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
+        if outcome.selected_target.is_some() {
+            self.sync_book_from_owner();
+            self.book_request()
+        } else if outcome.disposition == MediaListDisposition::Consumed {
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        } else {
+            None
+        }
+    }
+
+    /// A keyboard viewport step on the focused chapter list (design D6/D7):
+    /// the window is component-local and reports no echo; an unhandled step
+    /// (nothing painted, a content end) falls through.
+    fn move_chapter_viewport(&mut self, input: MediaListSurfaceInput) {
+        self.chapter_list.delegate_operation(
+            input
+                .into_operation(None)
+                .expect("resolved media-list pointer target"),
+        );
     }
 
     /// Mirror the book owner's stable selection into the projected snapshot,
@@ -619,9 +652,38 @@ impl LibraryContentOwner for BookContent {
             }
             Key::Up | Key::Char('k') => self.move_book(MediaListSurfaceInput::Move(-1)),
             Key::Down | Key::Char('j') => self.move_book(MediaListSurfaceInput::Move(1)),
-            Key::PageUp if !self.chapter_focused => self.move_book(MediaListSurfaceInput::Page(-1)),
+            Key::PageUp if !self.chapter_focused => {
+                self.move_book_viewport(MediaListSurfaceInput::Page(-1))
+            }
             Key::PageDown if !self.chapter_focused => {
-                self.move_book(MediaListSurfaceInput::Page(1))
+                self.move_book_viewport(MediaListSurfaceInput::Page(1))
+            }
+            // The focused chapter list's viewport chords (design D6/D7).
+            Key::PageUp if self.chapter_focused => {
+                self.move_chapter_viewport(MediaListSurfaceInput::Page(-1));
+                None
+            }
+            Key::PageDown if self.chapter_focused => {
+                self.move_chapter_viewport(MediaListSurfaceInput::Page(1));
+                None
+            }
+            // The one-row viewport chord (design D7): the focused chapter
+            // list when it holds focus, otherwise the book list.
+            Key::Char('e') if key.modifiers == KeyModifiers::CONTROL => {
+                if self.chapter_focused {
+                    self.move_chapter_viewport(MediaListSurfaceInput::ScrollViewport(-1));
+                    None
+                } else {
+                    self.move_book_viewport(MediaListSurfaceInput::ScrollViewport(-1))
+                }
+            }
+            Key::Char('y') if key.modifiers == KeyModifiers::CONTROL => {
+                if self.chapter_focused {
+                    self.move_chapter_viewport(MediaListSurfaceInput::ScrollViewport(1));
+                    None
+                } else {
+                    self.move_book_viewport(MediaListSurfaceInput::ScrollViewport(1))
+                }
             }
             Key::Home if !self.chapter_focused => {
                 self.select_bucket_edge(false);

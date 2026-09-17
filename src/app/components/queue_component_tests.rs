@@ -344,21 +344,32 @@ fn queue_component_page_up_from_bottom_reaches_top() {
         PlaybackState::default(),
     );
     component.set_focused(true);
-    // The page stride derives from the framed content area the panel retains
-    // from its own view (task 3.1): a 24-row placement leaves 18 body rows,
-    // so five PageUps from the bottom cursor reach the top.
+    // The page step (design D6) is the painted row-flow height, resolved
+    // from the framed content rectangle the view retains (design D2): from
+    // the bottom-seeded cursor one PageUp pages the window to the top and
+    // drags the selection to the nearest row it shows.
     let mut terminal = Terminal::new(TestBackend::new(40, 24)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    for _ in 0..5 {
-        component.on(&Event::Keyboard(key(Key::PageUp)));
-        terminal
-            .draw(|frame| component.view(frame, frame.area()))
-            .unwrap();
-    }
-    assert_eq!(component.test_cursor(), 0);
+    component.on(&Event::Keyboard(key(Key::PageUp)));
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    assert_eq!(
+        component.test_scroll(),
+        0,
+        "the page step pages the window to the top"
+    );
+    assert_eq!(
+        component.test_cursor(),
+        17,
+        "the drag pulls the selection to the nearest row the paged window shows"
+    );
+    // A further page-up at the content end is a boundary no-op.
+    component.on(&Event::Keyboard(key(Key::PageUp)));
     assert_eq!(component.test_scroll(), 0);
+    assert_eq!(component.test_cursor(), 17);
 }
 
 #[test]
@@ -477,11 +488,29 @@ fn queue_movement_uses_single_row_stride_and_follows_focus() {
         Some(Msg::Queue(QueueRequest::Cursor { .. }))
     ));
     assert_eq!(component.test_cursor(), 1);
+    // PageDown is the page step (design D6): the window pages while a
+    // mid-window selection rides nowhere, so no cursor echo reports.
+    let mut terminal = Terminal::new(TestBackend::new(40, 24)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    // The selection sits on the window's top edge, so the page step drags it
+    // to the nearest row the paged window shows and the cursor echo reports;
+    // 30 rows over an 18-row page clamp the window at the content end.
     assert!(matches!(
         component.on(&Event::Keyboard(key(Key::PageDown))),
         Some(Msg::Queue(QueueRequest::Cursor { .. }))
     ));
-    assert_eq!(component.test_cursor(), 2);
+    assert_eq!(component.test_cursor(), 12);
+    assert_eq!(component.test_scroll(), 12);
+    // A further page at the content end is a boundary no-op: claimed by the
+    // component's nav-key contract, reporting no selection move.
+    assert!(matches!(
+        component.on(&Event::Keyboard(key(Key::PageDown))),
+        Some(Msg::TerminalEvent(_))
+    ));
+    assert_eq!(component.test_cursor(), 12);
+    assert_eq!(component.test_scroll(), 12);
 }
 
 #[test]
@@ -692,4 +721,47 @@ fn queue_footer_hides_scope_pills_when_disconnected() {
     let mut component = footer_component(None);
     assert_eq!(component.test_scope_pill_areas(), (None, None));
     assert_eq!(component.on(&click(37, 10)), None);
+}
+
+/// The Queue's one-row viewport chords (task 6.2, design D7): `Ctrl+y`/
+/// `Ctrl+e` step the window one display row; the selection rides only at
+/// the window's edge and a window-only step claims without a cursor echo.
+#[test]
+fn queue_viewport_ctrl_chords_step_the_window() {
+    let mut component = QueueComponent::new();
+    component.set_content(
+        long_queue(),
+        QueueCursorUpdate::Set(0),
+        QueueScope::Local,
+        PlaybackState::default(),
+    );
+    component.set_focused(true);
+    for _ in 0..5 {
+        component.on(&Event::Keyboard(key(Key::Down)));
+    }
+    let mut terminal = Terminal::new(TestBackend::new(40, 24)).unwrap();
+    terminal
+        .draw(|frame| component.view(frame, frame.area()))
+        .unwrap();
+    let before_cursor = component.test_cursor();
+
+    assert!(matches!(
+        component.on(&Event::Keyboard(chord(
+            Key::Char('y'),
+            KeyModifiers::CONTROL
+        ))),
+        Some(Msg::TerminalEvent(_))
+    ));
+    assert_eq!(component.test_scroll(), 1);
+    assert_eq!(component.test_cursor(), before_cursor);
+
+    assert!(matches!(
+        component.on(&Event::Keyboard(chord(
+            Key::Char('e'),
+            KeyModifiers::CONTROL
+        ))),
+        Some(Msg::TerminalEvent(_))
+    ));
+    assert_eq!(component.test_scroll(), 0);
+    assert_eq!(component.test_cursor(), before_cursor);
 }

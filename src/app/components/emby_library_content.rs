@@ -31,8 +31,8 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::library_panel::LibraryKind;
 use super::media_list::{
-    letter_grouped_rows, MediaKind, MediaListCarrier, MediaListOperation, MediaListRow,
-    MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, RowIntent,
+    letter_grouped_rows, MediaKind, MediaListCarrier, MediaListDisposition, MediaListOperation,
+    MediaListRow, MediaListSurfaceInput, MediaListTrailing, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
 use crate::app::render::{effective_sort_str, LetterFilter};
@@ -229,6 +229,24 @@ impl EmbyLibraryContent {
 
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
+    }
+
+    /// A keyboard viewport step's report (design D8): the cursor index
+    /// reports only when the step dragged the selection; a window-only step
+    /// is a consumed key with no shell echo — its reached position reports
+    /// through the panel's deferred resting-scroll update, and pagination
+    /// fires at the window's reach there.
+    fn viewport_step(&mut self, operation: MediaListOperation<String>) -> Option<Msg> {
+        let outcome = self.carrier.delegate_operation(operation);
+        if outcome.selected_target.is_some() {
+            Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
+                index: self.cursor(),
+            }))
+        } else if outcome.disposition == MediaListDisposition::Consumed {
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        } else {
+            None
+        }
     }
 
     /// The window's last visible display row resolved to its `items` index
@@ -467,17 +485,19 @@ impl EmbyLibraryContent {
                 }));
             }
             Key::PageUp => {
-                self.carrier
-                    .delegate_operation(MediaListOperation::Page(-1));
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                }));
+                return self.viewport_step(MediaListOperation::ScrollViewportPage(-1));
             }
             Key::PageDown => {
-                self.carrier.delegate_operation(MediaListOperation::Page(1));
-                return Some(Msg::Shell(ShellRequest::EmbyLibraryCursorIndex {
-                    index: self.cursor(),
-                }));
+                return self.viewport_step(MediaListOperation::ScrollViewportPage(1));
+            }
+            // The one-row viewport chord (design D6/D7): the window steps
+            // one display row and the selection rides only when it would
+            // leave the window.
+            Key::Char('e') if ctrl => {
+                return self.viewport_step(MediaListOperation::ScrollViewport(-1));
+            }
+            Key::Char('y') if ctrl => {
+                return self.viewport_step(MediaListOperation::ScrollViewport(1));
             }
             Key::Home => {
                 self.carrier.delegate_operation(MediaListOperation::First);

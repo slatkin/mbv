@@ -478,7 +478,10 @@ fn music_owner_reanchor_lands_regardless_of_prior_local_move() {
 #[test]
 fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
     let mut model = Model::new(make_music_group_app());
-    for index in 2..8 {
+    // Enough rows that a painted page actually has somewhere to go (design
+    // D6: the page step is the painted height; with no retained frame the
+    // step is an unhandled no-op).
+    for index in 2..60 {
         let mut album = make_item(&format!("Album {index}"), "MusicAlbum");
         album.id = format!("album-{index}");
         album.artist = "Alpha".into();
@@ -504,19 +507,23 @@ fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
         "the shell must apply the emitted cursor request to the resting position"
     );
 
+    // The page step (design D6) resolves its height from the retained
+    // painted frame, so paint before paging.
+    let mut terminal = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    terminal
+        .draw(|frame| model.draw_frame(frame, false, false))
+        .unwrap();
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
         code: Key::PageDown,
         modifiers: KeyModifiers::NONE,
     });
+    let Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind })) = message else {
+        panic!("expected MusicAlbumCursor, got {message:?}");
+    };
+    assert_eq!(kind, AlbumCursorKind::Page);
     assert!(
-        matches!(
-            message,
-            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                kind: AlbumCursorKind::Page,
-                ..
-            }))
-        ),
-        "PageDown must move by the shared carrier's page stride: {message:?}"
+        target > 1,
+        "the page step dragged the selection a page down"
     );
 }
 
