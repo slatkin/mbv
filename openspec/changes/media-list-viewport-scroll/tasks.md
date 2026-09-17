@@ -93,15 +93,15 @@ follow-up units; coordinate before editing the same file.
 
 ## 6. Keyboard chords (D6, D7)
 
-- [ ] 6.1 Add the one-row viewport chord (`Ctrl+e` / `Ctrl+y`) and the page step on `PgUp`/`PgDn` to the
+- [x] 6.1 Add the one-row viewport chord (`Ctrl+e` / `Ctrl+y`) and the page step on `PgUp`/`PgDn` to the
   Emby library, Music album and track, and TV lists.
   (Verify: key tests per surface at wide and narrow heights.)
-- [ ] 6.2 Add the same chords to the Queue, Home, Feeds, podcast, book, and Inline Search lists.
+- [x] 6.2 Add the same chords to the Queue, Home, Feeds, podcast, book, and Inline Search lists.
   (Verify: key tests per surface.)
-- [ ] 6.3 Admit the two Ctrl chords in Feeds ahead of its blanket Ctrl/Alt early-return, leaving every
+- [x] 6.3 Admit the two Ctrl chords in Feeds ahead of its blanket Ctrl/Alt early-return, leaving every
   other Ctrl/Alt chord rejected.
   (Verify: a Feeds key test for both chords and for a still-rejected Ctrl chord.)
-- [ ] 6.4 Add the viewport chord to the Help overlay's key list and confirm its `PgUp / PgDn` row now
+- [x] 6.4 Add the viewport chord to the Help overlay's key list and confirm its `PgUp / PgDn` row now
   describes the page step truthfully.
   (Verify: the Help key-list test and a painted-frame assertion.)
 
