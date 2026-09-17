@@ -1,7 +1,7 @@
 ## 1. Wire normalisation (mbv-core)
 
-- [ ] 1.1 Add `description` to `AudiobookshelfDownloadedEpisode` and normalise `published_at` to unix seconds at the wire boundary: accept Audiobookshelf's epoch-millisecond number (its actual shape for downloaded episodes), epoch-second numbers and strings, and ISO-8601 or RFC 2822 text; a missing or unreadable value is `None` and groups as `Unknown date`. Verify with unit tests covering each accepted form, the missing case, and the unreadable case (`cargo nextest run -p mbv-core`).
-- [ ] 1.2 Keep exactly the two existing episode sources — the bounded page fetch of the library's items (shows only) and the per-show expanded-item fetch — and add fixtures for their real shapes: a show page, an expanded show carrying episodes and their descriptions, a show with no downloaded episodes, and a malformed response. Verify `audiobookshelf_catalog_tests.rs` decodes each fixture (`cargo nextest run -p mbv-core`).
+- [x] 1.1 Add `description` to `AudiobookshelfDownloadedEpisode` and normalise `published_at` to unix seconds at the wire boundary: accept Audiobookshelf's epoch-millisecond number (its actual shape for downloaded episodes), epoch-second numbers and strings, and ISO-8601 or RFC 2822 text; a missing or unreadable value is `None` and groups as `Unknown date`. Verify with unit tests covering each accepted form, the missing case, and the unreadable case (`cargo nextest run -p mbv-core`).
+- [x] 1.2 Keep exactly the two existing episode sources — the bounded page fetch of the library's items (shows only) and the per-show expanded-item fetch — and add fixtures for their real shapes: a show page, an expanded show carrying episodes and their descriptions, a show with no downloaded episodes, and a malformed response. Verify `audiobookshelf_catalog_tests.rs` decodes each fixture (`cargo nextest run -p mbv-core`).
 
 ## 2. Browse state restructure
 
