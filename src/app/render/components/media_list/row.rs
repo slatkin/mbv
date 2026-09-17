@@ -86,6 +86,9 @@ pub(in crate::app) fn media_list_row<Target>(
                 // the ordinary role. Active rows retain resume progress inline
                 // but do not receive the play marker. Both states append their
                 // progress percentage to the trailing text in the same style.
+                // A now-playing row never carries a secondary title (Home, the
+                // only split-row producer, emits `Ordinary` rows), so the
+                // split-row palette below never applies to one.
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
                 MediaSemanticState::Played => (palette::TEXT_MUTED, None, None),
                 MediaSemanticState::Active { progress } => (
@@ -148,8 +151,10 @@ pub(in crate::app) fn media_list_row<Target>(
             // aqua role, with one separating space. The mute follows the
             // title role, not the position: a played split row mutes the
             // item title while the context keeps gold; no other semantic
-            // state moves the split-row palette. Single-part rows keep the
-            // ordinary title role for their semantic state. (`parts` feeds
+            // state moves the split-row palette (and a `NowPlaying` row never
+            // carries a secondary title, so it cannot reach this branch).
+            // Single-part rows keep the ordinary title role for their
+            // semantic state. (`parts` feeds
             // the marquee path, which only paints selected rows; unselected
             // split rows paint the same roles via the truncation branch
             // below.)

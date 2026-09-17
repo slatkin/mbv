@@ -554,39 +554,43 @@ fn home_owner_cursor_survives_a_content_push() {
     );
 }
 
-/// The (x, y) of a needle's first character inside the one buffer row that
-/// paints `context title` as contiguous text — Home's split-row shape, which
-/// no other surface (hero header, queue) paints on a single line.
-fn split_row_cells(
+/// The list-row cells for Home's two fixture rows, found as a pair: the
+/// split row's `(context_x, title_x, y)` and the single-part row's `(x, y)`,
+/// where the single-part row sits on the buffer line directly below the
+/// split row (the list's fixed-row flow, with no `Heading`/`Spacer` between
+/// them). The cursor-following Hero header can paint either title on its own
+/// line, so a lone whole-frame match proves nothing about a row — only the
+/// adjacent pair identifies the list rows the palette claims are about.
+fn home_list_row_cells(
     terminal: &Terminal<TestBackend>,
     context: &str,
-    title: &str,
-) -> (u16, u16, u16) {
+    split_title: &str,
+    single_title: &str,
+) -> ((u16, u16, u16), (u16, u16)) {
     let buf = terminal.backend().buffer();
-    let whole = format!("{context} {title}");
-    for y in 0..buf.area().height {
-        let row: String = (0..buf.area().width)
-            .map(|x| buf[(x, y)].symbol())
-            .collect();
-        if let Some(at) = row.find(&whole) {
-            return (at as u16, (at + context.len() + 1) as u16, y);
+    let whole = format!("{context} {split_title}");
+    let needle_ys = |needle: &str| -> Vec<(u16, usize)> {
+        (0..buf.area().height)
+            .filter_map(|y| {
+                let row: String = (0..buf.area().width)
+                    .map(|x| buf[(x, y)].symbol())
+                    .collect();
+                row.find(needle).map(|at| (y, at))
+            })
+            .collect()
+    };
+    let single_hits = needle_ys(single_title);
+    for (y, at) in needle_ys(&whole) {
+        if let Some(&(_, single_at)) = single_hits.iter().find(|&&(sy, _)| sy == y + 1) {
+            return (
+                (at as u16, (at + context.len() + 1) as u16, y),
+                (single_at as u16, y + 1),
+            );
         }
     }
-    panic!("split row text {whole:?} not painted");
-}
-
-/// The (x, y) of a single-part row title's first character.
-fn single_part_row_cell(terminal: &Terminal<TestBackend>, title: &str) -> (u16, u16) {
-    let buf = terminal.backend().buffer();
-    for y in 0..buf.area().height {
-        let row: String = (0..buf.area().width)
-            .map(|x| buf[(x, y)].symbol())
-            .collect();
-        if let Some(at) = row.find(title) {
-            return (at as u16, y);
-        }
-    }
-    panic!("single-part row text {title:?} not painted");
+    panic!(
+        "adjacent list rows for split {whole:?} and single-part {single_title:?} not painted"
+    );
 }
 
 fn assert_home_palette_painted(terminal: &Terminal<TestBackend>, label: &str) {
@@ -596,7 +600,8 @@ fn assert_home_palette_painted(terminal: &Terminal<TestBackend>, label: &str) {
     // A split row (episode → series context + item title): the context name
     // paints the playback-context gold role and the item title the
     // playback-title aqua role.
-    let (ctx_x, title_x, row_y) = split_row_cells(terminal, "Severance", "Broken Bird");
+    let ((ctx_x, title_x, row_y), (single_x, single_y)) =
+        home_list_row_cells(terminal, "Severance", "Broken Bird", "The Long Goodbye");
     assert_eq!(
         buf[(ctx_x, row_y)].fg,
         palette::PLAYBACK_CONTEXT_FG,
@@ -608,9 +613,8 @@ fn assert_home_palette_painted(terminal: &Terminal<TestBackend>, label: &str) {
         "{label}: split-row item title must paint the playback-title role"
     );
     // A single-part row (movie, no container) keeps the ordinary title role.
-    let (x, y) = single_part_row_cell(terminal, "The Long Goodbye");
     assert_eq!(
-        buf[(x, y)].fg,
+        buf[(single_x, single_y)].fg,
         palette::TEXT_EMPHASIS,
         "{label}: single-part row must keep the ordinary title role"
     );
