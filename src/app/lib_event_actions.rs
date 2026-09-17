@@ -1,8 +1,8 @@
 use super::types_events::NavigateLanding;
 use super::ui_util::sort_audio_tracks;
 use super::{
-    notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
-    QueueScope,
+    notify_actions::ToastSeverity, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
+    FeedHomeVideoState, LibEvent, QueueScope,
 };
 use mbv_core::api::EmbyItem;
 
@@ -501,6 +501,21 @@ impl App {
                 // delivers a one-shot enter request at the next sync — wide
                 // only, narrow stays unfocused).
                 self.save_default_library_position(lib_idx);
+                // A `NavigateLanding::Album` landing defers its tab switch to
+                // this drain (D4): the landed stack has replaced the nav
+                // stack and the saved position above, so the switch's
+                // activation compares equal and never restores. Consume it
+                // only when this landing is the pending navigation's library
+                // (an Inline Search activation elsewhere must not switch tabs).
+                if let Some(idx) = self.pending_navigate_tab_switch.take() {
+                    if self
+                        .libs
+                        .get(idx)
+                        .is_some_and(|lib| lib.library.id == library_id)
+                    {
+                        self.set_library_tab(idx + 1);
+                    }
+                }
             }
             LibEvent::AllItemsPrefetched {
                 lib_idx,
@@ -611,10 +626,56 @@ impl App {
                             self.set_library_tab(lib_idx + 1);
                         }
                     }
-                    // Unreachable until tasks 2.2/2.3 wire emission of these variants.
-                    NavigateLanding::Series { .. } => {}
-                    // Unreachable until tasks 2.2/2.3 wire emission of these variants.
-                    NavigateLanding::Album { .. } => {}
+                    NavigateLanding::Series { reveal } => {
+                        if self.libs.get(lib_idx).is_some()
+                            && self.activate_searched_series(lib_idx, &reveal)
+                        {
+                            // D4: the landed root level (pill + cursor) is the
+                            // saved position from now on; the fence in
+                            // `handle_restored_library_position` then discards
+                            // any stale pre-navigation restore.
+                            self.save_default_library_position(lib_idx);
+                            if switch_tab {
+                                self.set_library_tab(lib_idx + 1);
+                            }
+                        } else {
+                            // Miss (absent from the level corpus, unloaded
+                            // library): flash the library-error path and leave
+                            // the active tab unchanged (task 4.2's semantics).
+                            self.flash_error(format!(
+                                "Could not land on '{}' in its library",
+                                reveal.name
+                            ));
+                        }
+                    }
+                    NavigateLanding::Album { reveal, ancestors } => {
+                        let display_label = ancestors
+                            .iter()
+                            .map(|part| part.name.clone())
+                            .chain(std::iter::once(reveal.display_name()))
+                            .collect::<Vec<_>>()
+                            .join(" / ");
+                        let entry = AlbumSearchEntry {
+                            album: *reveal,
+                            ancestors,
+                            search_text: display_label.clone(),
+                            display_label,
+                        };
+                        // Fully async, exactly like Inline Search's album
+                        // activation: the nav stack is replaced (and the
+                        // landed position saved) on the
+                        // `RecursiveAlbumActivated` drain, which then consumes
+                        // `pending_navigate_tab_switch` so the tab switch
+                        // never compares the landed stack against the stale
+                        // saved position (D4).
+                        if self.activate_recursive_album(lib_idx, entry) {
+                            if switch_tab {
+                                self.pending_navigate_tab_switch = Some(lib_idx);
+                            }
+                        } else {
+                            self.flash_error("Could not start the album navigation".to_string());
+                        }
+                    }
                 }
             }
             LibEvent::PlaylistsLoaded(items) => {
@@ -670,6 +731,10 @@ impl App {
             | LibEvent::AudiobookshelfLatestRebuilt(_)
             | LibEvent::FeedsLatestRebuilt(_) => {}
             LibEvent::Error(e) => {
+                // A failed per-kind album activation reports through here;
+                // drop the deferred tab switch so it can never fire on a
+                // later, unrelated album activation.
+                self.pending_navigate_tab_switch = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
         }

@@ -1,4 +1,4 @@
-use super::types_browse::{AlbumSearchEntry, BrowseLevel};
+use super::types_browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
 use super::types_feed::FeedHomeVideoGroup;
 use super::types_playback::{HomeContent, HomeLatestSource};
 use mbv_core::api::EmbyItem;
@@ -6,30 +6,27 @@ use mbv_core::playback_queue::QueueItem;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
 /// change `per-destination-item-navigation`): the Movie/generic arm keeps the
-/// built ancestor-chain nav stack, while the show/album arms will carry the
-/// single resolved reveal item once tasks 2.2/2.3 wire the emission. Each
-/// kind is an explicit variant so every dispatch site resolves the landing
-/// exhaustively.
+/// built ancestor-chain nav stack, the show arm carries the resolved reveal
+/// Series, and the album arm carries the resolved reveal album plus its
+/// folder chain between the library root and it (what the recursive album
+/// activation consumes). Each kind is an explicit variant so every dispatch
+/// site resolves the landing exhaustively.
 pub(super) enum NavigateLanding {
     /// Movie/generic video: the ancestor-chain nav stack with the cursor
     /// resting on the item (the pre-change shape, kept verbatim).
     Chain { nav_stack: Vec<BrowseLevel> },
     /// TV: land the owning Series via the searched-series activation flow
-    /// (task 2.2). `reveal` is the full series item.
-    /// INTERIM (U1 correction): production does not construct this variant
-    /// until 2.2/2.3 flip emission — only tests construct it, so the gate
-    /// masks the variant + its unconsumed `reveal` field in non-test builds
-    /// until then.
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// (task 2.2). `reveal` is the full series item, resolved and
+    /// type-verified by the worker (design D1).
     Series { reveal: Box<EmbyItem> },
     /// Music: land the owning album via recursive album activation
-    /// (task 2.3). `reveal` is the full album item.
-    /// INTERIM (U1 correction): production does not construct this variant
-    /// until 2.2/2.3 flip emission — only tests construct it, so the gate
-    /// masks the variant + its unconsumed `reveal` field in non-test builds
-    /// until then.
-    #[cfg_attr(not(test), allow(dead_code))]
-    Album { reveal: Box<EmbyItem> },
+    /// (task 2.3). `reveal` is the full album item; `ancestors` is the
+    /// root→album folder chain the activation walks (same shape the album
+    /// index builds), empty for a flat album-at-root library.
+    Album {
+        reveal: Box<EmbyItem>,
+        ancestors: Vec<AlbumPathPart>,
+    },
 }
 
 pub(super) enum LibEvent {

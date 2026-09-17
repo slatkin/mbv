@@ -6,10 +6,9 @@ use mbv_core::api::{EmbyClient, EmbyItem};
 
 /// D1 (change `per-destination-item-navigation`): the resolved reveal target.
 /// `Chain` keeps the built ancestor-chain nav stack (Movie/generic);
-/// `Series`/`Album` name the single reveal item that the App will land per
-/// kind at drain time once tasks 2.2/2.3 wire the emission. Until then the
-/// resolved kind gates only the 4.2 failure semantics; every kind emits
-/// `Chain` (see `landing_for_target`).
+/// `Series`/`Album` name the single reveal item the App lands per kind at
+/// drain time. An unresolvable kind is a resolve failure (task 4.2), never a
+/// silent misroute.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum RevealTarget {
     Chain,
@@ -80,8 +79,9 @@ fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, Str
 
 /// D1+D2: resolve the reveal target for `item` and build the landing payload
 /// the App applies at drain time. Every failure mode (no ancestors,
-/// unresolvable kind, fetch error, deleted item) returns the error that
-/// `LibEvent::Error` flashes, leaving the active tab unchanged (task 4.2).
+/// unresolvable kind, fetch error, deleted item, unexpected fetched item
+/// type) returns the error that `LibEvent::Error` flashes, leaving the
+/// active tab unchanged (task 4.2).
 fn build_navigate_landing(
     client: &EmbyClient,
     item_id: &str,
@@ -105,25 +105,73 @@ fn build_navigate_landing(
     }
 }
 
-/// INTERIM (U1 correction): until tasks 2.2/2.3 wire emission of the
-/// per-kind variants, EVERY resolved kind emits `Chain` — the pre-change
-/// full ancestor-chain build for the original item id — so each kind keeps
-/// today's reachable landing. The resolution above still runs for its 4.2
-/// failure semantics (an unresolvable kind errors instead of silently
-/// chain-landing).
-///
-/// U2 rule (design D1): when 2.2/2.3 wire the variants, the landing kind is
-/// chosen from the RESOLVED `RevealTarget` kind, and an unexpected fetched
-/// item type is a resolve failure (`LibEvent::Error`), never a silent
-/// misroute.
+/// D1+D2: the landing kind is chosen from the RESOLVED `RevealTarget` kind.
+/// An unexpected fetched item type (e.g. a `series_id` resolving to a
+/// non-Series record) is a resolve failure (`LibEvent::Error`), never a
+/// silent misroute.
 fn landing_for_target(
     client: &EmbyClient,
     item: &EmbyItem,
-    _reveal: RevealTarget,
-    lib_id: &str,
+    reveal: RevealTarget,
+    _lib_id: &str,
 ) -> Result<NavigateLanding, String> {
-    build_chain_nav_stack(client, item, lib_id)
-        .map(|nav_stack| NavigateLanding::Chain { nav_stack })
+    match reveal {
+        RevealTarget::Chain => build_chain_nav_stack(client, item, _lib_id)
+            .map(|nav_stack| NavigateLanding::Chain { nav_stack }),
+        RevealTarget::Series(series_id) => {
+            // The item's own record already in hand doubles as the reveal
+            // item when it IS the series; otherwise fetch it and verify the
+            // type before handing it to the App.
+            let series = if item.id == series_id && item.item_type == "Series" {
+                item.clone()
+            } else {
+                fetch_reveal_item(client, &series_id)?
+            };
+            if series.item_type != "Series" {
+                return Err(format!("Item {series_id} is not a Series"));
+            }
+            Ok(NavigateLanding::Series {
+                reveal: Box::new(series),
+            })
+        }
+        RevealTarget::Album(album_id) => {
+            let album = if item.id == album_id && (item.item_type == "MusicAlbum" || item.is_folder)
+            {
+                item.clone()
+            } else {
+                fetch_reveal_item(client, &album_id)?
+            };
+            // Unmatched album folders come back as plain "Folder" records
+            // (the album index builds its terminal level by `is_folder` for
+            // the same reason), so a folder record is a valid album reveal.
+            if album.item_type != "MusicAlbum" && !album.is_folder {
+                return Err(format!("Item {album_id} is not an album"));
+            }
+            // The recursive activation consumes the album-index entry shape:
+            // the album plus the folder chain between the library root and
+            // it. `get_ancestors` is nearest→root; drop the trailing library
+            // folder + AggregateFolder (same rule as `build_chain_nav_stack`)
+            // and reverse what's left to root→album.
+            let ancestors = client.get_ancestors(&album.id)?;
+            let inside = if ancestors.len() >= 2 {
+                &ancestors[..ancestors.len() - 2]
+            } else {
+                &ancestors[..0]
+            };
+            let ancestors = inside
+                .iter()
+                .rev()
+                .map(|a| AlbumPathPart {
+                    id: a.id.clone(),
+                    name: a.display_name(),
+                })
+                .collect();
+            Ok(NavigateLanding::Album {
+                reveal: Box::new(album),
+                ancestors,
+            })
+        }
+    }
 }
 
 /// Movie/generic ancestor-chain rebuild (D2: the Chain arm keeps this

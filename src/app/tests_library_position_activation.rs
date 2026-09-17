@@ -220,7 +220,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
         }],
         ..Default::default()
     };
-    app.replace_saved_library_position(0, position);
+    app.replace_saved_library_position(0, position.clone());
     app.panel_focus = PanelFocus::Queue;
     app.tab = TabSelection::Home;
 
@@ -255,6 +255,65 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
         "the navigated cursor must survive the tab switch"
     );
     assert!(!app.libs[0].nav_stack[0].loading);
+
+    // Task 4.1 (`per-destination-item-navigation`): the landed state became
+    // the saved Library position, so a stale in-flight `RestoreLibraryPosition`
+    // captured for the PRE-navigation state is discarded — the
+    // requested-position fence in `handle_restored_library_position` no
+    // longer matches.
+    let saved = app
+        .saved_library_position(0)
+        .expect("the landing replaces the saved position");
+    assert_ne!(
+        saved, position,
+        "the pre-navigation position was replaced by the landed state"
+    );
+    assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("id3"));
+    app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+        lib_idx: 0,
+        requested_position: position,
+        position: crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Stale restore".into(),
+                focused_item_id: Some("id1".into()),
+                cursor_index: 1,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
+            }],
+            ..Default::default()
+        },
+        nav_stack: vec![BrowseLevel {
+            parent_id: "lib-movies".into(),
+            title: "Stale restore".into(),
+            items: make_items(2),
+            total_count: 2,
+            resting: crate::app::types_browse::BrowseResting::new(1, 0),
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        }],
+    });
+
+    assert_eq!(
+        app.libs[0].nav_stack[0].resting().cursor(),
+        3,
+        "the stale restore must not clobber the landed state"
+    );
+    assert_eq!(
+        app.libs[0].nav_stack[0].items.len(),
+        5,
+        "the navigated stack, not the restored one, is in place"
+    );
 }
 
 #[test]

@@ -175,6 +175,12 @@ pub struct App {
     pub(super) list_pane_width: Option<u16>,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
+    /// Deferred tab switch for a `NavigateLanding::Album` landing (design D4
+    /// of change `per-destination-item-navigation`): set when the recursive
+    /// album activation spawns, consumed on its `RecursiveAlbumActivated`
+    /// drain once the landed nav stack has replaced the saved position, so
+    /// the switch's activation never restores a stale position.
+    pub(super) pending_navigate_tab_switch: Option<usize>,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,

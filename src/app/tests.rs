@@ -190,6 +190,7 @@ pub(crate) fn make_app_stub() -> App {
         panel_mode: PanelMode::default(),
         mini_view_focus: PanelFocus::Queue,
         library_tab_pending: 0,
+        pending_navigate_tab_switch: None,
         last_played_item_id: None,
         last_played_completed: false,
         card_image_states: std::collections::HashMap::new(),
