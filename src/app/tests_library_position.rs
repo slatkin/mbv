@@ -60,10 +60,11 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
 
     assert_eq!(level.resting().cursor(), 3);
     // Design D9: the restore is cursor-only — the saved position no longer
-    // derives a bottom-anchored window from the item index; the boundary
-    // seeds the window at the top and the visible window derives from the
-    // selection's display row at paint time.
-    assert_eq!(level.resting().scroll(), 0);
+    // derives a bottom-anchored window from the item index, but the boundary
+    // derives the window from the selection's display row in the flat level
+    // flow (its index, clamped), so a deep restore parks the window ON the
+    // selection — never back at 0, which no later writer would raise.
+    assert_eq!(level.resting().scroll(), 3);
     assert_eq!(level.item_types.as_deref(), Some("Movie"));
     assert!(!level.loading);
     assert!(level.all_items.is_none());
@@ -72,7 +73,7 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
     let level = BrowseLevel::from_position_level(&saved, make_items(5), 5);
 
     assert_eq!(level.resting().cursor(), 4);
-    assert_eq!(level.resting().scroll(), 0);
+    assert_eq!(level.resting().scroll(), 4);
 }
 
 #[test]

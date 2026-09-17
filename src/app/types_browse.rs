@@ -97,16 +97,23 @@ impl BrowseLevel {
             .and_then(|id| items.iter().position(|item| &item.id == id))
             .unwrap_or_else(|| saved.cursor_index.min(items.len().saturating_sub(1)));
         // The on-disk position is cursor-only (design D9): the restore seeds
-        // the selection and parks the window at the top; the visible window
-        // derives from the selection's display row once the flow exists (the
-        // paint-time clamp), and the boundary's explicit seed (the shell's
+        // the selection and derives the window from its display row at this
+        // boundary. This level's row flow is the flat item list (grouping is
+        // `None` here), so the selection's display row is its index; parking
+        // the window on that row (clamped to the flow) keeps the selection
+        // visible at any painted height and gives the window-relative steps
+        // a live base — `follow_cursor` only lowers the window, so a window
+        // left at 0 under a deep selection would never come down. No
+        // layout-derived height enters this: it is a row-flow offset, not a
+        // measurement. The boundary's explicit seed (the shell's
         // `apply_position`/re-anchor) is the only writer after that.
+        let scroll = cursor.min(items.len().saturating_sub(1));
         Self {
             parent_id: saved.parent_id.clone(),
             title: saved.title.clone(),
             items,
             total_count,
-            resting: BrowseResting::new(cursor, 0),
+            resting: BrowseResting::new(cursor, scroll),
             item_types: saved.item_types.clone(),
             unplayed_only: saved.unplayed_only,
             sort_by: saved.sort_by.clone(),

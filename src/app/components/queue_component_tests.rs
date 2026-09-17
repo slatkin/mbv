@@ -504,6 +504,21 @@ fn queue_cursor_push_never_hand_clamps_the_window() {
         4,
         "a Set inside the window leaves the stored window untouched"
     );
+
+    // The discriminating case: a window seeded BELOW the selection and a
+    // push that does not move it. The cursor path (follow_cursor) only
+    // lowers the window when the selection is above it, so the stored
+    // window stays authoritative at 9 — a reinstated `scroll.min(cursor)`
+    // hand clamp would drag it up to the cursor at 3.
+    component.set_cursor(QueueCursorUpdate::Set(3));
+    component.test_seed_scroll(9);
+    component.set_cursor(QueueCursorUpdate::Preserve);
+    assert_eq!(component.test_cursor(), 3);
+    assert_eq!(
+        component.test_scroll(),
+        9,
+        "a push that keeps the selection never moves the window"
+    );
 }
 
 #[test]
