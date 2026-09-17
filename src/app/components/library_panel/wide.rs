@@ -370,6 +370,23 @@ pub(in crate::app) fn render_wide_skeleton(
     Some(geometry)
 }
 
+/// Shared test helper (precedent: the panel's `#[cfg(test)]` support items,
+/// reached cross-module like `SkeletonHits`): whether any cell in `area`
+/// renders `needle`.
+#[cfg(test)]
+pub(in crate::app) fn text_in(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> bool {
+    for y in area.top()..area.bottom() {
+        let mut line = String::new();
+        for x in area.left()..area.right() {
+            line.push_str(buf[(x, y)].symbol());
+        }
+        if line.contains(needle) {
+            return true;
+        }
+    }
+    false
+}
+
 #[cfg(test)]
 #[path = "wide_tests.rs"]
 mod wide_tests;

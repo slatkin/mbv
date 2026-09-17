@@ -104,19 +104,6 @@ fn draw_skeleton(
     )
 }
 
-fn text_in(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> bool {
-    for y in area.top()..area.bottom() {
-        let mut line = String::new();
-        for x in area.left()..area.right() {
-            line.push_str(buf[(x, y)].symbol());
-        }
-        if line.contains(needle) {
-            return true;
-        }
-    }
-    false
-}
-
 fn browser_pane(area: Rect) -> crate::app::render::arrangements::wide_hero::WideHeroBrowserPane {
     let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
     wide_hero_browser_pane(panes.browser_panel, panes.browser_area)
@@ -741,9 +728,12 @@ fn zero_row_search_paints_the_placeholder_strings_and_no_anchor() {
 /// control.
 #[test]
 fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
+    // More rows than either painted list box can show, so both paints have
+    // to resolve a clamped viewport for a selection parked past row 0.
+    const ROWS: usize = 40;
     let mut search = InlineSearch::new();
     search.open();
-    search.set_pool(SearchPool::Items(crate::app::tests::make_items(10)));
+    search.set_pool(SearchPool::Items(crate::app::tests::make_items(ROWS)));
     search.restore_query("ite".into());
     search
         .results_mut()
@@ -819,10 +809,39 @@ fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
         .results()
         .current_flow_offset()
         .expect("the narrow paint retained the row flow");
-    let selected_index = 9;
+    // Exact clamp (canonical-media-lists delta: the shared owner's
+    // geometry-change rule): the result flow is flat — one display row per
+    // pool item — and the selection is the last row, so the narrow box's
+    // painted row capacity must leave exactly `rows - viewport_height`
+    // display rows above the viewport top; nothing else keeps the selection
+    // visible.
+    let viewport_height = narrow_geo.list_area.height as usize;
     assert!(
-        offset <= selected_index && selected_index < offset + narrow_geo.list_area.height as usize,
+        ROWS > viewport_height,
+        "the fixture must overflow the narrow list box"
+    );
+    let selected_row = search.results().rows().len() - 1;
+    assert_eq!(selected_row, ROWS - 1, "the selection is the last result");
+    let expected_offset = selected_row + 1 - viewport_height;
+    assert_eq!(
+        offset, expected_offset,
+        "the clamped viewport parks the selection on its last visible row"
+    );
+    assert!(
+        offset <= selected_row && selected_row < offset + viewport_height,
         "the clamped viewport keeps the selection visible"
+    );
+    // And the retained selected-row geometry sits inside that viewport.
+    let selected_rect = search
+        .results()
+        .current_selected_row_rect()
+        .expect("the selected row's retained rect");
+    assert!(
+        narrow_geo.list_area.left() <= selected_rect.left()
+            && selected_rect.right() <= narrow_geo.list_area.right()
+            && narrow_geo.list_area.top() <= selected_rect.top()
+            && selected_rect.bottom() <= narrow_geo.list_area.bottom(),
+        "the selected row's rect lies inside the retained narrow viewport"
     );
     assert_eq!(
         search.query(),
@@ -832,9 +851,11 @@ fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
 }
 
 /// A closed search session paints no search surface anywhere in the frame
-/// and retains no hit geometry (task 6.3): the Selector row paints its
-/// pills, the list box is the browse list's, and the search carrier holds no
-/// retained rect because the panel never drove its surface.
+/// and retains no hit geometry (task 6.3). The session is painted open
+/// first, so its carrier really holds a retained content rect — the close,
+/// not a missing paint, is what clears it: the retained rect is gone, no
+/// search bar is painted, a point inside the old rect resolves to nothing
+/// through the carrier, and the browse list still paints the frame.
 #[test]
 fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
     let mut search = InlineSearch::new();
@@ -843,8 +864,35 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
         "Alpha", "Movie",
     )]));
     search.restore_query("Alp".into());
-    search.close();
 
+    // Paint the open session through the panel's one canonical list box so
+    // the carrier retains its painted hit geometry.
+    let old_rect;
+    {
+        let mut open_content = LibraryPanelContent {
+            selector: Some(SelectorRow {
+                pills: vec!["All".into()],
+                active: Some(0),
+            }),
+            controls: None,
+            list: ListSlot::Search(&mut search),
+            hero: None,
+        };
+        let (_buf, open_geo, _hits) = draw_skeleton(&mut open_content, false);
+        old_rect = search
+            .results()
+            .current_content_rect()
+            .expect("the painted session retained its hit geometry");
+        assert_eq!(old_rect, open_geo.list_area);
+    }
+
+    search.close();
+    assert!(
+        search.results().current_content_rect().is_none(),
+        "closing the session clears the carrier's retained rect"
+    );
+
+    // Repaint with the browse list: the closed session adds no surface.
     let mut list = StubList::with_rows(vec!["Alpha"]);
     let mut content = LibraryPanelContent {
         selector: Some(SelectorRow {
@@ -866,9 +914,14 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
         text_in(&buf, geo.list_area, "Alpha"),
         "the browse list paints"
     );
+    let inside_old = ratatui::layout::Position {
+        x: old_rect.x + old_rect.width / 2,
+        y: old_rect.y + old_rect.height / 2,
+    };
+    assert!(!search.results().claims_current_point(inside_old));
     assert!(
-        search.results().current_content_rect().is_none(),
-        "the closed session retained no painted hit geometry"
+        search.results().resolve_current_point(inside_old).is_none(),
+        "a point inside the old rect resolves to nothing after the close"
     );
 }
 

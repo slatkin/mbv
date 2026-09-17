@@ -1,3 +1,4 @@
+use super::super::wide::text_in;
 use super::*;
 use crate::app::components::inline_search::{InlineSearch, SearchPool};
 use crate::app::components::library_panel::{
@@ -105,10 +106,6 @@ fn fixed_row_owner_clamps_when_narrow_viewport_shrinks_and_restores() {
     assert!(carrier.wide().current_flow_offset().unwrap() <= 9);
 }
 
-/// The non-Wide list box is the Wide browser pane's list box (design D3): the
-/// `LibraryPanel` fill pair on the box and the `MainContentBox` stripe pair on
-/// the alternating rows, in both focus states, with no body or scrollbar
-/// override of its own.
 /// A search session at the non-Wide breakpoint paints the same one-bar +
 /// one-list composition as Wide (task 6.3): the search box takes the
 /// Selector row, the scored results flow through the one canonical fixed-row
@@ -166,19 +163,10 @@ fn narrow_search_paints_one_search_bar_and_one_result_list() {
     );
 }
 
-fn text_in(buf: &ratatui::buffer::Buffer, area: Rect, needle: &str) -> bool {
-    for y in area.top()..area.bottom() {
-        let mut line = String::new();
-        for x in area.left()..area.right() {
-            line.push_str(buf[(x, y)].symbol());
-        }
-        if line.contains(needle) {
-            return true;
-        }
-    }
-    false
-}
-
+/// The non-Wide list box is the Wide browser pane's list box (design D3): the
+/// `LibraryPanel` fill pair on the box and the `MainContentBox` stripe pair on
+/// the alternating rows, in both focus states, with no body or scrollbar
+/// override of its own.
 #[test]
 fn narrow_list_box_uses_the_wide_browser_pane_fill_and_stripes() {
     for focused in [false, true] {
