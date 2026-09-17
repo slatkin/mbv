@@ -1661,21 +1661,26 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
         modifiers: KeyModifiers::NONE,
     }));
     let outcome = harness.step();
+    // The window starts at the top, so its new offset is the applied page
+    // stride; the paged window is [page, 2 * page) and the drag lands the
+    // top-edge selection on its last selectable row — the leading edge of a
+    // downward page (Invariant 6), never the top edge it left.
+    let page = tv_owner_of(&harness).episode_scroll();
+    assert!(page > 1, "the overlay episode list has a painted page");
+    let landed = tv_owner_of(&harness).episode_cursor();
     assert_eq!(
-        tv_owner_of(&harness).episode_cursor(),
-        tv_owner_of(&harness).episode_scroll(),
+        landed,
+        page * 2 - 1,
         "the page step moves the window one painted height and the top-edge \
-         selection rides to the nearest row it shows"
+         selection lands on the paged window's last row"
     );
-    let page = tv_owner_of(&harness).episode_cursor();
-    assert!(page > 0, "the overlay episode list has a painted page");
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
             Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta })
-                if *delta == page as i64
+                if *delta == landed as i64
         )),
-        "PageDown reports the applied page stride"
+        "PageDown reports the applied movement"
     );
     assert_eq!(
         harness.model().app.libs[0].nav_stack[0].resting().cursor(),
@@ -1691,13 +1696,14 @@ fn overlay_workspace_pager_moves_by_the_episode_lists_own_stride() {
     assert!(
         outcome.raw_messages.iter().any(|message| matches!(
             message,
-            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta: -1 })
+            Msg::Shell(crate::app::components::msg::ShellRequest::TvEpisodeMove { delta })
+                if *delta == -(landed as i64)
         )),
         "PageUp reports the applied movement too: the window returns to the \
-         top and the selection rides to its last row"
+         top and the dragged selection lands on its first row"
     );
     assert_eq!(tv_owner_of(&harness).episode_scroll(), 0);
-    assert_eq!(tv_owner_of(&harness).episode_cursor(), page - 1);
+    assert_eq!(tv_owner_of(&harness).episode_cursor(), 0);
 }
 
 /// The overlay Workspace's Home/End mutate the episode list locally AND

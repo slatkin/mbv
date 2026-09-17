@@ -456,16 +456,38 @@ fn browser_viewport_chords_step_the_window_at_wide_and_narrow_heights() {
             modifiers: KeyModifiers::NONE,
         }));
         let _ = harness.step();
+        let paged_scroll = browser_scroll(&harness);
         assert!(
-            browser_scroll(&harness) > before + 1,
+            paged_scroll > before + 1,
             "PgDn pages the window at width {width}"
         );
-        // The page may drag a left-behind selection to the paged window's
-        // top (design D3's drag rule); it never leaves it outside.
+        // The page may drag a left-behind selection; Invariant 6 lands it on
+        // the leading edge of the page — the last selectable row the paged
+        // window shows — and never leaves it outside. The height is the
+        // painted list slot's, the same rectangle the step resolves from.
+        let list_height = harness
+            .model()
+            .application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(|panel| {
+                panel
+                    .test_wide_geometry()
+                    .or_else(|| panel.test_narrow_geometry())
+            })
+            .expect("the panel painted a list slot")
+            .list_area
+            .height as usize;
         let after_cursor = browser_cursor(&harness);
         assert!(
-            after_cursor == before_cursor || after_cursor == browser_scroll(&harness),
-            "the page leaves the selection inside the paged window"
+            after_cursor == before_cursor
+                || after_cursor == (paged_scroll + list_height - 1).min(29),
+            "the page lands a dragged selection on the paged window's last selectable row (29, the fixture's last) at width {width}"
+        );
+        assert!(
+            after_cursor == before_cursor
+                || (after_cursor >= paged_scroll && after_cursor < paged_scroll + list_height),
+            "the page leaves the selection inside the paged window at width {width}"
         );
         let _ = draw(&mut harness, width, 30);
     }

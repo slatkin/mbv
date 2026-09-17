@@ -175,21 +175,29 @@ fn album_wheel_steps_the_viewport_and_requests_the_cursor_only_when_dragged() {
     ));
     assert_eq!(owner.carrier.scroll(), 3);
     // Stepping past it drags the selection with the window: the album cursor
-    // request fires only then, resolved against the dragged owner target.
+    // request fires only then, resolved against the new window's last
+    // selectable row — the leading edge of a downward step (Invariant 6).
     let dragged = owner.on_slot_event(event);
     assert_eq!(owner.carrier.scroll(), 4);
     assert!(matches!(
         dragged,
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: 3,
+            target: 5,
             kind: AlbumCursorKind::Move,
         }))
     ));
 
     // A dragged step whose target the context cannot resolve reports
-    // nothing.
+    // nothing: the upward step drags the bottom-edge selection back to the
+    // new window's first row.
     owner.context.album_targets.clear();
-    assert_eq!(owner.on_slot_event(event), None);
+    assert_eq!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {
+            at: Position { x: 0, y: 0 },
+            delta: -1,
+        })),
+        None
+    );
 }
 
 #[test]
@@ -298,8 +306,9 @@ fn album_viewport_chords_step_the_rail_and_report_only_drags() {
     assert_eq!(owner.carrier.scroll(), 1);
 
     // PgDn pages the window a full painted height; the left-behind
-    // selection is dragged to the paged window's top and the page-kind
-    // album cursor reports the drag (design D8).
+    // selection is dragged to the paged window's last selectable row — the
+    // leading edge of the downward page — and the page-kind album cursor
+    // reports the drag (design D8).
     let message = owner.on_key(&KeyEvent {
         code: Key::PageDown,
         modifiers: KeyModifiers::NONE,
@@ -307,7 +316,7 @@ fn album_viewport_chords_step_the_rail_and_report_only_drags() {
     assert_eq!(owner.carrier.scroll(), 4);
     match message {
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor { target, kind })) => {
-            assert_eq!(target, 3);
+            assert_eq!(target, 5);
             assert_eq!(kind, AlbumCursorKind::Page);
         }
         other => panic!("expected the dragged page's album cursor, got {other:?}"),
@@ -340,31 +349,33 @@ fn track_viewport_chords_step_the_focused_track_list() {
         .draw(|frame| owner.track_list.wide_mut().view(frame, area))
         .unwrap();
 
-    // Ctrl+y steps the window; the top-edge selection is dragged with it.
+    // Ctrl+y steps the window; the top-edge selection is dragged to the new
+    // window's last visible row.
     let message = owner.on_key(&KeyEvent {
         code: Key::Char('y'),
         modifiers: KeyModifiers::CONTROL,
     });
     assert_eq!(message, None, "the track list reports no step echo");
     assert_eq!(owner.track_list.scroll(), 1);
-    assert_eq!(owner.track_list.cursor(), 1);
+    assert_eq!(owner.track_list.cursor(), 4);
 
-    // Ctrl+e steps the window back over a now mid-window selection.
+    // Ctrl+e steps the window back; the bottom-edge selection is dragged to
+    // the new window's first row, never the bottom edge it left.
     let message = owner.on_key(&KeyEvent {
         code: Key::Char('e'),
         modifiers: KeyModifiers::CONTROL,
     });
     assert_eq!(message, None);
     assert_eq!(owner.track_list.scroll(), 0);
-    assert_eq!(owner.track_list.cursor(), 1);
+    assert_eq!(owner.track_list.cursor(), 0);
 
     // PgDn pages the window a full painted height and drags the
-    // left-behind selection to the paged window's top.
+    // left-behind selection to the paged window's last selectable row.
     let message = owner.on_key(&KeyEvent {
         code: Key::PageDown,
         modifiers: KeyModifiers::NONE,
     });
     assert_eq!(message, None);
     assert_eq!(owner.track_list.scroll(), 4);
-    assert_eq!(owner.track_list.cursor(), 4);
+    assert_eq!(owner.track_list.cursor(), 7);
 }

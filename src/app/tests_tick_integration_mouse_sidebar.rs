@@ -200,8 +200,9 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
     }));
     let outcome = harness.step();
     // The wheel steps the queue's viewport (design D1): the selection sat on
-    // the window's top edge, so the drag rule rides it to the next row — the
-    // wheel moves the selection only through that drag.
+    // the window's top edge, so the drag rule lands it on the new window's
+    // last visible row (the leading edge of a downward step — Invariant 6) —
+    // the wheel moves the selection only through that drag.
     let mut queue_scroll_cursor = || -> (usize, usize) {
         let component = harness
             .model_mut()
@@ -214,7 +215,7 @@ fn tick_queue_only_wheel_excludes_unpainted_library_and_keeps_keyboard() {
             .unwrap();
         (queue.test_scroll(), queue.test_cursor())
     };
-    assert_eq!(queue_scroll_cursor(), (1, 1));
+    assert_eq!(queue_scroll_cursor(), (1, 16));
     assert!(outcome
         .raw_messages
         .iter()

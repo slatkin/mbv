@@ -488,7 +488,28 @@ fn home_narrow_tick_wheel_and_click_use_current_inline_geometry() {
     let (x, y) = row_cell(&draw(&mut harness, 60, 20), "Home Item 0");
     harness.inject(wheel(x, y));
     let _outcome = harness.step();
-    assert_eq!(home_owner(&harness).cursor(), 1);
+    // The wheel steps the window one row and, because the selection sat on
+    // its first row, drags it to the leading edge of the step direction: the
+    // new window's last visible row (Invariant 6) — not one row down. The
+    // height is read from the same painted list slot the step resolves from.
+    let list_height = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| {
+            panel
+                .test_wide_geometry()
+                .or_else(|| panel.test_narrow_geometry())
+        })
+        .expect("the panel painted a list slot")
+        .list_area
+        .height as usize;
+    assert_eq!(
+        home_owner(&harness).cursor(),
+        list_height,
+        "the stepped window starts at row 1, so its last visible row is the painted height"
+    );
     let _ = draw(&mut harness, 60, 20);
 
     let (target_x, target_y) = row_cell(&draw(&mut harness, 60, 20), "Home Item 2");

@@ -516,7 +516,8 @@ mod tests {
             .unwrap();
 
         // The selection (result "a", display row 0) rides the window's top
-        // edge, so the downward step drags it one row while the window steps.
+        // edge, so the downward step drags it to the leading edge of the step
+        // direction: the new window's last visible row (Invariant 6).
         let transition = search.results_mut().delegate_operation(
             MediaListSurfaceInput::Wheel {
                 at: ratatui::layout::Position { x: 1, y: 1 },
@@ -527,12 +528,12 @@ mod tests {
         );
         assert_eq!(transition.disposition, MediaListDisposition::Consumed);
         assert_eq!(search.test_scroll(), 1);
-        assert_eq!(search.test_cursor(), 1);
-
-        // With the selection mid-window a step moves only the viewport.
-        search.handle_key(&key(Key::Down));
-        search.handle_key(&key(Key::Down));
         assert_eq!(search.test_cursor(), 3);
+
+        // With the selection off the window's first row a step moves only the
+        // viewport.
+        search.handle_key(&key(Key::Up));
+        assert_eq!(search.test_cursor(), 2);
         let transition = search.results_mut().delegate_operation(
             MediaListSurfaceInput::Wheel {
                 at: ratatui::layout::Position { x: 1, y: 1 },
@@ -544,7 +545,7 @@ mod tests {
         assert_eq!(transition.disposition, MediaListDisposition::Consumed);
         assert_eq!(transition.selected_target, None);
         assert_eq!(search.test_scroll(), 2);
-        assert_eq!(search.test_cursor(), 3);
+        assert_eq!(search.test_cursor(), 2);
     }
 
     /// Task 6.2 (design D7): the two viewport chords are admitted ahead of
@@ -570,25 +571,28 @@ mod tests {
             .draw(|f| search.results_mut().wide_mut().view(f, area))
             .unwrap();
 
-        // Ctrl+y steps the window; the top-edge selection is dragged with it.
+        // Ctrl+y steps the window; the top-edge selection is dragged to the
+        // new window's last visible row.
         let ctrl = |code: Key| KeyEvent {
             code,
             modifiers: KeyModifiers::CONTROL,
         };
         search.handle_key(&ctrl(Key::Char('y')));
         assert_eq!(search.test_scroll(), 1);
-        assert_eq!(search.test_cursor(), 1);
+        assert_eq!(search.test_cursor(), 3);
 
-        // Ctrl+e steps the window back over a now mid-window selection.
+        // Ctrl+e steps the window back; the bottom-edge selection is dragged
+        // to the new window's first row — the leading edge of the upward
+        // step, never the bottom edge it left.
         search.handle_key(&ctrl(Key::Char('e')));
         assert_eq!(search.test_scroll(), 0);
-        assert_eq!(search.test_cursor(), 1);
+        assert_eq!(search.test_cursor(), 0);
 
         // Every other Ctrl chord stays rejected: no step, no consumption
         // signal beyond `None` (the hosts' result actions keep working).
         assert_eq!(search.handle_key(&ctrl(Key::Char('a'))), None);
         assert_eq!(search.test_scroll(), 0);
-        assert_eq!(search.test_cursor(), 1);
+        assert_eq!(search.test_cursor(), 0);
     }
 
     #[test]

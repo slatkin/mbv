@@ -516,9 +516,11 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     );
 
     // One wheel notch through the mounted panel: the control resolves its
-    // own new index and the typed `EmbyLibraryCursorIndex` echo persists it as
-    // the shell's resting `video_cursor` — the control is authoritative and
-    // the shell follows, never the reverse.
+    // own new index — the leading edge of the stepped window (Invariant 6),
+    // never the bottom edge the selection rode — and the typed
+    // `EmbyLibraryCursorIndex` echo persists it as the shell's resting
+    // `video_cursor`: the control is authoritative and the shell follows,
+    // never the reverse.
     let wheel = model
         .application
         .get_component_mut(&ComponentId::Library)
@@ -530,12 +532,23 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
             modifiers: KeyModifiers::NONE,
         }))
         .expect("the wheel emits the typed cursor echo");
-    assert!(
-        matches!(
-            wheel,
-            Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index }) if index == total_rows - 2
-        ),
-        "the wheel echo carries the control's resolved index: {wheel:?}"
+    let index = match wheel {
+        Msg::Shell(ShellRequest::EmbyLibraryCursorIndex { index }) => index,
+        other => panic!("the wheel emits the typed cursor echo: {other:?}"),
+    };
+    // The selection sat on the last row, so the upward step drags it to the
+    // first row the stepped window shows: one row above the resolved
+    // window's top (`End` leaves the stored window at 0, and the display
+    // clamp shows the last row).
+    let leading_edge = total_rows - 1 - list_area.height as usize;
+    assert_eq!(
+        index, leading_edge,
+        "the wheel echo carries the control's leading-edge index"
+    );
+    assert_ne!(
+        index,
+        total_rows - 2,
+        "the step must not park the selection on the edge it left"
     );
     model.handle_terminal_message(wheel, &mut music_resize, &mut tv_resize);
     // The wheel move re-resolves the viewport and invalidates the retained
@@ -544,8 +557,8 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
     draw(&mut model, &mut term);
     assert_eq!(
         owner_cursor(&mut model),
-        total_rows - 2,
-        "the wheel moves the control one row up"
+        leading_edge,
+        "the wheel moves the control to its resolved leading-edge row"
     );
     assert_eq!(
         model.app.libs[0]
@@ -553,7 +566,7 @@ fn feed_home_video_group_browser_wheel_keeps_control_cursor_authoritative() {
             .as_ref()
             .unwrap()
             .video_cursor,
-        total_rows - 2,
+        leading_edge,
         "the shell resting state follows the resolved control selection"
     );
 }

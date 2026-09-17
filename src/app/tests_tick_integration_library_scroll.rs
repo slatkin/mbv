@@ -421,9 +421,11 @@ fn step_input(harness: &mut TickHarness, wheel: bool, up: bool, list: ratatui::l
 /// Task 8.1 (design D1/D2/D3): through the real tick, a wheel step and the
 /// one-row viewport chord each move the letter-grouped window one display
 /// row, drag the selection only on the step that would leave it outside, and
-/// reach display row 0 — where the first group's `Heading` paints. Verified
-/// at the Wide and the non-Wide breakpoint; the height enters from the
-/// retained painted frame in both.
+/// land it on the leading edge of the step direction — the new window's
+/// first selectable row upward, its last selectable row downward (Invariant
+/// 6) — reaching display row 0, where the first group's `Heading` paints.
+/// Verified at the Wide and the non-Wide breakpoint; the height enters from
+/// the retained painted frame in both.
 #[test]
 fn viewport_step_inputs_walk_a_grouped_list_to_display_row_0_wide_and_narrow() {
     for (width, wheel) in [(120u16, true), (120, false), (70, true), (70, false)] {
@@ -446,7 +448,8 @@ fn viewport_step_inputs_walk_a_grouped_list_to_display_row_0_wide_and_narrow() {
 
         // Step up to the top: the window decrements one row per step and the
         // selection is dragged exactly on the step that would leave it below
-        // the window — never before.
+        // the window — never before — landing on the new window's first
+        // selectable row, the leading edge of an upward step.
         loop {
             let row = display_row(cursor_of(&harness));
             let before_cursor = cursor_of(&harness);
@@ -469,10 +472,10 @@ fn viewport_step_inputs_walk_a_grouped_list_to_display_row_0_wide_and_narrow() {
                     before_cursor,
                     "the edge step drags the selection at width {width}"
                 );
-                let dragged = display_row(cursor_of(&harness));
-                assert!(
-                    dragged >= after_scroll && dragged < after_scroll + height,
-                    "the dragged selection stays inside the window at width {width}"
+                assert_eq!(
+                    display_row(cursor_of(&harness)),
+                    first_selectable_row(after_scroll, height),
+                    "the drag lands on the new window's first selectable row at width {width}"
                 );
             }
         }
@@ -512,5 +515,58 @@ fn viewport_step_inputs_walk_a_grouped_list_to_display_row_0_wide_and_narrow() {
             painted.iter().any(|row| row.contains(&selected_name)),
             "the selection stays visible inside the reached window at width {width}"
         );
+
+        // Step back down to the content end: the mirrored rule — the window
+        // increments one row per step and the drag lands the selection on the
+        // new window's last selectable row, the leading edge of a downward
+        // step — until the content end clamps the window and the selection.
+        loop {
+            let row = display_row(cursor_of(&harness));
+            let before_cursor = cursor_of(&harness);
+            let before_scroll = scroll_of(&harness);
+            step_input(&mut harness, wheel, false, list);
+            let after_scroll = scroll_of(&harness);
+            if after_scroll == before_scroll {
+                assert_eq!(
+                    cursor_of(&harness),
+                    before_cursor,
+                    "the content end clamps the window and drags nothing at width {width}"
+                );
+                break;
+            }
+            assert_eq!(after_scroll, before_scroll + 1, "one row per step at width {width}");
+            if row >= after_scroll && row < after_scroll + height {
+                assert_eq!(
+                    cursor_of(&harness),
+                    before_cursor,
+                    "the selection rides nowhere while it stays visible at width {width}"
+                );
+            } else {
+                assert_eq!(
+                    display_row(cursor_of(&harness)),
+                    last_selectable_row(after_scroll, height),
+                    "the drag lands on the new window's last selectable row at width {width}"
+                );
+            }
+        }
     }
+}
+
+/// The display row of the first selectable row in the window `[top, top +
+/// height)`: what an upward step drags the selection to (Invariant 6).
+fn first_selectable_row(top: usize, height: usize) -> usize {
+    (0..FIXTURE_ITEMS)
+        .map(display_row)
+        .find(|&row| row >= top && row < top + height)
+        .unwrap_or_else(|| panic!("the window [{top}, {}) shows no selectable row", top + height))
+}
+
+/// The display row of the last selectable row in the window `[top, top +
+/// height)`: what a downward step drags the selection to (Invariant 6).
+fn last_selectable_row(top: usize, height: usize) -> usize {
+    (0..FIXTURE_ITEMS)
+        .map(display_row)
+        .rev()
+        .find(|&row| row >= top && row < top + height)
+        .unwrap_or_else(|| panic!("the window [{top}, {}) shows no selectable row", top + height))
 }
