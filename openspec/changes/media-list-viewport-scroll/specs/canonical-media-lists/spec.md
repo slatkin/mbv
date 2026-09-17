@@ -49,7 +49,9 @@ window, and the wheel and page chords SHALL move the selection only through the 
 #### Scenario: A cursor move still brings its row into view
 
 - **WHEN** the user moves the selection with a cursor chord past the window's last visible row
-- **THEN** the window moves the minimum distance that shows the selection
+- **THEN** the window moves the minimum distance that shows the selection — except that when that would
+  place the selection on the window's first row with its labelling `Heading` directly above, the window
+  moves one row further so the label stays visible
 - **AND** the selection keeps its stable target
 
 ### Requirement: The media-list viewport has one writer
@@ -90,9 +92,11 @@ A geometry change for one logical list SHALL reuse its shared canonical owner an
 A replacement of the row flow itself — letter regrouping, a provider reorder, a page append, or a refresh
 — SHALL NOT carry the previous flow's display-row index into the new one. The owner SHALL re-anchor the
 window from the first selectable row the previous flow showed at the window's top when that target is
-still present, and otherwise SHALL keep the selection inside the window and clamp, so a replaced flow
-never leaves the window pointing at unrelated rows. The stable target under the cursor SHALL survive the
-replacement as it does for an ordinary refresh.
+still present. When the previous flow painted a `Heading` directly above that row and the new flow also
+places a `Heading` directly above it, the window SHALL be anchored to that `Heading` instead, so the label
+context above the target survives the replacement. If the target is gone, the owner SHALL keep the
+selection inside the window and clamp, so a replaced flow never leaves the window pointing at unrelated
+rows. The stable target under the cursor SHALL survive the replacement as it does for an ordinary refresh.
 
 #### Scenario: TV re-anchors across breakpoints
 
@@ -107,6 +111,14 @@ replacement as it does for an ordinary refresh.
 - **THEN** the window shows the previous top visible target at its painted offset where the new flow allows
 - **AND** the selection keeps its stable target and stays inside the window
 - **AND** no display-row index from the previous flow is carried over
+
+#### Scenario: A regrouped flow keeps the leading heading above the re-anchored row
+
+- **WHEN** a grouped list's rows are replaced while the previous window top painted a `Heading` directly
+  above the first selectable row
+- **AND** the new flow still places a `Heading` directly above that target
+- **THEN** the window is anchored to that `Heading`
+- **AND** the target and its label are painted together
 
 #### Scenario: A page append keeps the window still
 

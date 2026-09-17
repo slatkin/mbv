@@ -79,7 +79,7 @@ the listed painted region, and retains only the stated semantic boundary:
 
 | Surface | Local owner and painted claim | Breakpoint evidence | Semantic boundary |
 | --- | --- | --- | --- |
-| Emby library (plain kinds: Movies / Home videos / Generic) | `EmbyLibraryContent` over the Library panel's canonical list; `WideMediaList` in Wide or `InlineMediaBrowser` in Normal/Narrow | Wide and Normal/Narrow owner paths; panel tick coverage | resolved position for persistence and pagination; resolved `EmbyLibraryCursorIndex` only when the step dragged the selection |
+| Emby library (plain kinds: Movies / Home videos / Generic) | `EmbyLibraryContent` over the Library panel's canonical list; the same `WideMediaList` fixed-row presentation at both breakpoints — a narrower painted height in Normal/Narrow, never a second presentation | Wide and Normal/Narrow owner paths; panel tick coverage | resolved position for persistence and pagination; resolved `EmbyLibraryCursorIndex` only when the step dragged the selection |
 | Wide TV | `TvContent`; painted series rail claimed by its embedded list | Wide workspace tests; narrow ownership is TV's own content owner | none for wheel; no relay |
 | Home | `HomeComponent`; canonical list or inline-hero claim | Wide and Normal/Narrow | resolved Continue Watching position for persistence; cursor effect only when the step dragged the selection |
 | Queue | `QueueComponent`; painted `WideMediaList` queue region | Wide and narrow | none for wheel |

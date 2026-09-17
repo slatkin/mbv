@@ -18,13 +18,18 @@ follow-up units; coordinate before editing the same file.
   (Verify: owner unit tests — step inside the window moves only the window; a step at the window's edge
   drags the selection to the nearest shown selectable row; both content ends clamp.)
 - [ ] 1.2 Add the page form of the same operation for a painted height, reusing the clamp and drag rule.
+  This is a height-taking owner method, NOT a reuse of `MediaListOperation::Page` — that variant keeps its
+  five-item selection meaning until 6.2 converts the last `PgUp`/`PgDn` arm (Queue, Home, Feeds, podcast,
+  book, and Inline Search still route through the variant) and deletes it.
   (Verify: unit tests — a page moves by the height, a page longer than the remaining content clamps, and
   a page drags the selection the same way.)
 - [ ] 1.3 Handle the new operation exhaustively in `delegate_operation` and count a window-only move as a
   consumed step while a boundary no-op stays unhandled, so a viewport-only wheel step reports no selection
-  move.
+  move. A step never extends the live range: `multi_selection` and the anchored range are untouched even
+  when the drag fires.
   (Verify: transition tests — `selected_target` is `None` for a window-only step and `Some` when the drag
-  fired; disposition is consumed for a window move and unhandled at a content end.)
+  fired; disposition is consumed for a window move and unhandled at a content end; a step during Visual
+  mode leaves the multi-selection unchanged.)
 
 ## 2. Owner: reachability and leading context (D4)
 
@@ -40,10 +45,14 @@ follow-up units; coordinate before editing the same file.
 ## 3. Owner: row-flow replacement anchor (D5)
 
 - [ ] 3.1 On `set_content`, record the first selectable target the previous flow showed at the window's top
-  and restore the window to that target's new row; when the target is gone, keep the selection inside the
-  window and clamp. No display-row index crosses the replacement.
-  (Verify: unit tests — a reordered flow keeps the window on the same target; a missing target falls back;
-  an append far from the window leaves it unchanged.)
+  plus whether a `Heading` sat directly above it; after installing the new rows re-find that target and
+  restore the window to its row — or to the `Heading` directly above it when the previous flow showed one
+  there and the new flow still places one (structural match only; `Heading` has no stable identity). When
+  the target is gone, keep the selection inside the window and clamp. No display-row index crosses the
+  replacement.
+  (Verify: unit tests — a reordered flow keeps the window on the same target; a regrouped flow restores
+  the label above the target; a target whose new flow has no leading `Heading` anchors to the target's
+  row; a missing target falls back; an append far from the window leaves it unchanged.)
 - [ ] 3.2 Drive the Music grouping settle case deterministically (commit the settled catalog directly; no
   waits) and assert the window keeps its place while the albums reorder.
   (Verify: an app-level test with a reordering settled catalog; the test must not sleep.)
@@ -55,9 +64,12 @@ follow-up units; coordinate before editing the same file.
   pin that a paint does not change the window and a shorter paint does not raise it.
   (Verify: the replaced test plus `cargo nextest run -p mbv`.)
 - [ ] 4.2 Resolve the step's height from the retained painted content rectangle in the carrier, and make
-  `sync_viewport` a geometry clamp that no longer stores a resolved offset.
-  (Verify: carrier unit tests — the height comes from the retained frame; a height change clamps without
-  raising the window; the shared owner survives the transition.)
+  `sync_viewport` a geometry clamp that no longer stores a resolved offset. With no retained frame the
+  step is a no-op (`Unhandled`); a stale height's overshoot is display-only until the next paint clamp —
+  the owner's window is never corrected from a stale height.
+  (Verify: carrier unit tests — the height comes from the retained frame; a step with no retained frame
+  changes nothing; a height change clamps without raising the window; the shared owner survives the
+  transition.)
 - [ ] 4.3 Keep the panel's per-frame height sync as the single geometry seam and update its tests.
   (Verify: `library_panel/panel_list.rs` and `panel_tests` green.)
 
@@ -67,9 +79,11 @@ follow-up units; coordinate before editing the same file.
   carrier-backed surface steps its viewport.
   (Verify: component tests — the wheel moves the window one row at wide and narrow heights.)
 - [ ] 5.2 Convert the direct `Move` build in the Emby owner and gate its `EmbyLibraryCursorIndex` echo on an
-  actual selection move, reporting the window's reached row for pagination instead.
+  actual selection move, reporting the window's reached row for pagination instead. Confirm the
+  pending-fetch guard means repeated viewport position reports at the loaded end do not trigger repeated
+  fetches — a scroll-only wheel reader at the bottom must not spam pagination.
   (Verify: tick test — a viewport-only wheel step emits no cursor index and still reports position;
-  pagination still fires near the loaded end.)
+  pagination still fires near the loaded end; repeated reports at the loaded end fire at most one fetch.)
 - [ ] 5.3 Convert the Music album rail and track-list wheel arms, gating the album cursor request on a
   dragged selection.
   (Verify: the updated `tests_tick_integration_music_mouse` assertions plus an album-rail wheel test.)

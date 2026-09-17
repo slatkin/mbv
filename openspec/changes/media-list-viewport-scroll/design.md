@@ -65,11 +65,18 @@ Alternatives considered: store the height on the owner at paint time (makes the 
 the thing this change removes); thread the height from the panel through every destination's input arm
 (new plumbing per surface, no single source).
 
+The retained rectangle is the last painted frame, so two edge cases need explicit dispositions: with no
+frame yet painted, the step is a no-op (`Unhandled`); with a frame staler than a geometry change, a
+step (a page step in particular) may overshoot by one frame, and the display-only clamp at the next
+paint recovers it. The owner's window is never corrected from a stale height.
+
 ### D3 The drag rule resolves to a selectable row
 
 Display rows include non-selectable `Heading`/`Spacer` rows, so "drag the selection into the window" means
 the nearest selectable row at or below the window's top, or at or above its last row, resolved against the
 ascending selectable index. A step whose window still contains the selection moves nothing but the window.
+A step is never a live-range extension: even when the drag moves the selection, `multi_selection` and the
+anchored range are untouched, because a step is a viewport gesture, not a cursor move.
 
 ### D4 Cursor moves keep one row of leading context
 
@@ -82,20 +89,35 @@ legitimately scroll the label off, because the step can always be reversed.
 
 ### D5 A row-flow replacement re-anchors by stable identity
 
-`MediaList::set_content` records the first selectable target the previous flow showed at the window's top,
-and after installing the new rows re-finds that target and restores the window to its row. If the target is
-gone, the window falls back to keeping the selection visible and clamping. No display-row index crosses a
-flow replacement.
+`MediaList::set_content` records the first selectable target the previous flow showed at the window's top
+**plus whether a `Heading` was painted directly above it**, and after installing the new rows re-finds that
+target and restores the window to its row — or to the `Heading` directly above it, when the previous flow
+showed one there and the new flow still places one. `Heading` carries no stable identity (text only), so
+the label is matched structurally ("the row directly above the target in each flow"), never by text. If
+the target is gone, the window falls back to keeping the selection visible and clamping. No display-row
+index crosses a flow replacement. This is what keeps D4's leading-context invariant across the
+asynchronous Music grouping settle: an anchor restored without its label reintroduces the missing-`Heading`
+bug this change fixes, on every regroup.
 
-Alternatives considered: keep the index (today's behaviour) — meaningless after a reorder, which is how the
+- Alternatives considered: keep the index (today's behaviour) — meaningless after a reorder, which is how the
 asynchronous Music grouping settle can misplace the window; always re-anchor to the selection — loses the
 user's reading position on every ordinary content refresh.
+
+Context note: the `ViewportAnchor` machinery D5 revives is currently prod-dead — its only producer is
+`#[cfg_attr(not(test), allow(dead_code))]` and `apply_viewport_anchor` is test-only since commit `0f9bd770`.
+This change puts it back on the production path; no decision changes.
 
 ### D6 `PgUp`/`PgDn` become the page step
 
 A page is the painted row-flow height, so the Help overlay's "Page scroll" label becomes true. The old
 five-item jump has no other claimant: the hidden-truth cost of keeping it is that the documentation keeps
 lying about the only chord named after scrolling.
+
+Migration note: the page step is a height-taking owner method, not a reuse of the `MediaListOperation::Page`
+variant. The variant keeps its five-item selection meaning until tasks 6.1 and 6.2 have converted every
+`PgUp`/`PgDn` arm (6.2 covers the Queue, Home, Feeds, podcast, book, and Inline Search surfaces, which
+still route through the variant via `MediaListSurfaceInput::Page`), at which point the variant is deleted;
+the two meanings never coexist inside one surface.
 
 Risk accepted: a page is a height, so a page differs between Wide and narrow. Verification covers both
 breakpoints (the mouse-input spec already requires per-breakpoint evidence).
