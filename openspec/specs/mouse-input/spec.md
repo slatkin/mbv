@@ -320,10 +320,13 @@ embedded list control claims the pointed list region from its completed current-
 retained result. An unmigrated destination MAY retain its existing compatibility
 claim path until its own migration. A text viewport or irregular-row surface that competes with another eligible surface SHALL accept a wheel gesture only when the point is inside geometry published by its own painter. A sole eligible focused overlay SHALL accept its wheel gesture independently of pointer position; its local boundary clamp SHALL retain valid state.
 
+A canonical media list SHALL apply an accepted wheel step to its viewport rather than to its selection: the visible window moves one display row and the selection stays where it is, unless the step would put the selection outside the window, in which case the selection is dragged to the nearest row the window shows. The list SHALL apply the step to its viewport even when the pointed list does not hold keyboard focus.
+
 #### Scenario: Wheel moves a canonical list by one row
 
 - **WHEN** the user turns the wheel down once over a painted canonical media list with a following row
-- **THEN** the list's owning component advances its local selection and viewport by one row
+- **THEN** the list's owning component moves its local viewport down by one row
+- **AND** the selection moves only when it would otherwise leave the viewport
 - **AND** no shell-side wheel movement is calculated for that list
 
 #### Scenario: Wheel moves a text viewport by one line
@@ -331,6 +334,12 @@ claim path until its own migration. A text viewport or irregular-row surface tha
 - **WHEN** the user turns the wheel up once over a painted text viewport with a preceding line
 - **THEN** the viewport's owning component moves its local offset back by one line
 - **AND** its cursor or selection remains unchanged unless that surface's ordinary one-step navigation also changes it
+
+#### Scenario: A wheel step reaches the first display row of a grouped list
+
+- **WHEN** the user turns the wheel up repeatedly over a grouped canonical list whose first selectable row follows a group `Heading`
+- **THEN** the viewport reaches the first display row
+- **AND** the first group's `Heading` is painted
 
 #### Scenario: A competing surface ignores an outside wheel gesture
 
@@ -365,6 +374,12 @@ Every scrollable interactive surface recorded in the interactive-surface ledger 
 - **THEN** it does not emit a shell request solely to relay that movement
 - **AND** verification confirms the local state changes without a shell-side wheel handler
 
+#### Scenario: A viewport-only wheel step reports no selection move
+
+- **WHEN** the user turns the wheel over a canonical list whose viewport can move without dragging the selection
+- **THEN** the owning component emits no selection or cursor message for that step
+- **AND** it still reports the resolved position when an existing persistence or pagination operation needs it
+
 **Verification record: affected surfaces**
 
 The implementation and interactive-surface ledger record the following affected
@@ -373,15 +388,15 @@ the listed painted region, and retains only the stated semantic boundary:
 
 | Surface | Local owner and painted claim | Breakpoint evidence | Semantic boundary |
 | --- | --- | --- | --- |
-| Emby library (plain kinds: Movies / Home videos / Generic) | `EmbyLibraryContent` over the Library panel's canonical list; `WideMediaList` in Wide or `InlineMediaBrowser` in Normal/Narrow | Wide and Normal/Narrow owner paths; panel tick coverage | resolved `EmbyLibraryCursorIndex` for persistence only |
+| Emby library (plain kinds: Movies / Home videos / Generic) | `EmbyLibraryContent` over the Library panel's canonical list; the same `WideMediaList` fixed-row presentation at both breakpoints — a narrower painted height in Normal/Narrow, never a second presentation | Wide and Normal/Narrow owner paths; panel tick coverage | resolved position for persistence and pagination; resolved `EmbyLibraryCursorIndex` only when the step dragged the selection |
 | Wide TV | `TvContent`; painted series rail claimed by its embedded list | Wide workspace tests; narrow ownership is TV's own content owner | none for wheel; no relay |
-| Home | `HomeComponent`; canonical list or inline-hero claim | Wide and Normal/Narrow | resolved Continue Watching cursor effect only |
+| Home | `HomeComponent`; canonical list or inline-hero claim | Wide and Normal/Narrow | resolved Continue Watching position for persistence; cursor effect only when the step dragged the selection |
 | Queue | `QueueComponent`; painted `WideMediaList` queue region | Wide and narrow | none for wheel |
-| Music | `MusicWorkspaceComponent`; Wide rail or Normal/Narrow inline list | Wide and Normal/Narrow | resolved album cursor request |
+| Music | `MusicWorkspaceComponent`; Wide rail or Normal/Narrow inline list | Wide and Normal/Narrow | resolved album position for persistence; album cursor request only when the step dragged the selection |
 | Feeds | `FeedsComponent`; active canonical list region | Wide and Normal/Narrow | none for wheel |
-| Audiobookshelf podcast | `AudiobookshelfPodcastComponent`; painted show-row geometry | Wide and Normal/Narrow | resolved show selection |
-| Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | resolved book/chapter selection or focus |
-| Inline Search | active host component; painted results `left_area`, first refusal | Emby library, Music, and TV host paths | local result selection only |
+| Audiobookshelf podcast | `AudiobookshelfPodcastComponent`; painted show-row geometry | Wide and Normal/Narrow | resolved show position; selection only when the step dragged it |
+| Audiobookshelf books | `AudiobookshelfBookComponent`; painted book- or chapter-row geometry | Wide and Normal/Narrow | resolved book/chapter position; selection or focus only when the step dragged it |
+| Inline Search | active host component; painted results `left_area`, first refusal | Emby library, Music, and TV host paths | local result viewport and selection |
 | Global Search sidebar | `SearchSidebarComponent`; painter-published result-row hit regions | fixed overlay geometry (breakpoint-invariant) | local result selection only |
 | Settings | `SettingsComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
 | Help | `HelpComponent`; focus-owned wheel while sole eligible overlay | fixed overlay geometry (breakpoint-invariant) | none for wheel |
@@ -393,6 +408,12 @@ Focused verification names and geometry evidence are maintained with the rows in
 pointed-region rejection, while focused-sidebar proofs cover down/up direction,
 boundaries, and an off-panel pointer. These records do not add a second
 interaction policy or require a shell wheel handler.
+
+A canonical-list row's verification SHALL additionally prove the viewport step: the
+window moves one row, the selection keeps its painted screen row unless the step
+drags it, and the window reaches the first and last display row. Surfaces outside the
+canonical media-list owner (Global Search, Settings, Help, Sessions, Playlists) keep
+their existing selection- or offset-driven wheel behavior for now.
 
 ### Requirement: The Queue panel boundary supports precise column resizing
 
