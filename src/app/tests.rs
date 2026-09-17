@@ -193,6 +193,7 @@ pub(crate) fn make_app_stub() -> App {
         pending_navigate_tab_switch: None,
         pending_series_landing: None,
         pending_series_handoff: None,
+        pending_track_selection: None,
         last_played_item_id: None,
         last_played_completed: false,
         card_image_states: std::collections::HashMap::new(),

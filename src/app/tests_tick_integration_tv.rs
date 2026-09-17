@@ -429,6 +429,7 @@ fn navigated_series_opens_the_wide_workspace() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: navigated_series("series-1", "Second"),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -467,6 +468,7 @@ fn navigated_series_opens_the_hero_overlay_narrow() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: navigated_series("series-1", "Second"),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -517,6 +519,7 @@ fn deferred_series_landing_runs_the_handoff_on_its_retry_drain() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: navigated_series("series-9", "Ninth"),
+            episode_id: None,
         },
         switch_tab: true,
     });

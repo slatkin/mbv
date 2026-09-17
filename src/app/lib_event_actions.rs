@@ -658,7 +658,7 @@ impl App {
                             self.set_library_tab(lib_idx + 1);
                         }
                     }
-                    NavigateLanding::Series { reveal } => {
+                    NavigateLanding::Series { reveal, episode_id } => {
                         let name = reveal.name.clone();
                         if !self.libs.get(lib_idx).is_some() {
                             self.flash_error(format!("Could not land on '{name}' in its library"));
@@ -673,9 +673,14 @@ impl App {
                             }
                             // The landing completed; the Model drain owes the
                             // detail hand-off (task 3.1, design D3).
-                            self.pending_series_handoff =
-                                Some(PendingSeriesHandoff { lib_idx, reveal });
-                        } else if !self.arm_pending_series_landing(lib_idx, reveal, switch_tab) {
+                            self.pending_series_handoff = Some(PendingSeriesHandoff {
+                                lib_idx,
+                                reveal,
+                                episode_id,
+                            });
+                        } else if !self
+                            .arm_pending_series_landing(lib_idx, reveal, switch_tab, episode_id)
+                        {
                             // Miss against a complete corpus (absent item, an
                             // unloadable library): flash the library-error
                             // path and leave the active tab unchanged (task
@@ -684,7 +689,11 @@ impl App {
                             self.flash_error(format!("Could not land on '{name}' in its library"));
                         }
                     }
-                    NavigateLanding::Album { reveal, ancestors } => {
+                    NavigateLanding::Album {
+                        reveal,
+                        ancestors,
+                        track_id,
+                    } => {
                         let entry = AlbumSearchEntry::from_chain(*reveal, ancestors);
                         // Fully async, exactly like Inline Search's album
                         // activation: the nav stack is replaced (and the
@@ -697,6 +706,12 @@ impl App {
                             if switch_tab {
                                 self.pending_navigate_tab_switch = Some(lib_idx);
                             }
+                            // Deep selection (task 6.2, design D6): the
+                            // chosen track rides the activation; the shell
+                            // binds it to the activated album at the
+                            // `RecursiveAlbumActivated` drain.
+                            self.pending_track_selection =
+                                track_id.map(|track_id| (lib_idx, track_id));
                         } else {
                             self.flash_error("Could not start the album navigation".to_string());
                         }

@@ -20,7 +20,7 @@ use super::components::tv_content::TvContent;
 use super::components::ComponentId;
 use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
-use super::shell::Model;
+use super::shell::{Model, PendingEpisodeSelection};
 use super::TabSelection;
 use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
@@ -128,12 +128,95 @@ impl Model {
     /// App arms the hand-off at the actual landing completion -- the immediate
     /// `NavigateTo` arm or the deferred pending-landing retry -- and this
     /// runs the same presentation sequence Inline Search's series activation
-    /// runs. A no-op when no landing completed.
+    /// runs. A no-op when no landing completed. A carried episode id (task
+    /// 6.1, design D6) arms the deep-selection pending after the presentation
+    /// opens; the selection itself resolves against the series detail.
     pub(in crate::app) fn drain_series_navigation_handoff(&mut self) {
         let Some(handoff) = self.app.pending_series_handoff.take() else {
             return;
         };
         self.open_series_workspace_handoff(handoff.lib_idx, &handoff.reveal);
+        if let Some(episode_id) = handoff.episode_id {
+            self.pending_episode_selection = Some(PendingEpisodeSelection {
+                lib_idx: handoff.lib_idx,
+                series_id: handoff.reveal.id.clone(),
+                episode_id,
+            });
+            self.drain_pending_episode_selection();
+        }
+    }
+
+    /// Deep-selection retry (task 6.1, design D6): resolve the navigated
+    /// episode against the cached series detail -- fetching a season's
+    /// episodes when uncached -- and select it with episode focus. Runs at
+    /// the sync pass and after every lib-event drain, so the detail and
+    /// season-episodes fetches it arms re-drive it. Absence is not failure:
+    /// once every season's episodes are in hand without a match, the pending
+    /// clears and the landed show keeps its default selection (no error --
+    /// the navigation target was reached). A manual tab change discards the
+    /// pending silently, like the hand-off it extends.
+    pub(super) fn drain_pending_episode_selection(&mut self) {
+        enum Step {
+            /// The series detail (or an in-flight season fetch) has not
+            /// landed yet; stay armed.
+            Wait,
+            /// The season's episodes are uncached: arm the fetch and retry
+            /// on its drain (`fetch_series_season_episodes` deduplicates).
+            Fetch(String),
+            /// The episode is in the season's cached episodes.
+            Select(usize),
+            /// Every season's episodes are in hand; the episode is absent.
+            Absent,
+        }
+        let Some(sel) = self.pending_episode_selection.clone() else {
+            return;
+        };
+        if self.app.tab != TabSelection::EmbyLibrary(sel.lib_idx) {
+            self.pending_episode_selection = None;
+            return;
+        }
+        let step = match self.app.series_detail_cache.get(&sel.series_id) {
+            None => Step::Wait,
+            Some(detail) => {
+                let mut step = Step::Absent;
+                for (season_index, season) in detail.seasons.iter().enumerate() {
+                    match detail.episodes.get(&season.id) {
+                        Some(episodes) => {
+                            if episodes.iter().any(|episode| episode.id == sel.episode_id) {
+                                step = Step::Select(season_index);
+                                break;
+                            }
+                        }
+                        None => {
+                            step = Step::Fetch(season.id.clone());
+                            break;
+                        }
+                    }
+                }
+                step
+            }
+        };
+        match step {
+            Step::Wait => {}
+            Step::Fetch(season_id) => {
+                self.app
+                    .fetch_series_season_episodes(sel.series_id.clone(), season_id);
+            }
+            Step::Select(season_index) => {
+                let selected = self
+                    .update_tv_owner(|owner| {
+                        owner.select_episode_in_season(season_index, &sel.episode_id)
+                    })
+                    .unwrap_or(false);
+                self.pending_episode_selection = None;
+                if selected {
+                    // Materialize the moved season/episode rows in the opened
+                    // presentation.
+                    self.push_tv_workspace_content();
+                }
+            }
+            Step::Absent => self.pending_episode_selection = None,
+        }
     }
 
     /// The active TV library's owner key (design D2's

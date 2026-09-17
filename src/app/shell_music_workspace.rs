@@ -5,7 +5,7 @@
 use super::components::library_panel::LibraryKey;
 use super::components::music_content::MusicContent;
 use super::components::LibraryKind;
-use super::shell::{Model, MusicTrackFocusRequest};
+use super::shell::{Model, MusicTrackFocusRequest, MusicTrackSelection};
 use super::BrowseLevel;
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
@@ -54,10 +54,8 @@ impl Model {
                 library_id,
                 nav_stack,
             });
-        // Bind the enter request to the activated album (the resting cursor of
-        // the replaced nav stack) so it can retry once the album's tracks
-        // arrive without ever firing on an album the user moved to meanwhile.
-        self.music_track_focus_request = self
+        // The activated album: the resting cursor of the replaced nav stack.
+        let activated_album_id = self
             .app
             .libs
             .iter()
@@ -68,8 +66,31 @@ impl Model {
                     .items
                     .get(level.resting().cursor())
                     .map(|item| item.id.clone())
-            })
+            });
+        // Bind the enter request to the activated album (the resting cursor of
+        // the replaced nav stack) so it can retry once the album's tracks
+        // arrive without ever firing on an album the user moved to meanwhile.
+        self.music_track_focus_request = activated_album_id
+            .clone()
             .map(|album_id| MusicTrackFocusRequest::Enter { album_id });
+        // Deep selection (task 6.2, design D6): a navigated track rides the
+        // album activation. Adopt the App's pending selection only when this
+        // activation is the navigation's library, and bind it to the
+        // activated album so the workspace push selects the track once its
+        // rows arrive.
+        self.pending_music_track_selection = self
+            .app
+            .pending_track_selection
+            .take()
+            .filter(|(lib_idx, _)| {
+                self.app
+                    .libs
+                    .get(*lib_idx)
+                    .is_some_and(|lib| lib.library.id == library_id_lookup)
+            })
+            .and_then(|(_, track_id)| {
+                activated_album_id.map(|album_id| MusicTrackSelection { album_id, track_id })
+            });
         // Nav stack was replaced wholesale; its resting cursor now points at
         // the activated album. Re-anchor the component explicitly, regardless
         // of prior local moves.
@@ -164,6 +185,29 @@ impl Model {
             .flatten();
         if let Some(rearm) = rearm {
             self.music_track_focus_request = Some(rearm);
+        }
+        // Deep selection (task 6.2, design D6): select the navigated track
+        // once its album's track rows arrive. A superseded album or an
+        // absent track drops the pending silently (no error -- the
+        // navigation target was reached).
+        if let Some(sel) = self.pending_music_track_selection.clone() {
+            let mut resolved = false;
+            self.update_music_owner(|owner| {
+                if owner
+                    .selected_item()
+                    .is_some_and(|album| album.id == sel.album_id)
+                {
+                    if !owner.track_list.rows().is_empty() {
+                        owner.track_list.select_target(&sel.track_id);
+                        resolved = true;
+                    }
+                } else {
+                    resolved = true;
+                }
+            });
+            if resolved {
+                self.pending_music_track_selection = None;
+            }
         }
     }
 

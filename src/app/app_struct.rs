@@ -199,6 +199,13 @@ pub struct App {
     /// it the same way, so the hand-off fires at the actual landing
     /// completion, not at the original `NavigateTo` drain.
     pub(super) pending_series_handoff: Option<PendingSeriesHandoff>,
+    /// Deep selection (task 6.2, design D6 of change
+    /// `per-destination-item-navigation`): the chosen track from a
+    /// `NavigateLanding::Album`, armed when the recursive album activation
+    /// spawns and bound to the activated album at the shell's
+    /// `RecursiveAlbumActivated` drain. Keyed by the target library so a
+    /// foreign library's activation never adopts it.
+    pub(super) pending_track_selection: Option<(usize, String)>,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,

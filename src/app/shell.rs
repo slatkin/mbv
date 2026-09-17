@@ -48,6 +48,30 @@ pub(super) enum MusicTrackFocusRequest {
     Clear,
 }
 
+/// Deep selection (task 6.1, design D6 of change
+/// `per-destination-item-navigation`): a navigated episode the opened TV
+/// workspace still owes its selection. Consumed by
+/// `drain_pending_episode_selection` once the series detail and the
+/// episode's season episodes are in hand; absence of the episode from the
+/// fetched detail clears it silently (the landing stands, no error).
+#[derive(Clone, Debug)]
+pub(super) struct PendingEpisodeSelection {
+    pub(super) lib_idx: usize,
+    pub(super) series_id: String,
+    pub(super) episode_id: String,
+}
+
+/// Deep selection (task 6.2, design D6): a navigated track the adopted
+/// Music workspace still owes its selection, bound to the activated album at
+/// the `RecursiveAlbumActivated` drain. Consumed by
+/// `push_music_workspace_content` once the album's track rows arrive;
+/// absence clears it silently.
+#[derive(Clone, Debug)]
+pub(super) struct MusicTrackSelection {
+    pub(super) album_id: String,
+    pub(super) track_id: String,
+}
+
 /// Shell model holding the legacy `App` and the TuiRealm `Application`.
 pub struct Model {
     pub app: App,
@@ -67,6 +91,11 @@ pub struct Model {
     /// only delivers the trigger that used to write the deleted inline
     /// track-focus field.
     pub(super) music_track_focus_request: Option<MusicTrackFocusRequest>,
+    /// Deep-selection pending state (tasks 6.1/6.2). TV: see
+    /// `PendingEpisodeSelection`; consumed at the sync pass. Music: see
+    /// `MusicTrackSelection`; consumed at the workspace content push.
+    pub(super) pending_episode_selection: Option<PendingEpisodeSelection>,
+    pub(super) pending_music_track_selection: Option<MusicTrackSelection>,
     /// One-shot shell→component re-anchor trigger for the mounted Music
     /// workspace's album cursor/scroll, consumed at the next
     /// `push_music_workspace_content`. Set at the three navigation events that
@@ -434,6 +463,8 @@ impl Model {
             application,
             mouse_subscribed: std::collections::HashSet::new(),
             music_track_focus_request: None,
+            pending_episode_selection: None,
+            pending_music_track_selection: None,
             music_workspace_reanchor: false,
             feeds_manage: None,
             home_content: HomeContent::new(),

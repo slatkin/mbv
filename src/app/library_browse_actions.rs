@@ -137,8 +137,13 @@ fn landing_for_target(
             if series.item_type != "Series" {
                 return Err(format!("Item {series_id} is not a Series"));
             }
+            // Deep selection (task 6.1, design D6): an Episode reveal rides
+            // its own id on the Series landing; a Season reveal stays
+            // show-level (default selection).
+            let episode_id = (item.item_type == "Episode").then(|| item.id.clone());
             Ok(NavigateLanding::Series {
                 reveal: Box::new(series),
+                episode_id,
             })
         }
         RevealTarget::Album(album_id) => {
@@ -169,9 +174,13 @@ fn landing_for_target(
                     name: a.display_name(),
                 })
                 .collect();
+            // Deep selection (task 6.2, design D6): an Audio-track reveal
+            // rides its own id on the Album landing.
+            let track_id = item.is_audio().then(|| item.id.clone());
             Ok(NavigateLanding::Album {
                 reveal: Box::new(album),
                 ancestors,
+                track_id,
             })
         }
     }

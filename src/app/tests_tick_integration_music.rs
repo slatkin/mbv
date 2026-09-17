@@ -601,3 +601,115 @@ fn navigated_flat_album_lands_the_album_at_the_root_cursor() {
         "the flat shape has no group-view owner to re-anchor"
     );
 }
+
+/// Task 6.2 (design D6): "Go to Library" on a queued track selects the track
+/// in the workspace track list once the activated album's track rows arrive —
+/// including when the fetch lands after the landing.
+#[test]
+fn navigated_track_is_selected_in_the_workspace_track_list() {
+    let (mut harness, id) = wide_music_harness();
+    // The queued track: the navigation carries it as deep selection bound to
+    // the activated album.
+    harness.model_mut().app.pending_track_selection = Some((0, "track-2".into()));
+
+    harness
+        .model_mut()
+        .on_recursive_album_activated("lib-music".into(), landed_grouped_album_stack("album-1"));
+    harness.step();
+
+    assert_eq!(
+        music_selected_album_id(&harness, &id).as_deref(),
+        Some("album-1"),
+        "the album landing stands"
+    );
+    assert_eq!(
+        harness.model().test_music_owner().track_selected_row(),
+        Some(1),
+        "the chosen track is selected in the track list"
+    );
+    assert!(
+        harness.model().pending_music_track_selection.is_none(),
+        "the deep selection is fully consumed"
+    );
+    assert_ne!(
+        harness.model().app.status_severity,
+        crate::app::notify_actions::ToastSeverity::Error,
+        "a successful deep selection does not flash: {}",
+        harness.model().app.status
+    );
+}
+
+/// Task 6.2: the track is absent from the fetched track list — the album
+/// landing stands with the default selection and no error.
+#[test]
+fn absent_track_keeps_the_landing_with_default_selection() {
+    let (mut harness, id) = wide_music_harness();
+    harness.model_mut().app.pending_track_selection = Some((0, "track-gone".into()));
+
+    harness
+        .model_mut()
+        .on_recursive_album_activated("lib-music".into(), landed_grouped_album_stack("album-1"));
+    harness.step();
+
+    assert_eq!(
+        music_selected_album_id(&harness, &id).as_deref(),
+        Some("album-1"),
+        "the album landing stands"
+    );
+    assert_eq!(
+        harness.model().test_music_owner().track_selected_row(),
+        Some(0),
+        "default selection: first track"
+    );
+    assert!(
+        harness.model().pending_music_track_selection.is_none(),
+        "the absent-track pending is cleared"
+    );
+    assert_ne!(
+        harness.model().app.status_severity,
+        crate::app::notify_actions::ToastSeverity::Error,
+        "absence is not failure: {}",
+        harness.model().app.status
+    );
+}
+
+/// Task 6.2: the album's tracks have not arrived when the activation drains —
+/// the pending selection stays armed and applies on the tracks re-push.
+#[test]
+fn navigated_track_selection_waits_for_the_album_tracks() {
+    let mut app = crate::app::render::make_music_group_app();
+    app.terminal_width = 160;
+    app.terminal_height = 40;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _id = ComponentId::Library;
+
+    harness.model_mut().app.pending_track_selection = Some((0, "track-2".into()));
+    harness
+        .model_mut()
+        .on_recursive_album_activated("lib-music".into(), landed_grouped_album_stack("album-1"));
+    harness.step();
+    assert!(
+        harness.model().pending_music_track_selection.is_some(),
+        "the pending selection stays armed while the track fetch is in flight"
+    );
+
+    // The tracks arrive (the `AlbumTracksFetched` drain re-pushes).
+    let mut first = crate::app::tests::make_item("Track One", "Audio");
+    first.id = "track-1".into();
+    let mut second = crate::app::tests::make_item("Track Two", "Audio");
+    second.id = "track-2".into();
+    harness
+        .model_mut()
+        .app
+        .album_tracks_cache
+        .insert("album-1".into(), vec![first, second]);
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        harness.model().test_music_owner().track_selected_row(),
+        Some(1),
+        "the chosen track is selected once its rows arrive"
+    );
+    assert!(harness.model().pending_music_track_selection.is_none());
+}

@@ -17,8 +17,14 @@ pub(super) enum NavigateLanding {
     Chain { nav_stack: Vec<BrowseLevel> },
     /// TV: land the owning Series via the searched-series activation flow
     /// (task 2.2). `reveal` is the full series item, resolved and
-    /// type-verified by the worker (design D1).
-    Series { reveal: Box<EmbyItem> },
+    /// type-verified by the worker (design D1). `episode_id` carries the
+    /// chosen episode for deep selection (task 6.1, design D6) — `Some` only
+    /// when the reveal was resolved from an Episode; a Season reveal stays
+    /// show-level with default selection.
+    Series {
+        reveal: Box<EmbyItem>,
+        episode_id: Option<String>,
+    },
     /// Music: land the owning album via recursive album activation
     /// (task 2.3). `reveal` is the full album item; `ancestors` is the
     /// root→album folder chain the activation walks (same shape the album
@@ -26,6 +32,9 @@ pub(super) enum NavigateLanding {
     Album {
         reveal: Box<EmbyItem>,
         ancestors: Vec<AlbumPathPart>,
+        /// Deep selection (task 6.2, design D6): the chosen track's id when
+        /// the reveal was resolved from an Audio track.
+        track_id: Option<String>,
     },
 }
 
@@ -43,6 +52,8 @@ pub(super) struct PendingSeriesLanding {
     pub(super) lib_idx: usize,
     pub(super) reveal: Box<EmbyItem>,
     pub(super) switch_tab: bool,
+    /// Deep selection carried through the deferred landing (task 6.1).
+    pub(super) episode_id: Option<String>,
 }
 
 /// A completed `NavigateLanding::Series` that still owes the shell's detail
@@ -60,6 +71,8 @@ pub(super) struct PendingSeriesLanding {
 pub(super) struct PendingSeriesHandoff {
     pub(super) lib_idx: usize,
     pub(super) reveal: Box<EmbyItem>,
+    /// Deep selection carried through the hand-off (task 6.1, design D6).
+    pub(super) episode_id: Option<String>,
 }
 
 pub(super) enum LibEvent {

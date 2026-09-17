@@ -58,6 +58,7 @@ impl App {
         lib_idx: usize,
         reveal: Box<EmbyItem>,
         switch_tab: bool,
+        episode_id: Option<String>,
     ) -> bool {
         if !self.series_corpus_can_grow(lib_idx) {
             return false;
@@ -66,6 +67,7 @@ impl App {
             lib_idx,
             reveal,
             switch_tab,
+            episode_id,
         });
         self.ensure_lib_loaded_for(lib_idx);
         if self.series_landing_needs_prefetch(lib_idx) {
@@ -95,6 +97,7 @@ impl App {
             return;
         }
         let reveal = pending.reveal;
+        let episode_id = pending.episode_id;
         let name = reveal.name.clone();
         if self.activate_searched_series(lib_idx, &reveal) {
             self.save_default_library_position(lib_idx);
@@ -102,9 +105,15 @@ impl App {
                 self.set_library_tab(lib_idx + 1);
             }
             // The deferred landing completed on THIS drain: arm the same
-            // hand-off the immediate arm arms (task 3.1).
-            self.pending_series_handoff = Some(PendingSeriesHandoff { lib_idx, reveal });
-        } else if !self.arm_pending_series_landing(lib_idx, reveal, pending.switch_tab) {
+            // hand-off the immediate arm arms (task 3.1), carrying the deep
+            // selection (task 6.1).
+            self.pending_series_handoff = Some(PendingSeriesHandoff {
+                lib_idx,
+                reveal,
+                episode_id,
+            });
+        } else if !self.arm_pending_series_landing(lib_idx, reveal, pending.switch_tab, episode_id)
+        {
             self.flash_error(format!("Could not land on '{name}' in its library"));
         }
     }

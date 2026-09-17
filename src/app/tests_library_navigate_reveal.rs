@@ -174,11 +174,14 @@ fn episode_navigation_emits_the_series_landing_without_extra_round_trips() {
         } => {
             assert_eq!(lib_idx, 0);
             assert!(switch_tab);
-            let NavigateLanding::Series { reveal } = landing else {
+            let NavigateLanding::Series { reveal, episode_id } = landing else {
                 panic!("expected a Series landing");
             };
             assert_eq!(reveal.id, "ser1");
             assert_eq!(reveal.item_type, "Series");
+            // Deep selection (task 6.1, design D6): the Episode reveal rides
+            // its own id on the Series landing.
+            assert_eq!(episode_id.as_deref(), Some("ep1"));
         }
         _ => panic!("expected NavigateTo"),
     }
@@ -213,14 +216,54 @@ fn direct_series_navigation_reuses_the_fetched_item() {
         .expect("navigate event");
     match ev {
         LibEvent::NavigateTo { landing, .. } => {
-            let NavigateLanding::Series { reveal } = landing else {
+            let NavigateLanding::Series { reveal, episode_id } = landing else {
                 panic!("expected a Series landing");
             };
             assert_eq!(reveal.id, "ser1");
+            // A direct Series reveal is show-level: no deep selection.
+            assert_eq!(episode_id, None);
         }
         _ => panic!("expected NavigateTo"),
     }
     assert_eq!(http.request_count(), 1, "the item fetch is the reveal fetch");
+}
+
+#[test]
+fn season_navigation_keeps_the_show_level_landing() {
+    // Task 6.1: a Season reveal lands on its Series with default selection
+    // (design D6: no deep selection — the reveal was not an Episode).
+    let _guard = crate::config::TestStateDirGuard::new();
+    let http = MockHttp::new();
+    let app = app_with_mock_emby(&http);
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"sea1","Name":"Season 1","Type":"Season","SeriesId":"ser1"}]}"#,
+    );
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"ser1","Name":"The Show","Type":"Series"}]}"#,
+    );
+
+    app.spawn_navigate_to_item(
+        "sea1".into(),
+        "Season".into(),
+        vec![(0, "lib-tv".into(), "tvshows".into())],
+    );
+
+    let ev = app
+        .lib_rx
+        .recv_timeout(Duration::from_secs(2))
+        .expect("navigate event");
+    match ev {
+        LibEvent::NavigateTo { landing, .. } => {
+            let NavigateLanding::Series { reveal, episode_id } = landing else {
+                panic!("expected a Series landing");
+            };
+            assert_eq!(reveal.id, "ser1");
+            assert_eq!(episode_id, None, "a Season reveal stays show-level");
+        }
+        _ => panic!("expected NavigateTo"),
+    }
 }
 
 #[test]
@@ -291,11 +334,19 @@ fn track_navigation_emits_the_album_landing_with_its_folder_chain() {
         .expect("navigate event");
     match ev {
         LibEvent::NavigateTo { landing, .. } => {
-            let NavigateLanding::Album { reveal, ancestors } = landing else {
+            let NavigateLanding::Album {
+                reveal,
+                ancestors,
+                track_id,
+            } = landing
+            else {
                 panic!("expected an Album landing");
             };
             assert_eq!(reveal.id, "alb1");
             assert_eq!(reveal.item_type, "MusicAlbum");
+            // Deep selection (task 6.2, design D6): the Audio-track reveal
+            // rides its own id on the Album landing.
+            assert_eq!(track_id.as_deref(), Some("trk1"));
             assert_eq!(
                 ancestors,
                 vec![AlbumPathPart {
@@ -359,6 +410,7 @@ fn series_landing_applies_the_searched_series_activation_on_the_root_level() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(show),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -405,6 +457,7 @@ fn series_landing_miss_flashes_and_leaves_the_active_tab_unchanged() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(absent),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -449,6 +502,7 @@ fn album_landing_flat_library_replaces_the_stack_on_the_activated_drain() {
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
             ancestors: vec![],
+            track_id: None,
         },
         switch_tab: true,
     });
@@ -514,6 +568,7 @@ fn album_landing_grouped_library_walks_the_folder_chain() {
                 id: "art1".into(),
                 name: "The Artist".into(),
             }],
+            track_id: None,
         },
         switch_tab: true,
     });
@@ -554,6 +609,7 @@ fn failed_album_activation_flashes_and_never_switches_tabs_later() {
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
             ancestors: vec![],
+            track_id: None,
         },
         switch_tab: true,
     });
@@ -712,6 +768,7 @@ fn series_landing_on_an_unloaded_library_waits_then_lands_on_the_loaded_drain() 
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(series_item("ser1", "The Show")),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -761,6 +818,7 @@ fn series_landing_waits_for_the_whole_library_prefetch_on_a_paginated_root() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(show),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -802,6 +860,7 @@ fn series_landing_miss_after_the_whole_library_load_flashes_and_clears() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(series_item("ser-absent", "Missing Show")),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -845,6 +904,7 @@ fn pending_series_landing_survives_a_foreign_library_drain() {
         lib_idx: 0,
         reveal: Box::new(series_item("ser1", "The Show")),
         switch_tab: true,
+        episode_id: None,
     });
     let mut other_lib = make_item("Music", "CollectionFolder");
     other_lib.id = "lib-other".into();
@@ -878,6 +938,7 @@ fn completed_series_landing_handoff_survives_an_unrelated_error_drain() {
         lib_idx: 0,
         landing: NavigateLanding::Series {
             reveal: Box::new(series_item("ser1", "The Show")),
+            episode_id: None,
         },
         switch_tab: true,
     });
@@ -890,6 +951,7 @@ fn completed_series_landing_handoff_survives_an_unrelated_error_drain() {
         lib_idx: 0,
         reveal: Box::new(series_item("ser2", "Third Show")),
         switch_tab: true,
+        episode_id: None,
     });
 
     app.handle_lib_event(LibEvent::Error("an unrelated refresh failed".into()));
@@ -1008,6 +1070,7 @@ fn album_landing_with_a_stale_library_index_flashes_instead_of_panicking() {
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
             ancestors: Vec::new(),
+            track_id: None,
         },
         switch_tab: true,
     });
@@ -1052,6 +1115,7 @@ fn recursive_album_activation_rests_the_cursor_on_a_non_folder_album() {
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
             ancestors: Vec::new(),
+            track_id: None,
         },
         switch_tab: true,
     });
@@ -1097,6 +1161,7 @@ fn manual_tab_change_drops_the_deferred_album_switch_and_never_yanks_back() {
         landing: NavigateLanding::Album {
             reveal: Box::new(album),
             ancestors: Vec::new(),
+            track_id: None,
         },
         switch_tab: true,
     });

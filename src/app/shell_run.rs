@@ -44,6 +44,10 @@ impl Model {
         // panel's active pointer follows the landed tab and before the hero
         // image / focus passes so they see the opened presentation.
         self.drain_series_navigation_handoff();
+        // Task 6.1: a navigated episode's workspace selection retries as its
+        // series detail / season episodes drain (each retry may arm the next
+        // season fetch; absence clears it silently).
+        self.drain_pending_episode_selection();
         // Task 5.10 (design D9): the active owner's hero image projection —
         // the fetches and the cover-fit box re-encode — runs here, before the
         // draw, so painting reads projected state only.
