@@ -8,8 +8,8 @@
 
 ## 2. Shell-side feed-name resolution
 
-- [ ] 2.1 Add the feed-id → display-name lookup field to `HomeContent` (`src/app/types_playback.rs`), populated in `assign_home_content` (`src/app/shell_home_content.rs`) from the existing config subscription match, and cleared on `HomeContentCleared`. Verify: `cargo nextest run -p mbv shell_home_content` / existing Home tests pass.
-- [ ] 2.2 Test: assignment resolves a matching subscription's display name, and a non-matching/`None` `feed_id` yields no entry. Verify: `cargo nextest run -p mbv shell_home_content`.
+- [x] 2.1 Add the feed-id → display-name lookup field to `HomeContent` (`src/app/types_playback.rs`), populated in `assign_home_content` (`src/app/shell_home_content.rs`) from the existing config subscription match, and cleared on `HomeContentCleared`. Verify: `cargo nextest run -p mbv shell_home_content` / existing Home tests pass.
+- [x] 2.2 Test: assignment resolves a matching subscription's display name, and a non-matching/`None` `feed_id` yields no entry. Verify: `cargo nextest run -p mbv shell_home_content`.
 
 ## 3. Home row projection
 
