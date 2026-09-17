@@ -31,7 +31,7 @@ use crate::app::types_audiobookshelf_browse::{
     podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
     PodcastDisplayRow,
 };
-use crate::app::ui_util::{list_duration_secs, trunc_str};
+use crate::app::ui_util::trunc_str;
 
 /// Shared max pill label length (`feeds_content.rs`): this owner is the one
 /// producer of the Selector row's labels, and show pills truncate like the
@@ -189,9 +189,9 @@ impl PodcastContent {
                             .unwrap_or_default(),
                         secondary: Some(episode.title.clone()),
                         trailing: None,
-                        duration: episode
-                            .duration_seconds
-                            .and_then(|seconds| list_duration_secs(seconds.round() as i64)),
+                        // Library lists carry no time column (only the Queue
+                        // list and the sessions modal show one).
+                        duration: None,
                         kind: MediaKind::Media,
                         semantic_state: match progress {
                             Some(progress) if progress.is_finished => MediaSemanticState::Played,
@@ -947,7 +947,7 @@ mod tests {
             } => {
                 assert_eq!(primary, "Alpha Show", "the split row names its podcast");
                 assert_eq!(secondary.as_deref(), Some("dated"));
-                assert_eq!(duration.as_deref(), Some("1:00:00"));
+                assert_eq!(duration, None, "library episode rows carry no time");
                 assert_eq!(semantic_state, MediaSemanticState::Played);
                 assert_eq!(kind, MediaKind::Media);
             }

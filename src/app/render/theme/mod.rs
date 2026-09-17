@@ -103,11 +103,18 @@ pub const STATUS_ERROR: Color = primitives::RED;
 pub const STATUS_AVAILABLE: Color = primitives::GREEN; // checkmarks, available/positive metadata
 
 // Media list metadata
-/// The right-aligned duration column of every media list (queue, home,
-/// feeds, TV episode, music track, book chapter). Its own role rather than
-/// the green `STATUS_AVAILABLE` metadata role, so a status-colour edit
-/// cannot move the durations.
+/// The right-aligned duration column of the Queue list. Its own role rather
+/// than the green `STATUS_AVAILABLE` metadata role, so a status-colour edit
+/// cannot move the durations. Only the Queue list projects a duration; library
+/// browse rows carry no time.
 pub const DURATION: Color = primitives::IRIS; // the sage
+
+/// The secondary title of a split media-list row — the item's own name after
+/// the container/context (which paints `PLAYBACK_CONTEXT_FG`). Its own role
+/// rather than `PLAYBACK_TITLE_FG`, the playback strip's own-name role:
+/// browse lists paint their split-row titles in sage while the strip keeps
+/// aqua.
+pub const SPLIT_ROW_TITLE_FG: Color = primitives::IRIS; // the sage
 
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = primitives::ORANGE;

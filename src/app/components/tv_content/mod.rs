@@ -25,8 +25,8 @@ use super::media_list::{
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
-use crate::app::ui_util::{list_duration_secs, natural_sort_key};
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use crate::app::ui_util::natural_sort_key;
+use mbv_core::api::EmbyItem;
 use ratatui::layout::Position;
 #[cfg(test)]
 use tuirealm::event::Key;
@@ -102,8 +102,8 @@ fn emby_semantic_state(item: &EmbyItem) -> MediaSemanticState {
     }
 }
 /// Build the embedded episode `WideMediaList`'s rows from a season's
-/// episodes (task 4.2d): the same title/duration formatting the hand-painted
-/// table previously rendered, now the canonical control's row content.
+/// episodes (task 4.2d): the canonical control's row content. Library lists
+/// carry no time column, so no duration is projected.
 fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
     episodes
         .iter()
@@ -119,7 +119,7 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 primary: format!("{number}. {}", episode.name),
                 secondary: None,
                 trailing: None,
-                duration: list_duration_secs(episode.runtime_ticks / TICKS_PER_SECOND),
+                duration: None,
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             }

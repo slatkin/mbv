@@ -142,14 +142,14 @@ pub(in crate::app) fn media_list_row<Target>(
             let title_color = fg;
             // Split rows paint the now-playing two-tone palette: primary is
             // the container/context in gold, secondary the item's own name in
-            // aqua, with one separating space. A played row mutes only the
+            // sage, with one separating space. A played row mutes only the
             // secondary; no other state moves the palette (a `NowPlaying` row
             // never carries secondary). Single-part rows keep their semantic
             // title role. (`parts` feeds the selected-row marquee path;
             // unselected split rows paint the same roles below.)
             let secondary_color = match semantic_state {
                 MediaSemanticState::Played => palette::TEXT_MUTED,
-                _ => palette::PLAYBACK_TITLE_FG,
+                _ => palette::SPLIT_ROW_TITLE_FG,
             };
             let parts: Vec<(String, Color)> =
                 match secondary.as_deref().filter(|sec| !sec.is_empty()) {

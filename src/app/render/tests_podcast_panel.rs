@@ -162,8 +162,8 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
     );
 
     // The grouped list paints the age-group headings and the split rows
-    // (podcast name in the context role, episode title, duration), each
-    // painted exactly once by the one list painter.
+    // (podcast name in the context role, episode title), each painted exactly
+    // once by the one list painter. Library list rows carry no time column.
     assert!(area_contains(
         terminal.backend().buffer(),
         wide.list_area,
@@ -181,8 +181,8 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
     );
     assert_eq!(
         count_in_buffer(&terminal, "1:00:00"),
-        1,
-        "the row's duration paints once"
+        0,
+        "library list rows paint no duration time"
     );
 
     // The Wide hero paints the selected episode in the Hero pane — no

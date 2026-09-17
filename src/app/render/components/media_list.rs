@@ -699,7 +699,7 @@ mod wide_row_regression_tests {
     fn collection_row_suppresses_projected_duration_media_row_paints_it() {
         let rect = Rect::new(0, 0, 40, 4);
         let selected_bg = palette::SURFACE_RESTING;
-        let dur = crate::app::ui_util::list_duration_secs(272); // 4:32
+        let dur = Some(crate::app::ui_util::fmt_duration_short(272)); // 4:32
         assert_eq!(dur.as_deref(), Some("4:32"));
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -742,11 +742,11 @@ mod wide_row_regression_tests {
         );
     }
 
-    /// Split rows paint the now-playing two-tone palette: context in gold,
-    /// item title in aqua. On a narrow slot the row truncates as one string —
-    /// the context keeps its width and the single ellipsis lands at the cut.
+    /// Split rows paint one palette: context in gold, item title in sage. On
+    /// a narrow slot the row truncates as one string — the context keeps its
+    /// width and the single ellipsis lands at the cut.
     #[test]
-    fn episode_row_paints_the_split_row_playback_palette() {
+    fn episode_row_paints_the_split_row_palette() {
         use crate::app::components::media_list::{MediaListRow, MediaSemanticState};
 
         let rect = Rect::new(0, 0, 40, 1);
@@ -779,7 +779,7 @@ mod wide_row_regression_tests {
         assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
-            palette::PLAYBACK_TITLE_FG
+            palette::SPLIT_ROW_TITLE_FG
         );
 
         // Narrow slot on an unselected row (the selected row marquees):
@@ -867,7 +867,7 @@ mod wide_row_regression_tests {
         assert_eq!(buf[(2, 1)].fg, palette::TEXT_MUTED);
     }
 
-    /// A played split row mutes only the item title (aqua → muted) while the
+    /// A played split row mutes only the item title (sage → muted) while the
     /// context keeps gold, so the container stays legible on watched rows.
     #[test]
     fn played_split_row_mutes_the_item_title_while_context_keeps_gold() {

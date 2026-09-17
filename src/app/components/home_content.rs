@@ -30,8 +30,7 @@ use crate::app::types_context_menu::ContextMenuTargets;
 
 use super::msg::{LeafKeyResult, Msg, ShellRequest};
 use crate::app::types_playback::HomeLatestSource;
-use crate::app::ui_util::{fmt_duration_short, trunc_str};
-use mbv_core::api::TICKS_PER_SECOND;
+use crate::app::ui_util::trunc_str;
 use mbv_core::playback_queue::QueueItem;
 
 /// The resume-percentage badge Home rows draw next to the title (rendered as
@@ -235,9 +234,9 @@ impl HomeContent {
                     // episodes.
                     target: item.id().to_owned(),
                     trailing: home_progress_badge(item).map(MediaListTrailing::Progress),
-                    duration: item
-                        .duration()
-                        .map(|ticks| fmt_duration_short((ticks / TICKS_PER_SECOND as u64) as i64)),
+                    // Library lists carry no time column (only the Queue list
+                    // and the sessions modal show one).
+                    duration: None,
                     kind: MediaKind::Media,
                     semantic_state: MediaSemanticState::Ordinary,
                 }

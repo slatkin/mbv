@@ -35,9 +35,7 @@ use super::media_list::{
     MediaListTransition, MediaSemanticState, RowIntent,
 };
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent};
-use crate::app::render::{
-    current_time_secs, feed_display_rows, feed_duration_text, FeedDisplayRow,
-};
+use crate::app::render::{current_time_secs, feed_display_rows, FeedDisplayRow};
 use crate::app::types_feed_tab::WatchedFilter;
 use crate::app::ui_util::trunc_str;
 
@@ -369,7 +367,9 @@ impl FeedsContent {
                         primary: entry.title.clone(),
                         secondary: None,
                         trailing: None,
-                        duration: feed_duration_text(entry.duration_ticks),
+                        // Library lists carry no time column (only the Queue
+                        // list and the sessions modal show one).
+                        duration: None,
                         kind: MediaKind::Media,
                         semantic_state: if entry.played {
                             MediaSemanticState::Played

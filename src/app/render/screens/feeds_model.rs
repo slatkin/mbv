@@ -1,5 +1,3 @@
-use crate::app::ui_util::list_duration_secs;
-use mbv_core::api::TICKS_PER_SECOND;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SECONDS_PER_DAY: u64 = 24 * 60 * 60;
@@ -76,13 +74,6 @@ pub(in crate::app) fn current_time_secs() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs()
-}
-
-/// Convert an optional feed tick count to canonical list duration text.
-pub(in crate::app) fn feed_duration_text(ticks: Option<u64>) -> Option<String> {
-    ticks
-        .map(|t| (t / TICKS_PER_SECOND as u64) as i64)
-        .and_then(list_duration_secs)
 }
 
 #[cfg(test)]

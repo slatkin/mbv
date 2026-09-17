@@ -6,7 +6,7 @@
 //! `MusicWorkspaceComponent` temporarily borrows this owner for its existing
 //! painters until the later Music panel slices move painting and registration.
 
-use mbv_core::api::{EmbyItem, TICKS_PER_SECOND};
+use mbv_core::api::EmbyItem;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::inline_search::{InlineSearch, InlineSearchHost};
@@ -23,7 +23,7 @@ use super::media_list::{
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
 use crate::app::render::MusicWideRenderCtx;
-use crate::app::ui_util::{list_duration_secs, trunc_str};
+use crate::app::ui_util::trunc_str;
 
 /// Strips the `Artist (Year) ` folder-name prefix from an album's display
 /// name, returning the bare title and resolved release year. Rehomed from the
@@ -65,7 +65,9 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
             } else {
                 index as i64 + 1
             };
-            let duration = list_duration_secs(track.runtime_ticks / TICKS_PER_SECOND);
+            // Library lists carry no time column (only the Queue list and
+            // the sessions modal show one).
+            let duration = None;
             MediaListRow::Item {
                 target: track.id.clone(),
                 primary: format!("{number}. {}", track.name),

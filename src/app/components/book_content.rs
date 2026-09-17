@@ -37,29 +37,18 @@ fn chapter_rows(state: &AudiobookshelfBookBrowseState, id: &str) -> Vec<MediaLis
             // number or the audio-part index -- never the `enumerate()` display
             // position, so a detail refresh that re-composes `visible_rows`
             // cannot resolve a stale target to a different row (design.md D4).
-            let (target, primary, duration) = match row {
-                BookRow::Chapter {
-                    id,
-                    title,
-                    start,
-                    end,
-                } => (
-                    id,
-                    title,
-                    crate::app::ui_util::list_duration_secs((end - start).max(0.0) as i64),
-                ),
-                BookRow::AudioFile { index, duration } => (
-                    index,
-                    format!("Part {index}"),
-                    crate::app::ui_util::list_duration_secs(duration as i64),
-                ),
+            let (target, primary) = match row {
+                BookRow::Chapter { id, title, .. } => (id, title),
+                BookRow::AudioFile { index, .. } => (index, format!("Part {index}")),
             };
             MediaListRow::Item {
                 target,
                 primary,
                 secondary: None,
                 trailing: None,
-                duration,
+                // Library lists carry no time column (only the Queue list and
+                // the sessions modal show one).
+                duration: None,
                 kind: MediaKind::Media,
                 semantic_state: MediaSemanticState::Ordinary,
             }
