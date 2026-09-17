@@ -12,7 +12,7 @@ command, and SHALL NOT mutate queue or playback state.
 - **WHEN** a Client attempts to transmit a Player command that the ctrl transport cannot encode
 - **THEN** the transport SHALL return a refusal to the caller instead of transmitting
 - **AND** the sending process SHALL remain alive
-- **AND** the refusal SHALL be presentable to the user
+- **AND** the caller SHALL receive the refusal so it can be presented
 
 #### Scenario: Refusal leaves playback state untouched
 

@@ -23,13 +23,13 @@ the user sees.
 
 #### Scenario: Running from a checkout
 
-- **WHEN** the running build located next to a checkout provides the script set
+- **WHEN** the running build's compile-time checkout root provides the script set at `<checkout>/scripts/`
 - **THEN** that script set SHALL be the one loaded
 
 #### Scenario: Installed build
 
-- **WHEN** no checkout script set is available to the running build
-- **THEN** the installed script set SHALL be loaded
+- **WHEN** the running build's checkout root is absent at runtime, or holds no script set
+- **THEN** the installed script set at `/usr/share/mbv/scripts/` SHALL be loaded
 
 ### Requirement: The resolved script set is observable
 
@@ -51,7 +51,8 @@ delete or rewrite such a copy.
 ### Requirement: The overlay script set and its fonts resolve under one rule
 
 The mpv overlay script set and the font directory it references SHALL resolve under the
-same rule, so a build never pairs its script set with another build's fonts.
+same rule (checkout root if present, otherwise `/usr/share/mbv`), so a build never pairs
+its script set with another build's fonts.
 
 #### Scenario: Fonts follow the script source
 
