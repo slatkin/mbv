@@ -20,8 +20,9 @@ use super::components::tv_content::TvContent;
 use super::components::ComponentId;
 use super::components::{LibraryKind, ShellRequest};
 use super::render::TvWideRenderCtx;
-use super::shell::Model;
+use super::shell::{Model, PendingEpisodeSelection};
 use super::TabSelection;
+use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
 
 impl Model {
@@ -99,6 +100,121 @@ impl Model {
     /// local focus (the same state the ordinary second Enter enters).
     pub(super) fn focus_tv_owner_episodes(&mut self) {
         self.update_tv_owner(TvContent::enter_episode_selection);
+    }
+
+    /// The series detail hand-off shared by Inline Search's series activation
+    /// and a completed `NavigateLanding::Series` (task 3.1, design D3): the
+    /// owner re-anchors onto the series, the workspace content is pushed, the
+    /// Wide workspace / Narrow Library Hero overlay opens, and the content is
+    /// re-pushed so the opened presentation reads the re-anchored selection.
+    pub(super) fn open_series_workspace_handoff(&mut self, lib_idx: usize, item: &EmbyItem) {
+        // Re-anchor the owner's selection onto the navigated-to series before
+        // the presentation push reads it (the owner otherwise preserves its
+        // prior stable target).
+        self.reanchor_tv_owner_selection(&item.id);
+        self.push_tv_workspace_content();
+        if self.app.wide_tv_library_area(lib_idx).is_some() {
+            self.app.activate_selected_series_item(lib_idx, item);
+            // The workspace is active: episode selection takes the local
+            // focus, like music's track-selection mode.
+            self.focus_tv_owner_episodes();
+        } else {
+            self.open_library_hero_overlay();
+        }
+        self.push_tv_workspace_content();
+    }
+
+    /// Consume a landing that completed since the last drain (task 3.1): the
+    /// App arms the hand-off at the actual landing completion -- the immediate
+    /// `NavigateTo` arm or the deferred pending-landing retry -- and this
+    /// runs the same presentation sequence Inline Search's series activation
+    /// runs. A no-op when no landing completed. A carried episode id (task
+    /// 6.1, design D6) arms the deep-selection pending after the presentation
+    /// opens; the selection itself resolves against the series detail.
+    pub(in crate::app) fn drain_series_navigation_handoff(&mut self) {
+        let Some(handoff) = self.app.pending_series_handoff.take() else {
+            return;
+        };
+        self.open_series_workspace_handoff(handoff.lib_idx, &handoff.reveal);
+        if let Some(episode_id) = handoff.episode_id {
+            self.pending_episode_selection = Some(PendingEpisodeSelection {
+                lib_idx: handoff.lib_idx,
+                series_id: handoff.reveal.id.clone(),
+                episode_id,
+            });
+            self.drain_pending_episode_selection();
+        }
+    }
+
+    /// Deep-selection retry (task 6.1, design D6): resolve the navigated
+    /// episode against the cached series detail -- fetching a season's
+    /// episodes when uncached -- and select it with episode focus. Runs at
+    /// the sync pass and after every lib-event drain, so the detail and
+    /// season-episodes fetches it arms re-drive it. Absence is not failure:
+    /// once every season's episodes are in hand without a match, the pending
+    /// clears and the landed show keeps its default selection (no error --
+    /// the navigation target was reached). A manual tab change discards the
+    /// pending silently, like the hand-off it extends.
+    pub(super) fn drain_pending_episode_selection(&mut self) {
+        enum Step {
+            /// The series detail (or an in-flight season fetch) has not
+            /// landed yet; stay armed.
+            Wait,
+            /// The season's episodes are uncached: arm the fetch and retry
+            /// on its drain (`fetch_series_season_episodes` deduplicates).
+            Fetch(String),
+            /// The episode is in the season's cached episodes.
+            Select(usize),
+            /// Every season's episodes are in hand; the episode is absent.
+            Absent,
+        }
+        let Some(sel) = self.pending_episode_selection.clone() else {
+            return;
+        };
+        if self.app.tab != TabSelection::EmbyLibrary(sel.lib_idx) {
+            self.pending_episode_selection = None;
+            return;
+        }
+        let step = match self.app.series_detail_cache.get(&sel.series_id) {
+            None => Step::Wait,
+            Some(detail) => detail
+                .seasons
+                .iter()
+                .enumerate()
+                .find_map(
+                    |(season_index, season)| match detail.episodes.get(&season.id) {
+                        None => Some(Step::Fetch(season.id.clone())),
+                        Some(episodes)
+                            if episodes.iter().any(|episode| episode.id == sel.episode_id) =>
+                        {
+                            Some(Step::Select(season_index))
+                        }
+                        Some(_) => None,
+                    },
+                )
+                .unwrap_or(Step::Absent),
+        };
+        match step {
+            Step::Wait => {}
+            Step::Fetch(season_id) => {
+                self.app
+                    .fetch_series_season_episodes(sel.series_id.clone(), season_id);
+            }
+            Step::Select(season_index) => {
+                let selected = self
+                    .update_tv_owner(|owner| {
+                        owner.select_episode_in_season(season_index, &sel.episode_id)
+                    })
+                    .unwrap_or(false);
+                self.pending_episode_selection = None;
+                if selected {
+                    // Materialize the moved season/episode rows in the opened
+                    // presentation.
+                    self.push_tv_workspace_content();
+                }
+            }
+            Step::Absent => self.pending_episode_selection = None,
+        }
     }
 
     /// The active TV library's owner key (design D2's

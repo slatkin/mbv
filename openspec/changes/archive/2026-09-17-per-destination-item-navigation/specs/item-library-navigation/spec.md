@@ -20,10 +20,12 @@ browse level with the cursor on the series. An Episode or Season SHALL resolve
 its owning Series and land on that show; a Season or Episode SHALL never exist
 as the top browse level of the landed navigation. A Music track or album
 SHALL resolve to its album and land with that album selected in the Music
-surface. A MusicArtist SHALL NOT land: the navigation SHALL fail with a flash
-and leave the current view unchanged (an artist has no single owning album,
-and a plain artist browse chain does not render on a grouped Music surface —
-verified by a real-tick render check).
+surface, with the track list as the workspace content in the album-grouped
+view (in a flat music library the landed top level IS the track list). A
+MusicArtist SHALL NOT land: the navigation SHALL fail with a flash and leave
+the current view unchanged (an artist has no single owning album, and a plain
+artist browse chain does not render on a grouped Music surface - verified by
+a real-tick render check).
 
 #### Scenario: Episode in the queue navigates to its show
 
@@ -37,9 +39,7 @@ verified by a real-tick render check).
 
 - **WHEN** the user chooses "Go to Library" on a queued Music track
 - **THEN** the Music library tab becomes the active tab selection with the
-  track's album selected and, in the album-grouped view, the album's track list
-  as the workspace content; in a flat (non-grouped) music library the landed
-  top browse level IS the track list
+  track's album selected and its track list available as the workspace content
 
 #### Scenario: Movie in the queue navigates to its list row
 
@@ -93,9 +93,8 @@ pre-navigation position SHALL NOT apply after the navigation completes.
 
 When item navigation targets a destination whose Interactive Component is
 already mounted, the component SHALL re-anchor its selection to the landed
-item before the presentation push that draws the landed state, so the
-workspace or list reflects the navigation rather than the pre-navigation
-selection.
+item before the next presentation push, so the workspace or list reflects the
+navigation rather than the pre-navigation selection.
 
 #### Scenario: Previously visited TV library follows the navigation
 
@@ -103,3 +102,28 @@ selection.
   the session
 - **THEN** the retained TV destination's series selection points at the
   navigated show before the next content push
+
+### Requirement: Navigated workspaces select the chosen episode or track
+
+When item navigation resolves an Episode to its show, the opened TV Workspace
+SHALL select that episode (season + episode resolved, fetching season episodes
+when uncached) with episode focus. When item navigation resolves a Music track
+to its album, the album's workspace track list SHALL select that track. A
+Season reveal keeps the show-level landing with default selection. When the
+chosen episode or track is absent from the fetched detail, the show/album
+landing SHALL stand with default selection and no error. Movie/generic
+behavior is unchanged (the cursor already rests on the item).
+
+#### Scenario: Navigated workspace selects the episode
+
+- **WHEN** the user chooses "Go to Library" on a queued Episode and the
+  library is in the Wide hero arrangement
+- **THEN** the show is selected with its Workspace open
+- **AND** the episode is selected in the workspace
+
+#### Scenario: Navigated track list selects the track
+
+- **WHEN** the user chooses "Go to Library" on a queued Music track
+- **THEN** the track's album is selected with its track list as the workspace
+  content
+- **AND** the track is selected in the track list

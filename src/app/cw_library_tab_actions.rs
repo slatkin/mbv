@@ -48,6 +48,13 @@ impl App {
     /// Move to left-panel tab `pos` and settle all state that follows from a
     /// tab change (panel focus, stale image dims, library activation).
     fn apply_tab_position(&mut self, pos: usize) {
+        // Any tab change abandons the deferred cross-surface navigations (U2
+        // correction): the user moved on, so a later drain must never yank
+        // the tab to the navigated library. A landing's own switch happens
+        // after it consumed its pending state, so it is unaffected.
+        self.pending_navigate_tab_switch = None;
+        self.pending_series_landing = None;
+        self.pending_series_handoff = None;
         self.tab = TabSelection::from_position_with_counts(
             pos,
             self.libs.len(),

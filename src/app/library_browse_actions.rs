@@ -1,7 +1,244 @@
 use super::types_browse::BrowseResting;
+use super::types_events::NavigateLanding;
 use super::ui_util::sort_episodes;
 use super::{AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, LibEvent, LibraryTab, PAGE_SIZE};
-use mbv_core::api::EmbyItem;
+use mbv_core::api::{EmbyClient, EmbyItem};
+
+/// D1 (change `per-destination-item-navigation`): the resolved reveal target.
+/// `Chain` keeps the built ancestor-chain nav stack (Movie/generic);
+/// `Series`/`Album` name the single reveal item the App lands per kind at
+/// drain time. An unresolvable kind is a resolve failure (task 4.2), never a
+/// silent misroute.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum RevealTarget {
+    Chain,
+    Series(String),
+    Album(String),
+}
+
+/// D1 reveal-item table, pure over the item's own back-references and its
+/// ancestor chain (nearest→root, the `get_ancestors` order) so the table
+/// test covers the item_type → reveal mapping without a server. `ancestors`
+/// is `None` when the kind's own back-reference already decided (the worker
+/// skips the round trip).
+pub(super) fn resolve_reveal_target(
+    item_type: &str,
+    item: &EmbyItem,
+    ancestors: Option<&[EmbyItem]>,
+) -> Result<RevealTarget, String> {
+    match item_type {
+        // Episode/Season reveal their owning Series: the item's own
+        // `series_id` decides without an ancestors round trip; the chain is
+        // the fallback.
+        "Episode" | "Season" => {
+            if !item.series_id.is_empty() {
+                return Ok(RevealTarget::Series(item.series_id.clone()));
+            }
+            owning_ancestor(ancestors, "Series")
+                .map(|a| RevealTarget::Series(a.id.clone()))
+                .ok_or_else(|| "Could not resolve the item's series".to_string())
+        }
+        // A track reveals its album: `album_id` first, ancestors fallback.
+        "Audio" => {
+            if !item.album_id.is_empty() {
+                return Ok(RevealTarget::Album(item.album_id.clone()));
+            }
+            owning_ancestor(ancestors, "MusicAlbum")
+                .map(|a| RevealTarget::Album(a.id.clone()))
+                .ok_or_else(|| "Could not resolve the item's album".to_string())
+        }
+        "MusicAlbum" => Ok(RevealTarget::Album(item.id.clone())),
+        // An artist does not land (D1): it has no single owning album, and a
+        // plain artist browse chain does not render on a grouped Music
+        // surface (real-tick render check). The kind resolves to the
+        // pre-U2 failure, flashing and leaving the active view unchanged.
+        "MusicArtist" => Err("Could not resolve the artist's album".to_string()),
+        "Series" => Ok(RevealTarget::Series(item.id.clone())),
+        // Movie/generic: the ancestor-chain rebuild is already correct.
+        _ => Ok(RevealTarget::Chain),
+    }
+}
+
+/// The nearest ancestor of `item_type` in a nearest→root ancestor chain.
+fn owning_ancestor<'a>(ancestors: Option<&'a [EmbyItem]>, item_type: &str) -> Option<&'a EmbyItem> {
+    ancestors.and_then(|chain| chain.iter().find(|a| a.item_type == item_type))
+}
+
+/// Fetch one item by id; a miss (empty result, server error) is a resolve
+/// failure (deleted item, task 4.2).
+fn fetch_reveal_item(client: &EmbyClient, item_id: &str) -> Result<EmbyItem, String> {
+    client
+        .get_items_by_ids(&[item_id.to_string()])?
+        .into_iter()
+        .next()
+        .ok_or_else(|| format!("Item {item_id} no longer exists"))
+}
+
+/// D1+D2: resolve the reveal target for `item` and build the landing payload
+/// the App applies at drain time. Every failure mode (no ancestors,
+/// unresolvable kind, fetch error, deleted item, unexpected fetched item
+/// type) returns the error that `LibEvent::Error` flashes, leaving the
+/// active tab unchanged (task 4.2).
+fn build_navigate_landing(
+    client: &EmbyClient,
+    item_id: &str,
+    item_type: &str,
+    lib_id: &str,
+) -> Result<NavigateLanding, String> {
+    // The item's own record supplies the back-references (D1: no ancestors
+    // round trip when present); the fetch doubles as the deleted-item check.
+    let item = fetch_reveal_item(client, item_id)?;
+    // Ancestors are ordered nearest→root: [Season, Series, physical_folder, AggregateFolder].
+    // The pure table decides first from the item's own back-references; the
+    // round trip is paid only when a kind's fallback needs the chain.
+    let reveal = resolve_reveal_target(item_type, &item, None).or_else(|_| {
+        let ancestors = client.get_ancestors(item_id)?;
+        log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
+        resolve_reveal_target(item_type, &item, Some(&ancestors))
+    })?;
+    landing_for_target(client, &item, reveal, lib_id)
+}
+
+/// The navigable ancestors inside the library: `get_ancestors` is
+/// nearest→root and its last two entries are the physical library folder and
+/// the AggregateFolder root, which are never browse levels of their own.
+fn ancestors_inside_library(ancestors: &[EmbyItem]) -> &[EmbyItem] {
+    &ancestors[..ancestors.len().saturating_sub(2)]
+}
+
+/// D1+D2: the landing kind is chosen from the RESOLVED `RevealTarget` kind.
+/// An unexpected fetched item type (e.g. a `series_id` resolving to a
+/// non-Series record) is a resolve failure (`LibEvent::Error`), never a
+/// silent misroute.
+fn landing_for_target(
+    client: &EmbyClient,
+    item: &EmbyItem,
+    reveal: RevealTarget,
+    lib_id: &str,
+) -> Result<NavigateLanding, String> {
+    match reveal {
+        RevealTarget::Chain => build_chain_nav_stack(client, item, lib_id)
+            .map(|nav_stack| NavigateLanding::Chain { nav_stack }),
+        RevealTarget::Series(series_id) => {
+            // The item's own record already in hand doubles as the reveal
+            // item when it IS the series; otherwise fetch it and verify the
+            // type before handing it to the App.
+            let series = if item.id == series_id && item.item_type == "Series" {
+                item.clone()
+            } else {
+                fetch_reveal_item(client, &series_id)?
+            };
+            if series.item_type != "Series" {
+                return Err(format!("Item {series_id} is not a Series"));
+            }
+            // Deep selection (task 6.1, design D6): an Episode reveal rides
+            // its own id on the Series landing; a Season reveal stays
+            // show-level (default selection).
+            let episode_id = (item.item_type == "Episode").then(|| item.id.clone());
+            Ok(NavigateLanding::Series {
+                reveal: Box::new(series),
+                episode_id,
+            })
+        }
+        RevealTarget::Album(album_id) => {
+            let album = if item.id == album_id && (item.item_type == "MusicAlbum" || item.is_folder)
+            {
+                item.clone()
+            } else {
+                fetch_reveal_item(client, &album_id)?
+            };
+            // Unmatched album folders come back as plain "Folder" records
+            // (the album index builds its terminal level by `is_folder` for
+            // the same reason), so a folder record is a valid album reveal.
+            if album.item_type != "MusicAlbum" && !album.is_folder {
+                return Err(format!("Item {album_id} is not an album"));
+            }
+            // The recursive activation consumes the album-index entry shape:
+            // the album plus the folder chain between the library root and
+            // it. `get_ancestors` is nearest→root; drop the trailing library
+            // folder + AggregateFolder (same rule as `build_chain_nav_stack`)
+            // and reverse what's left to root→album.
+            let ancestors = client.get_ancestors(&album.id)?;
+            let inside = ancestors_inside_library(&ancestors);
+            let ancestors = inside
+                .iter()
+                .rev()
+                .map(|a| AlbumPathPart {
+                    id: a.id.clone(),
+                    name: a.display_name(),
+                })
+                .collect();
+            // Deep selection (task 6.2, design D6): an Audio-track reveal
+            // rides its own id on the Album landing.
+            let track_id = item.is_audio().then(|| item.id.clone());
+            Ok(NavigateLanding::Album {
+                reveal: Box::new(album),
+                ancestors,
+                track_id,
+            })
+        }
+    }
+}
+
+/// Movie/generic ancestor-chain rebuild (D2: the Chain arm keeps this
+/// pre-change shape verbatim): lib_id first, then inside ancestors from
+/// root→item, cursors resting on the next level's target.
+fn build_chain_nav_stack(
+    client: &EmbyClient,
+    item: &EmbyItem,
+    lib_id: &str,
+) -> Result<Vec<BrowseLevel>, String> {
+    // Drop the last two ancestors (physical library folder + AggregateFolder
+    // root); everything before those is navigable content inside the library.
+    let ancestors = client.get_ancestors(&item.id)?;
+    let inside = ancestors_inside_library(&ancestors);
+
+    // Build nav levels: lib_id first, then inside ancestors from root→item, then item itself.
+    // inside is nearest→root order; we need root→item, so iterate reversed.
+    let mut parents: Vec<String> = vec![lib_id.to_string()];
+    for a in inside.iter().rev() {
+        parents.push(a.id.clone());
+    }
+
+    // targets[i] is the item we want the cursor on inside parents[i]
+    let mut targets: Vec<String> = inside.iter().rev().skip(1).map(|a| a.id.clone()).collect();
+    if let Some(a) = inside.first() {
+        targets.push(a.id.clone());
+    } // last inside level → first inside ancestor
+    targets.push(item.id.clone()); // deepest level → the item itself
+
+    let mut nav_stack: Vec<BrowseLevel> = Vec::new();
+    for (parent_id, target_id) in parents.into_iter().zip(targets) {
+        let (mut items, total_count) =
+            client.get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending")?;
+        if items
+            .first()
+            .map(|it| it.item_type == "Episode")
+            .unwrap_or(false)
+        {
+            sort_episodes(&mut items);
+        }
+        let cursor = items.iter().position(|it| it.id == target_id).unwrap_or(0);
+        log::debug!(target:"navigate", "level parent={parent_id} target={target_id} cursor={cursor}/{}", items.len());
+        nav_stack.push(BrowseLevel {
+            parent_id: parent_id.clone(),
+            title: String::new(),
+            items,
+            total_count,
+            resting: BrowseResting::new(cursor, 0),
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+
+            all_items: None,
+            letter_filter: None,
+            music_grouping: None,
+        });
+    }
+    Ok(nav_stack)
+}
 
 type BrowseRefresh = (
     usize,
@@ -88,16 +325,7 @@ pub(super) fn build_album_index_with(
             // index. `is_folder` is the same criterion the intermediate
             // levels above already use.
             for album in items.into_iter().filter(|item| item.is_folder) {
-                let mut labels: Vec<String> =
-                    ancestors.iter().map(|part| part.name.clone()).collect();
-                labels.push(album.display_name());
-                let display_label = labels.join(" / ");
-                entries.push(AlbumSearchEntry {
-                    album,
-                    ancestors: ancestors.clone(),
-                    search_text: display_label.clone(),
-                    display_label,
-                });
+                entries.push(AlbumSearchEntry::from_chain(album, ancestors.clone()));
             }
             return Ok(());
         }
@@ -391,6 +619,11 @@ impl App {
         libs: Vec<(usize, String, String)>,
     ) {
         let Some(client) = self.emby_snapshot() else {
+            // An unavailable Emby is a resolve failure (task 4.2), never a
+            // silent drop: the 4.2 flash fires and the active tab is unchanged.
+            let _ = self
+                .lib_tx
+                .send(LibEvent::Error("Emby is unavailable".into()));
             return;
         };
         let tx = self.lib_tx.clone();
@@ -412,88 +645,18 @@ impl App {
                 }
             };
 
-            // Ancestors are ordered nearest→root: [Season, Series, physical_folder, AggregateFolder]
-            let ancestors = match client.get_ancestors(&item_id) {
-                Ok(a) => a,
-                Err(e) => {
-                    log::error!(target:"navigate", "get_ancestors failed: {e}");
-                    let _ = tx.send(LibEvent::Error(e));
-                    return;
-                }
+            // D1: resolve the reveal target and build the per-kind landing
+            // before anything else. Any resolution failure sends the flash
+            // path (task 4.2) and leaves the active tab unchanged.
+            let event = match build_navigate_landing(&client, &item_id, &item_type, &lib_id) {
+                Ok(landing) => LibEvent::NavigateTo {
+                    lib_idx,
+                    landing,
+                    switch_tab: true,
+                },
+                Err(e) => LibEvent::Error(e),
             };
-            log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
-
-            // Drop the last two ancestors (physical library folder + AggregateFolder root);
-            // everything before those is navigable content inside the library.
-            let inside = if ancestors.len() >= 2 {
-                &ancestors[..ancestors.len() - 2]
-            } else {
-                &ancestors[..0]
-            };
-
-            // Build nav levels: lib_id first, then inside ancestors from root→item, then item itself.
-            // inside is nearest→root order; we need root→item, so iterate reversed.
-            let mut parents: Vec<String> = vec![lib_id];
-            for a in inside.iter().rev() {
-                parents.push(a.id.clone());
-            }
-
-            // targets[i] is the item we want the cursor on inside parents[i]
-            let mut targets: Vec<String> =
-                inside.iter().rev().skip(1).map(|a| a.id.clone()).collect();
-            if let Some(a) = inside.first() {
-                targets.push(a.id.clone());
-            } // last inside level → first inside ancestor
-            targets.push(item_id.clone()); // deepest level → the item itself
-
-            let mut nav_stack: Vec<BrowseLevel> = Vec::new();
-            for (parent_id, target_id) in parents.into_iter().zip(targets) {
-                let (mut items, total_count) = match client.get_items_sorted(
-                    &parent_id,
-                    None,
-                    false,
-                    0,
-                    500,
-                    "SortName",
-                    "Ascending",
-                ) {
-                    Ok(x) => x,
-                    Err(e) => {
-                        let _ = tx.send(LibEvent::Error(e));
-                        return;
-                    }
-                };
-                if items
-                    .first()
-                    .map(|it| it.item_type == "Episode")
-                    .unwrap_or(false)
-                {
-                    sort_episodes(&mut items);
-                }
-                let cursor = items.iter().position(|it| it.id == target_id).unwrap_or(0);
-                log::debug!(target:"navigate", "level parent={parent_id} target={target_id} cursor={cursor}/{}", items.len());
-                nav_stack.push(BrowseLevel {
-                    parent_id: parent_id.clone(),
-                    title: String::new(),
-                    items,
-                    total_count,
-                    resting: BrowseResting::new(cursor, 0),
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    loading: false,
-
-                    all_items: None,
-                    letter_filter: None,
-                    music_grouping: None,
-                });
-            }
-            let _ = tx.send(LibEvent::NavigateTo {
-                lib_idx,
-                nav_stack,
-                switch_tab: true,
-            });
+            let _ = tx.send(event);
         });
     }
 

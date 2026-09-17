@@ -23,6 +23,10 @@ mod tests_library_position_restore;
 mod tests_library_position_activation;
 
 #[cfg(test)]
+#[path = "tests_library_navigate_reveal.rs"]
+mod tests_library_navigate_reveal;
+
+#[cfg(test)]
 #[path = "split_browse_state_browse_level_tests.rs"]
 mod split_browse_state_browse_level_tests;
 
@@ -202,6 +206,10 @@ mod tests_tick_integration_emby_library; // Emby library ownership tick coverage
 #[cfg(test)]
 #[path = "tests_tick_integration_tv.rs"]
 mod tests_tick_integration_tv; // TV ownership tick coverage
+
+#[cfg(test)]
+#[path = "tests_tick_integration_navigate_item.rs"]
+mod tests_tick_integration_navigate_item; // Queue "Go to Library" landing tick coverage
 
 #[cfg(test)]
 #[path = "tests_tick_integration_feeds.rs"]

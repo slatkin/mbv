@@ -1,12 +1,16 @@
+use super::types_events::{NavigateLanding, PendingSeriesHandoff};
 use super::ui_util::sort_audio_tracks;
 use super::{
-    notify_actions::ToastSeverity, AlbumIndexState, App, BrowseLevel, FeedHomeVideoState, LibEvent,
-    QueueScope,
+    notify_actions::ToastSeverity, AlbumIndexState, AlbumSearchEntry, App, BrowseLevel,
+    FeedHomeVideoState, LibEvent, QueueScope,
 };
 use mbv_core::api::EmbyItem;
 
 impl App {
     fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
+        // The drain's own parent id tells a root load apart from a deeper
+        // level's load for the pending Series landing retry below.
+        let loaded_parent_id = parent_id.clone();
         self.handle_loaded_level(lib_idx, parent_id, level);
         self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_tv_season_level(lib_idx);
@@ -21,6 +25,10 @@ impl App {
                 .unwrap_or(0),
         );
         self.spawn_all_items_prefetch(lib_idx);
+        // A pending Series landing retries once this library's ROOT level has
+        // drained (U2 correction: ensure-then-land); a deeper level's load
+        // re-arms and waits.
+        self.retry_pending_series_landing(lib_idx, &loaded_parent_id);
     }
 
     /// On the FIRST unfiltered load of a library's top browse level, this
@@ -141,7 +149,15 @@ impl App {
         if self.saved_library_position(lib_idx).as_ref() != Some(&requested_position) {
             return;
         }
-        if self.active_library_position_scope_for(lib_idx).is_none() {
+        // A restore an armed pending Series landing is waiting on is never
+        // stale: the landing spawned it and cannot retry until it applies,
+        // and the landing is initiated from another tab (queue "Go to
+        // Library") whose tab switch happens only on completion.
+        let serves_pending_landing = self
+            .pending_series_landing
+            .as_ref()
+            .is_some_and(|pending| pending.lib_idx == lib_idx);
+        if self.active_library_position_scope_for(lib_idx).is_none() && !serves_pending_landing {
             return;
         }
         if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -162,6 +178,18 @@ impl App {
             if let Some(restored) = restored {
                 self.replace_saved_library_position(lib_idx, restored);
             }
+        }
+        // A pending Series landing retries against the restored root corpus.
+        // `arm` only pays the whole-library prefetch for a user-initiated
+        // pending landing, so a startup restore stays in the no-prefetch
+        // regime the note below protects.
+        if let Some(parent_id) = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first())
+            .map(|lvl| lvl.parent_id.clone())
+        {
+            self.retry_pending_series_landing(lib_idx, &parent_id);
         }
         // Deliberately no `spawn_all_items_prefetch` call here (unlike
         // `handle_lib_loaded`'s sibling call, which is safe): this method
@@ -500,6 +528,23 @@ impl App {
                 // delivers a one-shot enter request at the next sync — wide
                 // only, narrow stays unfocused).
                 self.save_default_library_position(lib_idx);
+                // A `NavigateLanding::Album` landing defers its tab switch to
+                // this drain (D4): the landed stack has replaced the nav
+                // stack and the saved position above, so the switch's
+                // activation compares equal and never restores. Consume it
+                // only when this landing belongs to the pending navigation's
+                // library; an Inline Search activation, or any other
+                // library's landing, must leave it armed (U2 correction).
+                let belongs_to_pending = self.pending_navigate_tab_switch.is_some_and(|idx| {
+                    self.libs
+                        .get(idx)
+                        .is_some_and(|lib| lib.library.id == library_id)
+                });
+                if belongs_to_pending {
+                    if let Some(idx) = self.pending_navigate_tab_switch.take() {
+                        self.set_library_tab(idx + 1);
+                    }
+                }
             }
             LibEvent::AllItemsPrefetched {
                 lib_idx,
@@ -513,6 +558,9 @@ impl App {
                         }
                     }
                 }
+                // The whole-library corpus is exactly what a pending Series
+                // landing was waiting for (U2 correction).
+                self.retry_pending_series_landing(lib_idx, &parent_id);
             }
             LibEvent::FeedHomeVideoAggregated {
                 lib_idx,
@@ -589,23 +637,82 @@ impl App {
             }
             LibEvent::NavigateTo {
                 lib_idx,
-                nav_stack,
+                landing,
                 switch_tab,
             } => {
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    lib.nav_stack = nav_stack;
-                }
-                // A completed navigation IS the saved position from now on;
-                // without this the `switch_tab` activation below compares the
-                // navigated stack against the stale saved position, takes the
-                // restore branch, and clobbers the navigation the user asked
-                // for (queue "Go to Library" / search-sidebar activation
-                // degraded to a bare tab switch).
-                if self.libs.get(lib_idx).is_some() {
-                    self.save_default_library_position(lib_idx);
-                }
-                if switch_tab {
-                    self.set_library_tab(lib_idx + 1);
+                match landing {
+                    NavigateLanding::Chain { nav_stack } => {
+                        if let Some(lib) = self.libs.get_mut(lib_idx) {
+                            lib.nav_stack = nav_stack;
+                            // A completed navigation IS the saved position from now on;
+                            // without this the `switch_tab` activation below compares the
+                            // navigated stack against the stale saved position, takes the
+                            // restore branch, and clobbers the navigation the user asked
+                            // for (queue "Go to Library" / search-sidebar activation
+                            // degraded to a bare tab switch).
+                            self.save_default_library_position(lib_idx);
+                        }
+                        if switch_tab {
+                            self.set_library_tab(lib_idx + 1);
+                        }
+                    }
+                    NavigateLanding::Series { reveal, episode_id } => {
+                        let name = reveal.name.clone();
+                        if self.libs.get(lib_idx).is_none() {
+                            self.flash_error(format!("Could not land on '{name}' in its library"));
+                        } else if self.activate_searched_series(lib_idx, &reveal) {
+                            // D4: the landed root level (pill + cursor) is the
+                            // saved position from now on; the fence in
+                            // `handle_restored_library_position` then discards
+                            // any stale pre-navigation restore.
+                            self.save_default_library_position(lib_idx);
+                            if switch_tab {
+                                self.set_library_tab(lib_idx + 1);
+                            }
+                            // The landing completed; the Model drain owes the
+                            // detail hand-off (task 3.1, design D3).
+                            self.pending_series_handoff = Some(PendingSeriesHandoff {
+                                lib_idx,
+                                reveal,
+                                episode_id,
+                            });
+                        } else if !self
+                            .arm_pending_series_landing(lib_idx, reveal, switch_tab, episode_id)
+                        {
+                            // Miss against a complete corpus (absent item, an
+                            // unloadable library): flash the library-error
+                            // path and leave the active tab unchanged (task
+                            // 4.2's semantics). A satisfiable-but-not-yet
+                            // corpus was armed above instead (U2 correction).
+                            self.flash_error(format!("Could not land on '{name}' in its library"));
+                        }
+                    }
+                    NavigateLanding::Album {
+                        reveal,
+                        ancestors,
+                        track_id,
+                    } => {
+                        let entry = AlbumSearchEntry::from_chain(*reveal, ancestors);
+                        // Fully async, exactly like Inline Search's album
+                        // activation: the nav stack is replaced (and the
+                        // landed position saved) on the
+                        // `RecursiveAlbumActivated` drain, which then consumes
+                        // `pending_navigate_tab_switch` so the tab switch
+                        // never compares the landed stack against the stale
+                        // saved position (D4).
+                        if self.activate_recursive_album(lib_idx, entry) {
+                            if switch_tab {
+                                self.pending_navigate_tab_switch = Some(lib_idx);
+                            }
+                            // Deep selection (task 6.2, design D6): the
+                            // chosen track rides the activation; the shell
+                            // binds it to the activated album at the
+                            // `RecursiveAlbumActivated` drain.
+                            self.pending_track_selection = track_id.map(|id| (lib_idx, id));
+                        } else {
+                            self.flash_error("Could not start the album navigation".to_string());
+                        }
+                    }
                 }
             }
             LibEvent::PlaylistsLoaded(items) => {
@@ -661,6 +768,15 @@ impl App {
             | LibEvent::AudiobookshelfLatestRebuilt(_)
             | LibEvent::FeedsLatestRebuilt(_) => {}
             LibEvent::Error(e) => {
+                // A failed per-kind activation reports through here; drop the
+                // deferred tab switch and the pending Series landing so
+                // neither can fire on a later, unrelated drain (U2
+                // correction). `pending_series_handoff` deliberately survives:
+                // it is only armed once the landing already succeeded, and an
+                // unscoped later error must not swallow the pending workspace/
+                // overlay open -- it is consumed by the next sync pass.
+                self.pending_navigate_tab_switch = None;
+                self.pending_series_landing = None;
                 self.flash(format!("Library error: {e}"), ToastSeverity::Error);
             }
         }

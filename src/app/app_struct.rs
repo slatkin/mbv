@@ -6,7 +6,7 @@ use super::resize::{ResizeRegisterTx, ResizeResponseRx};
 use super::types_browse::{AlbumIndexState, SeriesDetail};
 use super::types_cast::{CastAttachment, CastEvent};
 use super::types_confirm::ConfirmModal;
-use super::types_events::{LibEvent, SessionEvent};
+use super::types_events::{LibEvent, PendingSeriesHandoff, PendingSeriesLanding, SessionEvent};
 use super::types_feed::IdleFeed;
 use super::types_feed::SavePlaylistDialog;
 use super::types_feed_tab::FeedTabState;
@@ -175,6 +175,37 @@ pub struct App {
     pub(super) list_pane_width: Option<u16>,
     pub(super) panel_mode: PanelMode,
     pub(super) library_tab_pending: usize, // restored from prefs; applied once libs have loaded
+    /// Deferred tab switch for a `NavigateLanding::Album` landing (design D4
+    /// of change `per-destination-item-navigation`): set when the recursive
+    /// album activation spawns, consumed on its `RecursiveAlbumActivated`
+    /// drain once the landed nav stack has replaced the saved position, so
+    /// the switch's activation never restores a stale position. Consumed only
+    /// when the drained activation belongs to the pending library; any other
+    /// library's activation leaves it armed. Loss semantics: it is cleared by
+    /// any manual tab change (`apply_tab_position`) and by `LibEvent::Error`,
+    /// so a user who moved on or a failed activation never gets yanked to the
+    /// navigated library (U2 correction).
+    pub(super) pending_navigate_tab_switch: Option<usize>,
+    /// Ensure-then-land state for a `NavigateLanding::Series` whose target
+    /// library corpus is not ready (U2 correction): armed by the
+    /// `NavigateTo` arm, retried on that library's `Loaded`,
+    /// `AllItemsPrefetched` and restored-position drains. See
+    /// `PendingSeriesLanding` for the full lifecycle.
+    pub(super) pending_series_landing: Option<PendingSeriesLanding>,
+    /// A landing that completed and still owes the shell's Series detail
+    /// hand-off (task 3.1, design D3): armed by the landing success path and
+    /// consumed by the shell's sync pass, which runs the Inline Search series
+    /// presentation sequence. The deferred `PendingSeriesLanding` retry arms
+    /// it the same way, so the hand-off fires at the actual landing
+    /// completion, not at the original `NavigateTo` drain.
+    pub(super) pending_series_handoff: Option<PendingSeriesHandoff>,
+    /// Deep selection (task 6.2, design D6 of change
+    /// `per-destination-item-navigation`): the chosen track from a
+    /// `NavigateLanding::Album`, armed when the recursive album activation
+    /// spawns and bound to the activated album at the shell's
+    /// `RecursiveAlbumActivated` drain. Keyed by the target library so a
+    /// foreign library's activation never adopts it.
+    pub(super) pending_track_selection: Option<(usize, String)>,
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) card_image_states: std::collections::HashMap<String, images::CachedImage>,

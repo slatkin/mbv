@@ -1,8 +1,79 @@
-use super::types_browse::{AlbumSearchEntry, BrowseLevel};
+use super::types_browse::{AlbumPathPart, AlbumSearchEntry, BrowseLevel};
 use super::types_feed::FeedHomeVideoGroup;
 use super::types_playback::{HomeContent, HomeLatestSource};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
+
+/// Per-kind landing payload for cross-surface item navigation (design D2 of
+/// change `per-destination-item-navigation`): the Movie/generic arm keeps the
+/// built ancestor-chain nav stack, the show arm carries the resolved reveal
+/// Series, and the album arm carries the resolved reveal album plus its
+/// folder chain between the library root and it (what the recursive album
+/// activation consumes). Each kind is an explicit variant so every dispatch
+/// site resolves the landing exhaustively.
+pub(super) enum NavigateLanding {
+    /// Movie/generic video: the ancestor-chain nav stack with the cursor
+    /// resting on the item (the pre-change shape, kept verbatim).
+    Chain { nav_stack: Vec<BrowseLevel> },
+    /// TV: land the owning Series via the searched-series activation flow
+    /// (task 2.2). `reveal` is the full series item, resolved and
+    /// type-verified by the worker (design D1). `episode_id` carries the
+    /// chosen episode for deep selection (task 6.1, design D6) — `Some` only
+    /// when the reveal was resolved from an Episode; a Season reveal stays
+    /// show-level with default selection.
+    Series {
+        reveal: Box<EmbyItem>,
+        episode_id: Option<String>,
+    },
+    /// Music: land the owning album via recursive album activation
+    /// (task 2.3). `reveal` is the full album item; `ancestors` is the
+    /// root→album folder chain the activation walks (same shape the album
+    /// index builds), empty for a flat album-at-root library.
+    Album {
+        reveal: Box<EmbyItem>,
+        ancestors: Vec<AlbumPathPart>,
+        /// Deep selection (task 6.2, design D6): the chosen track's id when
+        /// the reveal was resolved from an Audio track.
+        track_id: Option<String>,
+    },
+}
+
+/// A `NavigateLanding::Series` the target library's corpus could not satisfy
+/// yet (U2 correction): armed when the library has no loaded root level, the
+/// series sits outside the loaded page, or the whole-library `all_items`
+/// cache is absent. `Ensure-then-land`: the arm grows the corpus via
+/// `ensure_lib_loaded_for`/`spawn_all_items_prefetch` and
+/// `App::retry_pending_series_landing` retries the landing on that
+/// library's next `Loaded`/`AllItemsPrefetched`/restored-position drain.
+/// Cleared by the retry on success (land, save, switch per D4) or on a miss
+/// against a complete corpus (flash, tab unchanged), by `LibEvent::Error`,
+/// and by any manual tab change.
+pub(super) struct PendingSeriesLanding {
+    pub(super) lib_idx: usize,
+    pub(super) reveal: Box<EmbyItem>,
+    pub(super) switch_tab: bool,
+    /// Deep selection carried through the deferred landing (task 6.1).
+    pub(super) episode_id: Option<String>,
+}
+
+/// A completed `NavigateLanding::Series` that still owes the shell's detail
+/// hand-off (task 3.1, design D3): armed by the per-kind landing on success --
+/// the immediate `NavigateTo` arm or the deferred
+/// `retry_pending_series_landing` -- and consumed by the shell's sync pass
+/// (`Model::drain_series_navigation_handoff`), which runs the same
+/// presentation sequence Inline Search's series activation runs.
+///
+/// Lifecycle: the landing has already succeeded when this is armed, so it is
+/// NOT cleared by `LibEvent::Error` (an unrelated error after the landing must
+/// not swallow the owed workspace/overlay open); it survives to the next sync
+/// pass. A manual tab change in between discards it silently, without
+/// surfacing an error.
+pub(super) struct PendingSeriesHandoff {
+    pub(super) lib_idx: usize,
+    pub(super) reveal: Box<EmbyItem>,
+    /// Deep selection carried through the hand-off (task 6.1, design D6).
+    pub(super) episode_id: Option<String>,
+}
 
 pub(super) enum LibEvent {
     Loaded {
@@ -122,7 +193,7 @@ pub(super) enum LibEvent {
     /// false for startup restore (just populate nav_stack, stay on current tab).
     NavigateTo {
         lib_idx: usize,
-        nav_stack: Vec<BrowseLevel>,
+        landing: NavigateLanding,
         switch_tab: bool,
     },
     RestoreLibraryPosition {

@@ -60,7 +60,7 @@ the landing:
 | Series | the item | `activate_searched_series` flow |
 | Episode / Season | owning Series | `activate_searched_series` flow |
 | Audio / MusicAlbum | owning album | Music album activation |
-| MusicArtist | itself | resolve failure (flash, current view unchanged) — an artist has no single owning album, and a real-tick render check proved a plain artist chain does not render on a grouped Music surface (stale phantom surface / empty area), so the interim chain rule was replaced by the resolve-failure rule |
+| MusicArtist | itself | resolve failure (flash, current view unchanged) - an artist has no single owning album, and a real-tick render check proved a plain artist chain does not render on a grouped Music surface (stale phantom surface / empty area), so the interim chain rule was replaced by the resolve-failure rule |
 
 Resolution uses the item's own `series_id` for Episode/Season (one field, no
 extra round trip when present; `get_ancestors` remains the fallback), and
@@ -83,15 +83,13 @@ synchronous App state and the event already exists.
 
 ### D3: Shell hand-off mirrors Inline Search's series/album activation exactly
 
-The hand-off runs in the shell sync pass, right after `sync_library_panel`
-(armed at exact landing completion — immediate or deferred retry — and
-consumed once), performing the same sequence as `activate_inline_search_item`:
-TV — `reanchor_tv_owner_selection`, `push_tv_workspace_content`, then
-`activate_selected_series_item` (Wide) or `open_library_hero_overlay`
-(Narrow), and re-push. Music — the existing `RecursiveAlbumActivated` shell arm
-(set `music_workspace_reanchor`, track-focus request, pushes) is the mechanism
-for the album landing. No new hand-off kind is invented. The re-anchor added
-in 34dbbd55 is subsumed by this sequence (kept for the Movie/generic arm).
+The Model drain on a navigated show/album performs the same sequence as
+`activate_inline_search_item`: TV — `reanchor_tv_owner_selection`,
+`push_tv_workspace_content`, then `activate_selected_series_item` (Wide) or
+`open_library_hero_overlay` (Narrow), and re-push. Music — set
+`music_workspace_reanchor` and push; the owner adopts the album's track list as
+workspace content. No new hand-off kind is invented. The re-anchor added in
+34dbbd55 is subsumed by this sequence (kept for the Movie/generic arm).
 
 ### D4: Landing replaces the saved Library position (generalized)
 
@@ -111,13 +109,13 @@ state and grows the corpus: `ensure_lib_loaded_for` for an unloaded library,
 the restored-position drain is a third retry trigger; its prefetch only fires
 for this user-initiated pending, keeping startup restore's no-prefetch regime).
 Retries fire only on drains whose `parent_id` is the library root's parent.
-The miss rule — flash, tab unchanged — is reserved for a genuinely absent item
+The miss rule - flash, tab unchanged - is reserved for a genuinely absent item
 against a complete corpus. Lifecycle: the pending is consumed only by its own
 library's drains, cleared on `LibEvent::Error`, and cleared on any manual tab
 change; the deferred album tab switch (`pending_navigate_tab_switch`) and the
 series hand-off (`pending_series_handoff`) follow the same pattern. Loss
 semantics: an armed pending that is discarded by a manual tab change or an
-unscooped `LibEvent::Error` never surfaces an error — it simply leaves the
+unscoped `LibEvent::Error` never surfaces an error - it simply leaves the
 current view untouched.
 
 ## Risks / Trade-offs
@@ -142,3 +140,18 @@ new shapes are already serializable browse levels). Rollback = revert commit.
 
 None — the three scope questions from exploration were answered by the user's
 direction (land the show, workspace opens, fix shared path, music included).
+
+### D6: Deep selection rides the reveal, not a second navigation
+
+The landing carries the chosen item alongside the reveal (episode id on the
+Series landing, track id on the Album landing) through the pending/hand-off
+chain unchanged; the hand-off selects it after the presentation opens — TV
+resolves season + episode against series detail (fetching that season's
+episodes when uncached) and applies episode focus, Music selects the track in
+the adopted track list. Absence is not failure: the navigation target is the
+show/album, so a missing episode/track keeps the landed state with default
+selection and no flash. Season reveals and Movie/generic landings are
+untouched (show-level default selection; cursor already on the item).
+Alternative considered: a second navigate/select event after landing —
+rejected, the hand-off already runs at exactly the right seam with the owner
+re-anchored.

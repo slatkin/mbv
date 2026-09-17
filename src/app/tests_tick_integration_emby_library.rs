@@ -355,3 +355,92 @@ fn tick_play_prompt_mounts_and_accepts_local_fall_through() {
         )
     }));
 }
+
+/// Task 3.3: a completed Movie/generic `NavigateLanding::Chain` re-seeds the
+/// retained browser owner's cursor onto the navigated movie when the landing
+/// changes the browse identity (the 34dbbd55 re-anchor), driven through the
+/// shell drain and the `Application::tick()` sync pass.
+#[test]
+fn navigated_movie_reanchors_the_retained_browser_cursor() {
+    use crate::app::types_events::NavigateLanding;
+    use crate::app::{BrowseLevel, LibEvent};
+
+    let mut app = make_movie_app();
+    app.tab = crate::app::TabSelection::EmbyLibrary(0);
+    app.panel_focus = crate::app::PanelFocus::Library;
+    app.panel_mode = crate::app::PanelMode::LibraryOnly;
+    // The retained owner is parked at a drilled-in level, so the landed root
+    // level is a real identity change (depth + parent), not a same-level
+    // refresh the owner preserves.
+    let mut inside = crate::app::tests::make_item("Inside", "Movie");
+    inside.id = "movie-inside".into();
+    app.libs[0].nav_stack.push(BrowseLevel {
+        parent_id: "folder-1".into(),
+        title: "Folder".into(),
+        items: vec![inside],
+        total_count: 1,
+        resting: crate::app::types_browse::BrowseResting::new(0, 0),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        music_grouping: None,
+    });
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    let _terminal = draw(&mut harness, 100, 30);
+    assert_eq!(
+        browser_owner(&harness).cursor(),
+        0,
+        "the retained owner starts on the drilled level"
+    );
+
+    // The queue's built chain lands at the library root with the cursor on
+    // the navigated movie.
+    let mut third = crate::app::tests::make_item("Third Movie", "Movie");
+    third.id = "movie-third".into();
+    let landed = BrowseLevel {
+        parent_id: "lib-movies".into(),
+        title: "Movies".into(),
+        items: vec![
+            crate::app::tests::make_item("Focused Movie", "Movie"),
+            crate::app::tests::make_item("Second Movie", "Movie"),
+            third,
+        ],
+        total_count: 3,
+        resting: crate::app::types_browse::BrowseResting::new(2, 0),
+        item_types: None,
+        unplayed_only: false,
+        sort_by: "SortName".into(),
+        sort_order: "Ascending".into(),
+        loading: false,
+        all_items: None,
+        letter_filter: None,
+        music_grouping: None,
+    };
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(LibEvent::NavigateTo {
+            lib_idx: 0,
+            landing: NavigateLanding::Chain {
+                nav_stack: vec![landed],
+            },
+            switch_tab: true,
+        });
+    harness.step();
+    harness.model_mut().sync_mounted_surfaces();
+
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack[0].resting().cursor(),
+        2,
+        "the App rests on the navigated movie"
+    );
+    assert_eq!(
+        browser_owner(&harness).cursor(),
+        2,
+        "the retained browser re-seeds onto the navigated movie"
+    );
+}

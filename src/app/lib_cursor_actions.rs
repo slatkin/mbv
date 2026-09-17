@@ -1,4 +1,5 @@
 use super::render::{effective_sort_str, LetterFilter};
+use super::types_events::{PendingSeriesHandoff, PendingSeriesLanding};
 use super::{App, SeriesDetail};
 use mbv_core::api::EmbyItem;
 
@@ -19,6 +20,105 @@ impl App {
             .get(stack_len - 1)
             .map(|s| s == "album")
             .unwrap_or(false)
+    }
+
+    /// True when a miss against `lib_idx`'s current root corpus is not yet
+    /// final: an unloaded library (no level), a level still loading or showing
+    /// a partial page, or an active letter pill whose `all_items` is absent can
+    /// all still grow to hold the pending series. A loaded, fully listed,
+    /// unfiltered level (or one whose whole-library cache is already in hand)
+    /// is complete, so a miss against it is the task 4.2 miss.
+    fn series_corpus_can_grow(&self, lib_idx: usize) -> bool {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .is_none_or(|lvl| {
+                lvl.all_items.is_none()
+                    && (lvl.loading || lvl.letter_filter.is_some() || !lvl.is_fully_loaded())
+            })
+    }
+
+    /// True when `lib_idx`'s root level is materialized (not loading) but its
+    /// whole-library `all_items` cache is absent, so the pending series landing
+    /// needs `spawn_all_items_prefetch` to grow the corpus.
+    fn series_landing_needs_prefetch(&self, lib_idx: usize) -> bool {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.last())
+            .is_some_and(|lvl| !lvl.loading && lvl.all_items.is_none())
+    }
+
+    /// Arm the pending Series landing and start growing the target library's
+    /// corpus (`ensure_lib_loaded_for` for an unloaded library, the
+    /// whole-library prefetch when the root is loaded but `all_items` is
+    /// absent). Returns false when the miss is already final (complete
+    /// corpus), which keeps the caller's flash-and-keep-tab path.
+    pub(super) fn arm_pending_series_landing(
+        &mut self,
+        lib_idx: usize,
+        reveal: Box<EmbyItem>,
+        switch_tab: bool,
+        episode_id: Option<String>,
+    ) -> bool {
+        if !self.series_corpus_can_grow(lib_idx) {
+            return false;
+        }
+        self.pending_series_landing = Some(PendingSeriesLanding {
+            lib_idx,
+            reveal,
+            switch_tab,
+            episode_id,
+        });
+        self.ensure_lib_loaded_for(lib_idx);
+        if self.series_landing_needs_prefetch(lib_idx) {
+            self.spawn_all_items_prefetch(lib_idx);
+        }
+        true
+    }
+
+    /// Retry a pending Series landing when the target library's corpus drains
+    /// (`Loaded`, `AllItemsPrefetched`, or a restored position). A success
+    /// lands per D4 (land, save position, switch); a miss that can still grow
+    /// re-arms and asks for the next growth step; a miss against a complete
+    /// corpus flashes and leaves the tab unchanged (task 4.2). A drain for any
+    /// other library (or any level other than the library root, `parent_id`)
+    /// leaves the pending untouched.
+    pub(super) fn retry_pending_series_landing(&mut self, lib_idx: usize, parent_id: &str) {
+        let Some(pending) = self.pending_series_landing.take() else {
+            return;
+        };
+        let root_parent = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first())
+            .map(|lvl| lvl.parent_id.as_str());
+        if pending.lib_idx != lib_idx || root_parent != Some(parent_id) {
+            self.pending_series_landing = Some(pending);
+            return;
+        }
+        let reveal = pending.reveal;
+        let episode_id = pending.episode_id;
+        let name = reveal.name.clone();
+        if self.activate_searched_series(lib_idx, &reveal) {
+            self.save_default_library_position(lib_idx);
+            if pending.switch_tab {
+                self.set_library_tab(lib_idx + 1);
+            }
+            // The deferred landing completed on THIS drain: arm the same
+            // hand-off the immediate arm arms (task 3.1), carrying the deep
+            // selection (task 6.1).
+            self.pending_series_handoff = Some(PendingSeriesHandoff {
+                lib_idx,
+                reveal,
+                episode_id,
+            });
+        } else {
+            let rearmed =
+                self.arm_pending_series_landing(lib_idx, reveal, pending.switch_tab, episode_id);
+            if !rearmed {
+                self.flash_error(format!("Could not land on '{name}' in its library"));
+            }
+        }
     }
 
     /// Enter on an Inline Search Series result: navigate the library list to

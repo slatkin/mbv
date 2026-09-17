@@ -5,7 +5,8 @@
 use super::components::library_panel::LibraryKey;
 use super::components::music_content::MusicContent;
 use super::components::LibraryKind;
-use super::shell::{Model, MusicTrackFocusRequest};
+use super::shell::{Model, MusicTrackFocusRequest, MusicTrackSelection};
+use super::BrowseLevel;
 use super::TabSelection;
 use mbv_core::config::ServiceKind;
 
@@ -33,6 +34,67 @@ impl Model {
     fn update_music_owner<R>(&mut self, f: impl FnOnce(&mut MusicContent) -> R) -> Option<R> {
         let key = self.music_owner_key()?;
         self.update_library_owner(key, || Box::new(MusicContent::new()), f)
+    }
+
+    /// The shell's reaction to a completed recursive album activation
+    /// (`LibEvent::RecursiveAlbumActivated`): install the landed path through
+    /// App, bind the one-shot inline track-focus request to the activated
+    /// album, and re-anchor the workspace regardless of any prior local move.
+    /// Sole owner of the return to the standard Music presentation, shared by
+    /// Inline Search activation and a navigated `NavigateLanding::Album`
+    /// (task 3.2: the arm already covers the navigated case).
+    pub(in crate::app) fn on_recursive_album_activated(
+        &mut self,
+        library_id: String,
+        nav_stack: Vec<BrowseLevel>,
+    ) {
+        let library_id_lookup = library_id.clone();
+        self.app
+            .handle_lib_event(super::LibEvent::RecursiveAlbumActivated {
+                library_id,
+                nav_stack,
+            });
+        // The activated album: the resting cursor of the replaced nav stack.
+        let activated_album_id = self
+            .app
+            .libs
+            .iter()
+            .find(|lib| lib.library.id == library_id_lookup)
+            .and_then(|lib| {
+                let level = lib.nav_stack.last()?;
+                level
+                    .items
+                    .get(level.resting().cursor())
+                    .map(|item| item.id.clone())
+            });
+        // Bind the enter request to the activated album so it can retry once
+        // the album's tracks arrive without ever firing on an album the user
+        // moved to meanwhile.
+        self.music_track_focus_request = activated_album_id
+            .clone()
+            .map(|album_id| MusicTrackFocusRequest::Enter { album_id });
+        // Deep selection (task 6.2, design D6): a navigated track rides the
+        // album activation. Adopt the App's pending selection only when this
+        // activation is the navigation's library, and bind it to the
+        // activated album so the workspace push selects the track once its
+        // rows arrive.
+        self.pending_music_track_selection = self
+            .app
+            .pending_track_selection
+            .take()
+            .filter(|(lib_idx, _)| {
+                self.app
+                    .libs
+                    .get(*lib_idx)
+                    .is_some_and(|lib| lib.library.id == library_id_lookup)
+            })
+            .and_then(|(_, track_id)| {
+                activated_album_id.map(|album_id| MusicTrackSelection { album_id, track_id })
+            });
+        // Nav stack was replaced wholesale; its resting cursor now points at
+        // the activated album. Re-anchor the component explicitly, regardless
+        // of prior local moves.
+        self.music_workspace_reanchor = true;
     }
 
     pub(super) fn push_music_workspace_content(&mut self) {
@@ -123,6 +185,32 @@ impl Model {
             .flatten();
         if let Some(rearm) = rearm {
             self.music_track_focus_request = Some(rearm);
+        }
+        // Deep selection (task 6.2, design D6): select the navigated track
+        // once its album's track rows arrive. A superseded album or an
+        // absent track drops the pending silently (no error -- the
+        // navigation target was reached).
+        if let Some(sel) = self.pending_music_track_selection.clone() {
+            let resolved = self
+                .update_music_owner(|owner| {
+                    if !owner
+                        .selected_item()
+                        .is_some_and(|album| album.id == sel.album_id)
+                    {
+                        // Superseded: the owner moved to another album.
+                        return true;
+                    }
+                    if owner.track_list.rows().is_empty() {
+                        // Rows not here yet; stay armed for the re-push.
+                        return false;
+                    }
+                    owner.track_list.select_target(&sel.track_id);
+                    true
+                })
+                .unwrap_or(false);
+            if resolved {
+                self.pending_music_track_selection = None;
+            }
         }
     }
 

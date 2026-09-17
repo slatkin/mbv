@@ -488,6 +488,33 @@ impl TvContent {
         self.episodes.select_first();
         self.pane = Pane::Episodes;
     }
+    /// Deep selection (task 6.1, design D6 of change
+    /// `per-destination-item-navigation`): point the workspace at the
+    /// navigated episode's season and select the episode with episode focus.
+    /// Returns false when the season is out of range or the episode is not
+    /// among the (refreshed) season rows; the caller treats a miss as
+    /// absence (the landing stands, default selection, no error).
+    pub(in crate::app) fn select_episode_in_season(
+        &mut self,
+        season_index: usize,
+        episode_id: &str,
+    ) -> bool {
+        let Some(detail) = self.context.series_detail.as_ref() else {
+            return false;
+        };
+        if season_index >= detail.seasons.len() {
+            return false;
+        }
+        self.season_cursor = season_index;
+        if self.current_season_episodes_key_present() {
+            self.refresh_episode_rows();
+        }
+        let selected = self.episodes.select_target(&episode_id.to_string());
+        if selected {
+            self.pane = Pane::Episodes;
+        }
+        selected
+    }
     /// The series item under the component's own cursor, cloned out of the
     /// cached render context. `handle_key`'s Series Enter attaches this to
     /// `ShellRequest::TvActivate` so the shell effect targets the component

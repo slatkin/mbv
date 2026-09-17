@@ -14,6 +14,27 @@ pub(super) struct AlbumSearchEntry {
     pub(super) search_text: String,
 }
 
+impl AlbumSearchEntry {
+    /// The one label contract shared by the album index builder and the
+    /// `NavigateLanding::Album` landing: ancestor names root→album, the
+    /// album's `display_name()` last, joined with `" / "`; `search_text`
+    /// mirrors the label so search matches what row rendering shows.
+    pub(super) fn from_chain(album: EmbyItem, ancestors: Vec<AlbumPathPart>) -> Self {
+        let display_label = ancestors
+            .iter()
+            .map(|part| part.name.clone())
+            .chain(std::iter::once(album.display_name()))
+            .collect::<Vec<_>>()
+            .join(" / ");
+        Self {
+            album,
+            ancestors,
+            search_text: display_label.clone(),
+            display_label,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(super) enum AlbumIndexState {
     Unavailable,
