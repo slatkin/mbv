@@ -13,6 +13,7 @@ use super::notify_actions::ToastSeverity;
 use super::shell::Model;
 use super::types_playback::HomeContent;
 use mbv_core::playback_queue::QueueItem;
+use std::collections::HashMap;
 use std::time::Instant;
 
 impl Model {
@@ -25,9 +26,31 @@ impl Model {
     /// content's own `loading` flag (always `false` for a completed
     /// computation) is authoritative, so an assigned refresh also clears a
     /// pending startup skeleton.
-    pub(super) fn assign_home_content(&mut self, content: HomeContent) {
+    pub(super) fn assign_home_content(&mut self, mut content: HomeContent) {
+        content.feed_names = self.resolve_home_feed_names(&content);
         self.home_content = content;
         self.push_home_content();
+    }
+
+    /// Shell-side feed-name resolution for a Home snapshot (design D2):
+    /// feed subscription names live in `Config`, which never crosses into a
+    /// component, so the shell resolves the display names for the feed
+    /// entries a snapshot carries at assignment time (the same config
+    /// subscription match the App layer uses for the playback strip) and the
+    /// component's projection looks them up by the entry's `feed_id`.
+    pub(super) fn resolve_home_feed_names(&self, content: &HomeContent) -> HashMap<String, String> {
+        let mut names = HashMap::new();
+        for (_, _, items) in &content.latest {
+            for entry in items.iter().filter_map(|item| item.as_feed()) {
+                let Some(feed_id) = entry.feed_id.as_deref() else {
+                    continue;
+                };
+                if let Some(name) = self.app.feed_subscription_display_name(entry) {
+                    names.insert(feed_id.to_string(), name);
+                }
+            }
+        }
+        names
     }
 
     /// Reset Home content after an Emby removal/replacement
@@ -38,6 +61,7 @@ impl Model {
     pub(super) fn clear_home_content(&mut self) {
         self.home_content.continue_items.clear();
         self.home_content.latest.clear();
+        self.home_content.feed_names.clear();
         self.push_home_content();
     }
 
@@ -83,6 +107,9 @@ impl Model {
             sections,
             |source| matches!(source, super::types_playback::HomeLatestSource::Feeds),
         );
+        // Merged feed sections never pass through `assign_home_content`, so
+        // re-resolve the lookup over the merged content (design D2).
+        self.home_content.feed_names = self.resolve_home_feed_names(&self.home_content);
         self.push_home_content();
     }
 
