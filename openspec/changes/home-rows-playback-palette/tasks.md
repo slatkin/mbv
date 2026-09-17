@@ -13,8 +13,8 @@
 
 ## 3. Home row projection
 
-- [ ] 3.1 In `project_active_section` (`src/app/components/home_content.rs`), swap `display_name_parts()` for the playback title-parts mapping with the shell-resolved subscription name; primary = context part, secondary = title part, single-part rows unchanged. Verify: `cargo nextest run -p mbv home_content`.
-- [ ] 3.2 Tests: Home projects episode→series, audio track→artist, feed entry→subscription, ABS podcast→show; movie/book/feed-without-subscription project single-part; truncation priority still protects the item title. Verify: `cargo nextest run -p mbv home_content`.
+- [x] 3.1 In `project_active_section` (`src/app/components/home_content.rs`), swap `display_name_parts()` for the playback title-parts mapping with the shell-resolved subscription name; primary = context part, secondary = title part, single-part rows unchanged. Verify: `cargo nextest run -p mbv home_content`.
+- [x] 3.2 Tests: Home projects episode→series, audio track→artist, feed entry→subscription, ABS podcast→show; movie/book/feed-without-subscription project single-part; truncation priority still protects the item title. Verify: `cargo nextest run -p mbv home_content`.
 
 ## 4. Gates
 
