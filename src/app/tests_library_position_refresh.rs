@@ -51,6 +51,7 @@ fn mixed_services_app() -> App {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),
+            description: None,
             published_at: None,
             duration_seconds: None,
         },

@@ -58,6 +58,8 @@ fn fixtures_decode_without_losing_native_identity() {
 #[rstest]
 #[case(Some(serde_json::json!(1_704_153_600_000u64)), Some(1_704_153_600), "epoch-millisecond number (ABS 2.36 downloaded episodes)")]
 #[case(Some(serde_json::json!(1_704_153_600u64)), Some(1_704_153_600), "epoch-second number")]
+#[case(Some(serde_json::json!(0u64)), None, "zero epoch number is the absent-date sentinel")]
+#[case(Some(serde_json::json!("0")), None, "zero epoch string is the absent-date sentinel")]
 #[case(Some(serde_json::json!(1_704_153_600.0)), Some(1_704_153_600), "integral epoch-second float number")]
 #[case(Some(serde_json::json!("1704153600")), Some(1_704_153_600), "epoch-second string")]
 #[case(Some(serde_json::json!("1704153600000")), Some(1_704_153_600), "epoch-millisecond string")]

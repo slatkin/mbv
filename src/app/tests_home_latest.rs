@@ -417,6 +417,7 @@ fn home_play_and_enqueue_leave_audiobookshelf_tab_state_untouched() {
             library_item_id: "show-1".into(),
             episode_id: "episode-1".into(),
             title: "Episode 1".into(),
+            description: None,
             published_at: None,
             duration_seconds: Some(120.0),
         },

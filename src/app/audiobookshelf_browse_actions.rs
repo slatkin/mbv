@@ -372,10 +372,7 @@ impl App {
             duration_ticks: episode.duration_seconds.and_then(seconds_to_ticks_u64),
             position_ticks,
             played: is_finished,
-            pub_date_secs: episode
-                .published_at
-                .as_deref()
-                .and_then(super::feed_parse_date::parse_pub_date_secs),
+            pub_date_secs: episode.published_at,
             is_finished,
             cover_path: show.and_then(|show| show.cover_path.clone()),
         }))

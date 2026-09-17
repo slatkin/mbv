@@ -157,6 +157,7 @@ fn podcast_narrow_hero_workspace_completes_and_reanchors_stably() {
         library_item_id: "show-a".into(),
         episode_id: "episode-ready".into(),
         title: "Ready Episode".into(),
+        description: None,
         published_at: None,
         duration_seconds: None,
     };

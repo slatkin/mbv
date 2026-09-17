@@ -248,7 +248,8 @@ fn shelf_entry_from_wire(entry: ShelfEntryWire) -> AudiobookshelfShelfEntry {
 /// downloaded episode's `publishedAt` as an epoch-millisecond number
 /// (`PodcastEpisode.toOldJSONExpanded`), while other wire shapes carry epoch
 /// seconds as a number or numeric string, or ISO-8601 / RFC 2822 text. A
-/// missing or unreadable value is `None` (it groups as `Unknown date`).
+/// missing, unreadable, or zero (ABS's absent-date sentinel) value is `None`
+/// (it groups as `Unknown date` rather than 1970-01-01).
 fn published_at_secs(value: Option<serde_json::Value>) -> Option<u64> {
     match value? {
         serde_json::Value::Number(number) => {
@@ -267,8 +268,12 @@ fn published_at_secs(value: Option<serde_json::Value>) -> Option<u64> {
 }
 
 /// Epoch values below 10^11 are seconds (that instant is year 5138); every
-/// real epoch-millisecond value exceeds it.
+/// real epoch-millisecond value exceeds it. A zero epoch is ABS's absent-date
+/// sentinel, not 1970-01-01, so it normalises to `None`.
 fn epoch_value_to_secs(raw: u64) -> Option<u64> {
+    if raw == 0 {
+        return None;
+    }
     Some(if raw >= 100_000_000_000 {
         raw / 1000
     } else {

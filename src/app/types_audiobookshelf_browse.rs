@@ -146,7 +146,7 @@ impl AudiobookshelfBrowseState {
             })
             .collect::<Vec<_>>();
         episodes.sort_by(|left, right| {
-            compare_publication_dates(left.published_at.as_deref(), right.published_at.as_deref())
+            compare_publication_dates(left.published_at, right.published_at)
         });
         episodes
     }
@@ -470,17 +470,12 @@ pub(super) enum BookRow {
     },
 }
 
-fn compare_publication_dates(left: Option<&str>, right: Option<&str>) -> std::cmp::Ordering {
+fn compare_publication_dates(left: Option<u64>, right: Option<u64>) -> std::cmp::Ordering {
     match (left, right) {
         (None, None) => std::cmp::Ordering::Equal,
         (None, Some(_)) => std::cmp::Ordering::Greater,
         (Some(_), None) => std::cmp::Ordering::Less,
-        (Some(left), Some(right)) => match (left.parse::<f64>(), right.parse::<f64>()) {
-            (Ok(left), Ok(right)) => right
-                .partial_cmp(&left)
-                .unwrap_or(std::cmp::Ordering::Equal),
-            _ => right.cmp(left),
-        },
+        (Some(left), Some(right)) => right.cmp(&left),
     }
 }
 
@@ -512,6 +507,7 @@ mod tests {
             library_item_id: show.into(),
             episode_id: id.into(),
             title: id.into(),
+            description: None,
             published_at: None,
             duration_seconds: None,
         }
@@ -601,9 +597,9 @@ mod tests {
         let mut state = AudiobookshelfBrowseState::new(library());
         state.append_page(0, 20, 1, vec![show("a", "A")]);
         state.episodes = Some(vec![
-            episode_with_date("a", "old", Some("2026-01-01")),
+            episode_with_date("a", "old", Some(1_767_225_600)),
             episode_with_date("a", "undated", None),
-            episode_with_date("a", "new", Some("2026-08-12")),
+            episode_with_date("a", "new", Some(1_786_492_800)),
         ]);
 
         assert_eq!(
@@ -705,13 +701,14 @@ mod tests {
     fn episode_with_date(
         show: &str,
         id: &str,
-        published_at: Option<&str>,
+        published_at: Option<u64>,
     ) -> AudiobookshelfDownloadedEpisode {
         AudiobookshelfDownloadedEpisode {
             library_item_id: show.into(),
             episode_id: id.into(),
             title: id.into(),
-            published_at: published_at.map(str::to_string),
+            description: None,
+            published_at,
             duration_seconds: None,
         }
     }

@@ -27,6 +27,7 @@ pub(crate) fn audiobookshelf_app() -> App {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),
+            description: None,
             published_at: None,
             duration_seconds: None,
         },
@@ -182,7 +183,8 @@ fn audiobookshelf_episode_handlers_build_native_item_from_read_only_snapshot() {
             library_item_id: "show-a".into(),
             episode_id: "episode-a".into(),
             title: "Episode A".into(),
-            published_at: Some("2024-01-02T00:00:00Z".into()),
+            description: None,
+            published_at: Some(1_704_153_600),
             duration_seconds: Some(1234.5),
         },
     ]);
