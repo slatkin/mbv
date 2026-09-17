@@ -513,3 +513,89 @@ fn narrow_double_click_plays_the_selected_episode_without_an_overlay() {
         .expect("library panel");
     assert!(!panel.test_hero_overlay_open(), "no overlay opened");
 }
+
+fn hero_scroll_offset(harness: &TickHarness) -> usize {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .expect("library panel")
+        .test_hero_scroll_offset()
+}
+
+/// The Wide hero's overview box is scrollable: the panel claims the wheel
+/// against the box it painted and turns the owner's offset, so the box's
+/// painted scrollbar follows the wheel. The hero describes one episode, so
+/// selecting another starts its description at the top again.
+#[test]
+fn wide_hero_overview_wheel_scrolls_the_episode_description() {
+    let mut app = audiobookshelf_app();
+    {
+        let episodes = app.audiobookshelf_browse[0]
+            .detail_cache
+            .get_mut("show-a")
+            .expect("the fixture caches show-a's episodes");
+        episodes[0].description = Some(
+            "A deliberately long episode description that overflows the hero box. ".repeat(80),
+        );
+        episodes.push(episode("show-a", "episode-b"));
+    }
+    let mut harness = TickHarness::new(app);
+    draw(&mut harness, 160);
+    let (box_rect, max_offset) = {
+        let panel = harness
+            .model()
+            .application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .expect("library panel");
+        let geometry = panel.test_wide_geometry().expect("wide panel");
+        let box_rect = geometry
+            .overview_box
+            .expect("the episode hero paints an overview box");
+        assert_eq!(panel.test_hero_scroll_offset(), 0);
+        (
+            box_rect,
+            geometry.overview_content_length - geometry.overview_viewport,
+        )
+    };
+    assert!(
+        max_offset > 0,
+        "the long description overflows the hero box"
+    );
+
+    harness.inject(mouse(
+        MouseEventKind::ScrollDown,
+        box_rect.x + 1,
+        box_rect.y + 1,
+    ));
+    let outcome = harness.step();
+    assert!(outcome
+        .raw_messages
+        .iter()
+        .any(|message| matches!(message, Msg::TerminalEvent(TerminalObserverEvent::MouseClaimed))));
+    let scrolled = hero_scroll_offset(&harness);
+    assert!(
+        scrolled > 0 && scrolled <= max_offset,
+        "one wheel step scrolled the overview: {scrolled}"
+    );
+
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Down,
+        modifiers: KeyModifiers::NONE,
+    }));
+    harness.step();
+    assert_eq!(
+        podcast(&mut harness)
+            .selected_episode_target()
+            .expect("an episode is selected")
+            .episode_id(),
+        "episode-b"
+    );
+    assert_eq!(
+        hero_scroll_offset(&harness),
+        0,
+        "the newly selected episode starts at the top of its description"
+    );
+}

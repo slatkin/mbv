@@ -62,6 +62,13 @@ pub(in crate::app) struct PodcastContent {
     /// The projection's image state for the current hero: set by the shell,
     /// read by the painters through the panel content.
     hero_image: HeroImageState,
+    /// The Wide hero's overview scroll offset (paint-local presentation
+    /// state): the panel turns it from the HeroPane wheel and the hero
+    /// header paints from it. `hero_scroll_target` remembers the episode it
+    /// was measured on, so a different selected episode starts at the top of
+    /// its description instead of inheriting the previous one's offset.
+    hero_scroll: usize,
+    hero_scroll_target: Option<PodcastEpisodeTarget>,
     /// Injectable grouping clock (`None` = wall clock): the injected
     /// `now_secs` seam `podcast_display_rows` takes, so tests keep the
     /// age-group projection deterministic.
@@ -86,6 +93,8 @@ impl PodcastContent {
             focused: false,
             episodes: MediaListCarrier::new(),
             hero_image: HeroImageState::None,
+            hero_scroll: 0,
+            hero_scroll_target: None,
             now_secs: None,
         }
     }
@@ -120,6 +129,7 @@ impl PodcastContent {
             self.episodes.select_first();
             self.initialized = true;
         }
+        self.sync_hero_scroll();
     }
 
     /// The active pill's scoped episode view: a show pill ignores play
@@ -242,6 +252,26 @@ impl PodcastContent {
         self.pill = pill;
         self.rebuild_rows();
         self.episodes.select_first();
+        self.sync_hero_scroll();
+    }
+
+    /// Offer one operation to the shared list owner, then re-anchor the
+    /// hero's overview scroll (selection movement is owner-local here).
+    fn delegate_episodes(&mut self, operation: MediaListOperation<PodcastEpisodeTarget>) {
+        self.episodes.delegate_operation(operation);
+        self.sync_hero_scroll();
+    }
+
+    /// Drop the retained hero overview scroll when the selected episode
+    /// changed since the offset was measured. The hero describes exactly one
+    /// episode, so a different selection starts at the top of its
+    /// description; every path that can move the selection calls this.
+    fn sync_hero_scroll(&mut self) {
+        let selected = self.episodes.selected_target().cloned();
+        if self.hero_scroll_target != selected {
+            self.hero_scroll = 0;
+            self.hero_scroll_target = selected;
+        }
     }
 
     /// `[`/`]`: one uniform walk of the whole bar — state pills then show
@@ -446,6 +476,25 @@ impl LibraryContentOwner for PodcastContent {
         Some(self.episodes.selection_summary())
     }
 
+    fn hero_scroll_offset(&self) -> usize {
+        self.hero_scroll
+    }
+
+    /// One wheel step of the Wide hero's overview box: the panel gates the
+    /// pointer against the box it painted and supplies that box's scroll
+    /// range, so the offset only clamps here.
+    fn hero_scroll(&mut self, delta: i16, max_offset: usize) -> bool {
+        let next = if delta < 0 {
+            self.hero_scroll.saturating_sub((-delta) as usize)
+        } else {
+            self.hero_scroll.saturating_add(delta as usize)
+        }
+        .min(max_offset);
+        let changed = next != self.hero_scroll;
+        self.hero_scroll = next;
+        changed
+    }
+
     fn content(&mut self) -> LibraryPanelContent<'_> {
         self.content()
     }
@@ -482,7 +531,7 @@ impl LibraryContentOwner for PodcastContent {
                     if !self.episodes.claims_current_point(at) {
                         return None;
                     }
-                    self.episodes.delegate_operation(
+                    self.delegate_episodes(
                         MediaListSurfaceInput::Wheel { at, delta }
                             .into_operation(None)
                             .expect("resolved media-list pointer target"),
@@ -494,7 +543,7 @@ impl LibraryContentOwner for PodcastContent {
                 | MediaListSurfaceInput::RangeClick(at)
                 | MediaListSurfaceInput::ContextClick(at) => {
                     let target = self.episodes.resolve_current_point(at)?.clone();
-                    self.episodes.delegate_operation(
+                    self.delegate_episodes(
                         input
                             .into_operation(Some(target))
                             .expect("resolved media-list pointer target"),
@@ -507,8 +556,7 @@ impl LibraryContentOwner for PodcastContent {
                 MediaListSurfaceInput::DoubleClick(at) => {
                     // Resolve once, then delegate the target-bearing activation.
                     let target = self.episodes.resolve_current_point(at)?.clone();
-                    self.episodes
-                        .delegate_operation(MediaListOperation::Activate(target.clone()));
+                    self.delegate_episodes(MediaListOperation::Activate(target.clone()));
                     Some(Msg::Shell(
                         ShellRequest::AudiobookshelfPodcastEpisodeIntent(
                             PodcastEpisodeIntent::OpenOrPlay(Some(target)),
@@ -516,7 +564,7 @@ impl LibraryContentOwner for PodcastContent {
                     ))
                 }
                 _ => {
-                    self.episodes.delegate_operation(
+                    self.delegate_episodes(
                         input
                             .into_operation(None)
                             .expect("resolved media-list pointer target"),
@@ -547,7 +595,7 @@ impl LibraryContentOwner for PodcastContent {
         }
         match key.code {
             Key::Up | Key::Char('k') => {
-                self.episodes.delegate_operation(
+                self.delegate_episodes(
                     MediaListSurfaceInput::Move(-1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
@@ -555,7 +603,7 @@ impl LibraryContentOwner for PodcastContent {
                 self.move_effect()
             }
             Key::Down | Key::Char('j') => {
-                self.episodes.delegate_operation(
+                self.delegate_episodes(
                     MediaListSurfaceInput::Move(1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
@@ -563,7 +611,7 @@ impl LibraryContentOwner for PodcastContent {
                 self.move_effect()
             }
             Key::PageUp => {
-                self.episodes.delegate_operation(
+                self.delegate_episodes(
                     MediaListSurfaceInput::Page(-1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
@@ -571,7 +619,7 @@ impl LibraryContentOwner for PodcastContent {
                 self.move_effect()
             }
             Key::PageDown => {
-                self.episodes.delegate_operation(
+                self.delegate_episodes(
                     MediaListSurfaceInput::Page(1)
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
@@ -579,7 +627,7 @@ impl LibraryContentOwner for PodcastContent {
                 self.move_effect()
             }
             Key::Home => {
-                self.episodes.delegate_operation(
+                self.delegate_episodes(
                     MediaListSurfaceInput::First
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
@@ -587,7 +635,7 @@ impl LibraryContentOwner for PodcastContent {
                 self.move_effect()
             }
             Key::End => {
-                self.episodes.delegate_operation(
+                self.delegate_episodes(
                     MediaListSurfaceInput::Last
                         .into_operation(None)
                         .expect("resolved media-list pointer target"),
@@ -1029,6 +1077,38 @@ mod tests {
         );
         assert_eq!(hero.overview.as_deref(), Some("Second overview"));
         assert_eq!(hero.facts.meta_rows[1], "30m");
+    }
+
+    /// The Wide hero's overview box is one scrollable flow: the panel's
+    /// HeroPane wheel turns this offset and the hero header paints from it.
+    /// The offset belongs to the selected episode, so a different episode
+    /// starts its description at the top.
+    #[test]
+    fn hero_overview_scroll_clamps_to_its_range_and_resets_with_the_selection() {
+        let mut owner = owner();
+        assert_eq!(owner.hero_scroll_offset(), 0);
+        assert!(owner.hero_scroll(3, 5));
+        assert_eq!(owner.hero_scroll_offset(), 3);
+        assert!(owner.hero_scroll(9, 5), "clamps at the box's last row");
+        assert_eq!(owner.hero_scroll_offset(), 5);
+        assert!(
+            !owner.hero_scroll(4, 5),
+            "a step at the boundary changes nothing"
+        );
+        assert!(owner.hero_scroll(-2, 5));
+        assert_eq!(owner.hero_scroll_offset(), 3);
+        assert!(owner.hero_scroll(-9, 5), "clamps at the top");
+        assert_eq!(owner.hero_scroll_offset(), 0);
+
+        assert!(owner.hero_scroll(4, 5));
+        let previous = owner.episodes.selected_target().cloned();
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::Move(1)));
+        assert_ne!(owner.episodes.selected_target().cloned(), previous);
+        assert_eq!(
+            owner.hero_scroll_offset(),
+            0,
+            "the newly selected episode starts at the top of its description"
+        );
     }
 
     #[test]
