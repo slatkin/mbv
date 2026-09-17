@@ -13,7 +13,6 @@ use crate::app::components::msg::HomeRowTarget;
 
 /// Values resolved when a context menu opens. The overlay never re-resolves
 /// these values after focus changes.
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct ContextActionSnapshot<T> {
     pub origin: SelectionOrigin,
@@ -21,7 +20,6 @@ pub(crate) struct ContextActionSnapshot<T> {
 }
 
 /// Destination-qualified targets supplied by row context-menu requests.
-#[allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ContextMenuTargets {
     Home(Vec<HomeRowTarget>),

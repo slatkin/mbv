@@ -65,6 +65,7 @@ impl ContextMenuComponent {
     }
 
     /// The painted rect the shell computed from `AppLayout` (task 5.3c).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn menu_rect(&self) -> Rect {
         self.menu_rect
     }

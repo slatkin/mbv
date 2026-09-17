@@ -50,6 +50,7 @@ impl StatusBarPanel {
     }
 
     /// The pill regions retained from the last paint (test accessor).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn regions(&self) -> StatusBarRegions {
         self.regions
     }

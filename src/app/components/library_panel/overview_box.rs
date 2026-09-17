@@ -11,6 +11,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::components::mouse::hit::HitRegions;
 use crate::app::palette;
 use crate::app::render::{PANE_PAD_X, PANE_PAD_Y};
+use crate::app::ui_util::trunc_str;
 
 use super::content::{HeroContent, HeroCredit, HeroFacts};
 
@@ -198,10 +199,6 @@ pub(in crate::app) fn paint_overview_box(
     })
 }
 
-fn paint_credits(f: &mut Frame, area: Rect, credits: &[HeroCredit]) {
-    paint_credits_from(f, area, credits, 0);
-}
-
 fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_offset: usize) {
     // Column geometry is a property of the whole table, not the visible page.
     let name_width = credits
@@ -242,7 +239,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         );
         if role_start < area.right() {
             let available_width = area.right().saturating_sub(role_start) as usize;
-            let role = truncate_ellipsis(&credit.role, available_width);
+            let role = trunc_str(&credit.role, available_width);
             let rendered_role_width = UnicodeWidthStr::width(role.as_str()) as u16;
             let role_x = area.right().saturating_sub(rendered_role_width);
             f.render_widget(
@@ -256,30 +253,6 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
             );
         }
     }
-}
-
-fn truncate_ellipsis(text: &str, width: usize) -> String {
-    if UnicodeWidthStr::width(text) <= width {
-        return text.to_owned();
-    }
-    if width == 0 {
-        return String::new();
-    }
-    if width == 1 {
-        return "…".into();
-    }
-    let mut out = String::new();
-    let mut used = 0;
-    for ch in text.chars() {
-        let w = UnicodeWidthStr::width(ch.to_string().as_str());
-        if used + w > width - 1 {
-            break;
-        }
-        out.push(ch);
-        used += w;
-    }
-    out.push('…');
-    out
 }
 
 fn contains_control(text: &str) -> bool {

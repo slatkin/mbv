@@ -22,23 +22,6 @@ use crate::app::types_audiobookshelf_browse::{
 use crate::app::ui_util::clean_overview;
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
-pub(in crate::app) fn podcast_show_rows(
-    shows: &[mbv_core::audiobookshelf::AudiobookshelfShow],
-) -> Vec<MediaListRow<String>> {
-    shows
-        .iter()
-        .map(|show| MediaListRow::Item {
-            target: show.library_item_id.clone(),
-            primary: show.title.clone(),
-            secondary: None,
-            trailing: None,
-            duration: None,
-            kind: MediaKind::Collection,
-            semantic_state: MediaSemanticState::Ordinary,
-        })
-        .collect()
-}
-
 /// Plain owner for one Audiobookshelf podcast library. Content is projected by
 /// the shell; filter, focus, and list selection remain local interaction state.
 pub(in crate::app) struct PodcastContent {
@@ -175,15 +158,19 @@ impl PodcastContent {
         self.carrier.selected_target().cloned()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn episode_focused(&self) -> bool {
         self.episode_focused
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn episode_rows(&self) -> &[MediaListRow<String>] {
         self.episode_list.rows()
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn episode_filter(&self) -> AudiobookshelfEpisodeFilter {
         self.episode_filter
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn set_episode_filter(&mut self, filter: AudiobookshelfEpisodeFilter) {
         self.episode_filter = filter;
         self.project_episode_rows();

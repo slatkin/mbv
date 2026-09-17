@@ -103,12 +103,6 @@ impl Model {
                         self.app.play_album_track(&album_id, &track);
                         self.push_music_workspace_content();
                     }
-                    ShellRequest::MusicTrackEnqueue { track } => {
-                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
-                            self.app.enqueue_lib_item(lib_idx, track);
-                        }
-                        self.push_music_workspace_content();
-                    }
                     ShellRequest::MusicGroupSwitch { delta } => {
                         if let Some(lib_idx) = self.app.tab.emby_library_index() {
                             self.app.switch_music_group(lib_idx, delta);

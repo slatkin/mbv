@@ -166,67 +166,10 @@ pub fn clean_overview(s: &str) -> String {
 }
 
 pub fn regex_strip_urls(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut chars = s.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == 'h' {
-            let mut buf = String::from(c);
-            for expected in "ttp".chars() {
-                match chars.peek() {
-                    Some(&nc) if nc == expected => {
-                        buf.push(chars.next().unwrap());
-                    }
-                    _ => {
-                        out.push_str(&buf);
-                        buf.clear();
-                        break;
-                    }
-                }
-            }
-            if buf == "http" {
-                if chars.peek() == Some(&'s') {
-                    buf.push(chars.next().unwrap());
-                }
-                let mut ok = true;
-                for expected in "://".chars() {
-                    match chars.peek() {
-                        Some(&nc) if nc == expected => {
-                            buf.push(chars.next().unwrap());
-                        }
-                        _ => {
-                            ok = false;
-                            break;
-                        }
-                    }
-                }
-                if ok {
-                    while chars.peek().is_some_and(|&c| !c.is_whitespace()) {
-                        chars.next();
-                    }
-                } else {
-                    out.push_str(&buf);
-                }
-            } else if !buf.is_empty() {
-                out.push_str(&buf);
-            }
-        } else {
-            out.push(c);
-        }
-    }
-    let mut result = String::with_capacity(out.len());
-    let mut prev_space = false;
-    for c in out.chars() {
-        if c.is_whitespace() {
-            if !prev_space {
-                result.push(' ');
-            }
-            prev_space = true;
-        } else {
-            result.push(c);
-            prev_space = false;
-        }
-    }
-    result
+    s.split_whitespace()
+        .filter(|token| !token.contains("http://") && !token.contains("https://"))
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// First `n` chars of `s`, with no ellipsis — for fixed-width abbreviations
@@ -237,7 +180,9 @@ pub fn take_chars(s: &str, n: usize) -> String {
 }
 
 pub fn trunc_str(s: &str, max: usize) -> String {
-    if s.width() <= max {
+    if max == 0 {
+        String::new()
+    } else if s.width() <= max {
         s.to_string()
     } else {
         let mut out = String::new();

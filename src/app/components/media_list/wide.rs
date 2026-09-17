@@ -1,6 +1,6 @@
 use super::{
-    letter_grouped_rows, MediaList, MediaListOperation, MediaListRow, MediaListTransition,
-    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
+    MediaList, MediaListOperation, MediaListRow, MediaListTransition, RowGeometry, ViewportAnchor,
+    WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -14,6 +14,7 @@ struct WidePaintResult<Target> {
     claim_rect: Rect,
     content_rect: Rect,
     row_geometry: RowGeometry<Target>,
+    #[cfg_attr(not(test), allow(dead_code))]
     selected_target: Option<Target>,
     selected_row_rect: Option<Rect>,
 }
@@ -51,12 +52,6 @@ impl<Target> WideMediaList<Target> {
             configured_geometry: None,
             paint: None,
         }
-    }
-
-    /// Return the canonical owner so another presentation can be configured
-    /// over the same logical flow.
-    pub fn into_media_list(self) -> MediaList<Target> {
-        self.core
     }
 
     pub fn invalidate_paint(&mut self) {
@@ -114,6 +109,7 @@ impl<Target> WideMediaList<Target> {
     }
 
     /// The current frame's selected target, if `view` completed.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_selected_target(&self) -> Option<&Target> {
         self.paint
             .as_ref()
@@ -128,17 +124,21 @@ impl<Target> WideMediaList<Target> {
     }
 
     /// Number of rows in the complete flow retained by the current view.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_len(&self) -> Option<usize> {
         self.paint.as_ref().map(|paint| paint.row_geometry.len())
     }
 
     /// Display-row offset and target retained by the current view.
+    /// The current frame's selected-row rectangle, if it is visible.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_target_at(&self, row: usize) -> Option<Option<&Target>> {
         self.paint
             .as_ref()
             .map(|paint| paint.row_geometry.targets().nth(row).flatten())
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_offset(&self) -> Option<usize> {
         self.paint.as_ref().map(|paint| paint.row_geometry.offset())
     }
@@ -170,11 +170,6 @@ impl<Target> WideMediaList<Target> {
         self.core.rows()
     }
 
-    /// Number of selectable rows.
-    pub fn selectable_len(&self) -> usize {
-        self.core.selectable_len()
-    }
-
     /// No selectable rows at all.
     pub fn is_empty(&self) -> bool {
         self.core.is_empty()
@@ -185,11 +180,6 @@ impl<Target> WideMediaList<Target> {
         self.core.cursor()
     }
 
-    /// The display-row index the cursor currently points at.
-    pub fn selected_display_row(&self) -> Option<usize> {
-        self.core.selected_display_row()
-    }
-
     /// The stable identity under the cursor.
     pub fn selected_target(&self) -> Option<&Target> {
         self.core.selected_target()
@@ -197,10 +187,6 @@ impl<Target> WideMediaList<Target> {
 
     pub fn multi_selection(&self) -> &[Target] {
         self.core.multi_selection()
-    }
-
-    pub fn is_visual_mode(&self) -> bool {
-        self.core.is_visual_mode()
     }
 
     pub fn is_selected_target(&self, target: &Target) -> bool
@@ -259,6 +245,7 @@ impl<Target> WideMediaList<Target> {
 
     /// Zero-based screen-row offset from the viewport top to the selected
     /// row, for the responsive [`ViewportAnchor`] hand-off (design.md D3).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
         self.core.selected_row_offset(viewport_height)
     }
@@ -295,25 +282,6 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     }
 
     /// Replace the display rows from a letter-grouped projection: sort the
-    /// `(sort_str, Item)` pairs by natural key and inject `Heading`/`Spacer`
-    /// rows per bucket, matching the deleted legacy painter's contract.
-    /// `total_count`
-    /// selects range vs per-letter buckets; `letter_filter_active` forces
-    /// per-letter mode for an already-filtered slice.
-    pub fn set_letter_grouped_content(
-        &mut self,
-        items: Vec<(String, MediaListRow<Target>)>,
-        total_count: usize,
-        letter_filter_active: bool,
-    ) {
-        self.invalidate_paint();
-        self.core.set_content(letter_grouped_rows(
-            items,
-            total_count,
-            letter_filter_active,
-        ));
-    }
-
     /// Move the cursor to `target` when it is present; returns whether it was.
     /// Selection does not change row flow geometry, so a completed view remains
     /// valid for pointer gestures until the next view begins.
@@ -325,6 +293,7 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
         self.core.toggle_selection(target);
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn extend_selection_to(&mut self, target: &Target) {
         self.core.extend_selection_to(target);
     }
@@ -335,6 +304,7 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
 
     /// Produce a [`ViewportAnchor`] from the current selection for a painted
     /// viewport height (design.md D3). `None` when nothing is selectable.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<Target>> {
         self.core.viewport_anchor(viewport_height)
     }
@@ -342,6 +312,7 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
     /// Restore a [`ViewportAnchor`] at a painted viewport height: select the
     /// target if present, then place it at the requested offset where the
     /// geometry allows, clamping otherwise (design.md D3).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn apply_viewport_anchor(
         &mut self,
         anchor: &ViewportAnchor<Target>,

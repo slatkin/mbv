@@ -126,18 +126,22 @@ impl FeedsContent {
         }
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier.cursor()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
         self.watched_filter
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn selected_group(&self) -> usize {
         self.selected_group
     }
@@ -146,6 +150,7 @@ impl FeedsContent {
         1 + self.subscriptions.len()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn visible_titles(&self) -> Vec<&str> {
         self.visible_entries
             .iter()
@@ -153,6 +158,7 @@ impl FeedsContent {
             .collect()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn subscription_names(&self) -> Vec<&str> {
         self.subscriptions
             .iter()
@@ -170,13 +176,6 @@ impl FeedsContent {
     /// (design D6 frame invalidation).
     pub(in crate::app) fn claims_current_point(&self, at: Position) -> bool {
         self.carrier.claims_current_point(at)
-    }
-
-    /// Move the shared owner into the presentation the painted breakpoint
-    /// selects (the legacy `ensure_carrier`), preserving only the outgoing
-    /// selected-row viewport offset.
-    pub(in crate::app) fn ensure_presentation(&mut self, _wide: bool, viewport_height: usize) {
-        self.carrier.sync_viewport(viewport_height.max(1));
     }
 
     /// The entry whose stable `guid` the shared owner selected. Effect

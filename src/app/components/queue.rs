@@ -113,6 +113,7 @@ impl QueueComponent {
         self.focused = focused;
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn set_content(
         &mut self,
         slots: Vec<QueueSlot>,
@@ -133,6 +134,7 @@ impl QueueComponent {
 
     /// The semantic states of the projected rows, in row order (tick-test
     /// evidence for the shell's now-playing claim projection).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn projected_row_states(&self) -> Vec<MediaSemanticState> {
         self.carrier
             .wide()

@@ -103,17 +103,6 @@ fn movie_logo_source(item: &EmbyItem) -> Option<ArtworkSource> {
     Some(source)
 }
 
-/// The artwork policy for one queue item: dispatches to the item kind's
-/// policy (Emby, Audiobookshelf podcast episode, book, or feed entry).
-pub(in crate::app) fn queue_artwork_policy(item: &QueueItem) -> HeroArtwork {
-    match item {
-        QueueItem::Emby(item) => emby_artwork_policy(item),
-        QueueItem::Audiobookshelf(episode) => abs_episode_artwork_policy(episode),
-        QueueItem::AudiobookshelfBook(book) => abs_book_artwork_policy(book),
-        QueueItem::Feed(entry) => feed_artwork_policy(entry),
-    }
-}
-
 /// The artwork policy for an Audiobookshelf book (design D5): books declare
 /// a portrait cover; no cover means the Portrait placeholder.
 pub(in crate::app) fn abs_book_artwork_policy(book: &AudiobookshelfBookQueueItem) -> HeroArtwork {

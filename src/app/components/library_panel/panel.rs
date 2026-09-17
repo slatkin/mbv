@@ -35,6 +35,7 @@ use crate::app::components::inline_search::InlineSearchHost;
 /// own painted skeleton geometry).
 #[derive(Clone, Debug)]
 struct OverlayGeometry {
+    #[cfg_attr(not(test), allow(dead_code))]
     pane: ratatui::layout::Rect,
     frame: ratatui::layout::Rect,
     hero: HeroCompositionGeometry,
@@ -328,24 +329,10 @@ impl LibraryPanel {
     }
 
     #[cfg(test)]
-    pub(in crate::app) fn test_hovered_link(&self) -> Option<usize> {
-        self.hovered_link
-    }
-
-    #[cfg(test)]
     pub(in crate::app) fn test_link_hits(
         &self,
     ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
         &self.hits.links
-    }
-
-    /// The List-controls row's retained hit regions, for the pill-row test
-    /// path.
-    #[cfg(test)]
-    pub(in crate::app) fn test_control_hits(
-        &self,
-    ) -> &crate::app::components::mouse::hit::HitRegions<usize> {
-        &self.hits.controls
     }
 
     /// The Workspace selector row's retained hit regions (task 8.4: TV's
@@ -518,13 +505,6 @@ impl LibraryPanel {
     /// painted.
     fn hero_pane_rect(&self) -> Option<ratatui::layout::Rect> {
         self.wide_geometry.as_ref().map(|geometry| geometry.hero)
-    }
-
-    /// Route one already-normalized pointer input to the active owner's
-    /// list. The owner performs the typed point resolution through its own
-    /// carrier and translates the outcome into its `Msg`s.
-    fn delegate_list_input(&mut self, input: MediaListSurfaceInput) -> Option<Msg> {
-        self.slot_event(LibrarySlotEvent::List(input))
     }
 
     fn can_open_hero_overlay(&mut self) -> bool {

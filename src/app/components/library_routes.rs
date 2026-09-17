@@ -56,10 +56,6 @@ impl LibraryRoutesComponent {
             .min(stage_len(self.stage.as_ref()).saturating_sub(1));
     }
 
-    pub(in crate::app) fn snapshot(&self) -> Option<(LibraryRouteStage, usize)> {
-        self.stage.clone().map(|stage| (stage, self.cursor))
-    }
-
     /// Read the current picker stage (task 5.3c): the shell drives stage
     /// transitions once the component owns the interaction state.
     pub(in crate::app) fn stage(&self) -> Option<&LibraryRouteStage> {

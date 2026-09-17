@@ -1,12 +1,5 @@
 //! TuiRealm interactive-component contracts: `ComponentId`, `Msg`, `UserEvent`
 //! (design `migrate-tui-to-tuirealm` D3–D5).
-//!
-//! Pre-wiring scaffolding: the enums and their payload types are declared here
-//! so the TuiRealm `Application<ComponentId, Msg, UserEvent>` can be assembled
-//! in task 1.4, but nothing references them yet. Per-item dead code is expected
-//! and allowed here until the Model wires the types; revisit once 1.4 lands.
-
-#![allow(dead_code)]
 
 pub mod book_content;
 pub mod component_id;

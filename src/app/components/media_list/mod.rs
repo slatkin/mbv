@@ -56,20 +56,9 @@ impl<Target> RowGeometry<Target> {
     }
 
     /// Stable targets parallel to the flow rows.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn targets(&self) -> impl Iterator<Item = Option<&Target>> {
         self.rows.iter().map(|row| row.target.as_ref())
-    }
-
-    /// Absolute one-line rectangles for rows visible in `area`.
-    pub fn visible_rows(&self, area: Rect) -> Vec<Rect> {
-        (self.offset..self.rows.len())
-            .take(area.height as usize)
-            .map(|row| Rect {
-                y: area.y + (row - self.offset) as u16,
-                height: 1,
-                ..area
-            })
-            .collect()
     }
 
     /// The selected row's absolute one-line rectangle when it is visible.
@@ -141,8 +130,6 @@ pub enum MediaSemanticState {
     Played,
     Active { progress: Option<ActiveProgress> },
     NowPlaying { progress: Option<ActiveProgress> },
-    Starting,
-    Disabled,
 }
 
 impl MediaSemanticState {
@@ -263,7 +250,6 @@ pub enum MediaListOperation<Target> {
     Range(Target),
     Activate(Target),
     Context(Target),
-    ContextSelection,
 }
 
 impl MediaListSurfaceInput {
@@ -403,17 +389,7 @@ pub struct WideViewport {
     pub total_rows: usize,
 }
 
-impl WideViewport {
-    /// The largest `offset` that still fills the viewport.
-    pub fn max_offset(&self) -> usize {
-        self.total_rows.saturating_sub(self.height)
-    }
-
-    /// Whether the content is taller than the viewport (scrollbar territory).
-    pub fn overflows(&self) -> bool {
-        self.total_rows > self.height
-    }
-}
+impl WideViewport {}
 
 /// The single canonical owner for one logical provider-neutral media-row flow.
 ///
@@ -480,11 +456,6 @@ impl<Target> MediaList<Target> {
 
     fn rows(&self) -> &[MediaListRow<Target>] {
         &self.rows
-    }
-
-    /// Number of selectable rows.
-    fn selectable_len(&self) -> usize {
-        self.selectable.len()
     }
 
     /// No selectable rows at all.
@@ -571,6 +542,7 @@ impl<Target> MediaList<Target> {
 
     /// Zero-based screen-row offset from the viewport top to the selected
     /// row (design.md D3). `None` when nothing is selectable.
+    #[cfg_attr(not(test), allow(dead_code))]
     fn selected_row_offset(&self, viewport_height: usize) -> Option<usize> {
         let row = self.selected_display_row()?;
         Some(row.saturating_sub(self.resolve_viewport(viewport_height).offset))
@@ -637,7 +609,6 @@ impl<Target> MediaList<Target> {
                 Some(RowIntent::Activate(target))
             }
             MediaListOperation::Context(target) => Some(self.context_intent(target)),
-            MediaListOperation::ContextSelection => None,
         };
         if extends_range && self.live_range {
             if let Some(target) = self.selected_target().cloned() {

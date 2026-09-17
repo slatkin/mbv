@@ -23,7 +23,6 @@ use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
     MediaListTrailing, MediaSemanticState, RowIntent, ViewportAnchor,
 };
-use super::mouse::gesture::MouseGestureState;
 use super::msg::{LeafKeyResult, Msg, ShellRequest, TerminalObserverEvent, TvHit};
 use crate::app::render::{effective_sort_str, letter_bucket, TvWideRenderCtx};
 use crate::app::ui_util::{list_duration_secs, natural_sort_key};
@@ -67,9 +66,6 @@ pub(in crate::app) struct TvContent {
     last_series_rows: Option<Vec<MediaListRow<String>>>,
     /// The episode twin of [`TvContent::last_series_rows`].
     last_episode_rows: Option<Vec<MediaListRow<String>>>,
-    /// Private per-parent gesture recognition (ADR 0024, design.md D3): owns
-    /// the double-click window and wheel throttle. Not a shared clock.
-    mouse_gestures: MouseGestureState,
     /// The embedded Inline Search control (design.md D1). See
     /// `EmbyLibraryContent::inline_search` for the migration-phase notes.
     inline_search: InlineSearch,
@@ -154,7 +150,6 @@ impl TvContent {
             viewport_height: 1,
             last_series_rows: None,
             last_episode_rows: None,
-            mouse_gestures: MouseGestureState::new(),
             inline_search: InlineSearch::new(),
             is_wide: true,
             hero_overlay_open: false,
@@ -421,6 +416,7 @@ impl TvContent {
             hero,
         }
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn cursor(&self) -> usize {
         self.carrier.cursor()
     }
@@ -442,6 +438,7 @@ impl TvContent {
             })
             .unwrap_or(0)
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn viewport_anchor(
         &self,
         viewport_height: usize,
@@ -463,14 +460,12 @@ impl TvContent {
             painted
         }
     }
-    /// Whether letter pills are enabled in the pushed context.
-    pub(in crate::app) fn show_letter_pills(&self) -> bool {
-        self.context.show_letter_pills
-    }
     /// The scroll offset the component tracks for its series list.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn scroll(&self) -> usize {
         self.carrier.scroll()
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn selected_item_id(&self) -> Option<String> {
         let target = self.carrier.selected_target()?;
         self.context
@@ -510,6 +505,7 @@ impl TvContent {
     /// .selected_series`), exposed so tests can verify the pushed detail
     /// follows the component's authoritative selection rather than the App
     /// browse cursor.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn selected_series_snapshot(&self) -> Option<&EmbyItem> {
         self.context.selected_series.as_ref()
     }

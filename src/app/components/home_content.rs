@@ -18,7 +18,7 @@ use super::library_panel::content::{
     HeroContent, HeroImageState, LibraryPanelContent, ListSlot, SelectorRow,
 };
 use super::library_panel::hero::hero_content_queue;
-use super::library_panel::owner::{LibraryContentOwner, LibraryKey, LibrarySlotEvent};
+use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
@@ -390,13 +390,6 @@ impl HomeContent {
         }
     }
 
-    /// The active section's projected canonical rows (the carrier holds the
-    /// active vector).
-    #[cfg(test)]
-    pub(in crate::app) fn test_active_rows(&self) -> &[MediaListRow<String>] {
-        self.carrier.rows()
-    }
-
     /// The active carrier's resting scroll offset.
     #[cfg(test)]
     pub(in crate::app) fn test_active_scroll(&self) -> usize {
@@ -627,9 +620,4 @@ impl LibraryContentOwner for HomeContent {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-}
-
-/// The owner-map key Home installs under (design D2's `LibraryKey::Home`).
-pub(in crate::app) fn home_library_key() -> LibraryKey {
-    LibraryKey::Home
 }

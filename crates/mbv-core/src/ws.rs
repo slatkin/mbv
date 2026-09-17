@@ -6,8 +6,6 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-use rand::RngExt;
-
 use serde_json::Value;
 use tungstenite::Message;
 
@@ -303,11 +301,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
                 break 'reconnect;
             }
             // M3: Exponential backoff with jitter, max 60s.
-            let jitter: f64 = rand::rng().random_range(0.0..1.0);
-            let delay = Duration::from_secs_f64(backoff_secs as f64 + jitter);
-            log::info!(target: "ws", "reconnecting in {:.1}s (backoff={backoff_secs}s)", delay.as_secs_f64());
-            thread::sleep(delay);
-            backoff_secs = (backoff_secs * 2).min(60);
+            crate::reconnect_backoff_sleep(&mut backoff_secs, "ws");
         }
     });
     WsSender {

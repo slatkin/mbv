@@ -1,3 +1,8 @@
+// The anchor seam is the named foundation of the in-flight
+// `media-list-viewport-scroll` plan (design.md D5): production wiring
+// arrives with that change; tests exercise it today.
+#![cfg_attr(not(test), allow(dead_code))]
+
 use super::MediaList;
 
 /// The selection state a responsive parent hands from one canonical

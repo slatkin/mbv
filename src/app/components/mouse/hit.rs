@@ -51,10 +51,9 @@ impl<Tag> HitRegions<Tag> {
             .map(|(_, tag)| tag)
     }
 
-    /// The recorded rect/tag pairs in paint order. The panel's slot events
-    /// resolve through [`HitRegions::resolve`]; the one production reader is
-    /// the mounted `LibraryPanel` (task 8.4), which adopts the shared
-    /// Workspace selector's painted pills into its own hit store.
+    /// The recorded rect/tag pairs in paint order. Test accessors read them
+    /// for hit-geometry assertions.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn regions(&self) -> &[(Rect, Tag)] {
         &self.regions
     }

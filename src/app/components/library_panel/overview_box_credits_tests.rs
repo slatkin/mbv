@@ -320,13 +320,14 @@ fn credits_clip_and_role_column_survives_long_name() {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(24, 3)).unwrap();
     terminal
         .draw(|f| {
-            paint_credits(
+            paint_credits_from(
                 f,
                 Rect::new(0, 0, 24, 1),
                 &[HeroCredit {
                     name: "A very long credit name".into(),
                     role: "Actor".into(),
                 }],
+                0,
             );
         })
         .unwrap();
@@ -343,7 +344,7 @@ fn credits_roles_use_the_full_remaining_width_and_right_align() {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(36, 2)).unwrap();
     terminal
         .draw(|f| {
-            paint_credits(
+            paint_credits_from(
                 f,
                 Rect::new(2, 0, 30, 2),
                 &[
@@ -356,6 +357,7 @@ fn credits_roles_use_the_full_remaining_width_and_right_align() {
                         role: "Cinematographer".into(),
                     },
                 ],
+                0,
             );
         })
         .unwrap();
@@ -384,13 +386,14 @@ fn credits_truncate_roles_at_the_right_edge() {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(24, 1)).unwrap();
     terminal
         .draw(|f| {
-            paint_credits(
+            paint_credits_from(
                 f,
                 Rect::new(0, 0, 24, 1),
                 &[HeroCredit {
                     name: "A very long credit name".into(),
                     role: "Director of Photography".into(),
                 }],
+                0,
             );
         })
         .unwrap();

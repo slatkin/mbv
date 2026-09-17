@@ -245,21 +245,25 @@ impl MusicContent {
     pub(in crate::app) fn clear_track_focus(&mut self) {
         self.track_focused = false;
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_cursor(&self) -> usize {
         self.selected_album_index()
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_scroll(&self) -> usize {
         self.carrier.scroll()
     }
     pub(in crate::app) fn track_focused(&self) -> bool {
         self.track_focused
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {
         (0..self.carrier.current_flow_len().unwrap_or(0))
             .map(|row| self.carrier.current_flow_target_at(row).flatten().cloned())
             .collect()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_target_rows(&self, target: usize) -> Vec<usize> {
         self.album_flow_targets()
             .iter()
@@ -271,6 +275,7 @@ impl MusicContent {
             .collect()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn track_selected_row(&self) -> Option<usize> {
         let target = self.track_list.selected_target()?;
         self.context
@@ -278,14 +283,6 @@ impl MusicContent {
             .as_deref()?
             .iter()
             .position(|track| track.id == *target)
-    }
-    #[cfg(test)]
-    pub(in crate::app) fn test_track_content_rect(&self) -> Option<ratatui::layout::Rect> {
-        self.track_list.current_content_rect()
-    }
-    #[cfg(test)]
-    pub(in crate::app) fn test_track_selected_row_rect(&self) -> Option<ratatui::layout::Rect> {
-        self.track_list.current_selected_row_rect()
     }
     pub(in crate::app) fn selected_track_item(&self) -> Option<EmbyItem> {
         let target = self.track_list.selected_target()?;

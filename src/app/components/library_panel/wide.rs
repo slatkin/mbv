@@ -66,14 +66,17 @@ pub(in crate::app) struct WideSkeletonGeometry {
     pub hero: Rect,
     /// The Selector row's pill-bar rect, reserved even when the destination
     /// supplies no `SelectorRow` (the Inline Search box takes it).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub selector_bar: Rect,
     /// The List controls row's rect, when the destination supplies content.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub controls: Option<Rect>,
     /// The list box's full panel rect (fill + border).
     pub list_panel: Rect,
     /// The list box's inset row-flow rect.
     pub list_area: Rect,
     /// The Hero pane's inset content rect.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub hero_area: Rect,
     /// The Workspace box's panel and the rect its list was viewed into
     /// (below the optional header rows), when one painted.

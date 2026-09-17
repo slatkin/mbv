@@ -181,12 +181,6 @@ impl BookContent {
         self.project_chapter_rows();
     }
 
-    /// Whether the parent-owned chapter pane currently has focus (design.md
-    /// D5). Independent of the chapter owner's selected row.
-    pub(in crate::app) fn chapter_focused(&self) -> bool {
-        self.chapter_focused
-    }
-
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
     }
@@ -208,11 +202,6 @@ impl BookContent {
         self.carrier.selected_target().map(String::as_str)
     }
 
-    #[cfg(test)]
-    pub(crate) fn selected_bucket(&self) -> usize {
-        self.selected_bucket
-    }
-
     /// The chapter owner's book-qualified stable target, resolved only while
     /// the chapter pane holds focus (design.md D4/D5). Activation never
     /// re-derives it from a numeric display position.
@@ -225,15 +214,6 @@ impl BookContent {
             self.state.selected_id.clone()?,
             index,
         ))
-    }
-
-    /// The active book owner's stable target index in the projected catalog.
-    fn selected_book_index(&self) -> Option<usize> {
-        let target = self.carrier.selected_target()?;
-        self.state
-            .books
-            .iter()
-            .position(|book| &book.library_item_id == target)
     }
 
     pub(in crate::app) fn book_request(&self) -> Option<Msg> {

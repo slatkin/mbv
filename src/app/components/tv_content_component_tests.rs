@@ -32,13 +32,6 @@ fn tv_key() -> LibraryKey {
     }
 }
 
-/// A mounted-panel harness hosting one TV owner: the shape production uses
-/// (the panel is the event boundary; the owner never mounts).
-struct TvPanel {
-    panel: LibraryPanel,
-    owner: TvContent,
-}
-
 fn panel_with(owner: TvContent, focused: bool) -> LibraryPanel {
     let mut panel = LibraryPanel::new();
     panel.insert_owner(tv_key(), Box::new(owner));

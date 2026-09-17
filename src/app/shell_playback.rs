@@ -87,9 +87,6 @@ impl Model {
             PlaybackRequest::Stop => self.dispatch_playback(Command::Stop),
             PlaybackRequest::Previous => self.dispatch_playback(Command::PreviousTrack),
             PlaybackRequest::Next => self.dispatch_playback(Command::NextTrack),
-            PlaybackRequest::SeekRelative(seconds) => {
-                self.dispatch_playback(Command::SeekRelative(seconds as f64));
-            }
             PlaybackRequest::SeekTo(fraction) => self.app.seek_to_fraction(fraction),
             PlaybackRequest::ToggleMute => self.dispatch_playback(Command::ToggleMute),
             PlaybackRequest::VolumeDelta(delta) => {
@@ -100,9 +97,6 @@ impl Model {
             }
             PlaybackRequest::CycleSubtitle => {
                 self.dispatch_playback(Command::CycleOrToggleSubtitle);
-            }
-            PlaybackRequest::ToggleVisualizer => {
-                let _ = self.app.dispatch(super::action::Command::ToggleVisualizer);
             }
         }
     }

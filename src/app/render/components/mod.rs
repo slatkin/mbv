@@ -20,7 +20,8 @@ pub(super) mod feeds_manage;
 pub(super) mod help;
 pub(super) mod hero;
 pub(in crate::app) mod hero_model;
-pub(super) mod home_feed;
+// Feed/home-video group browsing is painted by the embedded EmbyLibraryContent
+// owner; the shell owns loading and projects FeedHomeVideoState into its context.
 pub(super) mod home_video;
 pub mod indicators;
 pub(in crate::app) mod library_hero_overlay;

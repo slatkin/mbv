@@ -1,3 +1,5 @@
+use rand::RngExt;
+
 pub mod api;
 pub mod applog;
 pub mod audiobookshelf;
@@ -45,6 +47,22 @@ const PATH_SEGMENT: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANU
 /// not a full path -- do not pass a string containing `/`.
 pub(crate) fn encode_path_segment(value: &str) -> percent_encoding::PercentEncode<'_> {
     percent_encoding::utf8_percent_encode(value, PATH_SEGMENT)
+}
+
+/// Sleep out one reconnect attempt: exponential backoff with 0–1s jitter,
+/// doubling `backoff_secs` up to 60s. Shared by the Emby and Audiobookshelf
+/// websocket reconnect loops so the incantation lives in one place.
+pub(crate) fn reconnect_backoff_sleep(backoff_secs: &mut u64, target: &str) {
+    let jitter: f64 = rand::rng().random_range(0.0..1.0);
+    let delay = std::time::Duration::from_secs_f64(*backoff_secs as f64 + jitter);
+    log::info!(
+        target: target,
+        "reconnecting in {:.1}s (backoff={}s)",
+        delay.as_secs_f64(),
+        backoff_secs
+    );
+    std::thread::sleep(delay);
+    *backoff_secs = (*backoff_secs * 2).min(60);
 }
 
 /// Build an agent using the explicit native-tls provider (ureq 3 no longer

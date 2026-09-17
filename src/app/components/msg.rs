@@ -63,20 +63,6 @@ mod leaf_key_tests {
 }
 
 impl LeafKeyResult {
-    pub(crate) fn from_option(message: Option<Msg>) -> Self {
-        Self::Consumed(message)
-    }
-
-    /// Adapt a legacy optional handler where `None` means the key was not
-    /// recognized. Handlers that mutate local state without a request should
-    /// return `Consumed(None)` directly.
-    pub(crate) fn from_unhandled_option(message: Option<Msg>) -> Self {
-        match message {
-            Some(message) => Self::Consumed(Some(message)),
-            None => Self::Unhandled,
-        }
-    }
-
     pub(crate) fn into_option(self) -> Option<Msg> {
         match self {
             Self::Unhandled => None,

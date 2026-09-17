@@ -12,6 +12,7 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::palette;
+use crate::app::ui_util::trunc_str;
 use crate::app::NowPlayingStatus;
 
 /// The header's status word for one now-playing status.
@@ -31,32 +32,6 @@ fn status_color(status: NowPlayingStatus) -> ratatui::style::Color {
         NowPlayingStatus::Paused => palette::TEXT_FOCUS_ACCENT,
         NowPlayingStatus::Idle => palette::TEXT_MUTED,
     }
-}
-
-/// Tail-truncates `text` to at most `max_width` cells, ending in an
-/// ellipsis when any character was dropped.
-fn ellipsize(text: &str, max_width: u16) -> String {
-    if max_width == 0 {
-        return String::new();
-    }
-    // Reserve one cell for the ellipsis; zero-width characters ride along.
-    let budget = max_width - 1;
-    let mut out = String::new();
-    let mut used = 0u16;
-    let mut truncated = false;
-    for ch in text.chars() {
-        let w = unicode_width::UnicodeWidthChar::width(ch).unwrap_or(0) as u16;
-        if used + w > budget {
-            truncated = true;
-            break;
-        }
-        out.push(ch);
-        used += w;
-    }
-    if truncated {
-        out.push('\u{2026}');
-    }
-    out
 }
 
 /// Paints the header row into `area`: ` PLAYING`/` PAUSED`/` IDLE` on the left
@@ -95,7 +70,7 @@ pub(in crate::app) fn render_playback_header(
     } else if full_target_w <= avail {
         (full_target, avail - full_target_w)
     } else if avail > 1 {
-        (ellipsize(&full_target, avail - 1), 1)
+        (trunc_str(&full_target, (avail - 1) as usize), 1)
     } else {
         (String::new(), 0)
     };

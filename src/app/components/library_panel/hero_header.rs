@@ -298,26 +298,6 @@ mod hero_header_tests {
         false
     }
 
-    /// The fg of the first cell painting `needle`'s first character.
-    fn text_fg(
-        buf: &ratatui::buffer::Buffer,
-        area: Rect,
-        needle: &str,
-    ) -> Option<ratatui::style::Color> {
-        for y in area.top()..area.bottom() {
-            let mut line = String::new();
-            let mut cells = Vec::new();
-            for x in area.left()..area.right() {
-                line.push_str(buf[(x, y)].symbol());
-                cells.push(buf[(x, y)].style().fg);
-            }
-            if let Some(offset) = line.find(needle) {
-                return cells.get(offset).copied().flatten();
-            }
-        }
-        None
-    }
-
     fn placeholder_fill() -> ratatui::style::Color {
         palette::surface_colors(palette::Surface::ArtworkPlaceholder, false).fill
     }

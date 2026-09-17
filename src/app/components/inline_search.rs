@@ -196,6 +196,7 @@ impl InlineSearch {
         &self.query
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn restore_query(&mut self, query: String) {
         self.query = query;
         self.deadline = None;
@@ -222,18 +223,9 @@ impl InlineSearch {
         &mut self.results
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn selected_target(&self) -> Option<(String, String)> {
         self.selected_item().map(|item| (item.id, item.item_type))
-    }
-
-    /// Restores a session's selected result and viewport: the stable target
-    /// moves the carrier's selection when present; the row offset parks the
-    /// viewport (design.md D5).
-    pub(in crate::app) fn restore_target(&mut self, id: Option<String>, row_offset: usize) {
-        if let Some(id) = id {
-            self.results.select_target(&id);
-            self.results.set_scroll(row_offset);
-        }
     }
 
     pub(in crate::app) fn results_len(&self) -> usize {
@@ -401,16 +393,6 @@ impl InlineSearch {
         None
     }
 
-    #[cfg(test)]
-    pub(in crate::app) fn test_pool_item_ids(&self) -> Vec<String> {
-        match &self.pool {
-            SearchPool::Items(items) => items.iter().map(|item| item.id.clone()).collect(),
-            SearchPool::Albums(entries) => {
-                entries.iter().map(|entry| entry.album.id.clone()).collect()
-            }
-        }
-    }
-
     /// Test-only: the carrier's selectable cursor, so tests can assert
     /// movement without depending on target identities (the shared fixtures
     /// reuse one item id).
@@ -435,9 +417,6 @@ pub(in crate::app) trait InlineSearchHost {
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
     fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.inline_search().selected_item()
-    }
-    fn restore_inline_search_query(&mut self, query: String) {
-        self.inline_search_mut().restore_query(query);
     }
 
     fn open_inline_search(&mut self) {

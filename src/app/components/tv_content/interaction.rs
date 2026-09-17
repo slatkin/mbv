@@ -316,23 +316,11 @@ impl TvContent {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn test_episode_claim_rect(&self) -> Option<ratatui::layout::Rect> {
-        self.episodes.wide().current_claim_rect()
-    }
-
     /// Test-only: the owner's local key interpretation, so shell tests can
     /// drive it without importing `LibraryContentOwner`.
     #[cfg(test)]
     pub(in crate::app) fn test_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         self.handle_key(key)
-    }
-
-    /// Test-only: translate one panel slot event, so shell tests can drive
-    /// pointer semantics without importing `LibraryContentOwner`.
-    #[cfg(test)]
-    pub(in crate::app) fn test_slot_event(&mut self, event: LibrarySlotEvent) -> Option<Msg> {
-        self.handle_slot_event(event)
     }
 
     /// Test-only: the embedded Inline Search session, for the component-level

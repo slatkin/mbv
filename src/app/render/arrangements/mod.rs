@@ -1,7 +1,7 @@
 use ratatui::layout::Rect;
 
 pub(in crate::app) mod chrome;
-pub(in crate::app) mod inline_search;
+// Inline Search consumes destination-owned geometry directly: no arrangement.
 pub(in crate::app) mod library;
 pub(in crate::app) mod playback_transport;
 pub(in crate::app) mod queue;

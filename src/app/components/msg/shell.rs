@@ -44,13 +44,6 @@ pub enum ShellRequest {
         album_id: String,
         track: EmbyItem,
     },
-    /// Enqueue the focused inline album track (Ctrl+A while a track is
-    /// focused): carries the owner-resolved track identity and enqueues it via
-    /// the library-view enqueue path.
-    MusicTrackEnqueue {
-        track: EmbyItem,
-    },
-
     /// `[`/`]` in grouped Music: cycle to the previous (`delta == -1`) or next
     /// (`delta == 1`) group; the shell runs `App::switch_music_group`.
     MusicGroupSwitch {

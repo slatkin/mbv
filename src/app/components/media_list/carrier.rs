@@ -81,14 +81,17 @@ impl<Target> MediaListCarrier<Target> {
         self.wide.current_selected_row_rect()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_len(&self) -> Option<usize> {
         self.wide.current_flow_len()
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_target_at(&self, row: usize) -> Option<Option<&Target>> {
         self.wide.current_flow_target_at(row)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_offset(&self) -> Option<usize> {
         self.wide.current_flow_offset()
     }
@@ -143,6 +146,7 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         self.wide.toggle_selection(target);
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn extend_selection_to(&mut self, target: &Target) {
         self.wide.extend_selection_to(target);
     }
@@ -201,15 +205,8 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         self.wide.resolve_current_point(point)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn viewport_anchor(&self, viewport_height: usize) -> Option<ViewportAnchor<Target>> {
         self.wide.viewport_anchor(viewport_height)
-    }
-
-    pub fn apply_viewport_anchor(
-        &mut self,
-        anchor: &ViewportAnchor<Target>,
-        viewport_height: usize,
-    ) {
-        self.wide.apply_viewport_anchor(anchor, viewport_height);
     }
 }

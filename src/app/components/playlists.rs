@@ -117,16 +117,13 @@ impl PlaylistsComponent {
         self.panel_area = area;
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn cursor(&self) -> usize {
         self.cursor
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn open_cursor(&self) -> usize {
         self.open_cursor
-    }
-
-    #[cfg(test)]
-    pub(in crate::app) fn test_playlist_rows(&self) -> &[(Rect, usize)] {
-        &self.geometry.playlist_rows
     }
 
     fn local_change() -> Option<Msg> {

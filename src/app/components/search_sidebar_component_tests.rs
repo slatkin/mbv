@@ -12,15 +12,6 @@ use tuirealm::event::{
     Event, Key, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
 };
 
-fn click(x: u16, y: u16) -> Event<super::user_event::UserEvent> {
-    Event::Mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Left),
-        column: x,
-        row: y,
-        modifiers: KeyModifiers::NONE,
-    })
-}
-
 fn key(code: Key) -> Event<super::user_event::UserEvent> {
     Event::Keyboard(KeyEvent {
         code,

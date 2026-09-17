@@ -49,8 +49,6 @@ impl AudiobookshelfEpisodeFilter {
 
 #[derive(Debug, Clone)]
 pub(super) struct AudiobookshelfBrowseState {
-    // Retained for upcoming library-local rendering milestones.
-    #[allow(dead_code)]
     pub library: AudiobookshelfLibrary,
     pub shows: Vec<AudiobookshelfShow>,
     pub total: usize,
@@ -81,8 +79,6 @@ impl AudiobookshelfBrowseState {
         }
     }
 
-    // Retained for upcoming incremental-loading milestones.
-    #[allow(dead_code)]
     pub fn cursor(&self) -> usize {
         self.selected_id
             .as_ref()

@@ -13,11 +13,12 @@ fn ui_root_router_command_opens_help() {
         model.router_outcome(&messages),
         RouterOutcome::Command(Command::OpenHelp)
     );
-    assert!(fold_keyboard_messages(
+    assert!(arbitrate_key(
         messages,
         Some(&ComponentId::UiRoot),
         &RouterOutcome::Command(Command::OpenHelp)
     )
+    .0
     .is_empty());
     assert!(!model.dispatch_router_command(Command::OpenHelp));
     assert!(model

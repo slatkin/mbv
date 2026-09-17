@@ -87,9 +87,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 // but do not receive the play marker. Both states append their
                 // progress percentage to the trailing text in the same style.
                 MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
-                MediaSemanticState::Played | MediaSemanticState::Disabled => {
-                    (palette::TEXT_MUTED, None, None)
-                }
+                MediaSemanticState::Played => (palette::TEXT_MUTED, None, None),
                 MediaSemanticState::Active { progress } => (
                     palette::TEXT_EMPHASIS,
                     (*progress).map(|value| format!("{}%", value.percent())),
@@ -100,9 +98,6 @@ pub(in crate::app) fn media_list_row<Target>(
                     (*progress).map(|value| format!("{}%", value.percent())),
                     Some("▶ "),
                 ),
-                MediaSemanticState::Starting => {
-                    (palette::TEXT_EMPHASIS, Some("starting".into()), None)
-                }
             };
             const LEFT_INSET: usize = 2;
             const QUIET_GAP: usize = 2;

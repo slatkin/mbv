@@ -142,7 +142,9 @@ pub(super) struct ArbitrationDiagnostic {
     pub dispatch_kind: &'static str,
 }
 
-#[allow(dead_code)]
+/// Test seam over `arbitrate_key`: the folded message list without the
+/// diagnostic record. Production routes through `arbitrate_key` directly.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn fold_keyboard_messages(
     messages: Vec<Msg>,
     focused: Option<&ComponentId>,

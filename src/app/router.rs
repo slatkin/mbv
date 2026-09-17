@@ -27,7 +27,6 @@ pub(super) enum RouterOutcome {
     /// The leaf's message stands (if it produced one).
     FallThrough,
     /// A context-sensitive candidate resolved after leaf arbitration.
-    #[allow(dead_code)]
     Deferred(Command),
 }
 
