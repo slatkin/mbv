@@ -83,19 +83,34 @@ Run `cargo nextest run -p mbv` after each task; keep it green.
 
 ## 4. Context cleanup: TV grouping gate + Music ctx decoration (D6)
 
-- [ ] 4.1 `TvContent::set_content` grouped computation reads
+- [x] 4.1 `TvContent::set_content` grouped computation reads
   `self.inline_search.is_active()` instead of
   `context.list.is_search_active()`.
-- [ ] 4.2 Delete the Music push's `context.list.with_search(…)` decoration
+  (Accepted: `ad55488a`, from `e819e5ba`; the replaced ctx field was
+  constant-false for TV, so this made the gate live for the first time —
+  the new `tv_grouped_rows_flatten_while_search_is_open_and_restore_after_close`
+  pins both directions: grouped rows while the session is closed, flat
+  `Item`-only rows while it is open, grouped shape back after Esc. The
+  post-close regroup rides the per-frame sync pass
+  (`shell_run.rs:614` → `sync_tv_content` → `push_tv_workspace_content` →
+  `set_content`), which recomputes rows before the next draw.)
+- [x] 4.2 Delete the Music push's `context.list.with_search(…)` decoration
   (`shell_music_workspace.rs`).
-- [ ] 4.3 Delete `LibraryListRenderCtx::{search_query, search_loading, with_search,
+  (Accepted: `e819e5ba`; behaviour-neutral — the deleted round trip pushed
+  the owner's own session state back to it, and the owner opens/closes
+  locally.)
+- [x] 4.3 Delete `LibraryListRenderCtx::{search_query, search_loading, with_search,
   is_search_active}`.
-- [ ] 4.4 Confirm TV/Music/Emby tick-integration search tests pass unchanged
+  (Accepted: `e819e5ba`; no ctx search field or `library_search_active`
+  remains in `src/`.)
+- [x] 4.4 Confirm TV/Music/Emby tick-integration search tests pass unchanged
   (they drive real keys; only internal-seed lines may change).
+  (Accepted: `e819e5ba`; all test-file hunks are seed-arity only —
+  `from_items(.., 0, 0)` → `(.., 0)` — zero flow or assertion edits.)
 
 ## 5. Deletions + one-painter evidence (D7)
 
-- [ ] 5.1 Delete `src/app/render/components/list.rs`,
+- [x] 5.1 Delete `src/app/render/components/list.rs`,
   `src/app/render/components/list_letter_groups.rs`,
   `src/app/render/components/media_list/plain_rows.rs`,
   `src/app/render/components/inline_search.rs` (the
@@ -103,13 +118,29 @@ Run `cargo nextest run -p mbv` after each task; keep it green.
   `src/app/render/mod.rs`; keep `render_search_box`
   (`render/components/hero.rs`) and
   `render/components/media_list/{row,wide}.rs` (live canonical painters).
-- [ ] 5.2 Delete the now-unused `LibraryListRenderCtx` plumbing pieces surfaced by
+  (Accepted: `e819e5ba`; `src/app/library_column_width.rs` was deleted too —
+  both its consumers died in this unit and nothing took over its math.)
+- [x] 5.2 Delete the now-unused `LibraryListRenderCtx` plumbing pieces surfaced by
   the deletions (`rows()`/`ListRenderCtx` consumers — audit; move what is
   genuinely shared rather than deleting what `list_letter_groups` still
   uniquely provided if other renderers need it).
-- [ ] 5.3 Compile-level proof: no remaining callers of
+  (Accepted: `fea7d173`; deleted `rows()`/`ListRenderCtx`,
+  `FixedRowPlan`/`DisplayRow`, the span builders, `draw_column_selection_bleed`
+  and the painter-only `scroll` field. Nothing `list_letter_groups` uniquely
+  provided needed moving — `letter_bucket`/`effective_sort_str`/`LetterFilter`
+  already live in `screens/sort_filter.rs`; `LibraryListRenderCtx` itself
+  survives for TV/Music wide and detail.)
+- [x] 5.3 Compile-level proof: no remaining callers of
   `render_generic_movies_home_video_rows_with_ctx`/`render_plain_rows`/
   `render_letter_grouped_rows`/`render_inline_search`.
+  (Accepted: `fea7d173`; grep over `src/` returns no code matches. The one
+  deleted test was the removed painter's own geometry test, whose claim the
+  canonical-media-lists delta now forbids.)
+
+Recorded note (accepted, not fixed): in the new TV gate test the flat-shape
+assertion `rows.iter().all(Item)` would also hold for zero rows; the same test's
+baseline push pins the fixture's 3 items, so the vacuity is not reachable within
+this test.
 
 ## 6. Gates + integration evidence
 
