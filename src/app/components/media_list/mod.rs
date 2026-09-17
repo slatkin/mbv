@@ -613,12 +613,16 @@ impl<Target> MediaList<Target> {
         let Some(row) = self.selected_display_row() else {
             return;
         };
+        let mut moved = false;
         if row < self.scroll {
             self.scroll = row;
+            moved = true;
         }
-        if self.scroll == row
-            && row > 0
-            && matches!(self.rows.get(row - 1), Some(MediaListRow::Heading { .. }))
+        // The backup fires only for a move that actually raised the window:
+        // an in-window move landing on the window's first row must leave the
+        // stored window where it is (D4: a move that keeps the selection
+        // inside the window moves nothing).
+        if moved && row > 0 && matches!(self.rows.get(row - 1), Some(MediaListRow::Heading { .. }))
         {
             self.scroll = row - 1;
         }

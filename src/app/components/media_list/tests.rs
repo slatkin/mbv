@@ -414,6 +414,31 @@ fn cursor_move_preserves_a_stored_window_above_the_selection() {
     assert_eq!(list.scroll(), 1);
 }
 
+// Task 2.1 / D4: an in-window cursor move that lands on the window's first
+// row with a `Heading` above it does not raise the window — the heading
+// backup fires only when the move actually shifted the window.
+#[test]
+fn cursor_move_inside_the_window_does_not_back_up_over_a_heading() {
+    let mut list = MediaList::new();
+    list.set_content(vec![
+        MediaListRow::Heading { text: "A".into() },
+        item("a1"),
+        item("a2"),
+        item("a3"),
+    ]);
+    // Display rows: 0=Heading A, 1=a1, 2=a2, 3=a3.
+    list.select_target(&"a2".to_string());
+    list.set_scroll(1);
+    let transition = list.delegate_operation(MediaListOperation::Move(-1));
+    assert_eq!(transition.selected_target, Some("a1".to_string()));
+    // The selection already sat on the window's first row; no window move is
+    // needed, so the window stays at the stored top instead of backing up
+    // over the `Heading`.
+    assert_eq!(list.scroll(), 1);
+    assert_eq!(list.resolve_viewport(3).offset, 1);
+    assert_eq!(list.selected_target(), Some(&"a1".to_string()));
+}
+
 // Task 2.1 / D4: the step path stays clamped solely by the content ends —
 // a step may leave the selection on the window's first row with its
 // labelling `Heading` scrolled off, because a step is reversible.
