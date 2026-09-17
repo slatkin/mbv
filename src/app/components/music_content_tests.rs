@@ -229,7 +229,9 @@ fn resolved_hero_data_uses_parsed_title_year_and_cached_artist() {
 /// The album rail's keyboard viewport chords (task 6.1, design D6/D7):
 /// `Ctrl+y`/`Ctrl+e` step the window one display row, `PgDn` pages it by the
 /// painted height, and the album-cursor echo reports an actual selection
-/// move only (design D8) — a window-only step reports nothing.
+/// move only (design D8) — a window-only step emits no cursor request but is
+/// still claimed, so the panel takes the deferred resting-scroll position
+/// report instead of letting the chord fall through to the shell.
 #[test]
 fn album_viewport_chords_step_the_rail_and_report_only_drags() {
     let albums: Vec<EmbyItem> = (0..8)
@@ -266,24 +268,33 @@ fn album_viewport_chords_step_the_rail_and_report_only_drags() {
     owner.carrier.select_target(&"album-2".to_string());
 
     // Ctrl+y steps the window down onto the selection's neighbourhood; the
-    // selection stays inside, so no album cursor is reported.
+    // selection stays inside, so no album cursor is reported — but the
+    // consumed step is claimed (the position-report path).
     let message = owner.on_key(&KeyEvent {
         code: Key::Char('y'),
         modifiers: KeyModifiers::CONTROL,
     });
-    assert_eq!(message, None, "a window-only chord reports no cursor");
+    assert_eq!(
+        message,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed)),
+        "a window-only chord is claimed without a cursor request"
+    );
     assert_eq!(owner.carrier.scroll(), 2);
     assert_eq!(
         owner.carrier.selected_target(),
         Some(&"album-2".to_string())
     );
 
-    // Ctrl+e steps the window back; still a viewport gesture.
+    // Ctrl+e steps the window back; still a viewport gesture, still
+    // claimed with no cursor request.
     let message = owner.on_key(&KeyEvent {
         code: Key::Char('e'),
         modifiers: KeyModifiers::CONTROL,
     });
-    assert_eq!(message, None);
+    assert_eq!(
+        message,
+        Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+    );
     assert_eq!(owner.carrier.scroll(), 1);
 
     // PgDn pages the window a full painted height; the left-behind

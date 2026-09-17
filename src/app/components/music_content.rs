@@ -17,8 +17,8 @@ use super::library_panel::hero::hero_content_music_album;
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
-    MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaSemanticState, RowIntent,
+    MediaKind, MediaListCarrier, MediaListDisposition, MediaListOperation, MediaListRow,
+    MediaListSurfaceInput, MediaSemanticState, RowIntent,
 };
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
@@ -202,21 +202,27 @@ impl MusicContent {
                 .expect("resolved media-list pointer target"),
         );
         // The album-cursor echo is a selection-move report (design D8): a
-        // window-only viewport step reports nothing — the window is
-        // component-local and pagination waits for a dragged selection.
-        if outcome.selected_target.is_none() {
-            return None;
+        // window-only viewport step echoes nothing — the window is
+        // component-local and pagination waits for a dragged selection — but
+        // a consumed step is still claimed (Emby's `viewport_step` shape),
+        // so the panel takes the deferred resting-scroll position report and
+        // the chord stays framework-local instead of falling through.
+        if outcome.selected_target.is_some() {
+            let target = self.carrier.selected_target()?;
+            let index = self
+                .context
+                .album_targets
+                .iter()
+                .position(|candidate| candidate == target)?;
+            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
+                target: index,
+                kind,
+            }))
+        } else if outcome.disposition == MediaListDisposition::Consumed {
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        } else {
+            None
         }
-        let target = self.carrier.selected_target()?;
-        let index = self
-            .context
-            .album_targets
-            .iter()
-            .position(|candidate| candidate == target)?;
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target: index,
-            kind,
-        }))
     }
 
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
