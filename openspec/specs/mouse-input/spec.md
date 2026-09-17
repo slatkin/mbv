@@ -320,13 +320,14 @@ embedded list control claims the pointed list region from its completed current-
 retained result. An unmigrated destination MAY retain its existing compatibility
 claim path until its own migration. A text viewport or irregular-row surface that competes with another eligible surface SHALL accept a wheel gesture only when the point is inside geometry published by its own painter. A sole eligible focused overlay SHALL accept its wheel gesture independently of pointer position; its local boundary clamp SHALL retain valid state.
 
-A canonical media list SHALL apply an accepted wheel step to its viewport rather than to its selection: the visible window moves one display row and the selection stays where it is, unless the step would put the selection outside the window, in which case the selection is dragged to the nearest row the window shows. The list SHALL apply the step to its viewport even when the pointed list does not hold keyboard focus.
+A canonical media list SHALL apply an accepted wheel step to its viewport rather than to its selection: the visible window moves one display row and the selection stays where it is, unless the step would put the selection outside the window, in which case the selection is dragged to the leading edge of the step direction — the first selectable row of the new window for a step toward the preceding row, the last selectable row of the new window for a step toward the following row — and never left on the edge it was dragged off. The list SHALL apply the step to its viewport even when the pointed list does not hold keyboard focus.
 
 #### Scenario: Wheel moves a canonical list by one row
 
 - **WHEN** the user turns the wheel down once over a painted canonical media list with a following row
 - **THEN** the list's owning component moves its local viewport down by one row
 - **AND** the selection moves only when it would otherwise leave the viewport
+- **AND** a dragged selection lands on the leading-edge selectable row of the new viewport, never on the edge it left
 - **AND** no shell-side wheel movement is calculated for that list
 
 #### Scenario: Wheel moves a text viewport by one line
