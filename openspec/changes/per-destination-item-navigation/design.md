@@ -59,7 +59,8 @@ the landing:
 | Movie / generic | the item | root level, cursor on it (existing chain path) |
 | Series | the item | `activate_searched_series` flow |
 | Episode / Season | owning Series | `activate_searched_series` flow |
-| Audio / MusicAlbum / MusicArtist | owning album | Music album activation |
+| Audio / MusicAlbum | owning album | Music album activation |
+| MusicArtist | itself | plain chain (`[library, artist]` levels - the artist's album list as the top level; an artist has no single owning album, so the original "resolve to its album" rule was unsatisfiable and was renamed to this rule during U2 review) |
 
 Resolution uses the item's own `series_id` for Episode/Season (one field, no
 extra round trip when present; `get_ancestors` remains the fallback), and
@@ -96,6 +97,26 @@ The 34dbbd55 `save_default_library_position` call stays, applied to whatever
 state the per-kind landing produced, before `switch_tab` activation. The
 restore fence (requested-position check in
 `handle_restored_library_position`) then discards any pre-navigation restore.
+
+### D5: Ensure-then-land for a Series whose target library cannot satisfy the landing
+
+A miss against a root corpus that can still grow is not a failure (the
+pre-change Chain arm landed regardless of library load state, and the spec
+requires the landing to select the show). Instead the landing arms a pending
+state and grows the corpus: `ensure_lib_loaded_for` for an unloaded library,
+`spawn_all_items_prefetch` when the root is loaded but `all_items` is absent
+(`ensure_lib_loaded_for`'s saved-position restore path never emits `Loaded`, so
+the restored-position drain is a third retry trigger; its prefetch only fires
+for this user-initiated pending, keeping startup restore's no-prefetch regime).
+Retries fire only on drains whose `parent_id` is the library root's parent.
+The miss rule - flash, tab unchanged - is reserved for a genuinely absent item
+against a complete corpus. Lifecycle: the pending is consumed only by its own
+library's drains, cleared on `LibEvent::Error`, and cleared on any manual tab
+change; the deferred album tab switch (`pending_navigate_tab_switch`) and the
+series hand-off (`pending_series_handoff`) follow the same pattern. Loss
+semantics: an armed pending that is discarded by a manual tab change or an
+unscoped `LibEvent::Error` never surfaces an error - it simply leaves the
+current view untouched.
 
 ## Risks / Trade-offs
 

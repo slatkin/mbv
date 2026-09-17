@@ -23,9 +23,11 @@ per destination, not per caller.
     overlay opening through the same shell hand-off Inline Search uses.
   - Episode / Season: resolve the owning Series (via `series_id`/ancestors) and
     navigate to the show — never to a Season or Episode browse level.
-  - Music item (track / album / artist): resolve to its album and select that
-    album in the Music surface, with the track list as the workspace content —
-    no Artist browse level.
+  - Music track / album: resolve to its album and select that album in the
+    Music surface, with the track list as the workspace content (grouped view)
+    or as the landed top level (flat). Music artist: land on the artist's
+    browse chain (`[library, artist]` levels) — an artist has no single owning
+    album, so no Artist-into-album rewrite is attempted.
 - A completed navigation replaces the saved Library position for the target
   library (the 34dbbd55 behavior is kept and generalized).
 - Retained TV and Music destination owners re-anchor to the navigated selection
