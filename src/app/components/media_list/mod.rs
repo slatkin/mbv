@@ -243,6 +243,19 @@ pub enum MediaListOperation<Target> {
     Page(i64),
     First,
     Last,
+    /// Signed one-row viewport step (design D1): the visible window moves
+    /// one display row in the step direction, clamped to the content, and
+    /// the selection is dragged along only when it would otherwise leave
+    /// the window. Height-taking (design D2): the painted height enters
+    /// where the operation is applied, not in this variant.
+    #[cfg_attr(not(test), allow(dead_code))]
+    ScrollViewport(i64),
+    /// Signed page form of the viewport step (design D6): the window moves
+    /// by the painted height in the step direction, reusing the clamp and
+    /// drag rule. Never a reuse of `Page`, which keeps its five-item
+    /// selection meaning until 6.2 deletes it.
+    #[cfg_attr(not(test), allow(dead_code))]
+    ScrollViewportPage(i64),
     ActivateCurrent,
     ContextCurrent,
     Select(Target),
@@ -507,6 +520,73 @@ impl<Target> MediaList<Target> {
         }
     }
 
+    /// Move the viewport window `delta` display rows (signed) for a painted
+    /// `painted_height` (design D1): clamp to the first/last display row, and
+    /// drag the selection into the window only when the step would leave it
+    /// outside — to the nearest selectable row the window shows, resolved
+    /// against the ascending selectable index (`Heading`/`Spacer` rows are
+    /// never selected). A step never extends a live range. Returns whether
+    /// the window moved; a step at a content end moves nothing.
+    pub fn scroll_viewport(&mut self, delta: i64, painted_height: usize) -> bool {
+        let total_rows = self.rows.len();
+        if total_rows == 0 {
+            return false;
+        }
+        let height = painted_height.max(1) as i64;
+        let max_offset = (total_rows as i64 - height).max(0);
+        let current = (self.scroll as i64).min(max_offset);
+        let target = (current + delta).clamp(0, max_offset);
+        if target == current {
+            return false;
+        }
+        self.scroll = target as usize;
+        self.drag_selection_into_window(target as usize, height as usize);
+        true
+    }
+
+    /// The page form of the viewport step (design D6, task 1.2): move the
+    /// window by the painted height in the signed direction, reusing the
+    /// clamp and drag rule of [`MediaList::scroll_viewport`]. This is a
+    /// height-taking owner method, not a reuse of `MediaListOperation::Page`.
+    pub fn scroll_viewport_page(&mut self, delta: i64, painted_height: usize) -> bool {
+        self.scroll_viewport(
+            delta.saturating_mul(painted_height.max(1) as i64),
+            painted_height,
+        )
+    }
+
+    /// Drag the cursor to the nearest selectable row inside the window
+    /// `[top, top + height)` when the selection would otherwise sit outside
+    /// it (design D3): the first selectable row at or below the window top,
+    /// or the last selectable row at or above the window's last row. A
+    /// window showing no selectable row leaves the selection where it is.
+    fn drag_selection_into_window(&mut self, top: usize, height: usize) {
+        let Some(row) = self.selected_display_row() else {
+            return;
+        };
+        if row >= top && row < top + height {
+            return;
+        }
+        let cursor = if row < top {
+            let index = self
+                .selectable
+                .partition_point(|&candidate| candidate < top);
+            if index == self.selectable.len() {
+                return;
+            }
+            index
+        } else {
+            let index = self
+                .selectable
+                .partition_point(|&candidate| candidate <= top + height - 1);
+            if index == 0 {
+                return;
+            }
+            index - 1
+        };
+        self.cursor = cursor;
+    }
+
     fn select_first(&mut self) {
         self.cursor = 0;
     }
@@ -556,6 +636,17 @@ impl<Target> MediaList<Target> {
     where
         Target: Clone + PartialEq,
     {
+        if matches!(
+            operation,
+            MediaListOperation::ScrollViewport(_) | MediaListOperation::ScrollViewportPage(_)
+        ) {
+            // A viewport step is height-taking (design D2): the owner is
+            // height-free, so this height-free delegate cannot resolve the
+            // painted window and the step stays unhandled. Height-aware
+            // callers (the carrier, from the retained painted frame) use
+            // `delegate_viewport_operation`.
+            return self.delegate_viewport_operation(operation, None);
+        }
         let before = self.selected_target().cloned();
         let before_count = self.multi_selection.len();
         let extends_range = matches!(
@@ -609,6 +700,9 @@ impl<Target> MediaList<Target> {
                 Some(RowIntent::Activate(target))
             }
             MediaListOperation::Context(target) => Some(self.context_intent(target)),
+            MediaListOperation::ScrollViewport(_) | MediaListOperation::ScrollViewportPage(_) => {
+                None
+            }
         };
         if extends_range && self.live_range {
             if let Some(target) = self.selected_target().cloned() {
@@ -635,6 +729,45 @@ impl<Target> MediaList<Target> {
                 },
             ),
             external_intent,
+        }
+    }
+
+    /// Apply a viewport operation for a painted height (design D2, task 1.3).
+    /// The painted height enters the input path here; `None` — a caller with
+    /// no retained painted frame — leaves the step an unhandled no-op. A
+    /// window-only move is a consumed step reporting no selection move; a
+    /// boundary no-op is unhandled. A step never extends the live range: the
+    /// multi-selection and the anchored range are untouched even when the
+    /// drag fires.
+    pub fn delegate_viewport_operation(
+        &mut self,
+        operation: MediaListOperation<Target>,
+        painted_height: Option<usize>,
+    ) -> MediaListTransition<Target>
+    where
+        Target: Clone + PartialEq,
+    {
+        let before = self.selected_target().cloned();
+        let moved = match operation {
+            MediaListOperation::ScrollViewport(delta) => {
+                painted_height.is_some_and(|height| self.scroll_viewport(delta, height))
+            }
+            MediaListOperation::ScrollViewportPage(delta) => {
+                painted_height.is_some_and(|height| self.scroll_viewport_page(delta, height))
+            }
+            // Only viewport operations are meaningful here.
+            _ => false,
+        };
+        let after = self.selected_target().cloned();
+        MediaListTransition {
+            disposition: if moved {
+                MediaListDisposition::Consumed
+            } else {
+                MediaListDisposition::Unhandled
+            },
+            selected_target: (before != after).then_some(after).flatten(),
+            selection_summary: None,
+            external_intent: None,
         }
     }
 }
