@@ -136,6 +136,14 @@ impl FeedsContent {
         self.carrier.scroll()
     }
 
+    /// The list's painted display offset from the last completed view
+    /// (design D2): the owner's stored window is authoritative between
+    /// paints — painting never writes the resolved offset back.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(in crate::app) fn painted_scroll(&self) -> Option<usize> {
+        self.carrier.wide().current_flow_offset()
+    }
+
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn watched_filter(&self) -> WatchedFilter {
         self.watched_filter

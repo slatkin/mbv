@@ -609,6 +609,20 @@ impl QueueComponent {
     pub(crate) fn test_scroll(&self) -> usize {
         self.carrier.scroll()
     }
+
+    /// Test-only: the list's painted display offset from the last completed
+    /// view (design D2): the stored window is authoritative between paints.
+    #[cfg(test)]
+    pub(crate) fn test_painted_offset(&self) -> Option<usize> {
+        self.carrier.wide().current_flow_offset()
+    }
+
+    /// Test-only: seed the stored window explicitly (an explicit restore/
+    /// hand-off boundary is the one legitimate writer besides input).
+    #[cfg(test)]
+    pub(crate) fn test_seed_scroll(&mut self, offset: usize) {
+        self.carrier.set_scroll(offset);
+    }
 }
 
 impl Default for QueueComponent {

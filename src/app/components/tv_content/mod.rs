@@ -530,6 +530,14 @@ impl TvContent {
     pub(in crate::app) fn episode_scroll(&self) -> usize {
         self.episodes.scroll()
     }
+    /// Test-only: the episode pane's painted display offset from the last
+    /// completed view (design D2): the owner's stored window is
+    /// authoritative between paints — painting never writes the resolved
+    /// offset back.
+    #[cfg(test)]
+    pub(in crate::app) fn episode_painted_scroll(&self) -> Option<usize> {
+        self.episodes.wide().current_flow_offset()
+    }
     /// Test-only: whether the Episodes pane holds the local focus (the
     /// "workspace is active" state).
     #[cfg(test)]

@@ -179,10 +179,20 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         self.wide.set_scroll(offset);
     }
 
+    /// The panel's per-frame height sync, the single geometry seam (design
+    /// D9): clamp the stored window to the content for this height in place.
+    /// This is a geometry clamp only — it never stores a resolved offset and
+    /// never raises the window onto the selection; the owner's window stays
+    /// authoritative between paints, and a stale-height overshoot is
+    /// recovered display-side by the next paint's clamp.
     pub fn sync_viewport(&mut self, viewport_height: usize) {
-        let offset = self.wide.resolve_viewport(viewport_height.max(1)).offset;
-        if self.wide.scroll() != offset {
-            self.wide.set_scroll(offset);
+        let max_offset = self
+            .wide
+            .rows()
+            .len()
+            .saturating_sub(viewport_height.max(1));
+        if self.wide.scroll() > max_offset {
+            self.wide.set_scroll(max_offset);
         }
     }
 
@@ -190,6 +200,24 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         &mut self,
         operation: MediaListOperation<Target>,
     ) -> MediaListTransition<Target> {
+        // A viewport step is height-taking (design D2): the painted height
+        // enters here, resolved from the retained content rectangle of the
+        // last completed view — the same source hit resolution uses. With no
+        // retained frame the step is an unhandled no-op; a stale height's
+        // overshoot is display-only until the next paint clamp, and the
+        // owner's window is never corrected from a stale height.
+        if matches!(
+            operation,
+            MediaListOperation::ScrollViewport(_) | MediaListOperation::ScrollViewportPage(_)
+        ) {
+            let painted_height = self
+                .wide
+                .current_content_rect()
+                .map(|rect| rect.height as usize);
+            return self
+                .wide
+                .delegate_viewport_operation(operation, painted_height);
+        }
         let mut transition = self.wide.delegate_operation(operation);
         if transition.selection_summary.is_some() {
             transition.selection_summary = Some(self.selection_summary());

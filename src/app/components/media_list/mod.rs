@@ -498,7 +498,9 @@ impl<Target> MediaList<Target> {
         self.scroll
     }
 
-    /// Store the offset a painter resolved, so the next frame resumes from it.
+    /// Store an explicit window seed or reset (a restore/hand-off boundary,
+    /// a scope reset, or the panel's geometry clamp). The paint never calls
+    /// this: the owner's window is authoritative between paints (design D2).
     fn set_scroll(&mut self, offset: usize) {
         self.scroll = offset.min(self.rows.len().saturating_sub(1));
     }

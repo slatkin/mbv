@@ -204,7 +204,9 @@ impl<Target> WideMediaList<Target> {
         self.core.scroll()
     }
 
-    /// Store the offset a painter resolved, so the next frame resumes from it.
+    /// Store an explicit window seed or reset (a restore/hand-off boundary,
+    /// a scope reset, or the panel's geometry clamp). The paint never calls
+    /// this: the owner's window is authoritative between paints (design D2).
     pub fn set_scroll(&mut self, offset: usize) {
         self.invalidate_paint();
         self.core.set_scroll(offset);
@@ -239,6 +241,7 @@ impl<Target> WideMediaList<Target> {
 
     /// The clamped viewport for a painted `viewport_height`, keeping the
     /// selected row on screen.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn resolve_viewport(&self, viewport_height: usize) -> WideViewport {
         self.core.resolve_viewport(viewport_height)
     }
@@ -331,6 +334,19 @@ impl<Target: Clone + PartialEq> WideMediaList<Target> {
         operation: MediaListOperation<Target>,
     ) -> MediaListTransition<Target> {
         self.core.delegate_operation(operation)
+    }
+
+    /// Apply a height-taking viewport operation for a painted height (design
+    /// D2, task 1.3). `None` — a caller with no retained painted frame —
+    /// leaves the step an unhandled no-op; the owner's window is never
+    /// corrected from a stale height.
+    pub fn delegate_viewport_operation(
+        &mut self,
+        operation: MediaListOperation<Target>,
+        painted_height: Option<usize>,
+    ) -> MediaListTransition<Target> {
+        self.core
+            .delegate_viewport_operation(operation, painted_height)
     }
 }
 

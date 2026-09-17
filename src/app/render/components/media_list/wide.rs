@@ -10,10 +10,11 @@ use ratatui::Frame;
 
 /// Resolved paint output for [`render_wide_media_list`]: the flow geometry the
 /// painter laid out and the selected row's absolute rect within the hit/scroll
-/// geometry rect. The painter persists the resolved scroll offset into `list`
-/// itself, so no caller can forget to. This is internal to the media-list
-/// paint subsystem (design.md D6/D7): destinations receive rows only through
-/// the retained `Component::view` facts.
+/// geometry rect. The paint is read-only (design D2): it resolves the owner's
+/// window for display and never writes back, so callers cannot mutate list
+/// state by painting. This is internal to the media-list paint subsystem
+/// (design.md D6/D7): destinations receive rows only through the retained
+/// `Component::view` facts.
 pub(super) struct MediaListPaint<Target> {
     pub row_geometry: RowGeometry<Target>,
     pub selected_row_rect: Option<Rect>,
@@ -33,9 +34,8 @@ pub(super) struct MediaListPaint<Target> {
 /// against it. The title's text indent is applied per row in `media_list_row`,
 /// not by insetting either rect.
 ///
-/// The painter resolves the scroll offset and stores it back into `list` via
-/// [`WideMediaList::set_scroll`] before returning, so the offset persists across
-/// frames without the caller threading a `usize` back.
+/// The paint is read-only (design D2): the scroll offset is clamped for
+/// display only and never stored back into `list`.
 #[cfg(test)]
 pub(super) fn render_wide_media_list<Target: Clone + PartialEq>(
     f: &mut Frame,
@@ -150,7 +150,6 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
     }
 
     let selected_row_rect = geometry.selected_row_rect(content_area);
-    list.set_scroll(offset);
     MediaListPaint {
         row_geometry: geometry,
         selected_row_rect,

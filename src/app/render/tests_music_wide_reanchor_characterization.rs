@@ -108,17 +108,26 @@ fn grouped_music_wide_reanchor_characterization() {
     re_anchor_to(&mut model, last, 0);
     let _ = draw_mounted_frame(&mut model, 160, 40);
     assert_eq!(album_cursor(&model, &id), last);
-    let wide_scroll = mounted_music_scroll(&model);
-    assert!(
-        wide_scroll > 0,
-        "the bottom album forces a non-zero album_scroll write-back"
-    );
+    // The paint is read-only (design D2): the bottom album's display clamp
+    // anchors it to the flow's last painted row; the owner's stored window
+    // is never corrected from the paint.
+    {
+        let geometry = super::test_helpers::mounted_music_wide_geometry(&model);
+        let rect = geometry
+            .selected
+            .expect("the bottom album's selected row is painted");
+        assert_eq!(
+            rect.y,
+            geometry.list_area.y + geometry.list_area.height - 1,
+            "the bottom album's display clamp anchors it to the flow's last painted row"
+        );
+    }
     assert_eq!(album_targets(&model, last).len(), 1);
 
     // ---- Wide -> Narrow -> Wide: bare presentation flips keep the selection -
     // No shell re-anchor fires, so the kept-mounted component holds its
-    // album_cursor across the round trip and the wide scroll recomputes to the
-    // identical bottom-anchored offset.
+    // album_cursor across the round trip and the wide display clamp
+    // recomputes the identical bottom-anchored offset.
     let _ = draw_mounted_frame(&mut model, 60, 30);
     assert_eq!(
         album_cursor(&model, &id),
@@ -133,11 +142,17 @@ fn grouped_music_wide_reanchor_characterization() {
             > 0
     );
     assert_eq!(album_cursor(&model, &id), last);
-    assert_eq!(
-        mounted_music_scroll(&model),
-        wide_scroll,
-        "wide album_scroll is recomputed to the identical bottom-anchored offset"
-    );
+    {
+        let geometry = super::test_helpers::mounted_music_wide_geometry(&model);
+        let rect = geometry
+            .selected
+            .expect("the flipped-back Wide paint publishes the selected row");
+        assert_eq!(
+            rect.y,
+            geometry.list_area.y + geometry.list_area.height - 1,
+            "the Wide display clamp recomputes the identical bottom-anchored offset"
+        );
+    }
     assert_eq!(album_targets(&model, last).len(), 1);
 
     // ---- Normal/Narrow: selected target + on-screen selected row -----------

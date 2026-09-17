@@ -528,8 +528,10 @@ fn breakpoint_flip_carries_one_viewport_anchor() {
     let mut panel = panel_with(owner, true);
     let _ = paint(&mut panel, wide, 10);
     assert!(
-        feeds(&panel).scroll() > 0,
-        "wide viewport scrolled to the selection"
+        feeds(&panel)
+            .painted_scroll()
+            .is_some_and(|offset| offset > 0),
+        "the wide display clamp shows the bottom selection",
     );
 
     // Breakpoint flip Wide -> Narrow: one ViewportAnchor carries the

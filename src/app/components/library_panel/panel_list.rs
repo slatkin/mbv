@@ -174,8 +174,9 @@ mod panel_list_tests {
         carrier.select_target(&"b".to_string());
         carrier.set_scroll(0);
 
-        // Wide paints with the selected row at the bottom of a 2-row
-        // viewport, so the resolved offset re-anchors it there.
+        // Wide paints the selected row inside the 2-row viewport: the
+        // display clamp resolves the offset that shows it (design D2 — the
+        // paint is read-only and never stores it back).
         let list_rect = Rect::new(0, 0, 20, 2);
         let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
         terminal

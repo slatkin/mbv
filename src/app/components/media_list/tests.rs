@@ -607,3 +607,57 @@ fn set_content_append_far_from_the_window_leaves_it_unchanged() {
     assert_eq!(list.scroll(), 2);
     assert_eq!(list.selected_target(), Some(&"2".to_string()));
 }
+
+// Task 4.2 / D2: the carrier resolves a viewport step's height from the
+// retained painted content rectangle — the same source hit resolution uses;
+// with no retained frame the step is an unhandled no-op.
+#[test]
+fn carrier_step_resolves_its_height_from_the_retained_frame() {
+    let mut carrier = MediaListCarrier::new();
+    carrier.set_content(numbered_items(10));
+    carrier.select_target(&"1".to_string());
+
+    // No retained frame yet: the step cannot resolve a height and changes
+    // nothing.
+    let transition = carrier.delegate_operation(MediaListOperation::ScrollViewport(1));
+    assert_eq!(transition.disposition, MediaListDisposition::Unhandled);
+    assert_eq!(carrier.scroll(), 0);
+    assert_eq!(transition.selected_target, None);
+
+    // Paint a 3-row frame: the step's height is the retained content rect's
+    // height, so the window steps one row without dragging the selection.
+    paint(carrier.wide_mut(), Rect::new(0, 0, 10, 3));
+    let transition = carrier.delegate_operation(MediaListOperation::ScrollViewport(1));
+    assert_eq!(transition.disposition, MediaListDisposition::Consumed);
+    assert_eq!(carrier.scroll(), 1);
+    assert_eq!(
+        transition.selected_target, None,
+        "a window-only step reports no selection move"
+    );
+}
+
+// Task 4.2 / D9: `sync_viewport` is the panel's geometry clamp — it lowers an
+// overshooting stored window in place but never stores a resolved offset and
+// never raises the window onto the selection.
+#[test]
+fn sync_viewport_clamps_in_place_without_raising_the_window() {
+    let mut carrier = MediaListCarrier::new();
+    carrier.set_content(numbered_items(10));
+    carrier.select_target(&"8".to_string());
+
+    // A stale window below the selection survives the height sync untouched:
+    // the display clamp at paint shows the selection, the owner's window
+    // stays authoritative.
+    carrier.sync_viewport(3);
+    assert_eq!(carrier.scroll(), 0);
+
+    // An overshooting stored window is lowered to the content's end.
+    carrier.set_scroll(9);
+    carrier.sync_viewport(3);
+    assert_eq!(carrier.scroll(), 7);
+
+    // The clamp never raises: a stored window inside the range stays put.
+    carrier.set_scroll(2);
+    carrier.sync_viewport(3);
+    assert_eq!(carrier.scroll(), 2);
+}

@@ -706,11 +706,13 @@ mod wide_row_regression_tests {
         assert_ne!(buffer[(claim.x, content.y + 1)].bg, selected_bg);
     }
 
-    /// Step 4 latent bug: the painter must persist the resolved scroll offset
-    /// back into `list` so it survives across frames. Home discarded the old
-    /// `usize` return, so its rail always re-scrolled to the top.
+    /// Design D2 / task 4.1: the paint is read-only. The painter resolves the
+    /// window for display only and never stores a resolved offset back into
+    /// the owner, and a shorter paint cannot raise the stored window onto the
+    /// selection — the display-side clamp recovers a stale window without
+    /// correcting it.
     #[test]
-    fn painter_persists_resolved_scroll_offset_across_frames() {
+    fn paint_does_not_change_the_window_and_a_shorter_paint_does_not_raise_it() {
         let rect = Rect::new(0, 0, 40, 4);
         let selected_bg = palette::SURFACE_RESTING;
         let mut list: WideMediaList<String> = WideMediaList::new();
@@ -720,20 +722,49 @@ mod wide_row_regression_tests {
                 .collect(),
         );
         list.select_last();
+        assert_eq!(list.scroll(), 0, "the stored window starts at the top");
 
         let first = paint(&mut list, rect, selected_bg);
         let resolved = first.row_geometry.offset();
-        assert!(resolved > 0, "a bottom selection must scroll the viewport");
+        assert!(
+            resolved > 0,
+            "the display clamp lowers the painted offset to show the bottom selection"
+        );
         assert_eq!(
             list.scroll(),
-            resolved,
-            "painter stores the offset it resolved"
+            0,
+            "the paint never writes the resolved offset back into the owner"
         );
 
-        // Re-render with no further input: the stored offset is reused, not reset.
+        // Re-render with no further input: the same window resolves the same
+        // painted offset; the paint still changes nothing.
         let second = paint(&mut list, rect, selected_bg);
         assert_eq!(second.row_geometry.offset(), resolved);
-        assert_eq!(list.scroll(), resolved);
+        assert_eq!(list.scroll(), 0);
+
+        // A shorter paint clamps the display without raising the stored
+        // window onto the selection.
+        let shorter = paint(&mut list, Rect::new(0, 0, 40, 2), selected_bg);
+        assert_eq!(shorter.row_geometry.offset(), 10);
+        assert_eq!(list.scroll(), 0);
+
+        // A shrink that leaves the selection outside the shorter window
+        // clamps the painted offset to the new height only: the selection
+        // rides the display's last row, and the stored window is neither
+        // raised nor lowered to the resolved offset.
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(
+            (0..12)
+                .map(|i| item(&format!("t{i}"), &format!("Entry {i}"), None))
+                .collect(),
+        );
+        list.select_index(2);
+        let first = paint(&mut list, rect, selected_bg);
+        assert_eq!(first.row_geometry.offset(), 0);
+        assert_eq!(list.scroll(), 0);
+        let shorter = paint(&mut list, Rect::new(0, 0, 40, 2), selected_bg);
+        assert_eq!(shorter.row_geometry.offset(), 1);
+        assert_eq!(list.scroll(), 0);
     }
 
     /// canonical-list-duration-kind 1.2: the painter suppresses the duration

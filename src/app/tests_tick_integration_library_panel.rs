@@ -1116,10 +1116,6 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
         14,
         "the cursor moved through the overflowing list"
     );
-    assert!(
-        tv_owner_of(&harness).episode_scroll() > 0,
-        "the Workspace viewport must follow the cursor with overflow"
-    );
     let buf = terminal.backend().buffer();
     assert!(
         find_text(buf, "15. Episode 15").is_some(),
@@ -1127,20 +1123,29 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     );
     // The viewport is the painted Workspace box's content rows: re-derive
     // the expected window from the box the frame actually painted (the
-    // overlay's size is an arrangement fact, not this test's input).
+    // overlay's size is an arrangement fact, not this test's input). The
+    // painted offset is the display clamp's resolution — the owner's stored
+    // window stays authoritative (design D2: painting never writes it back).
     let (_, box_content) = panel_of(&harness)
         .and_then(|panel| panel.test_overlay_workspace_box())
         .expect("the overlay's Workspace box painted");
     let visible = box_content.height as usize;
-    let scroll = tv_owner_of(&harness).episode_scroll();
+    let scroll = tv_owner_of(&harness)
+        .episode_painted_scroll()
+        .expect("the overlay's Workspace painted");
     assert!(
         scroll > 0,
-        "the Workspace viewport must follow the cursor with overflow"
+        "the Workspace display clamp follows the cursor with overflow"
     );
     assert_eq!(
         scroll,
         14 + 1 - visible,
         "the viewport follows the cursor: the cursor's row is the window's last row"
+    );
+    assert_eq!(
+        tv_owner_of(&harness).episode_scroll(),
+        0,
+        "the paint never writes the resolved offset back into the owner"
     );
     // The last row above the scrolled-in window has left the box. (Probing
     // row 1 is a substring of row 11's label, so only probe row numbers
@@ -1426,8 +1431,10 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
         let _ = harness.step();
     }
     drop(draw_frame_at_model_size(&mut harness));
-    let scroll_before = tv_owner_of(&harness).episode_scroll();
-    assert!(scroll_before > 0, "test setup: the viewport is in overflow");
+    let painted_before = tv_owner_of(&harness)
+        .episode_painted_scroll()
+        .expect("the overlay's Workspace painted");
+    assert!(painted_before > 0, "test setup: the display clamp is in overflow");
 
     let (x, y) = find_text(terminal.backend().buffer(), "Episode 2")
         .or_else(|| find_text(terminal.backend().buffer(), "Episode 3"))
@@ -1451,9 +1458,17 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
         "the wheel stepped the Workspace cursor"
     );
     drop(draw_frame_at_model_size(&mut harness));
+    let painted_after = tv_owner_of(&harness)
+        .episode_painted_scroll()
+        .expect("the overlay's Workspace painted");
     assert!(
-        tv_owner_of(&harness).episode_scroll() > scroll_before,
-        "the wheel scrolled the Workspace viewport past its bottom edge"
+        painted_after > painted_before,
+        "the wheel stepped the display window past its bottom edge"
+    );
+    assert_eq!(
+        tv_owner_of(&harness).episode_scroll(),
+        0,
+        "the paint never writes the resolved offset back into the owner"
     );
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())

@@ -387,8 +387,11 @@ fn queue_component_instances_isolate_viewport_state() {
     terminal
         .draw(|frame| untouched.view(frame, frame.area()))
         .unwrap();
-    assert!(bottom.test_scroll() > 0);
-    assert_eq!(untouched.test_scroll(), 0);
+    assert!(
+        bottom.test_painted_offset().unwrap_or(0) > 0,
+        "the bottom instance's display clamp follows its bottom cursor"
+    );
+    assert_eq!(untouched.test_painted_offset(), Some(0));
     assert_eq!(untouched.test_cursor(), 0);
 }
 
@@ -453,7 +456,10 @@ fn queue_refresh_retains_selected_target_and_scrolls_to_it() {
         .unwrap();
     assert_eq!(component.test_cursor(), 20);
     assert_eq!(component.test_selected_target(), Some(selected));
-    assert!(component.test_scroll() > 0);
+    assert!(
+        component.selected_row_rect().is_some(),
+        "the refreshed paint keeps the retained selection on screen"
+    );
 }
 
 #[test]
@@ -525,16 +531,18 @@ fn queue_scope_switch_resets_component_scroll() {
     );
     component.set_focused(true);
     // The framed sub-areas derive from the placement the view receives (task
-    // 3.1); 14 rows leave eight body rows, enough for the bottom cursor to
-    // scroll against.
+    // 3.1); 14 rows leave eight body rows, enough for an overflow window.
+    // The stored window is seeded explicitly (an explicit seed is the one
+    // legitimate writer besides input): the paint is read-only (design D2).
     let mut terminal = Terminal::new(TestBackend::new(40, 14)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    assert!(
-        component.test_scroll() > 0,
-        "bottom cursor must produce nonzero scroll, got {}",
-        component.test_scroll()
+    component.test_seed_scroll(20);
+    assert_eq!(
+        component.test_scroll(),
+        20,
+        "test setup: the stored window sits in overflow"
     );
 
     // Keyboard scope change preassigns `self.scope` before the request, so
@@ -552,6 +560,8 @@ fn queue_scope_switch_resets_component_scroll() {
 
     // External scope change (e.g. session switch) flows through
     // `set_content` with a differing scope; the component resets there too.
+    // The stored window is seeded explicitly; the paint is read-only
+    // (design D2), so the setup's overflow never comes from a paint.
     component.set_content(
         long_queue(),
         QueueCursorUpdate::Set(29),
@@ -562,14 +572,14 @@ fn queue_scope_switch_resets_component_scroll() {
     // Same framed-subarea note (task 3.1): the in-view cursor below needs
     // more than the two body rows a 40x8 placement leaves, so keep the body
     // at eight rows via a 40x14 placement.
-    let mut terminal = Terminal::new(TestBackend::new(40, 14)).unwrap();
     terminal
         .draw(|frame| component.view(frame, frame.area()))
         .unwrap();
-    assert!(
-        component.test_scroll() > 0,
-        "remote content must again produce nonzero scroll, got {}",
-        component.test_scroll()
+    component.test_seed_scroll(20);
+    assert_eq!(
+        component.test_scroll(),
+        20,
+        "test setup: the stored window sits in overflow again"
     );
     component.set_content(
         long_queue(),
