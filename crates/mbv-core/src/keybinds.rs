@@ -102,8 +102,10 @@ pub struct KeybindAction {
     pub default_chords: &'static [&'static str],
     /// Routing-eligibility bucket shared with the keyboard policy's gates.
     pub gate: KeyGate,
-    /// The `KEY_POLICY` entry name this action's matching replaces. For the
-    /// split transport set this is the single `playback` bucket entry.
+    /// The `KEY_POLICY` entry this action's matching replaces. For the split
+    /// transport set this records the single `playback` bucket entry the
+    /// actions were split out of (task 5.1); each action's own id is its
+    /// `KEY_POLICY` entry name now.
     pub policy: &'static str,
     /// Router-scope override allowed. Every declared action is rebindable:
     /// the registry is exactly the rebindable set.
@@ -304,7 +306,10 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     KeybindAction {
         id: "next_track",
         section: KeySection::Playback,
-        default_chords: &["N"],
+        // Crossterm-case treatment (U3 lesson, as `Ctrl+l`): Shift+n is
+        // delivered as `Char('N')` + SHIFT, so the declared chord must carry
+        // SHIFT to be seen by routing at all.
+        default_chords: &["Shift+N"],
         gate: KeyGate::Playback,
         policy: "playback",
         rebindable: true,
@@ -313,7 +318,8 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     KeybindAction {
         id: "previous_track",
         section: KeySection::Playback,
-        default_chords: &["P"],
+        // Crossterm-case treatment: Shift+p arrives as Char('P') + SHIFT.
+        default_chords: &["Shift+P"],
         gate: KeyGate::Playback,
         policy: "playback",
         rebindable: true,

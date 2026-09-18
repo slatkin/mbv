@@ -2,7 +2,6 @@
 
 use super::tests_routing_matrix_support::*;
 use crate::app::components::{ComponentId, Msg, QueueRequest, ShellRequest};
-use crate::app::input_resolver::KeyChord;
 use crate::app::types_playback::QueueScope;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -55,20 +54,10 @@ fn ctrl_a_under_library_focus_is_enqueue_not_audio_toggle() {
         &out[0],
         Msg::Shell(ShellRequest::EmbyLibraryEnqueue { .. })
     ));
-    // The playback command table's `'a'` arm is `!ctrl`-guarded; assert the
-    // audio toggle does NOT resolve for Ctrl+a even with playback active.
-    let playback_cmd = crate::app::action::playback_command_for_key(
-        KeyChord {
-            code: KeyCode::Char('a'),
-            mods: KeyModifiers::CONTROL,
-        },
-        true,
-        false,
-    );
-    assert!(
-        playback_cmd.is_none(),
-        "audio toggle must not claim Ctrl+a (enqueue-before-playback, #209)"
-    );
+    // Ctrl+a resolves through no policy layer (exact-chord matching keeps
+    // superset chords inert), so the audio toggle cannot claim it even with
+    // playback active — the FallThrough above is the enqueue-before-playback
+    // guarantee (#209).
 }
 #[test]
 fn lib_key_ctrl_catchall_swallows_unmapped_chord() {

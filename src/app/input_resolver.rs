@@ -1,10 +1,13 @@
-//! Central input resolution: the single, testable seam that turns a key press
-//! (in a given UI context) into a semantic `Command`, a `Swallow`, or a
-//! `FallThrough`. See `docs/adr/0002-centralized-input-handling.md`.
+//! Central input normalization: the chord shape (`KeyChord`) the Keyboard
+//! Router's ordered policy (`key_policy.rs` + `router.rs`) matches against,
+//! plus the TuiRealm-to-crossterm key conversion. See
+//! `docs/adr/0002-centralized-input-handling.md`.
 //!
 //! The legacy `CONTEXT_STACK` and its handler functions were removed in the
-//! keyboard-endpoint deletion (task 8.1). All input resolution is now done
-//! by the central Keyboard Router (`key_policy.rs` + `router.rs`).
+//! keyboard-endpoint deletion (task 8.1), and the bucketed playback resolver
+//! (`InputContext`/`resolve_key`) in the add-configurable-keybinds transport
+//! split (task 5.1). All input resolution is done by the central Keyboard
+//! Router.
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -116,41 +119,4 @@ pub(super) fn tuirealm_key_to_crossterm(
         modifiers.insert(crossterm::event::KeyModifiers::ALT);
     }
     crossterm::event::KeyEvent::new(code, modifiers)
-}
-/// UI context for key resolution — which surface "owns" the key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum InputContext {
-    Playback,
-}
-
-/// Plain-data snapshot of playback state for key resolution.
-#[derive(Debug, Clone, Copy)]
-pub(super) struct InputSnapshot {
-    pub player_active: bool,
-    pub has_remote_session: bool,
-}
-
-/// Outcome of resolving a key within a context.
-#[derive(Debug, Clone, PartialEq)]
-// TODO(interactive-surface-ledger): retain Swallow for the shared resolver outcome shape.
-#[allow(dead_code)]
-pub(super) enum KeyResolution {
-    Command(super::action::Command),
-    Swallow,
-    FallThrough,
-}
-
-pub(super) fn resolve_key(
-    context: InputContext,
-    snapshot: &InputSnapshot,
-    chord: KeyChord,
-) -> KeyResolution {
-    match context {
-        InputContext::Playback => super::action::playback_command_for_key(
-            chord,
-            snapshot.player_active,
-            snapshot.has_remote_session,
-        )
-        .map_or(KeyResolution::FallThrough, KeyResolution::Command),
-    }
 }

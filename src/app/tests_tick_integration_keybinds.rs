@@ -100,3 +100,71 @@ fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
         "Shift+Tab must fire previous_library_tab through tick()"
     );
 }
+
+/// Task 5.1: a rebound transport action fires through the live tick path on
+/// its configured chord, and its declared default becomes inert. `volume_up`
+/// is ungated, so no player state is needed.
+#[test]
+fn rebound_transport_action_fires_through_tick_and_default_is_inert() {
+    let app = make_app_stub();
+    let config = crate::config::Config {
+        keybinds: mbv_core::keybinds::load(&mbv_core::keybinds::RawKeybinds {
+            prefix: None,
+            sections: vec![(
+                "playback".into(),
+                mbv_core::keybinds::RawSection {
+                    router: vec![("volume_up".into(), "k".into())],
+                    prefix: vec![],
+                },
+            )],
+        })
+        .expect("valid keys configuration"),
+        ..Default::default()
+    };
+    *app.config.lock().unwrap() = config.clone();
+    let mut harness = TickHarness::new(app);
+
+    harness.inject(key(Key::Char('k')));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(crate::app::action::Command::AdjustVolume(5)),
+        "the configured chord fires the rebound transport action through tick()"
+    );
+
+    // The declared default `+` (and its `=` alias) no longer resolves.
+    let app = make_app_stub();
+    *app.config.lock().unwrap() = config;
+    let mut harness = TickHarness::new(app);
+    harness.inject(key(Key::Char('+')));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::FallThrough,
+        "the declared default of a rebound transport action is inert"
+    );
+}
+
+/// Task 5.1: the crossterm-case default for `next_track` — Shift+n is
+/// delivered as `Char('N')` + SHIFT — fires through the live tick path with
+/// an active player.
+#[test]
+fn shift_n_default_fires_next_track_through_tick() {
+    let app = make_app_stub();
+    app.player
+        .status
+        .lock()
+        .unwrap()
+        .active = true;
+    let mut harness = TickHarness::new(app);
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::Char('N'),
+        modifiers: KeyModifiers::SHIFT,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(crate::app::action::Command::NextTrack),
+        "Shift+N must fire next_track through tick()"
+    );
+}

@@ -4,8 +4,8 @@
 //! plain-data snapshot. It deliberately does not read TuiRealm attributes:
 //! precedence belongs to the router, not to distributed component mirrors.
 
-use super::action::{idle_feed_command_for_key, Command};
-use super::input_resolver::{resolve_key, InputContext, InputSnapshot, KeyChord, KeyResolution};
+use super::action::{idle_feed_command_for_key, Command, VOLUME_STEP};
+use super::input_resolver::KeyChord;
 use super::types_settings::{PanelFocus, PanelMode};
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::keybinds::{action_by_id, Keybinds};
@@ -74,18 +74,29 @@ pub(super) enum KeyPolicyBinding {
     PanelModeCycle,
     ClearQueue,
     Visualizer,
-    Playback,
+    TogglePlayPause,
+    Stop,
+    SeekBack,
+    SeekForward,
+    NextTrack,
+    PreviousTrack,
+    VolumeDown,
+    VolumeUp,
+    ToggleMute,
+    ToggleMuteOrCycleAudio,
+    CycleSubtitle,
+    OpenIdleFeedLink,
     CtrlL,
     F5,
 }
 
 impl KeyPolicyBinding {
     /// Literal chord match for the policy entries that declare no registry
-    /// action (`sessions_sidebar_escape`, `queue_column_width`, `alt_swallow`,
-    /// and the `playback` transport bucket). Every declared action instead
-    /// matches its configured chords from `&Keybinds` in `resolve_policy`
-    /// (design D1); these keep their literals, including the swallow guard
-    /// that blocks rather than commands (D9).
+    /// action (`sessions_sidebar_escape`, `queue_column_width`, and the
+    /// blocking `alt_swallow`). Every declared action — the split transport
+    /// set included — instead matches its configured chords from `&Keybinds`
+    /// in `resolve_policy` (design D1/D2); these keep their literals,
+    /// including the swallow guard that blocks rather than commands (D9).
     fn matches(self, chord: KeyChord) -> bool {
         match self {
             Self::SessionsDismiss => chord.code == KeyCode::Esc,
@@ -94,7 +105,6 @@ impl KeyPolicyBinding {
                 matches!(chord.code, KeyCode::Left | KeyCode::Right)
                     && chord.mods == KeyModifiers::SHIFT
             }
-            Self::Playback => true,
             _ => false,
         }
     }
@@ -111,7 +121,19 @@ pub(super) enum KeyPolicyGate {
     QueueColumnWidth,
     ClearQueuePrompt,
     SessionsSidebarOpen,
+    /// Transport keys whose eligibility requires an active player or a
+    /// remote session (Space, Esc, `<`/`>`, N, P, `a` today). The shared
+    /// `Playback` label is the routing bucket, not one uniform condition —
+    /// each split action carries the condition its key had before the
+    /// bucket split (task 5.1, design D2).
     Playback,
+    /// Transport keys with no session/activity condition (`z`, `m`, `-`,
+    /// `+`/`=` today). Modifier exclusions are structural: exact-chord
+    /// matching makes Ctrl+chords inert (design D3).
+    PlaybackUngated,
+    /// The idle-feed link shortcut (`o`): its own availability condition,
+    /// owned by `idle_feed_command_for_key`.
+    IdleFeedLink,
 }
 
 impl KeyPolicyGate {
@@ -138,26 +160,26 @@ impl KeyPolicyGate {
             }
             Self::SessionsSidebarOpen => snapshot.sessions_sidebar_open,
             Self::Playback => {
-                // Playback shortcuts are single letters (space, o, m, z, a, …);
-                // a focused text entry must keep them as typed characters.
-                if snapshot.blocking_overlay_open || snapshot.text_entry_focused {
-                    return false;
-                }
-                let input = InputSnapshot {
-                    player_active: snapshot.player_active,
-                    has_remote_session: snapshot.has_remote_session,
-                };
-                matches!(
-                    resolve_key(InputContext::Playback, &input, chord),
-                    KeyResolution::Command(_)
-                ) || idle_feed_command_for_key(
-                    chord,
-                    snapshot.player_active,
-                    snapshot.connected_session_id_present,
-                    snapshot.queue_only_idle,
-                    snapshot.idle_feed_link_available,
-                )
-                .is_some()
+                // Playback shortcuts are single letters (space, a, …); a
+                // focused text entry must keep them as typed characters.
+                !snapshot.blocking_overlay_open
+                    && !snapshot.text_entry_focused
+                    && (snapshot.player_active || snapshot.has_remote_session)
+            }
+            Self::PlaybackUngated => {
+                !snapshot.blocking_overlay_open && !snapshot.text_entry_focused
+            }
+            Self::IdleFeedLink => {
+                !snapshot.blocking_overlay_open
+                    && !snapshot.text_entry_focused
+                    && idle_feed_command_for_key(
+                        chord,
+                        snapshot.player_active,
+                        snapshot.connected_session_id_present,
+                        snapshot.queue_only_idle,
+                        snapshot.idle_feed_link_available,
+                    )
+                    .is_some()
             }
         }
     }
@@ -256,11 +278,95 @@ pub(super) const KEY_POLICY: &[KeyPolicyEntry] = &[
         gate: KeyPolicyGate::SessionsSidebarOpen,
         blocking: false,
     },
+    // The split transport set (task 5.1, design D2): one entry per registry
+    // action, each named by its action id so chord matching resolves through
+    // the registry, each carrying its own eligibility gate. Order below the
+    // sessions sidebar escape preserves today's precedence (Esc closes the
+    // sidebar before it stops playback); among the transport entries the
+    // order is immaterial — chords are distinct under exact matching and
+    // collisions are rejected at load.
     KeyPolicyEntry {
-        name: "playback",
+        name: "toggle_play_pause",
         global: false,
-        binding: KeyPolicyBinding::Playback,
+        binding: KeyPolicyBinding::TogglePlayPause,
         gate: KeyPolicyGate::Playback,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "stop",
+        global: false,
+        binding: KeyPolicyBinding::Stop,
+        gate: KeyPolicyGate::Playback,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "seek_back",
+        global: false,
+        binding: KeyPolicyBinding::SeekBack,
+        gate: KeyPolicyGate::Playback,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "seek_forward",
+        global: false,
+        binding: KeyPolicyBinding::SeekForward,
+        gate: KeyPolicyGate::Playback,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "next_track",
+        global: false,
+        binding: KeyPolicyBinding::NextTrack,
+        gate: KeyPolicyGate::Playback,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "previous_track",
+        global: false,
+        binding: KeyPolicyBinding::PreviousTrack,
+        gate: KeyPolicyGate::Playback,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "volume_down",
+        global: false,
+        binding: KeyPolicyBinding::VolumeDown,
+        gate: KeyPolicyGate::PlaybackUngated,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "volume_up",
+        global: false,
+        binding: KeyPolicyBinding::VolumeUp,
+        gate: KeyPolicyGate::PlaybackUngated,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "toggle_mute",
+        global: false,
+        binding: KeyPolicyBinding::ToggleMute,
+        gate: KeyPolicyGate::PlaybackUngated,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "toggle_mute_or_cycle_audio",
+        global: false,
+        binding: KeyPolicyBinding::ToggleMuteOrCycleAudio,
+        gate: KeyPolicyGate::Playback,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "cycle_subtitle",
+        global: false,
+        binding: KeyPolicyBinding::CycleSubtitle,
+        gate: KeyPolicyGate::PlaybackUngated,
+        blocking: false,
+    },
+    KeyPolicyEntry {
+        name: "open_idle_feed_link",
+        global: false,
+        binding: KeyPolicyBinding::OpenIdleFeedLink,
+        gate: KeyPolicyGate::IdleFeedLink,
         blocking: false,
     },
     KeyPolicyEntry {
@@ -349,15 +455,12 @@ fn entry_matches(entry: &KeyPolicyEntry, key: KeyChord, keybinds: &Keybinds) -> 
 }
 
 /// Translate a matched router binding into the semantic command it owns.
-/// The `keybinds` parameter carries the loaded configuration for the
-/// transport split (task 5.1), whose per-action resolution will read the
-/// configured chords here the way `resolve_policy` already does.
-pub(super) fn command_for_policy(
-    binding: KeyPolicyBinding,
-    key: KeyChord,
-    snapshot: &RouterSnapshot,
-    _keybinds: &Keybinds,
-) -> Option<Command> {
+/// The transport split (task 5.1) binds each payload-carrying variant to its
+/// fixed call-site value here — the single site the old
+/// `playback_command_for_key` table bound them — so the eligibility gate and
+/// registry chord matching in `resolve_policy` fully decide whether a
+/// command dispatches.
+pub(super) fn command_for_policy(binding: KeyPolicyBinding, key: KeyChord) -> Option<Command> {
     match binding {
         KeyPolicyBinding::SettingsOpen => Some(Command::ToggleSettings),
         KeyPolicyBinding::SessionsOpen => Some(Command::OpenSessions),
@@ -384,26 +487,20 @@ pub(super) fn command_for_policy(
         KeyPolicyBinding::ClearQueue => Some(Command::RequestClearQueue),
         KeyPolicyBinding::F5 => Some(Command::RefreshCurrentView),
         KeyPolicyBinding::Visualizer => Some(Command::ToggleVisualizer),
-        KeyPolicyBinding::Playback => {
-            let command = idle_feed_command_for_key(
-                key,
-                snapshot.player_active,
-                snapshot.connected_session_id_present,
-                snapshot.queue_only_idle,
-                snapshot.idle_feed_link_available,
-            )
-            .or_else(|| {
-                let input = InputSnapshot {
-                    player_active: snapshot.player_active,
-                    has_remote_session: snapshot.has_remote_session,
-                };
-                match resolve_key(InputContext::Playback, &input, key) {
-                    KeyResolution::Command(command) => Some(command),
-                    KeyResolution::FallThrough | KeyResolution::Swallow => None,
-                }
-            })?;
-            Some(command)
-        }
+        // The split transport set: each action binds the fixed payload its
+        // key's call site carried before the bucket split (design D2).
+        KeyPolicyBinding::TogglePlayPause => Some(Command::TogglePlayPause),
+        KeyPolicyBinding::Stop => Some(Command::Stop),
+        KeyPolicyBinding::SeekBack => Some(Command::SeekRelative(-5.0)),
+        KeyPolicyBinding::SeekForward => Some(Command::SeekRelative(5.0)),
+        KeyPolicyBinding::NextTrack => Some(Command::NextTrack),
+        KeyPolicyBinding::PreviousTrack => Some(Command::PreviousTrack),
+        KeyPolicyBinding::VolumeDown => Some(Command::AdjustVolume(-VOLUME_STEP)),
+        KeyPolicyBinding::VolumeUp => Some(Command::AdjustVolume(VOLUME_STEP)),
+        KeyPolicyBinding::ToggleMute => Some(Command::ToggleMute),
+        KeyPolicyBinding::ToggleMuteOrCycleAudio => Some(Command::ToggleMuteOrCycleAudio),
+        KeyPolicyBinding::CycleSubtitle => Some(Command::CycleOrToggleSubtitle),
+        KeyPolicyBinding::OpenIdleFeedLink => Some(Command::OpenIdleFeedLink),
         _ => None,
     }
 }
@@ -428,7 +525,7 @@ pub(super) fn command_for_policy(
 mod tests {
     use super::*;
     use crate::app::router::RouterSnapshot;
-    use mbv_core::keybinds::{Chord, KeySection, SectionBindings, KEYBIND_ACTIONS};
+    use mbv_core::keybinds::{Chord, KeyGate, KeySection, SectionBindings, KEYBIND_ACTIONS};
 
     fn keybinds() -> Keybinds {
         Keybinds::default()
@@ -539,7 +636,7 @@ mod tests {
             )
             .unwrap()
             .name,
-            "playback"
+            "toggle_play_pause"
         );
         assert_eq!(
             resolve_policy(
@@ -561,7 +658,7 @@ mod tests {
             )
             .unwrap()
             .name,
-            "playback"
+            "open_idle_feed_link"
         );
 
         // A focused text entry (e.g. Inline Search) keeps every playback letter
@@ -590,6 +687,206 @@ mod tests {
         );
     }
 
+    /// Task 5.1: `gate: Playback` is a routing bucket, not a shared
+    /// eligibility condition. Each split action resolves from its default
+    /// chord under exactly the condition its key had before the split —
+    /// gated keys need an active player or a remote session, ungated keys
+    /// fire idle, and the idle-feed link keeps its own availability gate.
+    #[test]
+    fn each_transport_action_resolves_under_its_own_condition() {
+        let gated = [
+            "toggle_play_pause",
+            "stop",
+            "seek_back",
+            "seek_forward",
+            "next_track",
+            "previous_track",
+            "toggle_mute_or_cycle_audio",
+        ];
+        let ungated = ["volume_down", "volume_up", "toggle_mute", "cycle_subtitle"];
+
+        let default_chord = |id: &str| {
+            let action = action_by_id(id).expect("declared transport action");
+            KeyChord::from_keybinds_chord(action.parsed_default_chords()[0])
+        };
+
+        for id in gated.iter().chain(ungated.iter()) {
+            let mut active = snapshot();
+            active.player_active = true;
+            assert_eq!(
+                resolve_policy(default_chord(id), &active, &keybinds()).map(|entry| entry.name),
+                Some(*id),
+                "{id} resolves from its default chord with an active player"
+            );
+            let mut remote = snapshot();
+            remote.has_remote_session = true;
+            assert_eq!(
+                resolve_policy(default_chord(id), &remote, &keybinds()).map(|entry| entry.name),
+                Some(*id),
+                "{id} resolves with a remote session"
+            );
+        }
+
+        // Only the gated half requires active || has_remote_session: the
+        // ungated keys still fire with nothing playing, the gated keys do not.
+        for id in ungated {
+            assert_eq!(
+                resolve_policy(default_chord(id), &snapshot(), &keybinds()).map(|entry| entry.name),
+                Some(id),
+                "{id} is ungated and fires idle"
+            );
+        }
+        for id in gated {
+            assert_ne!(
+                resolve_policy(default_chord(id), &snapshot(), &keybinds()).map(|entry| entry.name),
+                Some(id),
+                "{id} must not fire with no player and no remote session"
+            );
+        }
+
+        // The idle-feed link keeps its own condition (task 3.8): available
+        // only when nothing plays, no session, the idle playback panel is
+        // not mounted, and a link is displayed.
+        let o = default_chord("open_idle_feed_link");
+        let mut idle = snapshot();
+        idle.idle_feed_link_available = true;
+        assert_eq!(
+            resolve_policy(o, &idle, &keybinds()).map(|entry| entry.name),
+            Some("open_idle_feed_link")
+        );
+        let mut busy = idle;
+        busy.player_active = true;
+        assert_eq!(
+            resolve_policy(o, &busy, &keybinds()).map(|entry| entry.name),
+            None
+        );
+        let mut panel_idle = idle;
+        panel_idle.queue_only_idle = true;
+        assert_eq!(
+            resolve_policy(o, &panel_idle, &keybinds()).map(|entry| entry.name),
+            None
+        );
+    }
+
+    /// A rebound transport action fires on the configured chord only: its
+    /// declared default is inert, and the command carries the action's fixed
+    /// payload binding (design D2).
+    #[test]
+    fn rebound_transport_action_fires_on_configured_chord_only() {
+        // Ungated rebind: volume_up off the `+`/`=` alias onto `k`.
+        let keybinds = rebound("volume_up", "k");
+        let new_chord = chord(KeyCode::Char('k'), KeyModifiers::NONE);
+        assert_eq!(
+            resolve_policy(new_chord, &snapshot(), &keybinds)
+                .unwrap()
+                .name,
+            "volume_up"
+        );
+        assert_eq!(
+            command_for_policy(KeyPolicyBinding::VolumeUp, new_chord),
+            Some(Command::AdjustVolume(VOLUME_STEP))
+        );
+        for inert in ['+', '='] {
+            assert_eq!(
+                resolve_policy(
+                    chord(KeyCode::Char(inert), KeyModifiers::NONE),
+                    &snapshot(),
+                    &keybinds
+                )
+                .map(|entry| entry.name),
+                None,
+                "declared default `{inert}` of volume_up is inert after the rebind"
+            );
+        }
+
+        // Gated rebind: toggle_play_pause off Space onto Ctrl+p; fires only
+        // under its own eligibility condition.
+        let keybinds = rebound("toggle_play_pause", "Ctrl+p");
+        let new_chord = chord(KeyCode::Char('p'), KeyModifiers::CONTROL);
+        let mut active = snapshot();
+        active.player_active = true;
+        assert_eq!(
+            resolve_policy(new_chord, &active, &keybinds).unwrap().name,
+            "toggle_play_pause"
+        );
+        assert_eq!(
+            command_for_policy(KeyPolicyBinding::TogglePlayPause, new_chord),
+            Some(Command::TogglePlayPause)
+        );
+        assert_eq!(
+            resolve_policy(new_chord, &snapshot(), &keybinds).map(|entry| entry.name),
+            None,
+            "a rebound gated action stays gated"
+        );
+        assert_eq!(
+            resolve_policy(
+                chord(KeyCode::Char(' '), KeyModifiers::NONE),
+                &active,
+                &keybinds
+            )
+            .map(|entry| entry.name),
+            None,
+            "the declared default Space is inert after the rebind"
+        );
+    }
+
+    /// Task 5.2 (D9): the blocking swallow guard stays outside the registry —
+    /// not configurable, not listed — and keeps its literal match.
+    #[test]
+    fn alt_swallow_stays_outside_the_registry_and_still_swallows() {
+        // Not configurable: no declared action to assign a chord to.
+        assert!(action_by_id("alt_swallow").is_none());
+        // Not listed, structurally for any future blocking-only entry: a
+        // blocking policy layer must never name a registry action.
+        for entry in KEY_POLICY.iter().filter(|entry| entry.blocking) {
+            assert!(
+                action_by_id(entry.name).is_none(),
+                "blocking entry `{}` must stay outside the registry (D9)",
+                entry.name
+            );
+        }
+        // Still swallows: an Alt-modified chord resolves to the guard and the
+        // router folds it to Swallow.
+        let key = chord(KeyCode::Char('k'), KeyModifiers::ALT);
+        assert_eq!(
+            resolve_policy(key, &snapshot(), &keybinds()).unwrap().name,
+            "alt_swallow"
+        );
+        assert_eq!(
+            crate::app::router::resolve_router_outcome_with_focused(
+                crossterm::event::KeyEvent::new(KeyCode::Char('k'), KeyModifiers::ALT),
+                &snapshot(),
+                None,
+                &keybinds()
+            ),
+            crate::app::router::RouterOutcome::Swallow
+        );
+    }
+
+    /// Task 5.1: the split transport entries are exactly the registry's
+    /// `Playback`-gated actions, one policy layer each, still named by the
+    /// action id so chord matching resolves through the registry.
+    #[test]
+    fn transport_policy_layers_match_the_registry_playback_actions() {
+        let transport: Vec<&str> = KEY_POLICY
+            .iter()
+            .filter(|entry| {
+                action_by_id(entry.name).is_some_and(|action| {
+                    action.section == KeySection::Playback && action.gate == KeyGate::Playback
+                })
+            })
+            .map(|entry| entry.name)
+            .collect();
+        let declared: Vec<&str> = KEYBIND_ACTIONS
+            .iter()
+            .filter(|action| {
+                action.section == KeySection::Playback && action.gate == KeyGate::Playback
+            })
+            .map(|action| action.id)
+            .collect();
+        assert_eq!(transport, declared);
+    }
+
     #[test]
     fn sessions_sidebar_escape_precedes_playback_stop() {
         let mut armed = snapshot();
@@ -598,7 +895,7 @@ mod tests {
             resolve_policy(chord(KeyCode::Esc, KeyModifiers::NONE), &armed, &keybinds())
                 .unwrap()
                 .name,
-            "playback"
+            "stop"
         );
 
         armed.sessions_sidebar_open = true;
@@ -647,7 +944,7 @@ mod tests {
             "quit"
         );
         assert_eq!(
-            command_for_policy(KeyPolicyBinding::Quit, new_chord, &snapshot(), &keybinds),
+            command_for_policy(KeyPolicyBinding::Quit, new_chord),
             Some(Command::Quit)
         );
 
@@ -751,22 +1048,31 @@ mod tests {
 
     #[test]
     fn defaults_reproduce_todays_resolution() {
-        // With the default configuration every declared non-transport action
-        // matches exactly its declared default chords (the transport bucket
-        // still resolves per-key through the Playback gate until task 5.1).
+        // With the default configuration every declared action matches
+        // exactly its declared default chords, under the snapshot condition
+        // its key carries (task 5.1: per-action transport eligibility).
         let keybinds = Keybinds::default();
         for action in KEYBIND_ACTIONS {
-            if action.policy == "playback" {
-                continue;
-            }
             for chord_str in action.default_chords {
                 let key = KeyChord::from_keybinds_chord(Chord::parse(chord_str).unwrap());
                 let mut snap = snapshot();
-                snap.panel_focus = match action.id {
-                    "panel_right" => PanelFocus::Queue,
-                    "panel_left" => PanelFocus::Library,
-                    _ => snap.panel_focus,
-                };
+                match action.id {
+                    "panel_right" => snap.panel_focus = PanelFocus::Queue,
+                    "panel_left" => snap.panel_focus = PanelFocus::Library,
+                    // Gated transport keys: one opener (an active player) is
+                    // enough to prove the default chord still routes.
+                    "toggle_play_pause"
+                    | "stop"
+                    | "seek_back"
+                    | "seek_forward"
+                    | "next_track"
+                    | "previous_track"
+                    | "toggle_mute_or_cycle_audio" => {
+                        snap.player_active = true;
+                    }
+                    "open_idle_feed_link" => snap.idle_feed_link_available = true,
+                    _ => {}
+                }
                 assert_eq!(
                     resolve_policy(key, &snap, &keybinds).map(|entry| entry.name),
                     Some(action.id),

@@ -80,7 +80,7 @@ pub(super) fn resolve_router_outcome_with_focused(
             {
                 return RouterOutcome::FallThrough;
             }
-            match command_for_policy(entry.binding, chord, snapshot, keybinds) {
+            match command_for_policy(entry.binding, chord) {
                 Some(cmd @ (Command::TogglePlayPause | Command::Stop)) => {
                     RouterOutcome::Deferred(cmd)
                 }

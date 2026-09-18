@@ -24,6 +24,7 @@ use crate::app::render::{
     help_destination, render_help_panel, HelpDestination, HelpRenderGeometry,
 };
 use crate::app::{PanelFocus, TabSelection};
+use mbv_core::keybinds::Keybinds;
 
 /// The Interactive Component for the Help sidebar.
 ///
@@ -33,6 +34,10 @@ use crate::app::{PanelFocus, TabSelection};
 pub struct HelpComponent {
     scroll: u16,
     destination: HelpDestination,
+    /// The compiled keybind configuration the shell renders with (plain
+    /// data, projected by the shell like the destination above): help's
+    /// Playback rows show the chords the loaded configuration fires on.
+    keybinds: Keybinds,
     /// The area the panel was painted in during `view()`, used for mouse
     /// hit-testing in `on()`. `None` when no panel area was provided (the
     /// help sidebar uses the full terminal with a width constraint).
@@ -47,6 +52,7 @@ impl HelpComponent {
         Self {
             scroll: 0,
             destination: HelpDestination::EmbyLibrary,
+            keybinds: Keybinds::default(),
             panel_area: None,
             content_geometry: None,
             mouse_gestures: MouseGestureState::new(),
@@ -57,6 +63,13 @@ impl HelpComponent {
     /// `get_component_mut`+downcast before each render (design D5).
     pub(in crate::app) fn set_destination(&mut self, panel_focus: PanelFocus, tab: TabSelection) {
         self.destination = help_destination(panel_focus, tab);
+    }
+
+    /// Set the compiled keybind configuration from the shell. Called via
+    /// `get_component_mut`+downcast before each render, so the rendered
+    /// Playback rows follow the loaded configuration (design D7).
+    pub(in crate::app) fn set_keybinds(&mut self, keybinds: &Keybinds) {
+        self.keybinds = keybinds.clone();
     }
 
     /// Set the panel area for rendering and hit-testing. Called by the shell
@@ -154,6 +167,7 @@ impl Component for HelpComponent {
             self.panel_area,
             &mut self.scroll,
             self.destination,
+            &self.keybinds,
         ));
     }
 

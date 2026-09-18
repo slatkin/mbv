@@ -87,6 +87,7 @@ impl Model {
             if let Some(help) = comp.as_any_mut().downcast_mut::<HelpComponent>() {
                 help.set_panel_area(panel_area);
                 help.set_destination(self.app.effective_panel_focus(), self.app.tab);
+                help.set_keybinds(&self.keybinds);
             }
         }
 

@@ -1,8 +1,8 @@
-use super::super::super::action::PLAYBACK_HELP_BINDINGS;
 use super::super::super::palette;
 use super::super::super::HELP_PANEL_W;
 use super::chrome;
 use crate::app::{PanelFocus, TabSelection};
+use mbv_core::keybinds::{KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -103,6 +103,27 @@ impl HelpSection {
     }
 }
 
+/// One-line help label per declared Playback action. Only the labels live
+/// here; the row set and the key chords come from the declared registry and
+/// the loaded `Keybinds` (design D7), so help cannot drift from routing.
+fn playback_label(action_id: &str) -> &'static str {
+    match action_id {
+        "toggle_play_pause" => "Pause/Resume",
+        "stop" => "Stop",
+        "seek_back" => "Seek back 5 seconds",
+        "seek_forward" => "Seek forward 5 seconds",
+        "next_track" => "Next track",
+        "previous_track" => "Previous track",
+        "volume_down" => "Volume down",
+        "volume_up" => "Volume up",
+        "toggle_mute" => "Mute",
+        "toggle_mute_or_cycle_audio" => "Cycle audio track",
+        "cycle_subtitle" => "Cycle subtitles",
+        "open_idle_feed_link" => "Open idle feed link",
+        other => panic!("declared Playback action `{other}` has no help label"),
+    }
+}
+
 fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
     Line::from(vec![
         Span::raw(""),
@@ -137,7 +158,10 @@ fn help_blank() -> Line<'static> {
 
 /// Builds every named help section. Kept as a pure function so classification
 /// tests can inspect section content and ordering without driving a terminal.
-fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
+fn build_help_sections(
+    key_w: usize,
+    keybinds: &Keybinds,
+) -> Vec<(HelpSection, Vec<Line<'static>>)> {
     let sec_global = vec![
         help_section_line("Global"),
         help_line(key_w, "F1", "Help"),
@@ -158,15 +182,25 @@ fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
         help_line(key_w, "q", "Quit"),
         help_blank(),
     ];
-    // Rendered from `PLAYBACK_HELP_BINDINGS` (issue #133, phase 4) so this
-    // section can no longer silently drift from `playback_command_for_key`.
+    // Rendered from the declared registry (design D7): one row per Playback
+    // action, its keys the chords it actually fires on for the loaded
+    // configuration, so the section cannot silently drift from routing.
     let mut sec_playback = vec![help_section_line("Playback")];
-    sec_playback.extend(
-        PLAYBACK_HELP_BINDINGS
+    // The transport bucket: the Playback-section actions gated `Playback`
+    // (design D2). `visualizer` shares the section but is presented in the
+    // Global rows above, where it lived before the split.
+    for action in KEYBIND_ACTIONS
+        .iter()
+        .filter(|action| action.section == KeySection::Playback && action.gate == KeyGate::Playback)
+    {
+        let keys = keybinds
+            .router_chords(action)
             .iter()
-            .map(|b| help_line(key_w, b.keys, b.label)),
-    );
-    sec_playback.push(help_line(key_w, "o", "Open idle feed link"));
+            .map(|chord| chord.to_string())
+            .collect::<Vec<_>>()
+            .join(" / ");
+        sec_playback.push(help_line(key_w, &keys, playback_label(action.id)));
+    }
     sec_playback.push(help_blank());
     let sec_queue = vec![
         help_section_line("Queue"),
@@ -263,11 +297,35 @@ pub(in crate::app) struct HelpRenderGeometry {
     pub max_scroll: u16,
 }
 
+/// The rendered Playback section's row texts (padded key column + label),
+/// one per declared Playback action, in registry order. Test seam for the
+/// render-layer tests that pin help to the registry (design D7).
+#[cfg(test)]
+pub(in crate::app::render) fn playback_help_rows(key_w: usize, keybinds: &Keybinds) -> Vec<String> {
+    let (_, lines) = build_help_sections(key_w, keybinds)
+        .into_iter()
+        .find(|(section, _)| *section == HelpSection::Playback)
+        .expect("Playback help section exists");
+    // Skip the section header; the rows follow it.
+    lines[1..]
+        .iter()
+        .filter(|line| !line.spans.is_empty())
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref() as &str)
+                .collect::<String>()
+        })
+        .filter(|text| !text.trim().is_empty())
+        .collect()
+}
+
 pub(in crate::app) fn render_help_panel(
     f: &mut Frame,
     area: Option<ratatui::layout::Rect>,
     scroll: &mut u16,
     dest: HelpDestination,
+    keybinds: &Keybinds,
 ) -> HelpRenderGeometry {
     let content = match area {
         Some(area) => chrome::render_panel_shell_at(
@@ -288,7 +346,7 @@ pub(in crate::app) fn render_help_panel(
     let key_w = 16usize;
 
     let mut sections: [Option<Vec<Line<'static>>>; 7] = std::array::from_fn(|_| None);
-    for (name, lines) in build_help_sections(key_w) {
+    for (name, lines) in build_help_sections(key_w, keybinds) {
         sections[name.index()] = Some(lines);
     }
     let order = help_section_order(dest);
@@ -342,7 +400,7 @@ mod tests {
 
     #[test]
     fn audiobookshelf_help_lists_spec_key_sets_first() {
-        let sections = build_help_sections(16);
+        let sections = build_help_sections(16, &Keybinds::default());
         let order = help_section_order(HelpDestination::Audiobookshelf);
         assert_eq!(order[0], HelpSection::Audiobookshelf);
 
@@ -377,7 +435,7 @@ mod tests {
 
     #[test]
     fn home_help_lists_section_switch_watched_and_enqueue() {
-        let sections = build_help_sections(16);
+        let sections = build_help_sections(16, &Keybinds::default());
         let order = help_section_order(HelpDestination::Home);
         assert_eq!(order[0], HelpSection::Home);
 
