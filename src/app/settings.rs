@@ -22,6 +22,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::Autoload => "autoload",
         SettingKey::ShowSysTrayIcon => "Show systray icon",
         SettingKey::SystemNotifications => "System notifications",
+        SettingKey::MouseSupport => "Mouse support",
         SettingKey::MyLanguages => "My languages",
         SettingKey::SubtitleMode => "Subtitle mode",
 
@@ -55,6 +56,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
         SettingKey::Autoload => bool_val(cfg.autoload),
         SettingKey::ShowSysTrayIcon => bool_val(cfg.show_systray_icon),
         SettingKey::SystemNotifications => bool_val(cfg.system_notifications),
+        SettingKey::MouseSupport => bool_val(cfg.mouse_support),
         SettingKey::MyLanguages => fmt_lang_list(&cfg.my_languages),
         SettingKey::SubtitleMode => {
             if cfg.subtitle_mode.is_empty() {

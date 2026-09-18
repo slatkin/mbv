@@ -198,6 +198,7 @@ impl App {
             image_cache_size_total: init.image_cache_size.saturating_mul(2),
             settings_destination: super::types_settings::SettingsDestination::Main,
             settings_save_at: None,
+            mouse_capture_pending: None,
             confirm_logout: false,
             notif_failed: false,
             sessions: Vec::new(),

@@ -71,6 +71,39 @@ fn parse_video_cache_settings_and_save_round_trip() {
 
 #[cfg(test)]
 #[test]
+fn mouse_support_round_trips_and_defaults_on() {
+    // Absent key parses to true (existing configs unchanged on upgrade).
+    let cfg = parse_config("[display]\nsystem_notifications = true\n").unwrap();
+    assert!(cfg.mouse_support);
+
+    let _g = SYS_ENV_LOCK.lock().unwrap();
+    let dir = std::env::temp_dir().join(format!(
+        "mbv-config-test-{}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(dir.join("mbv")).unwrap();
+    std::env::set_var("XDG_CONFIG_HOME", &dir);
+    std::env::remove_var("MBV_SYSTEM");
+
+    let cfg = Config {
+        mouse_support: false,
+        ..Default::default()
+    };
+    save_config_settings(&cfg).unwrap();
+    let saved = std::fs::read_to_string(config_path()).unwrap();
+    assert!(saved.contains("mouse_support = false"));
+    let reparsed = parse_config(&saved).unwrap();
+    assert!(!reparsed.mouse_support);
+
+    std::env::remove_var("XDG_CONFIG_HOME");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[cfg(test)]
+#[test]
 fn parse_audio_pipe_settings() {
     let toml = r#"
 [server]

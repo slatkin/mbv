@@ -347,11 +347,11 @@ impl App {
 
 type AppTerminal = Terminal<CrosstermBackend<std::io::Stdout>>;
 
-fn init_terminal() -> Result<AppTerminal, Box<dyn std::error::Error>> {
+fn init_terminal(mouse_support: bool) -> Result<AppTerminal, Box<dyn std::error::Error>> {
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
-    crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    set_mouse_capture(&mut stdout, mouse_support)?;
     set_shift_escape_mode(&mut stdout, true)?;
     crossterm::execute!(stdout, crossterm::event::EnableFocusChange)?;
     let _ = crossterm::execute!(
@@ -399,6 +399,14 @@ fn set_shift_escape_mode<W: Write>(writer: &mut W, enabled: bool) -> std::io::Re
     writer.write_all(if enabled { b"\x1b[>1s" } else { b"\x1b[>0s" })
 }
 
+pub(crate) fn set_mouse_capture<W: Write>(writer: &mut W, enabled: bool) -> std::io::Result<()> {
+    if enabled {
+        crossterm::execute!(writer, crossterm::event::EnableMouseCapture)
+    } else {
+        crossterm::execute!(writer, crossterm::event::DisableMouseCapture)
+    }
+}
+
 fn restore_terminal(
     mut terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -408,10 +416,7 @@ fn restore_terminal(
         crossterm::event::PopKeyboardEnhancementFlags
     );
     set_shift_escape_mode(terminal.backend_mut(), false)?;
-    crossterm::execute!(
-        terminal.backend_mut(),
-        crossterm::event::DisableMouseCapture
-    )?;
+    set_mouse_capture(terminal.backend_mut(), false)?;
     crossterm::execute!(terminal.backend_mut(), crossterm::event::DisableFocusChange)?;
     crossterm::execute!(
         terminal.backend_mut(),

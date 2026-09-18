@@ -172,7 +172,8 @@ impl Model {
 
     /// The run loop — the moved body of the former `App::run`.
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut terminal = init_terminal()?;
+        let mouse_support = self.app.config.lock().unwrap().mouse_support;
+        let mut terminal = init_terminal(mouse_support)?;
         terminal.clear()?;
 
         // Image pickers are initialised in `main` before `Model::new` starts
@@ -584,6 +585,13 @@ impl Model {
                 if quit {
                     break 'outer;
                 }
+            }
+
+            // Apply the Settings panel's live mouse-capture flip: the toggle
+            // arm only records the intent; the capture sequence goes out on
+            // the session stdout here, before the next draw.
+            if let Some(enabled) = self.app.mouse_capture_pending.take() {
+                let _ = crate::app::set_mouse_capture(terminal.backend_mut(), enabled);
             }
 
             // Drain deferred component intents after this tick's primary

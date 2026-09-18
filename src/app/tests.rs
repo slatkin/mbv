@@ -211,6 +211,7 @@ pub(crate) fn make_app_stub() -> App {
         image_cache_size_total: 50,
         settings_destination: SettingsDestination::Main,
         settings_save_at: None,
+        mouse_capture_pending: None,
         confirm_logout: false,
         system_notifications: false,
         notif_failed: false,

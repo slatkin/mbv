@@ -51,6 +51,7 @@ pub(crate) enum SettingKey {
     Autoload,
     ShowSysTrayIcon,
     SystemNotifications,
+    MouseSupport,
     MyLanguages,
     SubtitleMode,
     FeedViewLibraries,
@@ -108,7 +109,11 @@ pub(super) static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ),
     (
         "Display",
-        &[SettingKey::ImageProtocol, SettingKey::SystemNotifications],
+        &[
+            SettingKey::ImageProtocol,
+            SettingKey::SystemNotifications,
+            SettingKey::MouseSupport,
+        ],
     ),
     (
         "Session",

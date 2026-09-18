@@ -119,6 +119,10 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         "system_notifications".to_string(),
         toml::Value::Boolean(cfg.system_notifications),
     );
+    display.insert(
+        "mouse_support".to_string(),
+        toml::Value::Boolean(cfg.mouse_support),
+    );
 
     if !cfg.music_levels.is_empty() {
         let library = section!("library");

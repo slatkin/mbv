@@ -484,5 +484,66 @@ fn blocking_confirm_overlay_keeps_focus_and_receives_input() {
     assert!(messages.is_empty());
 }
 
+/// Task 3.3 (add-mouse-support-option): the Display section's MouseSupport
+/// row routes Enter through the shell sync pass to `handle_settings_activate`,
+/// flipping the config value and arming the live capture flip for the run
+/// loop (item ordinal 7: Services, 4 Playback, ImageProtocol,
+/// SystemNotifications).
+#[test]
+fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
+    let mut harness = TickHarness::new(make_app_stub());
+
+    harness.inject(key(Key::Function(2)));
+    let outcome = harness.step();
+    assert!(matches!(
+        outcome.router,
+        RouterOutcome::Command(Command::ToggleSettings)
+    ));
+    harness
+        .model_mut()
+        .dispatch_router_command(Command::ToggleSettings);
+    {
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+    }
+    harness.model_mut().sync_mounted_surfaces();
+    let settings_id = ComponentId::Overlay(OverlayId::Settings);
+    assert!(harness.model().application.mounted(&settings_id));
+    assert_eq!(harness.model().application.focus(), Some(&settings_id));
+
+    for _ in 0..7 {
+        harness.inject(key(Key::Down));
+        let outcome = harness.step();
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+    }
+
+    harness.inject(key(Key::Enter));
+    let outcome = harness.step();
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+
+    assert!(!harness
+        .model()
+        .app
+        .config
+        .lock()
+        .unwrap()
+        .mouse_support);
+    assert_eq!(harness.model().app.mouse_capture_pending, Some(false));
+}
+
 #[path = "tests_tick_integration_music.rs"]
 mod tests_tick_integration_music;

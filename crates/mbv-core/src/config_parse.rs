@@ -191,6 +191,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let mouse_support = display
+        .and_then(|m| m.get("mouse_support"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
     let save_playlist_on_consume = queue
         .and_then(|q| q.get("save_playlist_on_consume"))
         .and_then(|v| v.as_bool())
@@ -353,6 +358,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         autoload,
         music_levels,
         system_notifications,
+        mouse_support,
         save_playlist_on_consume,
         save_playlist_on_consume_audio,
         subtitle_mode,
