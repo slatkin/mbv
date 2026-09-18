@@ -75,6 +75,17 @@ impl App {
                 };
                 self.system_notifications = new_val;
             }
+            SettingKey::MouseSupport => {
+                let new_val = {
+                    let mut c = self.config.lock().unwrap();
+                    c.mouse_support = !c.mouse_support;
+                    c.mouse_support
+                };
+                // Effect handoff: the run loop applies the live flip on the
+                // session stdout; persistence rides the debounced
+                // `settings_save_at` below.
+                self.mouse_capture_pending = Some(new_val);
+            }
             SettingKey::SubtitleMode => {
                 let new_mode = {
                     let mut c = self.config.lock().unwrap();

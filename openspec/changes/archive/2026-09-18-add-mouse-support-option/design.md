@@ -63,9 +63,13 @@ parse-default-save trio in `config_parse.rs` / `config_save.rs` /
 
 - **Live toggle applies immediately, persists via the existing debounce.**
   `handle_settings_activate` runs on `Model` inside the run loop, so the
-  toggle arm flips the config value under the lock and executes the helper
-  directly; `settings_save_at` continues to own persistence, exactly as
-  the `SystemNotifications` arm separates apply-now from save-later.
+  toggle arm flips the config value under the lock and records the flip in
+  `mouse_capture_pending`; the run loop consumes the pending flag in the
+  same iteration and executes the helper against the session stdout (the
+  arm itself holds no terminal handle, so direct execution from the arm
+  would be a second capture site with the wrong I/O context).
+  `settings_save_at` continues to own persistence, exactly as the
+  `SystemNotifications` arm separates apply-now from save-later.
 
 - **Setting lives in `[display]` as `mouse_support`, default `true`.**
   Matches the section the user-facing row renders under (Display), and

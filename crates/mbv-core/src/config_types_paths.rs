@@ -50,6 +50,10 @@ pub struct Config {
     pub autoload: bool,
     pub music_levels: Vec<String>,
     pub system_notifications: bool,
+    /// Gates terminal mouse capture (ADR 0024): when off, capture is never
+    /// enabled and no mouse events are delivered. Editable via the F2
+    /// Settings panel's Display section; default on.
+    pub mouse_support: bool,
     pub save_playlist_on_consume: bool,
     pub save_playlist_on_consume_audio: bool,
     // [playback] — client-only subtitle/audio preferences (never pushed to Emby server)
@@ -134,6 +138,7 @@ impl Default for Config {
             autoload: false,
             music_levels: vec![],
             system_notifications: false,
+            mouse_support: true,
             save_playlist_on_consume: false,
             save_playlist_on_consume_audio: false,
             subtitle_mode: String::new(),

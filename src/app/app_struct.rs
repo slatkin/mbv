@@ -241,6 +241,10 @@ pub struct App {
     pub(super) image_cache_size_total: usize,
     pub(super) settings_destination: SettingsDestination,
     pub(super) settings_save_at: Option<Instant>,
+    /// Live mouse-capture flip requested by the Settings toggle arm (ADR
+    /// 0024): the run loop consumes it and applies `set_mouse_capture` on
+    /// the session stdout once per tick.
+    pub(super) mouse_capture_pending: Option<bool>,
     pub(super) confirm_logout: bool,
     pub(super) system_notifications: bool,
     pub(super) notif_failed: bool,
