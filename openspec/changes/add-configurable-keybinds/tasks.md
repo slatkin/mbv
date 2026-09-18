@@ -1,29 +1,50 @@
 # Tasks: add-configurable-keybinds
 
-## 1. Keys configuration in mbv-core
+## 1. Keybind action registry in mbv-core
 
-- [ ] 1.1 Add `Keybinds` type (prefix chord, prefix map chord→command name, rebind map action→chord), chord-string parser (`"Ctrl+b"`, `"F8"`, `"Shift+Left"`, modifier-order-insensitive), and `Keybinds::defaults()` compiled from today's policy chords. Verify: unit tests parse canonical and order-insensitive forms; defaults equal the current hard-coded chords.
-- [ ] 1.2 Wire `[keys]` into `Config` (serde) and the existing read-patch-write save path. Verify: round-trip test — a config with unrelated sections plus `[keys]` survives save with both preserved.
-- [ ] 1.3 Load-time validation: reserved chords (`Ctrl+q` extensible const), prefix/rebind collisions (including prefix vs any default global chord), unknown command names, unparseable chord strings — each rejects with a named error. Verify: table-driven unit tests covering every rejection class plus the accept case.
+- [ ] 1.1 Add the declared action table (`KeybindAction`: id, section, `default_chords`, gate, policy identity, `rebindable`, `prefix_addressable`), the `KeySection` enum mirroring `SETTING_SECTIONS` order plus `Global`, and `Keybinds` (prefix + per-section router overrides + per-section prefix assignments) in a new mbv-core module. Verify: unit tests assert every id is unique, every section is a `KeySection`, and `Rebindable` includes the router globals and transport actions.
+- [ ] 1.2 Add the chord-string parser (`"Ctrl+b"`, `"F8"`, `"Shift+Left"`, modifier-order-insensitive) and `Keybinds::defaults()` compiled from the declaration. Verify: parser tests cover canonical and reordered forms plus every rejection; `defaults()` reproduces today's hard-coded chords for each declared action.
+- [ ] 1.3 Add load-time validation: reserved chords (`RESERVED_CHORDS = ["Ctrl+q"]`), unparseable chord, unknown action id, section mismatch, non-`prefix_addressable` action in a prefix table, prefix collision, router-scope action-vs-action collision, and prefix-namespace action-vs-action collision. Verify: table-driven unit tests cover every rejection class and the accept case, each error naming the offending entry (both entries for the two collision classes).
 
-## 2. Rebindable global chords (Tier 2)
+## 2. Keys configuration in `Config`
 
-- [ ] 2.1 Thread `&Keybinds` through `resolve_policy`/`command_for_policy`; rebindable `global: true` entries match configured chords, defaults unchanged. Verify: key_policy unit tests — rebound action fires on its new chord, its default chord is inert, and `Keybinds::defaults()` reproduces today's resolution exactly.
-- [ ] 2.2 Update routing-matrix fixtures to construct `Keybinds::defaults()`; add matrix rows proving the text-entry and blocking-overlay rules hold for rebound chords. Verify: `cargo nextest run -p mbv` routing matrix green.
-- [ ] 2.3 Shell passes the parsed `Keybinds` from config load into routing. Verify: tick-integration test — a configured rebind fires through `Application::tick()`.
+- [ ] 2.1 Parse `[keys]`, `[keys.<section>]`, `[keys.<section>.prefix]` in `crates/mbv-core/src/config_parse.rs`, routing every entry through the registry validator, including the router-scope and prefix-namespace collision checks (both need the full parsed table before they can run, not per-entry). Verify: parse tests for absent section, partial override, per-section tables, and each rejection — including both collision classes — surfacing through the existing config error path.
+- [ ] 2.2 Save the `[keys]` tables through the existing read-patch-write path in `config_save.rs`, pruning empty tables. Verify: round-trip test — a config with unrelated sections plus `[keys]` survives save with both preserved and untouched keys intact.
+- [ ] 2.3 Wire the parsed `Keybinds` onto the shell `Model` from config load. Verify: `cargo check -p mbv -p mbv-core`; a unit test that a loaded override reaches the stored `Keybinds`.
 
-## 3. Prefix mode
+## 3. Policy parameterization
 
-- [ ] 3.1 App-owned armed flag mirrored as `RouterSnapshot.prefix_armed`; shell arm/disarm transitions from router outcomes; silent mouse disarm in the mouse path. Verify: tick-integration — arming consumes the prefix chord, mouse disarms without altering the event's handling.
-- [ ] 3.2 Policy layers: `prefix_arm` top layer gated on `!text_entry_focused` + `!blocking_overlay_open`, and the armed-dispatch layer (mapped → Command + disarm; Esc/unmapped → Swallow + disarm; prefix → re-arm; no FallThrough while armed). Verify: key_policy unit tests for every state-machine arm, including F-keys captured while armed and arming suppressed under text entry/overlays.
-- [ ] 3.3 Full state machine through `Application::tick()`: mapped command executes, unmapped chord swallowed and disarmed, double-prefix re-arms, no chord reaches any component while armed (component counters). Verify: new tick-integration test file green.
+- [ ] 3.1 Thread `&Keybinds` through `resolve_policy`/`command_for_policy`; each declared action matches its configured chord instead of `KeyPolicyBinding::matches()`'s literals, with `Keybinds::defaults()` byte-identical to today. Verify: `key_policy` unit tests — rebound action fires on its new chord, its default is inert, defaults reproduce today's resolution.
+- [ ] 3.2 Update routing-matrix fixtures to construct registry defaults and add rows proving the text-entry and blocking-overlay rules hold for rebound chords. Verify: `cargo nextest run -p mbv` routing matrix green.
+- [ ] 3.3 Pass the loaded `Keybinds` into production routing through the shell. Verify: tick-integration test — a configured rebind fires through `Application::tick()`.
 
-## 4. Indicator and help exposure
+## 4. Double-tap removal
 
-- [ ] 4.1 `prefix_status_spans()` armed pill in the `chrome_status` idiom, rendered only while armed, following the existing width-pressure drop-order precedent. Verify: buffer test — pill present while armed, absent otherwise; existing status-bar tests still green.
-- [ ] 4.2 Help bindings section rendered from `Keybinds` (defaults merged with overrides) plus the prefix map. Verify: help test — after a rebind, help shows the configured chord; with defaults, help matches current behavior.
+- [ ] 4.1 Remove the candidate timing branch from `apply_deferred_candidate` and the `App.last_space_press`/`last_esc_press` fields; `Deferred` dispatches immediately when the leaf did not consume the chord. Verify: `shell_tests.rs` deferred cases rewritten — unhandled `Space`/`Esc` fire once, a consumed press leaves no state.
+- [ ] 4.2 Remove `last_space`/`last_escape` and `double_tap()` from `components/library_playback_panel.rs`; `Space` and `Esc` fire single-press when the panel holds focus. Verify: component test — one press produces `TogglePlayPause`/`Stop`.
+- [ ] 4.3 Drop `App.last_space_press`/`last_esc_press` and the timing branch that reads them in `apply_deferred_candidate` (`shell.rs`) — these fields were never mirrored into `RouterSnapshot`, so there is nothing to remove there; add the new `RouterSnapshot.prefix_armed` field (task 6.1) as its own addition, not a replacement of these. Verify: `cargo nextest run -p mbv` green.
+- [ ] 4.4 Rewrite `live_tick_characterizes_space_double_tap_lifecycle` and `live_tick_characterizes_escape_double_tap_lifecycle` as single-press behavior records, covering the consumed-chord still suppressing the candidate. Verify: the rewritten integration tests pass and match the modified `semantic-input-arbitration` scenarios.
 
-## 5. Gates
+## 5. Transport actions become declared and rebindable
 
-- [ ] 5.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets`, `cargo nextest run -p mbv -p mbv-core`. Verify: all green.
-- [ ] 5.2 `openspec validate add-configurable-keybinds --strict`. Verify: passes.
+- [ ] 5.1 Split the `Playback` bucket into one registry action per transport behavior (`toggle_play_pause`, `stop`, `seek_back`/`seek_forward`, `next_track`, `previous_track`, `volume_down`/`volume_up`, `toggle_mute`, `toggle_mute_or_cycle_audio`, `cycle_subtitle`, `open_idle_feed_link`), each gated `Playback`; bind payload commands to their fixed call-site values. `gate: Playback` is a routing bucket, not a shared eligibility condition — today's `playback_command_for_key` gates each key individually (`Space`/`Esc`/`<`/`>`/`N`/`P`/`a` require `active || has_remote_session`; `z` only excludes Ctrl; `m`/`-`/`+`/`=` are ungated); each split action must carry forward its own key's condition, not a uniform one. Verify: key_policy unit tests — each action resolves from its default chord under its own (not a shared) eligibility condition, and a rebound transport action fires on the configured chord only.
+- [ ] 5.2 Exclude `alt_swallow` (and any future blocking-only entry) from the registry, keeping its literal match. Verify: a test asserts it is not configurable, not listed, and still swallows.
+- [ ] 5.3 Render help's Playback rows from the registry and delete the hand-written `PLAYBACK_HELP_BINDINGS.keys` strings (the table lives in `src/app/action.rs`, not `help.rs`; `render/components/help.rs` only renders it). Rewrite `action_tests.rs`'s `playback_help_bindings_match_playback_command_for_key` characterization test, which locks the deleted table today. Verify: help tests assert the rendered keys equal the registry defaults and follow an override.
+
+## 6. Prefix mode
+
+- [ ] 6.1 Add the App-owned armed flag mirrored as `RouterSnapshot.prefix_armed`; arm/disarm transitions from router outcomes; silent mouse disarm in the mouse path. Verify: tick-integration — arming consumes the prefix chord; a mouse event disarms without altering the event's handling.
+- [ ] 6.2 Add the `prefix_arm` top layer (gated `!text_entry_focused` + `!blocking_overlay_open`, blocking semantics) and the armed-dispatch layer (mapped chord whose action's gate currently allows it → action + disarm; mapped chord whose action's gate does not currently allow it → treated as unmapped → Swallow + disarm; Esc/unmapped → Swallow + disarm; prefix → re-arm; no FallThrough while armed). Verify: `key_policy` unit tests for every state-machine arm, including F-keys captured while armed, arming suppressed under text entry and overlays, Esc-while-armed not reaching stop, and a prefix-mapped gated action swallowed (not fired) when its gate is currently closed.
+- [ ] 6.3 Prove the full state machine through `Application::tick()`: mapped action executes, unmapped chord swallowed and disarmed, double-prefix re-arms, no chord reaches any component while armed (component counters). Verify: new tick-integration test file green.
+
+## 7. Presentation
+
+- [ ] 7.1 Add the `Keys` destination to the settings panel (component content + render), grouped by `KeySection`, listing the configurable set with router and prefix chords, following the `Services` child-destination precedent. Verify: component/buffer tests — groups equal the shared section list, rows equal the registry set, and an override renders the configured chord.
+- [ ] 7.2 Add the `Keys` row to the settings main list with the live summary (prefix and override count), extending `SETTING_SECTIONS`/`SettingKey`. Verify: snapshot test — the row value follows the loaded configuration.
+- [ ] 7.3 Add the armed pill in the `chrome_status` idiom, rendered only while armed, following the width-pressure drop-order precedent. Verify: buffer test — pill present while armed, absent otherwise; existing status-bar tests green.
+- [ ] 7.4 Render help's Global/configurable chords and the prefix list from the registry. Verify: help test — after a rebind, help shows the configured chord; with defaults, help matches current behavior.
+
+## 8. Gates
+
+- [ ] 8.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv -p mbv-core`. Verify: all green.
+- [ ] 8.2 Run `openspec validate add-configurable-keybinds --strict`. Verify: passes with both the new and the modified capability deltas.
