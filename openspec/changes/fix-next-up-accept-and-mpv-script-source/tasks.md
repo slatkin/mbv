@@ -63,23 +63,23 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
 
 ## 2. Unit B - one runtime source for the mpv overlay scripts
 
-- [ ] 2.1 Make script resolution a pure function over injected candidate directories (checkout, package, legacy installer path) returning the chosen path plus any unused legacy copy found; verify with hermetic unit tests covering checkout present, package only, and legacy copy present-but-ignored (no real HOME/config/state directory is read).
-- [ ] 2.2 Remove the user-data-directory branch from script resolution and correct the
+- [x] 2.1 Make script resolution a pure function over injected candidate directories (checkout, package, legacy installer path) returning the chosen path plus any unused legacy copy found; verify with hermetic unit tests covering checkout present, package only, and legacy copy present-but-ignored (no real HOME/config/state directory is read).
+- [x] 2.2 Remove the user-data-directory branch from script resolution and correct the
   dead checkout fallback in `crates/mbv-core/src/config_paths.rs:53` to the checkout's
   real `scripts/` path (from `env!("CARGO_MANIFEST_DIR")` = `<checkout>/crates/mbv-core`,
   the entry script is `<checkout>/scripts/mbv.lua`).
   (Verify: the 2.1 tests pass and a checkout run resolves the checkout's entry script.)
-- [ ] 2.3 Apply the same resolution rule to the overlay font directory
+- [x] 2.3 Apply the same resolution rule to the overlay font directory
   (`crates/mbv-core/src/config_paths.rs:63`; checkout `<checkout>/fonts`).
   (Verify: a font-resolution test mirrors the script cases.)
-- [ ] 2.4 Log the resolved script path where the script is handed to mpv
+- [x] 2.4 Log the resolved script path where the script is handed to mpv
   (`crates/mbv-core/src/player/runtime.rs:239`) and warn, naming the path, when an
   unused legacy copy exists - emitted only on the gate that actually hands a script set
   to mpv.
   (Verify: a test asserts the resolution result the log decision is derived from (the
   pure result from 2.1; there is no log-capture seam to assert the log line itself), and
   one manual run on this machine shows the resolved path in the startup log.)
-- [ ] 2.5 Confirm packaging metadata still installs the whole fragment set (`Cargo.toml` script mapping, `PKGBUILD`) and that the entry script resolves its siblings from its own directory; verify the mapping lists every fragment and `openspec validate --all` passes.
+- [x] 2.5 Confirm packaging metadata still installs the whole fragment set (`Cargo.toml` script mapping, `PKGBUILD`) and that the entry script resolves its siblings from its own directory; verify the mapping lists every fragment and `openspec validate --all` passes.
 - [ ] 2.6 Manual check: start Local-daemon-owned playback and confirm the on-screen accept completes the jump; then remove the legacy `~/.local/share/mbv/scripts/mbv.lua` and repeat, confirming the accept still completes the jump after the copy is gone. (manual terminal check, not an automated test)
 
 ## 3. Gates and acceptance
