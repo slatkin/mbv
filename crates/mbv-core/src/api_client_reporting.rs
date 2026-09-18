@@ -73,7 +73,7 @@ impl EmbyClient {
         .to_string();
         let pos_s = position_ticks / TICKS_PER_SECOND;
         let run_s = runtime_ticks / TICKS_PER_SECOND;
-        log::info!(target: "api", "outbound: ws Progress pos={pos_s}s/{run_s}s paused={is_paused} event={event_name}");
+        log::debug!(target: "api", "outbound: ws Progress pos={pos_s}s/{run_s}s paused={is_paused} event={event_name}");
         if ws_tx.send_text(msg).is_err() {
             log::warn!(target: "api", "ws channel disconnected, falling back to HTTP");
             self.report_progress_http(
