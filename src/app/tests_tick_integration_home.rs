@@ -592,19 +592,19 @@ fn assert_home_palette_painted(terminal: &Terminal<TestBackend>, label: &str) {
 
     let buf = terminal.backend().buffer();
     // A split row (episode → series context + item title): the context name
-    // paints the playback-context gold role and the item title the
-    // split-row sage role.
+    // paints the split-row context role and the item title the split-row
+    // title role.
     let ((ctx_x, title_x, row_y), (single_x, single_y)) =
         home_list_row_cells(terminal, "Severance", "Broken Bird", "The Long Goodbye");
     assert_eq!(
         buf[(ctx_x, row_y)].fg,
-        palette::PLAYBACK_CONTEXT_FG,
-        "{label}: split-row context must paint the playback-context role"
+        palette::SPLIT_ROW_CONTEXT_FG,
+        "{label}: split-row context must paint the split-row context role"
     );
     assert_eq!(
         buf[(title_x, row_y)].fg,
         palette::SPLIT_ROW_TITLE_FG,
-        "{label}: split-row item title must paint the split-row sage role"
+        "{label}: split-row item title must paint the split-row title role"
     );
     // A single-part row (movie, no container) keeps the ordinary title role.
     assert_eq!(

@@ -104,11 +104,16 @@ pub(in crate::app) fn media_list_row<Target>(
             const QUIET_GAP: usize = 2;
             // The left-aligned metadata pieces, in paint order: the trailing
             // slot's own role (a year is green), then the active row's
-            // percentage as its own FOAM piece.
+            // percentage as its own FOAM piece. A publish date is the slot's
+            // right-aligned gutter instead, painted with the duration below.
             let mut trailing_pieces: Vec<(String, Color)> = Vec::new();
+            let mut published: Option<&str> = None;
             match trailing {
                 Some(MediaListTrailing::Year(text)) if !text.is_empty() => {
                     trailing_pieces.push((text.clone(), palette::STATUS_AVAILABLE));
+                }
+                Some(MediaListTrailing::Published(text)) if !text.is_empty() => {
+                    published = Some(text.as_str());
                 }
                 _ => {}
             }
@@ -132,6 +137,9 @@ pub(in crate::app) fn media_list_row<Target>(
                 .map(|(text, _)| 1 + text.width())
                 .sum();
             let slot_reserve = duration.map_or(0, |dur| QUIET_GAP + dur.width());
+            // The publish-date gutter is a fixed-width column, so it reserves
+            // its full width whatever the date string's own length is.
+            let date_reserve = usize::from(published.is_some()) * (QUIET_GAP + DATE_GUTTER_W);
             let selected = selected && focused;
             // Every selected row paints the opaque bar edge to edge.
             let paint_selected = selected;
@@ -139,7 +147,12 @@ pub(in crate::app) fn media_list_row<Target>(
                 usize::from(secondary.as_deref().is_some_and(|text| !text.is_empty()));
             let icon_reserve = live_icon.map_or(0, UnicodeWidthStr::width);
             let title_width = content_w.saturating_sub(
-                LEFT_INSET + trailing_w + slot_reserve + secondary_separator_reserve + icon_reserve,
+                LEFT_INSET
+                    + trailing_w
+                    + slot_reserve
+                    + date_reserve
+                    + secondary_separator_reserve
+                    + icon_reserve,
             );
             let title_color = fg;
             // Split rows paint the two-tone palette: primary is the
@@ -156,8 +169,8 @@ pub(in crate::app) fn media_list_row<Target>(
             let parts: Vec<(String, Color)> =
                 match secondary.as_deref().filter(|sec| !sec.is_empty()) {
                     Some(sec) => vec![
-                        (primary.clone(), palette::PLAYBACK_CONTEXT_FG),
-                        (" ".into(), palette::PLAYBACK_CONTEXT_FG),
+                        (primary.clone(), palette::SPLIT_ROW_CONTEXT_FG),
+                        (" ".into(), palette::SPLIT_ROW_CONTEXT_FG),
                         (sec.to_owned(), secondary_color),
                     ],
                     None => vec![(primary.clone(), title_color)],
@@ -226,6 +239,20 @@ pub(in crate::app) fn media_list_row<Target>(
                     spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
                 }
             }
+            if let Some(date) = published {
+                let used: usize = spans.iter().map(|span| span.content.width()).sum();
+                let tail = DATE_GUTTER_W + duration.map_or(0, |dur| QUIET_GAP + dur.width());
+                let pad = content_w.saturating_sub(used + tail);
+                spans.push(Span::raw(" ".repeat(pad)));
+                spans.push(Span::styled(
+                    format!(
+                        "{:>width$}",
+                        trunc_str(date, DATE_GUTTER_W),
+                        width = DATE_GUTTER_W
+                    ),
+                    Style::default().fg(palette::ROW_DATE_FG),
+                ));
+            }
             if let Some(dur) = duration {
                 let used: usize = spans.iter().map(|span| span.content.width()).sum();
                 let pad = content_w.saturating_sub(used + dur.width());
@@ -258,6 +285,11 @@ pub(in crate::app) fn media_list_row<Target>(
 
 /// Columns the row's right inset reserves inside `inner_width`.
 const RIGHT_INSET: usize = 2;
+
+/// The fixed width of the right-aligned publish-date gutter (the podcast
+/// browser's `17 Sep` column): the column is the same width for every row
+/// that carries a date, whatever the date string's own length is.
+const DATE_GUTTER_W: usize = 6;
 
 /// The row's text-flow content width: every row type (items, headings, the
 /// blank spacers) stripes within this same range.

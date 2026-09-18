@@ -73,7 +73,7 @@ pub const TEXT_PRIMARY: Color = primitives::TEXT;
 pub const TEXT_SECONDARY: Color = primitives::SUBTLE; // paired with TEXT_PRIMARY/TEXT_STRONG
 pub const TEXT_MUTED: Color = primitives::MUTED; // dim text, icons, unfocused state
 /// A played media-list row's title (single-part primary, or a played split
-/// row's item title; the split context keeps `PLAYBACK_CONTEXT_FG`). Its own
+/// row's item title; the split context keeps `SPLIT_ROW_CONTEXT_FG`). Its own
 /// role rather than the generic dim `TEXT_MUTED`, so a played row can read as
 /// watched without moving icons and unfocused chrome.
 pub const PLAYED_ROW_FG: Color = primitives::PLAYED_ROW; // #bec5b2
@@ -114,12 +114,25 @@ pub const STATUS_AVAILABLE: Color = primitives::GREEN; // checkmarks, available/
 /// browse rows carry no time.
 pub const DURATION: Color = primitives::IRIS; // the sage
 
+/// The right-aligned publish-date column of a library browse row — the
+/// podcast browser's `17 Sep 26` gutter. Its own role rather than the
+/// `DURATION` time column's, so a duration edit cannot move the dates; a date
+/// is metadata about the item, not a playback time.
+pub const ROW_DATE_FG: Color = primitives::YELLOW; // muted gold (#dbbc7f)
+
+/// The primary (context/container) part of a split media-list row — the
+/// podcast an episode row came from. Its own role rather than
+/// `PLAYBACK_CONTEXT_FG`, the playback strip's context role: browse lists
+/// paint their split-row context in the soft-white emphasis colour while the
+/// strip keeps gold.
+pub const SPLIT_ROW_CONTEXT_FG: Color = primitives::SOFT_WHITE; // soft white (#faedcd)
+
 /// The secondary title of a split media-list row — the item's own name after
-/// the container/context (which paints `PLAYBACK_CONTEXT_FG`). Its own role
+/// the container/context (which paints `SPLIT_ROW_CONTEXT_FG`). Its own role
 /// rather than `PLAYBACK_TITLE_FG`, the playback strip's own-name role:
-/// browse lists paint their split-row titles in the soft-white emphasis
-/// colour while the strip keeps aqua.
-pub const SPLIT_ROW_TITLE_FG: Color = primitives::SOFT_WHITE; // soft white (#faedcd)
+/// browse lists paint their split-row titles in a light grey while the strip
+/// keeps aqua.
+pub const SPLIT_ROW_TITLE_FG: Color = primitives::SUBTLE; // light grey (#9e9e9e)
 
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = primitives::ORANGE;

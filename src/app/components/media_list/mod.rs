@@ -367,11 +367,19 @@ pub enum RowIntent<Target> {
 /// The left-aligned metadata a row paints after its `primary` title, with the
 /// text role baked in (one closed vocabulary: rows never carry raw colours).
 /// Resume/live progress is not trailing metadata: it comes from the row's
-/// [`MediaSemanticState`], so `Active`/`NowPlaying` render it inline.
+/// [`MediaSemanticState`], so `Active`/`NowPlaying` render it inline. Each
+/// variant carries its own placement as well as its role, so a row never
+/// chooses either at the call site.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MediaListTrailing {
-    /// The item's release year, painted in the green metadata role.
+    /// The item's release year, painted in the green metadata role
+    /// immediately after the title.
     Year(String),
+    /// The item's publish date, painted in the fixed-width right-aligned date
+    /// gutter (`ROW_DATE_FG`) — the podcast browser's `17 Sep 26` column —
+    /// left of the duration when a row carries both. A row without one
+    /// reserves no gutter.
+    Published(String),
 }
 
 /// A closed, provider-neutral row vocabulary for embedded media lists.

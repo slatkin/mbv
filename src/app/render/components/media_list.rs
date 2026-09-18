@@ -907,7 +907,7 @@ mod wide_row_regression_tests {
         );
         // The series title is at the 2-column quiet indent; the episode
         // title starts after it and the one separating space.
-        assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
+        assert_eq!(buf[(2, 0)].fg, palette::SPLIT_ROW_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
             palette::SPLIT_ROW_TITLE_FG
@@ -957,8 +957,8 @@ mod wide_row_regression_tests {
             "the item title is cut with the row: {row_text:?}"
         );
         assert!(row_text.matches('\u{2026}').count() == 1, "{row_text:?}");
-        // The truncated context part keeps the playback-context gold role.
-        assert_eq!(buf[(2, 1)].fg, palette::PLAYBACK_CONTEXT_FG);
+        // The truncated context part keeps the split-row context role.
+        assert_eq!(buf[(2, 1)].fg, palette::SPLIT_ROW_CONTEXT_FG);
     }
 
     /// A row with no secondary title keeps its semantic title role (soft
@@ -1003,8 +1003,9 @@ mod wide_row_regression_tests {
         );
     }
 
-    /// A played split row mutes only the item title (sage → muted) while the
-    /// context keeps gold, so the container stays legible on watched rows.
+    /// A played split row mutes only the item title (light grey → muted)
+    /// while the context keeps its soft-white role, so the container stays
+    /// legible on watched rows.
     #[test]
     fn played_split_row_mutes_the_item_title_while_context_keeps_gold() {
         let rect = Rect::new(0, 0, 40, 1);
@@ -1025,11 +1026,89 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_eq!(buf[(2, 0)].fg, palette::PLAYBACK_CONTEXT_FG);
+        assert_eq!(buf[(2, 0)].fg, palette::SPLIT_ROW_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
             palette::PLAYED_ROW_FG
         );
+    }
+
+    /// The publish-date gutter is a fixed six-column right-aligned column in
+    /// its own role, and a row without a date reserves none of it.
+    #[test]
+    fn published_date_paints_a_fixed_right_aligned_gutter() {
+        let rect = Rect::new(0, 0, 40, 2);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![
+            MediaListRow::Item {
+                target: "dated".into(),
+                primary: "Show A".into(),
+                secondary: Some("Episode One".into()),
+                trailing: Some(MediaListTrailing::Published("17 Sep".into())),
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+            MediaListRow::Item {
+                target: "undated".into(),
+                primary: "Show B".into(),
+                secondary: Some("Episode Two".into()),
+                trailing: None,
+                duration: None,
+                kind: MediaKind::Media,
+                semantic_state: MediaSemanticState::Ordinary,
+            },
+        ]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row_text = |y: u16| {
+            (0..rect.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        };
+        let dated = row_text(0);
+        // The gutter is the last six columns of the row's content: the row is
+        // 40 wide with a two-column right inset, so it ends at column 37.
+        assert_eq!(&dated[32..38], "17 Sep", "{dated:?}");
+        assert_eq!(buf[(32, 0)].fg, palette::ROW_DATE_FG);
+        assert!(
+            !row_text(1).contains("Sep"),
+            "a row without a date paints no gutter: {:?}",
+            row_text(1)
+        );
+    }
+
+    /// A short date still occupies the full fixed gutter, so every dated row's
+    /// column lines up on the same edge.
+    #[test]
+    fn short_published_date_right_aligns_in_the_same_gutter() {
+        let rect = Rect::new(0, 0, 40, 1);
+        let mut list: WideMediaList<String> = WideMediaList::new();
+        list.set_content(vec![MediaListRow::Item {
+            target: "dated".into(),
+            primary: "Show A".into(),
+            secondary: None,
+            trailing: Some(MediaListTrailing::Published("3 Sep".into())),
+            duration: None,
+            kind: MediaKind::Media,
+            semantic_state: MediaSemanticState::Ordinary,
+        }]);
+        let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
+        terminal
+            .draw(|f| {
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let text: String = (0..rect.width)
+            .map(|x| buf[(x, 0)].symbol().to_string())
+            .collect();
+        assert_eq!(&text[32..38], " 3 Sep", "{text:?}");
     }
 
     #[test]

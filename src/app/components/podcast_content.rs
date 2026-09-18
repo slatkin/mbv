@@ -21,7 +21,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaListTitleReveal, MediaSemanticState,
+    MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
 };
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
@@ -31,7 +31,7 @@ use crate::app::types_audiobookshelf_browse::{
     podcast_display_rows, AudiobookshelfBrowseState, AudiobookshelfEpisodeFilter, PillSelection,
     PodcastDisplayRow,
 };
-use crate::app::ui_util::trunc_str;
+use crate::app::ui_util::{fmt_publish_date_short, trunc_str};
 
 /// Shared max pill label length (`feeds_content.rs`): this owner is the one
 /// producer of the Selector row's labels, and show pills truncate like the
@@ -196,7 +196,15 @@ impl PodcastContent {
                             .map(|show| show.title.clone())
                             .unwrap_or_default(),
                         secondary: Some(episode.title.clone()),
-                        trailing: None,
+                        // The episode's publish date in the row's fixed
+                        // right-aligned gutter (`17 Sep`): the one thing
+                        // that distinguishes two episodes of a show once the
+                        // title is revealed only on the selected row.
+                        trailing: episode
+                            .published_at
+                            .map(fmt_publish_date_short)
+                            .filter(|date| !date.is_empty())
+                            .map(MediaListTrailing::Published),
                         // Library lists carry no time column (only the Queue
                         // list and the sessions modal show one).
                         duration: None,
@@ -955,6 +963,7 @@ mod tests {
             MediaListRow::Item {
                 primary,
                 secondary,
+                trailing,
                 duration,
                 semantic_state,
                 kind,
@@ -963,11 +972,29 @@ mod tests {
                 assert_eq!(primary, "Alpha Show", "the split row names its podcast");
                 assert_eq!(secondary.as_deref(), Some("dated"));
                 assert_eq!(duration, None, "library episode rows carry no time");
+                assert_eq!(
+                    trailing,
+                    Some(MediaListTrailing::Published("30 Jan".into())),
+                    "the row carries its publish date for the right-hand gutter"
+                );
                 assert_eq!(semantic_state, MediaSemanticState::Played);
                 assert_eq!(kind, MediaKind::Media);
             }
             _ => panic!("expected an episode item row"),
         }
+        let undated_trailing = rows
+            .iter()
+            .find_map(|row| match row {
+                MediaListRow::Item {
+                    target, trailing, ..
+                } if target.episode_id() == "undated" => Some(trailing.clone()),
+                _ => None,
+            })
+            .expect("undated episode row");
+        assert_eq!(
+            undated_trailing, None,
+            "an episode with no publish date reserves no gutter"
+        );
         let in_progress = rows
             .iter()
             .find_map(|row| match row {
