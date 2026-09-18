@@ -232,19 +232,11 @@ fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGly
         },
     );
     let prev = (
-        if ctx.use_nerd_fonts {
-            "\u{f04ae}"
-        } else {
-            "<<"
-        },
+        if ctx.use_nerd_fonts { "\u{f050}" } else { "<<" },
         palette::TEXT_STRONG,
     );
     let next = (
-        if ctx.use_nerd_fonts {
-            "\u{f04ad}"
-        } else {
-            ">>"
-        },
+        if ctx.use_nerd_fonts { "\u{f051}" } else { ">>" },
         if ctx.next_available {
             palette::TEXT_STRONG
         } else {
