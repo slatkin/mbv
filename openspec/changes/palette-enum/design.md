@@ -52,6 +52,61 @@ Current primitive names leak meaning (`LIBRARY_SIDE_BG`, `PLAYBACK_PANEL_BG`); p
 6. Delete `primitives.rs`, dead comments; sync `palette.json`; archive.
 Rollback: each step before (5) is additive; (5) is one mechanical commit revertible cleanly. No visual change at any step, so no staged rollout needed.
 
+## Spike outcomes (task 1.1, 2026-09-18)
+
+Both probes passed; both fallback paths are confirmed unneeded.
+
+**(a) `const fn color(self) -> Color` with a full `match` compiles under MSRV 1.88 — PASS.**
+The 1.88 toolchain was installed and actually exercised (no divergence):
+
+```text
+$ rustup toolchain install 1.88 --profile minimal
+  1.88-x86_64-unknown-linux-gnu installed - rustc 1.88.0 (6b00bc388 2025-06-23)
+```
+
+Throwaway probe crate (`/tmp/palette-probe`, deleted after the run; never in the repo):
+a 29-variant `#[derive(Clone, Copy)] enum Palette` whose `const fn color(self) -> Color`
+holds a full, exhaustive `match self` (one arm per variant, no wildcard) returning
+`ratatui::style::Color::Rgb(...)`, evaluated in a `const` context (`const FIRST_COLOR:
+Color = ALL[0].color();` over a `const ALL: [Palette; 29]`):
+
+```text
+$ cd /tmp/palette-probe && cargo +1.88 build
+   Compiling ratatui v0.30.2
+   Compiling palette-probe v0.0.0 (/tmp/palette-probe)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.37s
+$ cargo +1.88 run -q
+first=(26,26,26) last=(253,246,227) variants=29
+```
+
+Const-match (stable since 1.46) confirmed on 1.88.0 with the real `ratatui::style::Color`
+return type. One implementation note surfaced for task 2.1: the enum needs
+`#[derive(Clone, Copy)]` (or at least `Copy`) — const-context indexing out of `ALL`
+moves the value.
+
+**(b) `serde_json` reachable from `mbv` unit tests — PASS.**
+Provided by the mbv package's regular `[dependencies]` table
+(`serde_json.workspace = true`, Cargo.toml line 49); `[dev-dependencies]` lists only
+`uuid`/`rstest`. Unit tests (`#[cfg(test)]` modules) compile inside the crate, so
+regular dependencies are reachable without a dev-dependency entry. A temporary
+`#[cfg(test)]` probe appended to `src/app/render/theme/mod.rs` (removed after the
+run; worktree verified clean):
+
+```text
+$ cargo nextest run -p mbv spike_serde_json_probe
+     Compiling mbv v0.20.3 (/home/slatkin/Dev/worktrees/palette-enum)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 33.83s
+────────────
+        PASS [   0.037s] (1/1) mbv::bin/mbv app::render::theme::spike_serde_json_probe::serde_json_reachable_from_unit_tests
+────────────
+     Summary [   0.038s] 1 test run: 1 passed, 1723 skipped
+```
+
+**Fallback paths: confirmed unneeded.** Non-const `Color` shims (const-fn fallback)
+and an in-code `ALL` snapshot test with manual JSON regeneration (serde_json
+fallback) are both off the table — the `const fn` and the `palette.json` sync test
+can proceed as designed.
+
 ## Open Questions
 
 None. Variant naming rules settled (see decision above); the secondary payoff of numbered clusters is making near-duplicate greys/greens visible for future consolidation.
