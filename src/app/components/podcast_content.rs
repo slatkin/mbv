@@ -462,7 +462,7 @@ impl Default for PodcastContent {
 
 impl LibraryContentOwner for PodcastContent {
     fn clear_selection(&mut self) {
-        self.episodes.clear_selection();
+        self.episodes.clear_owner_selection();
     }
 
     fn set_selection_origin(

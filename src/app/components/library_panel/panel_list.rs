@@ -31,7 +31,7 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     }
 
     fn clear_selection(&mut self) {
-        MediaListCarrier::clear_selection(self);
+        self.clear_owner_selection();
     }
 
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {

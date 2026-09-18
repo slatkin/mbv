@@ -80,7 +80,7 @@ pub struct QueueComponent {
 
 impl QueueComponent {
     pub(crate) fn clear_selection(&mut self) {
-        self.carrier.clear_selection();
+        self.carrier.clear_owner_selection();
     }
 
     pub(crate) fn selected_row_rect(&self) -> Option<Rect> {
@@ -370,7 +370,7 @@ impl QueueComponent {
             Key::Delete => {
                 if !self.carrier.multi_selection().is_empty() {
                     let slot_ids = self.carrier.multi_selection().to_vec();
-                    self.carrier.clear_selection();
+                    self.carrier.clear_owner_selection();
                     return Some(Msg::Queue(QueueRequest::RemoveSelection {
                         scope: self.scope,
                         slot_ids,

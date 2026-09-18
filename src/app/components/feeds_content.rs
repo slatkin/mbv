@@ -434,7 +434,7 @@ impl Default for FeedsContent {
 
 impl LibraryContentOwner for FeedsContent {
     fn clear_selection(&mut self) {
-        self.carrier.clear_selection();
+        self.carrier.clear_owner_selection();
     }
 
     fn set_selection_origin(

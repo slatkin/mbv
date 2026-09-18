@@ -509,7 +509,7 @@ impl InlineSearchHost for EmbyLibraryContent {
 }
 impl LibraryContentOwner for EmbyLibraryContent {
     fn clear_selection(&mut self) {
-        self.carrier.clear_selection();
+        self.carrier.clear_owner_selection();
     }
 
     fn hero_overlay_target_available(&mut self) -> bool {

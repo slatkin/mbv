@@ -540,8 +540,8 @@ impl Default for BookContent {
 
 impl LibraryContentOwner for BookContent {
     fn clear_selection(&mut self) {
-        self.carrier.clear_selection();
-        self.chapter_list.clear_selection();
+        self.carrier.clear_owner_selection();
+        self.chapter_list.clear_owner_selection();
     }
 
     fn hero_overlay_target_available(&mut self) -> bool {

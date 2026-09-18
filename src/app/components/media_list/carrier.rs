@@ -130,7 +130,7 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         }
         match key.code {
             Key::Esc => {
-                self.clear_selection();
+                self.clear_owner_selection();
                 Some(0)
             }
             Key::Char(' ') => {
@@ -151,7 +151,9 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         self.wide.extend_selection_to(target);
     }
 
-    pub fn clear_selection(&mut self) {
+    /// Clear the shared owner's selection (#729): one inherent name, so no
+    /// same-named trait/inherent pair on the carrier.
+    pub fn clear_owner_selection(&mut self) {
         self.wide.clear_selection();
     }
 

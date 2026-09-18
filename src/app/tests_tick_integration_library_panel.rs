@@ -99,7 +99,7 @@ fn row(target: &str) -> MediaListRow<String> {
 
 impl LibraryContentOwner for FixtureOwner {
     fn clear_selection(&mut self) {
-        self.carrier.clear_selection();
+        self.carrier.clear_owner_selection();
     }
 
     fn content(&mut self) -> LibraryPanelContent<'_> {

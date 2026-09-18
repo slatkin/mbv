@@ -424,7 +424,7 @@ impl HomeContent {
 
 impl LibraryContentOwner for HomeContent {
     fn clear_selection(&mut self) {
-        self.carrier.clear_selection();
+        self.carrier.clear_owner_selection();
     }
 
     fn set_selection_origin(
