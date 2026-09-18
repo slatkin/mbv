@@ -8,9 +8,9 @@
 
 ## 2. Keys configuration in `Config`
 
-- [ ] 2.1 Parse `[keys]`, `[keys.<section>]`, `[keys.<section>.prefix]` in `crates/mbv-core/src/config_parse.rs`, routing every entry through the registry validator, including the router-scope and prefix-namespace collision checks (both need the full parsed table before they can run, not per-entry). Verify: parse tests for absent section, partial override, per-section tables, and each rejection — including both collision classes — surfacing through the existing config error path.
-- [ ] 2.2 Save the `[keys]` tables through the existing read-patch-write path in `config_save.rs`, pruning empty tables. Verify: round-trip test — a config with unrelated sections plus `[keys]` survives save with both preserved and untouched keys intact.
-- [ ] 2.3 Wire the parsed `Keybinds` onto the shell `Model` from config load. Verify: `cargo check -p mbv -p mbv-core`; a unit test that a loaded override reaches the stored `Keybinds`.
+- [x] 2.1 Parse `[keys]`, `[keys.<section>]`, `[keys.<section>.prefix]` in `crates/mbv-core/src/config_parse.rs`, routing every entry through the registry validator, including the router-scope and prefix-namespace collision checks (both need the full parsed table before they can run, not per-entry). Verify: parse tests for absent section, partial override, per-section tables, and each rejection — including both collision classes — surfacing through the existing config error path.
+- [x] 2.2 Save the `[keys]` tables through the existing read-patch-write path in `config_save.rs`, pruning empty tables. Verify: round-trip test — a config with unrelated sections plus `[keys]` survives save with both preserved and untouched keys intact.
+- [x] 2.3 Wire the parsed `Keybinds` onto the shell `Model` from config load. Verify: `cargo check -p mbv -p mbv-core`; a unit test that a loaded override reaches the stored `Keybinds`.
 
 ## 3. Policy parameterization
 
