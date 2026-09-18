@@ -46,5 +46,5 @@
 
 ## 8. Gates
 
-- [ ] 8.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv -p mbv-core`. Verify: all green.
-- [ ] 8.2 Run `openspec validate add-configurable-keybinds --strict`. Verify: passes with both the new and the modified capability deltas.
+- [x] 8.1 Run `cargo fmt`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo nextest run -p mbv -p mbv-core`. Verify: all green.
+- [x] 8.2 Run `openspec validate add-configurable-keybinds --strict`. Verify: passes with both the new and the modified capability deltas.
