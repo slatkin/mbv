@@ -30,6 +30,30 @@ fn is_superseded_jump_end_file(
 }
 
 impl PlaybackRun {
+    /// Emit `TrackChanged` for `slot_id`, tagging it with `transition` only if
+    /// the transition's target matches (design D1/D4 settle shape: an
+    /// active-file `JumpTo` and an `on_end_file` settle both confirm a
+    /// transition through this same emit).
+    fn emit_track_changed(
+        &mut self,
+        slot_id: QueueSlotId,
+        transition: Option<crate::playback_transition::Transition>,
+    ) {
+        let tag = transition
+            .filter(|t| t.target == slot_id)
+            .map(|t| (t.request_id, t.generation));
+        log::info!(
+            target: "transition",
+            "track_changed: slot_id={:?} transition_tag={}",
+            slot_id,
+            tag.is_some(),
+        );
+        let _ = self.event_tx.send(PlayerEvent::TrackChanged {
+            slot_id,
+            transition: tag,
+        });
+    }
+
     fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
         {
@@ -673,19 +697,7 @@ impl PlaybackRun {
             });
         }
         if let Some(next_slot_id) = self.active_slot_id() {
-            let transition = settling_transition
-                .filter(|t| t.target == next_slot_id)
-                .map(|t| (t.request_id, t.generation));
-            log::info!(
-                target: "transition",
-                "track_changed: slot_id={:?} transition_tag={}",
-                next_slot_id,
-                transition.is_some(),
-            );
-            let _ = self.event_tx.send(PlayerEvent::TrackChanged {
-                slot_id: next_slot_id,
-                transition,
-            });
+            self.emit_track_changed(next_slot_id, settling_transition);
         }
         false
     }

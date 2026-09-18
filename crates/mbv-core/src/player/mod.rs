@@ -82,13 +82,66 @@ fn queue_load_indices(len: usize, start_idx: usize) -> impl Iterator<Item = usiz
         .chain(start_idx + 1..len)
 }
 
+/// mpv loadfile mode for each queue load, design D3 load-then-play: the start
+/// slot loads first as a no-play `append` (mpv never starts playback for
+/// `append`), earlier slots are `insert-at` before it, later slots `append`
+/// after it. No load in the plan starts playback — `start_queue_playback`
+/// does that once the whole playlist is built.
 fn queue_load_location(index: usize, start_idx: usize) -> (&'static str, String) {
-    if index == start_idx {
-        ("replace", "-1".to_string())
-    } else if index < start_idx {
+    if index < start_idx {
         ("insert-at", index.to_string())
     } else {
         ("append", "-1".to_string())
+    }
+}
+
+/// mpv loadfile mode for the cold active-file (Audiobookshelf) single load in
+/// submit: that branch loads exactly one slot and skips
+/// `start_queue_playback`, so the load itself must start playback — `replace`
+/// on an empty idle playlist does. The D3 no-play plan modes never would.
+fn active_file_load_location() -> (&'static str, String) {
+    ("replace", "-1".to_string())
+}
+
+/// Start playback at `start_idx` after the no-play queue loads (design D3).
+///
+/// Two writes, because mpv resolves the start entry through two different
+/// mechanisms: a *deferred* first start — the one taken when the loads land
+/// inside mpv's own initialization window, which is exactly where the
+/// pre-warmed player sits — comes from the `playlist-start` option, while a
+/// start over an already-playing instance comes from the `playlist-pos`
+/// property write. Leaving `playlist-start` at its default (0) makes the
+/// deferred start play entry 0, and after the D3 head-inserts entry 0 is the
+/// queue's first item: the wrong track plays from the first audible moment and
+/// the run only observes it afterwards. Setting `playlist-pos` on the fully
+/// built, still-idle playlist is what makes mpv load that entry when it is
+/// already settled. An armed audio-pipe startup pause stays in force until the
+/// run's PlaybackRestart gate releases it.
+fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
+    // The queue is fully loaded but idle: a failed start leaves the run
+    // silent, so neither write below may be a silent `let _`. The reassert
+    // below only reports a layout mismatch, which this is not.
+    warn_on_set_property(
+        mpv,
+        "start_queue_playback",
+        "playlist-start",
+        start_idx as i64,
+    );
+    warn_on_set_property(
+        mpv,
+        "start_queue_playback",
+        "playlist-pos",
+        start_idx as i64,
+    );
+}
+
+fn warn_on_set_property(mpv: &Mpv, caller: &str, name: &str, value: i64) {
+    if let Err(e) = mpv.set_property(name, value) {
+        log::warn!(
+            target: "player",
+            "{caller} {name}={value} failed: {}",
+            mpv_err_str(&e),
+        );
     }
 }
 
@@ -151,9 +204,12 @@ fn mpv_position_ticks(mpv: &Mpv) -> i64 {
 /// layout settles, so nothing else ever re-derives it: reports keep naming the
 /// requested item while mpv streams another one.
 ///
-/// Called once after the loads; a layout that is short an entry is reported
-/// rather than repaired, because a missing entry means the ordinal no longer
-/// names the item we think it does.
+/// Called once after the loads and the `start_queue_playback` step as a
+/// safety net: with design D3's load-then-play sequence the layout is
+/// already correct, so this must observe `Ok` and do nothing; a mismatch
+/// log after this change means the no-play load plan drifted. A layout that
+/// is short an entry is reported rather than repaired, because a missing
+/// entry means the ordinal no longer names the item we think it does.
 fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
     let mpv_count = mpv.get_property::<i64>("playlist-count").unwrap_or(-1);
     let mpv_pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);

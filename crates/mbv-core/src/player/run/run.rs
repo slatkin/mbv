@@ -8,6 +8,16 @@ fn command_quit_async(mpv: &Mpv) {
     }
 }
 
+/// Worst-case mpv event latency when a wakeup byte is lost.
+///
+/// libmpv's wakeup callback may fire *before* the event is deliverable by
+/// `wait_event`, so its byte can be drained while `wait_event(0.0)` still
+/// returns `None`. mpv then writes no second byte for that event, and the
+/// client blocks for the whole timeout — which is how a 2000 ms poll turned
+/// into "mpv takes 2 s to notice next/prev". The pipe stays a latency
+/// optimisation; this ceiling, not an idle interval, is the real contract.
+const WAKEUP_POLL_MS: i32 = 50;
+
 fn poll_wakeup(fd: RawFd, timeout_ms: i32) {
     let mut pfd = libc::pollfd {
         fd,
@@ -294,10 +304,10 @@ impl PlaybackRun {
 
                 if !had_event {
                     if wakeup_read_fd >= 0 {
-                        poll_wakeup(wakeup_read_fd, 2000);
+                        poll_wakeup(wakeup_read_fd, WAKEUP_POLL_MS);
                         drain_wakeup(wakeup_read_fd);
                     } else {
-                        std::thread::sleep(Duration::from_millis(50));
+                        std::thread::sleep(Duration::from_millis(WAKEUP_POLL_MS as u64));
                     }
                 }
             }

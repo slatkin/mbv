@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change reliable-daemon-playback-intents. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Immediate direct-daemon intent presentation
 For direct `mbvd` playback, the client SHALL visibly present a guarded playback intent on its first input before waiting for a daemon response. The guarded path SHALL be shared by keyboard and mouse dispatch and SHALL NOT require double-Space or double-Escape confirmation.
 
@@ -63,7 +65,7 @@ Stop SHALL be available while direct-daemon playback is pending or active. An ac
 - **THEN** the client still allows Stop to be dispatched
 
 ### Requirement: Navigation is single-flight
-Next and Previous SHALL each remain single-flight until the requested track change reaches Applied, Rejected, or Superseded. An equivalent repeated navigation input during that interval SHALL be coalesced.
+Next and Previous SHALL each remain single-flight until the requested track change reaches Applied, Rejected, or Superseded. An equivalent repeated navigation input during that interval SHALL be coalesced. The Playback run SHALL confirm the transition through the same TrackChanged observation path regardless of whether the Playback run uses a full mpv playlist or owner-driven active-file projection.
 
 #### Scenario: Repeated Next before confirmation
 - **WHEN** Next is invoked again before the first Next changes the confirmed current item
@@ -76,6 +78,16 @@ Next and Previous SHALL each remain single-flight until the requested track chan
 #### Scenario: Repeated Previous before confirmation
 - **WHEN** Previous is invoked again before the first Previous changes the confirmed current item
 - **THEN** the repeated request is coalesced and playback moves back by only one item
+
+#### Scenario: Active-file JumpTo confirms via TrackChanged
+- **WHEN** a JumpTo command completes in active-file mode (owner-driven single-item projection)
+- **THEN** the Playback run SHALL emit a TrackChanged observation carrying the transition's request identity and the target slot
+- **AND** the Player owner SHALL settle the transition and update the observed active slot from that observation
+
+#### Scenario: Next advances sequentially in active-file mode
+- **WHEN** the user presses Next three times in active-file mode, waiting for each to confirm before pressing again
+- **THEN** each Next SHALL advance the observed active slot by one position from the previous confirmation
+- **AND** the daemon SHALL resolve each subsequent Next from the updated observed position
 
 ### Requirement: Pause uses desired state
 Direct-daemon Pause/Resume control SHALL transmit an explicit desired paused state rather than a toggle operation. Repeated requests for the same unresolved desired state SHALL be coalesced.
@@ -109,3 +121,15 @@ The guarded playback-intent behavior SHALL apply to playback controlled through 
 - **WHEN** the TUI controls an attached Emby session instead of direct `mbvd` playback
 - **THEN** the new daemon intent lifecycle and idempotency policy are not applied to that session command
 
+### Requirement: Player-side mpv events are observed within a bounded latency
+
+The player run SHALL observe mpv-originated events — mpv's own playlist navigation, file end, and
+observed property changes — within a fixed ceiling, and that ceiling SHALL NOT depend on a wakeup
+notification being delivered for every event. A wakeup notification that arrives before its event is
+observable SHALL cost at most the ceiling rather than the run's whole idle wait.
+
+#### Scenario: mpv-initiated navigation is observed promptly
+
+- **WHEN** mpv changes the playing entry itself, as an mpv-window previous or next command does
+- **THEN** the run observes the change within the ceiling and its reporting follows the new entry,
+  instead of waiting out a multi-second idle deadline

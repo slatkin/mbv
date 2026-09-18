@@ -265,8 +265,11 @@ takes them.
 
 The playback panel's transport glyphs and seekbar SHALL resolve pointer input in every layout where
 the panel renders, using the geometry of the panel that was actually painted in the current frame:
-the queue column panel in queue-visible layouts and the right-column strip otherwise. A panel that is
-not painted SHALL resolve nothing.
+the queue column panel in queue-visible layouts and the right-column strip otherwise. Every
+transport glyph it paints, the previous control included, SHALL retain the geometry of its own glyph,
+so a click resolves that control's intent and no two controls share one region. A transport control
+whose action is unavailable SHALL paint in its unavailable role and SHALL NOT resolve an intent. A
+panel that is not painted SHALL resolve nothing.
 
 #### Scenario: Sidebar panel accepts clicks in queue-only
 
@@ -283,6 +286,12 @@ not painted SHALL resolve nothing.
 
 - **WHEN** the layout is library-only
 - **THEN** clicks on the strip's glyphs and seekbar SHALL resolve against the strip's painted geometry
+
+#### Scenario: Previous control accepts clicks
+
+- **WHEN** the panel is painted with the previous control available
+- **THEN** a click on the previous glyph SHALL emit the previous transport intent
+- **AND** its retained region SHALL NOT overlap the next control's
 
 #### Scenario: Collapsed panel resolves nothing
 

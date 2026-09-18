@@ -59,6 +59,7 @@ pub struct QueuePlaybackPanel {
     play_pause_area: Rect,
     stop_area: Rect,
     next_area: Rect,
+    prev_area: Rect,
     seekbar_area: Rect,
     /// Panel-local marquee state (the title row's scrolling title).
     marquee_text: String,
@@ -84,11 +85,13 @@ impl QueuePlaybackPanel {
                 use_nerd_fonts: false,
                 stop_available: false,
                 next_available: false,
+                prev_available: false,
             },
             transport_area: None,
             play_pause_area: Rect::default(),
             stop_area: Rect::default(),
             next_area: Rect::default(),
+            prev_area: Rect::default(),
             seekbar_area: Rect::default(),
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
@@ -125,6 +128,7 @@ impl QueuePlaybackPanel {
             self.play_pause_area = Rect::default();
             self.stop_area = Rect::default();
             self.next_area = Rect::default();
+            self.prev_area = Rect::default();
             self.seekbar_area = Rect::default();
         }
         self.transport_area = painted;
@@ -134,6 +138,12 @@ impl QueuePlaybackPanel {
     #[cfg(test)]
     pub(in crate::app) fn transport_hits(&self) -> (Rect, Rect) {
         (self.play_pause_area, self.seekbar_area)
+    }
+
+    /// Test-only: the retained prev/next transport hit rects.
+    #[cfg(test)]
+    pub(in crate::app) fn transport_nav_hits(&self) -> (Rect, Rect) {
+        (self.prev_area, self.next_area)
     }
 
     /// Test-only: the sync-projected transport area.
@@ -161,6 +171,11 @@ impl QueuePlaybackPanel {
                 if self.stop_area.contains(point) && self.transport.stop_available =>
             {
                 Some(Msg::Playback(PlaybackRequest::Stop))
+            }
+            MouseEventKind::Down(MouseButton::Left)
+                if self.prev_area.contains(point) && self.transport.prev_available =>
+            {
+                Some(Msg::Playback(PlaybackRequest::Previous))
             }
             MouseEventKind::Down(MouseButton::Left)
                 if self.next_area.contains(point) && self.transport.next_available =>
@@ -242,6 +257,7 @@ impl Component for QueuePlaybackPanel {
                 use_nerd_fonts: self.transport.use_nerd_fonts,
                 stop_available: self.transport.stop_available,
                 next_available: self.transport.next_available,
+                prev_available: self.transport.prev_available,
                 status_indicators: self.transport.status_indicators.clone(),
                 title_parts: self.transport.title_parts.clone(),
                 // The queue column never shows the idle feed title: while
@@ -256,6 +272,7 @@ impl Component for QueuePlaybackPanel {
         self.play_pause_area = playback.play_pause_area;
         self.stop_area = playback.stop_area;
         self.next_area = playback.next_area;
+        self.prev_area = playback.prev_area;
         self.seekbar_area = playback.seekbar_area;
     }
 
@@ -560,6 +577,21 @@ mod tests {
         assert!(matches!(
             panel.on(&click(column, seekbar.y)),
             Some(Msg::Playback(PlaybackRequest::SeekTo(f))) if (f - 0.5).abs() < 1e-6
+        ));
+        // Prev and next keep distinct painted rects and resolve to their own
+        // intents (the prev control was painted without a hit rect until now).
+        panel.transport.prev_available = true;
+        panel.transport.next_available = true;
+        let (prev, next) = panel.transport_nav_hits();
+        assert!(prev.width > 0 && next.width > 0);
+        assert!(prev.right() <= next.x, "prev={prev:?} next={next:?}");
+        assert!(matches!(
+            panel.on(&click(prev.x, prev.y)),
+            Some(Msg::Playback(PlaybackRequest::Previous))
+        ));
+        assert!(matches!(
+            panel.on(&click(next.x, next.y)),
+            Some(Msg::Playback(PlaybackRequest::Next))
         ));
         // A collapsed panel (no transport painted) resolves nothing.
         panel.set_transport_area(None);

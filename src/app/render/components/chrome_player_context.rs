@@ -34,6 +34,7 @@ impl App {
             PanelMode::QueueOnly => palette::Surface::QueueOnlyPlaybackPanel,
             _ => palette::Surface::PlaybackPanel,
         };
+        let (prev_available, next_available) = self.transport_prev_next_available();
         PlaybackRenderContext {
             area,
             playback,
@@ -46,7 +47,8 @@ impl App {
             use_nerd_fonts: self.use_nerd_fonts,
             stop_available: self.connected_session_id.is_some()
                 || self.player.status.lock().unwrap().active,
-            next_available: self.transport_prev_next_available().1,
+            next_available,
+            prev_available,
             status_indicators: self.build_status_indicator_spans(),
             title_parts: self.active_playback_title_parts(),
             idle_feed_title: self.idle_feed.as_ref().and_then(|feed| {
