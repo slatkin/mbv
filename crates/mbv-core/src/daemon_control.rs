@@ -399,6 +399,17 @@ fn handle_ctrl(
                 crate::playback_queue::QueueRevision::default(),
             );
             reset_slot_jumps(transitions, queued_transition_origin);
+            // A new queue invalidates the previous playback observation (design
+            // D2): clear it on both the shared snapshot and the owner core so
+            // Next/Previous fall back to the new queue's active slot until the
+            // first TrackChanged observation arrives. Momentary `None` is
+            // correct — the observed slot follows playback, not the replace.
+            // The shared clear happens with the reset so the broadcast below is
+            // already coherent. The owner-core clear sits at the end of the arm
+            // because `queue`/`source`/`transitions` are destructured from
+            // `owner.core` and stay borrowed through the submit path; nothing
+            // observes the owner core in between within this synchronous arm.
+            *shared_queue.observed_active_slot.lock().unwrap() = None;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
@@ -409,6 +420,7 @@ fn handle_ctrl(
             let c = Arc::new(client.lock().unwrap().clone());
             let headless = player.headless_for(&c, all_audio);
             player.submit_queue_slots(queue_slots, next_cursor, Some(c), headless, 100);
+            owner.core.note_observed_active_slot(None);
         }
         CtrlCmd::UnifiedQueueAppend { items } => {
             if items.is_empty() {
