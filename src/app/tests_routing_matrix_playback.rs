@@ -7,7 +7,7 @@ use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, Rou
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
-fn playback_gating_space_first_press_falls_through() {
+fn playback_gating_space_falls_through_to_consumed_leaf() {
     let leaf = Some(Msg::Shell(ShellRequest::Quit));
     let out = fold_tick(
         leaf,
@@ -18,11 +18,11 @@ fn playback_gating_space_first_press_falls_through() {
     assert_eq!(
         out.len(),
         1,
-        "first Space press must fall through (browse leaf keeps its request)"
+        "consumed Space press must fall through (browse leaf keeps its request)"
     );
 }
 #[test]
-fn playback_gating_esc_first_press_falls_through() {
+fn playback_gating_esc_falls_through_to_consumed_leaf() {
     let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryBack));
     let out = fold_tick(
         leaf,
@@ -34,7 +34,7 @@ fn playback_gating_esc_first_press_falls_through() {
     assert!(matches!(&out[0], Msg::Shell(ShellRequest::EmbyLibraryBack)));
 }
 #[test]
-fn playback_gating_space_second_press_claims_toggle() {
+fn playback_gating_space_claims_deferred_toggle() {
     let snapshot = active_snapshot();
     assert_eq!(
         resolve_router_outcome_with_focused(key(KeyCode::Char(' ')), &snapshot, None, &default_keybinds()),
@@ -42,7 +42,7 @@ fn playback_gating_space_second_press_claims_toggle() {
     );
 }
 #[test]
-fn playback_gating_esc_second_press_claims_stop() {
+fn playback_gating_esc_claims_deferred_stop() {
     let snapshot = active_snapshot();
     assert_eq!(
         resolve_router_outcome_with_focused(key(KeyCode::Esc), &snapshot, None, &default_keybinds()),

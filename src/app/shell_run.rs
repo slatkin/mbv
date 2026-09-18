@@ -574,8 +574,10 @@ impl Model {
                 if let RouterOutcome::Command(command) = &router {
                     quit |= self.dispatch_router_command(command.clone());
                 }
-                quit |= self
-                    .apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
+                // A deferred candidate fires on an unhandled press; its
+                // commands never quit, so it does not feed the loop's quit
+                // flag.
+                self.apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
                 for msg in messages {
                     if self.handle_terminal_message(msg, &mut music_resize, &mut tv_resize) {
                         quit = true;

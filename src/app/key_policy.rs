@@ -22,7 +22,7 @@ pub(super) struct RouterSnapshot {
     pub blocking_overlay_open: bool,
     pub help_overlay_open: bool,
     /// Whether the (non-blocking) Sessions sidebar is mounted. When open, Esc
-    /// closes it and takes precedence over the double-Escape playback stop,
+    /// closes it and takes precedence over the Escape playback stop,
     /// matching the legacy context stack (Sessions before Playback).
     pub sessions_sidebar_open: bool,
     pub context_menu_open: bool,
@@ -591,7 +591,7 @@ mod tests {
     }
 
     #[test]
-    fn sessions_sidebar_escape_precedes_double_escape_playback_stop() {
+    fn sessions_sidebar_escape_precedes_playback_stop() {
         let mut armed = snapshot();
         armed.player_active = true;
         assert_eq!(

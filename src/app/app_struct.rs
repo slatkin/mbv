@@ -136,8 +136,6 @@ pub struct App {
     pub(super) layout: layout::AppLayout,
     pub(super) terminal_width: u16,
     pub(super) terminal_height: u16,
-    pub(super) last_space_press: Option<Instant>,
-    pub(super) last_esc_press: Option<Instant>,
     /// Shell handoff for a modal raised by App-owned effects. The mounted
     /// component owns the modal after the next Model tick.
     pub(super) pending_overlay: Option<super::types_overlay::OverlayRequest>,

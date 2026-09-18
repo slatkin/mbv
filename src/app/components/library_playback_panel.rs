@@ -10,7 +10,7 @@
 //! `PlaybackProjection` — the shared transport projection both playback
 //! panels consume — is also defined here.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use ratatui::layout::Rect;
 use ratatui::style::Color;
@@ -55,8 +55,6 @@ pub(in crate::app) struct PlaybackProjection {
 pub struct LibraryPlaybackPanel {
     projection: PlaybackProjection,
     props: Props,
-    last_space: Option<Instant>,
-    last_escape: Option<Instant>,
     play_pause_area: Rect,
     stop_area: Rect,
     next_area: Rect,
@@ -84,8 +82,6 @@ impl LibraryPlaybackPanel {
                 next_available: false,
             },
             props: Props::default(),
-            last_space: None,
-            last_escape: None,
             play_pause_area: Rect::default(),
             stop_area: Rect::default(),
             next_area: Rect::default(),
@@ -112,14 +108,6 @@ impl LibraryPlaybackPanel {
         self.projection.title_parts.clone()
     }
 
-    fn double_tap(last: &mut Option<Instant>) -> bool {
-        let now = Instant::now();
-        let result =
-            last.is_some_and(|previous| now.duration_since(previous) < Duration::from_millis(300));
-        *last = (!result).then_some(now);
-        result
-    }
-
     fn key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         match self.key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
@@ -138,15 +126,16 @@ impl LibraryPlaybackPanel {
         }
     }
 
+    /// One semantic intent per press: `Space` and `Esc` fire their transport
+    /// request immediately when the panel holds focus; the shell's deferred
+    /// candidate only covers presses the leaf did not consume.
     fn key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if key.modifiers != KeyModifiers::NONE {
             return None;
         }
         let request = match key.code {
-            Key::Char(' ') if Self::double_tap(&mut self.last_space) => {
-                PlaybackRequest::TogglePlayPause
-            }
-            Key::Esc if Self::double_tap(&mut self.last_escape) => PlaybackRequest::Stop,
+            Key::Char(' ') => PlaybackRequest::TogglePlayPause,
+            Key::Esc => PlaybackRequest::Stop,
             Key::Left => PlaybackRequest::Previous,
             Key::Right => PlaybackRequest::Next,
             Key::Char('m') => PlaybackRequest::ToggleMute,
@@ -477,6 +466,25 @@ mod tests {
         assert!(matches!(
             panel.on(&key(Key::Right)),
             Some(Msg::Playback(PlaybackRequest::Next))
+        ));
+    }
+
+    /// One press fires the transport intent — no repeated-press window
+    /// remains (task 4.2 / semantic-input-arbitration).
+    #[test]
+    fn space_and_escape_fire_their_transport_intent_on_one_press() {
+        let mut panel = LibraryPlaybackPanel::new();
+        assert!(matches!(
+            panel.on(&key(Key::Char(' '))),
+            Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
+        ));
+        assert!(matches!(
+            panel.on(&key(Key::Char(' '))),
+            Some(Msg::Playback(PlaybackRequest::TogglePlayPause))
+        ));
+        assert!(matches!(
+            panel.on(&key(Key::Esc)),
+            Some(Msg::Playback(PlaybackRequest::Stop))
         ));
     }
 

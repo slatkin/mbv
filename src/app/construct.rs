@@ -134,8 +134,6 @@ impl App {
             terminal_width: 80,
             terminal_height: 24,
 
-            last_space_press: None,
-            last_esc_press: None,
             pending_overlay: None,
             pending_exit_message: None,
             pending_delete_slot: None,

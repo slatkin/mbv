@@ -12,13 +12,16 @@
 //! plus the required U2 coverage: blocking-overlay swallow, router
 //! `Command`/`Swallow` discarding the leaf's message, `FallThrough` leaving
 //! exactly one leaf message standing, Queue-vs-Library focus routing, playback
-//! gating, and the double-tap first-press fall-through / second-press claim.
+//! gating, and the deferred playback candidates (a consumed chord falls
+//! through to the leaf; the shell's candidate fires only on an unhandled
+//! press).
 //!
 //! The matrix began against the empty policy; global rows now assert the live
 //! `Command`/`Swallow` outcomes while the remaining migration rows continue to
 //! pin their deliberate `FallThrough` behavior until their owning task moves
-//! the effect into the router. Playback rows additionally pin the live
-//! first-press FallThrough / second-press Command policy.
+//! the effect into the router. Playback rows additionally pin the deferred
+//! candidate policy: a consumed chord falls through to the leaf, and the
+//! candidate resolves as `Deferred`.
 
 use crate::app::components::{ComponentId, Msg, TerminalObserverEvent};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};

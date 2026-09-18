@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::action::Command;
 use super::components::msg::AlbumCursorKind;
@@ -414,6 +414,13 @@ impl Model {
     }
 
     /// Apply a deferred candidate after the focused leaf has been arbitrated.
+    ///
+    /// A deferred candidate carries no timing state (semantic-input-arbitration):
+    /// an unhandled press dispatches the command on that press; a consumed press
+    /// cancels the candidate and records nothing, so a later unhandled press
+    /// behaves as a first press. Returns whether the candidate fired. The
+    /// shell's quit signal is unaffected: deferred candidates are only ever
+    /// `TogglePlayPause`/`Stop`, which never quit.
     pub(super) fn apply_deferred_candidate(
         &mut self,
         router: &RouterOutcome,
@@ -422,22 +429,12 @@ impl Model {
         let RouterOutcome::Deferred(command) = router else {
             return false;
         };
-        let slot = match command {
-            Command::TogglePlayPause => &mut self.app.last_space_press,
-            Command::Stop => &mut self.app.last_esc_press,
-            _ => return false,
-        };
-        let completed = slot.is_some_and(|pressed| pressed.elapsed() < Duration::from_millis(300));
         if leaf_consumed {
-            *slot = None;
-            false
-        } else if completed {
-            *slot = None;
-            self.dispatch_router_command(command.clone())
-        } else {
-            *slot = Some(Instant::now());
-            false
+            return false;
         }
+        let quit = self.dispatch_router_command(command.clone());
+        debug_assert!(!quit, "deferred candidates never quit");
+        true
     }
 
     pub(in crate::app) fn dispatch_router_command(&mut self, command: Command) -> bool {

@@ -77,48 +77,40 @@ fn active_queue_harness() -> TickHarness {
     TickHarness::new(app)
 }
 
+/// Unhandled `Space` fires the playback candidate on the press itself: no
+/// repeated-press window arms, and every unhandled press fires again
+/// (semantic-input-arbitration, "Unhandled Space fires immediately").
 #[test]
-fn live_tick_characterizes_space_double_tap_lifecycle() {
+fn live_tick_unhandled_space_fires_playback_on_the_press() {
     let mut harness = active_queue_harness();
 
     harness.inject(key(Key::Char(' ')));
     let first = harness.step();
     assert!(matches!(first.router, RouterOutcome::Deferred(_)));
-    assert!(harness.model().app.last_space_press.is_some());
+    assert!(first.deferred_fired);
 
-    harness.model_mut().app.last_space_press = Some(Instant::now());
     harness.inject(key(Key::Char(' ')));
     let second = harness.step();
-    assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::TogglePlayPause));
-    assert!(harness.model().app.last_space_press.is_none());
-
-    harness.model_mut().app.last_space_press = Some(Instant::now() - Duration::from_secs(1));
-    harness.inject(key(Key::Char(' ')));
-    let expired = harness.step();
-    assert!(matches!(expired.router, RouterOutcome::Deferred(_)));
-    assert!(harness.model().app.last_space_press.is_some());
+    assert!(matches!(second.router, RouterOutcome::Deferred(_)));
+    assert!(second.deferred_fired, "a later unhandled press fires again as a first press");
 }
 
+/// Unhandled `Esc` fires the stop candidate on the press itself (the leaf's
+/// own consumption — e.g. the playback panel's `Stop` — suppresses it; see
+/// the Visual-mode records in `tests_tick_integration_home.rs`).
 #[test]
-fn live_tick_characterizes_escape_double_tap_lifecycle() {
+fn live_tick_unhandled_escape_fires_stop_on_the_press() {
     let mut harness = active_queue_harness();
 
     harness.inject(key(Key::Esc));
     let first = harness.step();
-    assert!(matches!(first.router, RouterOutcome::Deferred(_)));
-    assert!(harness.model().app.last_esc_press.is_some());
+    assert_eq!(first.router, RouterOutcome::Deferred(crate::app::action::Command::Stop));
+    assert!(first.deferred_fired);
 
-    harness.model_mut().app.last_esc_press = Some(Instant::now());
     harness.inject(key(Key::Esc));
     let second = harness.step();
     assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::Stop));
-    assert!(harness.model().app.last_esc_press.is_none());
-
-    harness.model_mut().app.last_esc_press = Some(Instant::now() - Duration::from_secs(1));
-    harness.inject(key(Key::Esc));
-    let expired = harness.step();
-    assert!(matches!(expired.router, RouterOutcome::Deferred(_)));
-    assert!(harness.model().app.last_esc_press.is_some());
+    assert!(second.deferred_fired, "a later unhandled press fires again as a first press");
 }
 
 #[test]
