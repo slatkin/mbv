@@ -27,9 +27,9 @@ pub enum SocketEvent {
     },
     /// Socket.IO CONNECT acknowledgement (`40{...}`).
     ConnectAck,
-    /// `42["authenticated"]` — auth accepted.
+    /// `42["init", {...}]` — auth accepted (ABS emits `init` on success).
     Authenticated,
-    /// `42["invalid_token"]` — auth rejected.
+    /// `42["auth_failed", {...}]` — auth rejected.
     InvalidToken,
     /// `42["user_item_progress_updated", {...}]`.
     ProgressUpdated(AudiobookshelfProgress),
@@ -127,8 +127,10 @@ fn parse_event(args_json: &str) -> Option<SocketEvent> {
     let args = v.as_array()?;
     let name = args.first()?.as_str()?;
     match name {
-        "authenticated" => Some(SocketEvent::Authenticated),
-        "invalid_token" => Some(SocketEvent::InvalidToken),
+        // Current ABS server events (SocketAuthority.js): `init` after a
+        // successful auth, `auth_failed` after a rejected token.
+        "init" => Some(SocketEvent::Authenticated),
+        "auth_failed" => Some(SocketEvent::InvalidToken),
         "user_item_progress_updated" => {
             let payload = args.get(1)?;
             let progress = decode_progress(payload)?;
@@ -163,10 +165,12 @@ fn decode_progress(payload: &Value) -> Option<AudiobookshelfProgress> {
 /// shutdown.
 ///
 /// The thread handles:
-/// - Engine.IO ping/pong heartbeat using the server's declared `pingInterval`/
-///   `pingTimeout` from the `open` packet.
+/// - Engine.IO ping/pong heartbeat: in protocol v4 the *server* pings every
+///   `pingInterval` and the client replies pong; the thread also closes a
+///   connection that has seen no data for `pingInterval + pingTimeout`.
 /// - Socket.IO CONNECT (`40`) on initial connection and every reconnect.
-/// - Auth emit (`42["auth", {"token": ...}]`) after each connect-ack.
+/// - Auth emit (`42["auth", "<token>"]` — the server reads the token as the
+///   first event argument) after each connect-ack.
 /// - Reconnect with exponential backoff capped at 60s.
 pub fn start(
     ws_url: String,
@@ -212,7 +216,6 @@ pub fn start(
                     log::info!(target: "audiobookshelf_socket", "connected");
 
                     let mut last_activity = Instant::now();
-                    let mut last_ping = Instant::now();
 
                     'conn: loop {
                         if shutdown_rx.try_recv().is_ok() {
@@ -220,19 +223,11 @@ pub fn start(
                             break 'conn;
                         }
 
-                        // Engine.IO heartbeat: send a ping every ping_interval
-                        // (the server also pings us; we reply in the read
-                        // match below).
-                        if last_ping.elapsed() >= ping_interval {
-                            if socket.send(Message::Text("2".into())).is_err() {
-                                log::warn!(
-                                    target: "audiobookshelf_socket",
-                                    "ping send failed, reconnecting"
-                                );
-                                break 'conn;
-                            }
-                            last_ping = Instant::now();
-                        }
+                        // Engine.IO v4 heartbeat: the SERVER pings every
+                        // `ping_interval` and we reply pong in the read match
+                        // below; a client-sent ping is a protocol error that
+                        // makes the server close the connection
+                        // ("invalid heartbeat direction").
 
                         // Detect stale connection: no data for longer than
                         // ping_interval + ping_timeout.
@@ -271,10 +266,10 @@ pub fn start(
                                         SocketEvent::ConnectAck => {
                                             // Authenticate immediately after the
                                             // Socket.IO connect acknowledgement.
-                                            let auth_payload = serde_json::json!([
-                                                "auth",
-                                                { "token": token }
-                                            ]);
+                                            // The server reads the token as the
+                                            // first event argument — a bare
+                                            // string, not an object.
+                                            let auth_payload = serde_json::json!(["auth", token]);
                                             let _ = socket.send(Message::Text(
                                                 format!("42{auth_payload}").into(),
                                             ));
@@ -419,17 +414,17 @@ mod tests {
         assert_eq!(parse(msg), None);
     }
 
-    // -- Authenticated / InvalidToken ----------------------------------------
+    // -- Authenticated / InvalidToken (ABS emits `init` / `auth_failed`) -----
 
     #[test]
     fn authenticated_event() {
-        let msg = r#"42["authenticated"]"#;
+        let msg = r#"42["init",{"userId":"u1","username":"slatkin"}]"#;
         assert_eq!(parse(msg), Some(SocketEvent::Authenticated));
     }
 
     #[test]
     fn invalid_token_event() {
-        let msg = r#"42["invalid_token"]"#;
+        let msg = r#"42["auth_failed",{"message":"Invalid token"}]"#;
         assert_eq!(parse(msg), Some(SocketEvent::InvalidToken));
     }
 
