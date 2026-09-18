@@ -19,6 +19,7 @@ pub(in crate::app) struct PlaybackStripAreas {
     pub(in crate::app) play_pause_area: Rect,
     pub(in crate::app) stop_area: Rect,
     pub(in crate::app) next_area: Rect,
+    pub(in crate::app) prev_area: Rect,
 }
 
 pub(in crate::app) struct PlaybackRenderContext<'a> {
@@ -36,6 +37,7 @@ pub(in crate::app) struct PlaybackRenderContext<'a> {
     pub(in crate::app) use_nerd_fonts: bool,
     pub(in crate::app) stop_available: bool,
     pub(in crate::app) next_available: bool,
+    pub(in crate::app) prev_available: bool,
     pub(in crate::app) status_indicators: Option<Vec<Span<'static>>>,
     /// The typed now-playing title parts with their closed roles (D6); the
     /// painter resolves a role to a colour, never the producer. `None` when
@@ -233,7 +235,11 @@ fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGly
     );
     let prev = (
         if ctx.use_nerd_fonts { "\u{f048}" } else { "<<" },
-        palette::TEXT_STRONG,
+        if ctx.prev_available {
+            palette::TEXT_STRONG
+        } else {
+            palette::TEXT_MUTED
+        },
     );
     let next = (
         if ctx.use_nerd_fonts { "\u{f051}" } else { ">>" },
@@ -295,6 +301,12 @@ fn render_transport_glyphs(
         ));
         spans.push(Span::raw(" "));
         x += 1;
+        ctx.playback.prev_area = Rect {
+            x,
+            y: row_y,
+            width: prev_w,
+            height: 1,
+        };
         spans.push(Span::styled(
             glyphs.prev.0,
             Style::default().fg(glyphs.prev.1),
@@ -314,6 +326,7 @@ fn render_transport_glyphs(
         spans.push(Span::raw(" "));
     } else {
         ctx.playback.stop_area = Rect::default();
+        ctx.playback.prev_area = Rect::default();
         ctx.playback.next_area = Rect::default();
     }
     spans
@@ -403,6 +416,7 @@ fn render_queue_title_rows(
     if upper.height == 0 || upper.width == 0 || lower.height == 0 || lower.width == 0 {
         ctx.playback.play_pause_area = Rect::default();
         ctx.playback.stop_area = Rect::default();
+        ctx.playback.prev_area = Rect::default();
         ctx.playback.next_area = Rect::default();
         return;
     }
@@ -481,6 +495,7 @@ pub(in crate::app) fn render_title_row(
     if area.height == 0 || area.width == 0 {
         ctx.playback.play_pause_area = Rect::default();
         ctx.playback.stop_area = Rect::default();
+        ctx.playback.prev_area = Rect::default();
         ctx.playback.next_area = Rect::default();
         return;
     }
@@ -641,6 +656,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
+            prev_available: false,
             status_indicators: None,
             title_parts: Some(parts),
             idle_feed_title: None,
@@ -709,6 +725,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: true,
             next_available: true,
+            prev_available: true,
             status_indicators: None,
             title_parts: None,
             idle_feed_title: None,
@@ -757,6 +774,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: true,
             next_available: true,
+            prev_available: true,
             status_indicators: None,
             title_parts: None,
             idle_feed_title: None,
@@ -827,6 +845,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
+            prev_available: false,
             status_indicators: None,
             title_parts: Some(parts),
             idle_feed_title: None,
@@ -897,6 +916,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
+            prev_available: false,
             status_indicators: Some(vec![Span::raw("CODEC "), Span::raw("FLAC")]),
             title_parts: None,
             idle_feed_title: None,
@@ -985,6 +1005,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
+            prev_available: false,
             status_indicators: Some(cluster),
             title_parts: None,
             idle_feed_title: None,

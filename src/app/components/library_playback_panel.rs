@@ -50,6 +50,7 @@ pub(in crate::app) struct PlaybackProjection {
     pub use_nerd_fonts: bool,
     pub stop_available: bool,
     pub next_available: bool,
+    pub prev_available: bool,
 }
 
 pub struct LibraryPlaybackPanel {
@@ -58,6 +59,7 @@ pub struct LibraryPlaybackPanel {
     play_pause_area: Rect,
     stop_area: Rect,
     next_area: Rect,
+    prev_area: Rect,
     seekbar_area: Rect,
     marquee_text: String,
     marquee_started_at: Instant,
@@ -80,11 +82,13 @@ impl LibraryPlaybackPanel {
                 use_nerd_fonts: false,
                 stop_available: false,
                 next_available: false,
+                prev_available: false,
             },
             props: Props::default(),
             play_pause_area: Rect::default(),
             stop_area: Rect::default(),
             next_area: Rect::default(),
+            prev_area: Rect::default(),
             seekbar_area: Rect::default(),
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
@@ -160,6 +164,11 @@ impl LibraryPlaybackPanel {
                 Some(Msg::Playback(PlaybackRequest::Stop))
             }
             MouseEventKind::Down(MouseButton::Left)
+                if self.prev_area.contains(point) && self.projection.prev_available =>
+            {
+                Some(Msg::Playback(PlaybackRequest::Previous))
+            }
+            MouseEventKind::Down(MouseButton::Left)
                 if self.next_area.contains(point) && self.projection.next_available =>
             {
                 Some(Msg::Playback(PlaybackRequest::Next))
@@ -210,6 +219,7 @@ impl Component for LibraryPlaybackPanel {
                 use_nerd_fonts: self.projection.use_nerd_fonts,
                 stop_available: self.projection.stop_available,
                 next_available: self.projection.next_available,
+                prev_available: self.projection.prev_available,
                 status_indicators: self.projection.status_indicators.clone(),
                 title_parts: self.projection.title_parts.clone(),
                 idle_feed_title: self.projection.idle_feed_title.clone(),
@@ -220,6 +230,7 @@ impl Component for LibraryPlaybackPanel {
         self.play_pause_area = playback.play_pause_area;
         self.stop_area = playback.stop_area;
         self.next_area = playback.next_area;
+        self.prev_area = playback.prev_area;
         self.seekbar_area = playback.seekbar_area;
     }
 
@@ -285,6 +296,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: true,
             next_available: true,
+            prev_available: true,
         });
         let mut terminal = Terminal::new(TestBackend::new(60, 12)).unwrap();
         terminal
@@ -325,6 +337,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: true,
             next_available: true,
+            prev_available: true,
         }
     }
 
@@ -460,6 +473,24 @@ mod tests {
     }
 
     #[test]
+    fn prev_and_next_clicks_resolve_against_their_own_painted_areas() {
+        let mut panel = painted_panel();
+        let (prev, next) = (panel.prev_area, panel.next_area);
+        // Both glyphs paint and keep distinct hit rects: the prev control was
+        // painted without one for as long as it has existed.
+        assert!(prev.width > 0 && next.width > 0);
+        assert!(prev.right() <= next.x, "prev={prev:?} next={next:?}");
+        assert!(matches!(
+            panel.on(&click(prev.x, prev.y)),
+            Some(Msg::Playback(PlaybackRequest::Previous))
+        ));
+        assert!(matches!(
+            panel.on(&click(next.x, next.y)),
+            Some(Msg::Playback(PlaybackRequest::Next))
+        ));
+    }
+
+    #[test]
     fn playback_chrome_transport_intent_is_typed_and_player_free() {
         let mut panel = LibraryPlaybackPanel::new();
         assert!(panel.on(&key(Key::Char('m'))).is_some());
@@ -503,6 +534,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
+            prev_available: false,
         });
         let mut terminal = Terminal::new(TestBackend::new(40, 4)).unwrap();
         terminal

@@ -106,6 +106,7 @@ fn title_row_paints_the_plain_next_control() {
     let mut app = make_app_stub();
     app.use_nerd_fonts = false;
     let next_glyph = ">>";
+    let prev_glyph = "<<";
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
@@ -139,6 +140,7 @@ fn title_row_paints_the_plain_next_control() {
     let line = buffer_to_string(&term).lines().next().unwrap().to_string();
     assert!(line.contains(next_glyph));
     assert_eq!(layout.next_area.width, next_glyph.width() as u16);
+    assert_eq!(layout.prev_area.width, prev_glyph.width() as u16);
 }
 
 #[test]
@@ -146,6 +148,7 @@ fn title_row_paints_the_nerd_font_next_control() {
     let mut app = make_app_stub();
     app.use_nerd_fonts = true;
     let next_glyph = "\u{f051}";
+    let prev_glyph = "\u{f048}";
     {
         let mut st = app.player.status.lock().unwrap();
         st.active = true;
@@ -179,6 +182,7 @@ fn title_row_paints_the_nerd_font_next_control() {
     let line = buffer_to_string(&term).lines().next().unwrap().to_string();
     assert!(line.contains(next_glyph));
     assert_eq!(layout.next_area.width, next_glyph.width() as u16);
+    assert_eq!(layout.prev_area.width, prev_glyph.width() as u16);
 }
 
 /// Task 4.1 (D10): the right column reserves the playback strip's rows only

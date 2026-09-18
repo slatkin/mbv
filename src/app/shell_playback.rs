@@ -76,6 +76,7 @@ impl Model {
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
             stop_available: self.app.connected_session_id.is_some() || state.active,
+            prev_available: self.app.transport_prev_next_available().0,
             next_available: self.app.transport_prev_next_available().1,
         }
     }
