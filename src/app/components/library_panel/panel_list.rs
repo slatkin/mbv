@@ -1,7 +1,7 @@
 //! The `PanelList` implementation (task 5.8, design D3): one object-safe
 //! implementation over the shared media-list carrier for every `Target`.
 //! The panel drives the carrier through this surface — the viewport clamp
-//! (`sync_viewport`), the paint policy, the slot-rect view, and the
+//! (`clamp_viewport`), the paint policy, the slot-rect view, and the
 //! retained-geometry reads — while typed target resolution stays on the
 //! carrier's own surface, so no per-destination `ListSlot` arm can grow.
 
@@ -24,7 +24,7 @@ fn zebra_stripe(surface: Surface) -> ZebraStripe {
 }
 
 impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
-    fn sync_viewport(&mut self, viewport_height: usize) {
+    fn clamp_viewport(&mut self, viewport_height: usize) {
         // The carrier's own viewport clamp (no same-named inherent pair, so
         // no recursion ambiguity to dodge).
         self.clamp_viewport(viewport_height);
@@ -74,8 +74,8 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
 /// `ListSlot::Media` does — the search control keeps only its query, pool,
 /// scoring, and debounce.
 impl PanelList for InlineSearch {
-    fn sync_viewport(&mut self, viewport_height: usize) {
-        PanelList::sync_viewport(self.results_mut(), viewport_height);
+    fn clamp_viewport(&mut self, viewport_height: usize) {
+        PanelList::clamp_viewport(self.results_mut(), viewport_height);
     }
 
     fn clear_selection(&mut self) {
@@ -168,7 +168,7 @@ mod panel_list_tests {
     /// surface: the same fixed-row owner remains active while its geometry
     /// changes, preserving selection and clamping on view.
     #[test]
-    fn sync_viewport_preserves_the_shared_owner_across_the_transition() {
+    fn clamp_viewport_preserves_the_shared_owner_across_the_transition() {
         let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("a"), item("b"), item("c")]);
         carrier.select_target(&"b".to_string());
@@ -191,7 +191,7 @@ mod panel_list_tests {
         let wide_selected = carrier.wide().current_selected_target().cloned();
 
         // The panel keeps the same fixed-row owner while geometry changes.
-        PanelList::sync_viewport(&mut carrier, 2);
+        PanelList::clamp_viewport(&mut carrier, 2);
         assert_eq!(
             carrier.selected_target().cloned(),
             wide_selected,
@@ -219,7 +219,7 @@ mod panel_list_tests {
             "the shared owner's selection is preserved across the transition"
         );
         // Back to Wide: the owner is reconfigured again, not copied.
-        PanelList::sync_viewport(&mut carrier, 2);
+        PanelList::clamp_viewport(&mut carrier, 2);
         assert_eq!(carrier.selected_target().cloned(), wide_selected);
     }
 }

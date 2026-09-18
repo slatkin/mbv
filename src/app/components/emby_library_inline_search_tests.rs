@@ -126,7 +126,7 @@ fn browser_owner_search_pointer_resolves_against_the_latest_repaint() {
         terminal
             .draw(|f| {
                 let search = owner.inline_search_mut();
-                search.sync_viewport(rect.height as usize);
+                search.clamp_viewport(rect.height as usize);
                 search.set_paint_policy(PanelListPaintPolicy::Wide { focused: true });
                 search.set_geometry(rect, rect);
                 search.view(f, rect);
@@ -221,7 +221,7 @@ fn browser_owner_search_pointer_resolves_against_painted_rows() {
     terminal
         .draw(|f| {
             let search = owner.inline_search_mut();
-            search.sync_viewport(row_area.height as usize);
+            search.clamp_viewport(row_area.height as usize);
             search.set_paint_policy(PanelListPaintPolicy::Wide { focused: true });
             search.set_geometry(row_area, row_area);
             search.view(f, row_area);

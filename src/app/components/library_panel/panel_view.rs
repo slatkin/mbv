@@ -57,7 +57,7 @@ impl Component for LibraryPanel {
         let mut overlay_area = area;
         // One breakpoint predicate (design D4): `wide_hero_fits` stays the
         // single Wide/Narrow choice; the panel clamps the list's viewport
-        // through the list's `sync_viewport` inside each skeleton.
+        // through the list's `clamp_viewport` inside each skeleton.
         if wide_hero_fits(area) {
             if let Some(geometry) = render_wide_skeleton(
                 frame,

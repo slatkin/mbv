@@ -33,7 +33,7 @@ impl StubList {
 }
 
 impl PanelList for StubList {
-    fn sync_viewport(&mut self, _viewport_height: usize) {}
+    fn clamp_viewport(&mut self, _viewport_height: usize) {}
 
     fn set_paint_policy(
         &mut self,

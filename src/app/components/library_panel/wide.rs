@@ -228,7 +228,7 @@ pub(in crate::app) fn paint_browser_pane(
                 };
                 render_placeholder(f, list_area, msg);
             } else {
-                search.sync_viewport(list_area.height.max(1) as usize);
+                search.clamp_viewport(list_area.height.max(1) as usize);
                 search.set_paint_policy(PanelListPaintPolicy::Wide {
                     focused: list_focused,
                 });
@@ -242,7 +242,7 @@ pub(in crate::app) fn paint_browser_pane(
             // The panel drives the viewport clamp and the paint policy
             // (design D3): the slot fixes focus and the list-backdrop
             // selected row (design D6).
-            list.sync_viewport(list_area.height.max(1) as usize);
+            list.clamp_viewport(list_area.height.max(1) as usize);
             list.set_paint_policy(super::content::PanelListPaintPolicy::Wide {
                 focused: list_focused,
             });

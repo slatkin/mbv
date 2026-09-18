@@ -250,10 +250,8 @@ impl QueueComponent {
             .map(|&slot_id| (self.scope, slot_id))
     }
 
-    /// Move the shared owner into the active presentation when they diverge.
-    /// Queue keeps the Wide presentation in every panel mode (spec), so this
-    /// preserves the fixed-row contract while keeping the owner behind the
-    /// carrier's presentation seam.
+    /// Clamp the shared owner's fixed-row viewport to the queue's content
+    /// area. Queue keeps the Wide presentation in every panel mode (spec).
     fn ensure_carrier(&mut self) {
         self.carrier
             .clamp_viewport(self.content_area.height.max(1) as usize);

@@ -9,10 +9,10 @@ use ratatui::Frame;
 use tuirealm::component::Component;
 use unicode_width::UnicodeWidthStr;
 
-/// The active media-list presentation Queue hands to the render layer this
-/// frame (design.md D1/D2). Queue keeps the Wide presentation in every panel
-/// mode; the closed handoff keeps its body paint behind the carrier's
-/// presentation seam instead of reaching into one adapter.
+/// The media-list Queue hands to the render layer this frame (design.md
+/// D1/D2). Queue keeps the Wide presentation in every panel mode; the closed
+/// handoff keeps its body paint behind the carrier's surface instead of
+/// reaching into one adapter.
 pub(in crate::app) enum QueuePresentation<'a> {
     Wide(&'a mut WideMediaList<QueueSlotId>),
 }

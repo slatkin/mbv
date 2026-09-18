@@ -279,7 +279,7 @@ pub(in crate::app) enum PanelListPaintPolicy {
 pub(in crate::app) trait PanelList {
     /// Clamp the viewport to the current geometry without transferring
     /// owner state; selection state remains with the owner.
-    fn sync_viewport(&mut self, viewport_height: usize);
+    fn clamp_viewport(&mut self, viewport_height: usize);
 
     /// Clear interaction selection when this owner is replaced as the active
     /// destination. Overlay focus changes do not call this method. Only the
