@@ -404,13 +404,11 @@ fn handle_ctrl(
             // Next/Previous fall back to the new queue's active slot until the
             // first TrackChanged observation arrives. Momentary `None` is
             // correct — the observed slot follows playback, not the replace.
-            // The shared clear happens with the reset so the broadcast below is
-            // already coherent. The owner-core clear sits at the end of the arm
-            // because `queue`/`source`/`transitions` are destructured from
-            // `owner.core` and stay borrowed through the submit path; nothing
-            // observes the owner core in between within this synchronous arm.
+            // The shared clear happens with the reset so the publish is
+            // already coherent; the owner-core clear happens before that
+            // publish too, so both copies of the observation are gone by the
+            // time a client can read the new snapshot.
             *shared_queue.observed_active_slot.lock().unwrap() = None;
-            broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
             // `send_command` alone only reaches an already-running mpv
             // thread; on a freshly started daemon no thread exists yet, so
             // route through `submit_queue_slots`, which cold-starts one when
@@ -421,6 +419,23 @@ fn handle_ctrl(
             let headless = player.headless_for(&c, all_audio);
             player.submit_queue_slots(queue_slots, next_cursor, Some(c), headless, 100);
             owner.core.note_observed_active_slot(None);
+            // Publish after the submit, not before: the snapshot resolves its
+            // active slot from the queue marker only while the player reports
+            // active, and a cold-start submit is what flips that flag and seeds
+            // the start item. Broadcasting first handed clients a new queue
+            // with no active slot, so their now-playing projection fell back to
+            // a stale `current_idx` and showed the queue's first row until the
+            // next broadcast — the wrong-track flash this change removes.
+            // Reborrowing `owner.core` here (rather than the arm's earlier
+            // destructured fields) is what lets the publish follow the submit.
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                &owner.core.queue,
+                &owner.core.source,
+                &owner.core.transitions,
+            );
         }
         CtrlCmd::UnifiedQueueAppend { items } => {
             if items.is_empty() {

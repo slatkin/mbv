@@ -425,6 +425,54 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
 }
 
 #[test]
+fn unified_queue_replace_publishes_the_start_slot_as_active() {
+    let player = cold_player();
+    let _cmd_rx = player.spy_on_commands();
+    let client = queue_op_client("test-token");
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, client_rx) = connect_client(&mut registry.lock().unwrap());
+    let (reply_tx, _reply_rx) = mpsc::channel();
+    let shared_queue = shared_queue_state();
+    let mut owner = owner_with(vec![emby_qi("a", "Video", "Movie")], 0);
+
+    run_queue_cmd_with_shared(
+        CtrlCmd::UnifiedQueueReplace {
+            items: vec![],
+            slots: vec![
+                crate::ctrl::UnifiedQueueSlot {
+                    slot_id: 11,
+                    item: emby_qi("a", "Video", "Movie"),
+                },
+                crate::ctrl::UnifiedQueueSlot {
+                    slot_id: 22,
+                    item: emby_qi("b", "Video", "Movie"),
+                },
+            ],
+            start_idx: Some(1),
+        },
+        client_id,
+        &reply_tx,
+        &client,
+        &player,
+        &mut owner,
+        &shared_queue,
+        &registry,
+    );
+
+    // The publish the client receives must already name the new queue's start
+    // slot: publishing before the submit handed a cold daemon's client a queue
+    // with no active slot at all, and its now-playing projection then fell back
+    // to a stale index — the queue's first row — until the next broadcast.
+    match recv_event(&client_rx) {
+        CtrlEvent::UnifiedQueueState(state) => {
+            assert_eq!(state.active_slot, Some(22));
+            assert_eq!(state.status.current_idx, 1);
+        }
+        _ => panic!("expected a queue-state publish"),
+    }
+}
+
+#[test]
 fn unified_queue_replace_clears_observed_active_slot() {
     let player = cold_player();
     let _cmd_rx = player.spy_on_commands();

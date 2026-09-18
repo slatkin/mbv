@@ -104,10 +104,27 @@ fn active_file_load_location() -> (&'static str, String) {
 }
 
 /// Start playback at `start_idx` after the no-play queue loads (design D3).
-/// Setting `playlist-pos` on the fully built, still-idle playlist makes mpv
-/// load that entry; an armed audio-pipe startup pause stays in force until
-/// the run's PlaybackRestart gate releases it.
+///
+/// Two writes, because mpv resolves the start entry through two different
+/// mechanisms: a *deferred* first start — the one taken when the loads land
+/// inside mpv's own initialization window, which is exactly where the
+/// pre-warmed player sits — comes from the `playlist-start` option, while a
+/// start over an already-playing instance comes from the `playlist-pos`
+/// property write. Leaving `playlist-start` at its default (0) makes the
+/// deferred start play entry 0, and after the D3 head-inserts entry 0 is the
+/// queue's first item: the wrong track plays from the first audible moment and
+/// the run only observes it afterwards. Setting `playlist-pos` on the fully
+/// built, still-idle playlist is what makes mpv load that entry when it is
+/// already settled. An armed audio-pipe startup pause stays in force until the
+/// run's PlaybackRestart gate releases it.
 fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
+    if let Err(e) = mpv.set_property("playlist-start", start_idx as i64) {
+        log::warn!(
+            target: "player",
+            "start_queue_playback playlist-start={start_idx} failed: {}",
+            mpv_err_str(&e),
+        );
+    }
     if let Err(e) = mpv.set_property("playlist-pos", start_idx as i64) {
         // The queue is fully loaded but idle: a failed start leaves the run
         // silent, so this must not be a silent `let _`. The reassert below
