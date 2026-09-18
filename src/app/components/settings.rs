@@ -300,6 +300,39 @@ impl SettingsComponent {
         }
     }
 
+    /// After a page/edge scroll move, keep the highlight on-screen: if the
+    /// cursor's document line fell outside the scrolled window, move it to
+    /// the nearest cursor-numbered action that is visible (a no-op before
+    /// the first paint; `cursor_lines` is ordered, so the first/last
+    /// visible row is the nearest one).
+    fn clamp_keys_cursor_to_window(&mut self) {
+        let height = self.geometry.content_area.height as usize;
+        if height == 0 {
+            return;
+        }
+        let Some(&line) = self.geometry.cursor_lines.get(self.keys_cursor) else {
+            return;
+        };
+        let window = self.scroll..self.scroll + height;
+        if window.contains(&line) {
+            return;
+        }
+        let visible = self
+            .geometry
+            .cursor_lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| window.contains(l));
+        let nearest = if line < self.scroll {
+            visible.map(|(idx, _)| idx).next()
+        } else {
+            visible.map(|(idx, _)| idx).next_back()
+        };
+        if let Some(idx) = nearest {
+            self.keys_cursor = idx;
+        }
+    }
+
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.setup.is_some() {
             return self.setup_key(key);
@@ -319,18 +352,22 @@ impl SettingsComponent {
                 }
                 Key::PageUp => {
                     self.scroll = self.scroll.saturating_sub(10);
+                    self.clamp_keys_cursor_to_window();
                     None
                 }
                 Key::PageDown => {
                     self.scroll = self.scroll.saturating_add(10).min(self.max_scroll());
+                    self.clamp_keys_cursor_to_window();
                     None
                 }
                 Key::Home => {
                     self.scroll = 0;
+                    self.clamp_keys_cursor_to_window();
                     None
                 }
                 Key::End => {
                     self.scroll = self.max_scroll();
+                    self.clamp_keys_cursor_to_window();
                     None
                 }
                 // Read-only destination (design D7): Enter/Space select
@@ -988,7 +1025,9 @@ mod tests {
     }
 
     /// PageUp/PageDown/Home/End scroll the Keys window (claimed, not
-    /// fallen through to the router), clamped to the document.
+    /// fallen through to the router), clamped to the document, and the
+    /// cursor follows into the newly visible window so the highlighted
+    /// action row stays painted.
     #[test]
     fn keys_page_and_edge_keys_scroll_and_are_claimed() {
         let mut component = painted_keys_content(40);
@@ -1001,26 +1040,46 @@ mod tests {
             .max()
             .unwrap_or(0)
             .saturating_sub(height - 1);
+        let cursor_visible = |component: &SettingsComponent| {
+            let line = component.geometry.cursor_lines[component.keys_cursor];
+            line >= component.scroll && line < component.scroll + height
+        };
         assert!(matches!(
             component.on(&key(Key::PageDown)),
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
         ));
         assert_eq!(component.scroll, 10.min(max_scroll));
+        assert!(
+            cursor_visible(&component),
+            "PageDown keeps the highlighted action row in the window"
+        );
         assert!(matches!(
             component.on(&key(Key::End)),
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
         ));
         assert_eq!(component.scroll, max_scroll);
+        assert!(
+            cursor_visible(&component),
+            "End keeps the highlighted action row in the window"
+        );
         assert!(matches!(
             component.on(&key(Key::Home)),
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
         ));
         assert_eq!(component.scroll, 0);
+        assert!(
+            cursor_visible(&component),
+            "Home keeps the highlighted action row in the window"
+        );
         assert!(matches!(
             component.on(&key(Key::PageUp)),
             Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
         ));
         assert_eq!(component.scroll, 0, "PageUp clamps at the top");
+        assert!(
+            cursor_visible(&component),
+            "PageUp keeps the highlighted action row in the window"
+        );
     }
 
     /// Scrolling the Keys window moves the painted rows (buffer evidence:
