@@ -155,16 +155,19 @@ fn no_two_actions_share_a_default_chord() {
 }
 
 #[test]
-fn only_escape_defaulted_actions_are_not_prefix_addressable() {
+fn non_prefix_addressable_actions_are_the_documented_exceptions() {
     for action in KEYBIND_ACTIONS {
         let escape_default = action
             .parsed_default_chords()
             .iter()
             .any(|chord| chord.key == Key::Esc && chord.mods.is_empty());
+        // `library_tab_jump` is positional: its payload is the pressed
+        // digit, which an action-level prefix mapping cannot carry.
+        let positional_payload = action.id == "library_tab_jump";
         assert_eq!(
             action.prefix_addressable,
-            !escape_default,
-            "action `{}` prefix-addressability must follow its Esc default",
+            !(escape_default || positional_payload),
+            "action `{}` prefix-addressability must follow its declared exception",
             action.id
         );
     }
@@ -512,6 +515,18 @@ fn load_rejects_every_validation_class() {
                 section: "playback".to_string(),
             },
             &["stop", "prefix-addressable"],
+        ),
+        (
+            "positional tab-jump action in a prefix table",
+            RawKeybinds {
+                prefix: None,
+                sections: vec![raw_prefix("library", &[("library_tab_jump", "n")])],
+            },
+            KeybindsError::NotPrefixAddressable {
+                action: "library_tab_jump".to_string(),
+                section: "library".to_string(),
+            },
+            &["library_tab_jump", "prefix-addressable"],
         ),
         (
             "prefix collides with a declared default",

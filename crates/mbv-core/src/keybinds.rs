@@ -207,7 +207,11 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
         gate: KeyGate::NoBlockingOverlay,
         policy: "library_tab_jump",
         rebindable: true,
-        prefix_addressable: true,
+        // The payload is the pressed digit, which an action-level prefix
+        // mapping cannot carry: a prefix assignment would pin the tab to the
+        // configured router chord, not the digit typed. Not
+        // prefix-addressable (rejected at load).
+        prefix_addressable: false,
     },
     KeybindAction {
         id: "f5_refresh",

@@ -148,13 +148,24 @@ pub(super) fn resolve_armed_outcome(
         .map(|(action, _)| action);
     if let Some(action) = mapped {
         // Armed dispatch resolves the action through its own policy layer so
-        // the declared gate and the command binding stay the registry's.
+        // the declared gate and the command binding stay the registry's. The
+        // gate and any chord-derived payload read the action's configured
+        // router chord — the chord that fires it outside prefix mode — not
+        // the pressed prefix chord: the two namespaces are disjoint, and the
+        // chord-sensitive gate (`open_idle_feed_link`'s IdleFeedLink)
+        // hard-codes its chord, so a pressed prefix chord could never
+        // satisfy it (R6 fix).
         if let Some(entry) = super::key_policy::KEY_POLICY
             .iter()
             .find(|entry| entry.name == action.id)
         {
-            if entry.gate.allows(chord, snapshot) {
-                if let Some(command) = command_for_policy(entry.binding, chord) {
+            let firing = keybinds
+                .router_chords(action)
+                .into_iter()
+                .map(KeyChord::from_keybinds_chord)
+                .find(|router| entry.gate.allows(*router, snapshot));
+            if let Some(firing) = firing {
+                if let Some(command) = command_for_policy(entry.binding, firing) {
                     return RouterOutcome::PrefixDispatch(command);
                 }
             }

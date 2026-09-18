@@ -1249,6 +1249,35 @@ mod tests {
         }
 
         #[test]
+        fn armed_idle_feed_link_gate_reads_the_router_chord() {
+            // open_idle_feed_link assigned `f` in the prefix namespace: the
+            // chord-sensitive IdleFeedLink gate tests the action's configured
+            // router chord (`o`), not the pressed prefix chord, so the
+            // mapping fires when the link conditions hold (R6 fix).
+            let keybinds = prefix_keybinds(&[("open_idle_feed_link", "f")]);
+            let mut link = armed_snapshot();
+            link.idle_feed_link_available = true;
+            assert_eq!(
+                resolve(
+                    crossterm::event::KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+                    &link,
+                    &keybinds
+                ),
+                RouterOutcome::PrefixDispatch(Command::OpenIdleFeedLink)
+            );
+            // The gate's non-chord conditions still close it.
+            assert_eq!(
+                resolve(
+                    crossterm::event::KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE),
+                    &armed_snapshot(),
+                    &keybinds
+                ),
+                RouterOutcome::PrefixSwallow,
+                "an unavailable link swallows and disarms"
+            );
+        }
+
+        #[test]
         fn armed_unmapped_chord_swallows_and_disarms() {
             let keybinds = prefix_keybinds(&[]);
             assert_eq!(
