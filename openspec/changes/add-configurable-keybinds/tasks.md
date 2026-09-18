@@ -39,10 +39,10 @@
 
 ## 7. Presentation
 
-- [ ] 7.1 Add the `Keys` destination to the settings panel (component content + render), grouped by `KeySection`, listing the configurable set with router and prefix chords, following the `Services` child-destination precedent. Verify: component/buffer tests — groups equal the shared section list, rows equal the registry set, and an override renders the configured chord.
-- [ ] 7.2 Add the `Keys` row to the settings main list with the live summary (prefix and override count), extending `SETTING_SECTIONS`/`SettingKey`. Verify: snapshot test — the row value follows the loaded configuration.
-- [ ] 7.3 Add the armed pill in the `chrome_status` idiom, rendered only while armed, following the width-pressure drop-order precedent. Verify: buffer test — pill present while armed, absent otherwise; existing status-bar tests green.
-- [ ] 7.4 Render help's Global/configurable chords and the prefix list from the registry. Verify: help test — after a rebind, help shows the configured chord; with defaults, help matches current behavior.
+- [x] 7.1 Add the `Keys` destination to the settings panel (component content + render), grouped by `KeySection`, listing the configurable set with router and prefix chords, following the `Services` child-destination precedent. Verify: component/buffer tests — groups equal the shared section list, rows equal the registry set, and an override renders the configured chord.
+- [x] 7.2 Add the `Keys` row to the settings main list with the live summary (prefix and override count), extending `SETTING_SECTIONS`/`SettingKey`. Verify: snapshot test — the row value follows the loaded configuration.
+- [x] 7.3 Add the armed pill in the `chrome_status` idiom, rendered only while armed, following the width-pressure drop-order precedent. Verify: buffer test — pill present while armed, absent otherwise; existing status-bar tests green.
+- [x] 7.4 Render help's Global/configurable chords and the prefix list from the registry. Verify: help test — after a rebind, help shows the configured chord; with defaults, help matches current behavior.
 
 ## 8. Gates
 
