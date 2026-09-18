@@ -2,8 +2,8 @@
 
 ## 1. Spikes (block everything below)
 
-- [ ] 1.1 Confirm `const fn color(self) -> Color` with a full match compiles under MSRV 1.88 (const-match stable since 1.46, expected to pass) and that `serde_json` is available to `mbv` dev-dependencies (it is a workspace dep, expected to pass); record both outcomes in design.md and verify by pasting the check commands' output into the task trail
-- [ ] 1.2 Produce the 29-variant name table as `openspec/changes/palette-enum/name-table.md` (columns: old primitive(s) → new PascalCase variant → hex → one-word description) following the naming rules in design.md: keep existing color-words (`Gold`, `Aqua`, `Red`, `Orange`, `Purple`, `Foam`); number grey cluster (`Grey1`–`Grey6`) and dark green-grey cluster (`Green1`–`Green3`); blue-grey slates are `Slate`/`Storm`/`Flint`; plain hue names elsewhere; ordered by hue then dark-to-light. Get user review; verified by an approved table committed in the change
+- [x] 1.1 Confirm `const fn color(self) -> Color` with a full match compiles under MSRV 1.88 (const-match stable since 1.46, expected to pass) and that `serde_json` is available to `mbv` dev-dependencies (it is a workspace dep, expected to pass); record both outcomes in design.md and verify by pasting the check commands' output into the task trail
+- [x] 1.2 Produce the 29-variant name table as `openspec/changes/palette-enum/name-table.md` (columns: old primitive(s) → new PascalCase variant → hex → one-word description) following the naming rules in design.md: keep existing color-words (`Gold`, `Aqua`, `Red`, `Orange`, `Purple`, `Foam`); number grey cluster (`Grey1`–`Grey6`) and dark green-grey cluster (`Green1`–`Green3`); blue-grey slates are `Slate`/`Storm`/`Flint`; plain hue names elsewhere; ordered by hue then dark-to-light. Get user review; verified by an approved table committed in the change
 
 ## 2. Palette core (additive, no callers)
 
