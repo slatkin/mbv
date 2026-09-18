@@ -116,13 +116,13 @@ fn fixed_row_owner_survives_wide_narrow_wide_geometry_changes() {
 
     // Both breakpoint arms configure the same fixed-row owner. The smaller
     // viewport clamps on view; no presentation-specific state is transferred.
-    carrier.sync_viewport(3);
+    carrier.clamp_viewport(3);
     paint(carrier.wide_mut(), Rect::new(0, 0, 20, 3));
     let narrow_offset = carrier.wide().current_flow_offset().unwrap();
     assert_eq!(carrier.selected_target(), target.as_ref());
     assert!(narrow_offset <= 5);
 
-    carrier.sync_viewport(7);
+    carrier.clamp_viewport(7);
     paint(carrier.wide_mut(), Rect::new(0, 0, 20, 7));
     assert_eq!(carrier.selected_target(), target.as_ref());
     assert!(carrier.wide().current_flow_offset().unwrap() <= narrow_offset);
@@ -164,7 +164,7 @@ fn carrier_preserves_multi_selection_across_geometry_changes() {
     carrier.set_content(vec![item("one"), item("two"), item("three")]);
     carrier.toggle_selection(&"one".to_string());
     carrier.toggle_selection(&"three".to_string());
-    carrier.sync_viewport(2);
+    carrier.clamp_viewport(2);
     assert_eq!(carrier.multi_selection(), &["one", "three"]);
 }
 

@@ -25,9 +25,9 @@ fn zebra_stripe(surface: Surface) -> ZebraStripe {
 
 impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn sync_viewport(&mut self, viewport_height: usize) {
-        // Path syntax prefers the inherent method, so this forwards to the
-        // carrier's own viewport clamp rather than recursing into the trait.
-        MediaListCarrier::sync_viewport(self, viewport_height);
+        // The carrier's own viewport clamp (no same-named inherent pair, so
+        // no recursion ambiguity to dodge).
+        self.clamp_viewport(viewport_height);
     }
 
     fn clear_selection(&mut self) {

@@ -161,7 +161,7 @@ impl TvContent {
     /// between adapters.
     fn ensure_carrier(&mut self) {
         let viewport_height = self.painted_viewport_height();
-        self.carrier.sync_viewport(viewport_height);
+        self.carrier.clamp_viewport(viewport_height);
     }
     pub(in crate::app) fn set_content(&mut self, context: TvWideRenderCtx) {
         self.ensure_carrier();

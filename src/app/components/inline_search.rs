@@ -486,7 +486,7 @@ mod tests {
         assert_eq!(search.test_cursor(), 2);
         // Park the resting viewport at the bottom the way the panel does at
         // paint time, so the reset has a stale offset to fall from.
-        search.results_mut().sync_viewport(1);
+        search.results_mut().clamp_viewport(1);
         assert_eq!(search.results().scroll(), 2);
 
         // A changed query re-scores: the selection resets to the first row
@@ -510,7 +510,7 @@ mod tests {
         assert_eq!(search.test_cursor(), 0);
         search.delegate_movement(MediaListSurfaceInput::Last);
         // Park the resting viewport the way the panel does at paint time.
-        search.results_mut().sync_viewport(1);
+        search.results_mut().clamp_viewport(1);
         let selected = search.selected_target().clone();
         assert_eq!(selected.map(|(id, _)| id), Some("c".into()));
 

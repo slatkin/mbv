@@ -179,7 +179,9 @@ impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
         self.wide.set_scroll(offset);
     }
 
-    pub fn sync_viewport(&mut self, viewport_height: usize) {
+    /// The viewport clamp (#729): one body for both the carrier's own callers
+    /// and the `PanelList` seam — no same-named trait/inherent pair.
+    pub fn clamp_viewport(&mut self, viewport_height: usize) {
         let offset = self.wide.resolve_viewport(viewport_height.max(1)).offset;
         if self.wide.scroll() != offset {
             self.wide.set_scroll(offset);

@@ -256,7 +256,7 @@ impl QueueComponent {
     /// carrier's presentation seam.
     fn ensure_carrier(&mut self) {
         self.carrier
-            .sync_viewport(self.content_area.height.max(1) as usize);
+            .clamp_viewport(self.content_area.height.max(1) as usize);
     }
 
     fn move_cursor(&mut self, delta: i64) -> Option<Msg> {

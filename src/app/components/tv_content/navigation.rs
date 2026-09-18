@@ -78,7 +78,7 @@ impl TvContent {
     /// the resting `BrowseLevel` cursor.
     pub(super) fn move_by_item_rows_narrow(&mut self, item_rows: i64) -> usize {
         self.carrier.move_selection(item_rows);
-        self.carrier.sync_viewport(self.painted_viewport_height());
+        self.carrier.clamp_viewport(self.painted_viewport_height());
         self.browse_cursor()
     }
 
@@ -91,7 +91,7 @@ impl TvContent {
             self.carrier.select_first();
         }
         if self.carrier.selected_target().is_some() {
-            self.carrier.sync_viewport(self.painted_viewport_height());
+            self.carrier.clamp_viewport(self.painted_viewport_height());
         }
         self.browse_cursor()
     }
