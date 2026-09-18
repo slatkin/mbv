@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change daemon-multi-connection. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Protocol version 9
 
 The ctrl protocol version SHALL be 9. Clients and daemons SHALL negotiate protocol version 9 during the hello handshake and SHALL reject a peer reporting any other version before the client sends credential-bearing or command messages. Version 9 SHALL remove the legacy packaged-`mbvd` Emby-token authentication field and behavior. This non-additive version bump is required by the ctrl wire rule because it removes a hello field and changes handshake semantics; the capability rule continues to apply to additive changes.
@@ -333,3 +335,22 @@ The v9 ctrl protocol SHALL let an attached same-user client signal a Local daemo
 - **WHEN** a client signals a Local daemon to reread owner Service setup
 - **THEN** no Service credential, Authorization value, or resolved setup value SHALL appear in the request or response
 
+### Requirement: A command with no ctrl wire form is refused fail-closed
+
+The ctrl transport SHALL refuse to encode a Player command that has no wire
+representation, returning a refusal to the caller. Refusing such a command SHALL NOT
+terminate the sending process or the receiving daemon, SHALL NOT deliver a partial
+command, and SHALL NOT mutate queue or playback state.
+
+#### Scenario: Client attempts a command with no wire form
+
+- **WHEN** a Client attempts to transmit a Player command that the ctrl transport cannot encode
+- **THEN** the transport SHALL return a refusal to the caller instead of transmitting
+- **AND** the sending process SHALL remain alive
+- **AND** the caller SHALL receive the refusal so it can be presented
+
+#### Scenario: Refusal leaves playback state untouched
+
+- **WHEN** a command is refused for having no wire form
+- **THEN** no queue mutation, active-slot change, or playback transition SHALL result from the attempt
+- **AND** the daemon SHALL remain connected and serving

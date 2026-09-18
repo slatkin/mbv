@@ -2,7 +2,9 @@
 
 ## Purpose
 Define one queue and playback-submission model shared by every QueueItem across composed editing, Player ownership, local and ctrl control, persistence, and mpv playback.
+
 ## Requirements
+
 ### Requirement: Each queue has one canonical ordered representation
 
 Every Composed or Bound queue SHALL be represented by one ordered collection of queue slots containing `QueueItem` values. A Player owner SHALL hold the only authoritative collection for its Bound queue. A Client MAY hold a replaceable snapshot of a Bound queue, and a Playback run MAY hold an mpv execution projection, but neither SHALL independently decide canonical order, active slot, revision, or queue mutation outcome. A component SHALL NOT maintain parallel item-kind collections whose synchronization is required to determine queue contents, order, length, or current slot. An mpv projection MAY contain the full playable sequence or only the active materialized file as required by source lifecycle, but that projection SHALL NOT become queue authority. A populate-only queue replacement MAY update the Client's Composed snapshot without submitting it to the active owner. Until explicit play submits the replacement, the Client SHALL NOT present an unconfirmed slot from that replacement as the playing slot.
@@ -320,7 +322,6 @@ A capable client attaching to a daemon that owns active Audiobookshelf playback 
 - **WHEN** a peer that did not negotiate Audiobookshelf queue transport attaches to an owner holding Audiobookshelf slots
 - **THEN** it SHALL receive no Audiobookshelf QueueItem variant and every previously supported queue behavior SHALL continue
 
-
 ### Requirement: Service-specific refresh preserves unrelated queue-item kinds
 A refresh sourced from one Service SHALL update or prune only queue slots that belong to that Service. It SHALL preserve every slot belonging to another Service or to Feeds, including both Audiobookshelf podcast episodes and Audiobookshelf books, without attempting to resolve their identities through the refreshing Service.
 
@@ -422,3 +423,32 @@ The decision that playback finished close enough to the end to count as complete
 - **WHEN** live playback status already describes the next occurrence when completion is evaluated
 - **THEN** the near-end verdict SHALL use the completed occurrence's runtime
 - **AND** SHALL NOT use the replacement occurrence's runtime
+
+### Requirement: A client-initiated slot jump dispatches by where the Player owner runs
+
+A Client SHALL dispatch a user-initiated jump to a canonical slot according to where the
+Player owner runs: when the owner is out-of-process (reached over ctrl, including this
+machine's Local daemon), the Client SHALL request the jump from the owner using the
+owner-resolved slot request; when the app process is the owner, the Client SHALL resolve
+the jump locally. A Client SHALL NOT construct or transmit a command that the ctrl
+transport has no wire form for. On completion of a jump requested from an
+out-of-process owner, the Client SHALL NOT set its own active slot from the requested
+slot; the active slot SHALL continue to follow the owner's queue snapshot.
+
+#### Scenario: Out-of-process owner accepts the on-screen Next-Up accept action
+
+- **WHEN** the mpv Next-Up accept affordance is activated while an out-of-process Player owner holds the Bound queue
+- **THEN** the Client SHALL request the jump from that owner
+- **AND** the requested slot SHALL become active only through the owner's queue snapshot
+- **AND** the Client process SHALL remain running
+
+#### Scenario: App-process owner accepts the on-screen Next-Up accept action
+
+- **WHEN** the mpv Next-Up accept affordance is activated while the app process is the Player owner
+- **THEN** the Client SHALL resolve the jump locally and play the requested slot
+
+#### Scenario: Every client-initiated jump uses the same dispatch
+
+- **WHEN** any client-initiated action jumps to an existing canonical slot
+- **THEN** it SHALL dispatch through the owner-kind rule rather than constructing a
+  local jump command directly
