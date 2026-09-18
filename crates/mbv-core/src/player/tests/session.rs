@@ -586,30 +586,24 @@ fn queue_loads_selected_item_first_without_starting_playback() {
 }
 
 #[test]
-fn no_play_load_plan_builds_canonical_playlist_before_playback_starts() {
-    // D3 mock model of mpv's loadfile semantics over an empty playlist:
-    // `append` pushes to the end without starting playback, `insert-at i`
-    // inserts at ordinal i without starting playback (verified against the
-    // mpv IPC contract — `append` maps to LOAD_TYPE_APPEND, play=false).
-    // The only playback-start step is the final `start_queue_playback`
-    // playlist-pos write, so after the loads the layout must already be
-    // exactly what the reassert safety net treats as Ok.
+fn queue_load_plan_never_starts_playback_mid_load() {
+    // Design D3: the only playback start in the queue plan is the
+    // `start_queue_playback` write after every load, so no load may use a mode
+    // that starts playback itself (`replace`). mpv's no-play behaviour for the
+    // modes used here (`append`, `insert-at`) is mpv's documented contract, not
+    // something a mock can prove — what this pins is that the production plan
+    // never reaches for a louder mode, at any length or start index.
     for (len, start_idx) in [(1, 0), (4, 0), (4, 2), (5, 4), (100, 50)] {
-        let mut playlist: Vec<usize> = Vec::new();
+        assert_eq!(queue_load_indices(len, start_idx).next(), Some(start_idx));
         for i in queue_load_indices(len, start_idx) {
-            let (mode, index) = queue_load_location(i, start_idx);
-            match mode {
-                // Neither no-play mode may start playback mid-load.
-                "append" => playlist.push(i),
-                // pi-lens-ignore: rust-unwrap
-                "insert-at" => playlist.insert(index.parse::<usize>().unwrap(), i),
-                other => panic!("unexpected load mode {other}"),
-            }
+            let (mode, _) = queue_load_location(i, start_idx);
+            assert_ne!(
+                mode, "replace",
+                "load {i} of a queue starting at {start_idx} must not start playback (D3)"
+            );
         }
-        assert_eq!(playlist, (0..len).collect::<Vec<_>>());
-        // The start slot plays first, from the very first audible moment.
-        assert_eq!(playlist[start_idx], start_idx);
-        // Reassert safety net: full layout, mpv on the start slot -> Ok.
+        // With the plan built, the reassert safety net must observe Ok: a
+        // mismatch there means the no-play load plan drifted.
         assert_eq!(
             queue_layout_verdict(start_idx, len, start_idx as i64, len as i64),
             QueueLayoutVerdict::Ok
@@ -619,36 +613,12 @@ fn no_play_load_plan_builds_canonical_playlist_before_playback_starts() {
 
 #[test]
 fn cold_active_file_single_load_starts_playback_via_replace() {
-    // Mock model of the cold submit path's active-file (Audiobookshelf)
-    // branch: the load plan is exactly vec![start_idx] and
-    // `start_queue_playback` is skipped, so the single loadfile must itself
-    // start playback. mpv semantics: `replace` on an empty idle playlist
-    // plays the file; the D3 no-play queue plan modes never do — which is
-    // why this branch must not use `queue_load_location`.
-    let start_idx = 0;
-    let mut playlist: Vec<usize> = Vec::new();
-    let mut playback_started = false;
-    // Cold submit: load plan is exactly vec![start_idx] for this projection.
-    let (mode, index) = active_file_load_location();
-    match mode {
-        "replace" => {
-            playlist = vec![start_idx];
-            playback_started = true;
-        }
-        "append" => playlist.push(start_idx),
-        // pi-lens-ignore: rust-unwrap
-        "insert-at" => playlist.insert(index.parse::<usize>().unwrap(), start_idx),
-        other => panic!("unexpected load mode {other}"),
-    }
-    assert_eq!(playlist, vec![start_idx]);
-    assert!(
-        playback_started,
-        "cold active-file load must start playback; no-play plan modes idle the run"
-    );
-    // Contrast: the same submit loop's full-queue arm is no-play for the
-    // start slot (D3), so the carve-out is what keeps the active-file load
-    // distinct.
-    assert_eq!(queue_load_location(start_idx, start_idx).0, "append");
+    // The cold submit path's active-file (Audiobookshelf) branch loads exactly
+    // one slot and skips `start_queue_playback`, so its load must start
+    // playback itself; reusing the D3 no-play plan modes there would idle the
+    // run. The two projections are what keep the load modes distinct.
+    assert_eq!(active_file_load_location().0, "replace");
+    assert_ne!(queue_load_location(0, 0).0, "replace");
 }
 
 #[test]

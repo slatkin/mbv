@@ -108,7 +108,16 @@ fn active_file_load_location() -> (&'static str, String) {
 /// load that entry; an armed audio-pipe startup pause stays in force until
 /// the run's PlaybackRestart gate releases it.
 fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
-    let _ = mpv.set_property("playlist-pos", start_idx as i64);
+    if let Err(e) = mpv.set_property("playlist-pos", start_idx as i64) {
+        // The queue is fully loaded but idle: a failed start leaves the run
+        // silent, so this must not be a silent `let _`. The reassert below
+        // only reports a layout mismatch, which this is not.
+        log::warn!(
+            target: "player",
+            "start_queue_playback playlist-pos={start_idx} failed: {}",
+            mpv_err_str(&e),
+        );
+    }
 }
 
 /// What the initial queue layout verification found in mpv's playlist.
