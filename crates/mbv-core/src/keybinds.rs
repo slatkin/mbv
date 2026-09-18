@@ -711,6 +711,10 @@ pub enum KeybindsError {
     UnknownSection {
         section: String,
     },
+    DuplicateSection {
+        first: String,
+        second: String,
+    },
     SectionMismatch {
         action: String,
         section: String,
@@ -755,6 +759,10 @@ impl std::fmt::Display for KeybindsError {
             Self::UnknownSection { section } => {
                 write!(f, "keys: unknown section `keys.{section}`")
             }
+            Self::DuplicateSection { first, second } => write!(
+                f,
+                "keys: sections `keys.{first}` and `keys.{second}` name the same section under different spellings"
+            ),
             Self::SectionMismatch {
                 action,
                 section,
@@ -809,10 +817,25 @@ pub fn load(raw: &RawKeybinds) -> Result<Keybinds, KeybindsError> {
         .transpose()?;
 
     let mut sections = Vec::new();
+    // `KeySection::from_name` matches case-insensitively, but the save loop
+    // keys the compiled tables by lowercase section name — two raw spellings
+    // of one section would silently collapse to the later spelling on save
+    // while the reader took the first. Reject them at load.
+    let mut seen_sections: Vec<&str> = Vec::new();
     let mut configured_router: Vec<(&'static KeybindAction, Chord)> = Vec::new();
     let mut configured_prefix_ns: Vec<(&'static KeybindAction, Chord)> = Vec::new();
 
     for (section_name, raw_section) in &raw.sections {
+        if let Some(first) = seen_sections
+            .iter()
+            .find(|seen| seen.eq_ignore_ascii_case(section_name))
+        {
+            return Err(KeybindsError::DuplicateSection {
+                first: (*first).to_string(),
+                second: section_name.clone(),
+            });
+        }
+        seen_sections.push(section_name);
         let section =
             KeySection::from_name(section_name).ok_or_else(|| KeybindsError::UnknownSection {
                 section: section_name.clone(),

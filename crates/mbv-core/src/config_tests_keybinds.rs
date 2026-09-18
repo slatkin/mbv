@@ -198,6 +198,10 @@ mod keys_rejections {
         "[keys.bogus]\nhelp_open = \"F9\"\n",
         "unknown section `keys.bogus`"
     )]
+    #[case::case_variant_duplicate_section(
+        "[keys.Library]\nprevious_library_tab = \"Shift+Tab\"\n\n[keys.library]\nnext_library_tab = \"n\"\n",
+        "same section under different spellings"
+    )]
     #[case::unknown_action(
         "[keys.global]\nnot_an_action = \"F9\"\n",
         "unknown action `not_an_action`"

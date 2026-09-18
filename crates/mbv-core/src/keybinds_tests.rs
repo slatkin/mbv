@@ -348,8 +348,13 @@ fn load_accepts_a_valid_partially_overridden_config() {
         prefix: Some("Ctrl+b".to_string()),
         sections: vec![
             raw_router("global", &[("help_open", "F9")]),
-            raw_router("library", &[("previous_library_tab", "Shift+Tab")]),
-            raw_prefix("library", &[("next_library_tab", "n")]),
+            (
+                "library".to_string(),
+                RawSection {
+                    router: vec![("previous_library_tab".to_string(), "Shift+Tab".to_string())],
+                    prefix: vec![("next_library_tab".to_string(), "n".to_string())],
+                },
+            ),
             raw_prefix("playback", &[("toggle_play_pause", "p")]),
         ],
     };
@@ -467,6 +472,21 @@ fn load_rejects_every_validation_class() {
                 section: "bogus".to_string(),
             },
             &["bogus"],
+        ),
+        (
+            "case-variant duplicate section names",
+            RawKeybinds {
+                prefix: None,
+                sections: vec![
+                    raw_router("Library", &[("previous_library_tab", "Shift+Tab")]),
+                    raw_router("library", &[("next_library_tab", "n")]),
+                ],
+            },
+            KeybindsError::DuplicateSection {
+                first: "Library".to_string(),
+                second: "library".to_string(),
+            },
+            &["Library", "library"],
         ),
         (
             "section mismatch",
