@@ -670,7 +670,7 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
         "the idle row starts without the now-playing colour"
     );
     assert!(
-        frame_text(buf).contains("0:45 / 1:30"),
+        frame_text(buf).contains("0:45/1:30"),
         "the panel starts on the playing item's live position"
     );
 
@@ -684,7 +684,7 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
     );
     let text = frame_text(buf);
     assert!(
-        text.contains("Selected Film") && text.contains("0:00 / 10:00"),
+        text.contains("Selected Film") && text.contains("0:00/10:00"),
         "the panel predicts the selection at a fresh start: {text}"
     );
     // The predicted row keeps its total duration: only live progress is

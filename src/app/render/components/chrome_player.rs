@@ -210,6 +210,7 @@ pub(in crate::app) fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
 struct TransportGlyphs {
     play: (&'static str, Color),
     stop: (&'static str, Color),
+    prev: (&'static str, Color),
     next: (&'static str, Color),
 }
 
@@ -230,6 +231,14 @@ fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGly
             palette::TEXT_MUTED
         },
     );
+    let prev = (
+        if ctx.use_nerd_fonts {
+            "\u{f04ae}"
+        } else {
+            "<<"
+        },
+        palette::TEXT_STRONG,
+    );
     let next = (
         if ctx.use_nerd_fonts { "\u{f051}" } else { ">>" },
         if ctx.next_available {
@@ -238,7 +247,12 @@ fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGly
             palette::TEXT_MUTED
         },
     );
-    TransportGlyphs { play, stop, next }
+    TransportGlyphs {
+        play,
+        stop,
+        prev,
+        next,
+    }
 }
 
 /// The play/pause(+stop/next when `show_buttons`) glyph row and its hit-area
@@ -254,6 +268,7 @@ fn render_transport_glyphs(
     glyph_w: u16,
     stop_w: u16,
     next_w: u16,
+    prev_w: u16,
     glyphs: &TransportGlyphs,
 ) -> Vec<Span<'static>> {
     let mut spans = vec![Span::styled(
@@ -284,6 +299,12 @@ fn render_transport_glyphs(
         ));
         spans.push(Span::raw(" "));
         x += 1;
+        spans.push(Span::styled(
+            glyphs.prev.0,
+            Style::default().fg(glyphs.prev.1),
+        ));
+        spans.push(Span::raw(" "));
+        x += prev_w + 1;
         ctx.playback.next_area = Rect {
             x,
             y: row_y,
@@ -400,8 +421,9 @@ fn render_queue_title_rows(
     let glyph_text = format!("{} ", glyphs.play.0);
     let glyph_w = glyph_text.width() as u16;
     let stop_w = glyphs.stop.0.width() as u16;
+    let prev_w = glyphs.prev.0.width() as u16;
     let next_w = glyphs.next.0.width() as u16;
-    let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
+    let buttons_w = stop_w as usize + 1 + prev_w as usize + 1 + next_w as usize + 1;
     // No title competes on the upper row, so the buttons show whenever the
     // glyphs, buttons and pills fit.
     let show_buttons = upper.width as usize >= glyph_w as usize + buttons_w + pills_w as usize;
@@ -414,6 +436,7 @@ fn render_queue_title_rows(
         glyph_w,
         stop_w,
         next_w,
+        prev_w,
         &glyphs,
     );
     let upper_left_w: u16 = upper_spans
@@ -430,7 +453,7 @@ fn render_queue_title_rows(
     // The lower row: ` <title> ... <pos / dur> `.
     let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
     let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
-    let time_text = format!("{pos_str} / {dur_str}");
+    let time_text = format!("{pos_str}/{dur_str}");
     let time_w = time_text.width() as u16;
     // One left indent, at least one gap cell before the time, one right
     // indent.
@@ -482,8 +505,9 @@ pub(in crate::app) fn render_title_row(
     let glyph_text = format!("{} ", glyphs.play.0);
     let glyph_w = glyph_text.width() as u16;
     let stop_w = glyphs.stop.0.width() as u16;
+    let prev_w = glyphs.prev.0.width() as u16;
     let next_w = glyphs.next.0.width() as u16;
-    let buttons_w = stop_w as usize + 1 + next_w as usize + 1;
+    let buttons_w = stop_w as usize + 1 + prev_w as usize + 1 + next_w as usize + 1;
     let available = area.width as usize;
     // The width-driven decision (task 3.5): whether the transport buttons
     // fit beside the title and the elapsed time, from the shared transport
@@ -507,6 +531,7 @@ pub(in crate::app) fn render_title_row(
         glyph_w,
         stop_w,
         next_w,
+        prev_w,
         &glyphs,
     );
     let fixed_w = glyph_w as usize + right_w as usize + if show_buttons { buttons_w } else { 0 };
@@ -665,6 +690,100 @@ mod tests {
             title_part_fg(PlaybackTitlePartRole::Title),
             title_part_fg(PlaybackTitlePartRole::Context),
             "the test locates the parts by their roles, so the roles must differ"
+        );
+    }
+
+    /// The prev transport glyph paints in white (TEXT_STRONG) between stop
+    /// and next whenever the transport buttons show, and collapses exactly
+    /// with them when the row is too narrow (`show_buttons` gate).
+    #[test]
+    fn prev_glyph_paints_between_stop_and_next_and_collapses_with_next() {
+        let mut playback = PlaybackStripAreas::default();
+        let mut marquee_text = String::new();
+        let mut marquee_started_at = std::time::Instant::now();
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 60, 1),
+            playback: &mut playback,
+            player_h: 2,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: true,
+            next_available: true,
+            status_indicators: None,
+            title_parts: None,
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(60, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 60, 1),
+                    "T",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row: String = (0..60).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+        let stop = row.find("X").expect("stop glyph painted");
+        let prev = row.find("<<").expect("prev glyph painted");
+        let next = row.find(">>").expect("next glyph painted");
+        assert!(
+            stop < prev && prev < next,
+            "prev must paint between stop and next: {row:?}"
+        );
+        assert_eq!(
+            buf[(prev as u16, 0)].fg,
+            palette::TEXT_STRONG,
+            "prev paints white: {row:?}"
+        );
+        // Collapse: below the buttons-fit width, prev vanishes with the rest.
+        let mut playback2 = PlaybackStripAreas::default();
+        let mut marquee_text2 = String::new();
+        let mut marquee_started_at2 = std::time::Instant::now();
+        let mut narrow = PlaybackRenderContext {
+            area: Rect::new(0, 0, 12, 1),
+            playback: &mut playback2,
+            player_h: 2,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::PlaybackPanel,
+            panel_focused: false,
+            progress: (0, 0, false),
+            use_nerd_fonts: false,
+            stop_available: true,
+            next_available: true,
+            status_indicators: None,
+            title_parts: None,
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text2,
+            marquee_started_at: &mut marquee_started_at2,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(12, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_title_row(
+                    f,
+                    Rect::new(0, 0, 12, 1),
+                    "T",
+                    palette::TEXT_STRONG,
+                    &mut narrow,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row: String = (0..12).map(|x| buf[(x, 0)].symbol().to_string()).collect();
+        assert!(
+            !row.contains("<<"),
+            "prev collapses with the transport buttons: {row:?}"
         );
     }
 

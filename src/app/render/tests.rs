@@ -329,7 +329,7 @@ fn queue_panel_moves_title_progress_and_time_to_the_lower_row() {
         lines[2]
     );
     assert!(
-        lines[2].ends_with("0:45 / 1:30 "),
+        lines[2].ends_with("0:45/1:30 "),
         "time right with one space of indent:\n{}",
         lines[2]
     );
@@ -431,7 +431,7 @@ fn queue_lower_row_marquees_a_title_that_does_not_fit() {
         lines[2]
     );
     assert!(
-        lines[2].ends_with("0:45 / 1:30 "),
+        lines[2].ends_with("0:45/1:30 "),
         "time stays intact at the right:\n{}",
         lines[2]
     );
