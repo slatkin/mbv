@@ -1,5 +1,6 @@
 -- Skip Intro overlay
-local skip_intro = make_overlay(999, {
+local skip_intro
+skip_intro = make_overlay(999, {
     'skip-intro',
 }, function(pw, ph)
     if not skip_intro.visible then return nil end

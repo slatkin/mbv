@@ -206,6 +206,18 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
 
     let no_scripts = config.no_scripts;
     let use_mpv_config = config.use_mpv_config;
+    if no_scripts {
+        log::warn!(
+            target: "player",
+            "init: mpv overlay scripts disabled by config (no_scripts); resolved source {} will not be handed to mpv",
+            crate::config::osc_script_source().chosen.display()
+        );
+    } else if use_mpv_config {
+        log::warn!(
+            target: "player",
+            "init: user's mpv config manages scripts; mbv hands mpv no overlay scripts (no mbv OSD)"
+        );
+    }
     let mut init_err: Option<String> = None;
     let mpv = match Mpv::with_initializer(|init| {
         macro_rules! opt {
@@ -261,6 +273,12 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
                     );
                 }
                 opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
+            } else {
+                log::warn!(
+                    target: "player",
+                    "init: resolved mpv overlay script {} does not exist; mpv will run with no overlay scripts",
+                    script.display()
+                );
             }
         }
         Ok(())
