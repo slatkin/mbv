@@ -7,6 +7,20 @@ use std::time::Duration;
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+/// Cap glibc malloc arenas. libmpv/ffmpeg allocate through glibc directly
+/// (mimalloc only covers Rust); with mpv's ~20 threads the default
+/// 8*ncores private arenas fragment freed playback memory beyond glibc's
+/// top-of-arena trim, pinning tens of MB of RSS (see issue #656). Two
+/// shared arenas let free pages be reused and returned. Rust allocations
+/// are unaffected — they never reach glibc.
+fn cap_glibc_arenas() {
+    // SAFETY: mallopt is thread-unsafe only after concurrent allocation
+    // begins; this runs first in main, before any threads spawn.
+    unsafe {
+        libc::mallopt(libc::M_ARENA_MAX, 2);
+    }
+}
+
 fn print_usage() {
     eprintln!("Usage: mbvd [--audio-only] [-q|--quit] [--connect emby] [--connect abs] [--disconnect abs] [--version]");
 }
@@ -464,6 +478,7 @@ fn run() -> Result<(), String> {
 }
 
 fn main() {
+    cap_glibc_arenas();
     install_panic_hook();
     install_signal_handlers();
     if let Err(e) = run() {
