@@ -263,7 +263,9 @@ fn cold_ctrl_player_command_keeps_connection_as_driver() {
 
     let mut owner = DaemonPlayerOwner { core: PlayerOwnerState::new(queue, source), ..Default::default() };
     handle_ctrl(
-        CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
+        CtrlCmd::PlayerCmd(
+            WireCommand::try_from_player_command(PlayerCommand::TogglePause).unwrap(),
+        ),
         1,
         CtrlRequest {
             reply_tx: &reply_tx,

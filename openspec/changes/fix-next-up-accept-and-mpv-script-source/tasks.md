@@ -41,6 +41,18 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
   in `crates/mbv-core/src/daemon_core.rs` (`:378`, `:430`, `:476`) and the daemon-side
   `dispatch_slot_jump`; no client-side site constructs a local jump command outside the
   two seams.)
+  - Audit note (unit A, HEAD of this change): repository-wide search for
+    `into_jump()` / `mint_local_transition` / `accept_local_transition` after routing —
+    client-side jump sends now exist only inside the two seams
+    (`src/app/action.rs` `dispatch_jump` / `request_slot_jump`). Remaining
+    `into_jump()` sites are owner-side only: `crates/mbv-core/src/daemon_core.rs:378`
+    (`dispatch_slot_jump`'s DispatchNow arm, fed from `daemon_control.rs:273/:517`),
+    `:430` (`settle_and_redispatch`), `:476` (`expire_and_redispatch`) — the daemon's
+    `player` there is the in-process Playback run, not a ctrl client. Remaining
+    `mint_local_transition`/`accept_local_transition` uses are the seams plus
+    owner-state unit/integration tests that seed owner state directly
+    (`owner_state.rs` tests, `tests_tick_integration_queue_playback.rs`,
+    `actions_tests_queue_state_reseat.rs`, `tests_next_up_accept_dispatch.rs`).
 - [ ] 1.6 Replace the local-only `unreachable!()` arm in
   `crates/mbv-core/src/ctrl.rs:456-465` with a fallible conversion and surface the
   refusal to the caller.

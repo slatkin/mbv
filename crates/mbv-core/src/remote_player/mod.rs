@@ -4,7 +4,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use crate::api::{EmbyClient, EmbyItem};
-use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent};
+use crate::ctrl::{CtrlCmd, CtrlCompatibility, PlaybackIntent, WireCommand};
 use crate::playback_queue::QueueItem;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
@@ -185,7 +185,16 @@ impl RemotePlayer {
                 );
                 return false;
             }
-            cmd => cmd.into(),
+            cmd => match WireCommand::try_from_player_command(cmd) {
+                Ok(wire) => wire,
+                Err(refused) => {
+                    log::warn!(
+                        target: "remote",
+                        "command has no ctrl wire form; refused without delivery: {refused:?}"
+                    );
+                    return false;
+                }
+            },
         };
         self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
     }

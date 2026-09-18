@@ -250,3 +250,7 @@ mod tests_tick_integration_root_frame_fill; // RootFrame placement fill sentinel
 #[cfg(test)]
 #[path = "tests_narrow_browse_migration.rs"]
 mod tests_narrow_browse_migration;
+
+#[cfg(test)]
+#[path = "tests_next_up_accept_dispatch.rs"]
+mod tests_next_up_accept_dispatch; // Next-Up accept owner-kind dispatch coverage (unit A rows 1.2/1.3)

@@ -295,7 +295,7 @@ pub enum PlayerEvent {
     AudiobookshelfBookProgress(crate::ctrl::AudiobookshelfBookProgressEvent),
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PlayerCommand {
     TogglePause,
     /// Jump to an existing queue occurrence by its owner-assigned slot
