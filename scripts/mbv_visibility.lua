@@ -52,7 +52,8 @@ set_virt_mouse_area(0, 0, 0, 0, 'window-controls')
 -- While visible the OSC is hidden and inaccessible.
 --
 
-local next_up = make_overlay(1001, {
+local next_up
+next_up = make_overlay(1001, {
     'next-up-skip',
     'next-up-dismiss',
 }, function(pw, ph)

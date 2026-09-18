@@ -15,7 +15,10 @@ impl App {
         else {
             return false;
         };
-        self.player.send_command(next.into_jump());
+        // The promoted transition was already accepted by the owner state
+        // (expire moved it into in-flight): dispatch it as-is, never re-mint
+        // or re-accept.
+        self.dispatch_jump(next);
         true
     }
 
@@ -285,7 +288,10 @@ impl App {
                             .bare_owner
                             .settle_local_transition(request_id, target_slot_id)
                         {
-                            self.player.send_command(next.into_jump());
+                            // Already accepted (settle promoted it into
+                            // in-flight): dispatch as-is, never re-mint or
+                            // re-accept.
+                            self.dispatch_jump(next);
                         }
                     }
                 }
@@ -357,21 +363,22 @@ impl App {
                         .position(|s| matches!(&s.item, mbv_core::playback_queue::QueueItem::Emby(e) if e.id == item.id))
                     {
                         let slot_id = self.playback_queue().slots()[idx].slot_id;
-                        self.bare_owner
-                            .sync_canonical_queue(self.playback_queue().queue.clone());
-                        let (request_id, generation) = self.bare_owner.mint_local_transition();
-                        let transition = mbv_core::playback_transition::Transition::new(
-                            request_id,
-                            generation,
-                            slot_id,
-                        );
-                        if let mbv_core::playback_transition::DispatchDecision::DispatchNow(t) =
-                            self.bare_owner.accept_local_transition(transition)
-                        {
-                            self.player.send_command(t.into_jump());
+                        let accepted = self.request_slot_jump(slot_id);
+                        if !self.player.is_remote() {
+                            // Bare owner only: with an out-of-process owner
+                            // the active slot follows the owner's queue
+                            // snapshot; a jump requested from it must not
+                            // write a client cursor from the requested slot.
+                            self.playback_queue_mut().queue_cursor = idx;
                         }
-                        self.playback_queue_mut().queue_cursor = idx;
-                        self.flash(label, ToastSeverity::Neutral);
+                        if accepted {
+                            self.flash(label, ToastSeverity::Neutral);
+                        } else {
+                            self.flash(
+                                "Playback owner rejected the queue selection".into(),
+                                ToastSeverity::Error,
+                            );
+                        }
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
                     }

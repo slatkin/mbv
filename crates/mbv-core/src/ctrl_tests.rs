@@ -256,7 +256,7 @@ fn wire_command_round_trips_through_json() {
 
 #[test]
 fn player_command_round_trips_through_wire_command() {
-    let wire: WireCommand = PlayerCommand::SeekAbsolute(12.5).into();
+    let wire = WireCommand::try_from_player_command(PlayerCommand::SeekAbsolute(12.5)).unwrap();
     let json = serde_json::to_string(&wire).unwrap();
     let decoded: WireCommand = serde_json::from_str(&json).unwrap();
     match PlayerCommand::from(decoded) {
@@ -267,8 +267,10 @@ fn player_command_round_trips_through_wire_command() {
 
 #[test]
 fn ctrl_cmd_player_cmd_round_trips_through_json() {
-    let json =
-        serde_json::to_string(&CtrlCmd::PlayerCmd(PlayerCommand::SetMute(true).into())).unwrap();
+    let json = serde_json::to_string(&CtrlCmd::PlayerCmd(
+        WireCommand::try_from_player_command(PlayerCommand::SetMute(true)).unwrap(),
+    ))
+    .unwrap();
     let cmd: CtrlCmd = serde_json::from_str(&json).unwrap();
     match cmd {
         CtrlCmd::PlayerCmd(wire) => match PlayerCommand::from(wire) {
@@ -666,5 +668,40 @@ fn audiobookshelf_queue_item_wire_fields_exact() {
         ],
         "AudiobookshelfQueueItem must contain exactly these wire fields — \
          adding any credential, session id, or resolved url will break this guard"
+    );
+}
+
+// A command with no ctrl wire form is refused fail-closed (design A2): the
+// caller receives the unencodable command back, nothing is delivered, and the
+// calling process survives — no unreachable!() abort.
+#[test]
+fn local_only_command_is_refused_without_delivery_or_termination() {
+    let cmd = PlayerCommand::JumpTo {
+        slot_id: crate::playback_queue::QueueSlotId::from_raw(3),
+        request_id: 9,
+        generation: 9,
+    };
+
+    // The transport refuses to encode it, returning the command.
+    assert!(
+        matches!(
+            WireCommand::try_from_player_command(cmd),
+            Err(PlayerCommand::JumpTo { slot_id, .. }) if slot_id.raw() == 3
+        ),
+        "JumpTo has no wire form and must be refused with the command returned"
+    );
+
+    // End-to-end through the remote-player send path: the send reports the
+    // refusal (`false`), delivers nothing, and the caller keeps running.
+    let (remote, _event_rx, cmd_rx) =
+        crate::remote_player::RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+    assert!(!remote.send_command(PlayerCommand::JumpTo {
+        slot_id: crate::playback_queue::QueueSlotId::from_raw(3),
+        request_id: 9,
+        generation: 9,
+    }));
+    assert!(
+        cmd_rx.try_recv().is_err(),
+        "refused command must not be delivered"
     );
 }

@@ -1,8 +1,9 @@
 # mbv
 
 A terminal client for Emby, Audiobookshelf, and Feeds that browses catalogs and
-plays media. Playback may run inside the terminal process itself, or be hosted
-by a background process on the same machine so it survives the terminal closing.
+plays media. Playback may run inside the terminal process itself, or be hosted by an
+out-of-process Player owner — the Local daemon on the same machine — so it survives
+the terminal closing.
 
 ## Services
 
@@ -100,6 +101,14 @@ Service-specific playback lifecycle. Exactly one exists per user at a time.
 Different owner kinds have different Service eligibility.
 _Avoid_: instance, master, host
 
+**Out-of-process owner**:
+A Player owner running outside the terminal application's own process — the Local
+daemon or packaged mbvd — reached over ctrl. Out-of-process says which process holds
+playback, not which machine: a Local daemon is always on this machine and still
+classifies as on-this-machine; only TCP or Unix daemon endpoints point elsewhere
+(`player-target-locality`). Bare mode is never out-of-process.
+_Avoid_: remote owner (bare), background owner, external player
+
 **Bare mode**:
 The default presentation, where one process is both the terminal UI and the
 Player owner. Closing it stops playback. Bare mode is currently the only owner
@@ -138,6 +147,23 @@ bound to a real ALSA endpoint, so hardware paces playback. Distinct from
 selecting the legacy PCM pipe output, which writes untimed PCM through mpv's
 `ao=pcm` file writer into a FIFO for an external consumer such as Snapserver.
 _Avoid_: ALSA mode, direct audio, hardware output
+
+**mpv script set**:
+The entry script `mbv.lua` and its sibling Lua fragments that build mpv's on-screen
+control overlay (OSC) and Next-Up prompt. Exactly one copy is live per playback run:
+the copy belonging to the running build, never a leftover from the removed installer,
+a previous version, or another build. Distinct from mpv's own configuration and user
+scripts, which mbv never reads or edits.
+_Avoid_: OSC bundle, overlay bundle, Lua scripts (bare), script folder
+
+**Resolved script path**:
+The one script-set path handed to mpv, chosen by a single rule: the running build's
+checkout copy (`<checkout>/scripts/mbv.lua`) when it exists, otherwise the installed
+copy at `/usr/share/mbv/scripts/mbv.lua`. The removed installer's user-directory path
+is never a candidate; an unused copy there is named in a startup warning and left
+untouched. The font directory resolves under the same rule, so scripts and fonts
+always come from the same source. Startup reports the resolved path.
+_Avoid_: script source (bare), active script, script lookup
 
 ## Processes
 

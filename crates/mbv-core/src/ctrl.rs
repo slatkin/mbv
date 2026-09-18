@@ -418,42 +418,44 @@ pub enum WireCommand {
     SkipIntroDismiss,
 }
 
-impl From<PlayerCommand> for WireCommand {
-    fn from(cmd: PlayerCommand) -> Self {
+impl WireCommand {
+    /// Encode a `PlayerCommand` for the ctrl wire. Local-only commands have
+    /// no wire form and are refused: slot-addressed queue mutation crosses
+    /// exclusively as `CtrlCmd::UnifiedQueue*`, `SubmitQueue` is resolved
+    /// before send, and `QueueAppend`/`LoadNew` have no legacy wire form. The
+    /// unencodable command is returned to the caller, which reports the
+    /// refusal — encoding must never terminate the process.
+    pub fn try_from_player_command(cmd: PlayerCommand) -> Result<Self, PlayerCommand> {
         match cmd {
-            PlayerCommand::TogglePause => WireCommand::TogglePause,
-            PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
-            PlayerCommand::Seek(s) => WireCommand::Seek(s),
-            PlayerCommand::SeekAbsolute(s) => WireCommand::SeekAbsolute(s),
-            PlayerCommand::SetAudio(i) => WireCommand::SetAudio(i),
-            PlayerCommand::SetSub(i) => WireCommand::SetSub(i),
+            PlayerCommand::TogglePause => Ok(WireCommand::TogglePause),
+            PlayerCommand::SetVolume(v) => Ok(WireCommand::SetVolume(v)),
+            PlayerCommand::Seek(s) => Ok(WireCommand::Seek(s)),
+            PlayerCommand::SeekAbsolute(s) => Ok(WireCommand::SeekAbsolute(s)),
+            PlayerCommand::SetAudio(i) => Ok(WireCommand::SetAudio(i)),
+            PlayerCommand::SetSub(i) => Ok(WireCommand::SetSub(i)),
             PlayerCommand::SetSubtitlePrefs {
                 mode,
                 subtitle_lang,
                 audio_lang,
-            } => WireCommand::SetSubtitlePrefs {
+            } => Ok(WireCommand::SetSubtitlePrefs {
                 mode,
                 subtitle_lang,
                 audio_lang,
-            },
-            PlayerCommand::SetMute(m) => WireCommand::SetMute(m),
+            }),
+            PlayerCommand::SetMute(m) => Ok(WireCommand::SetMute(m)),
             PlayerCommand::NextUpShow {
                 item_id,
                 show_title,
                 ep_title,
                 artist,
-            } => WireCommand::NextUpShow {
+            } => Ok(WireCommand::NextUpShow {
                 item_id,
                 show_title,
                 ep_title,
                 artist,
-            },
-            PlayerCommand::NextUpDismiss => WireCommand::NextUpDismiss,
-            PlayerCommand::SkipIntroDismiss => WireCommand::SkipIntroDismiss,
-            // Local-only commands: never serialized across ctrl. Slot-addressed
-            // queue mutation crosses exclusively as `CtrlCmd::UnifiedQueue*`;
-            // `SubmitQueue` is resolved before send; `QueueAppend` and `LoadNew`
-            // have no legacy wire form.
+            }),
+            PlayerCommand::NextUpDismiss => Ok(WireCommand::NextUpDismiss),
+            PlayerCommand::SkipIntroDismiss => Ok(WireCommand::SkipIntroDismiss),
             PlayerCommand::QueueAppend { .. }
             | PlayerCommand::QueueRemove(_)
             | PlayerCommand::QueueMove(..)
@@ -461,9 +463,7 @@ impl From<PlayerCommand> for WireCommand {
             | PlayerCommand::LoadNew { .. }
             | PlayerCommand::Next
             | PlayerCommand::Previous
-            | PlayerCommand::SubmitQueue { .. } => {
-                unreachable!("local-only PlayerCommand never crosses ctrl")
-            }
+            | PlayerCommand::SubmitQueue { .. } => Err(cmd),
         }
     }
 }

@@ -206,6 +206,18 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
 
     let no_scripts = config.no_scripts;
     let use_mpv_config = config.use_mpv_config;
+    if no_scripts {
+        log::warn!(
+            target: "player",
+            "init: mpv overlay scripts disabled by config (no_scripts); resolved source {} will not be handed to mpv",
+            crate::config::osc_script_source().chosen.display()
+        );
+    } else if use_mpv_config {
+        log::warn!(
+            target: "player",
+            "init: user's mpv config manages scripts; mbv hands mpv no overlay scripts (no mbv OSD)"
+        );
+    }
     let mut init_err: Option<String> = None;
     let mpv = match Mpv::with_initializer(|init| {
         macro_rules! opt {
@@ -236,11 +248,37 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
             opt!("osd-bar", "no");
         }
         if !no_scripts && !use_mpv_config {
-            let script = crate::config::osc_script_path();
+            let source = crate::config::osc_script_source();
+            let script = source.chosen;
             if script.exists() {
+                log::info!(target: "player", "init: mpv overlay scripts: {}", script.display());
+                if let Some(legacy) = source.unused_legacy {
+                    log::warn!(
+                        target: "player",
+                        "init: ignoring leftover installer script copy {} (using {}); delete it to silence this warning",
+                        legacy.display(),
+                        script.display()
+                    );
+                }
                 opt!("scripts", script.to_str().unwrap_or(""));
-                let fonts = crate::config::osc_fonts_dir();
+                let fonts_source = crate::config::osc_fonts_source();
+                let fonts = fonts_source.chosen;
+                log::info!(target: "player", "init: mpv overlay fonts: {}", fonts.display());
+                if let Some(legacy_fonts) = fonts_source.unused_legacy {
+                    log::warn!(
+                        target: "player",
+                        "init: ignoring leftover installer font directory {} (using {}); delete it to silence this warning",
+                        legacy_fonts.display(),
+                        fonts.display()
+                    );
+                }
                 opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
+            } else {
+                log::warn!(
+                    target: "player",
+                    "init: resolved mpv overlay script {} does not exist; mpv will run with no overlay scripts",
+                    script.display()
+                );
             }
         }
         Ok(())
