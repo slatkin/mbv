@@ -507,7 +507,15 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
     assert!(harness.model().application.mounted(&settings_id));
     assert_eq!(harness.model().application.focus(), Some(&settings_id));
 
-    for _ in 0..7 {
+    // Locate the MouseSupport row ordinal instead of hardcoding Down presses:
+    // the flat row order is SETTING_SECTIONS order, and rows shift whenever a
+    // section is added (the Keys entry moved this row once already).
+    let mouse_support_downs = crate::app::types_settings::SETTING_SECTIONS
+        .iter()
+        .flat_map(|(_, keys)| keys.iter())
+        .position(|key| *key == crate::app::types_settings::SettingKey::MouseSupport)
+        .expect("MouseSupport row exists in SETTING_SECTIONS");
+    for _ in 0..mouse_support_downs {
         harness.inject(key(Key::Down));
         let outcome = harness.step();
         let (mut music_resize, mut tv_resize) = (false, false);
