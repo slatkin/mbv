@@ -82,6 +82,51 @@ fn destination_independent_globals_resolve_to_router_commands() {
     );
 }
 #[test]
+fn shift_tab_backtab_shift_encoding_fires_previous_library_tab() {
+    // Crossterm delivers Shift+Tab as BackTab+SHIFT; the default binding is
+    // the bare BackTab chord. The chord normalization must keep it firing
+    // through the router (P1 regression).
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+            &idle_snapshot(),
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::Command(Command::PreviousLibraryTab),
+        "Shift+Tab must fire previous_library_tab under defaults"
+    );
+}
+#[test]
+fn exact_chord_narrowing_keeps_superset_chords_from_globals() {
+    // Deliberate exact-chord semantics: chords the old permissive literals
+    // happened to catch — Ctrl+C (clear queue) and the Ctrl+Shift encodings
+    // of `/` (search) — must not fire their globals (P2 pin).
+    let snapshot = idle_snapshot();
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL),
+            &snapshot,
+            None,
+            &default_keybinds()
+        ),
+        RouterOutcome::FallThrough,
+        "Ctrl+C must not fire the clear-queue prompt"
+    );
+    for code in [KeyCode::Char('/'), KeyCode::Char('_')] {
+        assert_eq!(
+            resolve_router_outcome_with_focused(
+                KeyEvent::new(code, KeyModifiers::CONTROL | KeyModifiers::SHIFT),
+                &snapshot,
+                None,
+                &default_keybinds()
+            ),
+            RouterOutcome::FallThrough,
+            "Ctrl+Shift+`/` must not open search"
+        );
+    }
+}
+#[test]
 fn help_and_alt_router_guards_preserve_overlay_precedence() {
     let mut snapshot = idle_snapshot();
     snapshot.blocking_overlay_open = true;

@@ -18,7 +18,19 @@ pub(super) struct KeyChord {
 }
 
 impl KeyChord {
+    /// Crossterm delivers Shift+Tab as `BackTab` with SHIFT set, while the
+    /// registry stores the `previous_library_tab` default as a bare `BackTab`
+    /// (the legacy literal matched the code with no modifier check). SHIFT is
+    /// redundant on BackTab — BackTab *is* Shift+Tab — so it is normalized
+    /// away here for both the pressed chord (`from_key`) and the configured
+    /// chord (`from_keybinds_chord`). Other non-Char codes keep SHIFT:
+    /// literal bindings such as the queue-column-width entry match on it.
     pub(super) fn new(code: KeyCode, mods: KeyModifiers) -> Self {
+        let mods = if code == KeyCode::BackTab {
+            mods - KeyModifiers::SHIFT
+        } else {
+            mods
+        };
         Self { code, mods }
     }
 

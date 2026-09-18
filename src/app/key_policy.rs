@@ -457,7 +457,9 @@ mod tests {
     }
 
     fn chord(code: KeyCode, mods: KeyModifiers) -> KeyChord {
-        KeyChord { code, mods }
+        // Through the normalizing constructor, mirroring how the router
+        // derives a chord from a pressed key (`KeyChord::from_key`).
+        KeyChord::new(code, mods)
     }
 
     #[test]
@@ -685,6 +687,66 @@ mod tests {
             .map(|entry| entry.name),
             None
         );
+    }
+
+    #[test]
+    fn shift_tab_resolves_previous_library_tab_under_defaults() {
+        // Crossterm delivers Shift+Tab as BackTab+SHIFT; the registry stores
+        // the default as bare BackTab. The normalization in `KeyChord::new`
+        // makes the pressed chord resolve under defaults.
+        assert_eq!(
+            resolve_policy(
+                chord(KeyCode::BackTab, KeyModifiers::SHIFT),
+                &snapshot(),
+                &keybinds()
+            )
+            .unwrap()
+            .name,
+            "previous_library_tab"
+        );
+        // A configured Shift+BackTab normalizes to the same chord, so it
+        // fires the action too.
+        let keybinds = rebound("previous_library_tab", "Shift+BackTab");
+        assert_eq!(
+            resolve_policy(
+                chord(KeyCode::BackTab, KeyModifiers::SHIFT),
+                &snapshot(),
+                &keybinds
+            )
+            .unwrap()
+            .name,
+            "previous_library_tab"
+        );
+    }
+
+    #[test]
+    fn exact_chord_narrowing_keeps_accidental_superset_chords_inert() {
+        // Deliberate exact-chord semantics (design D3): only the declared
+        // chords fire an action. Chords that the old permissive literals
+        // happened to catch — Ctrl+C for the clear-queue prompt, the
+        // Ctrl+Shift terminal encodings of `/` for search — stay inert.
+        assert_eq!(
+            resolve_policy(
+                chord(KeyCode::Char('c'), KeyModifiers::CONTROL),
+                &snapshot(),
+                &keybinds()
+            )
+            .map(|entry| entry.name),
+            None,
+            "Ctrl+C must not fire clear_queue_prompt_c"
+        );
+        for code in [KeyCode::Char('/'), KeyCode::Char('_')] {
+            assert_eq!(
+                resolve_policy(
+                    chord(code, KeyModifiers::CONTROL | KeyModifiers::SHIFT),
+                    &snapshot(),
+                    &keybinds()
+                )
+                .map(|entry| entry.name),
+                None,
+                "Ctrl+Shift+`/` (both terminal encodings) must not fire search_open"
+            );
+        }
     }
 
     #[test]

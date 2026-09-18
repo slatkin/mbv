@@ -81,3 +81,22 @@ fn configured_rebind_fires_through_tick() {
             OverlayId::Help
         )));
 }
+
+/// Crossterm delivers Shift+Tab as `BackTab` with SHIFT set; the default
+/// `previous_library_tab` binding is the bare `BackTab` chord. The pressed
+/// chord must still fire through the live tick path (P1 regression).
+#[test]
+fn shift_tab_backtab_shift_encoding_fires_previous_library_tab_through_tick() {
+    let app = make_app_stub();
+    let mut harness = TickHarness::new(app);
+    harness.inject(Event::Keyboard(KeyEvent {
+        code: Key::BackTab,
+        modifiers: KeyModifiers::SHIFT,
+    }));
+    let outcome = harness.step();
+    assert_eq!(
+        outcome.router,
+        RouterOutcome::Command(crate::app::action::Command::PreviousLibraryTab),
+        "Shift+Tab must fire previous_library_tab through tick()"
+    );
+}
