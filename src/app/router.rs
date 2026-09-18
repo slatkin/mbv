@@ -7,6 +7,7 @@
 //! leaf's own typed request stands).
 
 use crossterm::event::KeyEvent;
+use mbv_core::keybinds::Keybinds;
 
 use super::action::Command;
 use super::components::ComponentId;
@@ -39,7 +40,8 @@ pub(super) enum RouterOutcome {
 /// the policy can tell "the leaf is the blocking overlay" from "an overlay is
 /// mounted elsewhere".
 /// Resolve a chord against the live ordered policy, carrying the focused
-/// leaf so the policy can apply the two text-entry/overlay rules:
+/// leaf and the loaded keybind configuration so the policy can apply the
+/// configured chords and the two text-entry/overlay rules:
 ///
 /// 1. **Never swallow the focused leaf's own typed request.** When the
 ///    policy would return `Swallow` and the focused leaf is the blocking
@@ -58,11 +60,12 @@ pub(super) fn resolve_router_outcome_with_focused(
     key: KeyEvent,
     snapshot: &RouterSnapshot,
     focused: Option<&ComponentId>,
+    keybinds: &Keybinds,
 ) -> RouterOutcome {
     let chord = KeyChord::from_key(key);
     let focused_is_blocking_overlay =
         snapshot.blocking_overlay_open && focused.is_some_and(is_blocking_overlay);
-    match resolve_policy(chord, snapshot) {
+    match resolve_policy(chord, snapshot, keybinds) {
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
         Some(entry) => {
             if snapshot.text_entry_focused
@@ -77,7 +80,7 @@ pub(super) fn resolve_router_outcome_with_focused(
             {
                 return RouterOutcome::FallThrough;
             }
-            match command_for_policy(entry.binding, chord, snapshot) {
+            match command_for_policy(entry.binding, chord, snapshot, keybinds) {
                 Some(cmd @ (Command::TogglePlayPause | Command::Stop)) => {
                     RouterOutcome::Deferred(cmd)
                 }

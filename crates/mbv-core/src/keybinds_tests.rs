@@ -266,7 +266,7 @@ const EXPECTED_DEFAULTS: &[(&str, &[&str])] = &[
     ("panel_mode_cycle_x", &["x"]),
     ("panel_right", &["Right"]),
     ("panel_left", &["Left"]),
-    ("ctrl_l_force_clear", &["Ctrl+L"]),
+    ("ctrl_l_force_clear", &["Ctrl+l"]),
 ];
 
 #[test]

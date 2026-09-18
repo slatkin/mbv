@@ -180,6 +180,10 @@ pub(crate) mod tests_tick_harness;
 mod tests_tick_integration;
 
 #[cfg(test)]
+#[path = "tests_tick_integration_keybinds.rs"]
+mod tests_tick_integration_keybinds; // Configured keybinds route through the live tick (task 3.3)
+
+#[cfg(test)]
 #[path = "tests_tick_integration_mouse.rs"]
 mod tests_tick_integration_mouse;
 

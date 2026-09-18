@@ -63,7 +63,7 @@ fn focused_blocking_overlay_falls_through_unmatched_and_global_chords() {
 
     for code in [KeyCode::Char('z'), KeyCode::Char('q')] {
         assert_eq!(
-            resolve_router_outcome_with_focused(key(code), &snapshot, Some(&focused)),
+            resolve_router_outcome_with_focused(key(code), &snapshot, Some(&focused), &default_keybinds()),
             RouterOutcome::FallThrough,
             "the focused blocking overlay must keep {code:?}"
         );
@@ -122,5 +122,37 @@ fn fallthrough_with_no_leaf_message_fires_no_global_effect() {
     assert!(
         out.is_empty(),
         "no leaf message + FallThrough must run nothing (no global effect)"
+    );
+}
+
+#[test]
+fn rebound_global_respects_blocking_overlays() {
+    // `help_open` rebound from F1 to Ctrl+h (task 3.2): under a blocking
+    // overlay the rebound chord must not fire — the overlay routing rules
+    // hold for configured chords exactly as for declared defaults.
+    let keybinds = keybinds_with_override("help_open", "Ctrl+h");
+    let rebound_key = crossterm::event::KeyEvent::new(
+        KeyCode::Char('h'),
+        crossterm::event::KeyModifiers::CONTROL,
+    );
+    let snapshot = RouterSnapshot {
+        blocking_overlay_open: true,
+        ..RouterSnapshot::default()
+    };
+
+    assert_eq!(
+        resolve_router_outcome_with_focused(rebound_key, &snapshot, None, &keybinds),
+        RouterOutcome::Swallow,
+        "a rebound chord under a blocking overlay is swallowed"
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            rebound_key,
+            &snapshot,
+            Some(&ComponentId::Modal(ModalId::Confirm)),
+            &keybinds
+        ),
+        RouterOutcome::FallThrough,
+        "the focused blocking overlay keeps its own request over a rebound chord"
     );
 }

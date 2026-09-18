@@ -148,9 +148,6 @@ pub struct Model {
     /// prefix chord plus per-section router overrides and prefix-namespace
     /// assignments. Shell-owned plain data the router reads as its
     /// `&Keybinds` parameter (Unit 3); never mirrored into components.
-    /// `#[allow(dead_code)]` until that parameterization lands (same
-    /// convention as `KeyPolicyEntry::name` before Unit 1).
-    #[allow(dead_code)]
     pub keybinds: mbv_core::keybinds::Keybinds,
 }
 
@@ -408,7 +405,12 @@ impl Model {
             ) || self.active_inline_search_is_open(),
         };
 
-        resolve_router_outcome_with_focused(key, &snapshot, self.application.focus())
+        resolve_router_outcome_with_focused(
+            key,
+            &snapshot,
+            self.application.focus(),
+            &self.keybinds,
+        )
     }
 
     /// Apply a deferred candidate after the focused leaf has been arbitrated.

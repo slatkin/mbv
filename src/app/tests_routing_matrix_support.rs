@@ -24,6 +24,29 @@ use crate::app::components::{ComponentId, Msg, TerminalObserverEvent};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crate::app::shell::fold_keyboard_messages;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::keybinds::{Chord, KeySection, Keybinds, SectionBindings};
+
+/// The registry-defaults configuration the matrix resolves against (task
+/// 3.2): no prefix, every declared action on its declared chords.
+pub(crate) fn default_keybinds() -> Keybinds {
+    Keybinds::default()
+}
+
+/// A configuration with one router-scope override: `id` fires on `chord`
+/// instead of its declared default. The section is irrelevant to routing —
+/// `Keybinds::router_override` scans every section.
+pub(crate) fn keybinds_with_override(id: &'static str, chord: &str) -> Keybinds {
+    Keybinds {
+        prefix: None,
+        sections: vec![(
+            KeySection::Global,
+            SectionBindings {
+                router: vec![(id, Chord::parse(chord).expect("test chord must parse"))],
+                prefix: vec![],
+            },
+        )],
+    }
+}
 
 pub(crate) fn fold_tick(
     leaf: Option<Msg>,
@@ -36,7 +59,7 @@ pub(crate) fn fold_tick(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    let outcome = resolve_router_outcome_with_focused(key, &snapshot, None);
+    let outcome = resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds());
     fold_keyboard_messages(messages, focused.as_ref(), &outcome)
 }
 
@@ -69,7 +92,7 @@ pub(crate) fn fold_tick_focused(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref());
+    let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref(), &default_keybinds());
     fold_keyboard_messages(messages, focused.as_ref(), &outcome)
 }
 

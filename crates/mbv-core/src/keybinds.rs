@@ -405,7 +405,9 @@ pub const KEYBIND_ACTIONS: &[KeybindAction] = &[
     KeybindAction {
         id: "ctrl_l_force_clear",
         section: KeySection::Display,
-        default_chords: &["Ctrl+L"],
+        // Lowercase: crossterm delivers Ctrl+L as `Char('l')` + CONTROL, and
+        // the chord grammar maps a single letter verbatim.
+        default_chords: &["Ctrl+l"],
         gate: KeyGate::NoBlockingOverlay,
         policy: "ctrl_l_force_clear",
         rebindable: true,

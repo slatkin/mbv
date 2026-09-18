@@ -25,6 +25,45 @@ impl KeyChord {
     pub(super) fn from_key(key: KeyEvent) -> Self {
         Self::new(key.code, key.modifiers)
     }
+
+    /// Convert a configured chord from the keybind registry
+    /// (`mbv_core::keybinds::Chord`) into the resolver's normalized shape so
+    /// policy matching can compare it against the pressed chord. The registry
+    /// carries only Ctrl/Shift/Alt, which map losslessly onto crossterm
+    /// modifiers.
+    pub(super) fn from_keybinds_chord(chord: mbv_core::keybinds::Chord) -> Self {
+        use mbv_core::keybinds::{Key as RegistryKey, KeyMods};
+        let mut mods = KeyModifiers::empty();
+        if chord.mods.contains(KeyMods::CTRL) {
+            mods.insert(KeyModifiers::CONTROL);
+        }
+        if chord.mods.contains(KeyMods::SHIFT) {
+            mods.insert(KeyModifiers::SHIFT);
+        }
+        if chord.mods.contains(KeyMods::ALT) {
+            mods.insert(KeyModifiers::ALT);
+        }
+        let code = match chord.key {
+            RegistryKey::Backspace => KeyCode::Backspace,
+            RegistryKey::Enter => KeyCode::Enter,
+            RegistryKey::Esc => KeyCode::Esc,
+            RegistryKey::Left => KeyCode::Left,
+            RegistryKey::Right => KeyCode::Right,
+            RegistryKey::Up => KeyCode::Up,
+            RegistryKey::Down => KeyCode::Down,
+            RegistryKey::Home => KeyCode::Home,
+            RegistryKey::End => KeyCode::End,
+            RegistryKey::PageUp => KeyCode::PageUp,
+            RegistryKey::PageDown => KeyCode::PageDown,
+            RegistryKey::Tab => KeyCode::Tab,
+            RegistryKey::BackTab => KeyCode::BackTab,
+            RegistryKey::Delete => KeyCode::Delete,
+            RegistryKey::Insert => KeyCode::Insert,
+            RegistryKey::F(n) => KeyCode::F(n),
+            RegistryKey::Char(c) => KeyCode::Char(c),
+        };
+        Self::new(code, mods)
+    }
 }
 
 /// Convert a TuiRealm `KeyEvent` to a crossterm `KeyEvent` for the

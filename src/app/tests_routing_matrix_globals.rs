@@ -69,7 +69,7 @@ fn destination_independent_globals_resolve_to_router_commands() {
     ];
     for (key, command) in globals {
         assert_eq!(
-            resolve_router_outcome_with_focused(key, &snapshot, None),
+            resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds()),
             RouterOutcome::Command(command),
             "global {key:?} must be claimed by the router"
         );
@@ -77,7 +77,7 @@ fn destination_independent_globals_resolve_to_router_commands() {
 
     snapshot.help_overlay_open = false;
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None, &default_keybinds()),
         RouterOutcome::Command(Command::OpenHelp)
     );
 }
@@ -86,7 +86,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     let mut snapshot = idle_snapshot();
     snapshot.blocking_overlay_open = true;
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None, &default_keybinds()),
         RouterOutcome::Swallow,
         "F1 must not open Help over a blocking overlay"
     );
@@ -94,7 +94,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
     snapshot.blocking_overlay_open = false;
     snapshot.help_overlay_open = true;
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::F(1)), &snapshot, None, &default_keybinds()),
         RouterOutcome::FallThrough,
         "Help keeps F1 for its dismiss request"
     );
@@ -106,7 +106,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
             KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
             &snapshot,
             None
-        ),
+        , &default_keybinds()),
         RouterOutcome::Command(Command::FocusPanel(crate::app::PanelFocus::Library))
     );
     assert_eq!(
@@ -114,7 +114,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
             KeyEvent::new(KeyCode::Down, KeyModifiers::ALT),
             &snapshot,
             None
-        ),
+        , &default_keybinds()),
         RouterOutcome::Command(Command::NextLibraryTab)
     );
     assert_eq!(
@@ -122,7 +122,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
             KeyEvent::new(KeyCode::Right, KeyModifiers::ALT),
             &snapshot,
             None
-        ),
+        , &default_keybinds()),
         RouterOutcome::Swallow,
         "Alt+Right yielded its panel-switch duty to plain Right; alt_swallow claims it"
     );
@@ -131,7 +131,7 @@ fn help_and_alt_router_guards_preserve_overlay_precedence() {
             KeyEvent::new(KeyCode::Char('b'), KeyModifiers::ALT),
             &snapshot,
             None
-        ),
+        , &default_keybinds()),
         RouterOutcome::Swallow,
         "unhandled Alt chords must not leak into destination handling"
     );
@@ -150,7 +150,7 @@ fn plain_panel_arrows_yield_while_an_overlay_holds_focus() {
             KeyEvent::new(KeyCode::Left, KeyModifiers::NONE),
             &snapshot,
             None
-        ),
+        , &default_keybinds()),
         RouterOutcome::FallThrough,
         "plain Left stays with the focused sidebar"
     );
@@ -160,7 +160,7 @@ fn plain_panel_arrows_yield_while_an_overlay_holds_focus() {
             KeyEvent::new(KeyCode::Right, KeyModifiers::NONE),
             &snapshot,
             None
-        ),
+        , &default_keybinds()),
         RouterOutcome::FallThrough,
         "plain Right stays with the focused sidebar"
     );
@@ -173,7 +173,7 @@ fn quit_global_does_not_fire_in_search_sidebar() {
             key(KeyCode::Char('q')),
             &text_entry_snapshot(),
             Some(&focused),
-        ),
+        &default_keybinds()),
         RouterOutcome::FallThrough,
         "`q` is character input in the search sidebar, not Quit"
     );
@@ -186,7 +186,7 @@ fn panel_mode_cycle_global_does_not_fire_in_search_sidebar() {
             key(KeyCode::Char('x')),
             &text_entry_snapshot(),
             Some(&focused),
-        ),
+        &default_keybinds()),
         RouterOutcome::FallThrough,
         "`x` is character input in the search sidebar, not panel-mode cycle"
     );
@@ -199,7 +199,7 @@ fn library_tab_jump_does_not_fire_in_search_sidebar() {
             key(KeyCode::Char('1')),
             &text_entry_snapshot(),
             Some(&focused),
-        ),
+        &default_keybinds()),
         RouterOutcome::FallThrough,
         "a digit is character input in the search sidebar, not a tab jump"
     );
@@ -212,7 +212,7 @@ fn library_tab_jump_with_modifiers_is_swallowed() {
             KeyEvent::new(KeyCode::Char('1'), KeyModifiers::ALT),
             &idle_snapshot(),
             Some(&focused),
-        ),
+        &default_keybinds()),
         RouterOutcome::Swallow,
         "`Alt+1` is claimed by the policy's alt_swallow entry, not a tab jump"
     );
@@ -255,7 +255,7 @@ fn clear_queue_c_is_global_but_yields_to_text_entry() {
             key(KeyCode::Char('c')),
             &idle_snapshot(),
             Some(&focused)
-        ),
+        , &default_keybinds()),
         RouterOutcome::Command(Command::RequestClearQueue),
         "`c` opens the clear-queue prompt with the browser focused"
     );
@@ -263,9 +263,50 @@ fn clear_queue_c_is_global_but_yields_to_text_entry() {
     let mut typing = idle_snapshot();
     typing.text_entry_focused = true;
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('c')), &typing, Some(&focused)),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('c')), &typing, Some(&focused), &default_keybinds()),
         RouterOutcome::FallThrough,
         "`c` is character input while a text entry owns focus"
+    );
+}
+
+#[test]
+fn rebound_global_respects_text_entry_and_keeps_its_default_inert() {
+    // `quit` rebound from `q` to `w` (task 3.2): the configured chord claims
+    // the router, the text-entry rule holds for it, and the declared default
+    // is inert.
+    let keybinds = keybinds_with_override("quit", "w");
+    let rebound_key = KeyEvent::new(KeyCode::Char('w'), KeyModifiers::NONE);
+    let focused = ComponentId::Library;
+
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            rebound_key,
+            &idle_snapshot(),
+            Some(&focused),
+            &keybinds
+        ),
+        RouterOutcome::Command(Command::Quit),
+        "the configured chord fires the rebound action"
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            rebound_key,
+            &text_entry_snapshot(),
+            Some(&focused),
+            &keybinds
+        ),
+        RouterOutcome::FallThrough,
+        "the rebound chord is character input while a text entry owns focus"
+    );
+    assert_eq!(
+        resolve_router_outcome_with_focused(
+            key(KeyCode::Char('q')),
+            &idle_snapshot(),
+            Some(&focused),
+            &keybinds
+        ),
+        RouterOutcome::FallThrough,
+        "the declared default of a rebound action is inert"
     );
 }
 #[test]
@@ -275,7 +316,7 @@ fn quit_and_visualizer_yield_to_text_entry() {
     typing.text_entry_focused = true;
     for key in [key(KeyCode::Char('q')), key(KeyCode::Char('v'))] {
         assert_eq!(
-            resolve_router_outcome_with_focused(key, &typing, Some(&focused)),
+            resolve_router_outcome_with_focused(key, &typing, Some(&focused), &default_keybinds()),
             RouterOutcome::FallThrough,
             "inline search must keep typed characters instead of quitting/toggling"
         );
