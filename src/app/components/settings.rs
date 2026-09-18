@@ -14,6 +14,18 @@ use super::msg::{
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
+
+/// The Esc/F3/F4/q intent shared by every Settings destination.
+fn settings_intent_for_key(code: Key) -> Option<SettingsIntent> {
+    match code {
+        Key::Esc => Some(SettingsIntent::Back),
+        Key::Function(3) => Some(SettingsIntent::OpenSessions),
+        Key::Function(4) => Some(SettingsIntent::OpenPlaylists),
+        Key::Char('q') => Some(SettingsIntent::Quit),
+        _ => None,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SettingsRow {
     pub label: String,
@@ -374,23 +386,15 @@ impl SettingsComponent {
                 // nothing — the chord changes in the config file, never in
                 // place (ADR 0023). Returning None lets `on()`'s fallback
                 // claim them like the cursor moves.
-                Key::Esc => {
-                    // Leaving Keys zeroes the local cursor so the next
-                    // entry starts at the top (the Services precedent).
-                    self.keys_cursor = 0;
-                    Some(Msg::Shell(ShellRequest::SettingsIntent(
-                        SettingsIntent::Back,
-                    )))
+                Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
+                    let intent = settings_intent_for_key(key.code)?;
+                    if matches!(intent, SettingsIntent::Back) {
+                        // Leaving Keys zeroes the local cursor so the next
+                        // entry starts at the top (the Services precedent).
+                        self.keys_cursor = 0;
+                    }
+                    Some(Msg::Shell(ShellRequest::SettingsIntent(intent)))
                 }
-                Key::Function(3) => Some(Msg::Shell(ShellRequest::SettingsIntent(
-                    SettingsIntent::OpenSessions,
-                ))),
-                Key::Function(4) => Some(Msg::Shell(ShellRequest::SettingsIntent(
-                    SettingsIntent::OpenPlaylists,
-                ))),
-                Key::Char('q') => Some(Msg::Shell(ShellRequest::SettingsIntent(
-                    SettingsIntent::Quit,
-                ))),
                 _ => None,
             };
         }
@@ -414,13 +418,7 @@ impl SettingsComponent {
                 | Key::Char('r')
                 | Key::Char('R') => self.service_key(key),
                 Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                    let intent = match key.code {
-                        Key::Esc => SettingsIntent::Back,
-                        Key::Function(3) => SettingsIntent::OpenSessions,
-                        Key::Function(4) => SettingsIntent::OpenPlaylists,
-                        Key::Char('q') => SettingsIntent::Quit,
-                        _ => unreachable!(),
-                    };
+                    let intent = settings_intent_for_key(key.code)?;
                     if matches!(intent, SettingsIntent::Back) {
                         // Leaving Services zeroes the local cursor so the next
                         // entry starts at the top; the shell-side mirror of
@@ -434,13 +432,8 @@ impl SettingsComponent {
         }
         match key.code {
             Key::Esc | Key::Function(3) | Key::Function(4) | Key::Char('q') => {
-                Some(Msg::Shell(ShellRequest::SettingsIntent(match key.code {
-                    Key::Esc => SettingsIntent::Back,
-                    Key::Function(3) => SettingsIntent::OpenSessions,
-                    Key::Function(4) => SettingsIntent::OpenPlaylists,
-                    Key::Char('q') => SettingsIntent::Quit,
-                    _ => unreachable!(),
-                })))
+                settings_intent_for_key(key.code)
+                    .map(|intent| Msg::Shell(ShellRequest::SettingsIntent(intent)))
             }
             Key::Up => {
                 self.cursor = self.cursor.saturating_sub(1);
