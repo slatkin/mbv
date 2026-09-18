@@ -15,6 +15,7 @@ pub(crate) mod daemon_ctrl;
 pub mod feed_entry_state;
 pub mod id_types;
 pub use id_types::{EmbySessionId, ItemId, MediaSourceId};
+pub mod keybinds;
 #[cfg(any(test, feature = "test-support"))]
 pub mod mock_http;
 pub mod playback;
