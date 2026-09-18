@@ -5,6 +5,7 @@ use super::components::{
 use super::shell::Model;
 use super::types_settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
 use super::{settings, SETTINGS_PANEL_W};
+use mbv_core::keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use ratatui::layout::Rect;
 
 impl Model {
@@ -73,6 +74,7 @@ impl Model {
             cursor: Some(cursor),
         });
 
+        let keys = self.keys_snapshot();
         let services = SERVICE_ENTRIES
             .iter()
             .map(|entry| {
@@ -119,6 +121,7 @@ impl Model {
             destination: self.app.settings_destination,
             rows,
             services,
+            keys,
             setup,
             area: if let Some(panel_area) = super::shell_chrome_panels::sync_panel_area(&self.app) {
                 panel_area
@@ -131,6 +134,54 @@ impl Model {
                 }
             },
         }
+    }
+
+    /// The Keys destination's read-only content (design D7), derived from
+    /// the registry and the loaded `Keybinds`: group-header rows for every
+    /// populated `KeySection` in shared-vocabulary order, then one row per
+    /// declared action with its router chord(s) and, where assigned, its
+    /// prefix chord. Groups and rows cannot drift from routing — both are
+    /// projections of `KEYBIND_ACTIONS`.
+    fn keys_snapshot(&self) -> Vec<SettingsRow> {
+        let mut rows = Vec::new();
+        let mut cursor = 0usize;
+        for section in KEY_SECTIONS {
+            let actions: Vec<&KeybindAction> = KEYBIND_ACTIONS
+                .iter()
+                .filter(|action| action.section == *section)
+                .collect();
+            // A section with no declared action contributes no group (spec:
+            // a section with no configured bindings is absent).
+            if actions.is_empty() {
+                continue;
+            }
+            rows.push(SettingsRow {
+                label: section.name().into(),
+                value: String::new(),
+                section: true,
+                cursor: None,
+            });
+            for action in actions {
+                let mut value = self
+                    .keybinds
+                    .router_chords(action)
+                    .iter()
+                    .map(|chord| chord.to_string())
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                if let Some(prefix) = self.keybinds.prefix_assignment(action.id) {
+                    value.push_str(&format!(" · pfx {prefix}"));
+                }
+                rows.push(SettingsRow {
+                    label: action.id.into(),
+                    value,
+                    section: false,
+                    cursor: Some(cursor),
+                });
+                cursor += 1;
+            }
+        }
+        rows
     }
 
     pub(super) fn handle_service_request(&mut self, request: ServiceRequest) -> bool {
@@ -214,7 +265,10 @@ impl Model {
     pub(super) fn handle_settings_intent(&mut self, intent: SettingsIntent) -> bool {
         match intent {
             SettingsIntent::Back => {
-                if self.app.settings_destination == SettingsDestination::Services {
+                if matches!(
+                    self.app.settings_destination,
+                    SettingsDestination::Services | SettingsDestination::Keys
+                ) {
                     self.app.settings_destination = SettingsDestination::Main;
                 } else {
                     self.app.close_settings();
@@ -246,6 +300,7 @@ impl Model {
 mod tests {
     use super::*;
     use crate::app::components::ServiceRequest;
+    use mbv_core::keybinds::{Chord, KeySection, SectionBindings};
 
     #[test]
     fn settings_service_request_stays_at_shell_boundary() {
@@ -265,5 +320,119 @@ mod tests {
             .emby_setup_form
             .as_ref()
             .is_some_and(|form| !form.error.is_empty()));
+    }
+
+    /// The settings main list's Keys row summarizes the live configuration
+    /// (task 7.2, design D7): the configured prefix plus the number of
+    /// actions whose router binding deviates from the declared default.
+    #[test]
+    fn keys_row_summary_follows_the_loaded_configuration() {
+        use crate::app::{settings, SettingKey};
+        let app = super::super::tests::make_app_stub();
+        let cfg = app.config.lock().unwrap().clone();
+        let ui = app.ui_config_snapshot();
+        assert_eq!(
+            settings::setting_label(SettingKey::Keys),
+            "Keys",
+            "the Keys row is present in the settings label table"
+        );
+        assert_eq!(
+            settings::setting_value(SettingKey::Keys, &cfg, &ui),
+            "defaults",
+            "no [keys] section: the summary reports the declared defaults"
+        );
+
+        let mut configured = cfg.clone();
+        configured.keybinds.prefix = Some(Chord::parse("Ctrl+k").unwrap());
+        configured.keybinds.sections = vec![(
+            KeySection::Playback,
+            SectionBindings {
+                router: vec![
+                    ("toggle_play_pause", Chord::parse("k").unwrap()),
+                    ("stop", Chord::parse("s").unwrap()),
+                ],
+                prefix: vec![],
+            },
+        )];
+        assert_eq!(
+            settings::setting_value(SettingKey::Keys, &configured, &ui),
+            "Ctrl+k \u{b7} 2 overridden"
+        );
+    }
+
+    /// The Keys destination's content is a projection of the registry and
+    /// the loaded `Keybinds` (task 7.1, design D7): groups equal the shared
+    /// section list (populated `KeySection`s in order), action rows equal
+    /// the registry set, and an override renders the configured chord.
+    #[test]
+    fn keys_destination_lists_registry_groups_rows_and_overrides() {
+        let mut app = super::super::tests::make_app_stub();
+        app.settings_destination = SettingsDestination::Keys;
+        let mut model = Model::new(app);
+        model.keybinds = mbv_core::keybinds::Keybinds {
+            prefix: Some(Chord::parse("Ctrl+k").unwrap()),
+            sections: vec![(
+                KeySection::Playback,
+                SectionBindings {
+                    router: vec![("toggle_play_pause", Chord::parse("k").unwrap())],
+                    prefix: vec![("volume_up", Chord::parse("g").unwrap())],
+                },
+            )],
+        };
+
+        let snapshot = model.settings_snapshot();
+        let groups: Vec<&str> = snapshot
+            .keys
+            .iter()
+            .filter(|row| row.section)
+            .map(|row| row.label.as_str())
+            .collect();
+        let expected_groups: Vec<&str> = KEY_SECTIONS
+            .iter()
+            .filter(|section| KEYBIND_ACTIONS.iter().any(|a| a.section == **section))
+            .map(|section| section.name())
+            .collect();
+        assert_eq!(
+            groups, expected_groups,
+            "groups equal the shared section list"
+        );
+
+        let action_rows: Vec<&SettingsRow> =
+            snapshot.keys.iter().filter(|row| !row.section).collect();
+        let mut ids: Vec<&str> = action_rows.iter().map(|row| row.label.as_str()).collect();
+        let mut expected_ids: Vec<&str> = KEYBIND_ACTIONS.iter().map(|a| a.id).collect();
+        ids.sort_unstable();
+        expected_ids.sort_unstable();
+        assert_eq!(ids, expected_ids, "rows equal the registry set");
+        // Every action row is cursor-activatable for selection (read-only:
+        // no activation follows).
+        assert!(action_rows
+            .iter()
+            .all(|row| row.cursor.is_some() && !row.value.is_empty()));
+
+        let toggle = action_rows
+            .iter()
+            .find(|row| row.label == "toggle_play_pause")
+            .expect("declared action is listed");
+        assert_eq!(
+            toggle.value, "k",
+            "an override renders the configured chord"
+        );
+        let volume = action_rows
+            .iter()
+            .find(|row| row.label == "volume_up")
+            .expect("declared action is listed");
+        assert_eq!(
+            volume.value, "+ / = \u{b7} pfx g",
+            "a prefix assignment is shown beside the router chords"
+        );
+        let stop = action_rows
+            .iter()
+            .find(|row| row.label == "stop")
+            .expect("declared action is listed");
+        assert_eq!(
+            stop.value, "Esc",
+            "an unconfigured action shows its default"
+        );
     }
 }

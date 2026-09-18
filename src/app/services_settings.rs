@@ -48,6 +48,11 @@ impl App {
         self.settings_destination = SettingsDestination::Services;
     }
 
+    pub(crate) fn open_keys_settings(&mut self) {
+        self.request_sidebar_open(super::SidebarId::Settings);
+        self.settings_destination = SettingsDestination::Keys;
+    }
+
     fn open_emby_setup(&mut self) {
         let previous = self.emby_runtime.state;
         let config = self.config.lock().unwrap().clone();

@@ -34,9 +34,11 @@ pub enum KeyGate {
 }
 
 /// The settings UI's section vocabulary plus `Global`, in `SETTING_SECTIONS`
-/// order with `Global` appended (design D4). Config section names match the
-/// vocabulary case-insensitively (design D3's file shape spells them
-/// lowercase); the canonical spelling is `name()`.
+/// order with `Global` appended (design D4). The settings main list's
+/// navigation-only `Keys` entry is not a config section and has no variant
+/// here. Config section names match the vocabulary case-insensitively
+/// (design D3's file shape spells them lowercase); the canonical spelling is
+/// `name()`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum KeySection {
     Services,
@@ -694,6 +696,21 @@ impl Keybinds {
             .iter()
             .flat_map(|(_, bindings)| bindings.prefix.iter())
             .filter_map(|(id, chord)| Some((action_by_id(id)?, *chord)))
+    }
+
+    /// The number of actions whose router-scope binding deviates from the
+    /// declared default: the settings main list's Keys-row summary count
+    /// (design D7). A configured chord equal to a declared default is not a
+    /// deviation.
+    pub fn override_count(&self) -> usize {
+        self.sections
+            .iter()
+            .flat_map(|(_, bindings)| bindings.router.iter())
+            .filter(|(id, chord)| {
+                action_by_id(id)
+                    .is_some_and(|action| !action.parsed_default_chords().contains(chord))
+            })
+            .count()
     }
 }
 

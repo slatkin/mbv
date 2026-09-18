@@ -14,7 +14,6 @@ use super::msg::{
 use super::user_event::UserEvent;
 use crate::app::render::{render_settings_content, SettingsRenderGeometry, SettingsRenderModel};
 use crate::app::types_settings::SettingsDestination;
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct SettingsRow {
     pub label: String,
@@ -29,7 +28,6 @@ pub(crate) struct ServiceRow {
     pub detail: String,
     pub muted: bool,
 }
-
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum SetupDraft {
     Emby {
@@ -51,6 +49,12 @@ pub(crate) struct SettingsSnapshot {
     pub destination: SettingsDestination,
     pub rows: Vec<SettingsRow>,
     pub services: Vec<ServiceRow>,
+    /// The read-only Keys destination's content (design D7): group-header
+    /// rows (`section: true`) for each populated `KeySection` plus one row
+    /// per declared registry action with its configured chords. The
+    /// destination is read-only — chords change in the config file, never
+    /// in place (ADR 0023).
+    pub keys: Vec<SettingsRow>,
     pub setup: Option<SetupDraft>,
     pub area: Rect,
 }
@@ -59,9 +63,11 @@ pub struct SettingsComponent {
     destination: SettingsDestination,
     rows: Vec<SettingsRow>,
     services: Vec<ServiceRow>,
+    keys: Vec<SettingsRow>,
     setup: Option<SetupDraft>,
     cursor: usize,
     services_cursor: usize,
+    keys_cursor: usize,
     scroll: usize,
     area: Rect,
     geometry: SettingsRenderGeometry,
@@ -80,9 +86,11 @@ impl SettingsComponent {
             destination: SettingsDestination::Main,
             rows: Vec::new(),
             services: Vec::new(),
+            keys: Vec::new(),
             setup: None,
             cursor: 0,
             services_cursor: 0,
+            keys_cursor: 0,
             scroll: 0,
             area: Rect::default(),
             geometry: SettingsRenderGeometry::default(),
@@ -131,6 +139,7 @@ impl SettingsComponent {
         self.destination = snapshot.destination;
         self.rows = snapshot.rows;
         self.services = snapshot.services;
+        self.keys = snapshot.keys;
         // The component owns its interaction state; content pushes never
         // carry cursor/scroll values. First content (and each destination
         // change) starts from the component-local defaults — Services
@@ -140,12 +149,14 @@ impl SettingsComponent {
         if !self.initialized || destination_changed {
             self.cursor = 0;
             self.services_cursor = 0;
+            self.keys_cursor = 0;
             self.scroll = 0;
         }
         self.cursor = self.cursor.min(self.rows.len().saturating_sub(1));
         self.services_cursor = self
             .services_cursor
             .min(self.services.len().saturating_sub(1));
+        self.keys_cursor = self.keys_cursor.min(self.keys.len().saturating_sub(1));
         self.area = snapshot.area;
         self.initialized = true;
     }
@@ -252,6 +263,41 @@ impl SettingsComponent {
         if self.setup.is_some() {
             return self.setup_key(key);
         }
+        if self.destination == SettingsDestination::Keys {
+            return match key.code {
+                Key::Up => {
+                    self.keys_cursor = self.keys_cursor.saturating_sub(1);
+                    None
+                }
+                Key::Down => {
+                    self.keys_cursor =
+                        (self.keys_cursor + 1).min(self.keys.len().saturating_sub(1));
+                    None
+                }
+                // Read-only destination (design D7): Enter/Space select
+                // nothing — the chord changes in the config file, never in
+                // place (ADR 0023). Returning None lets `on()`'s fallback
+                // claim them like the cursor moves.
+                Key::Esc => {
+                    // Leaving Keys zeroes the local cursor so the next
+                    // entry starts at the top (the Services precedent).
+                    self.keys_cursor = 0;
+                    Some(Msg::Shell(ShellRequest::SettingsIntent(
+                        SettingsIntent::Back,
+                    )))
+                }
+                Key::Function(3) => Some(Msg::Shell(ShellRequest::SettingsIntent(
+                    SettingsIntent::OpenSessions,
+                ))),
+                Key::Function(4) => Some(Msg::Shell(ShellRequest::SettingsIntent(
+                    SettingsIntent::OpenPlaylists,
+                ))),
+                Key::Char('q') => Some(Msg::Shell(ShellRequest::SettingsIntent(
+                    SettingsIntent::Quit,
+                ))),
+                _ => None,
+            };
+        }
         if self.destination == SettingsDestination::Services {
             return match key.code {
                 Key::Up => {
@@ -339,6 +385,12 @@ impl SettingsComponent {
                     self.services_cursor = cursor;
                     return Some(Msg::Service(ServiceRequest::ActivateService(cursor)));
                 }
+                if self.destination == SettingsDestination::Keys {
+                    // Read-only destination: a click selects the row; there
+                    // is no activation.
+                    self.keys_cursor = cursor;
+                    return None;
+                }
                 self.cursor = cursor;
                 Some(Msg::Shell(ShellRequest::SettingsIntent(
                     SettingsIntent::Activate(cursor),
@@ -378,15 +430,23 @@ impl Default for SettingsComponent {
 impl Component for SettingsComponent {
     fn view(&mut self, frame: &mut Frame, area: Rect) {
         let area = if self.area.width > 0 { self.area } else { area };
+        // The Keys destination paints through the same row painter as the
+        // main list (group headers + label/value rows); only the content
+        // source and its cursor differ.
+        let (rows, cursor) = if self.destination == SettingsDestination::Keys {
+            (&self.keys, self.keys_cursor)
+        } else {
+            (&self.rows, self.cursor)
+        };
         render_settings_content(
             frame,
             area,
             SettingsRenderModel {
                 destination: self.destination,
-                rows: &self.rows,
+                rows,
                 services: &self.services,
                 setup: self.setup.as_ref(),
-                cursor: self.cursor,
+                cursor,
                 services_cursor: self.services_cursor,
                 scroll: self.scroll,
             },
@@ -520,6 +580,7 @@ mod tests {
             destination,
             rows,
             services,
+            keys: Vec::new(),
             setup: None,
             area: Rect::new(0, 0, 40, 12),
         });
@@ -608,6 +669,7 @@ mod tests {
                 detail: "Not configured".into(),
                 muted: false,
             }],
+            keys: Vec::new(),
             setup: Some(SetupDraft::Emby {
                 fields: ["https://server".into(), "user".into(), String::new()],
                 focus: 2,
@@ -636,6 +698,7 @@ mod tests {
                 cursor: Some(0),
             }],
             services: Vec::new(),
+            keys: Vec::new(),
             setup: None,
             area: Rect::new(0, 0, 40, 12),
         });
@@ -652,6 +715,115 @@ mod tests {
             .collect();
         assert!(output.contains("SETTINGS"));
         assert!(output.contains("Stay alive"));
+    }
+
+    /// The Keys destination paints through the main list's row painter:
+    /// group headers, one row per action with its chord column, the KEYS
+    /// shell, and an override rendering its configured chord (task 7.1,
+    /// design D7).
+    #[test]
+    fn keys_destination_paints_groups_actions_and_the_configured_chord() {
+        let keys = vec![
+            SettingsRow {
+                label: "Playback".into(),
+                value: String::new(),
+                section: true,
+                cursor: None,
+            },
+            SettingsRow {
+                label: "toggle_play_pause".into(),
+                value: "k".into(),
+                section: false,
+                cursor: Some(0),
+            },
+            SettingsRow {
+                label: "stop".into(),
+                value: "Esc".into(),
+                section: false,
+                cursor: Some(1),
+            },
+        ];
+        let mut component = SettingsComponent::new();
+        component.set_content(SettingsSnapshot {
+            destination: SettingsDestination::Keys,
+            rows: Vec::new(),
+            services: Vec::new(),
+            keys,
+            setup: None,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let output: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol().to_owned())
+            .collect();
+        assert!(output.contains("KEYS"));
+        assert!(output.contains("Playback"), "group header painted");
+        assert!(output.contains("toggle_play_pause"), "action row painted");
+        assert!(
+            output.contains("k"),
+            "the override's configured chord paints"
+        );
+        assert!(output.contains("Esc"), "the default chord paints");
+    }
+
+    /// Keys is a read-only destination (design D7 / ADR 0023): the arrows
+    /// move the local cursor, Enter/Space select nothing, and Back returns
+    /// to the main list and zeroes the cursor for the next entry.
+    #[test]
+    fn keys_destination_is_read_only_and_back_resets_the_cursor() {
+        let keys = vec![
+            SettingsRow {
+                label: "a_first".into(),
+                value: "F1".into(),
+                section: false,
+                cursor: Some(0),
+            },
+            SettingsRow {
+                label: "b_second".into(),
+                value: "F2".into(),
+                section: false,
+                cursor: Some(1),
+            },
+        ];
+        let mut component = SettingsComponent::new();
+        component.set_content(SettingsSnapshot {
+            destination: SettingsDestination::Keys,
+            rows: Vec::new(),
+            services: Vec::new(),
+            keys,
+            setup: None,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        // Down moves the local cursor; no shell intent is emitted.
+        assert!(matches!(
+            component.on(&key(Key::Down)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        assert_eq!(component.keys_cursor, 1);
+        // Enter/Space select nothing (read-only) — no Activate intent.
+        assert!(!matches!(
+            component.on(&key(Key::Enter)),
+            Some(Msg::Shell(ShellRequest::SettingsIntent(_)))
+        ));
+        assert!(matches!(
+            component.on(&key(Key::Enter)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        // Back returns to the main list and zeroes the cursor.
+        assert!(matches!(
+            component.on(&key(Key::Esc)),
+            Some(Msg::Shell(ShellRequest::SettingsIntent(
+                SettingsIntent::Back
+            )))
+        ));
+        assert_eq!(component.keys_cursor, 0);
     }
 
     #[test]
@@ -672,6 +844,7 @@ mod tests {
                     muted: false,
                 },
             ],
+            keys: Vec::new(),
             setup: None,
             area: Rect::new(0, 0, 40, 12),
         });
@@ -705,6 +878,7 @@ mod tests {
                     muted: false,
                 },
             ],
+            keys: Vec::new(),
             setup: None,
             area: Rect::new(0, 0, 40, 12),
         });

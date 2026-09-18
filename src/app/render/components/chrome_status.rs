@@ -313,6 +313,40 @@ impl App {
             })
     }
 
+    /// The prefix-armed pill (design D7, task 7.3): present only while
+    /// prefix mode is armed, styled like the other left-segment pills.
+    /// Non-interactive: any mouse event already disarms prefix mode
+    /// silently, so the pill carries no hit region.
+    pub(in crate::app) fn prefix_armed_status_spans(&self) -> Option<Vec<Span<'static>>> {
+        self.prefix_armed.then(|| {
+            vec![
+                Span::styled(
+                    " ",
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
+                Span::styled(
+                    " PREFIX ",
+                    Style::default()
+                        .fg(palette::ACCENT)
+                        .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    " ",
+                    Style::default().bg(palette::surface_colors(
+                        palette::Surface::StatusBarPill,
+                        false,
+                    )
+                    .fill),
+                ),
+            ]
+        })
+    }
+
     pub(in crate::app) fn volume_status_spans(&self) -> Vec<Span<'static>> {
         let volume = self.playback_display_target().displayed_volume(self);
         // Speaker glyph reflects the volume state (0 / low / mid / high).
@@ -531,6 +565,8 @@ pub(in crate::app) struct StatusBarModel {
     pub right: Vec<Span<'static>>,
     /// Visual-mode count indicator, when selected items exist.
     pub visual_mode: Option<VisualModeIndicator>,
+    /// Prefix-armed pill spans (absent when not armed).
+    pub prefix_armed: Option<Vec<Span<'static>>>,
 }
 /// The status row's pointer regions, retained by the mounted
 /// `StatusBarPanel` after painting.
@@ -578,11 +614,17 @@ pub(in crate::app) fn render_status_bar(
     } else {
         Vec::new()
     };
+    let armed_status = model.prefix_armed.clone();
 
     // Preserve the existing left-segment overflow order: mute drops
-    // first, then the volume pill, then remote. (The service-state
-    // glyphs now live in the right segment.)
+    // first, then the volume pill, then remote. The armed pill sits with
+    // the visual-mode indicator at the top persistence tier: it drops only
+    // when nothing else is left (it names the active routing mode).
     let remote_w = App::status_width(&remote_status);
+    let armed_w = armed_status
+        .as_ref()
+        .map(|spans| App::status_width(spans))
+        .unwrap_or(0);
     let visual_status = model.visual_mode.as_ref().map(|indicator| {
         vec![Span::styled(
             format!("-- VISUAL ({}) --", indicator.count),
@@ -611,17 +653,20 @@ pub(in crate::app) fn render_status_bar(
         }
         total
     };
-    let fits_all = joined_width(&[visual_w, remote_w, mute_w, vol_w]) <= available;
-    let fits_without_mute = !fits_all && joined_width(&[visual_w, remote_w, vol_w]) <= available;
-    let fits_without_volume =
-        !fits_all && !fits_without_mute && joined_width(&[visual_w, remote_w, mute_w]) <= available;
+    let fits_all = joined_width(&[visual_w, armed_w, remote_w, mute_w, vol_w]) <= available;
+    let fits_without_mute =
+        !fits_all && joined_width(&[visual_w, armed_w, remote_w, vol_w]) <= available;
+    let fits_without_volume = !fits_all
+        && !fits_without_mute
+        && joined_width(&[visual_w, armed_w, remote_w, mute_w]) <= available;
     let fits_without_remote = !fits_all
         && !fits_without_mute
         && !fits_without_volume
-        && joined_width(&[visual_w, mute_w, vol_w]) <= available;
+        && joined_width(&[visual_w, armed_w, mute_w, vol_w]) <= available;
 
-    let show_visual = visual_w > 0
-        && (fits_all || fits_without_mute || fits_without_volume || fits_without_remote);
+    let any_fit = fits_all || fits_without_mute || fits_without_volume || fits_without_remote;
+    let show_visual = visual_w > 0 && any_fit;
+    let show_armed = armed_w > 0 && any_fit;
     let show_remote = remote_w > 0 && (fits_all || fits_without_mute || fits_without_volume);
     let show_volume = fits_all || fits_without_mute || fits_without_remote;
 
@@ -635,6 +680,9 @@ pub(in crate::app) fn render_status_bar(
             width: visual_w,
             height: 1,
         });
+    }
+    if show_armed {
+        App::append_status(&mut spans, armed_status.unwrap_or_default());
     }
     if show_volume {
         let vol_x = area.x + App::status_width(&spans);

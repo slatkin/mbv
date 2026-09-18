@@ -47,12 +47,16 @@ pub(in crate::app) fn render_settings_content(
             Some(SetupDraft::Emby { .. }) => "EMBY SETUP",
             Some(SetupDraft::Audiobookshelf { .. }) => "AUDIOBOOKSHELF SETUP",
             None if model.destination == SettingsDestination::Services => "SERVICES",
+            None if model.destination == SettingsDestination::Keys => "KEYS",
             None => "SETTINGS",
         },
         if model.setup.is_some() {
             "[↵]submit [Esc]back"
         } else if model.destination == SettingsDestination::Services {
             "[↵]select [Esc]back"
+        } else if model.destination == SettingsDestination::Keys {
+            // Read-only destination (design D7): nothing to activate.
+            "[↑↓]browse [Esc]back"
         } else {
             "[Space]toggle [Esc]close"
         },

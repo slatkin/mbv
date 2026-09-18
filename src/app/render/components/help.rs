@@ -2,7 +2,7 @@ use super::super::super::palette;
 use super::super::super::HELP_PANEL_W;
 use super::chrome;
 use crate::app::{PanelFocus, TabSelection};
-use mbv_core::keybinds::{KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
+use mbv_core::keybinds::{action_by_id, KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -156,32 +156,80 @@ fn help_blank() -> Line<'static> {
     Line::from("")
 }
 
+/// The key-column text for a declared action under the loaded
+/// configuration: its configured/declared chords joined with ` / `, or the
+/// positional set's range (`1 – 9`) when the declaration carries more than
+/// two chords (the tab-jump digits). The registry and the loaded `Keybinds`
+/// are the only sources — the hand-written Global chord strings are gone
+/// (design D7), so a rebind is reflected here without a second table.
+fn action_keys(keybinds: &Keybinds, id: &str) -> String {
+    let action = action_by_id(id).expect("help references a declared action");
+    let chords: Vec<String> = keybinds
+        .router_chords(action)
+        .iter()
+        .map(|chord| chord.to_string())
+        .collect();
+    if chords.len() > 2 {
+        format!("{} – {}", chords[0], chords[chords.len() - 1])
+    } else {
+        chords.join(" / ")
+    }
+}
+
+/// The Global section's configurable rows as (action id, label), in the
+/// order they are presented. Only labels live here; the chords come from
+/// the registry and the loaded `Keybinds`.
+const GLOBAL_CONFIGURABLE_ROWS: &[(&str, &str)] = &[
+    ("help_open", "Help"),
+    ("settings_open", "Settings"),
+    ("sessions_open", "Remote sessions"),
+    ("playlists_open", "Playlists"),
+    ("f5_refresh", "Refresh view"),
+    ("visualizer", "Switch queue artwork / visualizer"),
+    ("next_library_tab", "Cycle menu"),
+    ("library_tab_jump", "Jump to tab"),
+    ("clear_queue_prompt_c", "Clear Queue"),
+    ("quit", "Quit"),
+];
+
 /// Builds every named help section. Kept as a pure function so classification
 /// tests can inspect section content and ordering without driving a terminal.
 fn build_help_sections(
     key_w: usize,
     keybinds: &Keybinds,
 ) -> Vec<(HelpSection, Vec<Line<'static>>)> {
-    let sec_global = vec![
-        help_section_line("Global"),
-        help_line(key_w, "F1", "Help"),
-        help_line(key_w, "F2", "Settings"),
-        help_line(key_w, "F3", "Remote sessions"),
-        help_line(key_w, "F4", "Playlists"),
-        help_line(key_w, "F5", "Refresh view"),
-        help_line(key_w, "v", "Switch queue artwork / visualizer"),
-        help_line(key_w, "Tab", "Cycle menu"),
-        help_line(key_w, "1 – 9", "Jump to tab"),
-        help_line(key_w, "↑ / ↓", "Move cursor"),
-        help_line(key_w, "← / →", "Switch panels"),
-        help_line(key_w, "PgUp / PgDn", "Page scroll"),
-        help_line(key_w, "Home / End", "First/last item"),
-        help_line(key_w, "Enter", "Select/Play/Open"),
-        help_line(key_w, ".", "Context menu"),
-        help_line(key_w, "c", "Clear Queue"),
-        help_line(key_w, "q", "Quit"),
-        help_blank(),
-    ];
+    let mut sec_global = vec![help_section_line("Global")];
+    for (id, label) in GLOBAL_CONFIGURABLE_ROWS {
+        sec_global.push(help_line(key_w, &action_keys(keybinds, id), label));
+    }
+    // The panel-focus pair is two declared actions presented as one row.
+    sec_global.push(help_line(
+        key_w,
+        &format!(
+            "{} / {}",
+            action_keys(keybinds, "panel_left"),
+            action_keys(keybinds, "panel_right")
+        ),
+        "Switch panels",
+    ));
+    // Leaf-local, non-configurable rows stay hand-written: the registry
+    // declares only router-owned chords (design D7).
+    sec_global.push(help_line(key_w, "↑ / ↓", "Move cursor"));
+    sec_global.push(help_line(key_w, "PgUp / PgDn", "Page scroll"));
+    sec_global.push(help_line(key_w, "Home / End", "First/last item"));
+    sec_global.push(help_line(key_w, "Enter", "Select/Play/Open"));
+    sec_global.push(help_line(key_w, ".", "Context menu"));
+    // The prefix namespace is presented when configured (spec: help lists
+    // the prefix and its assigned actions); with no prefix, help matches
+    // the pre-prefix presentation.
+    if let Some(prefix) = keybinds.prefix {
+        sec_global.push(help_section_line("Prefix"));
+        sec_global.push(help_line(key_w, &prefix.to_string(), "Arm prefix mode"));
+        for (action, chord) in keybinds.prefix_assignments() {
+            sec_global.push(help_line(key_w, &chord.to_string(), action.id));
+        }
+    }
+    sec_global.push(help_blank());
     // Rendered from the declared registry (design D7): one row per Playback
     // action, its keys the chords it actually fires on for the loaded
     // configuration, so the section cannot silently drift from routing.
@@ -302,10 +350,24 @@ pub(in crate::app) struct HelpRenderGeometry {
 /// render-layer tests that pin help to the registry (design D7).
 #[cfg(test)]
 pub(in crate::app::render) fn playback_help_rows(key_w: usize, keybinds: &Keybinds) -> Vec<String> {
+    section_help_rows(key_w, keybinds, HelpSection::Playback)
+}
+
+/// The rendered Global section's row texts (padded key column + label),
+/// including the prefix block when configured. Test seam for the
+/// render-layer tests that pin the Global/prefix presentation to the
+/// registry (task 7.4, design D7).
+#[cfg(test)]
+pub(in crate::app::render) fn global_help_rows(key_w: usize, keybinds: &Keybinds) -> Vec<String> {
+    section_help_rows(key_w, keybinds, HelpSection::Global)
+}
+
+#[cfg(test)]
+fn section_help_rows(key_w: usize, keybinds: &Keybinds, section: HelpSection) -> Vec<String> {
     let (_, lines) = build_help_sections(key_w, keybinds)
         .into_iter()
-        .find(|(section, _)| *section == HelpSection::Playback)
-        .expect("Playback help section exists");
+        .find(|(name, _)| *name == section)
+        .expect("help section exists");
     // Skip the section header; the rows follow it.
     lines[1..]
         .iter()

@@ -33,6 +33,7 @@ pub(super) enum PanelMode {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SettingKey {
     Services,
+    Keys,
     StayAlive,
     AutoReconnect,
     SavePlaylistOnQuit,
@@ -66,6 +67,7 @@ pub(crate) enum SettingsDestination {
     #[default]
     Main,
     Services,
+    Keys,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -97,6 +99,9 @@ pub(super) enum ServiceActionIntent {
 // LogOut is rendered separately as a plain line below the grid.
 pub(super) static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("Services", &[SettingKey::Services]),
+    // Navigation-only entry (opens the read-only Keys destination); not a
+    // config section, so `KeySection` has no `Keys` variant.
+    ("Keys", &[SettingKey::Keys]),
     (
         "Playback",
         &[

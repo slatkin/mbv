@@ -151,6 +151,7 @@ mod tests {
             volume,
             right: pill("R", Color::White),
             visual_mode: None,
+            prefix_armed: None,
         }
     }
 
