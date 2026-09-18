@@ -325,6 +325,12 @@ pub struct App {
     /// Emby server self-heals after `LIBRARY_ROUTE_CACHE_TTL` instead of
     /// requiring an app restart (#223, post-grilling revision item 5).
     pub(super) library_route_cache: std::collections::HashMap<String, (Option<String>, Instant)>,
+    /// Whether prefix mode is armed (change `add-configurable-keybinds`,
+    /// design D6, task 6.1): the App-owned bit the keyboard policy sees as
+    /// `RouterSnapshot.prefix_armed`. Armed by the `prefix_arm` policy layer,
+    /// disarmed by an armed-dispatch outcome, and silently cleared on any
+    /// mouse event. Sticky until a disarm event; no timed expiry.
+    pub(super) prefix_armed: bool,
     pub(super) force_clear: bool,
     pub(super) tab_scroll: usize,
     pub(super) ui_volume: u8,

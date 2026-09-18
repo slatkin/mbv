@@ -29,6 +29,16 @@ pub(super) enum RouterOutcome {
     FallThrough,
     /// A context-sensitive candidate resolved after leaf arbitration.
     Deferred(Command),
+    /// Prefix mode (design D6, task 6.2): arm prefix mode and consume the
+    /// chord. If already armed this re-arms (the double-prefix record).
+    PrefixArm,
+    /// Armed dispatch: a mapped prefix-namespace chord whose action's
+    /// declared gate currently allows it — run the command and disarm.
+    PrefixDispatch(Command),
+    /// Armed chord resolved to nothing (unmapped, Escape, or a mapped chord
+    /// whose gate is closed): swallow and disarm. No FallThrough exists
+    /// while armed.
+    PrefixSwallow,
 }
 
 /// Resolve a chord against the live ordered policy. A matched command is
@@ -38,11 +48,11 @@ pub(super) enum RouterOutcome {
 /// focused. Production routing goes through
 /// `resolve_router_outcome_with_focused`, which carries the focused leaf so
 /// the policy can tell "the leaf is the blocking overlay" from "an overlay is
-/// mounted elsewhere".
-/// Resolve a chord against the live ordered policy, carrying the focused
-/// leaf and the loaded keybind configuration so the policy can apply the
-/// configured chords and the two text-entry/overlay rules:
+/// mounted elsewhere". The rules, in the order they apply:
 ///
+/// 0. **Armed prefix capture** (design D6, task 6.2): while
+///    `snapshot.prefix_armed` is true the chord resolves against the prefix
+///    namespace only (`resolve_armed_outcome`); no chord reaches any surface.
 /// 1. **Never swallow the focused leaf's own typed request.** When the
 ///    policy would return `Swallow` and the focused leaf is the blocking
 ///    overlay (`snapshot.blocking_overlay_open` is true and the focused id
@@ -63,9 +73,16 @@ pub(super) fn resolve_router_outcome_with_focused(
     keybinds: &Keybinds,
 ) -> RouterOutcome {
     let chord = KeyChord::from_key(key);
+    // Armed prefix capture (design D6): while armed, every chord resolves
+    // against the prefix namespace only — before text-entry, overlay, and
+    // leaf arbitration, none of which can see an armed chord.
+    if snapshot.prefix_armed {
+        return resolve_armed_outcome(chord, snapshot, keybinds);
+    }
     let focused_is_blocking_overlay =
         snapshot.blocking_overlay_open && focused.is_some_and(is_blocking_overlay);
     match resolve_policy(chord, snapshot, keybinds) {
+        Some(entry) if entry.binding == KeyPolicyBinding::PrefixArm => RouterOutcome::PrefixArm,
         Some(entry) if entry.blocking => RouterOutcome::Swallow,
         Some(entry) => {
             if snapshot.text_entry_focused
@@ -107,6 +124,46 @@ pub(super) fn resolve_router_outcome_with_focused(
         }
         None => RouterOutcome::FallThrough,
     }
+}
+
+/// Armed-dispatch resolution (design D6, task 6.2): the next chord after the
+/// prefix resolves against the prefix-namespace assignments only. The prefix
+/// chord re-arms; a mapped chord fires its action only under the action's
+/// normal eligibility gate (arming reuses each action's declared gate, never
+/// bypasses it) and disarms; Escape or an unmapped chord — including a mapped
+/// chord whose gate is closed — swallows and disarms. There is no FallThrough
+/// path: while armed, no chord reaches the focused component or any surface.
+pub(super) fn resolve_armed_outcome(
+    chord: KeyChord,
+    snapshot: &RouterSnapshot,
+    keybinds: &Keybinds,
+) -> RouterOutcome {
+    // The prefix chord itself re-arms and stays consumed (double prefix).
+    if keybinds.prefix.map(KeyChord::from_keybinds_chord) == Some(chord) {
+        return RouterOutcome::PrefixArm;
+    }
+    let mapped = keybinds
+        .prefix_assignments()
+        .find(|(_, configured)| KeyChord::from_keybinds_chord(*configured) == chord)
+        .map(|(action, _)| action);
+    if let Some(action) = mapped {
+        // Armed dispatch resolves the action through its own policy layer so
+        // the declared gate and the command binding stay the registry's.
+        if let Some(entry) = super::key_policy::KEY_POLICY
+            .iter()
+            .find(|entry| entry.name == action.id)
+        {
+            if entry.gate.allows(chord, snapshot) {
+                if let Some(command) = command_for_policy(entry.binding, chord) {
+                    return RouterOutcome::PrefixDispatch(command);
+                }
+            }
+        }
+    }
+    // Unmapped, Escape, or mapped-with-closed-gate: consumed, disarms,
+    // nothing executes. `stop` is not prefix-addressable (design D1), so
+    // Escape can never dispatch through this path.
+    RouterOutcome::PrefixSwallow
 }
 
 /// Whether a component id is one of the blocking overlays the policy mounts.

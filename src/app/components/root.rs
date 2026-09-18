@@ -80,13 +80,17 @@ impl AppComponent<Msg, UserEvent> for UiRootComponent {
             // because it used to be the shell-resolved tab-bar click (task
             // 6.5); the tab bar is a mounted `TabPanel` now (task 2.1), so a
             // click is only the redraw echo and no shell geometry is read.
+            // The other mouse kinds get their own marker so the shell can
+            // silently disarm prefix mode on any mouse event (design D6,
+            // task 6.1) without mistaking them for the `NoOp` redraw echo.
             Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                 TerminalObserverEvent::MouseClick {
                     column: mouse.column,
                     row: mouse.row,
                 }
             }
-            Event::Mouse(_) | Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
+            Event::Mouse(_) => TerminalObserverEvent::Mouse,
+            Event::None | Event::Paste(_) | Event::Tick | Event::User(_) => {
                 TerminalObserverEvent::NoOp
             }
         };

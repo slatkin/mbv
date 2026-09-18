@@ -19,7 +19,10 @@ impl Model {
     /// the #607 acceptance gate). Mirrors the exact condition
     /// `sync_queue` uses to claim focus.
     pub(super) fn sync_active_destination(&mut self) {
-        if self.overlay_holds_focus() {
+        // Prefix-armed capture (design D6, task 6.1) holds focus off while
+        // armed — the arm blurred it and the disarm restores it — so the
+        // pass must not re-activate a destination mid-capture.
+        if self.overlay_holds_focus() || self.app.prefix_armed {
             return;
         }
         let queue_owns_focus = matches!(self.app.effective_panel_focus(), PanelFocus::Queue)

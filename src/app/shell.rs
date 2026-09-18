@@ -149,6 +149,13 @@ pub struct Model {
     /// assignments. Shell-owned plain data the router reads as its
     /// `&Keybinds` parameter (Unit 3); never mirrored into components.
     pub keybinds: mbv_core::keybinds::Keybinds,
+    /// The focus displaced by arming prefix mode (design D6, task 6.1).
+    /// tuirealm forwards every chord to the focused component before the
+    /// router fold, so armed capture blurs focus for the armed ticks; this
+    /// records what was focused when the shell armed, and the disarm
+    /// restores it (falling back to the sync passes' canonical
+    /// re-derivation when it was unmounted meanwhile).
+    pub(super) prefix_armed_focus: Option<ComponentId>,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -256,6 +263,9 @@ pub(super) fn arbitrate_key(
     };
     let final_disposition = match router {
         RouterOutcome::Command(_) => "command",
+        RouterOutcome::PrefixDispatch(_) => "prefix-dispatch",
+        RouterOutcome::PrefixArm => "prefix-arm",
+        RouterOutcome::PrefixSwallow => "prefix-swallow",
         RouterOutcome::Swallow => "swallow",
         RouterOutcome::FallThrough => {
             if leaf_disposition == "consumed" {
@@ -267,7 +277,7 @@ pub(super) fn arbitrate_key(
         RouterOutcome::Deferred(_) => "deferred",
     };
     let dispatch_kind = match router {
-        RouterOutcome::Command(_) => "command",
+        RouterOutcome::Command(_) | RouterOutcome::PrefixDispatch(_) => "command",
         _ if out.iter().any(|m| !matches!(m, Msg::TerminalEvent(_))) => "request",
         _ => "none",
     };
@@ -324,6 +334,7 @@ pub(super) fn fold_mouse_messages(messages: Vec<Msg>) -> Vec<Msg> {
                         | TerminalObserverEvent::Resize { .. }
                         | TerminalObserverEvent::FocusGained
                         | TerminalObserverEvent::FocusLost
+                        | TerminalObserverEvent::Mouse
                         | TerminalObserverEvent::MouseClick { .. }
                         | TerminalObserverEvent::MouseClaimed
                         | TerminalObserverEvent::KeyClaimed
@@ -403,14 +414,65 @@ impl Model {
                         | ComponentId::Overlay(OverlayId::Settings)
                 )
             ) || self.active_inline_search_is_open(),
+            prefix_armed: self.app.prefix_armed,
         };
 
-        resolve_router_outcome_with_focused(
+        let outcome = resolve_router_outcome_with_focused(
             key,
             &snapshot,
             self.application.focus(),
             &self.keybinds,
-        )
+        );
+        // Arm/disarm transitions come from the router's outcome (design D6,
+        // task 6.1): the arming layer arms, an armed dispatch (mapped or
+        // swallowed) disarms. The prefix chord re-arms through `PrefixArm`.
+        match outcome {
+            RouterOutcome::PrefixArm => self.arm_prefix_mode(),
+            RouterOutcome::PrefixDispatch(_) | RouterOutcome::PrefixSwallow => {
+                self.disarm_prefix_mode();
+            }
+            _ => {}
+        }
+        outcome
+    }
+
+    /// Arm prefix mode (design D6, task 6.1): set the App-owned bit and
+    /// withhold the keyboard from the focused leaf for the armed ticks.
+    /// tuirealm forwards every chord to the focused component before the
+    /// router fold (`Application::tick` → `forward_to_active_component`),
+    /// so armed capture — no chord reaches any component — blurs focus for
+    /// the armed ticks, exactly how blocking overlays withhold underlying
+    /// input. The displaced focus is saved for the disarm restore; the
+    /// focus-managing sync passes gate on the armed bit so they never steal
+    /// focus back mid-capture. The arm tick's own chord was already
+    /// delivered to the leaf before this runs — unavoidable, and the prefix
+    /// chord performs no other action at the router.
+    pub(in crate::app) fn arm_prefix_mode(&mut self) {
+        if self.app.prefix_armed {
+            return;
+        }
+        self.prefix_armed_focus = self.application.focus().cloned();
+        self.app.prefix_armed = true;
+        if self.application.focus().is_some() {
+            self.application.blur().expect("blur for prefix arm");
+        }
+    }
+
+    /// Disarm prefix mode: clear the App-owned bit and restore the focus the
+    /// arm displaced. A mouse-event disarm restores it too, so the event is
+    /// handled exactly as if prefix mode had never been armed.
+    pub(in crate::app) fn disarm_prefix_mode(&mut self) {
+        if !self.app.prefix_armed {
+            return;
+        }
+        self.app.prefix_armed = false;
+        if let Some(id) = self.prefix_armed_focus.take() {
+            if self.application.mounted(&id) {
+                self.application
+                    .active(&id)
+                    .expect("restore prefix-displaced focus");
+            }
+        }
     }
 
     /// Apply a deferred candidate after the focused leaf has been arbitrated.
@@ -490,6 +552,7 @@ impl Model {
             context_menu_origin: None,
             context_action_snapshot: None,
             keybinds,
+            prefix_armed_focus: None,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
@@ -572,8 +635,12 @@ fn apply_terminal_observer(
         // chrome; the tab bar is a mounted `TabPanel` now (task 2.1) and the
         // click reaches it through its `mouse_sub()` subscription, so a
         // click here is only the observer's redraw echo (no shell geometry
-        // is read).
-        TerminalObserverEvent::MouseClick { .. } => {}
+        // is read). It is still a mouse event: any mouse event silently
+        // disarms prefix mode (design D6, task 6.1) — a shell-side flag
+        // clear plus focus restore; the mouse event's own delivery and
+        // handling are unchanged.
+        TerminalObserverEvent::MouseClick { .. } => model.disarm_prefix_mode(),
+        TerminalObserverEvent::Mouse => model.disarm_prefix_mode(),
         TerminalObserverEvent::Key(_)
         | TerminalObserverEvent::NoOp
         | TerminalObserverEvent::MouseClaimed

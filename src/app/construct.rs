@@ -241,6 +241,7 @@ impl App {
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
+            prefix_armed: false,
             tab_scroll: 0,
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_library_nav_at: Instant::now() - Duration::from_secs(1),

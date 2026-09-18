@@ -22,7 +22,9 @@ impl Model {
             || self
                 .application
                 .mounted(&ComponentId::Popup(PopupId::FeedManage));
-        if !child_open && self.application.focus() != Some(&id) {
+        // Prefix-armed capture (design D6, task 6.1) holds focus off while
+        // armed; the disarm restores what the arm displaced.
+        if !child_open && self.application.focus() != Some(&id) && !self.app.prefix_armed {
             self.application.active(&id).expect("activate Settings");
         }
 

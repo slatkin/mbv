@@ -219,6 +219,7 @@ pub(crate) fn make_app_stub() -> App {
         search_tx,
         search_rx,
         force_clear: false,
+        prefix_armed: false,
         tab_scroll: 0,
         ui_volume: 100,
         pre_mute_volume: None,

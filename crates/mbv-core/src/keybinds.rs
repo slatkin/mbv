@@ -681,6 +681,16 @@ impl Keybinds {
             .next()
             .expect("every action resolves to at least one chord")
     }
+
+    /// Every configured prefix-namespace assignment as (action, configured
+    /// chord), for the armed-dispatch lookup (change
+    /// `add-configurable-keybinds`, design D6). Ids are validated at load.
+    pub fn prefix_assignments(&self) -> impl Iterator<Item = (&'static KeybindAction, Chord)> + '_ {
+        self.sections
+            .iter()
+            .flat_map(|(_, bindings)| bindings.prefix.iter())
+            .filter_map(|(id, chord)| Some((action_by_id(id)?, *chord)))
+    }
 }
 
 /// The `[keys]` configuration as read from the file, before compilation:

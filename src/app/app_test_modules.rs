@@ -184,6 +184,10 @@ mod tests_tick_integration;
 mod tests_tick_integration_keybinds; // Configured keybinds route through the live tick (task 3.3)
 
 #[cfg(test)]
+#[path = "tests_tick_integration_prefix_mode.rs"]
+mod tests_tick_integration_prefix_mode; // Prefix mode through the live tick (tasks 6.1, 6.3)
+
+#[cfg(test)]
 #[path = "tests_tick_integration_mouse.rs"]
 mod tests_tick_integration_mouse;
 
