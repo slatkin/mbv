@@ -5,6 +5,45 @@ use crate::app::PanelFocus;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
+fn loaded_keys_override_reaches_the_model() {
+    // The compiled `[keys]` configuration is read once, at Model
+    // construction, from the config the App was built with (U2 row 2.3).
+    let app = make_app_stub();
+    let config = crate::config::Config {
+        keybinds: mbv_core::keybinds::load(&mbv_core::keybinds::RawKeybinds {
+            prefix: Some("Ctrl+b".into()),
+            sections: vec![(
+                "global".into(),
+                mbv_core::keybinds::RawSection {
+                    router: vec![("help_open".into(), "F9".into())],
+                    prefix: vec![],
+                },
+            )],
+        })
+        .unwrap(),
+        ..Default::default()
+    };
+    *app.config.lock().unwrap() = config;
+
+    let model = Model::new(app);
+    assert_eq!(
+        model.keybinds.prefix,
+        Some(mbv_core::keybinds::Chord::parse("Ctrl+b").unwrap())
+    );
+    assert_eq!(
+        model.keybinds.router_override("help_open"),
+        Some(mbv_core::keybinds::Chord::parse("F9").unwrap())
+    );
+    assert!(model.keybinds.router_override("settings_open").is_none());
+}
+
+#[test]
+fn model_without_keys_configuration_holds_default_keybinds() {
+    let model = Model::new(make_app_stub());
+    assert_eq!(model.keybinds, mbv_core::keybinds::Keybinds::default());
+}
+
+#[test]
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
     let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);

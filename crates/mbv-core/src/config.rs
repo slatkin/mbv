@@ -19,6 +19,7 @@ pub mod tests {
     #[cfg(test)]
     use std::time::{SystemTime, UNIX_EPOCH};
     include!("config_tests_settings.rs");
+    include!("config_tests_keybinds.rs");
     include!("config_tests_library.rs");
     include!("config_tests_paths.rs");
     include!("config_tests_paths_env.rs");

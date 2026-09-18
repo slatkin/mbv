@@ -95,6 +95,11 @@ pub struct Config {
     /// (`[[feeds]]` array-of-tables in config.toml). The only persisted
     /// feed data: per-entry playback state is never saved.
     pub feeds: Vec<FeedSubscription>,
+    /// Compiled `[keys]` configuration (change `add-configurable-keybinds`,
+    /// D3): the optional prefix chord plus per-section router overrides and
+    /// prefix-namespace assignments, validated against the keybind registry
+    /// at parse time. Absent section resolves to the all-defaults value.
+    pub keybinds: crate::keybinds::Keybinds,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -151,6 +156,7 @@ impl Default for Config {
             idle_feed_rss_url: "https://novaramedia.com/feed/".to_string(),
             idle_feed_rotation_secs: 10,
             feeds: vec![],
+            keybinds: crate::keybinds::Keybinds::default(),
         }
     }
 }

@@ -143,6 +143,15 @@ pub struct Model {
             crate::app::types_context_menu::ContextMenuTargets,
         >,
     >,
+    /// Compiled keybind configuration, parsed once from the config file at
+    /// startup (change `add-configurable-keybinds`, design D3): the optional
+    /// prefix chord plus per-section router overrides and prefix-namespace
+    /// assignments. Shell-owned plain data the router reads as its
+    /// `&Keybinds` parameter (Unit 3); never mirrored into components.
+    /// `#[allow(dead_code)]` until that parameterization lands (same
+    /// convention as `KeyPolicyEntry::name` before Unit 1).
+    #[allow(dead_code)]
+    pub keybinds: mbv_core::keybinds::Keybinds,
 }
 
 /// The ADR 0023 Keyboard Router fold: apply the router's outcome to this
@@ -458,6 +467,10 @@ impl Model {
             .as_str()
             .and_then(HomeLatestSource::from_pref_key);
         let initial_terminal_size = (app.terminal_width, app.terminal_height);
+        // The compiled `[keys]` configuration is read once, here, from the
+        // config the App was built with; later config saves never rewrite it
+        // for the running session.
+        let keybinds = app.config.lock().unwrap().keybinds.clone();
         let mut model = Self {
             app,
             application,
@@ -477,6 +490,7 @@ impl Model {
             visual_selection: None,
             context_menu_origin: None,
             context_action_snapshot: None,
+            keybinds,
         };
         // UiRoot owns overlay z-order and permanently observes terminal events.
         // This is the ONLY mount with a non-mouse subscription; every other
