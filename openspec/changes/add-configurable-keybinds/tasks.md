@@ -14,9 +14,9 @@
 
 ## 3. Policy parameterization
 
-- [ ] 3.1 Thread `&Keybinds` through `resolve_policy`/`command_for_policy`; each declared action matches its configured chord instead of `KeyPolicyBinding::matches()`'s literals, with `Keybinds::defaults()` byte-identical to today. Verify: `key_policy` unit tests — rebound action fires on its new chord, its default is inert, defaults reproduce today's resolution.
-- [ ] 3.2 Update routing-matrix fixtures to construct registry defaults and add rows proving the text-entry and blocking-overlay rules hold for rebound chords. Verify: `cargo nextest run -p mbv` routing matrix green.
-- [ ] 3.3 Pass the loaded `Keybinds` into production routing through the shell. Verify: tick-integration test — a configured rebind fires through `Application::tick()`.
+- [x] 3.1 Thread `&Keybinds` through `resolve_policy`/`command_for_policy`; each declared action matches its configured chord instead of `KeyPolicyBinding::matches()`'s literals, with `Keybinds::defaults()` byte-identical to today. Verify: `key_policy` unit tests — rebound action fires on its new chord, its default is inert, defaults reproduce today's resolution.
+- [x] 3.2 Update routing-matrix fixtures to construct registry defaults and add rows proving the text-entry and blocking-overlay rules hold for rebound chords. Verify: `cargo nextest run -p mbv` routing matrix green.
+- [x] 3.3 Pass the loaded `Keybinds` into production routing through the shell. Verify: tick-integration test — a configured rebind fires through `Application::tick()`.
 
 ## 4. Double-tap removal
 
