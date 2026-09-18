@@ -217,7 +217,15 @@ impl Player {
                         return;
                     }
                 };
-                let (mode, index) = queue_load_location(i, start_idx);
+                let (mode, index) = if active_file_projection {
+                    // Cold active-file (Audiobookshelf): the single load is
+                    // the whole playlist and this branch skips
+                    // `start_queue_playback`, so the load must start
+                    // playback itself — the D3 no-play plan would idle.
+                    active_file_load_location()
+                } else {
+                    queue_load_location(i, start_idx)
+                };
                 let opts = prepared.mpv_load_options(item);
                 if let Err(e) =
                     mpv.command("loadfile", &[prepared.url.as_str(), mode, &index, &opts])

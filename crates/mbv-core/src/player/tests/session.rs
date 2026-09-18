@@ -618,6 +618,40 @@ fn no_play_load_plan_builds_canonical_playlist_before_playback_starts() {
 }
 
 #[test]
+fn cold_active_file_single_load_starts_playback_via_replace() {
+    // Mock model of the cold submit path's active-file (Audiobookshelf)
+    // branch: the load plan is exactly vec![start_idx] and
+    // `start_queue_playback` is skipped, so the single loadfile must itself
+    // start playback. mpv semantics: `replace` on an empty idle playlist
+    // plays the file; the D3 no-play queue plan modes never do — which is
+    // why this branch must not use `queue_load_location`.
+    let start_idx = 0;
+    let mut playlist: Vec<usize> = Vec::new();
+    let mut playback_started = false;
+    // Cold submit: load plan is exactly vec![start_idx] for this projection.
+    let (mode, index) = active_file_load_location();
+    match mode {
+        "replace" => {
+            playlist = vec![start_idx];
+            playback_started = true;
+        }
+        "append" => playlist.push(start_idx),
+        // pi-lens-ignore: rust-unwrap
+        "insert-at" => playlist.insert(index.parse::<usize>().unwrap(), start_idx),
+        other => panic!("unexpected load mode {other}"),
+    }
+    assert_eq!(playlist, vec![start_idx]);
+    assert!(
+        playback_started,
+        "cold active-file load must start playback; no-play plan modes idle the run"
+    );
+    // Contrast: the same submit loop's full-queue arm is no-play for the
+    // start slot (D3), so the carve-out is what keeps the active-file load
+    // distinct.
+    assert_eq!(queue_load_location(start_idx, start_idx).0, "append");
+}
+
+#[test]
 fn divergent_entry_names_only_an_entry_mpv_actually_moved_to() {
     // mpv is where the run already believes playback is: nothing to adopt.
     assert_eq!(divergent_entry(2, 2, 4), None);

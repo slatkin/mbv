@@ -95,6 +95,14 @@ fn queue_load_location(index: usize, start_idx: usize) -> (&'static str, String)
     }
 }
 
+/// mpv loadfile mode for the cold active-file (Audiobookshelf) single load in
+/// submit: that branch loads exactly one slot and skips
+/// `start_queue_playback`, so the load itself must start playback — `replace`
+/// on an empty idle playlist does. The D3 no-play plan modes never would.
+fn active_file_load_location() -> (&'static str, String) {
+    ("replace", "-1".to_string())
+}
+
 /// Start playback at `start_idx` after the no-play queue loads (design D3).
 /// Setting `playlist-pos` on the fully built, still-idle playlist makes mpv
 /// load that entry; an armed audio-pipe startup pause stays in force until
