@@ -27,6 +27,11 @@ impl Model {
     }
 
     pub(in crate::app) fn mount_sidebar(&mut self, sidebar: SidebarId) {
+        // Help and the sidebars are one switch set: `mount_help` dismisses the
+        // sidebars, so a sidebar mount dismisses Help. Without this, Help
+        // stays mounted and (painting after Settings/Playlists in
+        // OVERLAY_IDS) hides the sidebar the function key just opened.
+        self.umount_help();
         let id = Self::sidebar_component_id(sidebar);
         for other in [
             SidebarId::Settings,

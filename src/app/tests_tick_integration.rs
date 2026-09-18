@@ -539,3 +539,48 @@ fn settings_mouse_support_row_toggle_flips_config_and_arms_capture() {
 
 #[path = "tests_tick_integration_music.rs"]
 mod tests_tick_integration_music;
+
+/// A function key pressed while the Help overlay is open must dismiss Help and
+/// open its sidebar. Help stays mounted otherwise, and (painting after
+/// Settings/Playlists in OVERLAY_IDS) it hid the sidebar the key just opened —
+/// F2/F4 looked dead while F3 (painted after Help) worked.
+#[test]
+fn function_keys_from_help_dismiss_help_and_open_their_sidebar() {
+    let step_with_key = |harness: &mut TickHarness, code: Key| {
+        harness.inject(key(code));
+        let outcome = harness.step();
+        if let RouterOutcome::Command(command) = &outcome.router {
+            harness.model_mut().dispatch_router_command(command.clone());
+        }
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+        harness.model_mut().sync_mounted_surfaces();
+    };
+
+    for (code, overlay) in [
+        (Key::Function(2), OverlayId::Settings),
+        (Key::Function(3), OverlayId::Sessions),
+        (Key::Function(4), OverlayId::Playlists),
+    ] {
+        let mut harness = TickHarness::new(make_app_stub());
+        step_with_key(&mut harness, Key::Function(1));
+        let help_id = ComponentId::Overlay(OverlayId::Help);
+        assert!(
+            harness.model().application.mounted(&help_id),
+            "F1 must open Help first"
+        );
+
+        step_with_key(&mut harness, code);
+        let target_id = ComponentId::Overlay(overlay);
+        assert!(harness.model().application.mounted(&target_id));
+        assert_eq!(harness.model().application.focus(), Some(&target_id));
+        assert!(
+            !harness.model().application.mounted(&help_id),
+            "opening a sidebar from Help must dismiss Help; otherwise it paints over the sidebar"
+        );
+    }
+}
