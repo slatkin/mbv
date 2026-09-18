@@ -21,7 +21,7 @@ use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
     MediaKind, MediaListCarrier, MediaListOperation, MediaListRow, MediaListSurfaceInput,
-    MediaSemanticState,
+    MediaListTitleReveal, MediaSemanticState,
 };
 use super::msg::{
     Msg, PodcastEpisodeIntent, PodcastEpisodeTarget, ShellRequest, TerminalObserverEvent,
@@ -91,7 +91,15 @@ impl PodcastContent {
             pill: PillSelection::State(AudiobookshelfEpisodeFilter::All),
             initialized: false,
             focused: false,
-            episodes: MediaListCarrier::new(),
+            episodes: {
+                let mut episodes = MediaListCarrier::new();
+                // The episode browser reads as its parent podcasts at rest
+                // and reveals the episode title on the row the user selected
+                // (design D1: the destination declares the policy once; the
+                // shared row painter applies it).
+                episodes.set_title_reveal(MediaListTitleReveal::OnSelection);
+                episodes
+            },
             hero_image: HeroImageState::None,
             hero_scroll: 0,
             hero_scroll_target: None,
@@ -353,6 +361,13 @@ impl PodcastContent {
     #[cfg(test)]
     pub(in crate::app) fn episode_rows(&self) -> &[MediaListRow<PodcastEpisodeTarget>] {
         self.episodes.rows()
+    }
+
+    /// The episode list's declared title-reveal policy: the destination opts
+    /// in once at construction and the shared row painter applies it.
+    #[cfg(test)]
+    pub(in crate::app) fn episode_title_reveal(&self) -> MediaListTitleReveal {
+        self.episodes.wide().title_reveal()
     }
 
     /// The selected episode as the existing hero producer's input: the

@@ -8,8 +8,8 @@ use ratatui::layout::{Position, Rect};
 use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::{
-    MediaListOperation, MediaListRow, MediaListTransition, SelectionOrigin, SelectionSummary,
-    ViewportAnchor, WideMediaList,
+    MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition, SelectionOrigin,
+    SelectionSummary, ViewportAnchor, WideMediaList,
 };
 
 /// One logical row flow's destination-side carrier over one canonical owner.
@@ -108,6 +108,13 @@ impl<Target> MediaListCarrier<Target> {
 impl<Target: Clone + PartialEq> MediaListCarrier<Target> {
     pub fn set_content(&mut self, rows: Vec<MediaListRow<Target>>) {
         self.wide.set_content(rows);
+    }
+
+    /// Declare how this list's rows reveal their titles (see
+    /// [`MediaListTitleReveal`]). The destination that composes the list sets
+    /// it once; the shared row painter applies it.
+    pub fn set_title_reveal(&mut self, policy: MediaListTitleReveal) {
+        self.wide.set_title_reveal(policy);
     }
 
     pub fn select_target(&mut self, target: &Target) -> bool {

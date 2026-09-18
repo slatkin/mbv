@@ -1,6 +1,6 @@
 use super::{
-    MediaKind, MediaList, MediaListCarrier, MediaListRow, MediaSemanticState, ViewportAnchor,
-    WideMediaList, WideMediaListPaintPolicy,
+    MediaKind, MediaList, MediaListCarrier, MediaListRow, MediaListTitleReveal, MediaSemanticState,
+    ViewportAnchor, WideMediaList, WideMediaListPaintPolicy,
 };
 use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
@@ -126,6 +126,23 @@ fn fixed_row_owner_survives_wide_narrow_wide_geometry_changes() {
     paint(carrier.wide_mut(), Rect::new(0, 0, 20, 7));
     assert_eq!(carrier.selected_target(), target.as_ref());
     assert!(carrier.wide().current_flow_offset().unwrap() <= narrow_offset);
+}
+
+#[test]
+fn title_reveal_defaults_to_always_and_survives_a_content_refresh() {
+    let mut carrier = MediaListCarrier::new();
+    assert_eq!(
+        carrier.wide().title_reveal(),
+        MediaListTitleReveal::Always,
+        "a list that declares nothing reveals every row's title"
+    );
+    carrier.set_title_reveal(MediaListTitleReveal::OnSelection);
+    carrier.set_content(vec![item("one"), item("two")]);
+    assert_eq!(
+        carrier.wide().title_reveal(),
+        MediaListTitleReveal::OnSelection,
+        "an ordinary refresh keeps the list's declared policy"
+    );
 }
 
 #[test]

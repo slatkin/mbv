@@ -3,20 +3,23 @@ use ratatui::text::Span;
 use unicode_width::UnicodeWidthStr;
 
 /// `key` is the stable state key. Must match the text the caller looked the
-/// marquee state up with (the media-list painter keys on the row's
-/// `primary`), or the start time resets every frame and the marquee never
-/// advances.
+/// marquee state up with (the media-list painter keys on the row's full
+/// marqueed title text), or the start time resets every frame and the marquee
+/// never advances. `force_scroll` scrolls a title that already fits its
+/// window instead of returning it static, for a list that reveals its row
+/// titles only on the selected row.
 pub(super) fn marquee_spans(
     key: &str,
     parts: &[(String, Color)],
     max_width: usize,
     marquee_text: &mut String,
     marquee_started_at: &mut std::time::Instant,
+    force_scroll: bool,
 ) -> Vec<Span<'static>> {
     let total_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
     // A zero budget (the row fully consumed by reserved slots) yields an
     // empty window — never the untruncated parts.
-    if total_width <= max_width {
+    if total_width <= max_width && !force_scroll {
         return parts
             .iter()
             .map(|(text, color)| Span::styled(text.clone(), Style::default().fg(*color)))
@@ -27,10 +30,17 @@ pub(super) fn marquee_spans(
         marquee_text.push_str(key);
         *marquee_started_at = std::time::Instant::now();
     }
-    let overflow = total_width - max_width;
+    // A forced scroll of a title that already fits travels the title's own
+    // width, so it leaves the window entirely and returns; an overflowing
+    // title travels only its excess.
+    let travel = if force_scroll && total_width <= max_width {
+        total_width
+    } else {
+        total_width.saturating_sub(max_width)
+    };
     colored_width_window(
         parts,
-        marquee_col(overflow, marquee_started_at.elapsed().as_millis()),
+        marquee_col(travel, marquee_started_at.elapsed().as_millis()),
         max_width,
     )
 }
@@ -95,8 +105,36 @@ fn colored_width_window(
 
 #[cfg(test)]
 mod tests {
+    use ratatui::style::Color;
+    use std::time::{Duration, Instant};
+
     #[test]
     fn marquee_advances_five_columns_per_second() {
         assert_eq!(super::marquee_col(10, 600 + 150 * 5), 5);
+    }
+
+    /// A forced scroll carries a title that already fits its window out of the
+    /// window and back (the reveal-on-selection list's selected row), instead
+    /// of returning it static.
+    #[test]
+    fn forced_scroll_carries_a_fitting_title_out_and_back() {
+        let parts = vec![("Show A".to_string(), Color::Reset)];
+        let mut text = String::new();
+        let mut started = Instant::now();
+        let window = |text: &mut String, started: &mut Instant, elapsed_ms: u64| {
+            *started = Instant::now() - Duration::from_millis(elapsed_ms);
+            let spans = super::marquee_spans("Show A", &parts, 20, text, started, true);
+            spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<String>()
+        };
+        // 6 columns of title, 20 columns of window: the hold shows it whole.
+        assert_eq!(window(&mut text, &mut started, 0), "Show A");
+        // Hold (600ms) then one step per 150ms over the title's own width.
+        assert_eq!(window(&mut text, &mut started, 1_500), "");
+        // The far hold keeps the empty window, and the cycle returns the title.
+        assert_eq!(window(&mut text, &mut started, 2_100), "");
+        assert_eq!(window(&mut text, &mut started, 3_000), "Show A");
     }
 }

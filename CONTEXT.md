@@ -464,6 +464,16 @@ foreground role, so no title is bold and none takes an accent colour. A multi-se
 bar too, including while the list is unfocused; an unfocused list paints no bar for its cursor row.
 _Avoid_: gutter accent, gutter-selected style, selection marker
 
+**Title reveal**:
+The closed title-reveal policy of one media list: `Always` (every row paints its full title, the
+default) or `OnSelection` (a row outside the list's selection paints only its primary context text,
+and the selected row paints the full context-and-title text, marqueed while the list is focused). The
+destination that composes the list declares it once; the shared row painter applies it, so no
+destination paints or branches its own rows. The podcast episode browser is the only `OnSelection`
+list today: the list reads as its parent podcasts at rest and reveals the episode name where the user
+is looking.
+_Avoid_: hidden title, hover title, selected-only title, marquee mode
+
 **Tab panel**:
 The root-composed Panel that paints tab selection and overflow controls for the
 Library column and owns their hit geometry.

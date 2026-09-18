@@ -158,6 +158,30 @@ fn podcast_panel_owns_one_surface_at_wide_and_normal_breakpoints() {
     }
 }
 
+/// The episode browser declares the shared reveal-on-selection title policy:
+/// the destination opts in once at construction and the shared row painter
+/// applies it. The rows themselves keep both title parts, so the reveal is a
+/// paint-time policy rather than a content change.
+#[test]
+fn podcast_episode_list_declares_the_reveal_on_selection_title_policy() {
+    let mut harness = TickHarness::new(audiobookshelf_app());
+    draw(&mut harness, 160);
+
+    let owner = podcast(&mut harness);
+    assert_eq!(
+        owner.episode_title_reveal(),
+        crate::app::components::media_list::MediaListTitleReveal::OnSelection,
+        "the podcast episode list reveals its rows' titles on selection"
+    );
+    assert!(
+        owner.episode_rows().iter().any(|row| matches!(
+            row,
+            MediaListRow::Item { secondary: Some(title), .. } if !title.is_empty()
+        )),
+        "the rows still carry the episode title: the reveal is a paint-time policy"
+    );
+}
+
 #[test]
 fn podcast_flat_browser_updates_in_place_when_episodes_arrive() {
     let mut app = audiobookshelf_app();

@@ -132,6 +132,22 @@ pub enum MediaSemanticState {
     NowPlaying { progress: Option<ActiveProgress> },
 }
 
+/// The closed title-reveal policy of one list: whether every row paints its
+/// full title, or only the list's selected row does. Declared once by the
+/// destination that composes the list (`set_title_reveal`) and applied by the
+/// shared row painter, so a destination never paints or branches its own rows
+/// to express it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MediaListTitleReveal {
+    /// Every row paints its full title; a split row paints both parts.
+    #[default]
+    Always,
+    /// A row outside the list's selection paints only its primary text; the
+    /// selected row paints the full title (marqueed per the selected-row
+    /// marquee rule while the list is focused).
+    OnSelection,
+}
+
 impl MediaSemanticState {
     /// Constructs active state, clamping prepared progress to the permitted range.
     pub fn active(progress: Option<u16>) -> Self {
@@ -399,6 +415,24 @@ impl<Target> MediaListRow<Target> {
     }
 }
 
+/// The text a list's marquee clock keys on for one row: the full title text the
+/// painter marquees — a split row's context text and item title, one space
+/// apart — or `None` for a row with no title. One formula for both sides: the
+/// presenter keys its clock with this text and hands the painter the same
+/// string, so the two cannot drift. A drift makes the clock restart every frame
+/// and the marquee hold at the start forever.
+pub(crate) fn row_marquee_key<Target>(row: &MediaListRow<Target>) -> Option<String> {
+    match row {
+        MediaListRow::Item {
+            primary, secondary, ..
+        } => Some(match secondary.as_deref().filter(|sec| !sec.is_empty()) {
+            Some(sec) => format!("{primary} {sec}"),
+            None => primary.clone(),
+        }),
+        MediaListRow::Heading { .. } | MediaListRow::Spacer => None,
+    }
+}
+
 /// The clamped one-column viewport of a [`MediaList`] for a given painted
 /// height: `offset` is the display-row index at the viewport top, so display
 /// row `i` paints at screen row `i - offset`. `total_rows` counts every
@@ -435,6 +469,8 @@ pub struct MediaList<Target> {
     frozen_selection: Vec<Target>,
     /// Whether cursor movement currently recomputes the anchored range.
     live_range: bool,
+    /// The list's title-reveal policy (see [`MediaListTitleReveal`]).
+    title_reveal: MediaListTitleReveal,
     marquee_text: String,
     marquee_started_at: Instant,
 }
@@ -451,9 +487,19 @@ impl<Target> MediaList<Target> {
             selection_anchor: None,
             frozen_selection: Vec::new(),
             live_range: false,
+            title_reveal: MediaListTitleReveal::Always,
             marquee_text: String::new(),
             marquee_started_at: Instant::now(),
         }
+    }
+
+    /// Declare how this list's rows reveal their titles.
+    pub(crate) fn set_title_reveal(&mut self, policy: MediaListTitleReveal) {
+        self.title_reveal = policy;
+    }
+
+    pub(crate) fn title_reveal(&self) -> MediaListTitleReveal {
+        self.title_reveal
     }
 
     pub(crate) fn marquee_state(&mut self, text: &str) -> (String, Instant) {

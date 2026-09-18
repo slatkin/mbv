@@ -1,5 +1,5 @@
 use crate::app::components::media_list::{
-    MediaKind, MediaListRow, MediaListTrailing, MediaSemanticState,
+    MediaKind, MediaListRow, MediaListTitleReveal, MediaListTrailing, MediaSemanticState,
 };
 use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
@@ -42,7 +42,8 @@ pub(in crate::app) fn media_list_row<Target>(
     alternate_bg: Option<Color>,
     inner_width: usize,
     has_scrollbar: bool,
-    mut marquee: Option<(&mut String, &mut std::time::Instant)>,
+    title_reveal: MediaListTitleReveal,
+    mut marquee: Option<(&str, &mut String, &mut std::time::Instant)>,
 ) -> ListItem<'static> {
     match row {
         MediaListRow::Spacer => ListItem::new(Line::from(stripe_spans(
@@ -122,6 +123,10 @@ pub(in crate::app) fn media_list_row<Target>(
                 .filter(|_| !matches!(kind, MediaKind::Collection));
 
             let content_w = row_content_w(inner_width, has_scrollbar);
+            // The row's own selection bit, before the focus folding below:
+            // the title reveal follows the selection, while the selected-row
+            // bar and the marquee follow the focused selection.
+            let row_selected = selected;
             let trailing_w: usize = trailing_pieces
                 .iter()
                 .map(|(text, _)| 1 + text.width())
@@ -158,11 +163,30 @@ pub(in crate::app) fn media_list_row<Target>(
                     None => vec![(primary.clone(), title_color)],
                 };
             let parts_width: usize = parts.iter().map(|(text, _)| text.width()).sum();
+            // A row outside the selection of a reveal-on-selection list paints
+            // only its primary (context) text: the secondary title is the
+            // item's own name, shown where the user is looking. The row keeps
+            // its title slot, so the resting context text uses the columns the
+            // whole title would have taken and is cut by the ordinary
+            // truncation rule.
+            let hidden_title = title_reveal == MediaListTitleReveal::OnSelection && !row_selected;
+            let painted_parts: &[(String, Color)] = if hidden_title { &parts[..1] } else { &parts };
             let title_spans = marquee
                 .take()
-                .filter(|_| selected && parts_width > title_width)
-                .map(|(text, started_at)| {
-                    marquee_spans(primary, &parts, title_width, text, started_at)
+                .filter(|_| {
+                    selected
+                        && (parts_width > title_width
+                            || title_reveal == MediaListTitleReveal::OnSelection)
+                })
+                .map(|(key, text, started_at)| {
+                    marquee_spans(
+                        key,
+                        &parts,
+                        title_width,
+                        text,
+                        started_at,
+                        title_reveal == MediaListTitleReveal::OnSelection,
+                    )
                 })
                 .unwrap_or_else(|| {
                     // Whole-row truncation: the title parts (context,
@@ -173,7 +197,7 @@ pub(in crate::app) fn media_list_row<Target>(
                     // its full width; the item title absorbs the cut.
                     let mut spans = Vec::new();
                     let mut used = 0usize;
-                    for (text, color) in &parts {
+                    for (text, color) in painted_parts {
                         if used >= title_width {
                             break;
                         }

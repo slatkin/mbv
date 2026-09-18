@@ -1,6 +1,7 @@
 use super::row::media_list_row;
 use crate::app::components::media_list::{
-    MediaListRow, RowGeometry, SelectedRowSurface, WideMediaList, WideMediaListPaintPolicy,
+    row_marquee_key, MediaListRow, RowGeometry, SelectedRowSurface, WideMediaList,
+    WideMediaListPaintPolicy,
 };
 use crate::app::palette;
 use ratatui::layout::Rect;
@@ -67,15 +68,20 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
 ) -> MediaListPaint<Target> {
     let geometry = list.row_geometry(content_area.height as usize);
     let selected_row = geometry.selected_row();
-    let marquee_primary = focused
+    // The marquee clock keys on the full title text the row marquees (a split
+    // row's context text and item title), so two rows sharing a context name
+    // never share a clock position. `row_marquee_key` is the one formula the
+    // painter receives its key from too.
+    let marquee_key: Option<String> = focused
         .then_some(selected_row)
         .flatten()
         .and_then(|row| list.rows().get(row))
-        .and_then(|row| match row {
-            MediaListRow::Item { primary, .. } => Some(primary.clone()),
-            _ => None,
-        });
-    let mut marquee = marquee_primary.map(|primary| list.marquee_state(&primary));
+        .and_then(row_marquee_key);
+    let title_reveal = list.title_reveal();
+    let mut marquee = marquee_key.map(|key| {
+        let (text, started_at) = list.marquee_state(&key);
+        (key, text, started_at)
+    });
     let rows = list.rows();
     let offset = geometry.offset();
     let total_rows = geometry.len();
@@ -118,10 +124,11 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
                 alternate_bg,
                 inner_width,
                 scrollbar,
+                title_reveal,
                 marquee
                     .as_mut()
                     .filter(|_| Some(source_row) == selected_row)
-                    .map(|(text, started_at)| (text, started_at)),
+                    .map(|(key, text, started_at)| (key.as_str(), text, started_at)),
             )
         })
         .collect();

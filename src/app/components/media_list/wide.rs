@@ -1,6 +1,6 @@
 use super::{
-    MediaList, MediaListOperation, MediaListRow, MediaListTransition, RowGeometry, ViewportAnchor,
-    WideMediaListPaintPolicy, WideViewport,
+    MediaList, MediaListOperation, MediaListRow, MediaListTitleReveal, MediaListTransition,
+    RowGeometry, ViewportAnchor, WideMediaListPaintPolicy, WideViewport,
 };
 use ratatui::layout::{Position, Rect};
 use ratatui::Frame;
@@ -212,6 +212,15 @@ impl<Target> WideMediaList<Target> {
 
     pub(crate) fn marquee_state(&mut self, text: &str) -> (String, std::time::Instant) {
         self.core.marquee_state(text)
+    }
+
+    /// The list's declared title-reveal policy, read by the painter.
+    pub(crate) fn title_reveal(&self) -> MediaListTitleReveal {
+        self.core.title_reveal()
+    }
+
+    pub(crate) fn set_title_reveal(&mut self, policy: MediaListTitleReveal) {
+        self.core.set_title_reveal(policy);
     }
 
     #[cfg(test)]

@@ -563,6 +563,7 @@ fn marquee_spans(
         max_width,
         ctx.marquee_text,
         ctx.marquee_started_at,
+        false,
     )
 }
 
