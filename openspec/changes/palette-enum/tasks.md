@@ -7,8 +7,8 @@
 
 ## 2. Palette core (additive, no callers)
 
-- [ ] 2.1 Add `render/theme/palette.rs` with the `Palette` enum, `const fn color()`, `ALL`, and hex/name accessors; verify `cargo check -p mbv` passes
-- [ ] 2.2 Add palette-value uniqueness test over `ALL` plus the `docs/palette.json` sync test; verify with `cargo nextest run -p mbv` for the new tests
+- [x] 2.1 Add `render/theme/palette.rs` with the `Palette` enum, `const fn color()`, `ALL`, and hex/name accessors; verify `cargo check -p mbv` passes
+- [x] 2.2 Add palette-value uniqueness test over `ALL` plus the `docs/palette.json` sync test; verify with `cargo nextest run -p mbv` for the new tests
 
 ## 3. Type migration
 
