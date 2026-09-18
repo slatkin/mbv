@@ -37,6 +37,32 @@ pub(super) fn audiobookshelf_book_cover_cache_key(server: &str, id: &str, suffix
     format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:bookcover:{id}:{suffix}")
 }
 
+/// Cache key for an Audiobookshelf cover as the Library hero draws it:
+/// `{server}:hero:cover:{id}:{suffix}`, the plain cover key under a hero
+/// scope.
+///
+/// The hero re-encodes the entry's protocol from a cover-fit crop of its
+/// artwork box (`ensure_hero_cover_protocol`), so one entry can carry either
+/// the hero's crop or a plain consumer's `Resize::Scale` — never both. Sharing
+/// one key (the queue card paints the same show cover for a playing episode)
+/// made each consumer take the other's `ThreadProtocol` on every frame, so the
+/// hero fell back to the placeholder block and flashed. Emby's hero and card
+/// keys are already distinct for the same reason (`{id}:Backdrop,Primary` vs
+/// `{id}:P`).
+pub(super) fn audiobookshelf_hero_cover_cache_key(server: &str, id: &str, suffix: &str) -> String {
+    format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:hero:cover:{id}:{suffix}")
+}
+
+/// Hero-scoped sibling of [`audiobookshelf_book_cover_cache_key`], with the
+/// same crop-vs-plain isolation as [`audiobookshelf_hero_cover_cache_key`].
+pub(super) fn audiobookshelf_hero_book_cover_cache_key(
+    server: &str,
+    id: &str,
+    suffix: &str,
+) -> String {
+    format!("{AUDIOBOOKSHELF_CACHE_KEY_PREFIX}{server}:hero:bookcover:{id}:{suffix}")
+}
+
 /// The infix opening a Series artwork key: `{id}{SERIES_IMAGE_CACHE_KEY_INFIX}{types}`.
 /// No other cache-key namespace uses it, which is what lets the image-completion
 /// gate recognise the whole Series family from the key alone.
@@ -293,44 +319,53 @@ impl App {
 impl App {
     /// Triggers the Audiobookshelf cover fetch for `library_item_id` and
     /// returns its image cache key, or `None` with no server configured.
-    /// The hero projection (task 5.10) and the un-migrated painters'
-    /// `paint_home_image` Audiobookshelf arm both resolve the key here, so
-    /// the fetch dedupes on the one reservation.
+    /// This is the hero projection's own entry (task 5.10): the key is
+    /// hero-scoped so a plain consumer of the same cover — the queue card
+    /// painting a playing episode of this show — keeps its uncropped
+    /// encoding instead of the hero's cover-fit crop, and neither flashes.
     pub(in crate::app) fn audiobookshelf_cover_key(
         &mut self,
         library_item_id: &str,
     ) -> Option<String> {
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone()?;
-        if self.images_enabled() {
-            self.fetch_audiobookshelf_cover(setup.server_url.clone(), library_item_id.to_string());
-        }
-        Some(audiobookshelf_cover_cache_key(
+        let cache_key = audiobookshelf_hero_cover_cache_key(
             &setup.server_url,
             library_item_id,
             self.current_protocol_suffix(),
-        ))
+        );
+        if self.images_enabled() {
+            self.fetch_audiobookshelf_image(
+                cache_key.clone(),
+                setup.server_url.clone(),
+                library_item_id.to_string(),
+            );
+        }
+        Some(cache_key)
     }
 
     /// Triggers the Audiobookshelf book-cover fetch for `library_item_id` and
     /// returns its isolated image cache key, or `None` with no server
     /// configured. The book-browsing spec requires book artwork to remain
-    /// isolated from podcast artwork (line 124).
+    /// isolated from podcast artwork (line 124), and the hero scope keeps it
+    /// off the queue card's entry (see [`audiobookshelf_cover_key`]).
     pub(in crate::app) fn audiobookshelf_book_cover_key(
         &mut self,
         library_item_id: &str,
     ) -> Option<String> {
         let setup = self.config.lock().unwrap().audiobookshelf_setup.clone()?;
+        let cache_key = audiobookshelf_hero_book_cover_cache_key(
+            &setup.server_url,
+            library_item_id,
+            self.current_protocol_suffix(),
+        );
         if self.images_enabled() {
-            self.fetch_audiobookshelf_book_cover(
+            self.fetch_audiobookshelf_image(
+                cache_key.clone(),
                 setup.server_url.clone(),
                 library_item_id.to_string(),
             );
         }
-        Some(audiobookshelf_book_cover_cache_key(
-            &setup.server_url,
-            library_item_id,
-            self.current_protocol_suffix(),
-        ))
+        Some(cache_key)
     }
 }
 

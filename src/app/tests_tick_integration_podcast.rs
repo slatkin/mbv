@@ -393,7 +393,7 @@ fn podcast_hero_image_projection_keys_the_parent_show_cover_through_the_sync_pas
         Some(mbv_core::config::AudiobookshelfSetup::new("http://abs.test"));
     app.image_protocol_enabled = true;
     app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-    let cache_key = crate::app::images::audiobookshelf_cover_cache_key(
+    let cache_key = crate::app::images::audiobookshelf_hero_cover_cache_key(
         "http://abs.test",
         "show-a",
         app.current_protocol_suffix(),
@@ -443,6 +443,129 @@ fn podcast_hero_image_projection_keys_the_parent_show_cover_through_the_sync_pas
     // The pre-seeded cache entry means the projection issued no fetch: the
     // once-per-key discipline holds through the sync pass.
     assert!(harness.model().app.card_image_loading.is_empty());
+}
+
+/// The playing podcast's cover must not be one cache entry serving two
+/// derivations. The Wide Library hero re-encodes its entry from a cover-fit
+/// crop of its artwork box (`ensure_hero_cover_protocol`), while the queue
+/// card renders the same show cover through `Resize::Scale`; sharing the entry
+/// made each consumer `resize_encode` (take) the other's `ThreadProtocol` every
+/// frame, so the hero painted its placeholder block instead of the image — the
+/// reported "wide library hero image flashes constantly" while an ABS podcast
+/// plays. A non-playing show never collided: its `library_item_id` gave the
+/// hero a different key.
+#[test]
+fn playing_show_cover_keeps_the_hero_and_queue_card_entries_apart() {
+    let mut app = audiobookshelf_app();
+    app.audiobookshelf_browse[0].shows[0].cover_path = Some("cover".into());
+    app.config.lock().unwrap().audiobookshelf_setup =
+        Some(mbv_core::config::AudiobookshelfSetup::new("http://abs.test"));
+    app.image_protocol_enabled = true;
+    app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+    // The playing episode belongs to the show whose cover the selected hero
+    // draws, which is exactly the collision case.
+    app.player_tab
+        .queue
+        .append(mbv_core::playback_queue::QueueItem::Audiobookshelf(
+            mbv_core::playback_queue::AudiobookshelfQueueItem {
+                library_item_id: "show-a".into(),
+                episode_id: "episode-a".into(),
+                title: "Episode A".into(),
+                show_title: Some("Show A".into()),
+                author: None,
+                description: None,
+                duration_ticks: None,
+                position_ticks: 0,
+                played: false,
+                pub_date_secs: None,
+                is_finished: false,
+                cover_path: Some("cover".into()),
+            },
+        ));
+    {
+        let mut status = app.player.status.lock().unwrap();
+        status.active = true;
+        status.current_idx = 0;
+    }
+    let suffix = app.current_protocol_suffix();
+    let hero_key = crate::app::images::audiobookshelf_hero_cover_cache_key(
+        "http://abs.test",
+        "show-a",
+        suffix,
+    );
+    let card_key =
+        crate::app::images::audiobookshelf_cover_cache_key("http://abs.test", "show-a", suffix);
+    assert_ne!(
+        hero_key, card_key,
+        "the hero and the queue card must not share an artwork entry"
+    );
+
+    let mut harness = TickHarness::new(app);
+    // Settle the terminal size first: the resize pass clears the image caches,
+    // so the seeds below must land after it.
+    draw(&mut harness, 160);
+    for key in [&hero_key, &card_key] {
+        harness.model_mut().app.card_image_states.insert(
+            key.clone(),
+            crate::app::images::CachedImage {
+                img: Some(image::DynamicImage::ImageRgba8(
+                    image::RgbaImage::from_pixel(40, 20, image::Rgba([10, 20, 30, 255])),
+                )),
+                protocols: std::collections::HashMap::new(),
+                cover_box: None,
+                applied_logo_key: None,
+            },
+        );
+    }
+    harness.model_mut().app.refresh_queue_card_image();
+    draw(&mut harness, 160);
+
+    let panel = harness
+        .model_mut()
+        .application
+        .get_component_mut(&ComponentId::Library)
+        .and_then(|component| component.as_any_mut().downcast_mut::<LibraryPanel>())
+        .expect("library panel");
+    assert!(
+        panel.test_wide_geometry().is_some(),
+        "the fixture must paint the Wide skeleton, where the hero's cover-fit box rebuilds the protocol"
+    );
+    let hero_image = panel
+        .active_hero_data()
+        .expect("the podcast hero projects")
+        .facts
+        .artwork
+        .image;
+    assert!(
+        matches!(
+            &hero_image,
+            crate::app::components::library_panel::HeroImageState::Ready {
+                cache_key: key,
+                ..
+            } if key == &hero_key
+        ),
+        "the hero image state is Ready under the hero-scoped cover key: {hero_image:?}"
+    );
+
+    let entries = &harness.model().app.card_image_states;
+    assert!(
+        entries[&hero_key].cover_box.is_some(),
+        "the hero re-encodes its own entry with the cover-fit box"
+    );
+    assert!(
+        entries[&card_key].cover_box.is_none(),
+        "the queue card's entry keeps its plain encoding: the hero's crop must not reach it"
+    );
+    assert_eq!(
+        harness
+            .model()
+            .app
+            .queue_card_projection
+            .cache_key
+            .as_deref(),
+        Some(card_key.as_str()),
+        "the queue card paints its own key, not the hero's crop"
+    );
 }
 
 /// Narrow-geometry Enter on a podcast episode plays immediately: no Library

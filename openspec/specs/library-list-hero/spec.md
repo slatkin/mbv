@@ -338,6 +338,26 @@ chain completion re-pushes TV content.
 - **THEN** the loading placeholder is shown
 - **AND** no blank is shown in place of the pending artwork
 
+### Requirement: Hero artwork cache entries are consumer-isolated
+
+A hero's artwork cache entry SHALL NOT be shared with a consumer that draws the
+same provider artwork plainly. A hero re-encodes its entry from a cover-fit crop
+of its artwork box, while a plain consumer renders the entry through a plain
+scale resize; two consumers holding one entry take each other's resize protocol
+every frame, so the hero falls back to the placeholder and flashes. Every hero
+artwork key SHALL therefore be scoped to the hero, and every plain consumer of
+the same provider artwork SHALL keep its own key.
+
+#### Scenario: Playing Audiobookshelf podcast hero
+- **WHEN** the Wide hero shows the cover of the Audiobookshelf show whose episode is also the playing queue item
+- **THEN** the hero's cover-fit entry and the queue card's plain entry are distinct cache keys
+- **AND** the hero paints its cover-fit artwork without falling back to the placeholder
+- **AND** the queue card paints its own uncropped artwork
+
+#### Scenario: Hero re-encode leaves the plain entry alone
+- **WHEN** a hero re-encodes its entry for a new artwork box
+- **THEN** the plain consumer's entry for the same provider artwork keeps its encoding
+
 #### Scenario: Series completion re-pushes the TV workspace
 - **WHEN** any Series image chain for the selected series completes fetching
 - **THEN** the TV workspace content is re-pushed

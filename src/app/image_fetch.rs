@@ -247,6 +247,10 @@ impl App {
         self.spawn_image_fetch(req);
     }
 
+    /// Triggers the plain (uncropped) Audiobookshelf cover fetch for
+    /// `item_id` — the queue card's entry. The Library hero uses the
+    /// hero-scoped key instead (`App::audiobookshelf_cover_key`), because it
+    /// re-encodes its entry from a cover-fit crop.
     pub(super) fn fetch_audiobookshelf_cover(&mut self, server_url: String, item_id: String) {
         let cache_key =
             audiobookshelf_cover_cache_key(&server_url, &item_id, self.current_protocol_suffix());
