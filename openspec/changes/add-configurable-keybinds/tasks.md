@@ -33,9 +33,9 @@
 
 ## 6. Prefix mode
 
-- [ ] 6.1 Add the App-owned armed flag mirrored as `RouterSnapshot.prefix_armed`; arm/disarm transitions from router outcomes; silent mouse disarm in the mouse path. Verify: tick-integration — arming consumes the prefix chord; a mouse event disarms without altering the event's handling.
-- [ ] 6.2 Add the `prefix_arm` top layer (gated `!text_entry_focused` + `!blocking_overlay_open`, blocking semantics) and the armed-dispatch layer (mapped chord whose action's gate currently allows it → action + disarm; mapped chord whose action's gate does not currently allow it → treated as unmapped → Swallow + disarm; Esc/unmapped → Swallow + disarm; prefix → re-arm; no FallThrough while armed). Verify: `key_policy` unit tests for every state-machine arm, including F-keys captured while armed, arming suppressed under text entry and overlays, Esc-while-armed not reaching stop, and a prefix-mapped gated action swallowed (not fired) when its gate is currently closed.
-- [ ] 6.3 Prove the full state machine through `Application::tick()`: mapped action executes, unmapped chord swallowed and disarmed, double-prefix re-arms, no chord reaches any component while armed (component counters). Verify: new tick-integration test file green.
+- [x] 6.1 Add the App-owned armed flag mirrored as `RouterSnapshot.prefix_armed`; arm/disarm transitions from router outcomes; silent mouse disarm in the mouse path. Verify: tick-integration — arming consumes the prefix chord; a mouse event disarms without altering the event's handling.
+- [x] 6.2 Add the `prefix_arm` top layer (gated `!text_entry_focused` + `!blocking_overlay_open`, blocking semantics) and the armed-dispatch layer (mapped chord whose action's gate currently allows it → action + disarm; mapped chord whose action's gate does not currently allow it → treated as unmapped → Swallow + disarm; Esc/unmapped → Swallow + disarm; prefix → re-arm; no FallThrough while armed). Verify: `key_policy` unit tests for every state-machine arm, including F-keys captured while armed, arming suppressed under text entry and overlays, Esc-while-armed not reaching stop, and a prefix-mapped gated action swallowed (not fired) when its gate is currently closed.
+- [x] 6.3 Prove the full state machine through `Application::tick()`: mapped action executes, unmapped chord swallowed and disarmed, double-prefix re-arms, no chord reaches any component while armed (component counters). Verify: new tick-integration test file green.
 
 ## 7. Presentation
 
