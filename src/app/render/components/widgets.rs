@@ -107,26 +107,6 @@ pub(in crate::app) fn render_right_scrollbar_with_viewport(
     );
 }
 
-pub(in crate::app) fn render_right_scrollbar_inside(
-    f: &mut Frame,
-    area: Rect,
-    content_length: usize,
-    viewport_content_length: usize,
-    offset: usize,
-    color: Color,
-) {
-    render_scrollbar_with_viewport_at(
-        f,
-        area,
-        content_length,
-        viewport_content_length,
-        offset,
-        area.right().saturating_sub(1),
-        thin_vertical_thumb(GlyphSet::minimal()),
-        color,
-    );
-}
-
 pub(in crate::app) fn render_scrollbar_with_viewport_at(
     f: &mut Frame,
     area: Rect,

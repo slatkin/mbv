@@ -4,7 +4,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Paragraph};
 
-use crate::app::render::components::widgets::render_right_scrollbar_inside;
+use crate::app::render::components::widgets::render_right_scrollbar_with_viewport;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -182,13 +182,13 @@ pub(in crate::app) fn paint_overview_box(
         }
     }
     if max_offset > 0 && viewport > 0 {
-        render_right_scrollbar_inside(
+        render_right_scrollbar_with_viewport(
             f,
             panel,
             inner_rows,
             viewport,
             offset,
-            palette::TEXT_METADATA,
+            palette::SCROLLBAR,
         );
     }
     Some(OverviewPaint {
