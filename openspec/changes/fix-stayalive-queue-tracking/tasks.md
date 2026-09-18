@@ -18,4 +18,4 @@
 
 ## 4. Instrumentation for settle matching (D4, deferred)
 
-- [ ] 4.1 Add `target: "transition"` log lines in `settle()` when the dual match fails: log the expected `(request_id, target)` vs the observed `(request_id, slot)`. This will tell us whether the dual match is rejecting correct observations in practice. Verify: `cargo check -p mbv-core`; the log lines appear in debug runs when Next is pressed during active playback
+- [x] 4.1 Add `target: "transition"` log lines in `settle()` when the dual match fails: log the expected `(request_id, target)` vs the observed `(request_id, slot)`. This will tell us whether the dual match is rejecting correct observations in practice. Verify: `cargo check -p mbv-core`; the log lines appear in debug runs when Next is pressed during active playback
