@@ -381,11 +381,28 @@ fn dispatch_slot_jump(
     client_id: CtrlClientId,
     transition: crate::playback_transition::Transition,
 ) {
+    let transition_target = transition.target;
+    let transition_request_id = transition.request_id;
+    let transition_generation = transition.generation;
     match transitions.accept(transition) {
         crate::playback_transition::DispatchDecision::DispatchNow(t) => {
+            log::info!(
+                target: "transition",
+                "dispatch_slot_jump: decision=DispatchNow target={:?} request_id={} generation={}",
+                transition_target,
+                transition_request_id,
+                transition_generation,
+            );
             player.send_command(t.into_jump());
         }
         crate::playback_transition::DispatchDecision::Queued { superseded } => {
+            log::info!(
+                target: "transition",
+                "dispatch_slot_jump: decision=Queued target={:?} request_id={} generation={}",
+                transition_target,
+                transition_request_id,
+                transition_generation,
+            );
             if let (Some(s), Some((origin_request_id, origin_client))) = (superseded, *queued_origin)
             {
                 if origin_request_id == s.request_id {
@@ -431,8 +448,21 @@ fn settle_and_redispatch(
         .transitions
         .settle(observed_request_id, observed_slot)
     else {
+        log::info!(
+            target: "transition",
+            "settle_and_redispatch: request_id={} slot={:?} settled=false dispatch_next=false",
+            observed_request_id,
+            observed_slot,
+        );
         return;
     };
+    log::info!(
+        target: "transition",
+        "settle_and_redispatch: request_id={} slot={:?} settled=true dispatch_next={}",
+        observed_request_id,
+        observed_slot,
+        dispatch_next.is_some(),
+    );
     owner.queued_transition_origin = None;
     if let Some(next) = dispatch_next {
         player.send_command(next.into_jump());

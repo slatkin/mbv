@@ -39,6 +39,11 @@ impl PlaybackRun {
                 // ordinal; a stale slot (gone here) is rejected, never
                 // repaired by position (design D6).
                 let Some(idx) = self.queue.slot_index(slot_id) else {
+                    log::info!(
+                        target: "transition",
+                        "jump-to reject_stale_jump: slot_id={:?} unresolvable",
+                        slot_id,
+                    );
                     reject_stale_jump(&self.event_tx, slot_id);
                     return cancel_stop;
                 };
@@ -60,6 +65,14 @@ impl PlaybackRun {
                     self.forced_transition = None;
                     log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
                 } else {
+                    log::info!(
+                        target: "transition",
+                        "jump-to: playlist-pos ok slot_id={:?} idx={} current_idx={} queue_len={}",
+                        slot_id,
+                        idx,
+                        self.current_idx,
+                        self.queue_len(),
+                    );
                     // Selecting a track should always start it playing, even if
                     // mpv was paused on the previous track — otherwise the new
                     // track loads silently "stuck" paused (see issue: Enter on a

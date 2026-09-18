@@ -526,11 +526,21 @@ impl PlaybackRun {
         // (same lifetime, design D4); it tags the `TrackChanged` emit below
         // only if this observation actually lands on its target slot.
         let settling_transition = self.forced_transition.take();
+        let logged_forced_slot_id = self.forced_slot_id;
         let next_idx = self
             .forced_slot_id
             .take()
             .and_then(|slot_id| self.queue.slot_index(slot_id))
             .unwrap_or(self.current_idx + 1);
+        log::info!(
+            target: "transition",
+            "on_end_file settle: forced_slot_id={:?} next_idx={} current_idx={} queue_len={} settling_transition={}",
+            logged_forced_slot_id,
+            next_idx,
+            self.current_idx,
+            self.queue_len(),
+            settling_transition.is_some(),
+        );
 
         if next_idx >= self.queue_len() {
             progress.stop_and_join(self.progress_join_budget());
@@ -666,6 +676,12 @@ impl PlaybackRun {
             let transition = settling_transition
                 .filter(|t| t.target == next_slot_id)
                 .map(|t| (t.request_id, t.generation));
+            log::info!(
+                target: "transition",
+                "track_changed: slot_id={:?} transition_tag={}",
+                next_slot_id,
+                transition.is_some(),
+            );
             let _ = self.event_tx.send(PlayerEvent::TrackChanged {
                 slot_id: next_slot_id,
                 transition,

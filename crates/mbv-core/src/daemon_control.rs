@@ -282,6 +282,18 @@ fn handle_ctrl(
                         crate::ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
                         _ => Some(idx + 1).filter(|&next| next < queue.len()),
                     });
+                    log::info!(
+                        target: "transition",
+                        "playback intent: action={:?} queued_latest={:?} in_flight={:?} observed_active_slot={:?} queue_active_slot={:?} base_idx={:?} neighbor_idx={:?} queue_len={}",
+                        action,
+                        transitions.queued_latest().map(|t| t.target),
+                        transitions.in_flight().map(|t| t.target),
+                        *shared_queue.observed_active_slot.lock().unwrap(),
+                        queue.active_slot_id(),
+                        base_idx,
+                        neighbor_idx,
+                        queue.len(),
+                    );
                     if let Some(slot_id) =
                         neighbor_idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id))
                     {
