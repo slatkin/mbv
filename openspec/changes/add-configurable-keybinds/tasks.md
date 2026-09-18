@@ -20,10 +20,10 @@
 
 ## 4. Double-tap removal
 
-- [ ] 4.1 Remove the candidate timing branch from `apply_deferred_candidate` and the `App.last_space_press`/`last_esc_press` fields; `Deferred` dispatches immediately when the leaf did not consume the chord. Verify: `shell_tests.rs` deferred cases rewritten — unhandled `Space`/`Esc` fire once, a consumed press leaves no state.
-- [ ] 4.2 Remove `last_space`/`last_escape` and `double_tap()` from `components/library_playback_panel.rs`; `Space` and `Esc` fire single-press when the panel holds focus. Verify: component test — one press produces `TogglePlayPause`/`Stop`.
-- [ ] 4.3 Drop `App.last_space_press`/`last_esc_press` and the timing branch that reads them in `apply_deferred_candidate` (`shell.rs`) — these fields were never mirrored into `RouterSnapshot`, so there is nothing to remove there; add the new `RouterSnapshot.prefix_armed` field (task 6.1) as its own addition, not a replacement of these. Verify: `cargo nextest run -p mbv` green.
-- [ ] 4.4 Rewrite `live_tick_characterizes_space_double_tap_lifecycle` and `live_tick_characterizes_escape_double_tap_lifecycle` as single-press behavior records, covering the consumed-chord still suppressing the candidate. Verify: the rewritten integration tests pass and match the modified `semantic-input-arbitration` scenarios.
+- [x] 4.1 Remove the candidate timing branch from `apply_deferred_candidate` and the `App.last_space_press`/`last_esc_press` fields; `Deferred` dispatches immediately when the leaf did not consume the chord. Verify: `shell_tests.rs` deferred cases rewritten — unhandled `Space`/`Esc` fire once, a consumed press leaves no state.
+- [x] 4.2 Remove `last_space`/`last_escape` and `double_tap()` from `components/library_playback_panel.rs`; `Space` and `Esc` fire single-press when the panel holds focus. Verify: component test — one press produces `TogglePlayPause`/`Stop`.
+- [x] 4.3 Drop `App.last_space_press`/`last_esc_press` and the timing branch that reads them in `apply_deferred_candidate` (`shell.rs`) — these fields were never mirrored into `RouterSnapshot`, so there is nothing to remove there; add the new `RouterSnapshot.prefix_armed` field (task 6.1) as its own addition, not a replacement of these. Verify: `cargo nextest run -p mbv` green.
+- [x] 4.4 Rewrite `live_tick_characterizes_space_double_tap_lifecycle` and `live_tick_characterizes_escape_double_tap_lifecycle` as single-press behavior records, covering the consumed-chord still suppressing the candidate. Verify: the rewritten integration tests pass and match the modified `semantic-input-arbitration` scenarios.
 
 ## 5. Transport actions become declared and rebindable
 
