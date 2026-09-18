@@ -84,11 +84,11 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
 
 ## 3. Gates and acceptance
 
-- [ ] 3.1 `cargo fmt --all -- --check` reports no diff.
-- [ ] 3.2 `cargo clippy --workspace --all-targets -- -D warnings` is clean.
-- [ ] 3.3 `cargo nextest run -p mbv -p mbv-core` passes (report any teardown flake with a clean rerun).
-- [ ] 3.4 `openspec validate --all` passes.
-- [ ] 3.5 Add the change's domain terms to `CONTEXT.md` (the mpv script set and its
+- [x] 3.1 `cargo fmt --all -- --check` reports no diff.
+- [x] 3.2 `cargo clippy --workspace --all-targets -- -D warnings` is clean.
+- [x] 3.3 `cargo nextest run -p mbv -p mbv-core` passes (report any teardown flake with a clean rerun).
+- [x] 3.4 `openspec validate --all` passes.
+- [x] 3.5 Add the change's domain terms to `CONTEXT.md` (the mpv script set and its
   resolved path; the out-of-process owner) and use them consistently in the code and
   artifacts.
   (Verify: terms present; no collision with the existing `Player owner` / `Client` /
