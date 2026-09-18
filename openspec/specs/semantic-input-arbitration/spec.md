@@ -27,28 +27,6 @@ For each terminal key event, the system SHALL combine the Keyboard Router's orde
 - **THEN** the central arbiter records one final disposition and applies at most one global command
 - **AND** no destination independently resolves the competition
 
-### Requirement: Context-sensitive global actions are deferred candidates
-
-A global action whose eligibility depends on whether the focused component consumes the same key SHALL remain a deferred candidate until the focused component's disposition is known. Consumed local input SHALL cancel the candidate and SHALL NOT arm, advance, or preserve candidate timing state. Unhandled local input SHALL permit the candidate to arm or fire according to the central policy. Immediate global commands and blocking-overlay swallows SHALL retain their existing precedence.
-
-#### Scenario: Visual Space suppresses playback
-
-- **WHEN** a focused media list consumes `Space` for an active local Visual selection
-- **THEN** the playback double-tap candidate neither fires nor becomes armed
-- **AND** the row-local toggle remains applied
-
-#### Scenario: Visual Escape suppresses stop
-
-- **WHEN** a focused media list consumes `Esc` to clear its active Visual selection
-- **THEN** the stop double-tap candidate neither fires nor becomes armed
-- **AND** a later `Esc` begins with no candidate state inherited from the consumed press
-
-#### Scenario: Unhandled double tap retains existing behavior
-
-- **WHEN** the focused component reports the context-sensitive key as unhandled on two presses within the configured interval
-- **THEN** the existing global double-tap action fires on the second press
-- **AND** the first press follows its existing fall-through behavior
-
 ### Requirement: Local-state projections are not routing authority
 
 A component MAY publish a read-only summary of private interaction state when another component must present it. Such a summary SHALL NOT become writable selection state, SHALL NOT be pushed back into the owner, and SHALL NOT determine keyboard precedence. Routing SHALL use the focused component's disposition for the current event rather than a cached summary.
@@ -86,3 +64,36 @@ An interaction that outlives its originating input event SHALL carry a stable or
 - **WHEN** the user invokes the status presentation's clear control
 - **THEN** the clear request is sent to the list identified as focused when the control was invoked
 - **AND** a selection retained by the other visible panel is unchanged
+
+### Requirement: Context-sensitive global actions are deferred candidates without timing state
+
+A global action whose eligibility depends on whether the focused component consumes the same key SHALL remain a deferred candidate until the focused component's disposition is known. Consumed local input SHALL cancel the candidate. Unhandled local input SHALL fire the candidate on that press; there SHALL be no candidate timing state, repeated-press window, or deferred arming. Immediate global commands and blocking-overlay swallows SHALL retain their existing precedence.
+
+#### Scenario: Visual Space suppresses playback
+
+- **WHEN** a focused media list consumes `Space` for an active local Visual selection
+- **THEN** the playback candidate does not fire
+- **AND** the row-local toggle remains applied
+
+#### Scenario: Visual Escape suppresses stop
+
+- **WHEN** a focused media list consumes `Esc` to clear its active Visual selection
+- **THEN** the stop candidate does not fire
+- **AND** the local selection clearing remains applied
+
+#### Scenario: Unhandled Space fires immediately
+
+- **WHEN** the focused component reports `Space` as unhandled and a playback candidate is eligible
+- **THEN** the playback action fires on that press
+- **AND** no timing state is recorded for a later press
+
+#### Scenario: Unhandled Escape fires immediately
+
+- **WHEN** the focused component reports `Esc` as unhandled and a stop candidate is eligible
+- **THEN** the stop action fires on that press
+- **AND** no timing state is recorded for a later press
+
+#### Scenario: No candidate timing survives a consumed press
+
+- **WHEN** the focused component consumes a context-sensitive key and a later press of the same key is unhandled
+- **THEN** the later press behaves as a first press, with no inherited candidate state
