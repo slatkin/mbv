@@ -5,9 +5,9 @@
 //! box). One skeleton for every Wide library destination: destinations supply
 //! typed [`LibraryPanelContent`] and paint nothing themselves.
 //!
-//! The list box's presentation is the current carrier's (Wide/Inline via the
-//! owner's `ensure_presentation`); the panel views it through the provisional
-//! [`PanelList`] surface until task 5.8 formalizes the trait.
+//! The list box paints through the current carrier's fixed Wide presentation
+//! (carriers never switch presentation owners); the panel views it through the
+//! provisional [`PanelList`] surface until task 5.8 formalizes the trait.
 
 use ratatui::layout::Rect;
 
