@@ -236,10 +236,30 @@ fn init_mpv(config: &MpvRunConfig) -> Result<(Mpv, bool), String> {
             opt!("osd-bar", "no");
         }
         if !no_scripts && !use_mpv_config {
-            let script = crate::config::osc_script_path();
+            let source = crate::config::osc_script_source();
+            let script = source.chosen;
             if script.exists() {
+                log::info!(target: "player", "init: mpv overlay scripts: {}", script.display());
+                if let Some(legacy) = source.unused_legacy {
+                    log::warn!(
+                        target: "player",
+                        "init: ignoring leftover installer script copy {} (using {}); delete it to silence this warning",
+                        legacy.display(),
+                        script.display()
+                    );
+                }
                 opt!("scripts", script.to_str().unwrap_or(""));
-                let fonts = crate::config::osc_fonts_dir();
+                let fonts_source = crate::config::osc_fonts_source();
+                let fonts = fonts_source.chosen;
+                log::info!(target: "player", "init: mpv overlay fonts: {}", fonts.display());
+                if let Some(legacy_fonts) = fonts_source.unused_legacy {
+                    log::warn!(
+                        target: "player",
+                        "init: ignoring leftover installer font directory {} (using {}); delete it to silence this warning",
+                        legacy_fonts.display(),
+                        fonts.display()
+                    );
+                }
                 opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
             }
         }

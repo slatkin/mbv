@@ -24,5 +24,6 @@ pub mod tests {
     include!("config_tests_paths_env.rs");
     include!("config_tests_credentials.rs");
     include!("config_tests_paths_migration.rs");
+    include!("config_tests_script_source.rs");
     include!("config_tests_emby_admin.rs");
 }

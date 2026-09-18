@@ -45,16 +45,56 @@ fn migrate_to_state(filename: &str) -> PathBuf {
     dest
 }
 
-pub fn osc_script_path() -> PathBuf {
-    let user = data_dir_system_or_local().join("scripts").join("mbv.lua");
-    if user.exists() {
-        return user;
+/// The outcome of resolving the mpv overlay script set (or its fonts):
+/// the source handed to mpv, plus any ignored copy at the removed
+/// installer's user-directory path (named in a startup warning, never used).
+pub struct ScriptSource {
+    pub chosen: PathBuf,
+    pub unused_legacy: Option<PathBuf>,
+}
+
+/// Pure resolution over injected candidates (B3): the checkout entry wins
+/// when it exists, else the packaged path. `legacy` is never a candidate;
+/// it is only reported when it exists so startup can warn that a
+/// removed-installer copy is being ignored. No environment is read.
+pub fn resolve_script_source(
+    checkout: PathBuf,
+    package: PathBuf,
+    legacy: PathBuf,
+) -> ScriptSource {
+    let chosen = if checkout.exists() { checkout } else { package };
+    let unused_legacy = if legacy.exists() { Some(legacy) } else { None };
+    ScriptSource {
+        chosen,
+        unused_legacy,
     }
-    let dev = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/mbv.lua"));
-    if dev.exists() {
-        return dev;
-    }
-    PathBuf::from("/usr/share/mbv/scripts/mbv.lua")
+}
+
+/// Compile-time checkout root, derived from the manifest directory
+/// (`<checkout>/crates/mbv-core`). Absent on installed systems, so the
+/// packaged copy wins there.
+fn checkout_scripts_entry() -> PathBuf {
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../scripts/mbv.lua"))
+}
+
+fn checkout_fonts_dir() -> PathBuf {
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../fonts"))
+}
+
+pub fn osc_script_source() -> ScriptSource {
+    resolve_script_source(
+        checkout_scripts_entry(),
+        PathBuf::from("/usr/share/mbv/scripts/mbv.lua"),
+        data_dir_system_or_local().join("scripts").join("mbv.lua"),
+    )
+}
+
+pub fn osc_fonts_source() -> ScriptSource {
+    resolve_script_source(
+        checkout_fonts_dir(),
+        PathBuf::from("/usr/share/mbv/fonts"),
+        data_dir_system_or_local().join("fonts"),
+    )
 }
 
 pub fn prefs_path() -> PathBuf {
@@ -62,11 +102,7 @@ pub fn prefs_path() -> PathBuf {
 }
 
 pub fn osc_fonts_dir() -> PathBuf {
-    let user = data_dir_system_or_local().join("fonts");
-    if user.exists() {
-        return user;
-    }
-    PathBuf::from("/usr/share/mbv/fonts")
+    osc_fonts_source().chosen
 }
 
 fn runtime_dir() -> String {
