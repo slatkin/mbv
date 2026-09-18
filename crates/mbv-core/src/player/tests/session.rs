@@ -567,7 +567,7 @@ fn resume_start_pos_is_zero_for_audio_non_resumable_and_zero_position_feed_items
 }
 
 #[test]
-fn queue_loads_selected_item_first_without_starting_playback() {
+fn queue_loads_selected_item_first_and_restores_playlist_order() {
     let mut item = make_media_item("resumable");
     item.playback_position_ticks = item.runtime_ticks / 2;
     let queue_item = QueueItem::Emby(Box::new(item));
@@ -577,48 +577,10 @@ fn queue_loads_selected_item_first_without_starting_playback() {
         queue_load_indices(4, 2).collect::<Vec<_>>(),
         vec![2, 0, 1, 3]
     );
-    // Design D3: the start slot and later slots load as no-play appends;
-    // only earlier slots insert, so no load in the plan starts playback.
-    assert_eq!(queue_load_location(2, 2).0, "append");
+    assert_eq!(queue_load_location(2, 2).0, "replace");
     assert_eq!(queue_load_location(0, 2), ("insert-at", "0".into()));
     assert_eq!(queue_load_location(1, 2), ("insert-at", "1".into()));
     assert_eq!(queue_load_location(3, 2).0, "append");
-}
-
-#[test]
-fn queue_load_plan_never_starts_playback_mid_load() {
-    // Design D3: the only playback start in the queue plan is the
-    // `start_queue_playback` write after every load, so no load may use a mode
-    // that starts playback itself (`replace`). mpv's no-play behaviour for the
-    // modes used here (`append`, `insert-at`) is mpv's documented contract, not
-    // something a mock can prove — what this pins is that the production plan
-    // never reaches for a louder mode, at any length or start index.
-    for (len, start_idx) in [(1, 0), (4, 0), (4, 2), (5, 4), (100, 50)] {
-        assert_eq!(queue_load_indices(len, start_idx).next(), Some(start_idx));
-        for i in queue_load_indices(len, start_idx) {
-            let (mode, _) = queue_load_location(i, start_idx);
-            assert_ne!(
-                mode, "replace",
-                "load {i} of a queue starting at {start_idx} must not start playback (D3)"
-            );
-        }
-        // With the plan built, the reassert safety net must observe Ok: a
-        // mismatch there means the no-play load plan drifted.
-        assert_eq!(
-            queue_layout_verdict(start_idx, len, start_idx as i64, len as i64),
-            QueueLayoutVerdict::Ok
-        );
-    }
-}
-
-#[test]
-fn cold_active_file_single_load_starts_playback_via_replace() {
-    // The cold submit path's active-file (Audiobookshelf) branch loads exactly
-    // one slot and skips `start_queue_playback`, so its load must start
-    // playback itself; reusing the D3 no-play plan modes there would idle the
-    // run. The two projections are what keep the load modes distinct.
-    assert_eq!(active_file_load_location().0, "replace");
-    assert_ne!(queue_load_location(0, 0).0, "replace");
 }
 
 #[test]

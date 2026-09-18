@@ -217,15 +217,7 @@ impl Player {
                         return;
                     }
                 };
-                let (mode, index) = if active_file_projection {
-                    // Cold active-file (Audiobookshelf): the single load is
-                    // the whole playlist and this branch skips
-                    // `start_queue_playback`, so the load must start
-                    // playback itself — the D3 no-play plan would idle.
-                    active_file_load_location()
-                } else {
-                    queue_load_location(i, start_idx)
-                };
+                let (mode, index) = queue_load_location(i, start_idx);
                 let opts = prepared.mpv_load_options(item);
                 if let Err(e) =
                     mpv.command("loadfile", &[prepared.url.as_str(), mode, &index, &opts])
@@ -254,11 +246,6 @@ impl Player {
                 }
             }
             if !active_file_projection {
-                // Design D3 load-then-play: every load above was no-play, so
-                // playback starts here, at the fully built playlist's start
-                // slot — reassert below must now observe Ok (a mismatch log
-                // means the no-play plan drifted).
-                start_queue_playback(&mpv, start_idx);
                 reassert_queue_layout(&mpv, start_idx, items.len());
             }
             // send_ep_info only for Emby items.

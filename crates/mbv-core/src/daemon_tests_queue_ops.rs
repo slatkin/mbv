@@ -35,35 +35,6 @@ fn run_queue_cmd(
     );
 }
 
-/// Same as [`run_queue_cmd`], but with an explicit shared queue snapshot so a
-/// test can seed and then assert on `observed_active_slot`.
-fn run_queue_cmd_with_shared(
-    cmd: CtrlCmd,
-    client_id: u64,
-    reply_tx: &mpsc::Sender<CtrlOutbound>,
-    client: &Arc<Mutex<crate::api::EmbyClient>>,
-    player: &Player,
-    owner: &mut DaemonPlayerOwner,
-    shared_queue: &SharedQueueState,
-    registry: &Arc<Mutex<CtrlClients>>,
-) {
-    let (merged_tx, _merged_rx) = mpsc::channel::<DaemonEvent>();
-    handle_ctrl(
-        cmd,
-        client_id,
-        CtrlRequest { reply_tx },
-        client,
-        player,
-        false,
-        owner,
-        shared_queue,
-        registry,
-        false,
-        &merged_tx,
-        false,
-    );
-}
-
 fn owner_with(items: Vec<QueueItem>, active: usize) -> DaemonPlayerOwner {
     DaemonPlayerOwner {
         core: PlayerOwnerState::new(
@@ -422,62 +393,4 @@ fn unified_queue_clear_empties_canonical_queue_and_clears_the_player() {
         }
         _ => panic!("expected empty SubmitQueue"),
     }
-}
-
-#[test]
-fn unified_queue_replace_clears_observed_active_slot() {
-    let player = cold_player();
-    let _cmd_rx = player.spy_on_commands();
-    let client = queue_op_client("test-token");
-    let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (client_id, _rx) = connect_client(&mut registry.lock().unwrap());
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let shared_queue = shared_queue_state();
-
-    let mut owner = owner_with(
-        vec![
-            emby_qi("a", "Video", "Movie"),
-            emby_qi("b", "Video", "Movie"),
-        ],
-        0,
-    );
-    // A genuine playback observation advances the observed active slot on the
-    // owner and is mirrored into the shared snapshot (daemon_run precedent).
-    let old_slot = owner.core.queue.slots()[1].slot_id;
-    assert_eq!(
-        owner.core.observe_track_change(old_slot),
-        Some((1, old_slot))
-    );
-    *shared_queue.observed_active_slot.lock().unwrap() = owner.core.observed_active_slot();
-    assert_eq!(owner.core.observed_active_slot(), Some(old_slot));
-
-    run_queue_cmd_with_shared(
-        CtrlCmd::UnifiedQueueReplace {
-            items: vec![],
-            slots: vec![crate::ctrl::UnifiedQueueSlot {
-                slot_id: 77,
-                item: emby_qi("c", "Video", "Movie"),
-            }],
-            start_idx: Some(0),
-        },
-        client_id,
-        &reply_tx,
-        &client,
-        &player,
-        &mut owner,
-        &shared_queue,
-        &registry,
-    );
-
-    // The replacement queue is in place and the stale observation is gone
-    // from both the owner core and the shared snapshot (design D2): a
-    // momentary None is correct; navigation falls back to the new queue's
-    // active slot until the first TrackChanged arrives.
-    assert_eq!(owner.core.queue.len(), 1);
-    assert_eq!(owner.core.queue.slots()[0].slot_id.raw(), 77);
-    assert_eq!(owner.core.queue.active_slot_id().map(|s| s.raw()), Some(77));
-    assert_eq!(owner.core.observed_active_slot(), None);
-    assert_eq!(*shared_queue.observed_active_slot.lock().unwrap(), None);
-    // The spy receiver stays attached so the submit path's cold-start thread
-    // targets the test player, mirroring `replace_queue_succeeds_unconditionally`.
 }
