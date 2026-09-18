@@ -640,3 +640,34 @@ fn reserved_chord_list_is_the_documented_set() {
         }
     }
 }
+
+// ── Keys-row summary count (task 7.2, design D7) ────────────────────────
+
+#[test]
+fn override_count_counts_distinct_overridden_action_ids() {
+    // All defaults: nothing deviates.
+    assert_eq!(Keybinds::defaults().override_count(), 0);
+
+    let mut keybinds = Keybinds::defaults();
+    keybinds.sections.push((
+        KeySection::Playback,
+        SectionBindings {
+            // One action carrying two router entries counts once; a
+            // redundant default-equal override does not count.
+            router: vec![
+                ("toggle_play_pause", Chord::parse("k").unwrap()),
+                ("toggle_play_pause", Chord::parse("p").unwrap()),
+                ("stop", Chord::parse("Esc").unwrap()),
+            ],
+            prefix: Vec::new(),
+        },
+    ));
+    keybinds.sections.push((
+        KeySection::Global,
+        SectionBindings {
+            router: vec![("help_open", Chord::parse("F9").unwrap())],
+            prefix: Vec::new(),
+        },
+    ));
+    assert_eq!(keybinds.override_count(), 2, "distinct ids: toggle_play_pause + help_open");
+}

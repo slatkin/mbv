@@ -156,7 +156,12 @@ impl SettingsComponent {
         self.services_cursor = self
             .services_cursor
             .min(self.services.len().saturating_sub(1));
-        self.keys_cursor = self.keys_cursor.min(self.keys.len().saturating_sub(1));
+        // The Keys cursor numbers actions only (headers carry no cursor),
+        // matching the painter's highlight and the `cursor_lines` geometry
+        // indexed by action ordinal.
+        self.keys_cursor = self
+            .keys_cursor
+            .min(self.keys_action_count().saturating_sub(1));
         self.area = snapshot.area;
         self.initialized = true;
     }
@@ -259,6 +264,42 @@ impl SettingsComponent {
         }
     }
 
+    /// Keys rows: the count of cursor-numbered action rows (group headers
+    /// are not addressable). The Keys cursor is an ordinal over actions so
+    /// it stays aligned with the painter's highlight and the render
+    /// geometry's `cursor_lines`.
+    fn keys_action_count(&self) -> usize {
+        self.keys.iter().filter(|row| row.cursor.is_some()).count()
+    }
+
+    /// Largest valid scroll offset: the last geometry line fully in view.
+    fn max_scroll(&self) -> usize {
+        self.geometry
+            .cursor_lines
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(0)
+            .saturating_sub((self.geometry.content_area.height as usize).saturating_sub(1))
+    }
+
+    /// Keep the Keys cursor's document line inside the scrolled window
+    /// (geometry from the latest paint; a no-op before the first paint).
+    fn scroll_keys_to_cursor(&mut self) {
+        let Some(&line) = self.geometry.cursor_lines.get(self.keys_cursor) else {
+            return;
+        };
+        let height = self.geometry.content_area.height as usize;
+        if height == 0 {
+            return;
+        }
+        if line < self.scroll {
+            self.scroll = line;
+        } else if line >= self.scroll + height {
+            self.scroll = line + 1 - height;
+        }
+    }
+
     fn handle_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.setup.is_some() {
             return self.setup_key(key);
@@ -267,11 +308,29 @@ impl SettingsComponent {
             return match key.code {
                 Key::Up => {
                     self.keys_cursor = self.keys_cursor.saturating_sub(1);
+                    self.scroll_keys_to_cursor();
                     None
                 }
                 Key::Down => {
                     self.keys_cursor =
-                        (self.keys_cursor + 1).min(self.keys.len().saturating_sub(1));
+                        (self.keys_cursor + 1).min(self.keys_action_count().saturating_sub(1));
+                    self.scroll_keys_to_cursor();
+                    None
+                }
+                Key::PageUp => {
+                    self.scroll = self.scroll.saturating_sub(10);
+                    None
+                }
+                Key::PageDown => {
+                    self.scroll = self.scroll.saturating_add(10).min(self.max_scroll());
+                    None
+                }
+                Key::Home => {
+                    self.scroll = 0;
+                    None
+                }
+                Key::End => {
+                    self.scroll = self.max_scroll();
                     None
                 }
                 // Read-only destination (design D7): Enter/Space select
@@ -397,14 +456,7 @@ impl SettingsComponent {
                 )))
             }
             MouseGesture::Scroll { delta, .. } => {
-                let max_scroll = self
-                    .geometry
-                    .cursor_lines
-                    .iter()
-                    .copied()
-                    .max()
-                    .unwrap_or(0)
-                    .saturating_sub((self.geometry.content_area.height as usize).saturating_sub(1));
+                let max_scroll = self.max_scroll();
                 self.scroll = self
                     .scroll
                     .saturating_add_signed(delta as isize)
@@ -444,6 +496,7 @@ impl Component for SettingsComponent {
             SettingsRenderModel {
                 destination: self.destination,
                 rows,
+                keys: &self.keys,
                 services: &self.services,
                 setup: self.setup.as_ref(),
                 cursor,
@@ -495,6 +548,13 @@ impl AppComponent<Msg, UserEvent> for SettingsComponent {
         match event {
             Event::Keyboard(key) => match self.handle_key(key) {
                 Some(message) => LeafKeyResult::Consumed(Some(message)).into_option(),
+                None if self.destination == SettingsDestination::Keys
+                    && matches!(key.code, Key::PageUp | Key::PageDown | Key::Home | Key::End) =>
+                {
+                    // The Keys destination consumed the chord as a local
+                    // scroll move; claim it like the cursor moves.
+                    LeafKeyResult::Consumed(None).into_option()
+                }
                 None if matches!(
                     key.code,
                     Key::Up
@@ -824,6 +884,171 @@ mod tests {
             )))
         ));
         assert_eq!(component.keys_cursor, 0);
+    }
+
+    /// Keys cursor and scroll fixture: one group header plus `actions`
+    /// action rows, painted once so the render geometry (cursor lines,
+    /// content area) is live.
+    fn painted_keys_content(actions: usize) -> SettingsComponent {
+        let mut keys = vec![SettingsRow {
+            label: "Playback".into(),
+            value: String::new(),
+            section: true,
+            cursor: None,
+        }];
+        keys.extend((0..actions).map(|i| SettingsRow {
+            label: format!("action_{i}"),
+            value: "k".into(),
+            section: false,
+            cursor: Some(i),
+        }));
+        let mut component = SettingsComponent::new();
+        component.set_content(SettingsSnapshot {
+            destination: SettingsDestination::Keys,
+            rows: Vec::new(),
+            services: Vec::new(),
+            keys,
+            setup: None,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        component
+    }
+
+    /// The Keys cursor is an ordinal over action rows (headers are not
+    /// addressable): it clamps to the action count on both ends, and a
+    /// stale cursor value pushed in with content clamps to the last action
+    /// instead of highlighting a header or nothing.
+    #[test]
+    fn keys_cursor_numbers_actions_and_clamps_to_the_action_count() {
+        let mut component = painted_keys_content(2);
+        for _ in 0..5 {
+            assert!(matches!(
+                component.on(&key(Key::Down)),
+                Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+            ));
+        }
+        assert_eq!(component.keys_cursor, 1, "Down clamps to the last action");
+        for _ in 0..5 {
+            component.on(&key(Key::Up));
+        }
+        assert_eq!(component.keys_cursor, 0, "Up clamps at the first action");
+
+        // A stale cursor larger than the action count clamps on the next
+        // content push (headers carry no cursor, so they are never
+        // highlighted).
+        component.keys_cursor = 7;
+        component.set_content(SettingsSnapshot {
+            destination: SettingsDestination::Keys,
+            rows: Vec::new(),
+            services: Vec::new(),
+            keys: component.keys.clone(),
+            setup: None,
+            area: Rect::new(0, 0, 40, 12),
+        });
+        assert_eq!(component.keys_cursor, 1);
+    }
+
+    /// Arrow moves scroll the Keys window so the cursor's row stays
+    /// painted: ~40 rows overflow a 12-row panel, so moving the cursor off
+    /// the bottom pulls the scroll down, and moving back up restores it.
+    #[test]
+    fn keys_arrow_moves_scroll_the_cursor_into_view() {
+        let mut component = painted_keys_content(40);
+        let height = component.geometry.content_area.height as usize;
+        assert!(
+            component.geometry.cursor_lines.len() > height,
+            "fixture overflows the viewport"
+        );
+        for _ in 0..40 {
+            component.on(&key(Key::Down));
+        }
+        assert_eq!(component.keys_cursor, 39);
+        let line = component.geometry.cursor_lines[39];
+        assert!(
+            line >= component.scroll && line < component.scroll + height,
+            "cursor row must be inside the scrolled window after Down"
+        );
+        assert!(
+            component.scroll > 0,
+            "the window scrolled to reach the last row"
+        );
+        for _ in 0..40 {
+            component.on(&key(Key::Up));
+        }
+        assert_eq!(component.keys_cursor, 0);
+        let top = component.geometry.cursor_lines[0];
+        assert!(
+            top >= component.scroll && top < component.scroll + height,
+            "the first action row is inside the scrolled window again"
+        );
+    }
+
+    /// PageUp/PageDown/Home/End scroll the Keys window (claimed, not
+    /// fallen through to the router), clamped to the document.
+    #[test]
+    fn keys_page_and_edge_keys_scroll_and_are_claimed() {
+        let mut component = painted_keys_content(40);
+        let height = component.geometry.content_area.height as usize;
+        let max_scroll = component
+            .geometry
+            .cursor_lines
+            .iter()
+            .copied()
+            .max()
+            .unwrap_or(0)
+            .saturating_sub(height - 1);
+        assert!(matches!(
+            component.on(&key(Key::PageDown)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        assert_eq!(component.scroll, 10.min(max_scroll));
+        assert!(matches!(
+            component.on(&key(Key::End)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        assert_eq!(component.scroll, max_scroll);
+        assert!(matches!(
+            component.on(&key(Key::Home)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        assert_eq!(component.scroll, 0);
+        assert!(matches!(
+            component.on(&key(Key::PageUp)),
+            Some(Msg::TerminalEvent(TerminalObserverEvent::KeyClaimed))
+        ));
+        assert_eq!(component.scroll, 0, "PageUp clamps at the top");
+    }
+
+    /// Scrolling the Keys window moves the painted rows (buffer evidence:
+    /// the rows above the window scroll off, later rows paint in their
+    /// place).
+    #[test]
+    fn keys_scroll_moves_the_painted_window() {
+        let mut component = painted_keys_content(40);
+        component.on(&key(Key::PageDown));
+        let mut terminal = Terminal::new(TestBackend::new(40, 12)).unwrap();
+        terminal
+            .draw(|frame| component.view(frame, frame.area()))
+            .unwrap();
+        let output: String = terminal
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .map(|cell| cell.symbol().to_owned())
+            .collect();
+        assert!(
+            !output.contains("action_0"),
+            "rows above the window scrolled off"
+        );
+        assert!(
+            output.contains("action_15"),
+            "rows below the window painted in"
+        );
     }
 
     #[test]

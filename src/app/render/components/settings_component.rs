@@ -17,6 +17,9 @@ pub(in crate::app) struct SettingsRenderGeometry {
 pub(in crate::app) struct SettingsRenderModel<'a> {
     pub destination: SettingsDestination,
     pub rows: &'a [SettingsRow],
+    /// The Keys destination's rows; the scrollbar's document length there
+    /// (the main `rows` list is empty while Keys is mounted).
+    pub keys: &'a [SettingsRow],
     pub services: &'a [ServiceRow],
     pub setup: Option<&'a SetupDraft>,
     pub cursor: usize,
@@ -142,12 +145,12 @@ pub(in crate::app) fn render_settings_content(
                 Paragraph::new(lines).scroll((model.scroll as u16, 0)),
                 content,
             );
-            crate::app::render::render_sidebar_scrollbar(
-                frame,
-                content,
-                model.rows.len(),
-                model.scroll,
-            );
+            let document = if model.destination == SettingsDestination::Keys {
+                model.keys.len()
+            } else {
+                model.rows.len()
+            };
+            crate::app::render::render_sidebar_scrollbar(frame, content, document, model.scroll);
         }
     }
 }

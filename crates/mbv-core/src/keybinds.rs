@@ -700,17 +700,23 @@ impl Keybinds {
 
     /// The number of actions whose router-scope binding deviates from the
     /// declared default: the settings main list's Keys-row summary count
-    /// (design D7). A configured chord equal to a declared default is not a
-    /// deviation.
+    /// (design D7). Counted as distinct action ids — an action bound by
+    /// more than one router entry still counts once — and a configured
+    /// chord equal to a declared default is not a deviation.
     pub fn override_count(&self) -> usize {
-        self.sections
+        let mut overridden: Vec<&'static str> = self
+            .sections
             .iter()
             .flat_map(|(_, bindings)| bindings.router.iter())
             .filter(|(id, chord)| {
                 action_by_id(id)
                     .is_some_and(|action| !action.parsed_default_chords().contains(chord))
             })
-            .count()
+            .map(|(id, _)| *id)
+            .collect();
+        overridden.sort_unstable();
+        overridden.dedup();
+        overridden.len()
     }
 }
 
