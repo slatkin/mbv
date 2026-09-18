@@ -62,10 +62,10 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
     // right-column strip's own fill (`PlaybackPanel`), whose recess rects
     // share the value through this context.
     let panel_bg = palette::surface_colors(ctx.panel, ctx.panel_focused).fill;
-    // The queue column splits its title band across two rows (controls +
-    // pills up top, title + progress + time on the indicator row); the
-    // Library strip keeps the single title row. Derived from the context's
-    // panel surface so neither panel can point at the other's layout.
+    // The queue column splits its title band (controls + pills on the
+    // band's bottom row, title content above); the Library strip keeps the
+    // single title row. Derived from the context's panel surface so neither
+    // panel can point at the other's layout.
     let split = split_title_rows(ctx.panel);
     let mut indicator_painted = false;
     match rows.seekbar {
@@ -107,7 +107,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
                     Some(indicator_area) => {
                         render_queue_title_rows(
                             frame,
-                            title_area,
+                            title_row_area,
                             indicator_area,
                             rows.extra_row,
                             title.as_str(),
@@ -387,24 +387,24 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
     spans
 }
 
-/// The queue column's split title band: the upper row keeps the transport
-/// controls and the status pills. With a context part and an `extra` row the
-/// band expands onto three rows — the show (context) and the `pos / dur`
-/// time on the middle row, the title alone one row below — otherwise the
-/// title and the time share the lower row as before. The title keeps the
-/// shared marquee window (sized to its own row); the context row clips
-/// without scrolling. Hit geometry stays on the upper row, where the glyphs
-/// paint.
+/// The queue column's split title band: content rows first, the transport
+/// controls last. With a context part and a `third` row the band is three
+/// rows — the show (context) and the `pos / dur` time on the first row, the
+/// title alone with its marquee window on the second, the controls and
+/// status pills on the bottom row — otherwise the title and the time share
+/// the first row and the controls move to the row below. The show clips to
+/// its row without scrolling; the marquee belongs to the title row. Hit
+/// geometry rides the bottom row, where the glyphs paint.
 fn render_queue_title_rows(
     frame: &mut Frame,
-    upper: Rect,
-    lower: Rect,
-    extra: Option<Rect>,
+    first: Rect,
+    second: Rect,
+    third: Option<Rect>,
     title: &str,
     title_color: Color,
     ctx: &mut PlaybackRenderContext<'_>,
 ) {
-    if upper.height == 0 || upper.width == 0 || lower.height == 0 || lower.width == 0 {
+    if first.height == 0 || first.width == 0 || second.height == 0 || second.width == 0 {
         ctx.playback.play_pause_area = Rect::default();
         ctx.playback.stop_area = Rect::default();
         ctx.playback.next_area = Rect::default();
@@ -418,41 +418,6 @@ fn render_queue_title_rows(
     // right. `render_title_row` pads the same way after its own merge.
     let pills = padded_status_pill(ctx);
     let pills_w: u16 = pills.iter().map(|span| span.content.width() as u16).sum();
-    let glyph_text = format!("{} ", glyphs.play.0);
-    let glyph_w = glyph_text.width() as u16;
-    let stop_w = glyphs.stop.0.width() as u16;
-    let prev_w = glyphs.prev.0.width() as u16;
-    let next_w = glyphs.next.0.width() as u16;
-    let buttons_w = stop_w as usize + 1 + prev_w as usize + 1 + next_w as usize + 1;
-    // No title competes on the upper row, so the buttons show whenever the
-    // glyphs, buttons and pills fit.
-    let show_buttons = upper.width as usize >= glyph_w as usize + buttons_w + pills_w as usize;
-    let mut upper_spans = render_transport_glyphs(
-        ctx,
-        upper.y,
-        upper.x,
-        show_buttons,
-        &glyph_text,
-        glyph_w,
-        stop_w,
-        next_w,
-        prev_w,
-        &glyphs,
-    );
-    let upper_left_w: u16 = upper_spans
-        .iter()
-        .map(|span| span.content.width() as u16)
-        .sum();
-    let upper_gap = (upper.width as usize).saturating_sub(upper_left_w as usize + pills_w as usize);
-    upper_spans.push(Span::raw(" ".repeat(upper_gap)));
-    upper_spans.extend(pills);
-    frame.render_widget(
-        Paragraph::new(Line::from(upper_spans)).style(Style::default().bg(panel_bg)),
-        upper,
-    );
-    // The lower row(s): with a context part and a spare row, the show and
-    // the `pos / dur` time take the lower row and the title moves one row
-    // below; otherwise the title and the time share the lower row.
     let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
     let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
     let time_text = format!("{pos_str}/{dur_str}");
@@ -461,17 +426,15 @@ fn render_queue_title_rows(
         .title_parts
         .as_ref()
         .and_then(|parts| parts.context.as_ref());
-    if let (Some(extra), Some(context)) = (extra, context) {
-        if extra.height == 0 || extra.width == 0 {
+    if let (Some(third), Some(context)) = (third, context) {
+        if third.height == 0 || third.width == 0 {
             return;
         }
-        // Middle row: ` <show> ... <pos / dur> ` — the show left with one
+        // First row: ` <show> ... <pos / dur> ` — the show left with one
         // space of indent, the time right with one space of indent. The
         // show clips to the row (no marquee); the marquee belongs to the
         // title row below.
-        // One left indent, at least one gap cell before the time, one right
-        // indent.
-        let show_max = lower.width.saturating_sub(1 + 1 + time_w + 1) as usize;
+        let show_max = first.width.saturating_sub(1 + 1 + time_w + 1) as usize;
         let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
         let mut show = context.text.as_str();
         while show.width() > show_max {
@@ -484,7 +447,7 @@ fn render_queue_title_rows(
                 .bg(panel_bg),
         ));
         let row_w: u16 = row.iter().map(|span| span.content.width() as u16).sum();
-        let gap = (lower.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
+        let gap = (first.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
         row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
         row.push(Span::styled(
             time_text,
@@ -493,9 +456,9 @@ fn render_queue_title_rows(
         row.push(Span::styled(" ", Style::default().bg(panel_bg)));
         frame.render_widget(
             Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
-            lower,
+            first,
         );
-        // Title row: ` <title> ` alone, the marquee window sized to the row
+        // Second row: ` <title> ` alone, the marquee window sized to the row
         // minus its two indent cells.
         let title_parts = ctx
             .title_parts
@@ -507,23 +470,34 @@ fn render_queue_title_rows(
         row.extend(marquee_spans(
             ctx,
             title_parts,
-            extra.width.saturating_sub(2) as usize,
+            second.width.saturating_sub(2) as usize,
         ));
         frame.render_widget(
             Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
-            extra,
+            second,
+        );
+        // Bottom row: the transport controls and the status pills.
+        render_transport_pill_row(
+            ctx,
+            frame,
+            inset_row(third),
+            panel_bg,
+            &glyphs,
+            pills,
+            pills_w,
         );
         return;
     }
-    // The combined lower row: ` <title> ... <pos / dur> `.
-    // One left indent, at least one gap cell before the time, one right
-    // indent.
-    let title_max = lower.width.saturating_sub(1 + 1 + time_w + 1) as usize;
+    // Two rows: the title and the time share the first row, the controls
+    // and pills move to the row below.
+    // ` <title> ... <pos / dur> ` — one left indent, at least one gap cell
+    // before the time, one right indent.
+    let title_max = first.width.saturating_sub(1 + 1 + time_w + 1) as usize;
     let title_parts = playback_title_spans(ctx.title_parts.as_ref(), title, title_color);
     let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
     row.extend(marquee_spans(ctx, &title_parts, title_max));
     let row_w: u16 = row.iter().map(|span| span.content.width() as u16).sum();
-    let gap = (lower.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
+    let gap = (first.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
     row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
     row.push(Span::styled(
         time_text,
@@ -532,7 +506,73 @@ fn render_queue_title_rows(
     row.push(Span::styled(" ", Style::default().bg(panel_bg)));
     frame.render_widget(
         Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
-        lower,
+        first,
+    );
+    render_transport_pill_row(
+        ctx,
+        frame,
+        inset_row(second),
+        panel_bg,
+        &glyphs,
+        pills,
+        pills_w,
+    );
+}
+
+/// One band row inset one column each side: the controls row's paint rect.
+fn inset_row(row: Rect) -> Rect {
+    Rect {
+        x: row.x + 1,
+        width: row.width.saturating_sub(2),
+        ..row
+    }
+}
+
+/// The transport controls and status pills on one row: glyphs left, pills
+/// flush right. The buttons show whenever the glyphs, buttons and pills
+/// fit — no title competes on the controls row. Hit geometry lands on this
+/// row.
+fn render_transport_pill_row(
+    ctx: &mut PlaybackRenderContext<'_>,
+    frame: &mut Frame,
+    row: Rect,
+    panel_bg: Color,
+    glyphs: &TransportGlyphs,
+    pills: Vec<Span<'static>>,
+    pills_w: u16,
+) {
+    if row.height == 0 || row.width == 0 {
+        ctx.playback.play_pause_area = Rect::default();
+        ctx.playback.stop_area = Rect::default();
+        ctx.playback.next_area = Rect::default();
+        return;
+    }
+    let glyph_text = format!("{} ", glyphs.play.0);
+    let glyph_w = glyph_text.width() as u16;
+    let stop_w = glyphs.stop.0.width() as u16;
+    let prev_w = glyphs.prev.0.width() as u16;
+    let next_w = glyphs.next.0.width() as u16;
+    let buttons_w = stop_w as usize + 1 + prev_w as usize + 1 + next_w as usize + 1;
+    let show_buttons = row.width as usize >= glyph_w as usize + buttons_w + pills_w as usize;
+    let mut spans = render_transport_glyphs(
+        ctx,
+        row.y,
+        row.x,
+        show_buttons,
+        &glyph_text,
+        glyph_w,
+        stop_w,
+        next_w,
+        prev_w,
+        glyphs,
+    );
+    let left_w: u16 = spans.iter().map(|span| span.content.width() as u16).sum();
+    let gap = (row.width as usize).saturating_sub(left_w as usize + pills_w as usize);
+    spans.push(Span::raw(" ".repeat(gap)));
+    spans.extend(pills);
+    frame.render_widget(
+        Paragraph::new(Line::from(spans)).style(Style::default().bg(panel_bg)),
+        row,
     );
 }
 
@@ -993,39 +1033,46 @@ mod tests {
                 .collect::<String>()
         };
         let fgs = |y: u16| (0..40).map(|x| buf[(x, y)].fg).collect::<Vec<Color>>();
-        let middle = row(1);
-        let title_row = row(2);
+        let show_row = row(0);
+        let title_row = row(1);
+        let controls_row = row(2);
         assert_cells_in_row(
-            &middle,
-            &fgs(1),
+            &show_row,
+            &fgs(0),
             "Series",
             title_part_fg(PlaybackTitlePartRole::Context),
             "the show",
         );
         assert!(
-            middle.contains("1:17/0:00"),
-            "the elapsed/duration time rides the show row: {middle:?}"
+            show_row.contains("1:17/0:00"),
+            "the elapsed/duration time rides the show row: {show_row:?}"
         );
         assert!(
-            !middle.contains("Pilot"),
+            !show_row.contains("Pilot"),
             "the title is not on the show row"
         );
         assert_cells_in_row(
             &title_row,
-            &fgs(2),
+            &fgs(1),
             "Pilot",
             title_part_fg(PlaybackTitlePartRole::Title),
             "the title",
         );
         assert!(!title_row.contains("Series"), "the show stays on its row");
         assert!(!title_row.contains('/'), "no time on the title row");
+        // The transport controls land on the band's bottom row.
+        assert!(
+            controls_row.contains('X'),
+            "the stop glyph paints on the bottom row: {controls_row:?}"
+        );
+        assert!(!controls_row.contains("Pilot") && !controls_row.contains("Series"));
     }
 
-    /// The queue column's split upper row pads the status pill on both
+    /// The queue column's bottom controls row pads the status pill on both
     /// sides: the value (e.g. FLAC) must not touch the panel fill on the
     /// right, mirroring the leading pad `status_pill_spans` opens with.
     #[test]
-    fn split_upper_row_pads_the_status_pill_on_both_sides() {
+    fn bottom_controls_row_pads_the_status_pill_on_both_sides() {
         let pill_bg = palette::surface_colors(palette::Surface::PlaybackStatusPill, false).fill;
         let panel_bg =
             palette::surface_colors(palette::Surface::QueueOnlyPlaybackPanel, false).fill;
@@ -1070,30 +1117,33 @@ mod tests {
             .unwrap();
         let buf = terminal.backend().buffer();
         let pill_cells = (0..40)
-            .filter(|&x| buf[(x, 0)].bg == pill_bg)
+            .filter(|&x| buf[(x, 1)].bg == pill_bg)
             .collect::<Vec<_>>();
-        assert!(!pill_cells.is_empty(), "no pill painted on the upper row");
+        assert!(
+            !pill_cells.is_empty(),
+            "no pill painted on the controls row"
+        );
         let row_text = (0..40)
-            .map(|x| buf[(x, 0)].symbol().to_string())
+            .map(|x| buf[(x, 1)].symbol().to_string())
             .collect::<String>();
         assert!(
             row_text.contains("FLAC"),
             "expected the codec value: {row_text:?}"
         );
         assert_eq!(
-            buf[(pill_cells[0], 0)].symbol(),
+            buf[(pill_cells[0], 1)].symbol(),
             " ",
             "leading pill pad: {row_text:?}"
         );
         assert_eq!(
-            buf[(*pill_cells.last().unwrap(), 0)].symbol(),
+            buf[(*pill_cells.last().unwrap(), 1)].symbol(),
             " ",
             "trailing pill pad: {row_text:?}"
         );
         assert_eq!(
             *pill_cells.last().unwrap(),
-            39,
-            "the padded pill runs flush to the row edge: {row_text:?}"
+            38,
+            "the padded pill runs flush to the inset row edge: {row_text:?}"
         );
     }
 

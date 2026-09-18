@@ -142,15 +142,17 @@ starts one inset row below the box's top edge.
 In every queue-visible layout the playback panel (seekbar, title row, controls) SHALL render inside
 the queue column, using the same content as the Library playback panel. The panel SHALL NOT
 render in the right column of a queue-visible layout. The queue column splits the title band
-across two rows: the upper row keeps the transport controls and the status pills, while the
-title and the `pos / dur` time render one row below — the title left with one
-space of indent, the time right with one space of indent, with the title's marquee window kept.
-When the now-playing title carries a context part (e.g. a show beside an episode title), the
-band SHALL expand onto a third row: the show and the `pos / dur` time render on the middle row
-(the show left with one space of indent, the time right with one space of indent), and the title
-alone renders on the row below with the marquee window kept; the transport's footprint SHALL
-grow by that one row for as long as a context part plays. The show clips to its row without
-scrolling; the marquee belongs to the title row.
+across two rows with the content first and the controls last: the title and the `pos / dur` time
+render on the band's first row — the title left with one space of indent, the time right with one
+space of indent, with the title's marquee window kept — and the transport controls and the status
+pills render on the row below. When the now-playing title carries a context part (e.g. a show
+beside an episode title), the band SHALL expand onto a third row: the show and the `pos / dur`
+time render on the first row (the show left with one space of indent, the time right with one
+space of indent), the title alone renders on the second row with the marquee window kept, and the
+transport controls and the status pills render on the third (bottom) row; the transport's
+footprint SHALL grow by that one row for as long as a context part plays. The show clips to its
+row without scrolling; the marquee belongs to the title row. The transport hit geometry rides the
+bottom controls row.
 
 When the terminal is narrower than 100 columns the visual slot and the playback panel SHALL stack
 vertically: the visual slot at full column width, the panel directly below it, and the queue list

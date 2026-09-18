@@ -270,13 +270,13 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
     assert_ne!(first, later, "title window should have scrolled");
 }
 
-/// The queue column's split title band: the upper row keeps the transport
-/// controls, while the title and the `pos / dur` time move one row down —
-/// the title left with one space of indent, the time right with one space
-/// of indent. The header carries no throbber or percent; neither does
-/// this row.
+/// The queue column's split title band: the title and the `pos / dur` time
+/// take the band's first row — the title left with one space of indent, the
+/// time right with one space of indent — and the transport controls move to
+/// the row below. The header carries no throbber or percent; neither does
+/// the title row.
 #[test]
-fn queue_panel_moves_title_progress_and_time_to_the_lower_row() {
+fn queue_panel_puts_title_progress_and_time_above_the_controls_row() {
     use crate::app::types_settings::PanelMode;
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::QueueOnly;
@@ -309,33 +309,29 @@ fn queue_panel_moves_title_progress_and_time_to_the_lower_row() {
         .map(str::to_string)
         .collect();
     assert!(
-        lines[1].contains("||"),
-        "upper row keeps the controls:\n{}",
-        lines[1]
-    );
-    assert!(
-        !lines[1].contains("Title"),
-        "title moves down:\n{}",
-        lines[1]
-    );
-    assert!(
-        lines[2].starts_with(" Title"),
+        lines[1].starts_with(" Title"),
         "one space of left indent:\n{}",
-        lines[2]
+        lines[1]
     );
     assert!(
-        !lines[2].contains('%'),
-        "no percent on the lower row:\n{}",
-        lines[2]
+        !lines[1].contains('%'),
+        "no percent on the title row:\n{}",
+        lines[1]
     );
     assert!(
-        lines[2].ends_with("0:45/1:30 "),
+        lines[1].ends_with("0:45/1:30 "),
         "time right with one space of indent:\n{}",
+        lines[1]
+    );
+    assert!(
+        lines[2].contains("||"),
+        "the controls move to the row below:\n{}",
         lines[2]
     );
+    assert!(!lines[2].contains("Title"), "the title stays on its row");
     assert_eq!(
-        layout.play_pause_area.y, 1,
-        "transport hits stay on the upper row"
+        layout.play_pause_area.y, 2,
+        "transport hits ride the bottom controls row"
     );
 }
 
@@ -384,10 +380,10 @@ fn library_strip_keeps_the_single_title_row() {
     );
 }
 
-/// The moved title keeps the shared marquee window on its wider lower row:
+/// The moved title keeps the shared marquee window on its first-band row:
 /// a title that still does not fit scrolls instead of overlapping the time.
 #[test]
-fn queue_lower_row_marquees_a_title_that_does_not_fit() {
+fn queue_title_row_marquees_a_title_that_does_not_fit() {
     use crate::app::types_settings::PanelMode;
     let mut app = make_app_stub();
     app.panel_mode = PanelMode::QueueOnly;
@@ -421,19 +417,19 @@ fn queue_lower_row_marquees_a_title_that_does_not_fit() {
         .map(str::to_string)
         .collect();
     assert!(
-        lines[2].starts_with(" A Very Long"),
+        lines[1].starts_with(" A Very Long"),
         "marquee rests at the head:\n{}",
-        lines[2]
+        lines[1]
     );
     assert!(
-        !lines[2].contains(long_title),
+        !lines[1].contains(long_title),
         "overlong title windows instead of overflowing:\n{}",
-        lines[2]
+        lines[1]
     );
     assert!(
-        lines[2].ends_with("0:45/1:30 "),
+        lines[1].ends_with("0:45/1:30 "),
         "time stays intact at the right:\n{}",
-        lines[2]
+        lines[1]
     );
 }
 

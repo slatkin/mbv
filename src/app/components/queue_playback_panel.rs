@@ -293,6 +293,9 @@ mod tests {
     use rstest::rstest;
     use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
+    /// One painted band row: its text and each cell's foreground.
+    type PaintedRow = (String, Vec<Color>);
+
     fn painted_panel(idle: bool) -> QueuePlaybackPanel {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(
@@ -335,16 +338,14 @@ mod tests {
         }
     }
 
-    /// Paint the panel and return the two rows below the controls row — the
-    /// band's middle row (y 4) and its last row (y 5) — each as (text, fgs).
-    /// With a context part the middle row carries the show + `pos / dur`
-    /// time and the last row the title alone; without one, the middle row
-    /// carries the title + time (the unexpanded band) and the last row is
-    /// blank. The painter paints the typed parts only over an attached
-    /// target's plain title; the parts replace it when present.
-    fn painted_split_title_rows(
-        parts: PlaybackTitleParts,
-    ) -> ((String, Vec<Color>), (String, Vec<Color>)) {
+    /// Paint the panel and return the title band's three rows below the
+    /// seekbar (y 3, y 4, y 5), each as (text, fgs). With a context part the
+    /// band expands: the show + `pos / dur` time on y 3, the title alone on
+    /// y 4, the transport controls on y 5. Without one the band stays
+    /// two rows: the title + time on y 3, the controls on y 4, y 5 blank.
+    /// The painter paints the typed parts only over an attached target's
+    /// plain title; the parts replace it when present.
+    fn painted_split_title_rows(parts: PlaybackTitleParts) -> (PaintedRow, PaintedRow, PaintedRow) {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.show_controls = true;
@@ -362,7 +363,7 @@ mod tests {
                 (0..40).map(|x| buf[(x, y)].fg).collect(),
             )
         };
-        (row(4), row(5))
+        (row(3), row(4), row(5))
     }
 
     fn assert_cells_carry(text: &str, fgs: &[Color], needle: &str, expected: Color, label: &str) {
@@ -379,12 +380,13 @@ mod tests {
     }
 
     /// The painted media-type table (tasks 4.1, 4.2, 4.4) on the queue
-    /// column's title band: two-part rows expand onto two rows — the context
-    /// part (the show) paints on the middle row in the yellow context role
-    /// beside the `pos / dur` time, and the title part alone on the row
-    /// below in the aqua title role; single-part rows keep the unexpanded
-    /// band, painting the title and the time on the middle row and nothing
-    /// on the row below. (The one-space delineation between parts remains a
+    /// column's title band: two-part rows expand onto two content rows with
+    /// the transport controls on the band's bottom row — the context part
+    /// (the show) paints on the first row in the yellow context role beside
+    /// the `pos / dur` time, and the title part alone on the row below in
+    /// the aqua title role; single-part rows keep the unexpanded band,
+    /// painting the title and the time on the first row and the controls on
+    /// the row below. (The one-space delineation between parts remains a
     /// contract only where the parts still share a row — the Library strip's
     /// combined row, owned by `chrome_player.rs`'s painter test.)
     #[rstest]
@@ -399,51 +401,29 @@ mod tests {
         #[case] title: &str,
         #[case] context: Option<&str>,
     ) {
-        let ((mid, mid_fgs), (last, last_fgs)) =
+        let ((top, top_fgs), (mid, mid_fgs), (bottom, _bottom_fgs)) =
             painted_split_title_rows(parts_for(title, context));
         match context {
             Some(context) => {
-                // The middle row carries the show in the context role and
+                // The first row carries the show in the context role and
                 // the `pos / dur` time; the title is not on it.
                 assert_cells_carry(
-                    &mid,
-                    &mid_fgs,
+                    &top,
+                    &top_fgs,
                     context,
                     palette::PLAYBACK_CONTEXT_FG,
                     "the context part",
                 );
                 assert!(
-                    !mid.contains(title),
-                    "the title paints below the show row, not on it: {mid:?}"
+                    !top.contains(title),
+                    "the title paints below the show row, not on it: {top:?}"
                 );
                 assert!(
-                    mid.contains('/'),
-                    "the elapsed/duration time rides the show row: {mid:?}"
+                    top.contains('/'),
+                    "the elapsed/duration time rides the show row: {top:?}"
                 );
                 // The row below carries the title alone in the title role:
                 // no show, no time, no context-role paint.
-                assert_cells_carry(
-                    &last,
-                    &last_fgs,
-                    title,
-                    palette::PLAYBACK_TITLE_FG,
-                    "the title part",
-                );
-                assert!(
-                    !last.contains(context),
-                    "the show stays on its row: {last:?}"
-                );
-                assert!(!last.contains('/'), "no time on the title row: {last:?}");
-                let title_start = last.find(title).unwrap();
-                assert_ne!(
-                    last_fgs[title_start - 1],
-                    palette::PLAYBACK_CONTEXT_FG,
-                    "no context part beside the title: {last:?}"
-                );
-            }
-            None => {
-                // The unexpanded band: the title and the time share the
-                // middle row, the row below is blank.
                 assert_cells_carry(
                     &mid,
                     &mid_fgs,
@@ -451,10 +431,44 @@ mod tests {
                     palette::PLAYBACK_TITLE_FG,
                     "the title part",
                 );
-                assert!(mid.contains('/'), "the time rides the title row: {mid:?}");
+                assert!(!mid.contains(context), "the show stays on its row: {mid:?}");
+                assert!(!mid.contains('/'), "no time on the title row: {mid:?}");
+                let title_start = mid.find(title).unwrap();
+                assert_ne!(
+                    mid_fgs[title_start - 1],
+                    palette::PLAYBACK_CONTEXT_FG,
+                    "no context part beside the title: {mid:?}"
+                );
+                // The transport controls land on the band's bottom row.
                 assert!(
-                    !last.contains(title),
-                    "a single-part row does not expand onto the row below: {last:?}"
+                    bottom.contains('X'),
+                    "the stop glyph paints on the bottom row: {bottom:?}"
+                );
+                assert!(!bottom.contains(title) && !bottom.contains(context));
+            }
+            None => {
+                // The unexpanded band: the title and the time share the
+                // first row, the controls ride the row below, and nothing
+                // expands onto the band's last row.
+                assert_cells_carry(
+                    &top,
+                    &top_fgs,
+                    title,
+                    palette::PLAYBACK_TITLE_FG,
+                    "the title part",
+                );
+                assert!(top.contains('/'), "the time rides the title row: {top:?}");
+                assert!(
+                    mid.contains('X'),
+                    "the stop glyph paints on the controls row: {mid:?}"
+                );
+                assert!(
+                    !mid.contains(title) && !mid.contains('/'),
+                    "a single-part row does not expand onto the controls row: {mid:?}"
+                );
+                assert!(
+                    !bottom.contains(title) && !bottom.contains('X'),
+                    "nothing paints below the controls row: {bottom:?}"
                 );
             }
         }
