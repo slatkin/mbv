@@ -80,7 +80,8 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
   pure result from 2.1; there is no log-capture seam to assert the log line itself), and
   one manual run on this machine shows the resolved path in the startup log.)
 - [x] 2.5 Confirm packaging metadata still installs the whole fragment set (`Cargo.toml` script mapping, `PKGBUILD`) and that the entry script resolves its siblings from its own directory; verify the mapping lists every fragment and `openspec validate --all` passes.
-- [ ] 2.6 Manual check: start Local-daemon-owned playback and confirm the on-screen accept completes the jump; then remove the legacy `~/.local/share/mbv/scripts/mbv.lua` and repeat, confirming the accept still completes the jump after the copy is gone. (manual terminal check, not an automated test)
+- [x] 2.6 Manual check: start Local-daemon-owned playback and confirm the on-screen accept completes the jump; then remove the legacy `~/.local/share/mbv/scripts/mbv.lua` and repeat, confirming the accept still completes the jump after the copy is gone. (manual terminal check, not an automated test)
+  (User-verified 2026-09-18 both halves, on correction 7f0db6b0: banner renders, Start Now completes the jump with the legacy copy present (ignored+warned), and again after the copy was deleted.)
 
 ## 3. Gates and acceptance
 
@@ -93,7 +94,8 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
   artifacts.
   (Verify: terms present; no collision with the existing `Player owner` / `Client` /
   `Stay-alive` entries or `player-target-locality`'s on-this-machine classification.)
-- [ ] 3.6 Manual acceptance: reproduce the original report end-to-end (a Local daemon
+- [x] 3.6 Manual acceptance: reproduce the original report end-to-end (a Local daemon
   owns playback, episode near its end, press the on-screen accept) and confirm the next
   episode starts immediately with the TUI still running, and that volume scaling now
   applies once (the proposal's breaking note).
+  (User-verified 2026-09-18 on correction 7f0db6b0: OSD/Start Now appear ~60s before end, accept completes the jump.)
