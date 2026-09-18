@@ -82,14 +82,25 @@ fn queue_load_indices(len: usize, start_idx: usize) -> impl Iterator<Item = usiz
         .chain(start_idx + 1..len)
 }
 
+/// mpv loadfile mode for each queue load, design D3 load-then-play: the start
+/// slot loads first as a no-play `append` (mpv never starts playback for
+/// `append`), earlier slots are `insert-at` before it, later slots `append`
+/// after it. No load in the plan starts playback — `start_queue_playback`
+/// does that once the whole playlist is built.
 fn queue_load_location(index: usize, start_idx: usize) -> (&'static str, String) {
-    if index == start_idx {
-        ("replace", "-1".to_string())
-    } else if index < start_idx {
+    if index < start_idx {
         ("insert-at", index.to_string())
     } else {
         ("append", "-1".to_string())
     }
+}
+
+/// Start playback at `start_idx` after the no-play queue loads (design D3).
+/// Setting `playlist-pos` on the fully built, still-idle playlist makes mpv
+/// load that entry; an armed audio-pipe startup pause stays in force until
+/// the run's PlaybackRestart gate releases it.
+fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
+    let _ = mpv.set_property("playlist-pos", start_idx as i64);
 }
 
 /// What the initial queue layout verification found in mpv's playlist.
@@ -151,9 +162,12 @@ fn mpv_position_ticks(mpv: &Mpv) -> i64 {
 /// layout settles, so nothing else ever re-derives it: reports keep naming the
 /// requested item while mpv streams another one.
 ///
-/// Called once after the loads; a layout that is short an entry is reported
-/// rather than repaired, because a missing entry means the ordinal no longer
-/// names the item we think it does.
+/// Called once after the loads and the `start_queue_playback` step as a
+/// safety net: with design D3's load-then-play sequence the layout is
+/// already correct, so this must observe `Ok` and do nothing; a mismatch
+/// log after this change means the no-play load plan drifted. A layout that
+/// is short an entry is reported rather than repaired, because a missing
+/// entry means the ordinal no longer names the item we think it does.
 fn reassert_queue_layout(mpv: &Mpv, start_idx: usize, item_count: usize) {
     let mpv_count = mpv.get_property::<i64>("playlist-count").unwrap_or(-1);
     let mpv_pos = mpv.get_property::<i64>("playlist-pos").unwrap_or(-1);

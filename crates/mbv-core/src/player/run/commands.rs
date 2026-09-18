@@ -455,7 +455,10 @@ impl PlaybackRun {
         let had_previous_queue = self.queue_len() > 0;
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
         let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-        let _ = mpv.command("playlist-clear", &[]);
+        // Design D3 load-then-play: stop the previous playback and clear the
+        // whole playlist first — `playlist-clear` keeps the currently played
+        // file, which would survive a no-play load plan as a stray entry.
+        let _ = mpv.command("stop", &[]);
         for i in queue_load_indices(items.len(), start_idx) {
             let item = &items[i].item;
             let url = mpv_url_for_queue_item(item, &self.server_url, &self.token);
@@ -468,6 +471,10 @@ impl PlaybackRun {
                 );
             }
         }
+        // Design D3: every load above was no-play, so playback starts here,
+        // at the fully built playlist's start slot — reassert below must now
+        // observe Ok (a mismatch log means the no-play plan drifted).
+        start_queue_playback(mpv, start_idx);
         reassert_queue_layout(mpv, start_idx, items.len());
 
         let active_item = &items[start_idx].item;

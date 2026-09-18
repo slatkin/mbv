@@ -567,7 +567,7 @@ fn resume_start_pos_is_zero_for_audio_non_resumable_and_zero_position_feed_items
 }
 
 #[test]
-fn queue_loads_selected_item_first_and_restores_playlist_order() {
+fn queue_loads_selected_item_first_without_starting_playback() {
     let mut item = make_media_item("resumable");
     item.playback_position_ticks = item.runtime_ticks / 2;
     let queue_item = QueueItem::Emby(Box::new(item));
@@ -577,10 +577,44 @@ fn queue_loads_selected_item_first_and_restores_playlist_order() {
         queue_load_indices(4, 2).collect::<Vec<_>>(),
         vec![2, 0, 1, 3]
     );
-    assert_eq!(queue_load_location(2, 2).0, "replace");
+    // Design D3: the start slot and later slots load as no-play appends;
+    // only earlier slots insert, so no load in the plan starts playback.
+    assert_eq!(queue_load_location(2, 2).0, "append");
     assert_eq!(queue_load_location(0, 2), ("insert-at", "0".into()));
     assert_eq!(queue_load_location(1, 2), ("insert-at", "1".into()));
     assert_eq!(queue_load_location(3, 2).0, "append");
+}
+
+#[test]
+fn no_play_load_plan_builds_canonical_playlist_before_playback_starts() {
+    // D3 mock model of mpv's loadfile semantics over an empty playlist:
+    // `append` pushes to the end without starting playback, `insert-at i`
+    // inserts at ordinal i without starting playback (verified against the
+    // mpv IPC contract — `append` maps to LOAD_TYPE_APPEND, play=false).
+    // The only playback-start step is the final `start_queue_playback`
+    // playlist-pos write, so after the loads the layout must already be
+    // exactly what the reassert safety net treats as Ok.
+    for (len, start_idx) in [(1, 0), (4, 0), (4, 2), (5, 4), (100, 50)] {
+        let mut playlist: Vec<usize> = Vec::new();
+        for i in queue_load_indices(len, start_idx) {
+            let (mode, index) = queue_load_location(i, start_idx);
+            match mode {
+                // Neither no-play mode may start playback mid-load.
+                "append" => playlist.push(i),
+                // pi-lens-ignore: rust-unwrap
+                "insert-at" => playlist.insert(index.parse::<usize>().unwrap(), i),
+                other => panic!("unexpected load mode {other}"),
+            }
+        }
+        assert_eq!(playlist, (0..len).collect::<Vec<_>>());
+        // The start slot plays first, from the very first audible moment.
+        assert_eq!(playlist[start_idx], start_idx);
+        // Reassert safety net: full layout, mpv on the start slot -> Ok.
+        assert_eq!(
+            queue_layout_verdict(start_idx, len, start_idx as i64, len as i64),
+            QueueLayoutVerdict::Ok
+        );
+    }
 }
 
 #[test]

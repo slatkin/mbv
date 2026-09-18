@@ -246,6 +246,11 @@ impl Player {
                 }
             }
             if !active_file_projection {
+                // Design D3 load-then-play: every load above was no-play, so
+                // playback starts here, at the fully built playlist's start
+                // slot — reassert below must now observe Ok (a mismatch log
+                // means the no-play plan drifted).
+                start_queue_playback(&mpv, start_idx);
                 reassert_queue_layout(&mpv, start_idx, items.len());
             }
             // send_ep_info only for Emby items.
