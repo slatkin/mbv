@@ -2,7 +2,7 @@ use super::media_list::{MediaListRow, MediaSemanticState};
 use super::msg::{Msg, QueueColumnResize, QueueIntent, QueueRequest, ShellRequest};
 use super::queue::{queue_media_rows, QueueComponent, QueueCursorUpdate};
 use crate::app::types_playback::{PlaybackState, QueueScope};
-use mbv_core::playback_queue::{PlaybackQueue, QueueItem};
+use mbv_core::playback_queue::{FeedEntry, PlaybackQueue, QueueItem};
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
 use tuirealm::component::{AppComponent, Component};
@@ -423,6 +423,38 @@ fn queue_projection_clamps_active_progress_to_presentation_bounds() {
             if position_ticks == 0 { None } else { Some(100) }
         );
     }
+}
+
+#[test]
+fn queue_projection_keeps_resume_progress_on_a_non_active_feed_row() {
+    let slots = PlaybackQueue::from_queue_items(
+        vec![QueueItem::Feed(FeedEntry {
+            guid: "feed-half".into(),
+            title: "Feed entry".into(),
+            enclosure_url: Some("https://example.test/feed.mp3".into()),
+            link: None,
+            mime_type: Some("audio/mpeg".into()),
+            duration_ticks: Some(100),
+            pub_date_secs: None,
+            feed_kind: None,
+            feed_id: None,
+            position_ticks: 25,
+            played: false,
+        })],
+        None,
+    )
+    .slots()
+    .to_vec();
+
+    let rows = queue_media_rows(&slots, PlaybackState::default(), None);
+    let Some(MediaListRow::Item { semantic_state, .. }) = rows.first() else {
+        panic!("queue projection must produce an item row")
+    };
+    assert_eq!(
+        *semantic_state,
+        MediaSemanticState::active(Some(25)),
+        "a non-active Feed row keeps its stored resume progress"
+    );
 }
 
 #[test]

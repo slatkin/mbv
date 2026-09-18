@@ -780,6 +780,10 @@ fn queue_row_fields(
     playback: PlaybackState,
     is_active: bool,
 ) -> (String, i64, i64) {
+    // Every kind carries its stored resume position, and the active row's live
+    // ticks win over it. Feeds and Audiobookshelf used to paint 0 on a
+    // non-active row, so only the playing row ever showed progress.
+    let stored_ticks = item.playback_position_ticks();
     match item {
         QueueItem::Emby(item) => {
             let (pos, runtime) = if is_active {
@@ -787,12 +791,12 @@ fn queue_row_fields(
                     if playback.position_ticks > 0 {
                         playback.position_ticks
                     } else {
-                        item.playback_position_ticks
+                        stored_ticks
                     },
                     playback.runtime_ticks,
                 )
             } else {
-                (item.playback_position_ticks, item.runtime_ticks)
+                (stored_ticks, item.runtime_ticks)
             };
             (item.name.clone(), pos, runtime)
         }
@@ -801,7 +805,7 @@ fn queue_row_fields(
             if is_active {
                 playback.position_ticks
             } else {
-                0
+                stored_ticks
             },
             entry.duration_ticks.unwrap_or(0) as i64,
         ),
@@ -810,7 +814,7 @@ fn queue_row_fields(
             if is_active {
                 playback.position_ticks
             } else {
-                0
+                stored_ticks
             },
             ep.duration_ticks.unwrap_or(0) as i64,
         ),
@@ -819,7 +823,7 @@ fn queue_row_fields(
             if is_active {
                 playback.position_ticks
             } else {
-                0
+                stored_ticks
             },
             book.duration_ticks.unwrap_or(0) as i64,
         ),
