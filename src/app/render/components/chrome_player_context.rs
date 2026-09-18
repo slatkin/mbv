@@ -74,6 +74,20 @@ impl App {
         Some(self.playback_title_parts(item))
     }
 
+    /// Whether the queue column's transport projects a two-part now-playing
+    /// title (a context part): the expanded title band's geometry condition.
+    /// Same displayed-state lookup `transport_projection` uses for the parts,
+    /// so the root placements' row count and the panel's projection cannot
+    /// disagree about the band's height.
+    pub(in crate::app) fn transport_title_expanded(&self) -> bool {
+        let state = self.displayed_playback_state();
+        let item = state
+            .active_idx
+            .filter(|_| state.active)
+            .and_then(|idx| self.playback_queue().item_at(idx));
+        item.is_some_and(|item| self.playback_title_parts(item).context.is_some())
+    }
+
     /// The now-playing title parts for one queue item: core's media-type
     /// mapping, with the App-resolved feed subscription display name passed
     /// in for feed items only. The parts carry closed roles (D6); the

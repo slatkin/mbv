@@ -17,6 +17,10 @@ pub(in crate::app) struct TransportRows {
     pub(in crate::app) title: Option<Rect>,
     /// The blank row below the title (row 2).
     pub(in crate::app) indicator_row: Option<Rect>,
+    /// The fourth row (row 3), present only when the band is tall enough:
+    /// the queue column's expanded title band paints the title's second row
+    /// there. The Library strip's three-row band never has it.
+    pub(in crate::app) extra_row: Option<Rect>,
 }
 
 /// The title row's width decision: whether the stop/next transport buttons
@@ -45,6 +49,7 @@ pub(in crate::app) fn transport_rows(area: Rect, rows: u16) -> TransportRows {
         seekbar: row(0),
         title: row(1),
         indicator_row: row(2),
+        extra_row: row(3),
     }
 }
 
@@ -93,6 +98,15 @@ mod tests {
         assert!(short.indicator_row.is_none());
     }
 
+    /// The fourth row appears only when the band has four rows to spend.
+    #[test]
+    fn extra_row_shows_only_at_four_rows() {
+        let three = transport_rows(panel(60, 3), 3);
+        assert!(three.indicator_row.is_some() && three.extra_row.is_none());
+        let four = transport_rows(panel(60, 4), 4);
+        assert_eq!(four.extra_row.unwrap().y, panel(60, 4).y + 3);
+    }
+
     /// A panel wide enough for the glyph, the buttons, the indicators and
     /// the title shows the buttons.
     #[test]
@@ -118,6 +132,7 @@ mod tests {
                 seekbar: None,
                 title: None,
                 indicator_row: None,
+                extra_row: None,
             }
         );
         let b = transport_rows(panel(60, 0), 0);

@@ -212,7 +212,17 @@ impl Component for QueuePlaybackPanel {
                 .style(Style::default().bg(palette::surface_colors(TRANSPORT_SURFACE, false).fill)),
             transport_area,
         );
-        let player_h = transport_area.height.min(PLAYER_BOX_HEIGHT);
+        // The painted row budget: the three base transport rows, plus the
+        // expanded title band's fourth row while the projected title carries
+        // a context part (the shell sized the band for the same condition).
+        let title_expanded = self
+            .transport
+            .title_parts
+            .as_ref()
+            .is_some_and(|parts| parts.context.is_some());
+        let player_h = transport_area
+            .height
+            .min(PLAYER_BOX_HEIGHT + u16::from(title_expanded));
         let mut playback = PlaybackStripAreas::default();
         render_player_panel(
             frame,
@@ -325,15 +335,19 @@ mod tests {
         }
     }
 
-    /// Paint the panel and return the split lower title row's text plus each
-    /// cell's foreground (the transport band at y 2: seekbar y 2, controls
-    /// y 3, title y 4).
-    fn painted_split_title_row(parts: PlaybackTitleParts) -> (String, Vec<Color>) {
+    /// Paint the panel and return the two rows below the controls row — the
+    /// band's middle row (y 4) and its last row (y 5) — each as (text, fgs).
+    /// With a context part the middle row carries the show + `pos / dur`
+    /// time and the last row the title alone; without one, the middle row
+    /// carries the title + time (the unexpanded band) and the last row is
+    /// blank. The painter paints the typed parts only over an attached
+    /// target's plain title; the parts replace it when present.
+    fn painted_split_title_rows(
+        parts: PlaybackTitleParts,
+    ) -> ((String, Vec<Color>), (String, Vec<Color>)) {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.show_controls = true;
-        // The painter paints the typed parts only over an attached target's
-        // plain title; the parts replace it when present.
         panel.transport.now_playing_title = Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.title_parts = Some(parts);
         panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
@@ -342,10 +356,13 @@ mod tests {
             .draw(|frame| panel.view(frame, Rect::new(0, 0, 40, 8)))
             .unwrap();
         let buf = terminal.backend().buffer();
-        (
-            (0..40).map(|x| buf[(x, 4)].symbol().to_string()).collect(),
-            (0..40).map(|x| buf[(x, 4)].fg).collect(),
-        )
+        let row = |y: u16| {
+            (
+                (0..40).map(|x| buf[(x, y)].symbol().to_string()).collect(),
+                (0..40).map(|x| buf[(x, y)].fg).collect(),
+            )
+        };
+        (row(4), row(5))
     }
 
     fn assert_cells_carry(text: &str, fgs: &[Color], needle: &str, expected: Color, label: &str) {
@@ -362,11 +379,14 @@ mod tests {
     }
 
     /// The painted media-type table (tasks 4.1, 4.2, 4.4) on the queue
-    /// column's split lower title row: two-part rows paint the context part —
-    /// with its trailing space — in the yellow context role, then the title
-    /// part in the aqua title role, delineated by exactly one space and no
-    /// separator glyph; single-part rows paint wholly in the title role with
-    /// no context part before or after them.
+    /// column's title band: two-part rows expand onto two rows — the context
+    /// part (the show) paints on the middle row in the yellow context role
+    /// beside the `pos / dur` time, and the title part alone on the row
+    /// below in the aqua title role; single-part rows keep the unexpanded
+    /// band, painting the title and the time on the middle row and nothing
+    /// on the row below. (The one-space delineation between parts remains a
+    /// contract only where the parts still share a row — the Library strip's
+    /// combined row, owned by `chrome_player.rs`'s painter test.)
     #[rstest]
     #[case::emby_movie("Movie Name", None)]
     #[case::emby_home_video("Home Video", None)]
@@ -375,66 +395,66 @@ mod tests {
     #[case::emby_audio_track("Track", Some("Artist"))]
     #[case::audiobookshelf_podcast("Episode", Some("Show"))]
     #[case::feed_entry("Entry", Some("Subscription"))]
-    fn split_lower_title_row_paints_each_media_types_parts_in_their_roles(
+    fn split_title_band_paints_each_media_types_parts_in_their_roles(
         #[case] title: &str,
         #[case] context: Option<&str>,
     ) {
-        let (text, fgs) = painted_split_title_row(parts_for(title, context));
-        assert_cells_carry(
-            &text,
-            &fgs,
-            title,
-            palette::PLAYBACK_TITLE_FG,
-            "the title part",
-        );
+        let ((mid, mid_fgs), (last, last_fgs)) =
+            painted_split_title_rows(parts_for(title, context));
         match context {
             Some(context) => {
-                // D3: exactly one space between the parts and no separator
-                // glyph of any form. The context part paints first, the
-                // title part after it.
-                let joined = format!("{context} {title}");
-                // The painted run must be exactly the one-space join, not
-                // merely contain it: a wider delineation (e.g. a doubled
-                // space) must fail here.
-                let start = text.find(context).unwrap();
-                let painted: String = text[start..].chars().take(joined.chars().count()).collect();
-                assert_eq!(
-                    painted, joined,
-                    "exactly one space between the parts: {text:?}"
+                // The middle row carries the show in the context role and
+                // the `pos / dur` time; the title is not on it.
+                assert_cells_carry(
+                    &mid,
+                    &mid_fgs,
+                    context,
+                    palette::PLAYBACK_CONTEXT_FG,
+                    "the context part",
                 );
-                for separator in [" - ", " \u{2013} ", " \u{2014} ", " | ", " \u{2022} "] {
-                    assert!(
-                        !text.contains(&format!("{context}{separator}{title}")),
-                        "no separator glyph between the parts: {text:?}"
-                    );
-                }
-                // The context span owns its trailing space, so the context
-                // text and the space paint in the context role.
-                for i in 0..context.chars().count() + 1 {
-                    assert_eq!(
-                        fgs[start + i],
-                        palette::PLAYBACK_CONTEXT_FG,
-                        "the context part and the space paint in the context role: {text:?}"
-                    );
-                }
+                assert!(
+                    !mid.contains(title),
+                    "the title paints below the show row, not on it: {mid:?}"
+                );
+                assert!(
+                    mid.contains('/'),
+                    "the elapsed/duration time rides the show row: {mid:?}"
+                );
+                // The row below carries the title alone in the title role:
+                // no show, no time, no context-role paint.
+                assert_cells_carry(
+                    &last,
+                    &last_fgs,
+                    title,
+                    palette::PLAYBACK_TITLE_FG,
+                    "the title part",
+                );
+                assert!(
+                    !last.contains(context),
+                    "the show stays on its row: {last:?}"
+                );
+                assert!(!last.contains('/'), "no time on the title row: {last:?}");
+                let title_start = last.find(title).unwrap();
+                assert_ne!(
+                    last_fgs[title_start - 1],
+                    palette::PLAYBACK_CONTEXT_FG,
+                    "no context part beside the title: {last:?}"
+                );
             }
             None => {
-                // A single-part row paints no context part: nothing in the
-                // context role precedes or follows the title run (the
-                // audiobook case is task 4.4, design D5).
-                let title_start = text.find(title).unwrap();
-                if title_start > 0 {
-                    assert_ne!(
-                        fgs[title_start - 1],
-                        palette::PLAYBACK_CONTEXT_FG,
-                        "no context part before the title: {text:?}"
-                    );
-                }
-                let after = title_start + title.chars().count();
-                assert_ne!(
-                    fgs[after],
-                    palette::PLAYBACK_CONTEXT_FG,
-                    "no context part after the title: {text:?}"
+                // The unexpanded band: the title and the time share the
+                // middle row, the row below is blank.
+                assert_cells_carry(
+                    &mid,
+                    &mid_fgs,
+                    title,
+                    palette::PLAYBACK_TITLE_FG,
+                    "the title part",
+                );
+                assert!(mid.contains('/'), "the time rides the title row: {mid:?}");
+                assert!(
+                    !last.contains(title),
+                    "a single-part row does not expand onto the row below: {last:?}"
                 );
             }
         }

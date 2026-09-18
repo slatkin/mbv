@@ -280,7 +280,16 @@ impl Model {
                 };
                 let wide = queue_playback_column_wide(placement.width);
                 let card = &self.app.layout.card;
-                queue_playback_transport_area(slot_region, wide, card.width, card.height)
+                queue_playback_transport_area(
+                    slot_region,
+                    wide,
+                    card.width,
+                    card.height,
+                    transport
+                        .title_parts
+                        .as_ref()
+                        .is_some_and(|parts| parts.context.is_some()),
+                )
             })
         } else {
             None

@@ -109,6 +109,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
                             frame,
                             title_area,
                             indicator_area,
+                            rows.extra_row,
                             title.as_str(),
                             color,
                             &mut ctx,
@@ -387,15 +388,18 @@ fn padded_status_pill(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
 }
 
 /// The queue column's split title band: the upper row keeps the transport
-/// controls and the status pills, while the title and the `pos / dur` time
-/// move one row down onto the indicator row — the title left with one space
-/// of indent, the time right with one space of indent. The title keeps
-/// the shared marquee window, sized to the wider lower row. Hit geometry
-/// stays on the upper row, where the glyphs paint.
+/// controls and the status pills. With a context part and an `extra` row the
+/// band expands onto three rows — the show (context) and the `pos / dur`
+/// time on the middle row, the title alone one row below — otherwise the
+/// title and the time share the lower row as before. The title keeps the
+/// shared marquee window (sized to its own row); the context row clips
+/// without scrolling. Hit geometry stays on the upper row, where the glyphs
+/// paint.
 fn render_queue_title_rows(
     frame: &mut Frame,
     upper: Rect,
     lower: Rect,
+    extra: Option<Rect>,
     title: &str,
     title_color: Color,
     ctx: &mut PlaybackRenderContext<'_>,
@@ -446,11 +450,72 @@ fn render_queue_title_rows(
         Paragraph::new(Line::from(upper_spans)).style(Style::default().bg(panel_bg)),
         upper,
     );
-    // The lower row: ` <title> ... <pos / dur> `.
+    // The lower row(s): with a context part and a spare row, the show and
+    // the `pos / dur` time take the lower row and the title moves one row
+    // below; otherwise the title and the time share the lower row.
     let pos_str = fmt_duration_short(pos_ticks / mbv_core::api::TICKS_PER_SECOND);
     let dur_str = fmt_duration_short(rt_ticks / mbv_core::api::TICKS_PER_SECOND);
     let time_text = format!("{pos_str}/{dur_str}");
     let time_w = time_text.width() as u16;
+    let context = ctx
+        .title_parts
+        .as_ref()
+        .and_then(|parts| parts.context.as_ref());
+    if let (Some(extra), Some(context)) = (extra, context) {
+        if extra.height == 0 || extra.width == 0 {
+            return;
+        }
+        // Middle row: ` <show> ... <pos / dur> ` — the show left with one
+        // space of indent, the time right with one space of indent. The
+        // show clips to the row (no marquee); the marquee belongs to the
+        // title row below.
+        // One left indent, at least one gap cell before the time, one right
+        // indent.
+        let show_max = lower.width.saturating_sub(1 + 1 + time_w + 1) as usize;
+        let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
+        let mut show = context.text.as_str();
+        while show.width() > show_max {
+            show = &show[..show.len() - show.chars().last().map_or(1, char::len_utf8)];
+        }
+        row.push(Span::styled(
+            show.to_string(),
+            Style::default()
+                .fg(title_part_fg(context.role))
+                .bg(panel_bg),
+        ));
+        let row_w: u16 = row.iter().map(|span| span.content.width() as u16).sum();
+        let gap = (lower.width as usize).saturating_sub(row_w as usize + time_w as usize + 1);
+        row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
+        row.push(Span::styled(
+            time_text,
+            Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
+        ));
+        row.push(Span::styled(" ", Style::default().bg(panel_bg)));
+        frame.render_widget(
+            Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
+            lower,
+        );
+        // Title row: ` <title> ` alone, the marquee window sized to the row
+        // minus its two indent cells.
+        let title_parts = ctx
+            .title_parts
+            .as_ref()
+            .map(|parts| vec![(parts.title.text.clone(), title_part_fg(parts.title.role))]);
+        let fallback = [(title.to_string(), title_color)];
+        let title_parts = title_parts.as_deref().unwrap_or(&fallback[..]);
+        let mut row = vec![Span::styled(" ", Style::default().bg(panel_bg))];
+        row.extend(marquee_spans(
+            ctx,
+            title_parts,
+            extra.width.saturating_sub(2) as usize,
+        ));
+        frame.render_widget(
+            Paragraph::new(Line::from(row)).style(Style::default().bg(panel_bg)),
+            extra,
+        );
+        return;
+    }
+    // The combined lower row: ` <title> ... <pos / dur> `.
     // One left indent, at least one gap cell before the time, one right
     // indent.
     let title_max = lower.width.saturating_sub(1 + 1 + time_w + 1) as usize;
@@ -870,6 +935,92 @@ mod tests {
         );
     }
 
+    /// The expanded title band (a context part and an `extra` row): the
+    /// show and the `pos / dur` time paint on the middle row — the show in
+    /// the context role, the time in the meta role — and the title alone on
+    /// the row below in the title role, with no time beside it.
+    #[test]
+    fn expanded_title_band_paints_show_and_time_above_the_title() {
+        let parts = PlaybackTitleParts {
+            title: PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Title,
+                text: "Pilot".to_string(),
+            },
+            context: Some(PlaybackTitlePart {
+                role: PlaybackTitlePartRole::Context,
+                text: "Series".to_string(),
+            }),
+        };
+        let mut playback = PlaybackStripAreas::default();
+        let mut marquee_text = String::new();
+        let mut marquee_started_at = std::time::Instant::now();
+        let mut ctx = PlaybackRenderContext {
+            area: Rect::new(0, 0, 40, 3),
+            playback: &mut playback,
+            player_h: 4,
+            show_controls: true,
+            now_playing_title: None,
+            panel: palette::Surface::QueueOnlyPlaybackPanel,
+            panel_focused: false,
+            progress: (77 * mbv_core::api::TICKS_PER_SECOND, 0, false),
+            use_nerd_fonts: false,
+            stop_available: false,
+            next_available: false,
+            status_indicators: None,
+            title_parts: Some(parts),
+            idle_feed_title: None,
+            marquee_text: &mut marquee_text,
+            marquee_started_at: &mut marquee_started_at,
+        };
+        let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
+        terminal
+            .draw(|f| {
+                render_queue_title_rows(
+                    f,
+                    Rect::new(0, 0, 40, 1),
+                    Rect::new(0, 1, 40, 1),
+                    Some(Rect::new(0, 2, 40, 1)),
+                    "",
+                    palette::TEXT_STRONG,
+                    &mut ctx,
+                )
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer();
+        let row = |y: u16| {
+            (0..40)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        };
+        let fgs = |y: u16| (0..40).map(|x| buf[(x, y)].fg).collect::<Vec<Color>>();
+        let middle = row(1);
+        let title_row = row(2);
+        assert_cells_in_row(
+            &middle,
+            &fgs(1),
+            "Series",
+            title_part_fg(PlaybackTitlePartRole::Context),
+            "the show",
+        );
+        assert!(
+            middle.contains("1:17/0:00"),
+            "the elapsed/duration time rides the show row: {middle:?}"
+        );
+        assert!(
+            !middle.contains("Pilot"),
+            "the title is not on the show row"
+        );
+        assert_cells_in_row(
+            &title_row,
+            &fgs(2),
+            "Pilot",
+            title_part_fg(PlaybackTitlePartRole::Title),
+            "the title",
+        );
+        assert!(!title_row.contains("Series"), "the show stays on its row");
+        assert!(!title_row.contains('/'), "no time on the title row");
+    }
+
     /// The queue column's split upper row pads the status pill on both
     /// sides: the value (e.g. FLAC) must not touch the panel fill on the
     /// right, mirroring the leading pad `status_pill_spans` opens with.
@@ -910,6 +1061,7 @@ mod tests {
                     f,
                     Rect::new(0, 0, 40, 1),
                     Rect::new(0, 1, 40, 1),
+                    None,
                     "Title",
                     palette::TEXT_STRONG,
                     &mut ctx,

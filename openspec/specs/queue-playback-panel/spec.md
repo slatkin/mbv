@@ -145,6 +145,12 @@ render in the right column of a queue-visible layout. The queue column splits th
 across two rows: the upper row keeps the transport controls and the status pills, while the
 title and the `pos / dur` time render one row below — the title left with one
 space of indent, the time right with one space of indent, with the title's marquee window kept.
+When the now-playing title carries a context part (e.g. a show beside an episode title), the
+band SHALL expand onto a third row: the show and the `pos / dur` time render on the middle row
+(the show left with one space of indent, the time right with one space of indent), and the title
+alone renders on the row below with the marquee window kept; the transport's footprint SHALL
+grow by that one row for as long as a context part plays. The show clips to its row without
+scrolling; the marquee belongs to the title row.
 
 When the terminal is narrower than 100 columns the visual slot and the playback panel SHALL stack
 vertically: the visual slot at full column width, the panel directly below it, and the queue list
@@ -363,7 +369,7 @@ viewed queue does not hold, the row SHALL continue to render that target's own t
 - **WHEN** the layout changes between a queue-visible layout and a library-only layout while the
   same item plays
 - **THEN** the two panels SHALL render the same title parts for that item, including the
-  queue column's split lower title row
+  queue column's split title band
 
 ### Requirement: Title and context parts are delineated by colour
 
@@ -376,7 +382,7 @@ single-part title SHALL paint wholly in the title role.
 These roles SHALL be the playback panel's own semantic roles, not the shared focus-accent or
 brand roles, so that changing the focus accent or a brand colour cannot move the now-playing
 title. The roles SHALL apply wherever the row paints, including while the title is marqueed for
-overflow and in the queue column's split lower row.
+overflow and in the queue column's split title band.
 
 Because the parts are distinguished by colour rather than by a delimiter, the row's plain-text
 forms used outside the panel — the strings carried by toasts, the media-progress interface and

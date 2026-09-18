@@ -63,6 +63,10 @@ pub(in crate::app) struct ChromeGeometryInput {
     /// transport to zero rows (task 3.6): the connected-idle exception is
     /// deleted, so a connected but idle transport keeps only the header row.
     pub playback_active: bool,
+    /// Whether the queue column's transport projects a two-part now-playing
+    /// title (a context part): the title band expands onto its third row,
+    /// so the transport's footprint grows one row (the expanded title band).
+    pub queue_title_expanded: bool,
 }
 
 /// Inner tab-strip text width for a tab-bar box of `tab_bar_width` columns.
@@ -187,7 +191,11 @@ pub(in crate::app) fn queue_playback_transport_area(
     column_wide: bool,
     card_width: u16,
     card_height: u16,
+    title_expanded: bool,
 ) -> Rect {
+    // The expanded title band (a context part plays) spends one more row:
+    // controls + pills, show + pos/dur, title.
+    let player_rows = PLAYER_BOX_HEIGHT + u16::from(title_expanded);
     if column_wide {
         Rect {
             x: slot_region
@@ -198,14 +206,14 @@ pub(in crate::app) fn queue_playback_transport_area(
             width: slot_region
                 .width
                 .saturating_sub(card_width + SLOT_TRANSPORT_GAP),
-            height: card_height.max(PLAYER_BOX_HEIGHT),
+            height: card_height.max(player_rows),
         }
     } else {
         Rect {
             x: slot_region.x,
             y: slot_region.y.saturating_add(card_height),
             width: slot_region.width,
-            height: PLAYER_BOX_HEIGHT,
+            height: player_rows,
         }
     }
 }
@@ -220,6 +228,7 @@ pub(in crate::app) fn queue_playback_rows(
     column_wide: bool,
     card_height: u16,
     playback_active: bool,
+    title_expanded: bool,
 ) -> u16 {
     if !playback_active {
         return 0;
@@ -236,6 +245,7 @@ pub(in crate::app) fn queue_playback_rows(
         column_wide,
         0,
         card_height,
+        title_expanded,
     )
     .bottom()
 }
@@ -351,6 +361,7 @@ pub(in crate::app) fn chrome_geometry(input: ChromeGeometryInput) -> FrameChrome
         queue_playback_column_wide(left_area.width),
         input.card_height,
         input.playback_active,
+        input.queue_title_expanded,
     );
     let queue_geo = queue_panel_geometry(QueuePanelInputs {
         left_content: left_area,
@@ -430,6 +441,7 @@ mod root_frame_tests {
             terminal_width: area().width,
             card_height: 12,
             playback_active,
+            queue_title_expanded: false,
         })
         .root
     }
