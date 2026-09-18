@@ -6,9 +6,9 @@
 
 ## 2. Clear observed_active_slot on queue replacement (D2)
 
-- [ ] 2.1 In `daemon_control.rs` `UnifiedQueueReplace` handler (line ~401 area, after `reset_slot_jumps`), clear `shared_queue.observed_active_slot` to `None` and call `owner.core.note_observed_active_slot(None)`. Verify: `cargo check -p mbv-core`
+- [x] 2.1 In `daemon_control.rs` `UnifiedQueueReplace` handler (line ~401 area, after `reset_slot_jumps`), clear `shared_queue.observed_active_slot` to `None` and call `owner.core.note_observed_active_slot(None)`. Verify: `cargo check -p mbv-core`
 
-- [ ] 2.2 Add a unit test that replaces the queue while `observed_active_slot` is `Some(old_slot)` and asserts it becomes `None` after replacement. Verify: `cargo nextest run -p mbv-core` passes the new test
+- [x] 2.2 Add a unit test that replaces the queue while `observed_active_slot` is `Some(old_slot)` and asserts it becomes `None` after replacement. Verify: `cargo nextest run -p mbv-core` passes the new test
 
 ## 3. Fix mpv loading-order race (D3)
 
