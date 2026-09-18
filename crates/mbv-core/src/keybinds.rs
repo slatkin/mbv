@@ -14,13 +14,17 @@
 //! (`alt_swallow`, `queue_column_width`, `sessions_sidebar_escape`) are
 //! deliberately absent and keep their literal matches.
 //!
-//! `KeyGate` mirrors the keyboard policy's gate enum variant-for-variant so
-//! policy parameterization (Unit 3) can map it without a second vocabulary.
-//! It records the routing bucket only; per-key transport eligibility
-//! conditions are carried by the policy split (task 5.1), not here.
+//! `KeyGate` is a coarser presentation-only bucket than the keyboard
+//! policy's `KeyPolicyGate`: every transport action collapses to one
+//! `Playback` variant here, while `KeyPolicyGate` splits that bucket into
+//! `Playback`/`PlaybackUngated`/`IdleFeedLink` per-key eligibility
+//! conditions (task 5.1). `KeyGate` is used only to select which declared
+//! actions render in the help/settings-Keys Playback group, never for
+//! routing eligibility — that stays owned by the policy split.
 
-/// One gate bucket limiting when an action is eligible, shared with
-/// `key_policy.rs`'s `KeyPolicyGate` semantics.
+/// One presentation-only gate bucket used to group declared actions for
+/// help/settings-Keys rendering; coarser than `key_policy.rs`'s
+/// `KeyPolicyGate`, which owns actual routing eligibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyGate {
     NoBlockingOverlay,

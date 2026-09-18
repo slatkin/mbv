@@ -124,6 +124,17 @@ fn playback_label(action_id: &str) -> &'static str {
     }
 }
 
+/// A declared action id as a readable label (`toggle_play_pause` ->
+/// `Toggle play pause`) for prefix-namespace rows, which span any section
+/// and so have no hand-written label table like `playback_label`'s.
+fn humanize_action_id(id: &str) -> String {
+    let mut label = id.replace('_', " ");
+    if let Some(first) = label.get_mut(0..1) {
+        first.make_ascii_uppercase();
+    }
+    label
+}
+
 fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
     Line::from(vec![
         Span::raw(""),
@@ -226,7 +237,11 @@ fn build_help_sections(
         sec_global.push(help_section_line("Prefix"));
         sec_global.push(help_line(key_w, &prefix.to_string(), "Arm prefix mode"));
         for (action, chord) in keybinds.prefix_assignments() {
-            sec_global.push(help_line(key_w, &chord.to_string(), action.id));
+            sec_global.push(help_line(
+                key_w,
+                &chord.to_string(),
+                &humanize_action_id(action.id),
+            ));
         }
     }
     sec_global.push(help_blank());

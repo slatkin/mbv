@@ -214,10 +214,10 @@ fn help_lists_the_prefix_and_its_assignments() {
     assert!(label_column(arm).contains("Arm prefix mode"), "{arm:?}");
     let assigned = rows
         .iter()
-        .find(|row| key_column(row) == "n" && label_column(row).contains("next_track"))
+        .find(|row| key_column(row) == "n" && label_column(row).contains("Next track"))
         .expect("the prefix-namespace assignment is listed");
     assert!(
-        label_column(assigned).contains("next_track"),
+        label_column(assigned).contains("Next track"),
         "{assigned:?}"
     );
 }
