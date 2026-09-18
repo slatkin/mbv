@@ -12,9 +12,9 @@
 
 ## 3. Fix mpv loading-order race (D3)
 
-- [ ] 3.1 In `player/mod.rs` `queue_load_indices`, change the first `loadfile` (start_idx, "replace") to use the `no` append flag instead of starting playback. After all items are loaded (inserts + appends), set `playlist-pos` to the correct index to start playback. Remove `reassert_queue_layout` if it becomes unnecessary — or keep it as a safety net that should now be a no-op. Verify: `cargo check -p mbv-core`; add a log assertion or instrument to confirm `reassert_queue_layout` no longer detects a mismatch
+- [x] 3.1 In `player/mod.rs` `queue_load_indices`, change the first `loadfile` (start_idx, "replace") to use the `no` append flag instead of starting playback. After all items are loaded (inserts + appends), set `playlist-pos` to the correct index to start playback. Remove `reassert_queue_layout` if it becomes unnecessary — or keep it as a safety net that should now be a no-op. Verify: `cargo check -p mbv-core`; add a log assertion or instrument to confirm `reassert_queue_layout` no longer detects a mismatch
 
-- [ ] 3.2 Test with a multi-item queue at a non-zero start index. Verify: no `queue layout mismatch` log line appears during loading; playback starts at the correct item
+- [x] 3.2 Test with a multi-item queue at a non-zero start index. Verify: no `queue layout mismatch` log line appears during loading; playback starts at the correct item
 
 ## 4. Instrumentation for settle matching (D4, deferred)
 
