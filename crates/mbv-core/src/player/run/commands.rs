@@ -68,13 +68,13 @@ impl PlaybackRun {
                 }
             }
             PlayerCommand::Next => {
-                let target = self.current_idx + 1;
+                let target = self.relative_step_base() + 1;
                 if target < self.queue_len() {
                     self.step_to_index(target, mpv);
                 }
             }
             PlayerCommand::Previous => {
-                if let Some(target) = self.current_idx.checked_sub(1) {
+                if let Some(target) = self.relative_step_base().checked_sub(1) {
                     self.step_to_index(target, mpv);
                 }
             }

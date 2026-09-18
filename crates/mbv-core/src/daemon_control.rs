@@ -260,15 +260,30 @@ fn handle_ctrl(
                 }
                 action @ (crate::ctrl::PlaybackIntentAction::Next
                 | crate::ctrl::PlaybackIntentAction::Previous) => {
-                    let idx = {
-                        let status = player.status.lock().unwrap();
-                        match action {
-                            crate::ctrl::PlaybackIntentAction::Previous => status.previous_idx(),
-                            _ => status.next_idx(),
-                        }
-                    };
+                    // A relative step advances from the *desired* active slot
+                    // — the newest queued or in-flight transition, else the
+                    // slot the run observes playing, else the queue's active
+                    // marker. Stepping from the published `current_idx`
+                    // mirror instead recomputes the neighbor from a
+                    // coordinate that lags one transition behind while a jump
+                    // settles, so rapid Next presses kept landing on (or
+                    // re-issuing) the wrong slot.
+                    let base_idx = transitions
+                        .queued_latest()
+                        .or_else(|| transitions.in_flight())
+                        .map(|t| t.target)
+                        .or_else(|| {
+                            let observed = *shared_queue.observed_active_slot.lock().unwrap();
+                            observed
+                        })
+                        .or_else(|| queue.active_slot_id())
+                        .and_then(|slot| queue.slot_index(slot));
+                    let neighbor_idx = base_idx.and_then(|idx| match action {
+                        crate::ctrl::PlaybackIntentAction::Previous => idx.checked_sub(1),
+                        _ => Some(idx + 1).filter(|&next| next < queue.len()),
+                    });
                     if let Some(slot_id) =
-                        idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id))
+                        neighbor_idx.and_then(|idx| queue.slots().get(idx).map(|s| s.slot_id))
                     {
                         dispatch_slot_jump(
                             transitions,

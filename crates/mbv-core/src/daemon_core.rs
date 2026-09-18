@@ -124,18 +124,26 @@ impl PlaybackIntentState {
         intent: PlaybackIntent,
         pipe_output: bool,
     ) -> Vec<PlaybackIntentEvent> {
+        // A relative step (Next/Previous) has no resolve/open/buffer
+        // lifecycle, so it must never latch as `current` — the only code
+        // that settles `current` to Applied handles Play/SetPaused/Stop, so
+        // a latched Next would sit Accepted forever and swallow every later
+        // press from the connection. Dedup/ordering for relative steps is
+        // owned by the owner's transition state (in-flight/queued).
+        if matches!(
+            intent.action,
+            PlaybackIntentAction::Next | PlaybackIntentAction::Previous
+        ) {
+            return vec![PlaybackIntentEvent {
+                request_id: intent.request_id,
+                generation: intent.generation,
+                outcome: PlaybackIntentOutcome::Accepted,
+            }];
+        }
         if let Some(current) = &self.current {
             let unresolved = current.phase != PlaybackIntentPhase::Applied;
             if unresolved && current.connection_id == connection_id {
-                let equivalent = current.action == intent.action
-                    || matches!(
-                        (&current.action, &intent.action),
-                        (PlaybackIntentAction::Next, PlaybackIntentAction::Next)
-                            | (
-                                PlaybackIntentAction::Previous,
-                                PlaybackIntentAction::Previous
-                            )
-                    );
+                let equivalent = current.action == intent.action;
                 if equivalent {
                     return vec![PlaybackIntentEvent {
                         request_id: intent.request_id,

@@ -496,3 +496,113 @@ fn websocket_takeover_helper_records_emby_remote_authority() {
     assert!(!clients.has_driver());
     assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
 }
+
+// ── relative transport steps advance from the desired slot ──────────────
+
+/// A Next intent while a jump to B is in flight steps from B (queues C
+/// behind it), never from the published `current_idx` mirror — which still
+/// names A until the run confirms and made a rapid second press re-target B
+/// (the erratic Next report). Both presses must also act: the owner, not a
+/// client's status mirror, bounds-checks the step.
+#[test]
+fn next_intent_while_a_jump_is_in_flight_steps_from_the_desired_slot() {
+    let player = cold_player();
+    let cmd_rx = player.spy_on_commands();
+    let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (client_id, client_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let queue = queue_from_items(
+        &[
+            item("a", "Video", "Movie"),
+            item("b", "Video", "Movie"),
+            item("c", "Video", "Movie"),
+        ],
+        0,
+    );
+    let slot_b = queue.slots()[1].slot_id;
+    let slot_c = queue.slots()[2].slot_id;
+    let mut owner = DaemonPlayerOwner {
+        core: PlayerOwnerState::new(queue, QueueSource::Remote),
+        ..Default::default()
+    };
+    let shared = shared_queue_state();
+    let (dummy_merged_tx, _dummy_rx) = mpsc::channel::<DaemonEvent>();
+
+    let next_intent = |request_id: u64| CtrlCmd::PlaybackIntent(PlaybackIntent {
+        request_id,
+        generation: request_id,
+        action: PlaybackIntentAction::Next,
+    });
+
+    // First press: nothing in flight, observed slot A -> jump to B.
+    handle_ctrl(
+        next_intent(1),
+        client_id,
+        CtrlRequest {
+            reply_tx: &(mpsc::channel().0),
+        },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared,
+        &registry,
+        false,
+        &dummy_merged_tx,
+        false,
+    );
+    assert!(
+        matches!(
+            cmd_rx.recv().unwrap(),
+            PlayerCommand::JumpTo { slot_id, .. } if slot_id == slot_b
+        ),
+        "the first Next dispatches a slot jump to B"
+    );
+
+    // Second rapid press, B still in flight: steps from B and queues C
+    // behind it.
+    handle_ctrl(
+        next_intent(2),
+        client_id,
+        CtrlRequest {
+            reply_tx: &(mpsc::channel().0),
+        },
+        &client,
+        &player,
+        false,
+        &mut owner,
+        &shared,
+        &registry,
+        false,
+        &dummy_merged_tx,
+        false,
+    );
+    // The second press must not dispatch past the in-flight jump (one
+    // in-flight at a time, design D4): C is held queued, not sent to the run.
+    assert!(cmd_rx.try_recv().is_err(), "no second dispatch while B is in flight");
+    // The owner snapshot names the true desired pair: B in flight, C queued.
+    // (Stepping from the mirror would have queued B again.) Drain the
+    // already-queued events without ever blocking on recv.
+    let mut state = None;
+    while let Ok(outbound) = client_rx.try_recv() {
+        if let CtrlOutbound::Event(json) = outbound {
+            if let CtrlEvent::UnifiedQueueState(s) = serde_json::from_str(&json).unwrap() {
+                state = Some(s);
+            }
+        }
+    }
+    let state = state.expect("a UnifiedQueueState snapshot was broadcast");
+    assert_eq!(
+        state.in_flight_transition.map(|t| t.target_slot),
+        Some(slot_b.raw()),
+        "B remains in flight"
+    );
+    assert_eq!(
+        state.queued_latest_transition.map(|t| t.target_slot),
+        Some(slot_c.raw()),
+        "the second press queues C behind the in-flight B"
+    );
+}

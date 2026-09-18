@@ -1,4 +1,16 @@
 impl PlaybackRun {
+    /// The ordinal a relative step (Next/Previous) advances from: the active
+    /// slot's identity resolved to this run's ordinal (the permitted
+    /// identity -> ordinal direction, design D2), falling back to the run
+    /// coordinate when the sequence holds no active marker. Deriving the
+    /// neighbor from `current_idx` alone re-used a coordinate that a
+    /// settling observation can briefly outrun.
+    fn relative_step_base(&self) -> usize {
+        self.active_slot_id()
+            .and_then(|id| self.queue.slot_index(id))
+            .unwrap_or(self.current_idx)
+    }
+
     fn queue_len(&self) -> usize {
         self.queue.slots().len()
     }
