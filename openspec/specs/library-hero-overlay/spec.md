@@ -45,7 +45,7 @@ Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast t
 
 ### Requirement: The overlay is confined to the Library pane
 
-The Library Hero overlay SHALL be centered within the current Library pane and SHALL occupy 90 percent of that pane's width and height, subject to fitting within the available Library area. In non-Wide geometry the pane it is placed and dimmed within SHALL be the Library browser's inset list box below the reserved Selector row and its spacer band, so neither the overlay frame nor its dimmed backdrop covers those chrome rows. Its elevation, Library-only dimmed backdrop, and visible `Esc` dismissal hint SHALL make its overlay status evident. It SHALL NOT paint a border frame, occupy, cover, or dim any part of a visible Queue pane.
+The Library Hero overlay SHALL occupy exactly the same area as the current Library pane it overlays. In non-Wide geometry the pane it is placed and dimmed within SHALL be the Library browser's inset list box below the reserved Selector row and its spacer band, so neither the overlay frame nor its dimmed backdrop covers those chrome rows. Its elevation, Library-only dimmed backdrop, and visible `Esc` dismissal hint SHALL make its overlay status evident. It SHALL NOT paint a border frame, occupy, cover, or dim any part of a visible Queue pane.
 
 The overlay SHALL recompute its placement from the current Library pane whenever terminal geometry or Panel mode changes. Its internal Hero composition SHALL follow the existing Wide Hero space-allocation rules, including shrinking artwork before removing a present Workspace list viewport.
 

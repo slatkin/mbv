@@ -443,13 +443,24 @@ fn overlay_dismissal_handles_escape_backdrop_destination_and_missing_parent() {
     panel.insert_owner(LibraryKey::Home, Box::new(FixtureOwner::new(log.clone())));
     let _ = draw_panel(&mut panel);
 
+    // Backdrop dismissal: with the overlay exactly the pane's size there is
+    // no dimmed remainder, so the click-outside arm is only reachable in
+    // Narrow geometry, on the reserved chrome rows above the inset list box.
+    let mut terminal = Terminal::new(TestBackend::new(60, 24)).unwrap();
+    terminal
+        .draw(|f| Component::view(&mut panel, f, Rect::new(0, 0, 60, 24)))
+        .unwrap();
+    let narrow = panel
+        .test_narrow_geometry()
+        .expect("a sub-breakpoint area paints the narrow skeleton");
     panel.test_open_hero_overlay();
-    let _ = draw_panel(&mut panel);
-    let (pane, frame) = panel.test_overlay_geometry().unwrap();
-    let point = (pane.y..pane.bottom())
-        .flat_map(|y| (pane.x..pane.right()).map(move |x| (x, y)))
-        .find(|&(x, y)| !frame.contains(ratatui::layout::Position::new(x, y)))
-        .expect("dimmed Library remainder");
+    terminal
+        .draw(|f| Component::view(&mut panel, f, Rect::new(0, 0, 60, 24)))
+        .unwrap();
+    let point = (narrow.selector_bar.bottom()..narrow.list_panel.y)
+        .flat_map(|y| (0..60).map(move |x| (x, y)))
+        .next()
+        .expect("a reserved chrome row outside the overlay pane");
     let before = log.borrow().selections.clone();
     assert!(matches!(
         panel.on(&mouse_event(

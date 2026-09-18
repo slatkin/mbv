@@ -1,11 +1,6 @@
 use super::{padded_rect, wide_hero};
 use ratatui::layout::Rect;
 
-/// Percent of the Library pane the Library Hero overlay occupies in each
-/// dimension (openspec/specs/library-hero-overlay/spec.md, "The overlay is
-/// confined to the Library pane").
-pub(in crate::app) const OVERLAY_PANE_PERCENT: u32 = 90;
-
 /// The shared padded panes used by wide library presentations.
 pub(in crate::app) struct WideLibraryPanes {
     pub hero_panel: Rect,
@@ -39,26 +34,15 @@ pub(in crate::app) fn wide_library_panes(
     })
 }
 
-/// Place the Library-local Hero overlay inside the supplied area at
-/// [`OVERLAY_PANE_PERCENT`] of it.
+/// Place the Library-local Hero overlay exactly over the supplied area.
 ///
 /// The caller supplies the area the overlay owns: the non-Wide browser's inset
 /// list box, so the overlay and its dim backdrop never cover the pill bar or
-/// the spacer band above it. The percentage is deliberately computed from the
-/// supplied area, not the terminal: this keeps the Queue column outside both
+/// the spacer band above it. The overlay is the same size as that list panel,
+/// not a fraction of the terminal: this keeps the Queue column outside both
 /// the frame and its dimmed backdrop.
 pub(in crate::app) fn library_hero_overlay(area: Rect) -> Option<Rect> {
-    if area.width == 0 || area.height == 0 {
-        return None;
-    }
-    let width = ((area.width as u32 * OVERLAY_PANE_PERCENT) / 100).max(1) as u16;
-    let height = ((area.height as u32 * OVERLAY_PANE_PERCENT) / 100).max(1) as u16;
-    Some(Rect {
-        x: area.x + area.width.saturating_sub(width) / 2,
-        y: area.y + area.height.saturating_sub(height) / 2,
-        width: width.min(area.width),
-        height: height.min(area.height),
-    })
+    (area.width > 0 && area.height > 0).then_some(area)
 }
 
 #[cfg(test)]
@@ -66,15 +50,8 @@ mod tests {
     use super::*;
     use crate::app::render::arrangements::wide_hero::WIDE_HERO_MIN_AREA_HEIGHT;
 
-    fn contains(outer: Rect, inner: Rect) -> bool {
-        inner.x >= outer.x
-            && inner.y >= outer.y
-            && inner.right() <= outer.right()
-            && inner.bottom() <= outer.bottom()
-    }
-
     #[test]
-    fn overlay_is_centered_and_contained_by_library_pane() {
+    fn overlay_exactly_matches_the_library_pane() {
         for area in [
             Rect::new(3, 4, 38, 12),
             Rect::new(1, 1, 20, 8),
@@ -82,15 +59,12 @@ mod tests {
             Rect::new(7, 5, 80, 24),
         ] {
             let overlay = library_hero_overlay(area).expect("non-empty pane");
-            assert!(contains(area, overlay));
-            assert_eq!(overlay.x - area.x, (area.width - overlay.width) / 2);
-            assert_eq!(overlay.y - area.y, (area.height - overlay.height) / 2);
+            assert_eq!(overlay, area);
         }
 
         let library = Rect::new(2, 3, 72, 24);
         let queue = Rect::new(library.right(), library.y, 38, library.height);
         let overlay = library_hero_overlay(library).unwrap();
-        assert!(contains(library, overlay));
         assert_eq!(overlay.intersection(queue).width, 0);
     }
 
