@@ -5,14 +5,14 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
 
 ## 1. Unit A - owner-addressed slot jump (stops the panic)
 
-- [ ] 1.1 Add the two shared seams on `App`: `dispatch_jump(transition)`
+- [x] 1.1 Add the two shared seams on `App`: `dispatch_jump(transition)`
   (out-of-process owner -> `player.queue_play_slot`; this process is the owner ->
   `send_command(transition.into_jump())`) and `request_slot_jump(slot_id)`
   (out-of-process owner -> `queue_play_slot` and report the refusal; this process is the
   owner -> sync snapshot, mint/accept the local transition, `dispatch_jump` the
   `DispatchDecision::DispatchNow` transition).
   (Verify: `cargo nextest run -p mbv` green; the fresh-jump seam is covered by 1.3/1.4.)
-- [ ] 1.2 Route `src/app/player_event.rs:18` (expire promoted a transition) and `:288`
+- [x] 1.2 Route `src/app/player_event.rs:18` (expire promoted a transition) and `:288`
   (settle promoted a transition) through `dispatch_jump` with the transition they
   already hold - do NOT re-mint, and do NOT re-accept.
   (Verify: a test asserts the promoted transition is the one sent (the expire/settle
@@ -20,7 +20,7 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
   `tests_tick_integration_queue_playback.rs` stay green). Both sites are reached only
   when this process is the owner - `:8` returns early, `:277` guards the block - so no
   out-of-process request is expected from them.)
-- [ ] 1.3 Route the Next-Up accept event (`src/app/player_event.rs:371`) through
+- [x] 1.3 Route the Next-Up accept event (`src/app/player_event.rs:371`) through
   `request_slot_jump` and drop the client cursor write when the owner is
   out-of-process.
   (Verify: with a stub remote player and its command receiver
@@ -28,12 +28,12 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
   `CtrlCmd::UnifiedQueuePlaySlot` for the next-up slot, no `PlayerCommand::JumpTo` is
   constructed, the local cursor stays on the owner snapshot, and the client keeps
   running.)
-- [ ] 1.4 Route `src/app/action.rs:527` through `request_slot_jump` so explicit play and
+- [x] 1.4 Route `src/app/action.rs:527` through `request_slot_jump` so explicit play and
   the accept cannot diverge again.
   (Verify: `cargo nextest run -p mbv` green, including
   `rejected_remote_queue_selection_keeps_observed_playhead` and
   `queue_play_cursor_keeps_observed_progress_until_player_ack`.)
-- [ ] 1.5 Audit every remaining client-side jump send (repository-wide search for
+- [x] 1.5 Audit every remaining client-side jump send (repository-wide search for
   `into_jump()`, `mint_local_transition`, `accept_local_transition`) and confirm each is
   either routed through a seam or owner-side only; record the audit result in this
   change's notes.
@@ -53,7 +53,7 @@ Reference: `design.md` decisions A1-A3 and B1-B4; spec deltas in
     owner-state unit/integration tests that seed owner state directly
     (`owner_state.rs` tests, `tests_tick_integration_queue_playback.rs`,
     `actions_tests_queue_state_reseat.rs`, `tests_next_up_accept_dispatch.rs`).
-- [ ] 1.6 Replace the local-only `unreachable!()` arm in
+- [x] 1.6 Replace the local-only `unreachable!()` arm in
   `crates/mbv-core/src/ctrl.rs:456-465` with a fallible conversion and surface the
   refusal to the caller.
   (Verify: a ctrl-level test asserts the attempt is refused, no command is delivered,
