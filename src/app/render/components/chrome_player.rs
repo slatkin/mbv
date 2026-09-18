@@ -1025,6 +1025,7 @@ mod tests {
             use_nerd_fonts: false,
             stop_available: false,
             next_available: false,
+            prev_available: false,
             status_indicators: None,
             title_parts: Some(parts),
             idle_feed_title: None,
