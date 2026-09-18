@@ -1,7 +1,12 @@
+mod palette;
 mod primitives;
 mod surface;
 mod surface_resolve;
 mod surface_table;
+
+// The closed palette enum (openspec/changes/palette-enum). Section 2 is
+// additive: no consumers yet, so `Palette` is private to the theme until
+// the role/surface migration (section 3) takes assignments over it.
 
 // The closed surface table (`unify-surface-colour-neutral` D1/D2/D7). A screen
 // names a `Surface` and calls the resolver; the `Level`/`Row`/`FocusSource`
