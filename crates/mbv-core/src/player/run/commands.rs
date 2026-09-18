@@ -54,9 +54,28 @@ impl PlaybackRun {
                         log::warn!(target: "player", "active-file selection failed: {error}");
                     } else {
                         let _ = mpv.set_property("pause", false);
+                        // Active-file projection has no mpv playlist move to
+                        // observe, so the JumpTo emits its TrackChanged
+                        // observation here, shaped like the on_end_file settle
+                        // (design D1). The tag stays on `forced_transition` so
+                        // a duplicate settle path still carries it; the
+                        // pipeline treats the second attempt as Ignored.
+                        let transition = self
+                            .forced_transition
+                            .as_ref()
+                            .filter(|t| t.target == slot_id)
+                            .map(|t| (t.request_id, t.generation));
+                        log::info!(
+                            target: "transition",
+                            "jump-to: active-file track_changed slot_id={:?} transition_tag={}",
+                            slot_id,
+                            transition.is_some(),
+                        );
+                        let _ = self
+                            .event_tx
+                            .send(PlayerEvent::TrackChanged { slot_id, transition });
                     }
-                    return cancel_stop;
-                }
+                } else {
                 // mpv playlist indices are adapter coordinates; pin the
                 // target slot identity before asking mpv to move.
                 self.forced_slot_id = Some(slot_id);
@@ -78,6 +97,7 @@ impl PlaybackRun {
                     // track loads silently "stuck" paused (see issue: Enter on a
                     // queue item, or a remote Next/Previous command, while paused).
                     let _ = mpv.set_property("pause", false);
+                }
                 }
             }
             PlayerCommand::Next => {
