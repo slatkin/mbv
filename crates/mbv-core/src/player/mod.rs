@@ -118,20 +118,28 @@ fn active_file_load_location() -> (&'static str, String) {
 /// already settled. An armed audio-pipe startup pause stays in force until the
 /// run's PlaybackRestart gate releases it.
 fn start_queue_playback(mpv: &Mpv, start_idx: usize) {
-    if let Err(e) = mpv.set_property("playlist-start", start_idx as i64) {
+    // The queue is fully loaded but idle: a failed start leaves the run
+    // silent, so neither write below may be a silent `let _`. The reassert
+    // below only reports a layout mismatch, which this is not.
+    warn_on_set_property(
+        mpv,
+        "start_queue_playback",
+        "playlist-start",
+        start_idx as i64,
+    );
+    warn_on_set_property(
+        mpv,
+        "start_queue_playback",
+        "playlist-pos",
+        start_idx as i64,
+    );
+}
+
+fn warn_on_set_property(mpv: &Mpv, caller: &str, name: &str, value: i64) {
+    if let Err(e) = mpv.set_property(name, value) {
         log::warn!(
             target: "player",
-            "start_queue_playback playlist-start={start_idx} failed: {}",
-            mpv_err_str(&e),
-        );
-    }
-    if let Err(e) = mpv.set_property("playlist-pos", start_idx as i64) {
-        // The queue is fully loaded but idle: a failed start leaves the run
-        // silent, so this must not be a silent `let _`. The reassert below
-        // only reports a layout mismatch, which this is not.
-        log::warn!(
-            target: "player",
-            "start_queue_playback playlist-pos={start_idx} failed: {}",
+            "{caller} {name}={value} failed: {}",
             mpv_err_str(&e),
         );
     }

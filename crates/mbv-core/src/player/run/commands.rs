@@ -60,20 +60,7 @@ impl PlaybackRun {
                         // (design D1). The tag stays on `forced_transition` so
                         // a duplicate settle path still carries it; the
                         // pipeline treats the second attempt as Ignored.
-                        let transition = self
-                            .forced_transition
-                            .as_ref()
-                            .filter(|t| t.target == slot_id)
-                            .map(|t| (t.request_id, t.generation));
-                        log::info!(
-                            target: "transition",
-                            "jump-to: active-file track_changed slot_id={:?} transition_tag={}",
-                            slot_id,
-                            transition.is_some(),
-                        );
-                        let _ = self
-                            .event_tx
-                            .send(PlayerEvent::TrackChanged { slot_id, transition });
+                        self.emit_track_changed(slot_id, self.forced_transition);
                     }
                 } else {
                 // mpv playlist indices are adapter coordinates; pin the

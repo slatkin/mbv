@@ -156,18 +156,19 @@ impl OwnerTransitionState {
                     dispatch_next: self.in_flight,
                 }
             }
-            Some(t) => {
-                log::info!(
-                    target: "transition",
-                    "settle ignored: expected=(request_id={} target={:?}) observed=(request_id={} slot={:?})",
-                    t.request_id,
-                    t.target,
-                    observed_request_id,
-                    observed_slot,
-                );
+            _ => {
+                if let Some(t) = self.in_flight {
+                    log::info!(
+                        target: "transition",
+                        "settle ignored: expected=(request_id={} target={:?}) observed=(request_id={} slot={:?})",
+                        t.request_id,
+                        t.target,
+                        observed_request_id,
+                        observed_slot,
+                    );
+                }
                 SettleOutcome::Ignored
             }
-            None => SettleOutcome::Ignored,
         }
     }
 

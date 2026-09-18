@@ -55,6 +55,7 @@ impl Model {
         let show_controls = state.active
             || self.app.connected_session_id.is_some()
             || self.app.cast_attachment.is_some();
+        let (prev_available, next_available) = self.app.transport_prev_next_available();
         PlaybackProjection {
             state,
             show_controls,
@@ -76,8 +77,8 @@ impl Model {
             }),
             use_nerd_fonts: self.app.use_nerd_fonts,
             stop_available: self.app.connected_session_id.is_some() || state.active,
-            prev_available: self.app.transport_prev_next_available().0,
-            next_available: self.app.transport_prev_next_available().1,
+            prev_available,
+            next_available,
         }
     }
 
