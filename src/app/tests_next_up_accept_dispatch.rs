@@ -1,8 +1,7 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_items, make_remote_app_stub_with_cmd_rx};
 use mbv_core::player::PlayerEvent;
-use std::time::Duration;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 /// Row 1.3: the Next-Up accept on an out-of-process owner requests the jump
 /// from the owner (`CtrlCmd::UnifiedQueuePlaySlot`), never constructs a local

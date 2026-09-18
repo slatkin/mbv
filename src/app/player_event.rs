@@ -364,12 +364,11 @@ impl App {
                     {
                         let slot_id = self.playback_queue().slots()[idx].slot_id;
                         let accepted = self.request_slot_jump(slot_id);
-                        if self.player.is_remote() {
-                            // The active slot follows the owner's queue
-                            // snapshot; a jump requested from an
-                            // out-of-process owner must not write a client
-                            // cursor from the requested slot.
-                        } else {
+                        if !self.player.is_remote() {
+                            // Bare owner only: with an out-of-process owner
+                            // the active slot follows the owner's queue
+                            // snapshot; a jump requested from it must not
+                            // write a client cursor from the requested slot.
                             self.playback_queue_mut().queue_cursor = idx;
                         }
                         if accepted {
