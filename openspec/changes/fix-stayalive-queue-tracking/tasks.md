@@ -1,8 +1,8 @@
 ## 1. Active-file TrackChanged emission (D1)
 
-- [ ] 1.1 In `player/run/commands.rs`, after the `select_active_slot` call succeeds in the active_file branch (line ~55), emit a `PlayerEvent::TrackChanged` carrying `(request_id, generation)` from `self.forced_transition` and the target `slot_id`. Use the same event construction as `on_end_file` (events.rs ~685). Remove the early `return cancel_stop` so the transition tag flows through the same settlement path. Verify: `cargo check -p mbv-core`
+- [x] 1.1 In `player/run/commands.rs`, after the `select_active_slot` call succeeds in the active_file branch (line ~55), emit a `PlayerEvent::TrackChanged` carrying `(request_id, generation)` from `self.forced_transition` and the target `slot_id`. Use the same event construction as `on_end_file` (events.rs ~685). Remove the early `return cancel_stop` so the transition tag flows through the same settlement path. Verify: `cargo check -p mbv-core`
 
-- [ ] 1.2 Add a unit test in `daemon_tests.rs` (or `daemon_tests_abs_queue.rs`) that dispatches a JumpTo in active_file mode and asserts `observed_active_slot` advances to the target slot. The test should mock the Playback run's TrackChanged response. Verify: `cargo nextest run -p mbv-core` passes the new test
+- [x] 1.2 Add a unit test in `daemon_tests.rs` (or `daemon_tests_abs_queue.rs`) that dispatches a JumpTo in active_file mode and asserts `observed_active_slot` advances to the target slot. The test should mock the Playback run's TrackChanged response. Verify: `cargo nextest run -p mbv-core` passes the new test
 
 ## 2. Clear observed_active_slot on queue replacement (D2)
 
