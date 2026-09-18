@@ -5,6 +5,45 @@ use crate::app::PanelFocus;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
+fn loaded_keys_override_reaches_the_model() {
+    // The compiled `[keys]` configuration is read once, at Model
+    // construction, from the config the App was built with (U2 row 2.3).
+    let app = make_app_stub();
+    let config = crate::config::Config {
+        keybinds: mbv_core::keybinds::load(&mbv_core::keybinds::RawKeybinds {
+            prefix: Some("Ctrl+b".into()),
+            sections: vec![(
+                "global".into(),
+                mbv_core::keybinds::RawSection {
+                    router: vec![("help_open".into(), "F9".into())],
+                    prefix: vec![],
+                },
+            )],
+        })
+        .unwrap(),
+        ..Default::default()
+    };
+    *app.config.lock().unwrap() = config;
+
+    let model = Model::new(app);
+    assert_eq!(
+        model.keybinds.prefix,
+        Some(mbv_core::keybinds::Chord::parse("Ctrl+b").unwrap())
+    );
+    assert_eq!(
+        model.keybinds.router_override("help_open"),
+        Some(mbv_core::keybinds::Chord::parse("F9").unwrap())
+    );
+    assert!(model.keybinds.router_override("settings_open").is_none());
+}
+
+#[test]
+fn model_without_keys_configuration_holds_default_keybinds() {
+    let model = Model::new(make_app_stub());
+    assert_eq!(model.keybinds, mbv_core::keybinds::Keybinds::default());
+}
+
+#[test]
 fn ui_root_router_command_opens_help() {
     let mut model = Model::new(make_app_stub());
     let key = KeyEvent::new(KeyCode::F(1), KeyModifiers::NONE);
@@ -27,7 +66,7 @@ fn ui_root_router_command_opens_help() {
 }
 
 #[test]
-fn router_records_first_space_for_second_claim() {
+fn unhandled_space_fires_the_playback_candidate_once() {
     let mut model = Model::new(make_app_stub());
     model.app.player.status.lock().unwrap().active = true;
     let key = KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE);
@@ -37,21 +76,22 @@ fn router_records_first_space_for_second_claim() {
         model.router_outcome(&messages),
         RouterOutcome::Deferred(Command::TogglePlayPause)
     );
-    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false);
-    assert!(model.app.last_space_press.is_some());
-    assert_eq!(
-        model.router_outcome(&messages),
-        RouterOutcome::Deferred(Command::TogglePlayPause)
+    // No candidate timing state exists: an unhandled press fires on that
+    // press, and a later unhandled press fires again as a fresh press.
+    assert!(
+        model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false)
     );
-    model.app.last_space_press = Some(Instant::now());
-    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false);
-    assert!(model.app.last_space_press.is_none());
+    assert!(
+        model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false)
+    );
 }
 
 #[test]
-fn visual_mode_does_not_arm_double_tap_timers() {
+fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     let mut model = Model::new(make_app_stub());
     model.app.player.status.lock().unwrap().active = true;
+    // A focused media list holding an active Visual selection consumes Space
+    // for its row-local toggle; the shell sees the leaf's consumption only.
     model.visual_selection = Some((PanelFocus::Library, 2));
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
         KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE).into(),
@@ -61,11 +101,18 @@ fn visual_mode_does_not_arm_double_tap_timers() {
         model.router_outcome(&messages),
         RouterOutcome::Deferred(Command::TogglePlayPause)
     );
-    assert!(model.app.last_space_press.is_none());
+    assert!(
+        !model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), true)
+    );
+    // A later unhandled press still behaves as a first press: no consumed
+    // state is inherited.
+    assert!(
+        model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::TogglePlayPause), false)
+    );
 }
 
 #[test]
-fn router_records_first_esc_for_second_claim() {
+fn unhandled_escape_fires_the_stop_candidate_once() {
     let mut model = Model::new(make_app_stub());
     model.app.player.status.lock().unwrap().active = true;
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -75,15 +122,28 @@ fn router_records_first_esc_for_second_claim() {
         model.router_outcome(&messages),
         RouterOutcome::Deferred(Command::Stop)
     );
-    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false);
-    assert!(model.app.last_esc_press.is_some());
+    // No candidate timing state exists: an unhandled press fires on that
+    // press, and a later unhandled press fires again as a fresh press.
+    assert!(model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false));
+    assert!(model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false));
+}
+
+#[test]
+fn consumed_escape_cancels_the_stop_candidate_and_leaves_no_state() {
+    let mut model = Model::new(make_app_stub());
+    model.app.player.status.lock().unwrap().active = true;
+    let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
+    let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
+
     assert_eq!(
         model.router_outcome(&messages),
         RouterOutcome::Deferred(Command::Stop)
     );
-    model.app.last_esc_press = Some(Instant::now());
-    model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false);
-    assert!(model.app.last_esc_press.is_none());
+    // A leaf that consumed Esc (dismiss/back claims first) cancels the
+    // candidate and records nothing.
+    assert!(!model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), true));
+    // A later unhandled press still behaves as a first press.
+    assert!(model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false));
 }
 
 #[test]

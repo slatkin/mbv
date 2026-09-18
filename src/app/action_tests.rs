@@ -1,6 +1,7 @@
 use super::*;
 use crate::app::tests::{make_app_stub, make_remote_app_stub};
 use crate::app::{LibEvent, QueueScope};
+use crossterm::event::{KeyCode, KeyModifiers};
 
 fn key(code: KeyCode) -> KeyChord {
     KeyChord::new(code, KeyModifiers::NONE)
@@ -9,7 +10,6 @@ fn key(code: KeyCode) -> KeyChord {
 fn key_ctrl(code: KeyCode) -> KeyChord {
     KeyChord::new(code, KeyModifiers::CONTROL)
 }
-
 /// Focus switches keep the queue card checkpoint: the checkpoint is the
 /// measured image geometry and focus does not change the artwork, so a
 /// switch must not re-reserve the fallback rectangle for a frame (that
@@ -28,140 +28,6 @@ fn focus_panel_keeps_the_card_checkpoint() {
     assert_eq!(app.last_card_width, 34);
 }
 
-// ── PLAYBACK_HELP_BINDINGS stays truthful to playback_command_for_key ───
-
-/// Characterization test: replays every `PLAYBACK_HELP_BINDINGS` sample
-/// chord (all of them, not just one side of a paired display entry like
-/// `< / >`) through the real `playback_command_for_key` and asserts each
-/// resolves to the command the help table claims — for `gated` entries,
-/// only when gated open, and never resolving to *some other* command
-/// when gated closed. This is what keeps the help overlay's `[playback]`
-/// section from silently drifting off the real bindings (issue #133).
-#[test]
-fn playback_help_bindings_match_playback_command_for_key() {
-    for binding in PLAYBACK_HELP_BINDINGS {
-        for (sample, command) in binding.samples {
-            if binding.gated {
-                assert_eq!(
-                    playback_command_for_key(*sample, true, false),
-                    Some(command.clone()),
-                    "keys={:?} label={:?} sample={:?} should fire when active",
-                    binding.keys,
-                    binding.label,
-                    sample
-                );
-                assert_eq!(
-                    playback_command_for_key(*sample, false, true),
-                    Some(command.clone()),
-                    "keys={:?} label={:?} sample={:?} should fire on a remote session",
-                    binding.keys,
-                    binding.label,
-                    sample
-                );
-                assert_eq!(
-                    playback_command_for_key(*sample, false, false),
-                    None,
-                    "keys={:?} label={:?} sample={:?} should not fire when ungated",
-                    binding.keys,
-                    binding.label,
-                    sample
-                );
-            } else {
-                assert_eq!(
-                    playback_command_for_key(*sample, false, false),
-                    Some(command.clone()),
-                    "keys={:?} label={:?} sample={:?} should fire unconditionally",
-                    binding.keys,
-                    binding.label,
-                    sample
-                );
-            }
-        }
-    }
-}
-
-// ── playback_command_for_key: gated on (active OR has_remote_session) ────
-
-#[test]
-fn enter_never_stops() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Enter), true, true),
-        None
-    );
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Enter), false, false),
-        None
-    );
-}
-
-/// Assert that `code` produces `expected` for every (active, has_remote_session)
-/// combination — i.e. it fires unconditionally, with no gating at all.
-fn assert_fires_unconditionally(code: KeyCode, expected: Command) {
-    for active in [false, true] {
-        for remote in [false, true] {
-            assert_eq!(
-                playback_command_for_key(key(code), active, remote),
-                Some(expected.clone()),
-                "code={code:?} active={active} remote={remote}"
-            );
-        }
-    }
-}
-
-// ── `z`: unconditional, no `active` gate in either branch ───────────────
-
-#[test]
-fn z_fires_unconditionally() {
-    assert_fires_unconditionally(KeyCode::Char('z'), Command::CycleOrToggleSubtitle);
-}
-
-#[test]
-fn ctrl_z_does_not_fire() {
-    assert_eq!(
-        playback_command_for_key(key_ctrl(KeyCode::Char('z')), true, true),
-        None
-    );
-}
-
-// ── `m`: unconditional, no session check at all (the flagged bug) ──────
-
-#[test]
-fn m_fires_unconditionally() {
-    assert_fires_unconditionally(KeyCode::Char('m'), Command::ToggleMute);
-}
-
-// ── `-`/`+`: unconditional volume ────────────────────────────────────────
-
-#[test]
-fn volume_keys_fire_unconditionally() {
-    assert_fires_unconditionally(KeyCode::Char('-'), Command::AdjustVolume(-5));
-    assert_fires_unconditionally(KeyCode::Char('+'), Command::AdjustVolume(5));
-    assert_fires_unconditionally(KeyCode::Char('='), Command::AdjustVolume(5));
-}
-
-// ── `a`: gated on (active OR has_remote_session), same as the other
-// transport keys -- see #88 (previously `active` only, no remote path).
-
-#[test]
-fn ctrl_a_does_not_fire() {
-    assert_eq!(
-        playback_command_for_key(key_ctrl(KeyCode::Char('a')), true, true),
-        None
-    );
-}
-
-#[test]
-fn unrelated_key_does_not_fire() {
-    assert_eq!(
-        playback_command_for_key(key(KeyCode::Char('q')), true, true),
-        None
-    );
-}
-
-/// Task 3.8: the fourth input is the Queue playback panel's presence with
-/// nothing playing (`RouterSnapshot::queue_only_idle`'s shell-side fact): the
-/// gate follows the panel, not the panel mode, so the link is suppressed in
-/// idle `both` and `queue-only` alike.
 #[test]
 fn o_opens_an_idle_feed_link_only_when_available() {
     let o = key(KeyCode::Char('o'));

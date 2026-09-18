@@ -1,5 +1,8 @@
 use super::test_helpers::buffer_to_string;
-use crate::app::render::components::help::{help_destination, render_help_panel, HelpDestination};
+use crate::app::render::components::help::{
+    global_help_rows, help_destination, playback_help_rows, render_help_panel, HelpDestination,
+};
+use mbv_core::keybinds::{Chord, KeyGate, KeySection, Keybinds, SectionBindings, KEYBIND_ACTIONS};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
 use ratatui::Terminal;
@@ -15,6 +18,7 @@ fn render_help(width: u16, height: u16, scroll: u16) -> String {
                 Some(Rect::new(0, 0, width, height)),
                 &mut scroll,
                 HelpDestination::EmbyLibrary,
+                &Keybinds::default(),
             );
         })
         .unwrap();
@@ -38,5 +42,182 @@ fn help_destination_queue_focus_returns_queue() {
     assert_eq!(
         help_destination(PanelFocus::Queue, TabSelection::Home),
         HelpDestination::Queue
+    );
+}
+
+// ── Task 5.3: the Playback section renders from the declared registry ──
+
+/// The rendered Playback rows under the default configuration: one row per
+/// declared Playback action, in registry order, each showing that action's
+/// default chords and a label.
+#[test]
+fn playback_rows_render_the_registry_defaults() {
+    let rows = playback_help_rows(16, &Keybinds::default());
+    // One row per declared Playback action, no header, in registry order.
+    let declared: Vec<&str> = KEYBIND_ACTIONS
+        .iter()
+        .filter(|action| action.section == KeySection::Playback && action.gate == KeyGate::Playback)
+        .map(|action| action.id)
+        .collect();
+    assert_eq!(rows.len(), declared.len());
+
+    for (row, action) in rows.iter().zip(KEYBIND_ACTIONS.iter().filter(|action| {
+        action.section == KeySection::Playback && action.gate == KeyGate::Playback
+    })) {
+        let expected_keys = action
+            .parsed_default_chords()
+            .iter()
+            .map(|chord| chord.to_string())
+            .collect::<Vec<_>>()
+            .join(" / ");
+        let key_column = row[..16].trim();
+        assert_eq!(key_column, expected_keys, "row for `{}`", action.id);
+        assert!(
+            !row[16..].trim().is_empty(),
+            "row for `{}` must carry a label",
+            action.id
+        );
+    }
+}
+
+/// With an override, the rendered keys follow the configured chord and the
+/// declared defaults disappear from the section.
+#[test]
+fn playback_rows_follow_an_override() {
+    let keybinds = Keybinds {
+        prefix: None,
+        sections: vec![(
+            KeySection::Playback,
+            SectionBindings {
+                router: vec![(
+                    "toggle_play_pause",
+                    Chord::parse("k").expect("test chord must parse"),
+                )],
+                prefix: vec![],
+            },
+        )],
+    };
+    let rows = playback_help_rows(16, &keybinds);
+    let toggle_row = rows
+        .iter()
+        .find(|row| row[..16].trim() == "k")
+        .expect("rebound toggle_play_pause renders its configured chord");
+    assert!(
+        toggle_row[16..].contains("Pause/Resume"),
+        "the rebound row keeps the action's label: {toggle_row:?}"
+    );
+    assert!(
+        !rows.iter().any(|row| row[..16].trim() == "Space"),
+        "the declared default Space must disappear from the rendered section"
+    );
+}
+
+// ── Task 7.4: the Global section and the prefix list render from the registry ──
+
+/// The row's key column. Sub-headers inside a section (e.g. the prefix
+/// block's `Prefix` line) are shorter than the padded key width, so the
+/// slice is guarded.
+fn key_column(row: &str) -> &str {
+    let end = row.len().min(16);
+    row[..end].trim()
+}
+
+fn label_column(row: &str) -> &str {
+    if row.len() > 16 {
+        &row[16..]
+    } else {
+        ""
+    }
+}
+
+/// With defaults, the Global section's configurable rows carry the declared
+/// default chords: the registry is the only chord source.
+#[test]
+fn global_rows_render_the_registry_defaults() {
+    let rows = global_help_rows(16, &Keybinds::default());
+    for (chord, label) in [
+        ("F1", "Help"),
+        ("F2", "Settings"),
+        ("F3", "Remote sessions"),
+        ("F4", "Playlists"),
+        ("F5", "Refresh view"),
+        ("v", "Switch queue artwork / visualizer"),
+        ("Tab", "Cycle menu"),
+        ("1 – 9", "Jump to tab"),
+        ("c", "Clear Queue"),
+        ("q", "Quit"),
+        ("Left / Right", "Switch panels"),
+    ] {
+        let row = rows
+            .iter()
+            .find(|row| key_column(row) == chord)
+            .unwrap_or_else(|| panic!("no Global row for chord {chord:?} in {rows:?}"));
+        assert!(
+            label_column(row).contains(label),
+            "row for {chord:?} must carry the {label:?} label: {row:?}"
+        );
+    }
+    // No prefix block without a configured prefix.
+    assert!(!rows
+        .iter()
+        .any(|row| label_column(row).contains("Arm prefix mode")));
+}
+
+/// After a rebind, the Global section shows the configured chord and the
+/// declared default disappears.
+#[test]
+fn global_rows_follow_an_override() {
+    let keybinds = Keybinds {
+        prefix: None,
+        sections: vec![(
+            KeySection::Library,
+            SectionBindings {
+                router: vec![("next_library_tab", Chord::parse("k").unwrap())],
+                prefix: vec![],
+            },
+        )],
+    };
+    let rows = global_help_rows(16, &keybinds);
+    let rebound = rows
+        .iter()
+        .find(|row| key_column(row) == "k")
+        .expect("the rebound next_library_tab renders its configured chord");
+    assert!(
+        label_column(rebound).contains("Cycle menu"),
+        "the rebound row keeps the action's label: {rebound:?}"
+    );
+    assert!(
+        !rows.iter().any(|row| key_column(row) == "Tab"),
+        "the declared default Tab must disappear from the rendered section"
+    );
+}
+
+/// With a prefix configured, help lists the prefix chord and its assigned
+/// actions (spec: help reflects the prefix namespace).
+#[test]
+fn help_lists_the_prefix_and_its_assignments() {
+    let keybinds = Keybinds {
+        prefix: Some(Chord::parse("Ctrl+k").unwrap()),
+        sections: vec![(
+            KeySection::Playback,
+            SectionBindings {
+                router: vec![],
+                prefix: vec![("next_track", Chord::parse("n").unwrap())],
+            },
+        )],
+    };
+    let rows = global_help_rows(16, &keybinds);
+    let arm = rows
+        .iter()
+        .find(|row| key_column(row) == "Ctrl+k")
+        .expect("the configured prefix chord is listed");
+    assert!(label_column(arm).contains("Arm prefix mode"), "{arm:?}");
+    let assigned = rows
+        .iter()
+        .find(|row| key_column(row) == "n" && label_column(row).contains("Next track"))
+        .expect("the prefix-namespace assignment is listed");
+    assert!(
+        label_column(assigned).contains("Next track"),
+        "{assigned:?}"
     );
 }

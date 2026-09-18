@@ -113,6 +113,11 @@ pub enum TerminalObserverEvent {
         column: u16,
         row: u16,
     },
+    /// Any other mouse event (move, drag, release, scroll): the shell's
+    /// silent prefix-mode disarm signal (change
+    /// `add-configurable-keybinds`, design D6, task 6.1). It is a marker,
+    /// not a claim — delivery to mouse-subscribed components is unchanged.
+    Mouse,
     /// Framework-local redraw marker emitted by the root observer.
     NoOp,
     /// A mounted component consumed a key without emitting a request.

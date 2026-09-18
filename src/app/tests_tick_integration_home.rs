@@ -181,6 +181,9 @@ fn visual_mode_space_toggles_selection_without_playback() {
         message,
         Msg::Playback(crate::app::components::PlaybackRequest::TogglePlayPause)
     )));
+    // The consumed chord also cancels the shell's deferred candidate: the
+    // playback action must not fire behind the row-local toggle.
+    assert!(!outcome.deferred_fired);
     handle_tick_messages(&mut harness, outcome.messages);
     assert_eq!(home_owner(&harness).test_multi_selection_len(), 0);
 }
@@ -436,14 +439,14 @@ fn status_bar_clear_with_queue_origin_clears_queue() {
 }
 
 #[test]
-fn visual_mode_escape_clears_without_arming_playback_stop() {
+fn visual_mode_escape_clears_without_firing_playback_stop() {
     let mut harness = home_harness(160, 30, 2);
     let _ = draw(&mut harness, 160, 30);
 
     harness.inject(key_with_modifiers(Key::Char('v'), KeyModifiers::SHIFT));
     let outcome = harness.step();
     handle_tick_messages(&mut harness, outcome.messages);
-    assert!(harness.model().app.last_esc_press.is_none());
+    assert!(!outcome.deferred_fired);
 
     harness.inject(key(Key::Esc));
     let outcome = harness.step();
@@ -453,17 +456,19 @@ fn visual_mode_escape_clears_without_arming_playback_stop() {
     )));
     handle_tick_messages(&mut harness, outcome.messages);
     assert_eq!(home_owner(&harness).test_multi_selection_len(), 0);
-    assert!(harness.model().app.last_esc_press.is_none());
+    // The consumed press (Visual clear) cancels the stop candidate without
+    // recording any timing state.
+    assert!(!outcome.deferred_fired);
 
-    // Once Visual mode has exited, the next Esc follows the ordinary
-    // first-press playback path: it does not stop immediately.
+    // Once Visual mode has exited, the next Esc is consumed by the library
+    // back/dismiss leaf again: the stop candidate stays cancelled.
     harness.inject(key(Key::Esc));
     let outcome = harness.step();
     assert!(outcome.messages.iter().all(|message| !matches!(
         message,
         Msg::Playback(crate::app::components::PlaybackRequest::Stop)
     )));
-    assert!(harness.model().app.last_esc_press.is_none());
+    assert!(!outcome.deferred_fired);
 }
 
 #[test]

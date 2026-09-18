@@ -37,6 +37,9 @@ pub(in crate::app) struct StepOutcome {
     pub(in crate::app) messages: Vec<Msg>,
     pub(in crate::app) pre_fold_focus: Option<ComponentId>,
     pub(in crate::app) router: RouterOutcome,
+    /// Whether the shell's deferred candidate fired on this step (the leaf
+    /// did not consume and the command was dispatched).
+    pub(in crate::app) deferred_fired: bool,
 }
 
 impl TickHarness {
@@ -88,7 +91,7 @@ impl TickHarness {
             pre_fold_focus.as_ref(),
             &router,
         );
-        self.model.apply_deferred_candidate(
+        let deferred_fired = self.model.apply_deferred_candidate(
             &router,
             diagnostic.leaf_disposition == "consumed",
         );
@@ -97,6 +100,7 @@ impl TickHarness {
             messages,
             pre_fold_focus,
             router,
+            deferred_fired,
         }
     }
 }

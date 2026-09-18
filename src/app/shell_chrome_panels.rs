@@ -240,6 +240,7 @@ impl Model {
             visual_mode: self
                 .visual_selection
                 .map(|(_, count)| VisualModeIndicator { count }),
+            prefix_armed: self.app.prefix_armed_status_spans(),
         };
         if let Some(comp) = self.application.get_component_mut(&id) {
             if let Some(panel) = comp.as_any_mut().downcast_mut::<StatusBarPanel>() {

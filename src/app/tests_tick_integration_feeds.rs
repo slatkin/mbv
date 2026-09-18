@@ -207,9 +207,12 @@ fn feeds_tick_wheel_is_claimed_only_over_active_control() {
             modifiers: KeyModifiers::NONE,
         }));
         let outcome = off_harness.step();
+        // The off-control wheel is still claimed by nothing: the marker is
+        // the observer's mouse signal (design D6, task 6.1 — the shell's
+        // silent prefix-disarm signal), not a claim.
         assert_eq!(
             outcome.raw_messages,
-            vec![Msg::TerminalEvent(TerminalObserverEvent::NoOp)]
+            vec![Msg::TerminalEvent(TerminalObserverEvent::Mouse)]
         );
         assert_eq!(feeds_owner(&off_harness).cursor(), before_cursor);
         assert_eq!(selected_rect(&off_harness), before_paint);

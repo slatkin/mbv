@@ -340,6 +340,52 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
             ),
         );
     }
+
+    // `[keys]` (change `add-configurable-keybinds`): patched like any other
+    // section through the read-patch-write path, in the section-outer file
+    // shape (design D3, lowercase section names) that `parse_raw_keybinds`
+    // reads back. An all-defaults configuration — or one whose sections all
+    // lost their entries — prunes the whole table; a section with no
+    // surviving entries contributes no table.
+    let mut keys_table = toml::map::Map::new();
+    if let Some(prefix) = &cfg.keybinds.prefix {
+        keys_table.insert(
+            "prefix".to_string(),
+            toml::Value::String(prefix.to_string()),
+        );
+    }
+    for (section, bindings) in &cfg.keybinds.sections {
+        if bindings.router.is_empty() && bindings.prefix.is_empty() {
+            continue;
+        }
+        let mut section_table = toml::map::Map::new();
+        for (action_id, chord) in &bindings.router {
+            section_table.insert(
+                action_id.to_string(),
+                toml::Value::String(chord.to_string()),
+            );
+        }
+        if !bindings.prefix.is_empty() {
+            let mut prefix_table = toml::map::Map::new();
+            for (action_id, chord) in &bindings.prefix {
+                prefix_table.insert(
+                    action_id.to_string(),
+                    toml::Value::String(chord.to_string()),
+                );
+            }
+            section_table.insert("prefix".to_string(), toml::Value::Table(prefix_table));
+        }
+        keys_table.insert(
+            section.name().to_ascii_lowercase(),
+            toml::Value::Table(section_table),
+        );
+    }
+    if keys_table.is_empty() {
+        table.remove("keys");
+    } else {
+        table.insert("keys".to_string(), toml::Value::Table(keys_table));
+    }
+
     let s = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
     write_config_text_at(path, &s)
 }

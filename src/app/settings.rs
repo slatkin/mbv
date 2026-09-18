@@ -4,6 +4,7 @@ use crate::config::{Config, UiConfig};
 pub fn setting_label(key: SettingKey) -> &'static str {
     match key {
         SettingKey::Services => "Services",
+        SettingKey::Keys => "Keys",
         SettingKey::StayAlive => "Stay alive on exit",
         SettingKey::AutoReconnect => "Auto reconnect",
         SettingKey::SavePlaylistOnQuit => "Save playlist on quit",
@@ -38,6 +39,20 @@ pub fn setting_label(key: SettingKey) -> &'static str {
 pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
     match key {
         SettingKey::Services => "Emby, Audiobookshelf, Feeds".into(),
+        SettingKey::Keys => {
+            // Live keybind summary (design D7): the configured prefix and
+            // the number of actions whose router binding deviates from the
+            // declared default, both from the loaded configuration.
+            let keys = &cfg.keybinds;
+            let prefix = keys.prefix.map(|chord| chord.to_string());
+            let count = keys.override_count();
+            match (prefix, count) {
+                (None, 0) => "defaults".into(),
+                (None, n) => format!("{n} overridden"),
+                (Some(prefix), 0) => format!("{prefix} · defaults"),
+                (Some(prefix), n) => format!("{prefix} · {n} overridden"),
+            }
+        }
         SettingKey::StayAlive => bool_val(cfg.stay_alive),
         SettingKey::AutoReconnect => bool_val(cfg.auto_reconnect),
         SettingKey::SavePlaylistOnQuit => bool_val(cfg.save_playlist_on_quit),

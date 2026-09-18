@@ -62,8 +62,9 @@ impl Model {
         // A mounted sidebar/modal/popup owns focus while it is up; re-activating
         // Queue here would steal the keypress it needs to close itself (mini
         // view keeps `effective_panel_focus` on Queue, so this pass fires every
-        // tick otherwise).
-        if !self.overlay_holds_focus() {
+        // tick otherwise). Prefix-armed capture (design D6, task 6.1) holds
+        // focus off while armed, so this pass must not re-activate mid-capture.
+        if !self.overlay_holds_focus() && !self.app.prefix_armed {
             if queue_focused {
                 if self.application.focus() != Some(&id) {
                     self.application.active(&id).expect("activate Queue");

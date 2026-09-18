@@ -328,6 +328,19 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         setup
     });
 
+    // `[keys]` (change `add-configurable-keybinds`): parsed into the raw
+    // section-outer shape, then compiled through the keybind registry so
+    // every entry — unknown sections and actions, section mismatches,
+    // reserved chords, and both collision classes — is rejected here, at
+    // the existing config error path, before the process starts.
+    let keybinds = match doc.get("keys") {
+        None => crate::keybinds::Keybinds::default(),
+        Some(keys) => {
+            let raw = parse_raw_keybinds(keys)?;
+            crate::keybinds::load(&raw).map_err(|e| e.to_string())?
+        }
+    };
+
     Ok(Config {
         emby_setup,
         audiobookshelf_setup,
@@ -376,7 +389,55 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         idle_feed_rss_url,
         idle_feed_rotation_secs,
         feeds,
+        keybinds,
     })
+}
+
+/// Parse the `[keys]` table into the raw section-outer shape (design D3):
+/// `prefix` is a string chord, each other entry a per-section table whose
+/// string keys are router-scope overrides and whose `prefix` sub-table
+/// holds prefix-namespace assignments. Shape errors are reported here;
+/// semantic validation is the registry's (`keybinds::load`).
+fn parse_raw_keybinds(keys: &toml::Value) -> Result<crate::keybinds::RawKeybinds, String> {
+    use crate::keybinds::{RawKeybinds, RawSection};
+
+    let table = keys
+        .as_table()
+        .ok_or_else(|| "keys must be a table".to_string())?;
+    let mut raw = RawKeybinds::default();
+    for (name, entry) in table {
+        if name == "prefix" {
+            let chord = entry
+                .as_str()
+                .ok_or_else(|| "keys.prefix must be a string chord".to_string())?;
+            raw.prefix = Some(chord.to_string());
+            continue;
+        }
+        let section_table = entry
+            .as_table()
+            .ok_or_else(|| format!("keys.{name} must be a table"))?;
+        let mut section = RawSection::default();
+        for (key, value) in section_table {
+            if key == "prefix" {
+                let prefix_table = value
+                    .as_table()
+                    .ok_or_else(|| format!("keys.{name}.prefix must be a table"))?;
+                for (action_id, chord) in prefix_table {
+                    let chord = chord.as_str().ok_or_else(|| {
+                        format!("keys.{name}.prefix.{action_id} must be a string chord")
+                    })?;
+                    section.prefix.push((action_id.clone(), chord.to_string()));
+                }
+                continue;
+            }
+            let chord = value
+                .as_str()
+                .ok_or_else(|| format!("keys.{name}.{key} must be a string chord"))?;
+            section.router.push((key.clone(), chord.to_string()));
+        }
+        raw.sections.push((name.clone(), section));
+    }
+    Ok(raw)
 }
 
 /// Parse the `[[feeds]]` array-of-tables tolerantly: a row with an

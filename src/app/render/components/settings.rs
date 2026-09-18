@@ -21,6 +21,10 @@ impl App {
                 self.open_services_settings();
                 return;
             }
+            SettingKey::Keys => {
+                self.open_keys_settings();
+                return;
+            }
             SettingKey::HiddenLibraries => {
                 self.pending_overlay = Some(OverlayRequest::OpenMultiselect(
                     MultiSelectKind::HiddenLibraries,

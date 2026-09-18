@@ -572,11 +572,17 @@ impl Model {
                 // own request stand.
                 let router = self.router_outcome(&messages);
                 let (messages, diagnostic) = arbitrate_key(messages, focused.as_ref(), &router);
-                if let RouterOutcome::Command(command) = &router {
+                // A prefix-namespace dispatch (design D6, task 6.2) runs the
+                // mapped action and disarms, like an immediate `Command`.
+                if let RouterOutcome::Command(command) | RouterOutcome::PrefixDispatch(command) =
+                    &router
+                {
                     quit |= self.dispatch_router_command(command.clone());
                 }
-                quit |= self
-                    .apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
+                // A deferred candidate fires on an unhandled press; its
+                // commands never quit, so it does not feed the loop's quit
+                // flag.
+                self.apply_deferred_candidate(&router, diagnostic.leaf_disposition == "consumed");
                 for msg in messages {
                     if self.handle_terminal_message(msg, &mut music_resize, &mut tv_resize) {
                         quit = true;

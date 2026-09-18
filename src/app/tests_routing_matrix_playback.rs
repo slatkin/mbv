@@ -7,7 +7,7 @@ use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, Rou
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 #[test]
-fn playback_gating_space_first_press_falls_through() {
+fn playback_gating_space_falls_through_to_consumed_leaf() {
     let leaf = Some(Msg::Shell(ShellRequest::Quit));
     let out = fold_tick(
         leaf,
@@ -18,11 +18,11 @@ fn playback_gating_space_first_press_falls_through() {
     assert_eq!(
         out.len(),
         1,
-        "first Space press must fall through (browse leaf keeps its request)"
+        "consumed Space press must fall through (browse leaf keeps its request)"
     );
 }
 #[test]
-fn playback_gating_esc_first_press_falls_through() {
+fn playback_gating_esc_falls_through_to_consumed_leaf() {
     let leaf = Some(Msg::Shell(ShellRequest::EmbyLibraryBack));
     let out = fold_tick(
         leaf,
@@ -34,18 +34,18 @@ fn playback_gating_esc_first_press_falls_through() {
     assert!(matches!(&out[0], Msg::Shell(ShellRequest::EmbyLibraryBack)));
 }
 #[test]
-fn playback_gating_space_second_press_claims_toggle() {
+fn playback_gating_space_claims_deferred_toggle() {
     let snapshot = active_snapshot();
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char(' ')), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char(' ')), &snapshot, None, &default_keybinds()),
         RouterOutcome::Deferred(Command::TogglePlayPause)
     );
 }
 #[test]
-fn playback_gating_esc_second_press_claims_stop() {
+fn playback_gating_esc_claims_deferred_stop() {
     let snapshot = active_snapshot();
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Esc), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Esc), &snapshot, None, &default_keybinds()),
         RouterOutcome::Deferred(Command::Stop)
     );
 }
@@ -53,11 +53,11 @@ fn playback_gating_esc_second_press_claims_stop() {
 fn playback_policy_preserves_per_key_eligibility() {
     let active = active_snapshot();
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('<')), &active, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('<')), &active, None, &default_keybinds()),
         RouterOutcome::Command(Command::SeekRelative(-5.0))
     );
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('a')), &active, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('a')), &active, None, &default_keybinds()),
         RouterOutcome::Command(Command::ToggleMuteOrCycleAudio)
     );
     assert_eq!(
@@ -65,18 +65,18 @@ fn playback_policy_preserves_per_key_eligibility() {
             KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL),
             &active,
             None
-        ),
+        , &default_keybinds()),
         RouterOutcome::FallThrough
     );
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('m')), &idle_snapshot(), None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('m')), &idle_snapshot(), None, &default_keybinds()),
         RouterOutcome::Command(Command::ToggleMute)
     );
 }
 #[test]
 fn visualizer_resolves_to_router_command() {
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('v')), &idle_snapshot(), None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('v')), &idle_snapshot(), None, &default_keybinds()),
         RouterOutcome::Command(Command::ToggleVisualizer)
     );
 }
@@ -89,11 +89,11 @@ fn playback_and_visualizer_commands_are_swallowed_under_blocking_overlay() {
     };
 
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('v')), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('v')), &snapshot, None, &default_keybinds()),
         RouterOutcome::Swallow
     );
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('m')), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('m')), &snapshot, None, &default_keybinds()),
         RouterOutcome::Swallow
     );
 }
@@ -111,7 +111,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         ..RouterSnapshot::default()
     };
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &snapshot, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &snapshot, None, &default_keybinds()),
         RouterOutcome::Command(Command::OpenIdleFeedLink)
     );
 
@@ -121,7 +121,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         ..snapshot
     };
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &queue_only_idle, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &queue_only_idle, None, &default_keybinds()),
         RouterOutcome::FallThrough
     );
 
@@ -133,7 +133,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         ..snapshot
     };
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &both_idle, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &both_idle, None, &default_keybinds()),
         RouterOutcome::FallThrough
     );
 
@@ -145,7 +145,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         ..snapshot
     };
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &library_only_idle, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &library_only_idle, None, &default_keybinds()),
         RouterOutcome::Command(Command::OpenIdleFeedLink)
     );
 
@@ -154,7 +154,7 @@ fn idle_feed_path_uses_connected_session_not_broad_playback_route() {
         ..snapshot
     };
     assert_eq!(
-        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &connected, None),
+        resolve_router_outcome_with_focused(key(KeyCode::Char('o')), &connected, None, &default_keybinds()),
         RouterOutcome::FallThrough
     );
 }

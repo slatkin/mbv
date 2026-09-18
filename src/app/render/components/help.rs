@@ -1,8 +1,8 @@
-use super::super::super::action::PLAYBACK_HELP_BINDINGS;
 use super::super::super::palette;
 use super::super::super::HELP_PANEL_W;
 use super::chrome;
 use crate::app::{PanelFocus, TabSelection};
+use mbv_core::keybinds::{action_by_id, KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -103,6 +103,38 @@ impl HelpSection {
     }
 }
 
+/// One-line help label per declared Playback action. Only the labels live
+/// here; the row set and the key chords come from the declared registry and
+/// the loaded `Keybinds` (design D7), so help cannot drift from routing.
+fn playback_label(action_id: &str) -> &'static str {
+    match action_id {
+        "toggle_play_pause" => "Pause/Resume",
+        "stop" => "Stop",
+        "seek_back" => "Seek back 5 seconds",
+        "seek_forward" => "Seek forward 5 seconds",
+        "next_track" => "Next track",
+        "previous_track" => "Previous track",
+        "volume_down" => "Volume down",
+        "volume_up" => "Volume up",
+        "toggle_mute" => "Mute",
+        "toggle_mute_or_cycle_audio" => "Cycle audio track",
+        "cycle_subtitle" => "Cycle subtitles",
+        "open_idle_feed_link" => "Open idle feed link",
+        other => panic!("declared Playback action `{other}` has no help label"),
+    }
+}
+
+/// A declared action id as a readable label (`toggle_play_pause` ->
+/// `Toggle play pause`) for prefix-namespace rows, which span any section
+/// and so have no hand-written label table like `playback_label`'s.
+fn humanize_action_id(id: &str) -> String {
+    let mut label = id.replace('_', " ");
+    if let Some(first) = label.get_mut(0..1) {
+        first.make_ascii_uppercase();
+    }
+    label
+}
+
 fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
     Line::from(vec![
         Span::raw(""),
@@ -135,38 +167,103 @@ fn help_blank() -> Line<'static> {
     Line::from("")
 }
 
+/// The key-column text for a declared action under the loaded
+/// configuration: its configured/declared chords joined with ` / `, or the
+/// positional set's range (`1 – 9`) when the declaration carries more than
+/// two chords (the tab-jump digits). The registry and the loaded `Keybinds`
+/// are the only sources — the hand-written Global chord strings are gone
+/// (design D7), so a rebind is reflected here without a second table.
+fn action_keys(keybinds: &Keybinds, id: &str) -> String {
+    let action = action_by_id(id).expect("help references a declared action");
+    let chords: Vec<String> = keybinds
+        .router_chords(action)
+        .iter()
+        .map(|chord| chord.to_string())
+        .collect();
+    if chords.len() > 2 {
+        format!("{} – {}", chords[0], chords[chords.len() - 1])
+    } else {
+        chords.join(" / ")
+    }
+}
+
+/// The Global section's configurable rows as (action id, label), in the
+/// order they are presented. Only labels live here; the chords come from
+/// the registry and the loaded `Keybinds`.
+const GLOBAL_CONFIGURABLE_ROWS: &[(&str, &str)] = &[
+    ("help_open", "Help"),
+    ("settings_open", "Settings"),
+    ("sessions_open", "Remote sessions"),
+    ("playlists_open", "Playlists"),
+    ("f5_refresh", "Refresh view"),
+    ("visualizer", "Switch queue artwork / visualizer"),
+    ("next_library_tab", "Cycle menu"),
+    ("library_tab_jump", "Jump to tab"),
+    ("clear_queue_prompt_c", "Clear Queue"),
+    ("quit", "Quit"),
+];
+
 /// Builds every named help section. Kept as a pure function so classification
 /// tests can inspect section content and ordering without driving a terminal.
-fn build_help_sections(key_w: usize) -> Vec<(HelpSection, Vec<Line<'static>>)> {
-    let sec_global = vec![
-        help_section_line("Global"),
-        help_line(key_w, "F1", "Help"),
-        help_line(key_w, "F2", "Settings"),
-        help_line(key_w, "F3", "Remote sessions"),
-        help_line(key_w, "F4", "Playlists"),
-        help_line(key_w, "F5", "Refresh view"),
-        help_line(key_w, "v", "Switch queue artwork / visualizer"),
-        help_line(key_w, "Tab", "Cycle menu"),
-        help_line(key_w, "1 – 9", "Jump to tab"),
-        help_line(key_w, "↑ / ↓", "Move cursor"),
-        help_line(key_w, "← / →", "Switch panels"),
-        help_line(key_w, "PgUp / PgDn", "Page scroll"),
-        help_line(key_w, "Home / End", "First/last item"),
-        help_line(key_w, "Enter", "Select/Play/Open"),
-        help_line(key_w, ".", "Context menu"),
-        help_line(key_w, "c", "Clear Queue"),
-        help_line(key_w, "q", "Quit"),
-        help_blank(),
-    ];
-    // Rendered from `PLAYBACK_HELP_BINDINGS` (issue #133, phase 4) so this
-    // section can no longer silently drift from `playback_command_for_key`.
+fn build_help_sections(
+    key_w: usize,
+    keybinds: &Keybinds,
+) -> Vec<(HelpSection, Vec<Line<'static>>)> {
+    let mut sec_global = vec![help_section_line("Global")];
+    for (id, label) in GLOBAL_CONFIGURABLE_ROWS {
+        sec_global.push(help_line(key_w, &action_keys(keybinds, id), label));
+    }
+    // The panel-focus pair is two declared actions presented as one row.
+    sec_global.push(help_line(
+        key_w,
+        &format!(
+            "{} / {}",
+            action_keys(keybinds, "panel_left"),
+            action_keys(keybinds, "panel_right")
+        ),
+        "Switch panels",
+    ));
+    // Leaf-local, non-configurable rows stay hand-written: the registry
+    // declares only router-owned chords (design D7).
+    sec_global.push(help_line(key_w, "↑ / ↓", "Move cursor"));
+    sec_global.push(help_line(key_w, "PgUp / PgDn", "Page scroll"));
+    sec_global.push(help_line(key_w, "Home / End", "First/last item"));
+    sec_global.push(help_line(key_w, "Enter", "Select/Play/Open"));
+    sec_global.push(help_line(key_w, ".", "Context menu"));
+    // The prefix namespace is presented when configured (spec: help lists
+    // the prefix and its assigned actions); with no prefix, help matches
+    // the pre-prefix presentation.
+    if let Some(prefix) = keybinds.prefix {
+        sec_global.push(help_section_line("Prefix"));
+        sec_global.push(help_line(key_w, &prefix.to_string(), "Arm prefix mode"));
+        for (action, chord) in keybinds.prefix_assignments() {
+            sec_global.push(help_line(
+                key_w,
+                &chord.to_string(),
+                &humanize_action_id(action.id),
+            ));
+        }
+    }
+    sec_global.push(help_blank());
+    // Rendered from the declared registry (design D7): one row per Playback
+    // action, its keys the chords it actually fires on for the loaded
+    // configuration, so the section cannot silently drift from routing.
     let mut sec_playback = vec![help_section_line("Playback")];
-    sec_playback.extend(
-        PLAYBACK_HELP_BINDINGS
+    // The transport bucket: the Playback-section actions gated `Playback`
+    // (design D2). `visualizer` shares the section but is presented in the
+    // Global rows above, where it lived before the split.
+    for action in KEYBIND_ACTIONS
+        .iter()
+        .filter(|action| action.section == KeySection::Playback && action.gate == KeyGate::Playback)
+    {
+        let keys = keybinds
+            .router_chords(action)
             .iter()
-            .map(|b| help_line(key_w, b.keys, b.label)),
-    );
-    sec_playback.push(help_line(key_w, "o", "Open idle feed link"));
+            .map(|chord| chord.to_string())
+            .collect::<Vec<_>>()
+            .join(" / ");
+        sec_playback.push(help_line(key_w, &keys, playback_label(action.id)));
+    }
     sec_playback.push(help_blank());
     let sec_queue = vec![
         help_section_line("Queue"),
@@ -263,11 +360,49 @@ pub(in crate::app) struct HelpRenderGeometry {
     pub max_scroll: u16,
 }
 
+/// The rendered Playback section's row texts (padded key column + label),
+/// one per declared Playback action, in registry order. Test seam for the
+/// render-layer tests that pin help to the registry (design D7).
+#[cfg(test)]
+pub(in crate::app::render) fn playback_help_rows(key_w: usize, keybinds: &Keybinds) -> Vec<String> {
+    section_help_rows(key_w, keybinds, HelpSection::Playback)
+}
+
+/// The rendered Global section's row texts (padded key column + label),
+/// including the prefix block when configured. Test seam for the
+/// render-layer tests that pin the Global/prefix presentation to the
+/// registry (task 7.4, design D7).
+#[cfg(test)]
+pub(in crate::app::render) fn global_help_rows(key_w: usize, keybinds: &Keybinds) -> Vec<String> {
+    section_help_rows(key_w, keybinds, HelpSection::Global)
+}
+
+#[cfg(test)]
+fn section_help_rows(key_w: usize, keybinds: &Keybinds, section: HelpSection) -> Vec<String> {
+    let (_, lines) = build_help_sections(key_w, keybinds)
+        .into_iter()
+        .find(|(name, _)| *name == section)
+        .expect("help section exists");
+    // Skip the section header; the rows follow it.
+    lines[1..]
+        .iter()
+        .filter(|line| !line.spans.is_empty())
+        .map(|line| {
+            line.spans
+                .iter()
+                .map(|span| span.content.as_ref() as &str)
+                .collect::<String>()
+        })
+        .filter(|text| !text.trim().is_empty())
+        .collect()
+}
+
 pub(in crate::app) fn render_help_panel(
     f: &mut Frame,
     area: Option<ratatui::layout::Rect>,
     scroll: &mut u16,
     dest: HelpDestination,
+    keybinds: &Keybinds,
 ) -> HelpRenderGeometry {
     let content = match area {
         Some(area) => chrome::render_panel_shell_at(
@@ -288,7 +423,7 @@ pub(in crate::app) fn render_help_panel(
     let key_w = 16usize;
 
     let mut sections: [Option<Vec<Line<'static>>>; 7] = std::array::from_fn(|_| None);
-    for (name, lines) in build_help_sections(key_w) {
+    for (name, lines) in build_help_sections(key_w, keybinds) {
         sections[name.index()] = Some(lines);
     }
     let order = help_section_order(dest);
@@ -342,7 +477,7 @@ mod tests {
 
     #[test]
     fn audiobookshelf_help_lists_spec_key_sets_first() {
-        let sections = build_help_sections(16);
+        let sections = build_help_sections(16, &Keybinds::default());
         let order = help_section_order(HelpDestination::Audiobookshelf);
         assert_eq!(order[0], HelpSection::Audiobookshelf);
 
@@ -377,7 +512,7 @@ mod tests {
 
     #[test]
     fn home_help_lists_section_switch_watched_and_enqueue() {
-        let sections = build_help_sections(16);
+        let sections = build_help_sections(16, &Keybinds::default());
         let order = help_section_order(HelpDestination::Home);
         assert_eq!(order[0], HelpSection::Home);
 

@@ -134,8 +134,6 @@ impl App {
             terminal_width: 80,
             terminal_height: 24,
 
-            last_space_press: None,
-            last_esc_press: None,
             pending_overlay: None,
             pending_exit_message: None,
             pending_delete_slot: None,
@@ -244,6 +242,7 @@ impl App {
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
+            prefix_armed: false,
             tab_scroll: 0,
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_library_nav_at: Instant::now() - Duration::from_secs(1),

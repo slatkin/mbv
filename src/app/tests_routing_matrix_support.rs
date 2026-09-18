@@ -12,18 +12,44 @@
 //! plus the required U2 coverage: blocking-overlay swallow, router
 //! `Command`/`Swallow` discarding the leaf's message, `FallThrough` leaving
 //! exactly one leaf message standing, Queue-vs-Library focus routing, playback
-//! gating, and the double-tap first-press fall-through / second-press claim.
+//! gating, and the deferred playback candidates (a consumed chord falls
+//! through to the leaf; the shell's candidate fires only on an unhandled
+//! press).
 //!
 //! The matrix began against the empty policy; global rows now assert the live
 //! `Command`/`Swallow` outcomes while the remaining migration rows continue to
 //! pin their deliberate `FallThrough` behavior until their owning task moves
-//! the effect into the router. Playback rows additionally pin the live
-//! first-press FallThrough / second-press Command policy.
+//! the effect into the router. Playback rows additionally pin the deferred
+//! candidate policy: a consumed chord falls through to the leaf, and the
+//! candidate resolves as `Deferred`.
 
 use crate::app::components::{ComponentId, Msg, TerminalObserverEvent};
 use crate::app::router::{resolve_router_outcome_with_focused, RouterOutcome, RouterSnapshot};
 use crate::app::shell::fold_keyboard_messages;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::keybinds::{Chord, KeySection, Keybinds, SectionBindings};
+
+/// The registry-defaults configuration the matrix resolves against (task
+/// 3.2): no prefix, every declared action on its declared chords.
+pub(crate) fn default_keybinds() -> Keybinds {
+    Keybinds::default()
+}
+
+/// A configuration with one router-scope override: `id` fires on `chord`
+/// instead of its declared default. The section is irrelevant to routing —
+/// `Keybinds::router_override` scans every section.
+pub(crate) fn keybinds_with_override(id: &'static str, chord: &str) -> Keybinds {
+    Keybinds {
+        prefix: None,
+        sections: vec![(
+            KeySection::Global,
+            SectionBindings {
+                router: vec![(id, Chord::parse(chord).expect("test chord must parse"))],
+                prefix: vec![],
+            },
+        )],
+    }
+}
 
 pub(crate) fn fold_tick(
     leaf: Option<Msg>,
@@ -36,7 +62,7 @@ pub(crate) fn fold_tick(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    let outcome = resolve_router_outcome_with_focused(key, &snapshot, None);
+    let outcome = resolve_router_outcome_with_focused(key, &snapshot, None, &default_keybinds());
     fold_keyboard_messages(messages, focused.as_ref(), &outcome)
 }
 
@@ -69,7 +95,7 @@ pub(crate) fn fold_tick_focused(
         messages.push(leaf);
     }
     messages.push(Msg::TerminalEvent(TerminalObserverEvent::Key(key.into())));
-    let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref());
+    let outcome = resolve_router_outcome_with_focused(key, &snapshot, focused.as_ref(), &default_keybinds());
     fold_keyboard_messages(messages, focused.as_ref(), &outcome)
 }
 

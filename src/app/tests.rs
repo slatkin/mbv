@@ -172,8 +172,6 @@ pub(crate) fn make_app_stub() -> App {
         terminal_width: 80,
         terminal_height: 24,
 
-        last_space_press: None,
-        last_esc_press: None,
         pending_overlay: None,
         pending_exit_message: None,
         pending_delete_slot: None,
@@ -222,6 +220,7 @@ pub(crate) fn make_app_stub() -> App {
         search_tx,
         search_rx,
         force_clear: false,
+        prefix_armed: false,
         tab_scroll: 0,
         ui_volume: 100,
         pre_mute_volume: None,
