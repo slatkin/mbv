@@ -20,6 +20,12 @@ Audiobookshelf podcast episodes are not hero-bearing browser rows: the podcast t
 - **THEN** the Library Hero overlay opens for that artist root
 - **AND** its grouped artist-track Workspace holds focus
 
+#### Scenario: Filtered Grouped Music album dismisses into its overlay
+
+- **WHEN** the user presses Enter on an album leaf while a non-Wide Grouped Music tree filter is active
+- **THEN** the same key action dismisses the filter and focuses that album in the unfiltered tree
+- **AND** its Library Hero overlay opens with the album-track Workspace focused
+
 #### Scenario: Leaf requires a second Enter
 
 - **WHEN** the user presses Enter on a selected hero-bearing item without a Workspace in non-Wide geometry

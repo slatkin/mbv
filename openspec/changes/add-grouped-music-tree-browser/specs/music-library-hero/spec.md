@@ -4,7 +4,7 @@
 
 The grouped Music tree view SHALL use Wide hero when it meets the shared wide geometry conditions. Its right pane SHALL contain detail and a track Workspace for the selected artist root or album leaf, and its left rail SHALL contain the single-column tree browser. Otherwise an album leaf SHALL open its Library Hero overlay through its existing Enter activation, while Right on an already expanded artist root SHALL open the artist Library Hero overlay and focus its Workspace. Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
 
-Album-leaf detail SHALL retain the album title, metadata, album art, and album-track Workspace. Artist-root detail SHALL show artist artwork when stable Service identity and artwork are available, artist name, in-scope album count and year span, and an artist-track Workspace grouped by album. Fallback artist roots with no Service artist identity SHALL use the existing no-artwork presentation.
+Album-leaf detail SHALL retain the album title, metadata, album art, and album-track Workspace. In every composition, an album leaf's release year SHALL paint once in the canonical fixed six-column right gutter using the green `STATUS_AVAILABLE` role; artist roots and yearless leaves SHALL reserve no year gutter. Artist-root detail SHALL show artist artwork when stable Service identity and artwork are available, artist name, in-scope album count and year span, and an artist-track Workspace grouped by album. Fallback artist roots with no Service artist identity SHALL use the existing no-artwork presentation.
 
 #### Scenario: Grouped Music below the breakpoint
 - **WHEN** grouped Music does not meet the shared wide geometry conditions
@@ -14,6 +14,11 @@ Album-leaf detail SHALL retain the album title, metadata, album art, and album-t
 #### Scenario: Grouped Music at the breakpoint
 - **WHEN** grouped Music meets the shared wide geometry conditions
 - **THEN** it renders Wide hero with the selected artist or album detail and tracks in the right pane
+
+#### Scenario: Album year uses the canonical metadata gutter
+- **WHEN** an album leaf with a release year paints in any Grouped Music composition
+- **THEN** the year paints once, right-aligned in the fixed six-column gutter using `STATUS_AVAILABLE`
+- **AND** the title shrinks around that gutter without an inline or duplicate year
 
 #### Scenario: Grouped Music lacks sufficient height
 - **WHEN** grouped Music meets the width breakpoint but fails the existing minimum-height guard
