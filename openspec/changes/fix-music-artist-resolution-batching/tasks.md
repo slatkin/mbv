@@ -18,5 +18,5 @@
 
 ## 4. Verification
 
-- [ ] 4.1 Run `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`; all pass.
-- [ ] 4.2 Run `openspec validate fix-music-artist-resolution-batching` and confirm the delta applies cleanly against `stable-music-library-grouping`.
+- [x] 4.1 Run `cargo nextest run -p mbv`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo fmt --all -- --check`; all pass.
+- [x] 4.2 Run `openspec validate fix-music-artist-resolution-batching` and confirm the delta applies cleanly against `stable-music-library-grouping`.
