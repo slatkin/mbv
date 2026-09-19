@@ -84,7 +84,7 @@
 
 ## 5. Progress-visibility corrections (added 2026-09-19, user ruling)
 
-- [ ] 5.1 `MediaSemanticState::from_progress`
+- [x] 5.1 `MediaSemanticState::from_progress`
       (`src/app/components/media_list/mod.rs:165-177`): a positive
       `position_ticks` yields the resume percentage regardless of `played`;
       the played style applies only to played items with no position. Update
@@ -92,7 +92,7 @@
       (`media_list/tests.rs:201-225`), dropping "played wins over any resume
       position" and covering played-with-position and played-without-position.
       Verify: `cargo nextest run -p mbv media_list`.
-- [ ] 5.2 Monotonic enrichment merge: in `PlaybackQueue::merge_fetched_slot`'s
+- [x] 5.2 Monotonic enrichment merge: in `PlaybackQueue::merge_fetched_slot`'s
       non-active arm (`crates/mbv-core/src/playback/queue.rs:691-696`), the
       effective position is `max(fetched, stored)` — enrichment never lowers
       an adopted slot's stored ticks (restore the removed client path's
@@ -101,7 +101,7 @@
       successful fetch returning zero/stale UserData does not reduce an
       adopted slot's position, and a fetched position greater than stored
       still updates. Verify: `cargo nextest run -p mbv-core`.
-- [ ] 5.3 `get_continue_watching` (`crates/mbv-core/src/api_client_library.rs:189`):
+- [x] 5.3 `get_continue_watching` (`crates/mbv-core/src/api_client_library.rs:189`):
       include `EnableUserData=true` in the Resume query if absent, matching
       its siblings (api_client_library.rs:138, api_client_playlists.rs:210),
       so Home Continue Watching rows parse UserData. Add/extend a unit test
