@@ -19,6 +19,8 @@ use super::surface_table::{row, RESTING_DEVIATIONS};
 use super::*;
 use ratatui::style::Color;
 
+use super::palette::Palette;
+
 /// The resolved colour of one rendered surface for one frame.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct SurfaceColors {
@@ -49,7 +51,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     if follow_focus {
         SurfaceColors::fill(if row.soft {
-            primitives::SOFT_CONTENT_BODY_BG
+            Palette::Green2.color()
         } else {
             row.level.focused_fill()
         })
