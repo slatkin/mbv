@@ -192,7 +192,7 @@ pub const PLAYBACK_TITLE_FG: Color = Palette::Aqua.color();
 pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
 
 // Progress and queue
-pub const PROGRESS_TRACK: Color = Palette::Steel.color(); // unplayed seek/progress track
+pub const PROGRESS_TRACK: Color = Palette::Grey4.color(); // unplayed seek/progress track
 
 // Chrome
 /// Library/chrome scrollbar track/thumb; a former value alias of the soft

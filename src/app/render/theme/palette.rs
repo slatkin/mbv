@@ -51,6 +51,8 @@ pub(in crate::app) enum Palette {
     Storm,
     Flint,
     Ash,
+    // Retained as an approved palette variant even when no semantic role uses it.
+    #[cfg_attr(not(test), expect(dead_code))]
     Steel,
     Foam,
     Purple,
