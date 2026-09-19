@@ -1,5 +1,26 @@
 include!("daemon_control_queue.rs");
 
+/// Fetches `item_ids` from Emby off the event-loop thread and sends the
+/// result through `tx` as a `DaemonEvent`, built by `to_event`. Shared by
+/// every ctrl handler that resolves item ids against Emby before rejoining
+/// the daemon's single-threaded event loop.
+fn spawn_item_lookup<F>(
+    client: &Arc<Mutex<EmbyClient>>,
+    tx: &mpsc::Sender<DaemonEvent>,
+    item_ids: Vec<String>,
+    to_event: F,
+) where
+    F: FnOnce(Result<Vec<EmbyItem>, String>) -> Option<DaemonEvent> + Send + 'static,
+{
+    let tx = tx.clone();
+    let lookup_client = client.lock().unwrap().clone();
+    std::thread::spawn(move || {
+        if let Some(event) = to_event(lookup_client.get_items_by_ids(&item_ids)) {
+            let _ = tx.send(event);
+        }
+    });
+}
+
 /// Plays a resolved-by-id playback intent. Replaces the legacy `PlayItems`
 /// wire command, which carried both the wire shape and this internal
 /// control-flow re-entry; the wire variant is gone (ADR 0020), so the
@@ -192,24 +213,21 @@ fn handle_ctrl(
                     .iter()
                     .map(|(_, item_id)| item_id.clone())
                     .collect();
-                let tx = merged_tx.clone();
-                let lookup_client = client.lock().unwrap().clone();
-                std::thread::spawn(move || {
-                    match lookup_client.get_items_by_ids(&item_ids) {
-                        Ok(items) => {
-                            let items_by_id: std::collections::HashMap<String, EmbyItem> =
-                                items.into_iter().map(|item| (item.id.clone(), item)).collect();
-                            let enriched = adopted_slots
-                                .into_iter()
-                                .filter_map(|(slot_id, item_id)| {
-                                    items_by_id.get(&item_id).cloned().map(|item| (slot_id, item))
-                                })
-                                .collect();
-                            let _ = tx.send(DaemonEvent::QueueEnriched(enriched));
-                        }
-                        Err(error) => {
-                            log::warn!(target: "queue", "adopted queue enrichment fetch failed: {error}");
-                        }
+                spawn_item_lookup(client, merged_tx, item_ids, move |result| match result {
+                    Ok(items) => {
+                        let items_by_id: std::collections::HashMap<String, EmbyItem> =
+                            items.into_iter().map(|item| (item.id.clone(), item)).collect();
+                        let enriched = adopted_slots
+                            .into_iter()
+                            .filter_map(|(slot_id, item_id)| {
+                                items_by_id.get(&item_id).cloned().map(|item| (slot_id, item))
+                            })
+                            .collect();
+                        Some(DaemonEvent::QueueEnriched(enriched))
+                    }
+                    Err(error) => {
+                        log::warn!(target: "queue", "adopted queue enrichment fetch failed: {error}");
+                        None
                     }
                 });
             }
@@ -268,13 +286,10 @@ fn handle_ctrl(
                         log::info!(target: "pipe_latency", "request={} generation={} phase={:?} elapsed_ms={}", status.request_id, status.generation, status.phase, playback_intents.current.as_ref().map(|current| current.accepted_at.elapsed().as_millis()).unwrap_or_default());
                         send_to(request.reply_tx, &CtrlEvent::PipePlaybackStatus(status));
                     }
-                    let tx = merged_tx.clone();
-                    let lookup_client = client.lock().unwrap().clone();
                     let request_id = intent.request_id;
                     let generation = intent.generation;
-                    std::thread::spawn(move || {
-                        let fetched = lookup_client.get_items_by_ids(&item_ids);
-                        let _ = tx.send(DaemonEvent::PlaybackResolved {
+                    spawn_item_lookup(client, merged_tx, item_ids, move |fetched| {
+                        Some(DaemonEvent::PlaybackResolved {
                             start_idx,
                             start_ticks,
                             source: intent_source,
@@ -282,7 +297,7 @@ fn handle_ctrl(
                             request_id,
                             generation,
                             fetched,
-                        });
+                        })
                     });
                 }
                 crate::ctrl::PlaybackIntentAction::Stop => {

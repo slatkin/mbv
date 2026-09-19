@@ -80,6 +80,24 @@ persisted (if stale) progress in the meantime — exactly the property
 `QueueState.items` storing full items (not just IDs) exists to guarantee
 (see the comment at `crates/mbv-core/src/config_types_queue_state.rs:26-29`).
 
+### Follow-up correction (2026-09-19): `merge_refresh_for_slots`, not `merge_refresh`
+
+**Supersedes** the "reuse `merge_refresh`, no new merge logic" intent stated
+above and in tasks.md 1.3/proposal.md's Impact section. `merge_refresh`
+rebuilds the whole slot list from the fetched set and prunes any existing
+Emby slot absent from it (`queue.rs:612-615`) — correct for the client's
+synchronous refresh, where the fetch covers the queue as it exists right
+now. The daemon's cold-adopt fetch is asynchronous and can complete after
+the live queue has already changed (items added/reordered while the fetch
+was in flight); running a stale, adoption-scoped fetch result through
+`merge_refresh` would prune any slot added meanwhile as if it had vanished
+from Emby. `PlaybackQueue::merge_refresh_for_slots` (`queue.rs:546`) was
+added instead: it updates only the exact `QueueSlotId`s the fetch was
+dispatched for, guarded by a content-id check, and never prunes. No new
+merge *semantics* (the played/pending/monotonic-max rules are shared via
+`merge_fetched_slot`) — only a narrower, non-destructive targeting rule
+suited to an async, potentially-stale result set.
+
 ### Client no longer independently enriches after daemon adoption
 
 `spawn_enrich_queue_state`'s call sites in `src/app/daemon_restart.rs` and
