@@ -2,9 +2,9 @@
 
 ## 1. Batch fill core
 
-- [ ] 1.1 Extract the majority vote from `spawn_album_artist_fetch` (src/app/image_fetch.rs) into a pure function (`AlbumArtist` per track, per-track `Artists[0]` fallback, first ≤5 tracks, first-seen wins ties) and verify with unit tests covering: majority win, `Artists[0]` fallback, empty-candidate skipping, first-seen tie-break, ≤5 cap.
-- [ ] 1.2 Add pure bucketing: group a level's Audio rows by `ParentId`; attribute a bucket whose `ParentId` is no album at the level to the album whose `Path` prefixes the tracks' `Path` (drop the bucket if none matches). Verify with unit tests covering: 1:1 buckets, multi-disc orphan attributed via `Path`, unmatched orphan dropped.
-- [ ] 1.3 Add level-fill state `album_artist_levels: HashMap<String, LevelFillState>` (`Loading | Filled | Failed`) to `App` (src/app/app_struct.rs), replacing `album_artist_loading`; add `LibEvent::AlbumArtistLevelFetched { level_id, artists }` (src/app/types_events.rs) and its handler (src/app/lib_event_actions.rs): bulk-fill `album_artist_cache`, mark `Filled` (or `Failed` on empty/failure). Verify `cargo check -p mbv` passes and handler unit tests cover fill, failure, and Service-reset clearing (src/app/emby_service_actions.rs).
+- [x] 1.1 Extract the majority vote from `spawn_album_artist_fetch` (src/app/image_fetch.rs) into a pure function (`AlbumArtist` per track, per-track `Artists[0]` fallback, first ≤5 tracks, first-seen wins ties) and verify with unit tests covering: majority win, `Artists[0]` fallback, empty-candidate skipping, first-seen tie-break, ≤5 cap.
+- [x] 1.2 Add pure bucketing: group a level's Audio rows by `ParentId`; attribute a bucket whose `ParentId` is no album at the level to the album whose `Path` prefixes the tracks' `Path` (drop the bucket if none matches). Verify with unit tests covering: 1:1 buckets, multi-disc orphan attributed via `Path`, unmatched orphan dropped.
+- [x] 1.3 Add level-fill state `album_artist_levels: HashMap<String, LevelFillState>` (`Loading | Filled | Failed`) to `App` (src/app/app_struct.rs), replacing `album_artist_loading`; add `LibEvent::AlbumArtistLevelFetched { level_id, artists }` (src/app/types_events.rs) and its handler (src/app/lib_event_actions.rs): bulk-fill `album_artist_cache`, mark `Filled` (or `Failed` on empty/failure). Verify `cargo check -p mbv` passes and handler unit tests cover fill, failure, and Service-reset clearing (src/app/emby_service_actions.rs).
 
 ## 2. Level fetch + candidate integration
 
