@@ -103,6 +103,12 @@ back to an entry regardless of what was actually watched.
   `on_end_file` applies to the run's own `ExecutionSequence` via
   `ExecutionSequence::apply_progress`, at the same point it computes
   `completed_pos` for that occurrence.
+- **Cold-adopt enrichment is monotonic for unplayed fetches:**
+  `PlaybackQueue::merge_fetched_slot`'s non-active arm keeps the greater of
+  fetched and stored position for an unplayed fetched item, while adopting a
+  fetched played item verbatim so a completion reset can land. This
+  type-invisible rule protects the adopted position from stale Service UserData
+  and is enforced only at that merge site.
 - **One shared write path, several independent gates.**
   `crate::playback::queue::apply_progress_to_queue_item` is the single place
   that knows how to write a position/played pair into each `QueueItem` kind;
