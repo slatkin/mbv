@@ -119,9 +119,9 @@ fn sidebar_shells_follow_the_table() {
         ),
         (
             false,
-            palette::Surface::NonHeroSidebarBody,
-            palette::Surface::NonHeroSidebarBand,
-            "non-hero sidebar",
+            palette::Surface::SidebarBody,
+            palette::Surface::SidebarBand,
+            "plain shell (standard sidebar colours)",
         ),
     ] {
         let buffer = rendered(|f| {

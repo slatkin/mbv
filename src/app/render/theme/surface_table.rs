@@ -214,14 +214,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // The non-hero sidebar shell is its own appearance
-        // (`render/components/chrome.rs:169`).
-        Surface::NonHeroSidebarBody => Row {
-            level: Level::ContentBody,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_SIDEBAR,
-        },
         // The queue card's now-playing content is the queue column's content,
         // so it resolves the content-body pair with the queue column's focus
         // even though it sits inside the card
@@ -327,12 +319,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_CHROME,
         },
-        Surface::NonHeroSidebarBand => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_ITEM_FOCUSED,
-        },
         Surface::TabBar => Row {
             level: Level::ChromeBand,
             focus: FocusSource::Fixed,
@@ -406,11 +392,6 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     (
         Surface::MainContentBox,
         "the pane content box's resting half has always painted the app backdrop",
-    ),
-    (
-        Surface::NonHeroSidebarBody,
-        "the non-hero sidebar shell paints `SURFACE_SIDEBAR`, not the resting \
-         content value",
     ),
 ];
 

@@ -122,19 +122,11 @@ pub(in crate::app) fn render_panel_shell_at(
     style: bool,
 ) -> Rect {
     f.render_widget(Clear, sidebar);
-    // The sidebar's two declared appearances: the expanded (F1-F4) sidebar
-    // body/bands, and the non-hero sidebar shell's own pair. Fixed rows —
-    // neither follows focus.
-    let body_bg = if style {
-        palette::surface_colors(palette::Surface::SidebarBody, false).fill
-    } else {
-        palette::surface_colors(palette::Surface::NonHeroSidebarBody, false).fill
-    };
-    let band_bg = if style {
-        palette::surface_colors(palette::Surface::SidebarBand, false).fill
-    } else {
-        palette::surface_colors(palette::Surface::NonHeroSidebarBand, false).fill
-    };
+    // The sidebar's two shell layouts share one declared appearance: the
+    // expanded (F1-F4) sidebar body/band pair. Fixed rows — neither follows
+    // focus.
+    let body_bg = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
+    let band_bg = palette::surface_colors(palette::Surface::SidebarBand, false).fill;
     // Too short to fit a title row, a content row, and the 2-row footer;
     // bail out rather than let `footer_y = sidebar.y + sidebar.height - 2`
     // underflow below.

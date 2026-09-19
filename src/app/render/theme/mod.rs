@@ -52,11 +52,9 @@ pub const SURFACE_PLAYBACK: Color = Palette::Storm.color(); // now-playing-strip
 #[cfg(test)]
 #[allow(dead_code)]
 pub const SURFACE_ACCENT_SOFT: Color = Palette::Green2.color();
-pub const SURFACE_ITEM_FOCUSED: Color = Palette::Grey3.color();
-pub const SURFACE_SIDEBAR: Color = Palette::Flint.color(); // plain (non-hero) sidebar/panel background
-                                                           // Transitional: retired from production by task 4.2 (`SURFACE_ARTWORK_PLACEHOLDER`
-                                                           // was `SURFACE_BACKDROP`'s value alias); the name stays reachable only because
-                                                           // the frozen `artwork_placeholder_tests.rs` pins it.
+// Transitional: retired from production by task 4.2 (`SURFACE_ARTWORK_PLACEHOLDER`
+// was `SURFACE_BACKDROP`'s value alias); the name stays reachable only because
+// the frozen `artwork_placeholder_tests.rs` pins it.
 #[cfg(test)]
 #[allow(dead_code)]
 pub const SURFACE_ARTWORK_PLACEHOLDER: Color = Palette::Slate.color();
