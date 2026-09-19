@@ -28,9 +28,9 @@ impl Component for LibraryPanel {
         // hints land here screen-by-screen (Home first). Read before the
         // mutable content borrow below so the two never overlap.
         let hints: &[&str] = if matches!(self.owners.active_key(), Some(LibraryKey::Home)) {
-            &["ENTER:Play", "ESC:Exit"]
+            &["ENTER:Play", "ESC:Back"]
         } else {
-            &["ESC:Exit"]
+            &["ESC:Back"]
         };
         let Some(owner) = self.owners.active_mut() else {
             return;
