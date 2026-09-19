@@ -20,6 +20,15 @@ impl App {
         matches!(self.playback_target(), PlaybackTarget::Local(_))
     }
 
+    /// Whether a canonical-queue edit in `scope` should also be sent to the
+    /// player as a live command. `active` is the player's current playing
+    /// state (`self.player.status.lock().unwrap().active`), passed in since
+    /// callers already hold it.
+    pub(super) fn queue_edit_reaches_player(&self, scope: QueueScope, active: bool) -> bool {
+        scope == QueueScope::Remote
+            || (active || self.player.is_remote()) && self.queue_edits_reach_owner()
+    }
+
     pub(super) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
         match scope {
             QueueScope::Local => &self.player_tab,
