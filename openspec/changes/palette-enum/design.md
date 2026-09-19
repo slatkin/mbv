@@ -21,7 +21,11 @@ Roles keep their meaning-names (`TEXT_FOCUS_ACCENT`) so call sites still say wha
 All `Rgb(...)` expressions live in the match arms of this one function. Whether the frozen-test `Color` shims can be `const` depends on const-match under the repo MSRV — task 1 spikes this; fallback is non-const shims, and only if frozen tests use them in const contexts does this escalate to a rule (unfreezing) decision.
 
 **Frozen-test shims stay thin and test-only.**
-`SURFACE_PLAYBACK` etc. become `Palette::X.color()` shims under the existing `#[cfg(test)]` gates. No production path touches them; they shrink the diff to zero for frozen files.
+`SURFACE_PLAYBACK` etc. become `Palette::X.color()` shims under the existing `#[cfg(test)]` gates. No production path touches them.
+
+**Frozen files also receive a mechanical `.color()` adaptation (ruling A, 2026-09-18).**
+Empirically the frozen files do not consume only the `#[cfg(test)]` bridge names: they also consume *production* roles as `ratatui::Color` — in return position (`src/app/render/tests.rs:63-77`, a local `fn -> Color`) and in ~55 comparison/argument positions, plus ~40 more once `SurfaceColors.fill` becomes `Palette`. A name cannot be `Palette` for production and `Color` for tests in one build, so no shim bridges those. Frozen files are therefore edited, but only mechanically: `palette::X` → `palette::X.color()` at the ~60 affected sites, preserving every asserted value. Rejected alternatives: a cross-type `impl PartialEq<Color> for Palette` (lets a missing `.color()` at a paint site compile silently, and still does not fix return position) and `cfg`-split dual-typed roles (roles become `Color` in test builds, removing enforcement exactly where most call sites live). Roles stay `Palette` in every build.
+The change report must enumerate every frozen-file line changed and confirm no role symbol, literal, or asserted value was altered. Because an assertion's expected side now derives from the same role symbol as production, the value oracle moves off the tests and onto the enum: the approved hex table, the `ALL` uniqueness test, the `docs/palette.json` sync test, and row 4.2's comparison of every resolved role→hex value against base `69344aff:docs/palette.json` (the base is `origin/main`).
 
 **Raw `Color::` specials stay outside the palette.**
 Black (dim blend base), White (headings), Reset (transparency) are not palette colours — they are ratatui mechanics. Routing them through the enum would give meaning-names to non-meanings. Documented rationale in code, no change.
@@ -48,7 +52,7 @@ Current primitive names leak meaning (`LIBRARY_SIDE_BG`, `PLAYBACK_PANEL_BG`); p
 2. Name table: 29 variants, reviewed.
 3. Add `Palette` + `ALL` + uniqueness test alongside existing code (no callers yet).
 4. Migrate roles → `Palette`, surface rows/resolver → `Palette`, bridge re-exports.
-5. Mechanical call-site migration; frozen-test shims; full gate run.
+5. Mechanical call-site migration; frozen-test shims plus the value-preserving `.color()` adaptation in frozen files (ruling A); full gate run.
 6. Delete `primitives.rs`, dead comments; sync `palette.json`; archive.
 Rollback: each step before (5) is additive; (5) is one mechanical commit revertible cleanly. No visual change at any step, so no staged rollout needed.
 
