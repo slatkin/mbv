@@ -711,9 +711,8 @@ fn search_results_paint_the_canonical_selected_row_bar() {
     assert!(selected.right() <= focused_geo.list_panel.right());
 
     let (resting_buf, _resting_geo, _hits) = draw_skeleton(&mut content, false);
-    // The selected row is row 0, which is never a zebra stripe row, so the
-    // row's own line is the bar's discriminator (the zebra/backdrop fill
-    // shares the bar's RGB value by palette coincidence).
+    // The selected row is row 0; unfocused search results paint the bar
+    // nowhere on it, so the row's own line is the discriminator.
     for x in selected.left()..selected.right() {
         assert_ne!(
             resting_buf[(x, selected.y)].bg,
@@ -723,10 +722,11 @@ fn search_results_paint_the_canonical_selected_row_bar() {
     }
 }
 
-/// Result rows zebra-stripe like every other library list (spec): the second
-/// row carries the MainContentBox zebra fill the panel's Wide policy sets.
+/// Result rows paint no zebra: the browser list rests on its box fill, so
+/// the second row carries the `LibraryPanel` resting fill, not the
+/// `MainContentBox` stripe the panel's Wide policy used to set.
 #[test]
-fn search_result_rows_zebra_stripe_like_every_library_list() {
+fn search_result_rows_paint_no_zebra() {
     let mut search = InlineSearch::new();
     search.open();
     search.set_pool(SearchPool::Items(vec![
@@ -741,9 +741,11 @@ fn search_result_rows_zebra_stripe_like_every_library_list() {
         hero: None,
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
-    let zebra = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
-    // The ungrouped flow opens on the primary fill; the second row stripes.
-    assert_eq!(buf[(geo.list_area.x, geo.list_area.y + 1)].bg, zebra);
+    // The unselected rows rest on the box fill with no stripe.
+    assert_eq!(
+        buf[(geo.list_area.x, geo.list_area.y + 1)].bg,
+        palette::surface_colors(palette::Surface::LibraryPanel, false).fill
+    );
 }
 
 /// Zero rows paint the placeholder states (spec: loading while the corpus

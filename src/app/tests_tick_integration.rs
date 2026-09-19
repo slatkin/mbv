@@ -95,22 +95,23 @@ fn live_tick_unhandled_space_fires_playback_on_the_press() {
     assert!(second.deferred_fired, "a later unhandled press fires again as a first press");
 }
 
-/// Unhandled `Esc` fires the stop candidate on the press itself (the leaf's
-/// own consumption — e.g. the playback panel's `Stop` — suppresses it; see
-/// the Visual-mode records in `tests_tick_integration_home.rs`).
+/// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
+/// through (the leaf's own consumption — e.g. the playback panel's `Stop` —
+/// claims first; see the Visual-mode records in `tests_tick_integration_home.rs`),
+/// and the second press inside the window fires the stop candidate.
 #[test]
-fn live_tick_unhandled_escape_fires_stop_on_the_press() {
+fn live_tick_unhandled_escape_fires_stop_on_the_second_press() {
     let mut harness = active_queue_harness();
 
     harness.inject(key(Key::Esc));
     let first = harness.step();
-    assert_eq!(first.router, RouterOutcome::Deferred(crate::app::action::Command::Stop));
-    assert!(first.deferred_fired);
+    assert_eq!(first.router, RouterOutcome::FallThrough);
+    assert!(!first.deferred_fired);
 
     harness.inject(key(Key::Esc));
     let second = harness.step();
     assert_eq!(second.router, RouterOutcome::Deferred(crate::app::action::Command::Stop));
-    assert!(second.deferred_fired, "a later unhandled press fires again as a first press");
+    assert!(second.deferred_fired);
 }
 
 #[test]

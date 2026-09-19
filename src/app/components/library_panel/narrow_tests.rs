@@ -164,11 +164,11 @@ fn narrow_search_paints_one_search_bar_and_one_result_list() {
 }
 
 /// The non-Wide list box is the Wide browser pane's list box (design D3): the
-/// `LibraryPanel` fill pair on the box and the `MainContentBox` stripe pair on
-/// the alternating rows, in both focus states, with no body or scrollbar
-/// override of its own.
+/// `LibraryPanel` fill pair on the box, with no stripe pair of its own —
+/// the browser list paints no zebra, so every unselected row rests on the
+/// box fill in both focus states.
 #[test]
-fn narrow_list_box_uses_the_wide_browser_pane_fill_and_stripes() {
+fn narrow_list_box_uses_the_wide_browser_pane_fill_without_stripes() {
     for focused in [false, true] {
         let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("alpha"), item("beta"), item("gamma")]);
@@ -203,13 +203,13 @@ fn narrow_list_box_uses_the_wide_browser_pane_fill_and_stripes() {
             buf[(geometry.list_panel.x, geometry.list_panel.y)].bg,
             palette::surface_colors(palette::Surface::LibraryPanel, focused).fill
         );
-        // The zebra sequence opens unstriped, so the second visible row
-        // stripes with the `MainContentBox` pair; the stripe starts after the
-        // row's two-column indent — the claim's left edge plus the indent,
-        // which is the inset row flow's `x` under the shared pane painter.
-        assert_eq!(
-            buf[(geometry.list_area.x, geometry.list_area.y + 1)].bg,
-            palette::surface_colors(palette::Surface::MainContentBox, focused).fill
-        );
+        // No zebra on the browser list: the unselected rows rest on the
+        // `LibraryPanel` box fill, never the `MainContentBox` stripe pair.
+        for dy in 1..=2 {
+            assert_eq!(
+                buf[(geometry.list_area.x, geometry.list_area.y + dy)].bg,
+                palette::surface_colors(palette::Surface::LibraryPanel, focused).fill
+            );
+        }
     }
 }

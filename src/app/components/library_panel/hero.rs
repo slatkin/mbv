@@ -253,16 +253,6 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
     let movie = item.item_type == "Movie";
     let (mut meta_rows, duration_row) = emby_hero_meta_rows_plain(item);
     if movie {
-        let genres = item
-            .genres
-            .iter()
-            .filter(|genre| !genre.is_empty())
-            .cloned()
-            .collect::<Vec<_>>()
-            .join("/");
-        if !genres.is_empty() {
-            meta_rows.push(genres);
-        }
         let links = item
             .external_urls
             .iter()
@@ -281,6 +271,16 @@ pub(in crate::app) fn hero_content_emby(item: &EmbyItem) -> HeroContentData {
                     .collect::<Vec<_>>()
                     .join("|"),
             );
+        }
+        let genres = item
+            .genres
+            .iter()
+            .filter(|genre| !genre.is_empty())
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("/");
+        if !genres.is_empty() {
+            meta_rows.push(genres);
         }
         let mut credits = Vec::new();
         credits.extend(

@@ -2,17 +2,25 @@
 //! (16:9 artwork full content width above title/meta), Portrait (2:3) and
 //! Square (1:1) (title/meta left, artwork right) — behind one title/meta
 //! painter that colours meta row *n* with `HERO_META_ROLES[n % 3]` and owns
-//! truncation and wrapping. The arm comes from the artwork policy's shape,
+//! truncation and wrapping. The Landscape arm lays the title/meta entries
+//! out in a two-column grid (title top-left, entries alternating columns
+//! row by row, right column right-aligned) so short metadata uses the
+//! full content width; Portrait/Square keep the stacked rows. The arm
+//! comes from the artwork policy's shape,
 //! re-armed to the projected image's decoded aspect once it resolves
 //! (`HeroArtwork::painted_shape`), never from a destination. The artwork box is
 //! sized by the paint-free [`hero_artwork_box`], the one layout site the
 //! shell projection (task 5.10) shares with the painter.
 
 use ratatui::layout::Rect;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 use crate::app::palette;
 use crate::app::render::{paint_wide_hero_text, render_artwork_placeholder, WrappedHeroLine};
+use crate::app::ui_util::trunc_str;
 
 use super::content::{HeroContent, HeroFacts, HeroHeader};
 use super::overview_box;
@@ -107,7 +115,7 @@ pub(in crate::app) fn hero_artwork_box(
             // The artwork shrinks before the title/meta block below it is
             // starved out of the pane: the box keeps room for the wrapped
             // text rows plus the gap row between the two blocks.
-            let text_rows = wrapped_text_rows(area.width, facts);
+            let text_rows = landscape_text_rows(area.width, facts);
             let room_for_text = area
                 .height
                 .saturating_sub(text_rows)
@@ -143,17 +151,38 @@ fn box_from_height(max_h: u16, num: u16, den: u16, area: Rect) -> (u16, u16) {
     (w, h)
 }
 
-/// Rows the Landscape title/meta block needs once wrapped to the content
-/// width — the same wrap [`paint_wide_hero_text`] applies (`width - 1`),
-/// so the box's text-starvation cap matches what the painter actually
-/// paints below it.
-fn wrapped_text_rows(width: u16, facts: &HeroFacts) -> u16 {
-    let wrap_width = (width as usize).saturating_sub(1).max(1);
-    std::iter::once(&facts.title)
-        .chain(facts.meta_rows.iter())
-        .filter(|line| !line.is_empty())
-        .map(|line| textwrap::wrap(line, wrap_width).len() as u16)
-        .sum()
+/// Minimum columns each landscape-grid column keeps: the text block
+/// beside Portrait/Square art never goes narrower, so neither does a
+/// grid column. Below twice that width the Landscape arm falls back to
+/// the stacked rows.
+fn landscape_grid_columns(width: u16) -> Option<(u16, u16)> {
+    if width < 2 * HERO_MIN_TEXT_COLS {
+        return None;
+    }
+    let left = width / 2;
+    Some((left, width.saturating_sub(left)))
+}
+
+/// Rows the Landscape title/meta block needs: the two-column grid packs
+/// two non-empty entries per row (cells truncate, never wrap), or — on a
+/// text block too narrow for two columns — the same wrap
+/// [`paint_wide_hero_text`] applies (`width - 1`), so the box's
+/// text-starvation cap matches what the painter actually paints below it.
+fn landscape_text_rows(width: u16, facts: &HeroFacts) -> u16 {
+    if landscape_grid_columns(width).is_some() {
+        let entries = std::iter::once(&facts.title)
+            .chain(facts.meta_rows.iter())
+            .filter(|line| !line.is_empty())
+            .count();
+        entries.div_ceil(2) as u16
+    } else {
+        let wrap_width = (width as usize).saturating_sub(1).max(1);
+        std::iter::once(&facts.title)
+            .chain(facts.meta_rows.iter())
+            .filter(|line| !line.is_empty())
+            .map(|line| textwrap::wrap(line, wrap_width).len() as u16)
+            .sum()
+    }
 }
 
 /// Paints the Hero header and — when overview text exists — the overview
@@ -206,7 +235,13 @@ pub(in crate::app) fn paint_hero_pane_content(
             ..area
         },
     };
-    let mut next_row = paint_title_and_meta(f, text_area, &content.facts, hovered_link, link_hits);
+    // The Landscape arm packs title/meta into the two-column grid when
+    // the text block fits two columns; Portrait/Square keep stacked rows.
+    let grid = (header.arm() == super::content::HeroHeaderArm::Landscape)
+        .then(|| landscape_grid_columns(text_area.width))
+        .flatten();
+    let mut next_row =
+        paint_title_and_meta(f, text_area, &content.facts, hovered_link, link_hits, grid);
     // The header's painted bottom edge includes a right-side artwork box the
     // text block may not reach.
     if header.arm() != super::content::HeroHeaderArm::Landscape {
@@ -238,13 +273,16 @@ pub(in crate::app) fn paint_hero_pane_content(
 /// `HERO_META_ROLES[cycle % 3]` — except the duration row
 /// (`HeroFacts::duration_row`), painted the `DURATION` role and skipped by
 /// the cycle — wrapped to the text block's width (truncation and wrapping
-/// owned here, design D5). Returns the first unpainted row.
+/// owned here, design D5). The Landscape arm instead packs the entries
+/// into [`paint_title_and_meta_grid`]'s two columns when `grid` carries
+/// [`landscape_grid_columns`]' widths. Returns the first unpainted row.
 fn paint_title_and_meta(
     f: &mut Frame,
     area: Rect,
     facts: &HeroFacts,
     hovered_link: Option<usize>,
     link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
+    grid: Option<(u16, u16)>,
 ) -> u16 {
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
@@ -265,9 +303,68 @@ fn paint_title_and_meta(
             style: ratatui::style::Style::default().fg(fg),
         });
     }
+    if let Some((left_w, _)) = grid {
+        let next_row = paint_title_and_meta_grid(f, area, left_w, &lines);
+        overview_box::overlay_links_grid(f, area, left_w, facts, hovered_link, link_hits);
+        return next_row;
+    }
     let next_row = paint_wide_hero_text(f, area, &lines);
     overview_box::overlay_links(f, area, facts, hovered_link, link_hits);
     next_row
+}
+
+/// Landscape two-column grid over already-styled title/meta `entries`:
+/// entry 0 (the title) top-left, then entries alternate columns row by
+/// row; the left column is left-aligned, the right column right-aligned.
+/// Cells truncate to their column width and never wrap, so a grid row
+/// holds exactly two entries and empty entries leave no cell. Returns
+/// the first unpainted row.
+fn paint_title_and_meta_grid(
+    f: &mut Frame,
+    area: Rect,
+    left_w: u16,
+    entries: &[WrappedHeroLine<'_>],
+) -> u16 {
+    if area.height == 0 {
+        return area.y;
+    }
+    let right_w = area.width.saturating_sub(left_w);
+    let live: Vec<&WrappedHeroLine<'_>> = entries
+        .iter()
+        .filter(|entry| !entry.text.is_empty())
+        .collect();
+    let mut row = area.y;
+    for pair in live.chunks(2) {
+        if row >= area.bottom() {
+            break;
+        }
+        let left_text = trunc_str(pair[0].text, left_w as usize);
+        let mut spans = vec![
+            Span::styled(left_text.clone(), pair[0].style),
+            Span::raw(" ".repeat((left_w as usize).saturating_sub(left_text.width()))),
+        ];
+        match pair.get(1) {
+            Some(right) => {
+                let right_text = trunc_str(right.text, right_w as usize);
+                spans.push(Span::raw(
+                    " ".repeat((right_w as usize).saturating_sub(right_text.width())),
+                ));
+                spans.push(Span::styled(right_text, right.style));
+            }
+            None => spans.push(Span::raw(" ".repeat(right_w as usize))),
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect {
+                x: area.x,
+                y: row,
+                width: area.width,
+                height: 1,
+            },
+        );
+        row += 1;
+    }
+    row
 }
 
 #[cfg(test)]
@@ -553,7 +650,7 @@ mod hero_header_tests {
     }
 
     #[test]
-    fn meta_rows_cycle_the_three_roles_one_two_three_one() {
+    fn meta_rows_cycle_the_three_roles_across_the_grid() {
         let pane_facts = HeroFacts {
             title: "T".into(),
             meta_rows: vec!["a".into(), "b".into(), "c".into(), "d".into()],
@@ -574,15 +671,35 @@ mod hero_header_tests {
         };
         let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
         let buf = draw_pane(AREA.width, AREA.height, &pane);
-        // Title first, then one row per meta row; row n uses role n % 3.
-        for (index, expected) in palette::HERO_META_ROLES.iter().cycle().take(4).enumerate() {
-            let y = artwork.bottom() + 2 + index as u16;
+        // Grid entries [T, a, b, c, d]: title top-left, then alternating
+        // columns — left cells keep the indent column, right cells end at
+        // the area's right edge. Colours still cycle per meta row.
+        let y0 = artwork.bottom() + 1;
+        assert_eq!(buf[(AREA.x, y0)].symbol(), "T");
+        assert_eq!(
+            buf[(AREA.x, y0)].style().fg,
+            Some(palette::TEXT_HERO_TITLE),
+            "title colour"
+        );
+        let cells = [
+            (AREA.right() - 1, y0, "a", palette::HERO_META_ROLES[0]),
+            (AREA.x, y0 + 1, "b", palette::HERO_META_ROLES[1]),
+            (AREA.right() - 1, y0 + 1, "c", palette::HERO_META_ROLES[2]),
+            (AREA.x, y0 + 2, "d", palette::HERO_META_ROLES[0]),
+        ];
+        for (x, y, symbol, expected) in cells {
+            assert_eq!(buf[(x, y)].symbol(), symbol);
             assert_eq!(
-                buf[(AREA.x, y)].style().fg,
-                Some(*expected),
-                "meta row {index} colour"
+                buf[(x, y)].style().fg,
+                Some(expected),
+                "meta {symbol} colour"
             );
         }
+        assert_eq!(
+            buf[(AREA.x + AREA.width / 2, y0)].symbol(),
+            " ",
+            "right cell opens with alignment padding"
+        );
     }
 
     /// The duration row paints the `DURATION` role (the sage) and the cycle
@@ -600,21 +717,47 @@ mod hero_header_tests {
         };
         let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
         let buf = draw_pane(AREA.width, AREA.height, &pane);
-        let row_y = |index: u16| artwork.bottom() + 2 + index;
+        // Grid entries [Dune, a, b, c]: the duration row keeps its grid
+        // cell and the cycle still skips it.
+        let y0 = artwork.bottom() + 1;
         assert_eq!(
-            buf[(AREA.x, row_y(0))].style().fg,
+            buf[(AREA.right() - 1, y0)].style().fg,
             Some(palette::HERO_META_ROLES[0]),
             "row before the duration keeps its cycle colour"
         );
         assert_eq!(
-            buf[(AREA.x, row_y(1))].style().fg,
+            buf[(AREA.x, y0 + 1)].style().fg,
             Some(palette::DURATION),
             "duration row paints the DURATION role"
         );
+        assert_eq!(buf[(AREA.x, y0 + 1)].symbol(), "b");
         assert_eq!(
-            buf[(AREA.x, row_y(2))].style().fg,
+            buf[(AREA.right() - 1, y0 + 1)].style().fg,
             Some(palette::HERO_META_ROLES[1]),
             "the cycle skips the duration row"
+        );
+    }
+
+    /// A text block too narrow for two columns keeps the stacked rows:
+    /// entries paint top to bottom in the left column, colours unchanged.
+    #[test]
+    fn narrow_landscape_falls_back_to_stacked_rows() {
+        let pane = content(ArtworkShape::Landscape);
+        let narrow = Rect::new(0, 0, 24, 30);
+        assert!(
+            landscape_grid_columns(narrow.width).is_none(),
+            "24 columns fit no two text columns"
+        );
+        let artwork =
+            hero_artwork_box(narrow, &pane.facts, pane.workspace.is_some(), narrow.height);
+        let buf = draw_pane(narrow.width, narrow.height, &pane);
+        let y0 = artwork.bottom() + 1;
+        assert_eq!(buf[(narrow.x, y0)].symbol(), "D");
+        assert_eq!(buf[(narrow.x, y0 + 1)].symbol(), "2");
+        assert_eq!(
+            buf[(narrow.x, y0 + 1)].style().fg,
+            Some(palette::HERO_META_ROLES[0]),
+            "stacked fallback keeps the cycle colour"
         );
     }
 

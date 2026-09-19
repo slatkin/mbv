@@ -55,7 +55,7 @@ pub(in crate::app) fn media_list_row<Target>(
             vec![
                 Span::raw("  "),
                 Span::styled(
-                    text.clone(),
+                    text.to_uppercase(),
                     Style::default()
                         .fg(palette::TEXT_METADATA)
                         .add_modifier(Modifier::BOLD),
@@ -272,6 +272,14 @@ pub(in crate::app) fn media_list_row<Target>(
             }
             if !paint_selected {
                 spans = stripe_spans(spans, alternate_bg, content_w);
+            }
+            // The focused Workspace bar is Iris: override every span to the
+            // near-black on-accent text so the ordinary light roles stay
+            // legible on it. Dark bars keep their roles.
+            if paint_selected && selected_bg == palette::ACCENT_ACTIVE {
+                for span in spans.iter_mut() {
+                    span.style.fg = Some(palette::TEXT_ON_ACCENT);
+                }
             }
             // Gutter-accent selection keeps the row background unchanged.
             ListItem::new(Line::from(spans)).style(if paint_selected {

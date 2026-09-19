@@ -121,12 +121,11 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
 }
 
 /// migrate-home-feeds 4.6 regression, rewritten to the panel output (task
-/// 5.11): after the Wide panel skeleton paint the zebra alternates from the
-/// primary fill, so the selected first row paints the bar and the row below
-/// it carries the MainContentBox stripe. Unfocused rows keep the unfocused
-/// stripe value and paint no bar.
+/// 5.11): the browser list paints no zebra, so the selected first row
+/// paints the bar and the row below it rests on the `LibraryPanel` box
+/// fill. Unfocused rows keep the pane fill and paint no bar.
 #[test]
-fn wide_home_stripes_alternate_rows_with_the_selected_bar() {
+fn wide_home_paints_no_zebra_with_the_selected_bar() {
     let bgs = |focused: bool| {
         let mut app = home_app();
         if !focused {
@@ -150,29 +149,30 @@ fn wide_home_stripes_alternate_rows_with_the_selected_bar() {
         )
     };
 
-    // D1: the Browser-pane Wide arm stripes with the MainContentBox pair, on
-    // the sequence's second row; the selected first row paints the bar.
-    let (selected, striped) = bgs(true);
+    // The browser list paints no zebra: the row below the selected one
+    // rests on the `LibraryPanel` box fill; the selected first row paints
+    // the bar.
+    let (selected, plain) = bgs(true);
     assert_eq!(
         selected,
         Some(palette::SELECTED_ROW_BG),
         "the selected first row paints the bar"
     );
     assert_eq!(
-        striped,
-        Some(palette::surface_colors(palette::Surface::MainContentBox, true).fill),
-        "the row below the selected one carries the MainContentBox stripe"
+        plain,
+        Some(palette::surface_colors(palette::Surface::LibraryPanel, true).fill),
+        "the row below the selected one rests on the pane fill"
     );
 
-    let (selected, striped) = bgs(false);
+    let (selected, plain) = bgs(false);
     assert_eq!(
         selected,
         Some(palette::surface_colors(palette::Surface::LibraryPanel, false).fill),
         "an unfocused list paints no bar and keeps the pane fill"
     );
     assert_eq!(
-        striped,
-        Some(palette::surface_colors(palette::Surface::MainContentBox, false).fill),
-        "the unfocused stripe keeps the MainContentBox fill"
+        plain,
+        Some(palette::surface_colors(palette::Surface::LibraryPanel, false).fill),
+        "the unfocused row below keeps the pane fill"
     );
 }

@@ -111,21 +111,33 @@ fn consumed_space_cancels_the_playback_candidate_and_leaves_no_state() {
     );
 }
 
+/// The double-Esc stop (see `Model::router_outcome`): the first Esc falls
+/// through to its claimants and dispatches nothing; a second Esc inside
+/// [`DOUBLE_ESC_STOP_WINDOW`] resolves the stop candidate. A press on any
+/// other key disarms, so Esc-then-Space stays a play/pause toggle.
 #[test]
-fn unhandled_escape_fires_the_stop_candidate_once() {
+fn first_escape_falls_through_and_second_dispatches_the_stop_candidate() {
     let mut model = Model::new(make_app_stub());
     model.app.player.status.lock().unwrap().active = true;
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 
+    // First press: falls through, no candidate, nothing to dispatch.
+    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
+    // Second press inside the window: the stop candidate, which an unhandled
+    // press dispatches.
     assert_eq!(
         model.router_outcome(&messages),
         RouterOutcome::Deferred(Command::Stop)
     );
-    // No candidate timing state exists: an unhandled press fires on that
-    // press, and a later unhandled press fires again as a fresh press.
     assert!(model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false));
-    assert!(model.apply_deferred_candidate(&RouterOutcome::Deferred(Command::Stop), false));
+
+    // A non-Esc press between the two disarms: Space stays play/pause.
+    let space = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(
+        KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE).into(),
+    ))];
+    model.router_outcome(&space);
+    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
 }
 
 #[test]
@@ -135,6 +147,8 @@ fn consumed_escape_cancels_the_stop_candidate_and_leaves_no_state() {
     let key = KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE);
     let messages = vec![Msg::TerminalEvent(TerminalObserverEvent::Key(key.into()))];
 
+    // The first Esc arms the double-Esc window without a candidate.
+    assert_eq!(model.router_outcome(&messages), RouterOutcome::FallThrough);
     assert_eq!(
         model.router_outcome(&messages),
         RouterOutcome::Deferred(Command::Stop)

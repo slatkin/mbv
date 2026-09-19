@@ -353,7 +353,7 @@ fn emby_producer_fills_plain_meta_rows_and_overview() {
 }
 
 #[test]
-fn movie_meta_rows_append_genres_and_links_after_runtime() {
+fn movie_meta_rows_append_links_then_genres_after_runtime() {
     let item = emby_item(json!({
         "Id": "m1", "Name": "Dune", "Type": "Movie",
         "PremiereDate": "2021-10-22", "RunTimeTicks": 7_200_000_000i64,
@@ -367,7 +367,7 @@ fn movie_meta_rows_append_genres_and_links_after_runtime() {
     let data = hero_content_emby(&item);
     assert_eq!(
         data.facts.meta_rows,
-        vec!["22 Oct 2021", "12:00", "Action/Drama", "IMDb"]
+        vec!["22 Oct 2021", "12:00", "IMDb", "Action/Drama"]
     );
     assert_eq!(
         data.facts.links,

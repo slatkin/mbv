@@ -36,6 +36,10 @@ const TERMINAL_LISTENER_INTERVAL: Duration = Duration::from_millis(8);
 /// `PollStrategy::Once`, matching the legacy one-event-per-iteration loop.
 const TERMINAL_LISTENER_MAX_POLL: usize = 60;
 
+/// A second Esc inside this window stops playback; a single Esc stays free
+/// for whatever claims it (sidebar, search, overlay dismissal).
+const DOUBLE_ESC_STOP_WINDOW: Duration = Duration::from_millis(600);
+
 /// One-shot inline-track-focus transition the shell hands the Music workspace
 /// at the next content push. `Enter` is bound to the album it was raised for,
 /// so a re-anchor that outruns that album's track fetch can retry on the
@@ -143,6 +147,10 @@ pub struct Model {
             crate::app::types_context_menu::ContextMenuTargets,
         >,
     >,
+    /// The last Esc press, for the double-Esc playback stop. Shell-owned
+    /// timing state: a single Esc falls through to its claimants, and only
+    /// a second Esc within [`DOUBLE_ESC_STOP_WINDOW`] dispatches the stop.
+    pub(super) last_esc: Option<std::time::Instant>,
     /// Compiled keybind configuration, parsed once from the config file at
     /// startup (change `add-configurable-keybinds`, design D3): the optional
     /// prefix chord plus per-section router overrides and prefix-namespace
@@ -372,6 +380,17 @@ impl Model {
             return RouterOutcome::FallThrough;
         };
         let key = super::input_resolver::tuirealm_key_to_crossterm(tui_key);
+        // Double-Esc stop: a single Esc must stay free for whatever claims
+        // it (sidebar, search, overlay dismissal), so the stop dispatches
+        // only when this Esc follows another Esc inside the window. The
+        // tracker updates before resolution; the outcome gate below is the
+        // only consumer.
+        let now = std::time::Instant::now();
+        let double_esc = matches!(
+            self.last_esc,
+            Some(last) if now.duration_since(last) <= DOUBLE_ESC_STOP_WINDOW
+        );
+        self.last_esc = (key.code == crossterm::event::KeyCode::Esc).then_some(now);
         // `player.status` is a plain (non-reentrant) mutex and `RouterSnapshot`
         // initializers below call `effective_playback_state()`, which locks it
         // again. A temporary created anywhere inside the struct literal lives
@@ -423,6 +442,14 @@ impl Model {
             self.application.focus(),
             &self.keybinds,
         );
+        // The first Esc resolves to the stop candidate but falls through:
+        // the leaf (and the deferred-candidate arbitration) handle it as
+        // today, and nothing dispatches. A non-Esc stop chord (a rebound
+        // binding) fires immediately, unchanged.
+        let outcome = match outcome {
+            RouterOutcome::Deferred(Command::Stop) if !double_esc => RouterOutcome::FallThrough,
+            other => other,
+        };
         // Arm/disarm transitions come from the router's outcome (design D6,
         // task 6.1): the arming layer arms, an armed dispatch (mapped or
         // swallowed) disarms. The prefix chord re-arms through `PrefixArm`.
@@ -551,6 +578,7 @@ impl Model {
             visual_selection: None,
             context_menu_origin: None,
             context_action_snapshot: None,
+            last_esc: None,
             keybinds,
             prefix_armed_focus: None,
         };

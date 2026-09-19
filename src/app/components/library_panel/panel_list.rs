@@ -37,17 +37,15 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
     fn set_paint_policy(&mut self, policy: PanelListPaintPolicy) {
         match policy {
             PanelListPaintPolicy::Wide { focused } => {
-                self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::new(focused)
-                        .with_zebra(zebra_stripe(Surface::MainContentBox)),
-                );
+                // The browser list paints no zebra: queue and Workspace
+                // lists keep their stripes; the library browser rests on
+                // its surface fill.
+                self.wide_mut()
+                    .set_paint_policy(WideMediaListPaintPolicy::new(focused));
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
-                // The Workspace's unified look in both geometries: stripes
-                // rest at the table's fixed resting content Storm
-                // (`SidebarBody`'s row, fixed in both focus states) against
-                // the box's resting Slate fill, and the selected row takes
-                // the sheet's own Ink chrome.
+                // Fixed Storm stripes in both focus states; the focused
+                // selection paints the Iris bar.
                 self.wide_mut().set_paint_policy(
                     WideMediaListPaintPolicy::for_library_workspace(focused)
                         .with_zebra(zebra_stripe(Surface::SidebarBody)),

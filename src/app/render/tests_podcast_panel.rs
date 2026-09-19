@@ -167,12 +167,12 @@ fn podcast_wide_paints_pill_row_grouped_list_and_workspace_free_hero() {
     assert!(area_contains(
         terminal.backend().buffer(),
         wide.list_area,
-        "New"
+        "NEW"
     ));
     assert!(area_contains(
         terminal.backend().buffer(),
         wide.list_area,
-        "Unknown date"
+        "UNKNOWN DATE"
     ));
     assert_eq!(
         count_in_buffer(&terminal, "Dated Episode"),
@@ -234,7 +234,7 @@ fn podcast_narrow_paints_ordinary_grouped_rows_and_no_hero() {
     assert!(area_contains(
         terminal.backend().buffer(),
         narrow.list_area,
-        "New"
+        "NEW"
     ));
     assert!(area_contains(
         terminal.backend().buffer(),

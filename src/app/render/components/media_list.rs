@@ -390,6 +390,7 @@ mod wide_row_regression_tests {
         let buf = terminal.backend().buffer();
 
         assert_eq!(buf[(2, 0)].symbol(), "A", "heading label at the indent");
+        assert_eq!(buf[(3, 0)].symbol(), "R", "heading label paints all caps");
         assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA);
         assert!(buf[(2, 0)].modifier.contains(Modifier::BOLD));
 

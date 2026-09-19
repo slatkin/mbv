@@ -286,6 +286,56 @@ fn sanitize_label(label: &str) -> Option<&str> {
     (!contains_control(label)).then_some(label)
 }
 
+/// Registers hover underline and hit regions for the links row painted in
+/// `cell` (a full-width stacked row or one landscape-grid cell). `bottom`
+/// clips rows outside the text block. A label run wider than the cell
+/// registers nothing: the painter truncates it, so full-label hits would
+/// drift from the pixels.
+fn paint_link_hit_row(
+    f: &mut Frame,
+    cell: Rect,
+    bottom: u16,
+    facts: &HeroFacts,
+    hovered_link: Option<usize>,
+    link_hits: &mut HitRegions<usize>,
+) {
+    let mut offset = 0usize;
+    for (link_index, link) in facts.links.iter().enumerate() {
+        let label_width = UnicodeWidthStr::width(link.name.as_str());
+        if label_width > 0
+            && cell.y < bottom
+            && offset + label_width <= cell.width as usize
+            && sanitize_url(&link.url).is_some()
+            && sanitize_label(&link.name).is_some()
+        {
+            if hovered_link == Some(link_index) {
+                for x in offset..offset + label_width {
+                    if let Some(cell) = f.buffer_mut().cell_mut((cell.x + x as u16, cell.y)) {
+                        cell.set_style(
+                            cell.style()
+                                .fg(palette::TEXT_METADATA)
+                                .add_modifier(ratatui::style::Modifier::UNDERLINED),
+                        );
+                    }
+                }
+            }
+            link_hits.push(
+                Rect::new(cell.x + offset as u16, cell.y, label_width as u16, 1),
+                link_index,
+            );
+        }
+        offset += label_width + 1;
+    }
+}
+
+fn joined_links(facts: &HeroFacts) -> String {
+    facts
+        .links
+        .iter()
+        .map(|l| l.name.as_str())
+        .collect::<Vec<_>>()
+        .join("|")
+}
 pub(in crate::app) fn overlay_links(
     f: &mut Frame,
     area: Rect,
@@ -294,12 +344,7 @@ pub(in crate::app) fn overlay_links(
     link_hits: &mut HitRegions<usize>,
 ) {
     link_hits.clear();
-    let joined = facts
-        .links
-        .iter()
-        .map(|l| l.name.as_str())
-        .collect::<Vec<_>>()
-        .join("|");
+    let joined = joined_links(facts);
     if joined.is_empty() {
         return;
     }
@@ -317,37 +362,76 @@ pub(in crate::app) fn overlay_links(
             if lines.len() != 1 {
                 return;
             }
-            let mut offset = 0usize;
-            for (link_index, link) in facts.links.iter().enumerate() {
-                let label_width = UnicodeWidthStr::width(link.name.as_str());
-                if label_width > 0
-                    && y < area.bottom()
-                    && offset + label_width <= area.width as usize
-                    && sanitize_url(&link.url).is_some()
-                    && sanitize_label(&link.name).is_some()
-                {
-                    if hovered_link == Some(link_index) {
-                        for x in offset..offset + label_width {
-                            if let Some(cell) = f.buffer_mut().cell_mut((area.x + x as u16, y)) {
-                                cell.set_style(
-                                    cell.style()
-                                        .fg(palette::TEXT_METADATA)
-                                        .add_modifier(ratatui::style::Modifier::UNDERLINED),
-                                );
-                            }
-                        }
-                    }
-                    link_hits.push(
-                        Rect::new(area.x + offset as u16, y, label_width as u16, 1),
-                        link_index,
-                    );
-                }
-                offset += label_width + 1;
-            }
+            paint_link_hit_row(
+                f,
+                Rect::new(area.x, y, area.width, 1),
+                area.bottom(),
+                facts,
+                hovered_link,
+                link_hits,
+            );
             return;
         }
         y = y.saturating_add(lines.len() as u16);
     }
+}
+
+/// Link hits for the landscape two-column grid (`hero_header.rs`): the
+/// links row keeps its entry position among the non-empty title/meta
+/// entries, so entry `pos` paints at grid row `pos / 2`, left cell for
+/// even `pos` and right-aligned right cell for odd. `left_w` is the
+/// grid's left column width; the right column takes the rest of `area`.
+/// A links row wider than its cell registers nothing (the painter
+/// truncates it), mirroring the stacked walk's bail on a wrapped row.
+pub(in crate::app) fn overlay_links_grid(
+    f: &mut Frame,
+    area: Rect,
+    left_w: u16,
+    facts: &HeroFacts,
+    hovered_link: Option<usize>,
+    link_hits: &mut HitRegions<usize>,
+) {
+    link_hits.clear();
+    let joined = joined_links(facts);
+    if joined.is_empty() {
+        return;
+    }
+    let Some(index) = facts.meta_rows.iter().position(|row| row == &joined) else {
+        return;
+    };
+    let pos = std::iter::once(&facts.title)
+        .chain(facts.meta_rows.iter().take(index + 1))
+        .filter(|line| !line.is_empty())
+        .count()
+        .saturating_sub(1);
+    let y = area.y.saturating_add((pos / 2) as u16);
+    let cell = if pos % 2 == 0 {
+        Rect::new(area.x, y, left_w, 1)
+    } else {
+        Rect::new(
+            area.x.saturating_add(left_w),
+            y,
+            area.width.saturating_sub(left_w),
+            1,
+        )
+    };
+    if joined.width() > cell.width as usize {
+        return;
+    }
+    // The right column is right-aligned: the label run starts after the
+    // cell padding, so hits open at the painted text, not the cell edge.
+    let pad = if pos % 2 == 0 {
+        0
+    } else {
+        cell.width.saturating_sub(joined.width() as u16)
+    };
+    let cell = Rect::new(
+        cell.x.saturating_add(pad),
+        cell.y,
+        cell.width.saturating_sub(pad),
+        1,
+    );
+    paint_link_hit_row(f, cell, area.bottom(), facts, hovered_link, link_hits);
 }
 
 #[cfg(test)]

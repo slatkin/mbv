@@ -356,6 +356,57 @@ fn hovered_link_uses_foam_underline() {
         .contains("\x1b[4;"));
 }
 
+/// Grid links register at the painted label run: entries
+/// [Title, 2021, 2h, IMDb] put the links row third-from-title, so it
+/// lands in the right column right-aligned — hits open at the text,
+/// not the cell edge.
+#[test]
+fn grid_links_register_at_the_right_aligned_label() {
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(60, 4)).unwrap();
+    let facts = HeroFacts {
+        title: "Title".into(),
+        meta_rows: vec!["2021".into(), "2h".into(), "IMDb".into()],
+        duration_row: None,
+        links: vec![HeroLink {
+            name: "IMDb".into(),
+            url: "https://imdb.test".into(),
+        }],
+        artwork: HeroArtwork {
+            shape: super::super::content::ArtworkShape::Landscape,
+            source: None,
+            decoration: None,
+            image: super::super::content::HeroImageState::None,
+        },
+    };
+    let mut link_hits = HitRegions::new();
+    terminal
+        .draw(|f| {
+            overlay_links_grid(
+                f,
+                Rect::new(0, 0, 60, 4),
+                30,
+                &facts,
+                Some(0),
+                &mut link_hits,
+            );
+        })
+        .unwrap();
+    assert_eq!(link_hits.regions(), &[(Rect::new(56, 1, 4, 1), 0)]);
+    let buffer = terminal.backend().buffer();
+    assert!(buffer[(56, 1)]
+        .style()
+        .add_modifier
+        .contains(ratatui::style::Modifier::UNDERLINED));
+    assert_eq!(
+        link_hits.resolve(ratatui::layout::Position { x: 57, y: 1 }),
+        Some(&0)
+    );
+    assert_eq!(
+        link_hits.resolve(ratatui::layout::Position { x: 55, y: 1 }),
+        None
+    );
+}
+
 #[test]
 fn link_outside_box_is_not_overlaid() {
     let mut terminal = ratatui::Terminal::new(ratatui::backend::TestBackend::new(20, 1)).unwrap();
