@@ -93,6 +93,15 @@ daemon queue to defer to.
 
 ### Drop the "saved positions" override for the daemon-adoption path
 
+> **REVISED 2026-09-19 after the 4.2 live test (see the follow-up decision
+> below).** The original decision below was accepted on the assumption that
+> Emby returns "slightly stale-but-real" data during the Stopped-report race.
+> The live test falsified that: the fetch succeeded and returned zero UserData
+> for adopted items, and the daemon-side merge verbatim-overwrote the good
+> adopted ticks, making the refresh strictly worse than no refresh. The
+> override's *semantics* (max of locally-saved and fetched) are restored in
+> section 5, without threading the map through the wire.
+
 `QueueState.positions` exists to override Emby's UserData with a locally-
 saved position when Emby's write of a just-sent `Stopped` report may not
 have landed yet (a few-seconds race, documented at
@@ -139,7 +148,42 @@ rather than leaving it undiscovered next to the sites it already covers.
   case, not a regression.
 - **[Trade-off]** Dropping the positions-override protection for the
   daemon-adoption path (see Decisions) accepts a narrow, self-correcting
-  staleness window in exchange for no wire-protocol change.
+  staleness window in exchange for no wire-protocol change. **Superseded
+  2026-09-19**: the live test showed the window is not self-correcting and
+  not narrow — a successful fetch returning zero/stale UserData permanently
+  zeroes adopted positions for the session. Reverted by the monotonic-max
+  decision below.
+
+### Follow-up decision (2026-09-19): monotonic max overlay, no wire change
+
+The live 4.2 test failed with "no change in behaviour": cold adopt installed
+items carrying real ticks, then the enrichment fetch succeeded with zero/stale
+server UserData and `merge_fetched_slot`'s non-active arm verbatim-overwrote
+the good ticks; every later broadcast distributed the zeros. Three corrections,
+all without touching the ctrl wire shape:
+
+1. **Monotonic enrichment merge (restores the override's semantics).** The
+   non-active merge arm never lowers a slot's stored `playback_position_ticks`
+   during adoption-time enrichment: effective position is
+   `max(fetched, stored)`. This is exactly what the removed client-side
+   `spawn_enrich_queue_state` path did (its saved-positions overlay applied
+   before merging). A genuinely newer server position still wins whenever it
+   exceeds the stored value; the only loss case — Emby lagging a just-sent
+   Stopped report — now keeps the adopted value, and playback still
+   self-corrects via the play-driven path. The `QueueState.positions` map
+   itself stays out of the wire: the daemon's adopted items already carry the
+   saved ticks inside `slot.item`, so protecting them at merge time is
+   equivalent to the old overlay without a protocol change.
+2. **Played no longer suppresses resume percentage (user ruling).**
+   `MediaSemanticState::from_progress`'s `played`-trumps-position rule was
+   unintended migration fallout: it hid real progress on every played item
+   across queue, library, home, tv, and music rows. New derivation: a
+   positive position always yields the resume percentage; the played style
+   applies only to played items with no position.
+3. **`get_continue_watching` requests UserData.** Its sibling queries include
+   `EnableUserData=true`; if the Resume fetch does not, Home rows parse
+   without any UserData (position and played both lost). Align it with the
+   siblings and cover with a test asserting the query parameter.
 
 ## Migration Plan
 

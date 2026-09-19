@@ -34,3 +34,10 @@ refreshed queue to attached clients once applied.
   Feed entries
 - **THEN** the refresh updates or prunes only the slots belonging to the
   Service it queried, and leaves every other slot's progress untouched
+
+#### Scenario: Refresh does not regress adopted positions
+
+- **WHEN** the asynchronous adoption-time refresh returns UserData for an
+  adopted slot whose stored position is greater than the fetched one
+- **THEN** the slot keeps its greater stored position, and a fetched position
+  greater than the stored one still updates the slot
