@@ -212,6 +212,9 @@ pub fn parse_item(raw: &Value) -> EmbyItem {
         name: raw["Name"].as_str().unwrap_or("").to_string(),
         item_type,
         is_folder,
+        child_count: raw["ChildCount"]
+            .as_u64()
+            .and_then(|count| u32::try_from(count).ok()),
         media_type: raw["MediaType"].as_str().unwrap_or("").to_string(),
         collection_type: raw["CollectionType"].as_str().unwrap_or("").to_string(),
         runtime_ticks: raw["RunTimeTicks"].as_i64().unwrap_or(0),

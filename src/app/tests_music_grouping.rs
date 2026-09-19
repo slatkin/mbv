@@ -1,4 +1,5 @@
 use super::app_struct::LevelFillState;
+use super::library_browse_actions::retain_grouped_music_items;
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist};
 use super::tests::{make_app_stub, make_item};
 use super::types_events::LibEvent;
@@ -7,9 +8,11 @@ use crate::app::types_browse::BrowseResting;
 use mbv_core::api::EmbyItem;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use rstest::rstest;
 
 fn make_music_album_level(albums: Vec<EmbyItem>) -> BrowseLevel {
     BrowseLevel {
+        fetched_rows: 0,
         parent_id: "group-0".into(),
         title: "Alpha".into(),
         items: albums,
@@ -31,6 +34,7 @@ fn make_group_level() -> BrowseLevel {
     group.id = "group-0".into();
     group.is_folder = true;
     BrowseLevel {
+        fetched_rows: 0,
         parent_id: "lib-music".into(),
         title: "Music".into(),
         items: vec![group],
@@ -45,6 +49,30 @@ fn make_group_level() -> BrowseLevel {
         letter_filter: None,
         music_grouping: None,
     }
+}
+
+#[rstest]
+#[case::empty_folder((true, Some(0u32), false))]
+#[case::unknown_count((true, None, true))]
+#[case::non_folder((false, Some(0u32), true))]
+fn grouped_music_filter_cases(#[case] fixture: (bool, Option<u32>, bool)) {
+    let (is_folder, child_count, kept) = fixture;
+    let mut item = make_item("candidate", "Folder");
+    item.is_folder = is_folder;
+    item.child_count = child_count;
+    let mut items = vec![item];
+    retain_grouped_music_items(&mut items, true);
+    assert_eq!(items.is_empty(), !kept);
+}
+
+#[test]
+fn non_grouped_music_filter_keeps_empty_folder() {
+    let mut item = make_item("candidate", "Folder");
+    item.is_folder = true;
+    item.child_count = Some(0);
+    let mut items = vec![item];
+    retain_grouped_music_items(&mut items, false);
+    assert_eq!(items.len(), 1);
 }
 
 fn make_music_library_tab() -> LibraryTab {

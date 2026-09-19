@@ -94,10 +94,12 @@ impl App {
         parent_id: String,
         items: Vec<EmbyItem>,
         total_count: usize,
+        fetched_rows: usize,
     ) {
         let mut items = Some(items);
         self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
             last.items.extend(items.take().unwrap());
+            last.fetched_rows += fetched_rows;
             last.total_count = total_count;
             last.loading = false;
         });
@@ -129,6 +131,7 @@ impl App {
         if !is_feed_video_refresh {
             let mut items = Some(items);
             self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
+                last.fetched_rows = items.as_ref().map_or(0, Vec::len);
                 last.items = items.take().unwrap();
                 last.total_count = total_count;
                 last.loading = false;
@@ -447,7 +450,10 @@ impl App {
                 parent_id,
                 items,
                 total_count,
-            } => self.handle_lib_page_appended(lib_idx, parent_id, items, total_count),
+                fetched_rows,
+            } => {
+                self.handle_lib_page_appended(lib_idx, parent_id, items, total_count, fetched_rows)
+            }
             LibEvent::Refreshed {
                 lib_idx,
                 parent_id,

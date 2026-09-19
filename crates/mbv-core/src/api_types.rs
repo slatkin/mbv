@@ -248,6 +248,8 @@ pub struct EmbyItem {
     pub name: String,
     pub item_type: String,
     pub is_folder: bool,
+    #[serde(default)]
+    pub child_count: Option<u32>,
     pub media_type: String,
     pub collection_type: String,
     pub runtime_ticks: i64,
@@ -369,6 +371,7 @@ impl EmbyItem {
             name,
             item_type: "CollectionFolder".to_string(),
             is_folder: true,
+            child_count: None,
             collection_type,
             media_type: String::new(),
             runtime_ticks: 0,

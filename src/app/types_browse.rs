@@ -84,6 +84,8 @@ pub(super) struct BrowseLevel {
     pub(super) parent_id: String,
     pub(super) title: String,
     pub(super) items: Vec<EmbyItem>,
+    /// Number of server rows consumed, including rows omitted from `items`.
+    pub(super) fetched_rows: usize,
     pub(super) total_count: usize,
     pub(super) resting: BrowseResting,
     pub(super) item_types: Option<String>,
@@ -122,6 +124,7 @@ impl BrowseLevel {
         Self {
             parent_id: saved.parent_id.clone(),
             title: saved.title.clone(),
+            fetched_rows: saved.fetched_rows.unwrap_or(items.len()),
             items,
             total_count,
             resting: BrowseResting::new(cursor, scroll),
@@ -158,6 +161,7 @@ impl BrowseLevel {
             parent_id: self.parent_id.clone(),
             title: self.title.clone(),
             focused_item_id: self.items.get(resting.cursor()).map(|item| item.id.clone()),
+            fetched_rows: Some(self.fetched_rows),
             cursor_index: resting.cursor(),
             item_types: self.item_types.clone(),
             unplayed_only: self.unplayed_only,

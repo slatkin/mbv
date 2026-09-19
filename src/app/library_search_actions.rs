@@ -145,6 +145,7 @@ impl App {
                 nav_stack.push(BrowseLevel {
                     parent_id,
                     title,
+                    fetched_rows: items.len(),
                     items,
                     total_count,
                     resting: BrowseResting::new(cursor, 0),
@@ -238,7 +239,7 @@ impl App {
         if lvl.loading {
             return;
         }
-        if lvl.is_fully_loaded() {
+        if lvl.is_fully_loaded() || lvl.fetched_rows >= lvl.total_count {
             return;
         }
         // The root folder listing of a feed-home-video library isn't scrolled by
@@ -253,7 +254,7 @@ impl App {
         if !is_feed_home_video_root && cursor + PREFETCH_AHEAD < lvl.items.len() {
             return;
         }
-        let start_index = lvl.items.len();
+        let start_index = lvl.fetched_rows;
         let parent_id = lvl.parent_id.clone();
         let item_types = lvl.item_types.clone();
         let unplayed_only = lvl.unplayed_only;

@@ -210,6 +210,7 @@ fn selecting_existing_feed_slot_preserves_mixed_queue() {
         name: "Emby Item".into(),
         item_type: "Episode".into(),
         is_folder: false,
+        child_count: None,
         media_type: "Video".into(),
         collection_type: String::new(),
         runtime_ticks: 30 * crate::api::TICKS_PER_SECOND,

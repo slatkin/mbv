@@ -35,6 +35,7 @@ fn add_emby_tv_library(app: &mut App) {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-shows".into(),
             title: "Shows".into(),
             items: vec![make_item("The Series", "Series")],

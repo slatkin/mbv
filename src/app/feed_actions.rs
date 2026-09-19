@@ -339,6 +339,7 @@ impl App {
                 .unwrap_or_default()
         });
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            fetched_rows: 0,
             parent_id: lib_id.clone(),
             title: lib_name.clone(),
             items: vec![],

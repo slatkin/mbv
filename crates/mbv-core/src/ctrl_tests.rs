@@ -212,6 +212,7 @@ fn stub_media_item() -> crate::api::EmbyItem {
         name: "Test Item".into(),
         item_type: "Episode".into(),
         is_folder: false,
+        child_count: None,
         media_type: "Video".into(),
         collection_type: String::new(),
         runtime_ticks: 0,

@@ -11,6 +11,7 @@ pub(crate) fn make_item(name: &str, item_type: &str) -> EmbyItem {
         name: name.into(),
         item_type: item_type.into(),
         is_folder: false,
+        child_count: None,
         media_type: "Video".into(),
         collection_type: String::new(),
         runtime_ticks: 0,

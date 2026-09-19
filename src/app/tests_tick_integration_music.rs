@@ -266,6 +266,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
     // "album-1", whose tracks the harness has cached).
     let nav_stack = vec![
         crate::app::BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-music".into(),
             title: "Music".into(),
             items: vec![album_row("group-0", "Alpha")],
@@ -281,6 +282,7 @@ fn recursive_album_activation_event_reanchors_onto_the_activated_album() {
             music_grouping: None,
         },
         crate::app::BrowseLevel {
+        fetched_rows: 0,
             parent_id: "group-0".into(),
             title: "Alpha".into(),
             items: vec![
@@ -521,6 +523,7 @@ fn landed_album_level(
     items: Vec<mbv_core::api::EmbyItem>,
 ) -> crate::app::BrowseLevel {
     crate::app::BrowseLevel {
+        fetched_rows: 0,
         parent_id: parent_id.into(),
         title: title.into(),
         total_count: items.len(),

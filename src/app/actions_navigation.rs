@@ -32,6 +32,7 @@ impl App {
         if item.is_folder {
             let lib = &mut self.libs[lib_idx];
             lib.nav_stack.push(BrowseLevel {
+                fetched_rows: 0,
                 parent_id: item.id.clone(),
                 title: item.name.clone(),
                 items: vec![],

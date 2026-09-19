@@ -42,6 +42,7 @@ fn feeds_tab_does_not_route_into_library_behavior() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
@@ -118,6 +119,7 @@ fn set_library_tab_to_feeds_does_not_corrupt_library_state() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
@@ -293,6 +295,7 @@ fn f5_on_feeds_tab_does_not_reach_emby_or_audiobookshelf_refresh() {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],
@@ -364,6 +367,7 @@ fn f5_on_feeds_tab_invokes_feed_refresh() {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],

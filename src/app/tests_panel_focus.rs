@@ -227,6 +227,7 @@ fn building_from_panel_focus_prefs_does_not_mutate_saved_library_positions() {
             "lib-movies".into(),
             crate::config::LibraryPosition {
                 levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                     parent_id: "lib-movies".into(),
                     title: "Movies".into(),
                     focused_item_id: Some("id1".into()),

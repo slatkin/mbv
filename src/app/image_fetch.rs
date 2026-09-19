@@ -136,7 +136,7 @@ impl App {
                 // The established root-children call, verbatim from the
                 // music library's first browse level (`spawn_browse`'s
                 // default arm: no item types, SortName ascending).
-                if let Ok((items, _total)) = client.get_items_sorted(
+                if let Ok((mut items, _total)) = client.get_items_sorted(
                     &library_id,
                     None,
                     false,
@@ -145,6 +145,7 @@ impl App {
                     "SortName",
                     "Ascending",
                 ) {
+                    super::library_browse_actions::retain_grouped_music_items(&mut items, true);
                     let _ = tx.send(LibEvent::MusicGroupWarmupListed { generation, groups: items });
                 }
                 // A failed listing fetch is silent: no level ids are known,

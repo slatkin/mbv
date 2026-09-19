@@ -38,6 +38,7 @@ pub(super) fn make_music_album_app() -> App {
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
@@ -53,6 +54,7 @@ pub(super) fn make_music_album_app() -> App {
                 music_grouping: None,
             },
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "group-0".into(),
                 title: "Alpha".into(),
                 items: vec![album1, album2],
@@ -129,6 +131,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
@@ -144,6 +147,7 @@ pub(super) fn make_music_album_list_app(album_count: usize, cursor: usize) -> Ap
                 music_grouping: None,
             },
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "group-0".into(),
                 title: "Alpha".into(),
                 items: albums,

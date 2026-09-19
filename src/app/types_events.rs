@@ -87,6 +87,7 @@ pub(super) enum LibEvent {
         parent_id: String,
         items: Vec<EmbyItem>,
         total_count: usize,
+        fetched_rows: usize,
     },
     Refreshed {
         lib_idx: usize,

@@ -302,6 +302,7 @@ impl App {
                             parent_id: lvl.parent_id.clone(),
                             title: lvl.title.clone(),
                             items: lvl.items.clone(),
+                            fetched_rows: lvl.fetched_rows,
                             total_count: lvl.total_count,
                             item_types: lvl.item_types.clone(),
                             unplayed_only: lvl.unplayed_only,

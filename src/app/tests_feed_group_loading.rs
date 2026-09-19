@@ -16,6 +16,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![],
@@ -49,6 +50,7 @@ fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() 
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
         level: Box::new(BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: folders,
@@ -91,6 +93,7 @@ fn make_home_video_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![],
@@ -130,6 +133,7 @@ fn seed_home_video_root_loaded(app: &mut App) -> EmbyItem {
         lib_idx: 0,
         parent_id: "lib-youtube".into(),
         level: Box::new(BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![empty, active.clone()],
@@ -246,6 +250,7 @@ fn refreshed_does_not_overwrite_feed_root_with_video_items() {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder.clone()],
@@ -306,6 +311,7 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder],

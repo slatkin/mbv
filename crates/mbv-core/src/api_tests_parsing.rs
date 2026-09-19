@@ -8,6 +8,7 @@ fn make_item(name: &str, item_type: &str) -> EmbyItem {
         name: name.into(),
         item_type: item_type.into(),
         is_folder: false,
+        child_count: None,
         media_type: "Video".into(),
         collection_type: String::new(),
         runtime_ticks: 0,
@@ -77,6 +78,13 @@ fn parse_item_basic_fields() {
     assert_eq!(item.runtime_ticks, 36_000_000_000);
     assert!(item.played);
     assert_eq!(item.playback_position_ticks, 5_000_000);
+}
+
+#[rstest]
+#[case::explicit_zero(json!({"Type": "Folder", "IsFolder": true, "ChildCount": 0}), Some(0))]
+#[case::absent(json!({"Type": "Folder", "IsFolder": true}), None)]
+fn parse_item_child_count(#[case] raw: serde_json::Value, #[case] expected: Option<u32>) {
+    assert_eq!(parse_item(&raw).child_count, expected);
 }
 
 #[test]

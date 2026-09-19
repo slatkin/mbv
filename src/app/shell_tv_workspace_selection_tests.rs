@@ -284,6 +284,7 @@ fn tv_episode_activation_uses_component_cursors_and_cached_season_id() {
         "the stale App cursor must still diverge before TvBack"
     );
     model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
+        fetched_rows: 0,
         parent_id: "movie-third".into(),
         title: "Seasons".into(),
         items: vec![],

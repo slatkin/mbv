@@ -14,7 +14,9 @@ use crate::app::tests::*;
 use crate::app::types_browse::BrowseResting;
 
 fn movie_level(items: Vec<EmbyItem>, total_count: usize, cursor: usize) -> BrowseLevel {
+    let fetched_rows = items.len();
     BrowseLevel {
+        fetched_rows,
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
         total_count,
@@ -44,6 +46,7 @@ fn movie_lib(nav_stack: Vec<BrowseLevel>) -> LibraryTab {
 #[test]
 fn entering_library_restores_cursor_from_saved_focused_item_and_round_trips() {
     let saved = crate::config::LibraryPositionLevel {
+        fetched_rows: None,
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
         focused_item_id: Some("id2".into()),
@@ -69,12 +72,29 @@ fn entering_library_restores_cursor_from_saved_focused_item_and_round_trips() {
 }
 
 #[test]
+fn restored_fetched_rows_uses_persisted_value_or_item_count() {
+    let mut saved = crate::config::LibraryPositionLevel {
+        fetched_rows: Some(7),
+        parent_id: "lib-movies".into(),
+        title: "Movies".into(),
+        ..Default::default()
+    };
+    let persisted = BrowseLevel::from_position_level(&saved, make_items(2), 10, 3);
+    assert_eq!(persisted.fetched_rows, 7);
+
+    saved.fetched_rows = None;
+    let legacy = BrowseLevel::from_position_level(&saved, make_items(2), 10, 3);
+    assert_eq!(legacy.fetched_rows, 2);
+}
+
+#[test]
 fn go_back_reanchors_parent_cursor_onto_the_popped_child_folder() {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
     let root = movie_level(make_items(3), 3, 0);
     let child = movie_level(Vec::new(), 0, 0);
     let child = BrowseLevel {
+        fetched_rows: 0,
         parent_id: "id1".into(),
         ..child
     };

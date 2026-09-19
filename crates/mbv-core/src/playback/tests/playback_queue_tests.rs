@@ -6,6 +6,7 @@ fn item(id: &str) -> EmbyItem {
         name: format!("Item {id}"),
         item_type: "Episode".to_string(),
         is_folder: false,
+        child_count: None,
         media_type: "Video".to_string(),
         collection_type: String::new(),
         runtime_ticks: 30 * TICKS_PER_SECOND,

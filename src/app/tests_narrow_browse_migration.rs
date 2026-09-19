@@ -38,6 +38,7 @@ fn saved_level(
     item_types: Option<&str>,
 ) -> crate::config::LibraryPositionLevel {
     crate::config::LibraryPositionLevel {
+        fetched_rows: None,
         parent_id: parent_id.into(),
         title: title.into(),
         focused_item_id: Some(focused_item_id.into()),
@@ -239,6 +240,7 @@ fn tv_shows_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-shows".into(),
             title: "Shows".into(),
             items: folder_items("Series", "Series", 5),
@@ -369,6 +371,7 @@ fn feed_home_video_group_app() -> App {
     second.id = "video-two".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder.clone()],

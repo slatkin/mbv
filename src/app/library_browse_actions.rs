@@ -16,6 +16,12 @@ pub(super) enum RevealTarget {
     Album(String),
 }
 
+pub(super) fn retain_grouped_music_items(items: &mut Vec<EmbyItem>, grouped_music: bool) {
+    if grouped_music {
+        items.retain(|item| !(item.is_folder && item.child_count == Some(0)));
+    }
+}
+
 /// D1 reveal-item table, pure over the item's own back-references and its
 /// ancestor chain (nearest→root, the `get_ancestors` order) so the table
 /// test covers the item_type → reveal mapping without a server. `ancestors`
@@ -223,6 +229,7 @@ fn build_chain_nav_stack(
         nav_stack.push(BrowseLevel {
             parent_id: parent_id.clone(),
             title: String::new(),
+            fetched_rows: items.len(),
             items,
             total_count,
             resting: BrowseResting::new(cursor, 0),
@@ -363,6 +370,7 @@ impl App {
                         parent_id: root.parent_id.clone(),
                         title: root.title.clone(),
                         items: Vec::new(),
+                        fetched_rows: 0,
                         total_count: 0,
                         resting: BrowseResting::new(0, 0),
                         item_types: root.item_types.clone(),
@@ -400,6 +408,7 @@ impl App {
                 parent_id: lib_id.clone(),
                 title: lib_name.clone(),
                 items: vec![],
+                fetched_rows: 0,
                 total_count: 0,
                 resting: BrowseResting::new(0, 0),
                 item_types: item_types.clone(),
@@ -434,6 +443,7 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
+        let grouped_music = self.is_grouped_music_library(lib_idx);
         std::thread::spawn(move || {
             let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
                 let letter_filter = saved_level
@@ -443,7 +453,7 @@ impl App {
                     .as_ref()
                     .map(|f| (f.name_ge, f.name_lt))
                     .unwrap_or((None, None));
-                let (items, total_count) = client.get_items_sorted_ranged(
+                let (mut items, total_count) = client.get_items_sorted_ranged(
                     &saved_level.parent_id,
                     saved_level.item_types.as_deref(),
                     saved_level.unplayed_only,
@@ -454,8 +464,9 @@ impl App {
                     name_ge,
                     name_lt,
                 )?;
+                retain_grouped_music_items(&mut items, grouped_music);
                 if total_count > items.len() {
-                    client.get_items_sorted_ranged(
+                    let (mut items, total_count) = client.get_items_sorted_ranged(
                         &saved_level.parent_id,
                         saved_level.item_types.as_deref(),
                         saved_level.unplayed_only,
@@ -465,7 +476,9 @@ impl App {
                         &saved_level.sort_order,
                         name_ge,
                         name_lt,
-                    )
+                    )?;
+                    retain_grouped_music_items(&mut items, grouped_music);
+                    Ok((items, total_count))
                 } else {
                     Ok((items, total_count))
                 }
@@ -568,6 +581,7 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
+        let grouped_music = self.is_grouped_music_library(lib_idx);
         let spawn_started = std::time::Instant::now();
         std::thread::spawn(move || {
             match client.get_items_sorted(
@@ -579,7 +593,9 @@ impl App {
                 &sort_by,
                 &sort_order,
             ) {
-                Ok((items, total_count)) => {
+                Ok((mut items, total_count)) => {
+                    let fetched_rows = items.len();
+                    retain_grouped_music_items(&mut items, grouped_music);
                     log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} thread_total={}ms first3={:?}",
                         items.len(),
                         spawn_started.elapsed().as_millis(),
@@ -591,6 +607,7 @@ impl App {
                             parent_id,
                             title,
                             items,
+                            fetched_rows,
                             total_count,
                             resting: BrowseResting::new(0, 0),
                             item_types,
@@ -676,6 +693,7 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
+        let grouped_music = self.is_grouped_music_library(lib_idx);
         let (name_ge, name_lt) = letter_filter
             .as_ref()
             .map(|f| (f.name_ge, f.name_lt))
@@ -692,12 +710,15 @@ impl App {
                 name_ge,
                 name_lt,
             ) {
-                Ok((items, total_count)) => {
+                Ok((mut items, total_count)) => {
+                    let fetched_rows = items.len();
+                    retain_grouped_music_items(&mut items, grouped_music);
                     let _ = tx.send(LibEvent::PageAppended {
                         lib_idx,
                         parent_id,
                         items,
                         total_count,
+                        fetched_rows,
                     });
                 }
                 Err(e) => {

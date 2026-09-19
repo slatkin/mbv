@@ -6,20 +6,19 @@ impl App {
     /// a group-selector bar at top with the album list below.
     /// Activated when `music.levels` starts with `"group"` and the nav stack
     /// has a group level plus an album level above it.
+    pub(super) fn is_grouped_music_library(&self, lib_idx: usize) -> bool {
+        self.libs[lib_idx].library.collection_type == "music"
+            && self
+                .music_levels
+                .first()
+                .is_some_and(|level| level == "group")
+    }
+
     pub(super) fn is_music_group_view(&self, lib_idx: usize) -> bool {
+        if !self.is_grouped_music_library(lib_idx) {
+            return false;
+        }
         let lib = &self.libs[lib_idx];
-        if lib.library.collection_type != "music" {
-            return false;
-        }
-        // Only when the first configured level is "group".
-        if self
-            .music_levels
-            .first()
-            .map(|s| s != "group")
-            .unwrap_or(true)
-        {
-            return false;
-        }
         // Need at least a group level and an album level on the stack.
         if lib.nav_stack.len() < 2 {
             return false;
@@ -72,6 +71,7 @@ impl App {
 
         // Push a loading placeholder so the Loaded handler can fill it in.
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            fetched_rows: 0,
             parent_id: group_id.clone(),
             title: group_name.clone(),
             items: vec![],
@@ -121,6 +121,7 @@ impl App {
             return;
         }
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            fetched_rows: 0,
             parent_id: group_id.clone(),
             title: group_name.clone(),
             items: vec![],
@@ -263,6 +264,7 @@ impl App {
             (g.id.clone(), g.name.clone())
         };
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            fetched_rows: 0,
             parent_id: group_id.clone(),
             title: group_name.clone(),
             items: vec![],
@@ -332,6 +334,7 @@ impl App {
             if !group_id.is_empty() {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack.push(BrowseLevel {
+                        fetched_rows: 0,
                         parent_id: group_id.clone(),
                         title: group_name.clone(),
                         items: vec![],
