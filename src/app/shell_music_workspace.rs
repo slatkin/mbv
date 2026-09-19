@@ -214,10 +214,6 @@ impl Model {
         }
     }
 
-    pub(super) fn sync_music_workspace(&mut self) {
-        self.push_music_workspace_content();
-    }
-
     #[cfg(test)]
     pub(super) fn test_music_owner(&self) -> &MusicContent {
         self.music_owner().expect("music owner")

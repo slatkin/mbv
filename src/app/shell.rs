@@ -85,8 +85,8 @@ pub struct Model {
     /// the current state without querying `Application`.
     pub(super) mouse_subscribed: std::collections::HashSet<ComponentId>,
     /// One-shot shell→component request for the mounted Music workspace's
-    /// inline track focus, applied at the next `sync_music_workspace` after
-    /// the component is mounted/synced (so mount-timing never loses it).
+    /// inline track focus, applied at the next `push_music_workspace_content`
+    /// after the component is mounted/synced (so mount-timing never loses it).
     /// Neither mirrors App state: the component owns the cursor, the shell
     /// only delivers the trigger that used to write the deleted inline
     /// track-focus field.
