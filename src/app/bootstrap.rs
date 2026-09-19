@@ -11,7 +11,6 @@ pub(super) fn bootstrap_unified_queue(
         last_played_item_id: None,
         last_played_completed: false,
         adopt_queue: None,
-        positions: Default::default(),
     }
 }
 
@@ -21,12 +20,6 @@ pub(super) struct LocalDaemonBootstrap {
     pub(super) last_played_item_id: Option<String>,
     pub(super) last_played_completed: bool,
     pub(super) adopt_queue: Option<(Vec<QueueItem>, usize, crate::config::QueueSource)>,
-    /// Per-item resume positions carried over from the saved queue snapshot
-    /// (see `QueueState::positions`), so the same best-effort enrichment that
-    /// `restore_queue_state` performs for plain local playback also happens
-    /// for a cold daemon adopting a saved queue. Empty when there's nothing
-    /// to enrich (remote-populated queue, or no saved state).
-    pub(super) positions: std::collections::HashMap<String, i64>,
 }
 
 pub(super) fn bootstrap_local_daemon_queue(
@@ -46,7 +39,6 @@ pub(super) fn bootstrap_local_daemon_queue(
             last_played_item_id: None,
             last_played_completed: false,
             adopt_queue: None,
-            positions: Default::default(),
         };
     }
 
@@ -57,7 +49,6 @@ pub(super) fn bootstrap_local_daemon_queue(
             last_played_item_id: None,
             last_played_completed: false,
             adopt_queue: None,
-            positions: Default::default(),
         };
     };
 
@@ -75,6 +66,5 @@ pub(super) fn bootstrap_local_daemon_queue(
         last_played_item_id: state.last_played_item_id.clone(),
         last_played_completed: state.last_played_completed,
         adopt_queue: Some((queue_items, cursor, state.source)),
-        positions: state.positions,
     }
 }

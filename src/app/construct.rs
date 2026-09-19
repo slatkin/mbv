@@ -608,9 +608,6 @@ impl App {
             app.queue_source = bootstrap.queue_source;
             app.last_played_item_id = bootstrap.last_played_item_id;
             app.last_played_completed = bootstrap.last_played_completed;
-            if !bootstrap.positions.is_empty() {
-                app.spawn_enrich_queue_state(bootstrap.positions);
-            }
         } else {
             app.queue_source = remote_queue_source;
         }
