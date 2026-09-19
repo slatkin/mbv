@@ -23,22 +23,6 @@ When a settled grouped snapshot is replaced, the system SHALL preserve the curre
 - **WHEN** the user invokes an artist-root action on a settled grouped view
 - **THEN** the action operates on exactly that root's in-scope albums in the settled snapshot
 
-### Requirement: Artist headers are non-selectable grouping labels
-The grouped Music album view SHALL replace its former artist Heading rows with focusable artist roots in the shallow tree. Artist roots SHALL receive keyboard and mouse selection, expansion, current-item scope, playback and queue actions, and context actions as specified by `grouped-music-tree-browser`. Album leaves SHALL remain independently selectable targets within each artist root. This exception SHALL NOT change canonical Group headings in any other list or in the artist track Workspace; those remain non-selectable visual labels.
-
-#### Scenario: Keyboard navigation crosses an artist boundary
-- **WHEN** the user moves through the grouped Music tree across an artist boundary
-- **THEN** focus can land on the artist root and its visible album leaves
-
-#### Scenario: Artist header is clicked
-- **WHEN** the user clicks a painted artist root
-- **THEN** that root receives focus and becomes the current tree action scope
-
-#### Scenario: Grouped music action is invoked
-- **WHEN** the user invokes a playback, queue, or context action with an artist root focused
-- **THEN** the action resolves the root to its in-scope album leaves
-- **AND** no artist identity crosses the effect boundary as a playable target
-
 ### Requirement: Album navigation remains visible across artist groups
 Tree navigation in the grouped Music view SHALL keep the selected artist root or album leaf visible while crossing artist-group boundaries. Artist roots SHALL contribute to scroll geometry and SHALL be cursor targets; collapsed album leaves SHALL not contribute to the visible projection or hit geometry.
 
@@ -64,3 +48,29 @@ The non-Wide and Wide compositions SHALL consume the same settled grouped snapsh
 #### Scenario: Responsive composition redraws
 - **WHEN** either responsive composition redraws without a changed album snapshot
 - **THEN** it reuses the existing settled grouping without starting artist metadata resolution work
+
+## REMOVED Requirements
+
+### Requirement: Artist headers are non-selectable grouping labels
+
+**Reason**: Grouped Music replaces its former structural artist Heading rows with focusable artist roots in the shallow tree.
+
+**Migration**: Grouped Music uses the new `Artist roots are focusable grouping targets` requirement. Canonical Group headings in every other list and in the artist track Workspace remain non-selectable visual labels.
+
+## ADDED Requirements
+
+### Requirement: Artist roots are focusable grouping targets
+The grouped Music album view SHALL present focusable artist roots in the shallow tree. Artist roots SHALL receive keyboard and mouse selection, expansion, current-item scope, playback and queue actions, and context actions as specified by `grouped-music-tree-browser`. Album leaves SHALL remain independently selectable targets within each artist root. This SHALL NOT change canonical Group headings in any other list or in the artist track Workspace; those remain non-selectable visual labels.
+
+#### Scenario: Keyboard navigation crosses an artist boundary
+- **WHEN** the user moves through the grouped Music tree across an artist boundary
+- **THEN** focus can land on the artist root and its visible album leaves
+
+#### Scenario: Artist root is clicked
+- **WHEN** the user clicks a painted artist root
+- **THEN** that root receives focus and becomes the current tree action scope
+
+#### Scenario: Grouped music action is invoked
+- **WHEN** the user invokes a playback, queue, or context action with an artist root focused
+- **THEN** the action resolves the root to its in-scope album leaves
+- **AND** no artist identity crosses the effect boundary as a playable target

@@ -2,7 +2,7 @@
 
 See `proposal.md` for motivation. Grouped Music currently derives an atomically published `GroupedAlbumCatalog`, flattens it to `[Heading, Spacer, Item…]`, and projects the album flow through `MediaListCarrier<String>`. `MusicContent` owns album and track interaction but is already 756 lines, near the 800-line pre-push gate. The shell owns album-track fetching, image effects, and projection into the component.
 
-`tui-treelistview` 0.2.3 matches mbv's Ratatui 0.30 generation. Its useful boundary is the combination of `TreeModel`, `TreeQuery`, `TreeListViewState`, current-render hit testing, label/column renderers, and style configuration. Its optional keymap is incompatible with mbv's single Keyboard Router and will remain disabled. Its nodes use compact copyable IDs while mbv's stable domain targets are owned strings.
+`tui-treelistview` 0.2.2 matches mbv's Ratatui 0.30 generation. Its useful boundary is the combination of `TreeModel`, `TreeQuery`, `TreeListViewState`, current-render hit testing, label/column renderers, and style configuration. Its optional keymap is incompatible with mbv's single Keyboard Router and will remain disabled. Its nodes use compact copyable IDs while mbv's stable domain targets are owned strings.
 
 The existing contracts conflict with the new surface in deliberate, narrow ways: Grouped Music artist labels are currently non-selectable canonical `Heading` rows; album browsing is required to use `MediaList`; and Inline Search is required to replace grouping with flat, relevance-ordered, full-corpus results. The delta specs make Grouped Music the only exception. Track Workspaces and all other destinations remain canonical media lists.
 
@@ -48,7 +48,7 @@ usize NodeId -> MusicNode::Artist(ArtistKey) | MusicNode::Album(AlbumTarget)
 MusicNodeKey -> usize NodeId
 ```
 
-`ArtistKey` is either a stable Emby artist item ID or a deterministic fallback grouping key. The parser retains the first applicable `ArtistItems` name/ID pair associated with the displayed album artist; the settled catalog carries both display text and this identity. If no ID exists, the fallback key derives from the settled grouping identity, not display position. Equal names with different IDs remain separate roots.
+`ArtistKey` is either a stable Emby artist item ID or a deterministic fallback grouping key. The parser retains the first applicable `ArtistItems` name/ID pair associated with the displayed album artist; the settled catalog carries both display text and this identity. `ArtistItems` IDs from album/item payloads are the sole stable artist ID space used for `ArtistIds` item queries and `/Items/{id}/Images`; IDs obtained from an `/Artists` listing SHALL never be mixed into these keys. If no ID exists, the fallback key derives from the settled grouping identity, not display position. Equal names with different IDs remain separate roots.
 
 IDs are interned by semantic key, survive ordinary catalog replacement, and are not reused for a different key during the owner's lifetime. Removed entries are tombstoned or omitted from the model while preserving their interned mapping; the arena resets only when the retained Music destination changes identity. This favors simple, collision-free continuity over speculative compaction.
 
@@ -94,7 +94,7 @@ Alternative rejected: storing selected artist IDs. Their meaning changes with fi
 
 ### 7. Add artist detail without giving the component Service authority
 
-Extend the Emby item projection to retain artist name/ID pairs needed by grouping. Add a shell-owned artist detail cache keyed by Service generation and stable artist ID. On artist focus:
+Before tree implementation, extend the Emby item projection to retain artist name/ID pairs and establish the `mbv-core` Audio-by-artist operation using `ArtistIds=<ArtistItems id>`, `IncludeItemTypes=Audio`, and `Recursive=true`. Verify once against the configured live Emby Service that album payloads include `ArtistItems` alongside the existing requested fields and that the query returns that artist's tracks; automated coverage remains hermetic. Add a shell-owned artist detail cache keyed by Service generation and stable artist ID. On artist focus:
 
 - `MusicContent` immediately projects name, in-scope album count, and year span from the settled tree;
 - it emits typed requests for missing artist artwork and tracks;
@@ -108,7 +108,7 @@ Alternative rejected: name-based Service lookup, which conflates equal artist na
 
 ### 8. Use the stock tree rendering pipeline as the dependency gate
 
-Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` (or the exact equivalent in the locked 0.2.3 API) to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. Style values are resolved from existing semantic theme policies inside the owning render layer; the destination does not pass raw colours.
+Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` (or the exact equivalent in the locked 0.2.2 API) to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. Style values are resolved from existing semantic theme policies inside the owning render layer; the destination does not pass raw colours.
 
 The tree remains in the Library panel's existing browser slot. The panel owns placement and fill; the tree painter owns paint-local row geometry. No screen module calls Ratatui or splits layout, and no base frame paints underneath. Marquee timing reuses the existing title-marquee primitive if the label-renderer seam permits it.
 
@@ -129,6 +129,7 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 
 - **[Crate rendering seams cannot reproduce mbv's surface]** → Keep customization inside supported crate interfaces, run focused visual evidence before final acceptance, and remove the dependency/change if live review fails; do not add a parallel renderer.
 - **[The locked crate API differs from the evaluated surface]** → Pin the exact compatible release, compile a minimal adapter first, and map names to the locked API without changing ownership decisions.
+- **[The dependency is immature and release history is volatile]** → Version 0.2.2 is a single-maintainer crate with low adoption, no GitHub releases, and two recent yanked releases; keep the integration destination-local, pin exactly, and retain dependency rejection as the acceptance outcome.
 - **[Artist identity is absent or ambiguous]** → Prefer `ArtistItems` stable IDs, retain equal-name groups separately, and use a deterministic fallback key only when identity is absent; never perform effect lookup by name.
 - **[Artist completions paint beneath a new selection]** → Key requests and visible application by destination, Service generation, settled revision, and artist ID; cache valid data separately from presentation.
 - **[Filtering and marks expose hidden actions]** → Intersect tree multi-selection with the visible album projection whenever a debounced filter revision applies, and materialize every root action from that same projection.
@@ -139,11 +140,12 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 ## Migration Plan
 
 1. Add the locked dependency and destination-specific adapter with no optional keymap.
-2. Retain artist identity in parsed music data and settle it into stable tree keys.
-3. Replace only the Grouped Music album carrier with the tree owner; keep both track Workspaces canonical.
-4. Add local filtering, root action materialization, multi-selection, and current-frame mouse handling.
-5. Add shell-owned lazy artist detail/artwork/track projection with stale guards.
-6. Complete focused automated evidence, repository gates, and live user review at representative Panel modes.
-7. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.
+2. Retain `ArtistItems` identity in parsed music data, add the Audio-by-artist client operation, and complete the one-time live Emby mapping check before tree implementation.
+3. Settle the verified identity into stable tree keys.
+4. Replace only the Grouped Music album carrier with the tree owner; keep both track Workspaces canonical.
+5. Add local filtering, root action materialization, multi-selection, and current-frame mouse handling.
+6. Add shell-owned lazy artist detail/artwork/track projection with stale guards.
+7. Complete focused automated evidence, repository gates, and live user review at representative Panel modes.
+8. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.
 
 Rollback is a normal revert: no persisted tree state, protocol, queue schema, or config migration is introduced.
