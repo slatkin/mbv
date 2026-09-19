@@ -2,14 +2,14 @@
 
 ### Requirement: Grouped Music uses responsive compositions
 
-The grouped Music tree view SHALL use Wide hero when it meets the shared wide geometry conditions. Its right pane SHALL contain detail and a track Workspace for the selected artist root or album leaf, and its left rail SHALL contain the single-column tree browser. Otherwise selected-node detail SHALL use the Library Hero overlay reached from the same tree browser; Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
+The grouped Music tree view SHALL use Wide hero when it meets the shared wide geometry conditions. Its right pane SHALL contain detail and a track Workspace for the selected artist root or album leaf, and its left rail SHALL contain the single-column tree browser. Otherwise an album leaf SHALL open its Library Hero overlay through its existing Enter activation, while Right on an already expanded artist root SHALL open the artist Library Hero overlay and focus its Workspace. Grouped Music SHALL NOT evaluate the breakpoint or minimum-height guard itself and SHALL NOT use a separate fallback.
 
 Album-leaf detail SHALL retain the album title, metadata, album art, and album-track Workspace. Artist-root detail SHALL show artist artwork when stable Service identity and artwork are available, artist name, in-scope album count and year span, and an artist-track Workspace grouped by album. Fallback artist roots with no Service artist identity SHALL use the existing no-artwork presentation.
 
 #### Scenario: Grouped Music below the breakpoint
 - **WHEN** grouped Music does not meet the shared wide geometry conditions
 - **THEN** group pills span the content width and the tree occupies the browser list slot
-- **AND** activating selected-node detail opens the Library Hero overlay with the corresponding album or artist Workspace
+- **AND** Enter on an album leaf or Right on an already expanded artist root opens the Library Hero overlay with the corresponding Workspace
 
 #### Scenario: Grouped Music at the breakpoint
 - **WHEN** grouped Music meets the shared wide geometry conditions

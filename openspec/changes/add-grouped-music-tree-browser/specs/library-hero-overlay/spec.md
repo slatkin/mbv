@@ -2,7 +2,7 @@
 
 ### Requirement: Enter opens the selected item's Hero in the Library pane
 
-In every geometry where the Wide Hero arrangement does not apply, pressing Enter on a selected hero-bearing canonical browser row SHALL open a Library Hero overlay for that item. Grouped Music's artist roots and album leaves SHALL use the same overlay entry even though its tree nodes are not canonical browser rows. The overlay SHALL present the same Hero header, metadata, overview, artwork, provider links, and optional Workspace content that the selected target's Wide Hero pane presents. Inline Search results and an active Grouped Music tree filter SHALL retain their specified activation behavior and SHALL NOT open the overlay.
+In every geometry where the Wide Hero arrangement does not apply, pressing Enter on a selected hero-bearing canonical browser row SHALL open a Library Hero overlay for that item. A Grouped Music album leaf SHALL retain that Enter behavior; an artist root SHALL instead open the overlay when Right is pressed on the already expanded root, because Enter toggles its expansion. The overlay SHALL present the same Hero header, metadata, overview, artwork, provider links, and optional Workspace content that the selected target's Wide Hero pane presents. Inline Search results and an active Grouped Music tree filter SHALL retain their specified activation behavior and SHALL NOT open the overlay.
 
 For an item, artist root, or album leaf with a Workspace, opening the overlay SHALL give focus to its constituent media list. For an item without a Workspace, opening SHALL give focus to the Hero overlay and a subsequent Enter SHALL perform the item's existing activation behavior.
 
