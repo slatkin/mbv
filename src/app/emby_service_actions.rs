@@ -192,6 +192,9 @@ impl App {
         config.api_key.clear();
         drop(config);
         self.emby_runtime.state = ServiceState::Ready;
+        // Warm the music group levels in the background (design D5 of
+        // `fix-music-artist-resolution-batching`); never gates startup.
+        self.spawn_music_group_warmup();
         self.sync_subtitle_prefs_from_emby();
         self.flash("Emby replaced and ready".into(), ToastSeverity::Success);
     }

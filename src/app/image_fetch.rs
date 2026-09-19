@@ -106,6 +106,68 @@ impl App {
         });
     }
 
+    /// Startup warm-up (design D5 of
+    /// `fix-music-artist-resolution-batching`): once the Emby Service is
+    /// Ready, fetch each configured music library's group-level listing (its
+    /// root children — the same listing the group view's first level shows)
+    /// on the existing worker-thread + `lib_tx` pattern. The arrival handler
+    /// spawns one level fill per group-level child; fills dedupe through the
+    /// shared `LevelFillState::action_for` decision (design D4), so a
+    /// warm-up racing candidate creation — or a repeated Ready — does no
+    /// double work. Best-effort and silent: a failed group-listing fetch
+    /// names no levels, so it is a no-op; a failed per-level fill marks that
+    /// level `Failed` through the arrival handler, and browsing proceeds via
+    /// the existing settle/fallback path. Never gates startup.
+    pub(super) fn spawn_music_group_warmup(&mut self) {
+        let library_ids = self.music_group_warmup_library_ids();
+        if library_ids.is_empty() {
+            return;
+        }
+        let Some(client) = self.emby_snapshot() else {
+            return;
+        };
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            for library_id in library_ids {
+                // The established root-children call, verbatim from the
+                // music library's first browse level (`spawn_browse`'s
+                // default arm: no item types, SortName ascending).
+                if let Ok((items, _total)) = client.get_items_sorted(
+                    &library_id,
+                    None,
+                    false,
+                    0,
+                    PAGE_SIZE,
+                    "SortName",
+                    "Ascending",
+                ) {
+                    let _ = tx.send(LibEvent::MusicGroupWarmupListed { groups: items });
+                }
+                // A failed listing fetch is silent: no level ids are known,
+                // so there is nothing to mark `Failed`.
+            }
+        });
+    }
+
+    /// The libraries whose group levels warm up at Service Ready (design
+    /// D5): every Emby music library while the configured music levels
+    /// start with `"group"` — the same gate the group view itself uses.
+    pub(super) fn music_group_warmup_library_ids(&self) -> Vec<String> {
+        if !self
+            .music_levels
+            .first()
+            .map(|s| s == "group")
+            .unwrap_or(false)
+        {
+            return Vec::new();
+        }
+        self.libs
+            .iter()
+            .filter(|lib| lib.library.collection_type == "music")
+            .map(|lib| lib.library.id.clone())
+            .collect()
+    }
+
     /// Spawns the one background album-artist request per music level
     /// (design D1 of `fix-music-artist-resolution-batching`): a single
     /// recursive Audio query over the whole level, bucketed per album and

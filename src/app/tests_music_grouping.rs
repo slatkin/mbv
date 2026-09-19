@@ -47,19 +47,44 @@ fn make_group_level() -> BrowseLevel {
     }
 }
 
+fn make_music_library_tab() -> LibraryTab {
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "lib-music".into();
+    library.is_folder = true;
+    library.collection_type = "music".into();
+    LibraryTab::new(library)
+}
+
+fn make_group_item(id: &str, name: &str) -> EmbyItem {
+    let mut group = make_item(name, "Folder");
+    group.id = id.into();
+    group.is_folder = true;
+    group
+}
+
+fn make_untagged_album(id: &str) -> EmbyItem {
+    let mut album = make_item("Unknown Album", "MusicAlbum");
+    album.id = id.into();
+    album
+}
+
+/// A music library whose grouped view has not been opened: no nav stack,
+/// the state startup warm-up (tasks 3.1, design D5) runs against.
+fn make_unopened_music_app() -> super::App {
+    let mut app = make_app_stub();
+    app.music_levels = vec!["group".into(), "album".into()];
+    app.libs.push(make_music_library_tab());
+    app
+}
+
 fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);
     app.music_levels = vec!["group".into(), "album".into()];
 
-    let mut library = make_item("Music", "CollectionFolder");
-    library.id = "lib-music".into();
-    library.is_folder = true;
-    library.collection_type = "music".into();
-
     app.libs.push(LibraryTab {
         nav_stack: vec![make_group_level(), make_music_album_level(albums)],
-        ..LibraryTab::new(library)
+        ..make_music_library_tab()
     });
     app
 }
@@ -668,5 +693,170 @@ fn failed_level_retries_on_next_candidate_creation() {
     assert!(
         state.candidate.is_some(),
         "candidate stays unresolved waiting for the retry's arrival"
+    );
+}
+
+#[test]
+fn warmup_listing_requests_one_fill_per_group_child_without_a_view() {
+    let mut app = make_unopened_music_app();
+
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        groups: vec![
+            make_group_item("group-0", "A-D"),
+            make_group_item("group-1", "E-H"),
+        ],
+    });
+
+    // The stub has no Emby client, so each requested fill immediately marks
+    // its level `Failed` for retry — the established client-less observable
+    // for "a fill was requested". Both group children were requested.
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Failed)
+    );
+    assert_eq!(
+        app.album_artist_levels.get("group-1"),
+        Some(&LevelFillState::Failed)
+    );
+    // The view was never opened: browsing state is untouched.
+    assert!(app.libs[0].nav_stack.is_empty());
+    assert!(app.album_artist_cache.is_empty());
+}
+
+#[test]
+fn warmup_library_selection_gates_on_group_config_and_music_collection() {
+    let mut app = make_unopened_music_app();
+    assert_eq!(
+        app.music_group_warmup_library_ids(),
+        vec!["lib-music".to_string()]
+    );
+
+    // Not a group-first level config: no warm-up targets (the same gate
+    // `is_music_group_view` applies).
+    app.music_levels = vec!["album".into()];
+    assert!(app.music_group_warmup_library_ids().is_empty());
+
+    // Group config restored, but the library is not music.
+    app.music_levels = vec!["group".into(), "album".into()];
+    app.libs[0].library.collection_type = "movies".into();
+    assert!(app.music_group_warmup_library_ids().is_empty());
+}
+
+#[test]
+fn warmup_dedupes_on_loading_and_filled_levels() {
+    let mut app = make_unopened_music_app();
+    app.album_artist_levels
+        .insert("group-0".into(), LevelFillState::Loading);
+
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        groups: vec![make_group_item("group-0", "A-D")],
+    });
+
+    // An in-flight level does no work through the same
+    // `LevelFillState::action_for` decision candidates use. In this
+    // client-less stub a re-request would have cycled `Loading` -> `Failed`,
+    // so `Loading` surviving proves the warm-up spawned nothing.
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Loading)
+    );
+
+    app.album_artist_levels
+        .insert("group-1".into(), LevelFillState::Filled);
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        groups: vec![make_group_item("group-1", "E-H")],
+    });
+    assert_eq!(
+        app.album_artist_levels.get("group-1"),
+        Some(&LevelFillState::Filled)
+    );
+}
+
+#[test]
+fn warmup_and_candidate_share_one_fill_decision() {
+    let mut app = make_music_app(vec![make_untagged_album("album-1")]);
+    // Seed the in-flight state a real warm-up spawn marks (the stub has no
+    // client, so simulate it).
+    app.album_artist_levels
+        .insert("group-0".into(), LevelFillState::Loading);
+
+    // Opening the grouped view while warm-up is in flight: the candidate
+    // takes the NoWork arm and waits instead of starting a second fill.
+    app.start_or_supersede_music_grouping(0);
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(state.candidate.is_some());
+
+    // The warm-up listing arrives too: still no second fill for the level.
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        groups: vec![make_group_item("group-0", "A-D")],
+    });
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Loading)
+    );
+}
+
+#[test]
+fn warmup_fill_failure_marks_failed_and_leaves_browsing_untouched() {
+    let mut app = make_unopened_music_app();
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        groups: vec![make_group_item("group-0", "A-D")],
+    });
+    let status_before = app.status.clone();
+
+    // The per-level fill failed: empty artists is the HTTP-failure shape.
+    app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
+        level_id: "group-0".into(),
+        artists: vec![],
+    });
+
+    // Failed (retryable), and otherwise silent: no cache fill, no status/
+    // toast, no queue, no browsing state.
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Failed)
+    );
+    assert!(app.album_artist_cache.is_empty());
+    assert_eq!(app.status, status_before);
+    assert!(app.player_tab.all_queue_items().is_empty());
+    assert!(app.libs[0].nav_stack.is_empty());
+
+    // Grouped browsing remains usable: opening the level settles through
+    // the existing fallback within the grouping resolution window.
+    app.libs[0].nav_stack = vec![
+        make_group_level(),
+        make_music_album_level(vec![make_untagged_album("album-1")]),
+    ];
+    app.start_or_supersede_music_grouping(0);
+    // Force the settle window to have elapsed, as the fallback test does.
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .unwrap()
+        .music_grouping
+        .as_mut()
+        .unwrap()
+        .candidate
+        .as_mut()
+        .unwrap()
+        .created_at = Instant::now() - Duration::from_secs(4);
+    app.expire_music_grouping_candidates();
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(state.candidate.is_none());
+    assert_eq!(
+        state.settled.as_ref().unwrap().entries[0].artist,
+        "Unknown Artist"
     );
 }

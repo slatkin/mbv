@@ -667,6 +667,21 @@ impl App {
                         .insert(level_id, LevelFillState::Filled);
                 }
             }
+            LibEvent::MusicGroupWarmupListed { groups } => {
+                // One level fill per group-level child (design D5), deduped
+                // through the same `LevelFillState::action_for` decision
+                // candidate creation uses (`spawn_level_artist_fetch`'s
+                // guard). `albums` stays empty: warm-up holds only the group
+                // listing, so orphan-`Path` attribution (design D3) has no
+                // in-hand album paths — unmatched buckets keep their inert
+                // keys and those albums still resolve via the
+                // settle/fallback path. A fill failure arrives as an empty
+                // `AlbumArtistLevelFetched`, marking the level `Failed`
+                // (retryable) with no UI error; browsing state is untouched.
+                for group in groups {
+                    self.spawn_level_artist_fetch(group.id, Vec::new());
+                }
+            }
             LibEvent::NavigateTo {
                 lib_idx,
                 landing,

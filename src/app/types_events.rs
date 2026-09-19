@@ -128,6 +128,16 @@ pub(super) enum LibEvent {
         level_id: String,
         artists: Vec<(String, String)>,
     },
+    /// Startup warm-up (design D5 of `fix-music-artist-resolution-batching`):
+    /// a music library's group-level listing (its root children), fetched in
+    /// the background once the Service became Ready. The handler spawns one
+    /// level fill per listed child, deduped through the shared level-fill
+    /// state. Not presentation-affecting (no shell arm): it only mutates App
+    /// caches, and failures arrive as empty `AlbumArtistLevelFetched`
+    /// artists that merely mark the level `Failed`.
+    MusicGroupWarmupListed {
+        groups: Vec<EmbyItem>,
+    },
     /// Track list for the album currently highlighted in the
     /// album-folder listing, fetched proactively (#145) so the inline album
     /// detail pane has data without a nav_stack drilldown.

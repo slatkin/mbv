@@ -77,6 +77,9 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap, prior_latest);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+                // Warm the music group levels in the background (design D5 of
+                // `fix-music-artist-resolution-batching`); never gates startup.
+                self.spawn_music_group_warmup();
                 self.sync_subtitle_prefs_from_emby();
                 self.flash("Emby is ready".into(), ToastSeverity::Success);
                 log::info!(target: "startup", "Emby startup completed");
@@ -243,6 +246,9 @@ impl App {
                 self.emby_runtime.client = Some(client);
                 let content = self.apply_emby_bootstrap(startup.bootstrap, prior_latest);
                 self.emby_runtime.state = mbv_core::service_runtime::ServiceState::Ready;
+                // Warm the music group levels in the background (design D5 of
+                // `fix-music-artist-resolution-batching`); never gates startup.
+                self.spawn_music_group_warmup();
                 if start_network {
                     self.sync_subtitle_prefs_from_emby();
                 }
