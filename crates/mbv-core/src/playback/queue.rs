@@ -129,25 +129,38 @@ impl ProgressState {
     /// Applies progress back to the item. Feed and Audiobookshelf entries
     /// never participate in Emby sync.
     fn apply_to_item(&self, item: &mut QueueItem) {
-        match item {
-            QueueItem::Emby(emby) => {
-                emby.playback_position_ticks = self.local.position_ticks;
-                emby.played = self.local.played;
-            }
-            QueueItem::Feed(entry) => {
-                entry.position_ticks = self.local.position_ticks;
-                entry.played = self.local.played;
-            }
-            QueueItem::Audiobookshelf(ep) => {
-                ep.position_ticks = self.local.position_ticks;
-                ep.played = self.local.played;
-                ep.is_finished = self.local.played;
-            }
-            QueueItem::AudiobookshelfBook(book) => {
-                book.position_ticks = self.local.position_ticks;
-                book.played = self.local.played;
-                book.is_finished = self.local.played;
-            }
+        apply_progress_to_queue_item(item, self.local.position_ticks, self.local.played);
+    }
+}
+
+/// Writes a resolved position/played pair into whichever kind `item` is.
+/// Shared by [`ProgressState::apply_to_item`] (the canonical `PlaybackQueue`)
+/// and [`crate::playback::execution_sequence::ExecutionSequence`]'s own
+/// progress application (the Playback run's local queue mirror), so the two
+/// never diverge on how a kind's fields are written.
+pub(crate) fn apply_progress_to_queue_item(
+    item: &mut QueueItem,
+    position_ticks: i64,
+    played: bool,
+) {
+    match item {
+        QueueItem::Emby(emby) => {
+            emby.playback_position_ticks = position_ticks;
+            emby.played = played;
+        }
+        QueueItem::Feed(entry) => {
+            entry.position_ticks = position_ticks;
+            entry.played = played;
+        }
+        QueueItem::Audiobookshelf(ep) => {
+            ep.position_ticks = position_ticks;
+            ep.played = played;
+            ep.is_finished = played;
+        }
+        QueueItem::AudiobookshelfBook(book) => {
+            book.position_ticks = position_ticks;
+            book.played = played;
+            book.is_finished = played;
         }
     }
 }

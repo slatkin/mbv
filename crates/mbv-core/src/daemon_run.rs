@@ -495,6 +495,21 @@ pub fn run_with_options(
                             slot.item.playback_position_ticks()
                         };
                         owner.core.apply_completion_progress(*slot_id, position, *played);
+                        // Unlike TrackCompleted (which broadcasts unconditionally
+                        // below via the raw player event too), a full Stopped has
+                        // no other broadcast carrying the corrected queue —
+                        // without this, only this event's own client sees the
+                        // right value (via its own local apply), and any other
+                        // client or later resync stays stale until an unrelated
+                        // queue-affecting event happens to broadcast next.
+                        broadcast_queue_state(
+                            &ctrl_clients,
+                            &player,
+                            &shared_queue,
+                            &owner.core.queue,
+                            &owner.core.source,
+                            &owner.core.transitions,
+                        );
                     }
                 }
                 if let PlayerEvent::PausedChanged(paused) = &pe {

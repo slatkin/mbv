@@ -207,6 +207,11 @@ impl PlaybackRun {
         self.report_active_item();
         // Tracks and next-up belong to the entry that just started.
         self.tracks_initialized = false;
+        // Any resume re-seek was armed for whatever entry a forced jump asked
+        // for; mpv adopted a *different* entry here (that's what this path is
+        // for), so the armed value belongs to nothing about to restart and
+        // must not be misapplied to this one.
+        self.forced_resume_ticks = None;
         self.queue_next_up.reset();
         true
     }

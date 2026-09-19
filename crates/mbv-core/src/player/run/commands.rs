@@ -155,6 +155,7 @@ impl PlaybackRun {
                     if self.forced_slot_id == Some(slot_id) {
                         self.forced_slot_id = None;
                         self.forced_transition = None;
+                        self.forced_resume_ticks = None;
                     }
                     if active_slot_id == Some(slot_id) {
                         // Currently playing track removed — clear reporter item_id to prevent
@@ -281,9 +282,20 @@ impl PlaybackRun {
             }
             return;
         }
+        // Unlike JumpTo (which gets the target's resume position from the
+        // owner's canonical queue via the command itself), relative nav is
+        // resolved entirely locally — this run's own queue mirror is now kept
+        // current for exactly this (see `on_end_file`'s `apply_progress`
+        // call), so the same per-kind gate can be evaluated straight off it.
+        let resume_ticks = self
+            .queue
+            .slot(slot_id)
+            .and_then(|slot| crate::player::resume_ticks_for_item(&slot.item));
         self.forced_slot_id = Some(slot_id);
+        self.forced_resume_ticks = resume_ticks;
         if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
             self.forced_slot_id = None;
+            self.forced_resume_ticks = None;
             log::warn!(target: "player", "step to idx={idx} failed: {}", mpv_err_str(&e));
         } else {
             let _ = mpv.set_property("pause", false);

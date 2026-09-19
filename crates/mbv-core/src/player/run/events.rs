@@ -279,6 +279,12 @@ impl PlaybackRun {
                 let seconds = ticks as f64 / TICKS_PER_SECOND as f64;
                 if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
                     log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
+                } else {
+                    // Arms the same seek-settle guard below, so this restart
+                    // (still reporting position 0, since status hasn't caught
+                    // up to the seek yet) does not report progress to Emby
+                    // before the seek actually lands.
+                    self.last_seek_at = Some(Instant::now());
                 }
             }
             if let Some(item) = self.active_item().cloned() {
@@ -558,6 +564,14 @@ impl PlaybackRun {
             self.last_valid_pos, completed_runtime);
         let completed_pos =
             queue_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
+        // Keep this run's own queue mirror current too: it is never refreshed
+        // from the owner's canonical queue mid-session, so a later relative
+        // Next/Previous step (which resolves resume position locally, not via
+        // a dispatched command) would otherwise still see this slot's
+        // submission-time position.
+        if let Some(slot_id) = completed_slot_id {
+            self.queue.apply_progress(slot_id, completed_pos, played_out);
+        }
 
         // Consume the in-flight jump's identity alongside `forced_slot_id`
         // (same lifetime, design D4); it tags the `TrackChanged` emit below

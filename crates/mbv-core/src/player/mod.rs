@@ -71,14 +71,19 @@ pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
     }
 }
 
-/// The resume position, in ticks, for a slot-jump target — `resume_start_pos`
-/// evaluated against the canonical queue's current item for `slot_id`, so
-/// progress recorded since the queue was submitted is honored. `None` when
-/// the slot is gone or the item should not resume.
-pub fn resume_ticks_for_slot(queue: &PlaybackQueue, slot_id: QueueSlotId) -> Option<i64> {
-    let slot = queue.slot(slot_id)?;
-    let seconds = resume_start_pos(&slot.item);
+/// `resume_start_pos`, in ticks rather than seconds, gated on being positive.
+/// `None` when the item should not resume.
+pub fn resume_ticks_for_item(item: &QueueItem) -> Option<i64> {
+    let seconds = resume_start_pos(item);
     (seconds > 0.0).then_some((seconds * TICKS_PER_SECOND as f64) as i64)
+}
+
+/// The resume position, in ticks, for a slot-jump target — evaluated against
+/// the canonical queue's current item for `slot_id`, so progress recorded
+/// since the queue was submitted is honored. `None` when the slot is gone or
+/// the item should not resume.
+pub fn resume_ticks_for_slot(queue: &PlaybackQueue, slot_id: QueueSlotId) -> Option<i64> {
+    resume_ticks_for_item(&queue.slot(slot_id)?.item)
 }
 
 fn mpv_load_opts(item: &QueueItem) -> String {
