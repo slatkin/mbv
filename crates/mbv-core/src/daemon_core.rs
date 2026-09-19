@@ -57,6 +57,9 @@ enum DaemonEvent {
     /// Book-shaped counterpart to `AudiobookshelfProgress`, keyed by
     /// `library_item_id` only.
     AudiobookshelfBookProgress(crate::player::AudiobookshelfBookProgressUpdate),
+    /// Carries freshly fetched Emby progress for a queue adopted from a
+    /// persisted snapshot back to the daemon event loop.
+    QueueEnriched(Vec<EmbyItem>),
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.

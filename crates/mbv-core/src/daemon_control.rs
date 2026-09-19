@@ -177,6 +177,26 @@ fn handle_ctrl(
             *queue = PlaybackQueue::from_queue_items(items, Some(next_cursor));
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
+
+            let item_ids: Vec<String> = queue
+                .slots()
+                .iter()
+                .filter_map(|slot| slot.item.as_emby().map(|item| item.id.clone()))
+                .collect();
+            if !item_ids.is_empty() {
+                let tx = merged_tx.clone();
+                let lookup_client = client.lock().unwrap().clone();
+                std::thread::spawn(move || {
+                    match lookup_client.get_items_by_ids(&item_ids) {
+                        Ok(items) => {
+                            let _ = tx.send(DaemonEvent::QueueEnriched(items));
+                        }
+                        Err(error) => {
+                            log::warn!(target: "queue", "adopted queue enrichment fetch failed: {error}");
+                        }
+                    }
+                });
+            }
         }
         // Stale index-addressed jump from a cross-version peer. Slot-id +
         // request-identity JumpTo is now the only jump path, so an ordinal

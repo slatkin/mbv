@@ -1,3 +1,23 @@
+fn apply_queue_enriched(
+    items: Vec<EmbyItem>,
+    owner: &mut DaemonPlayerOwner,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    ctrl_clients: &ClientRegistry,
+) {
+    let result = owner.core.queue.merge_refresh(items);
+    if !result.updated_slots.is_empty() || !result.pruned_slots.is_empty() {
+        broadcast_queue_state(
+            ctrl_clients,
+            player,
+            shared_queue,
+            &owner.core.queue,
+            &owner.core.source,
+            &owner.core.transitions,
+        );
+    }
+}
+
 pub fn run_with_options(
     startup: DaemonStartupContext,
     audio_only: bool,
@@ -593,6 +613,9 @@ pub fn run_with_options(
                         &ctrl_clients,
                     );
                 }
+            }
+            DaemonEvent::QueueEnriched(items) => {
+                apply_queue_enriched(items, &mut owner, &player, &shared_queue, &ctrl_clients);
             }
             DaemonEvent::AudiobookshelfProgress(update) => {
                 apply_audiobookshelf_progress(
