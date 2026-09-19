@@ -747,13 +747,13 @@ impl App {
             Some(l) => l,
             None => return,
         };
-        // `lvl.is_fully_loaded()` compares `items.len()` against
-        // `lvl.total_count` -- with a letter-range pill active, that count
-        // is the FILTERED range's total, not the whole library's, so a
-        // fully-loaded small range (e.g. 40 items in `A–C`) would wrongly
-        // read as "nothing more to prefetch". `all_items` backs whole-library
-        // search (see `input.rs`'s `/` handler and `spawn_search_items_load`
-        // below), so it must never be satisfied by just the active range.
+        // `lvl.is_fully_loaded()` compares server rows consumed (`fetched_rows`)
+        // against the active range's `total_count` -- with a letter-range pill
+        // active, that count is the FILTERED range's total, not the whole
+        // library's, so a fully-loaded small range (e.g. 40 items in `A–C`)
+        // would wrongly read as "nothing more to prefetch" while `all_items`
+        // (which backs whole-library search) is still absent. `all_items` must
+        // never be satisfied by just the active range.
         if lvl.letter_filter.is_none() && lvl.is_fully_loaded() {
             return;
         }

@@ -124,7 +124,7 @@ impl App {
     /// Warm-up bound: one `Recursive=true` request per group child (about 15
     /// on the reference library), with at most `MAX_LEVEL_ARTIST_WARMUPS` (6)
     /// in flight; design D1/D5 measured about 3.8 MB peak and 3 seconds.
-    /// Re-warm only happens when the Service is replaced (`reset_emby_state`
+    /// Re-warm only happens when the Service is replaced (`clear_emby_memory`
     /// clears level state); reconnects dedupe through `LevelFillState`.
     pub(super) fn spawn_music_group_warmup(&mut self) {
         let library_ids = self.music_group_warmup_library_ids();
@@ -246,7 +246,7 @@ impl App {
         // reference library); the queue permits at most
         // `MAX_LEVEL_ARTIST_WARMUPS` (6) in flight, about 3.8 MB peak and
         // 3 seconds per design D1/D5. Re-warm follows Service replacement
-        // (`reset_emby_state` clears level state); reconnects dedupe through
+        // (`clear_emby_memory` clears level state); reconnects dedupe through
         // `LevelFillState`.
         // A candidate may start a level while it is still pending in the
         // warm-up queue. Remove that stale queue entry before the shared
