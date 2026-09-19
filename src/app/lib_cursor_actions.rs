@@ -133,10 +133,15 @@ impl App {
         let Some(level) = self.libs[lib_idx].nav_stack.last() else {
             return false;
         };
-        let corpus = level
+        let grouped_music = self.is_grouped_music_library(lib_idx);
+        let mut corpus = level
             .all_items
             .clone()
             .unwrap_or_else(|| level.items.clone());
+        // The whole-library search corpus is intentionally unfiltered, so
+        // apply the same grouped-music boundary rule before projecting it
+        // back into the browse level.
+        super::library_browse_actions::retain_grouped_music_items(&mut corpus, grouped_music);
         // The pill group the series sorts into (pills only exist at the
         // top level of pill-eligible libraries).
         let filter = if self.should_show_letter_pills(lib_idx) {

@@ -10,18 +10,9 @@ use mbv_core::api::EmbyItem;
 
 impl App {
     fn retain_grouped_music_level_items(&self, lib_idx: usize, level: &mut BrowseLevel) {
-        let fetched_rows = level.items.len();
-        super::library_browse_actions::retain_grouped_music_items(
-            &mut level.items,
+        super::library_browse_actions::retain_grouped_music_level_items(
+            level,
             self.is_grouped_music_library(lib_idx),
-        );
-        level.fetched_rows = fetched_rows;
-        level.resting = BrowseResting::new(
-            level
-                .resting()
-                .cursor()
-                .min(level.items.len().saturating_sub(1)),
-            level.resting().scroll(),
         );
     }
 
@@ -152,23 +143,30 @@ impl App {
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
-        let mut items = items;
-        let fetched_rows = items.len();
-        super::library_browse_actions::retain_grouped_music_items(
-            &mut items,
-            self.is_grouped_music_library(lib_idx),
-        );
         let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
             && item_types.as_deref() == Some("Video")
             && unplayed_only;
         if !is_feed_video_refresh {
             let mut items = Some(items);
-            self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
-                last.fetched_rows = fetched_rows;
+            let updated = self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
                 last.items = items.take().unwrap();
+                last.fetched_rows = last.items.len();
                 last.total_count = total_count;
                 last.loading = false;
             });
+            if updated {
+                let grouped_music = self.is_grouped_music_library(lib_idx);
+                if let Some(level) = self
+                    .libs
+                    .get_mut(lib_idx)
+                    .and_then(|lib| lib.nav_stack.last_mut())
+                {
+                    super::library_browse_actions::retain_grouped_music_level_items(
+                        level,
+                        grouped_music,
+                    );
+                }
+            }
         }
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
@@ -785,7 +783,14 @@ impl App {
                 switch_tab,
             } => {
                 match landing {
-                    NavigateLanding::Chain { nav_stack } => {
+                    NavigateLanding::Chain { mut nav_stack } => {
+                        let grouped_music = self.is_grouped_music_library(lib_idx);
+                        for level in &mut nav_stack {
+                            super::library_browse_actions::retain_grouped_music_level_items(
+                                level,
+                                grouped_music,
+                            );
+                        }
                         if let Some(lib) = self.libs.get_mut(lib_idx) {
                             lib.nav_stack = nav_stack;
                             // A completed navigation IS the saved position from now on;

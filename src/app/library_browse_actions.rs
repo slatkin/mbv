@@ -22,6 +22,19 @@ pub(super) fn retain_grouped_music_items(items: &mut Vec<EmbyItem>, grouped_musi
     }
 }
 
+pub(super) fn retain_grouped_music_level_items(level: &mut BrowseLevel, grouped_music: bool) {
+    let fetched_rows = level.items.len();
+    retain_grouped_music_items(&mut level.items, grouped_music);
+    level.fetched_rows = fetched_rows;
+    level.resting = BrowseResting::new(
+        level
+            .resting()
+            .cursor()
+            .min(level.items.len().saturating_sub(1)),
+        level.resting().scroll(),
+    );
+}
+
 /// D1 reveal-item table, pure over the item's own back-references and its
 /// ancestor chain (nearest→root, the `get_ancestors` order) so the table
 /// test covers the item_type → reveal mapping without a server. `ancestors`

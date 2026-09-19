@@ -97,6 +97,73 @@ fn grouped_refresh_filters_at_event_boundary_and_keeps_server_row_count() {
     assert_eq!(level.total_count, 2);
 }
 
+#[test]
+fn grouped_refresh_clamps_cursor_after_empty_folder_filter() {
+    let mut app = make_music_app(Vec::new());
+    app.libs[0].nav_stack.last_mut().unwrap().resting = BrowseResting::new(1, 1);
+    let mut empty = make_group_item("empty", "Empty");
+    empty.child_count = Some(0);
+    let kept = make_group_item("kept", "Kept");
+
+    app.handle_lib_event(LibEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "group-0".into(),
+        item_types: None,
+        unplayed_only: false,
+        items: vec![empty, kept],
+        total_count: 2,
+    });
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert_eq!(level.resting().cursor(), 0);
+    let position = level.to_position_level();
+    assert_eq!(position.cursor_index, 0);
+    assert_eq!(position.focused_item_id.as_deref(), Some("kept"));
+    assert_eq!(position.fetched_rows, Some(2));
+}
+
+#[test]
+fn grouped_chain_landing_filters_every_level_and_preserves_server_rows() {
+    let mut app = make_music_app(Vec::new());
+    let mut root = make_group_level();
+    root.items.clear();
+    let mut empty_root = make_group_item("empty-root", "Empty root");
+    empty_root.child_count = Some(0);
+    let kept_root = make_group_item("kept-root", "Kept root");
+    root.items.extend([empty_root, kept_root]);
+    root.total_count = root.items.len();
+
+    let mut child = make_music_album_level(Vec::new());
+    let mut empty_child = make_group_item("empty-child", "Empty child");
+    empty_child.child_count = Some(0);
+    let kept_child = make_group_item("kept-child", "Kept child");
+    child.items = vec![empty_child, kept_child];
+    child.total_count = child.items.len();
+    child.fetched_rows = child.items.len();
+
+    app.handle_lib_event(LibEvent::NavigateTo {
+        lib_idx: 0,
+        landing: super::types_events::NavigateLanding::Chain {
+            nav_stack: vec![root, child],
+        },
+        switch_tab: false,
+    });
+
+    assert_eq!(app.libs[0].nav_stack.len(), 2);
+    for (level, (expected_id, expected_fetched_rows)) in app.libs[0]
+        .nav_stack
+        .iter()
+        .zip([("kept-root", 2), ("kept-child", 2)])
+    {
+        assert_eq!(
+            level.items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(),
+            [expected_id]
+        );
+        assert_eq!(level.fetched_rows, expected_fetched_rows);
+        assert_eq!(level.to_position_level().fetched_rows, Some(expected_fetched_rows));
+    }
+}
+
 fn make_music_library_tab() -> LibraryTab {
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
