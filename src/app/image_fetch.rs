@@ -368,7 +368,10 @@ fn path_within(path: &str, root: &str) -> bool {
 /// Tracks with no `ParentId` go through the same `Path`-prefix map and are
 /// dropped when nothing matches — the album then resolves through the
 /// existing settle/fallback path. `tracks` must be in request order; each
-/// bucket preserves that order.
+/// bucket preserves that order. Orphan re-attribution is processed in each
+/// orphan bucket's first-appearance order in `tracks` (not HashMap order),
+/// so merged buckets append in request order and `vote_album_artist`'s
+/// first-seen tie-break is stable across runs.
 fn bucket_tracks_by_album<'a>(
     tracks: &'a [serde_json::Value],
     albums: &[mbv_core::api::EmbyItem],
@@ -383,10 +386,16 @@ fn bucket_tracks_by_album<'a>(
 
     let mut buckets: std::collections::HashMap<String, Vec<&'a serde_json::Value>> =
         std::collections::HashMap::new();
-    for track in tracks {
+    // First-appearance index of each `ParentId` bucket in the request-order
+    // `tracks` slice, so orphan re-attribution below can run in request
+    // order instead of `HashMap` enumeration order.
+    let mut bucket_first_seen: std::collections::HashMap<String, usize> =
+        std::collections::HashMap::new();
+    for (index, track) in tracks.iter().enumerate() {
         let parent = track["ParentId"].as_str().unwrap_or("");
         if !parent.is_empty() {
             buckets.entry(parent.to_string()).or_default().push(track);
+            bucket_first_seen.entry(parent.to_string()).or_insert(index);
             continue;
         }
         // Track without a `ParentId`: attribute by `Path` prefix against
@@ -399,12 +408,15 @@ fn bucket_tracks_by_album<'a>(
     // whose `Path` prefixes theirs, longest match winning so a nested
     // album folder claims its own disc tracks instead of donating them to
     // the outer album. Tracks that match nothing keep their original key.
-    let orphan_keys: Vec<String> = buckets
-        .keys()
-        .filter(|key| !album_ids.contains(key.as_str()))
-        .cloned()
+    // Buckets are processed in first-appearance order in `tracks` so that
+    // multiple orphans merging into one album append in request order and
+    // the vote's first-seen tie-break does not depend on `HashMap` order.
+    let mut orphan_keys: Vec<(String, usize)> = bucket_first_seen
+        .into_iter()
+        .filter(|(key, _)| !album_ids.contains(key.as_str()))
         .collect();
-    for key in orphan_keys {
+    orphan_keys.sort_by_key(|(_, index)| *index);
+    for (key, _) in orphan_keys {
         let bucket = buckets.remove(&key).unwrap_or_default();
         let mut unattributed = Vec::new();
         for track in bucket {
@@ -646,6 +658,32 @@ mod album_artist_batch_tests {
         // pipeline must return no artists so the level marks `Failed`.
         let albums = vec![album("alb-a", "/m/a")];
         assert!(level_artists_from_items(&[], &albums).is_empty());
+    }
+
+    #[test]
+    fn orphan_merge_order_follows_request_order_so_tie_break_is_stable() {
+        // Two disc subfolders re-attributing to one album with a tied vote:
+        // the winner must be the artist first seen in request order, no
+        // matter how `HashMap` enumerates the orphan bucket keys. Two track
+        // lists with different orphan key names (same first-appearance
+        // ordering) must yield identical merged-bucket order and winner.
+        let albums = vec![album("alb-1", "/m/a")];
+        for (k1, k2) in [("disc-1", "disc-2"), ("cd-b", "cd-a")] {
+            let tracks = vec![
+                track(k1, "/m/a/Disc 1/1.flac", Some("Zed"), &["Zed"]),
+                track(k2, "/m/a/Disc 2/1.flac", Some("Abc"), &["Abc"]),
+            ];
+            let buckets = bucket_tracks_by_album(&tracks, &albums);
+            assert_eq!(buckets["alb-1"].len(), 2, "keys {k1}/{k2}");
+            assert_eq!(buckets["alb-1"][0]["Path"], "/m/a/Disc 1/1.flac");
+            assert_eq!(buckets["alb-1"][1]["Path"], "/m/a/Disc 2/1.flac");
+            let artists = level_artists_from_items(&tracks, &albums);
+            assert_eq!(
+                artists,
+                vec![("alb-1".to_string(), "Zed".to_string())],
+                "keys {k1}/{k2}"
+            );
+        }
     }
 
     #[test]
