@@ -93,9 +93,12 @@ back to an entry regardless of what was actually watched.
 
 - **Progress-application call sites:** `daemon_run.rs`'s `TrackCompleted` arm
   and the generic `Stopped`-handling arm apply to the canonical queue via
-  `PlayerOwnerState::apply_completion_progress`; a cold-adopt refresh is the
-  fourth trigger that writes refreshed progress into that daemon queue after a
-  persisted snapshot is installed. `src/app/player_event.rs`'s
+  `PlayerOwnerState::apply_completion_progress`; a cold-adopt refresh writes
+  refreshed progress into that daemon queue after a persisted snapshot is
+  installed, via a non-`PlayerEvent` path (`daemon_control.rs`'s
+  `UnifiedAdoptQueue` post-adopt fetch → `DaemonEvent::QueueEnriched` →
+  `apply_queue_enriched` in `daemon_run.rs`, merged in-place by
+  `PlaybackQueue::merge_refresh_for_slots`). `src/app/player_event.rs`'s
   `Stopped`/`TrackCompleted` arms apply to the shell's own mirror; `events.rs`'s
   `on_end_file` applies to the run's own `ExecutionSequence` via
   `ExecutionSequence::apply_progress`, at the same point it computes
