@@ -89,7 +89,7 @@ The Wide hero arrangement SHALL apply one focused and unfocused surface treatmen
 
 ### Requirement: Wide track selection preserves keyboard behavior
 
-Enter on a selected wide-mode album leaf SHALL activate the track cursor in the already-visible album-track Workspace. Enter on a selected artist root SHALL toggle expansion and SHALL NOT enter its track Workspace. Artist Workspace track selection SHALL be entered through the existing Hero/Workspace focus action. Once either track Workspace has focus, existing track movement, playback, current-item scope, and Escape or Backspace exit behavior SHALL remain unchanged. Entering and exiting track selection SHALL NOT change the wide layout geometry.
+Enter on a selected wide-mode album leaf SHALL activate the track cursor in the already-visible album-track Workspace. Enter on a selected artist root SHALL toggle expansion and SHALL NOT enter its track Workspace. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL activate the cursor in its artist-track Workspace. Once either track Workspace has focus, existing track movement, playback, current-item scope, and Escape or Backspace exit behavior SHALL remain unchanged. Entering and exiting track selection SHALL NOT change the wide layout geometry.
 
 #### Scenario: Enter track selection
 - **WHEN** the user presses Enter on a selected album leaf in wide mode
@@ -99,6 +99,11 @@ Enter on a selected wide-mode album leaf SHALL activate the track cursor in the 
 - **WHEN** the user presses Enter on a selected artist root
 - **THEN** that root toggles expansion
 - **AND** track selection remains inactive
+
+#### Scenario: Right enters an expanded artist Workspace
+- **WHEN** the user presses Right on a selected artist root that is already expanded
+- **THEN** the artist-track Workspace cursor activates at its existing initial position
+- **AND** visual focus shifts right without moving either pane
 
 #### Scenario: Play focused track
 - **WHEN** the user presses Enter with an album or artist Workspace track focused

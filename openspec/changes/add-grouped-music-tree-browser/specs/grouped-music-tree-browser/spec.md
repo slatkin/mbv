@@ -7,7 +7,7 @@ Provide a shallow, directly navigable artist-and-album tree for Grouped Music, i
 ### Requirement: Grouped Music projects one stable shallow tree
 The Grouped Music browser SHALL present each settled artist group as a focusable artist root with its settled albums as leaf children. It SHALL preserve settled artist and album order. Artist identity SHALL use stable Service identity when available so equal display names remain distinct, and SHALL use a deterministic fallback identity when the Service supplies none. Album leaves SHALL retain their existing stable album targets.
 
-The tree SHALL have one owner for its selected node, expansion, viewport, multi-selection, and current-frame hit geometry. Ordinary settled-catalog replacement SHALL preserve the selected node, expansion state, surviving multi-selection, and closest practical viewport position by stable identity. A responsive presentation change SHALL reuse that owner and clamp its viewport rather than copying state into another control.
+The tree SHALL have one owner for its selected node, expansion, viewport, multi-selection, and current-frame hit geometry. Ordinary settled-catalog replacement SHALL preserve the selected node, expansion state, and surviving multi-selection by stable identity. When the selected node survives, its prior viewport row SHALL be preserved when projection bounds permit; otherwise the viewport SHALL apply only the minimum scroll needed to keep it visible and clamp at projection bounds. A responsive presentation change SHALL reuse that owner and apply the same visibility rule rather than copying state into another control.
 
 #### Scenario: Equal artist names remain distinct
 - **WHEN** two settled artist groups have the same display name but different stable Service identities
@@ -17,7 +17,7 @@ The tree SHALL have one owner for its selected node, expansion, viewport, multi-
 #### Scenario: A settled replacement preserves tree state
 - **WHEN** a replacement settled catalog still contains the selected node and expanded artist roots
 - **THEN** the selected node and surviving expansion state remain in use
-- **AND** the selected node remains visible at the closest practical viewport position
+- **AND** its prior viewport row is retained when bounds permit, otherwise the viewport scrolls only enough to keep it visible
 
 #### Scenario: Fallback artist remains browsable
 - **WHEN** an album has no stable artist identity from the Service
@@ -25,7 +25,7 @@ The tree SHALL have one owner for its selected node, expansion, viewport, multi-
 - **AND** that root does not request artist artwork
 
 ### Requirement: Artist roots and album leaves have distinct navigation
-Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right SHALL expand a focused artist root. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior; when filtering is active, it SHALL first dismiss the filter and focus the album in the unfiltered tree before enabling album-track selection. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
+Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior; when filtering is active, it SHALL first dismiss the filter and focus the album in the unfiltered tree before enabling album-track selection. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
 
 #### Scenario: Collapse removes descendants from navigation
 - **WHEN** the user collapses a focused artist root
@@ -35,6 +35,11 @@ Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. 
 #### Scenario: Left returns a leaf to its parent
 - **WHEN** an album leaf is focused and the user presses Left
 - **THEN** focus moves to that album's artist root without collapsing a different root
+
+#### Scenario: Right enters an expanded artist Workspace
+- **WHEN** an expanded artist root is focused and the user presses Right
+- **THEN** its artist-track Workspace receives focus
+- **AND** non-Wide geometry opens that Workspace in the Library Hero overlay
 
 #### Scenario: Album activation is preserved
 - **WHEN** the user presses Enter on an album leaf
@@ -90,9 +95,9 @@ The mounted Music destination SHALL remain the sole event boundary. Keyboard pre
 - **THEN** prior row geometry claims no pointer target
 
 ### Requirement: The integrated tree meets mbv visual contracts
-The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. It SHALL use semantic theme roles and SHALL preserve the canonical selected-row bar, distinct artist and album hierarchy, group-relative zebra treatment, release-year metadata, focused-title marquee behavior, scrollbar behavior, and readable indentation and expand/collapse glyphs at representative Wide and non-Wide widths. Album leaves SHALL obtain semantic state through the canonical music collapse and SHALL remain visually unplayed with no played or resume decoration; artist roots SHALL likewise use ordinary grouping semantics. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
+The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. At the repository's existing Wide geometry fixture and smallest supported non-Wide Library-panel fixture, it SHALL use semantic theme roles and preserve the canonical selected-row bar, distinct artist and album hierarchy, group-relative zebra treatment, release-year metadata when it fits, focused-title marquee behavior, and scrollbar behavior. Every visible node row SHALL retain its hierarchy/expansion glyph and at least one title cell; narrower content SHALL truncate or marquee rather than overrun the browser rectangle. Album leaves SHALL obtain semantic state through the canonical music collapse and SHALL remain visually unplayed with no played or resume decoration; artist roots SHALL likewise use ordinary grouping semantics. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
 
-The change SHALL be accepted only after automated checks and live user review of representative Wide, Narrow, Mini, and Library Hero overlay behavior. If the dependency's supported rendering and style extension points cannot satisfy these contracts, the dependency SHALL be removed and this change SHALL not merge; a parallel bespoke tree renderer is not an acceptance fallback.
+The change SHALL be accepted only after automated checks at the existing Wide and smallest supported non-Wide Library-panel fixtures and live user review in Wide, Narrow, Mini, and Library Hero overlay states. If the dependency's supported rendering and style extension points cannot satisfy these contracts, the dependency SHALL be removed and this change SHALL not merge; a parallel bespoke tree renderer is not an acceptance fallback.
 
 #### Scenario: Focused node uses the selected-row bar
 - **WHEN** the Library panel is focused and the tree paints its selected artist root or album leaf

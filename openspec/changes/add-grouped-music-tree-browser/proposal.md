@@ -7,10 +7,10 @@ Grouped Music presents a settled artist hierarchy as a flat list whose artist la
 - **BREAKING (Grouped Music interaction):** replace the Grouped Music album `MediaList` with a two-level tree whose focusable artist roots expand or collapse and whose album leaves retain existing album activation.
 - Add artist-root play, enqueue, shuffle, context, and multi-selection behavior, resolving roots to their visible album descendants in settled display order.
 - Replace Grouped Music's flat full-corpus Inline Search presentation with an in-place, 300 ms debounced fuzzy tree filter over the current settled tree. Matching preserves settled order, retains artist ancestors, force-expands matching paths, and restores pre-filter selection and expansion on dismissal.
-- Add an artist Hero with artwork and summary metadata plus an artist Workspace containing the in-scope tracks grouped under non-selectable album headings. Album Hero and Workspace behavior remains unchanged.
+- Add an artist Hero with artwork and summary metadata plus an artist Workspace containing the in-scope tracks grouped under non-selectable album headings. Album Hero and Workspace behavior remains unchanged. In non-Wide geometry, selected artist or album detail uses the existing Library Hero overlay rather than retaining Grouped Music's album-only inline-row Hero, because a focusable artist root needs the same complete Workspace-bearing detail surface as its Wide presentation.
 - Retain stable Emby artist identity in music data, with deterministic fallback identity for albums whose Service payload has no artist identity.
 - Integrate the tree through `MusicContent`, the existing Library panel slots, central keyboard policy, and latest-frame mouse geometry. `TreeListViewState` is the sole browser cursor, expansion, scroll, and mark owner; no second router, painter, or shell mirror is added.
-- Evaluate visual customization as an acceptance gate: the dependency must reproduce mbv's selected-row bar, hierarchy, semantic theme roles, zebra treatment, metadata, marquee, scrollbar, and representative Wide/non-Wide behavior through its supported extension points. A parallel bespoke tree renderer is out of scope.
+- Evaluate visual customization as an acceptance gate: the dependency must reproduce mbv's selected-row bar, hierarchy, semantic theme roles, zebra treatment, metadata, marquee, and scrollbar through its supported extension points at the existing Wide and smallest supported non-Wide Library-panel fixture widths. A parallel bespoke tree renderer is out of scope.
 - Keep every other destination, the Music track Workspace, and the artist track Workspace on canonical flat `MediaList` controls.
 
 ## Capabilities
@@ -23,7 +23,8 @@ Grouped Music presents a settled artist hierarchy as a flat list whose artist la
 
 - `canonical-media-lists`: Removes the Grouped Music album browser from canonical flat-list ownership while retaining canonical `MediaList` ownership for Music track Workspaces.
 - `stable-music-library-grouping`: Changes settled artist labels into stable, focusable tree roots while preserving atomic publication and refresh continuity.
-- `music-library-hero`: Adds artist-focused Hero and grouped-track Workspace content alongside the existing album-focused detail behavior.
+- `music-library-hero`: Adds artist-focused Hero and grouped-track Workspace content alongside the existing album-focused detail behavior and removes Grouped Music's album-only narrow inline-row Hero.
+- `library-hero-overlay`: Extends non-Wide overlay entry from canonical browser rows to Grouped Music artist roots and album leaves.
 - `inline-library-search`: Defines Grouped Music's deliberate in-place current-tree filtering exception while all other destinations retain flat full-library results.
 - `media-list-multi-select`: Extends uniform selection outcomes to the Grouped Music tree, including root aggregate state and visible-descendant materialization, without making artist identities effect targets.
 
