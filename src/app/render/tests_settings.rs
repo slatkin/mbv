@@ -8,7 +8,9 @@ use ratatui::Terminal;
 
 #[test]
 fn settings_fullscreen_fallback_paints_the_shell_over_the_frame() {
-    let width = 40;
+    // Width 80 deliberately differs from the retired 40-col clamp: the
+    // fullscreen contract must fail if the shell ever re-clamps.
+    let width = 80;
     let height = 12;
     let rows = vec![SettingsRow {
         label: "Stay alive".into(),
