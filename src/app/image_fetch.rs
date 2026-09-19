@@ -168,8 +168,9 @@ impl App {
         }
         self.libs
             .iter()
-            .filter(|lib| lib.library.collection_type == "music")
-            .map(|lib| lib.library.id.clone())
+            .enumerate()
+            .filter(|(lib_idx, _)| self.is_grouped_music_library(*lib_idx))
+            .map(|(_, lib)| lib.library.id.clone())
             .collect()
     }
 

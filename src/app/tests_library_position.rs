@@ -74,6 +74,27 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
 }
 
 #[test]
+fn restored_position_uses_actual_server_rows_over_stale_persisted_count() {
+    let saved = crate::config::LibraryPosition {
+        levels: vec![crate::config::LibraryPositionLevel {
+            fetched_rows: Some(100),
+            parent_id: "lib-movies".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let restored = restore_library_position_with_fetched_rows(&saved, 3, |_| {
+        Ok((make_items(103), 105, 105))
+    })
+    .expect("restore result")
+    .expect("restored position");
+
+    assert_eq!(restored.1[0].fetched_rows, 105);
+    assert_eq!(restored.0.levels[0].fetched_rows, Some(105));
+}
+
+#[test]
 fn restore_library_position_keeps_saved_path_when_levels_exist() {
     let mut root_a = make_item("A", "Folder");
     root_a.id = "folder-a".into();

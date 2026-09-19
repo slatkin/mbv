@@ -145,7 +145,7 @@ fn restored_default_library_fallback_rewrites_state_file_after_success() {
 
     let restored_items = make_items(2);
     let restored_nav = vec![BrowseLevel {
-        fetched_rows: 0,
+        fetched_rows: 2,
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
         items: restored_items.clone(),

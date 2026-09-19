@@ -443,46 +443,49 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
-        let grouped_music = self.is_grouped_music_library(lib_idx);
         std::thread::spawn(move || {
-            let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
-                let letter_filter = saved_level
-                    .letter_filter_index
-                    .and_then(super::render::LetterFilter::for_index);
-                let (name_ge, name_lt) = letter_filter
-                    .as_ref()
-                    .map(|f| (f.name_ge, f.name_lt))
-                    .unwrap_or((None, None));
-                let (mut items, total_count) = client.get_items_sorted_ranged(
-                    &saved_level.parent_id,
-                    saved_level.item_types.as_deref(),
-                    saved_level.unplayed_only,
-                    0,
-                    PAGE_SIZE,
-                    &saved_level.sort_by,
-                    &saved_level.sort_order,
-                    name_ge,
-                    name_lt,
-                )?;
-                retain_grouped_music_items(&mut items, grouped_music);
-                if total_count > items.len() {
-                    let (mut items, total_count) = client.get_items_sorted_ranged(
+            let restored = super::restore_library_position_with_fetched_rows(
+                &saved,
+                visible_rows,
+                |saved_level| {
+                    let letter_filter = saved_level
+                        .letter_filter_index
+                        .and_then(super::render::LetterFilter::for_index);
+                    let (name_ge, name_lt) = letter_filter
+                        .as_ref()
+                        .map(|f| (f.name_ge, f.name_lt))
+                        .unwrap_or((None, None));
+                    let (items, total_count) = client.get_items_sorted_ranged(
                         &saved_level.parent_id,
                         saved_level.item_types.as_deref(),
                         saved_level.unplayed_only,
                         0,
-                        total_count,
+                        PAGE_SIZE,
                         &saved_level.sort_by,
                         &saved_level.sort_order,
                         name_ge,
                         name_lt,
                     )?;
-                    retain_grouped_music_items(&mut items, grouped_music);
-                    Ok((items, total_count))
-                } else {
-                    Ok((items, total_count))
-                }
-            });
+                    let fetched_rows = items.len();
+                    if total_count > fetched_rows {
+                        let (items, total_count) = client.get_items_sorted_ranged(
+                            &saved_level.parent_id,
+                            saved_level.item_types.as_deref(),
+                            saved_level.unplayed_only,
+                            0,
+                            total_count,
+                            &saved_level.sort_by,
+                            &saved_level.sort_order,
+                            name_ge,
+                            name_lt,
+                        )?;
+                        let fetched_rows = items.len();
+                        Ok((items, total_count, fetched_rows))
+                    } else {
+                        Ok((items, total_count, fetched_rows))
+                    }
+                },
+            );
             match restored {
                 Ok(Some((position, nav_stack))) => {
                     let _ = tx.send(LibEvent::RestoreLibraryPosition {
@@ -581,7 +584,6 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
-        let grouped_music = self.is_grouped_music_library(lib_idx);
         let spawn_started = std::time::Instant::now();
         std::thread::spawn(move || {
             match client.get_items_sorted(
@@ -593,9 +595,8 @@ impl App {
                 &sort_by,
                 &sort_order,
             ) {
-                Ok((mut items, total_count)) => {
+                Ok((items, total_count)) => {
                     let fetched_rows = items.len();
-                    retain_grouped_music_items(&mut items, grouped_music);
                     log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} thread_total={}ms first3={:?}",
                         items.len(),
                         spawn_started.elapsed().as_millis(),
@@ -693,7 +694,6 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
-        let grouped_music = self.is_grouped_music_library(lib_idx);
         let (name_ge, name_lt) = letter_filter
             .as_ref()
             .map(|f| (f.name_ge, f.name_lt))
@@ -710,15 +710,12 @@ impl App {
                 name_ge,
                 name_lt,
             ) {
-                Ok((mut items, total_count)) => {
-                    let fetched_rows = items.len();
-                    retain_grouped_music_items(&mut items, grouped_music);
+                Ok((items, total_count)) => {
                     let _ = tx.send(LibEvent::PageAppended {
                         lib_idx,
                         parent_id,
                         items,
                         total_count,
-                        fetched_rows,
                     });
                 }
                 Err(e) => {

@@ -75,6 +75,28 @@ fn non_grouped_music_filter_keeps_empty_folder() {
     assert_eq!(items.len(), 1);
 }
 
+#[test]
+fn grouped_refresh_filters_at_event_boundary_and_keeps_server_row_count() {
+    let mut app = make_music_app(Vec::new());
+    let mut empty = make_group_item("empty", "Empty");
+    empty.child_count = Some(0);
+    let kept = make_group_item("kept", "Kept");
+
+    app.handle_lib_event(LibEvent::Refreshed {
+        lib_idx: 0,
+        parent_id: "group-0".into(),
+        item_types: None,
+        unplayed_only: false,
+        items: vec![empty, kept],
+        total_count: 2,
+    });
+
+    let level = app.libs[0].nav_stack.last().unwrap();
+    assert_eq!(level.items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>(), ["kept"]);
+    assert_eq!(level.fetched_rows, 2);
+    assert_eq!(level.total_count, 2);
+}
+
 fn make_music_library_tab() -> LibraryTab {
     let mut library = make_item("Music", "CollectionFolder");
     library.id = "lib-music".into();
