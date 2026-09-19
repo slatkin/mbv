@@ -477,10 +477,7 @@ fn vote_album_artist<'a>(
 /// True when `path` is `root` itself or lies underneath it — a
 /// component-aligned prefix, so `/a/ab/1.flac` never attributes to `/a/a`.
 fn path_within(path: &str, root: &str) -> bool {
-    path.starts_with(root)
-        && (path.len() == root.len()
-            || root.ends_with('/')
-            || path.as_bytes()[root.len()] == b'/')
+    std::path::Path::new(path).starts_with(root)
 }
 
 /// Groups a level's Audio rows by the album they belong to (design D1/D3).

@@ -784,12 +784,8 @@ impl App {
             } => {
                 match landing {
                     NavigateLanding::Chain { mut nav_stack } => {
-                        let grouped_music = self.is_grouped_music_library(lib_idx);
                         for level in &mut nav_stack {
-                            super::library_browse_actions::retain_grouped_music_level_items(
-                                level,
-                                grouped_music,
-                            );
+                            self.retain_grouped_music_level_items(lib_idx, level);
                         }
                         if let Some(lib) = self.libs.get_mut(lib_idx) {
                             lib.nav_stack = nav_stack;
