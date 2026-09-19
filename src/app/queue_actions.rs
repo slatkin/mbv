@@ -64,8 +64,8 @@ impl App {
         self.undo_stack_for_scope_mut(scope)
             .push(UndoEntry::Remove(pos, item));
         self.persist_local_queue_state_if_needed(scope);
-        let sent_queue_remove = controls_playback_queue
-            && (active || scope == QueueScope::Remote || self.player.is_remote());
+        let sent_queue_remove =
+            controls_playback_queue && self.queue_edit_reaches_player(scope, active);
         if sent_queue_remove {
             // Slot identity was captured before the local removal above.
             // Prefer the unified remote path; the in-process command is now
@@ -189,9 +189,7 @@ impl App {
             self.queue_dirty = true;
         }
         self.persist_local_queue_state_if_needed(scope);
-        if controls_playback_queue
-            && (active || scope == QueueScope::Remote || self.player.is_remote())
-        {
+        if controls_playback_queue && self.queue_edit_reaches_player(scope, active) {
             // Prefer the unified remote path; the in-process command is now
             // slot-addressed (source) with an ordinal destination.
             let sent_unified = self

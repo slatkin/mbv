@@ -1,5 +1,7 @@
 use super::notify_actions::ToastSeverity;
-use super::{App, PendingQueueAction, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry};
+use super::{
+    App, PendingQueueAction, PlaybackTarget, PlayerTab, QueueScope, QueueScopeResolution, UndoEntry,
+};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_execution_sequence::ExecSlot;
 use mbv_core::playback_queue::{QueueMutationResult, QueueSlotId, RefreshMergeResult};
@@ -12,6 +14,19 @@ impl App {
 
     pub(super) fn has_direct_remote_queue(&self) -> bool {
         self.player.is_remote() && self.has_remote_queue()
+    }
+
+    pub(super) fn queue_edits_reach_owner(&self) -> bool {
+        matches!(self.playback_target(), PlaybackTarget::Local(_))
+    }
+
+    /// Whether a canonical-queue edit in `scope` should also be sent to the
+    /// player as a live command. `active` is the player's current playing
+    /// state (`self.player.status.lock().unwrap().active`), passed in since
+    /// callers already hold it.
+    pub(super) fn queue_edit_reaches_player(&self, scope: QueueScope, active: bool) -> bool {
+        scope == QueueScope::Remote
+            || (active || self.player.is_remote()) && self.queue_edits_reach_owner()
     }
 
     pub(super) fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
@@ -97,6 +112,9 @@ impl App {
         items: Vec<ExecSlot>,
     ) -> bool {
         if items.is_empty() || scope != self.playing_queue_scope() {
+            return true;
+        }
+        if scope != QueueScope::Remote && !self.queue_edits_reach_owner() {
             return true;
         }
         if !self.player.is_remote() && !self.player.status.lock().unwrap().active {
