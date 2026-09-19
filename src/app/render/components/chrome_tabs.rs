@@ -7,7 +7,7 @@
 //! (`App::ensure_tab_visible`) and the painted bar cannot drift.
 
 use ratatui::layout::Rect;
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Paragraph, Tabs};
 use ratatui::Frame;
@@ -165,7 +165,7 @@ pub(in crate::app) fn render_tab_bar(
                 let style = if model.hovered == Some(position) {
                     Style::default().fg(palette::TEXT_STRONG)
                 } else {
-                    Style::default().fg(Color::Rgb(73, 81, 86))
+                    Style::default().fg(palette::PILL_FG)
                 };
                 Line::from(Span::styled(format!("  {n}  "), style))
             };
