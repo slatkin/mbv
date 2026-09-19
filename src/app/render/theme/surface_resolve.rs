@@ -50,6 +50,11 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     if follow_focus {
         SurfaceColors::fill(if row.soft {
+            // The soft content-body surface fill: its own value, not the
+            // scrollbar's `SCROLLBAR`, whose `Palette::Green2` value it
+            // shares today — the two are equal today and independently
+            // editable, so a scrollbar edit moves the scrollbar alone
+            // (unify-surface-colour-neutral task 4.2).
             Palette::Green2.color()
         } else {
             row.level.focused_fill()

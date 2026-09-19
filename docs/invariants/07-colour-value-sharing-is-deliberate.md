@@ -1,54 +1,67 @@
 # Invariant 7 — A shared colour value is a deliberate split; an alias is a deliberate bond
 
-**Scope:** `src/app/render/theme/` — the value tier (`primitives.rs` today, the
-`Palette` enum in `palette.rs` once `palette-enum` lands), the role tier
-(`mod.rs`, 51 role consts), and the surface tier (`surface.rs` level fills,
-`surface_table.rs` rows, `surface_resolve.rs`) — plus the re-export bridge
-`src/app/palette.rs` and every `palette::` consumer.
+**Scope:** `src/app/render/theme/` — the value tier (the `Palette` enum in
+`palette.rs`, landed by `palette-enum`), the role tier (`mod.rs`, 51 role
+consts), and the surface tier (`surface.rs` level fills, `surface_table.rs`
+rows, `surface_resolve.rs`) — plus the re-export bridge `src/app/palette.rs`
+and every `palette::` consumer.
 
 ## The invariant
 
-Two symbols in the theme can hold the same colour in two opposite ways, and the
-syntax is the distinction:
+Two symbols in the theme can hold the same colour in two opposite ways, and
+the distinction is what the symbols are:
 
-- **Two independent literals with equal values** assert that the two are
-  *independently editable*. They are equal today and either may move alone.
+- **Two independent roles naming one `Palette` variant** assert that the two
+  are *independently editable*. They are equal today and either may move
+  alone, by repointing to a different variant. Until one moves, both follow
+  the variant's one literal.
 - **An alias (`const X: Color = Y;`)** asserts that the two *must match*. An
-  edit to `Y` is meant to reach `X`.
+  edit to `Y` is meant to reach `X`. Theme code currently holds no alias:
+  `palette-enum` deleted the two that existed, and their former bonds survive
+  only as the comments recording them.
 
-`primitives.rs` currently holds 42 consts over 29 distinct values: 40 literals
-and 2 aliases. Eight values are shared by more than one symbol:
+The value tier is the closed `Palette` enum: 29 variants, one `Rgb` literal
+each in `const fn color()`, with a uniqueness test forbidding two variants at
+one hex — the tier can no longer hold a duplicate. The deliberate splits live
+one tier up, as independent roles and surface values naming the same variant.
+The eight shared values the primitive tier carried over, and where each
+group's rationale lives now:
 
-| Value | Symbols | Split rationale in code |
-|---|---|---|
-| `#1e2326` | `DARK_BG`, `PILL_SELECTOR_BG`, `PILL_SELECTOR_ROW_BG`, `PILL_SELECTOR_SELECTED_FG` | **none — independence unstated** |
-| `#2d353b` | `ARTWORK_PLACEHOLDER`, `LIBRARY_SIDE_BG`, `SELECTED_ROW_BAR` | yes, on `SELECTED_ROW_BAR` |
-| `#3c4841` | `SURFACE_FOCUSED_BG`, `BG_GREEN`, `PILL_SELECTOR_OVERFLOW_FG` *(alias of `BG_GREEN`)* | yes, on both literals |
-| `#48584e` | `SOFT_CONTENT_BODY_BG`, `BG_GREEN_SOFT`, `SCROLLBAR` *(alias of `BG_GREEN_SOFT`)* | yes, on both literals |
-| `#3f3f3f` | `OVERLAY`, `ARTWORK_LOADING_PLACEHOLDER` | yes, on both |
-| `#35a77c` | `AQUA`, `PLAYBACK_TITLE` | yes (`now-playing-media-type-titles` D2) |
-| `#dbbc7f` | `YELLOW`, `PLAYBACK_CONTEXT` | yes (`now-playing-media-type-titles` D2) |
-| `#3a94c5` | `FOAM`, `PILL_SELECTOR_SELECTED_BG` | yes, on `PILL_SELECTOR_SELECTED_BG` |
+| Value | Variant | Symbols | Split rationale in code |
+|---|---|---|---|
+| `#1e2326` | `Ink` | `SURFACE_CHROME`, `PILL_ROW_BG`, `PILL_BG`, `PILL_SELECTED_FG` | **none — independence unstated** |
+| `#2d353b` | `Slate` | `SURFACE_BACKDROP`, `SELECTED_ROW_BG` | yes, on `SELECTED_ROW_BG` |
+| `#3c4841` | `Green1` | `SURFACE_FOCUSED`, `TEXT_ACCENT_MUTED`, `PILL_OVERFLOW_FG` *(former alias of the text green)* | yes, on both split halves |
+| `#48584e` | `Green2` | `SCROLLBAR` *(former alias of the soft fill)*, the soft content-body fill (`surface_resolve.rs`) | yes, on both |
+| `#3f3f3f` | `Grey2` | `BORDER_UNFOCUSED`, the `ArtworkLoadingPlaceholder` row (`surface_table.rs`) | yes, on the row |
+| `#35a77c` | `Aqua` | `ACCENT`, `PLAYBACK_TITLE_FG` | yes (`now-playing-media-type-titles` D2) |
+| `#dbbc7f` | `Yellow` | `TEXT_FOCUS_ACCENT`, `TEXT_HERO_TITLE`, `HERO_CREDITS_NAME`, `ROW_DATE_FG`, `PLAYBACK_CONTEXT_FG` | yes, on `PLAYBACK_CONTEXT_FG` (`now-playing-media-type-titles` D2) |
+| `#3a94c5` | `Foam` | `TEXT_METADATA`, `PILL_SELECTED_BG` | yes, on `PILL_SELECTED_BG` |
 
-Seven of the eight carry the rationale in a doc comment naming the *other*
+Seven of the eight carry the rationale in a comment naming the *other*
 symbol and the change that split them:
 
 ```rust
-/// The now-playing title row's title-part value. A primitive of its own, not
-/// the brand aqua's `AQUA`, whose value it shares today: a brand-aqua edit
-/// can never move the now-playing title (now-playing-media-type-titles D2).
-pub(super) const PLAYBACK_TITLE: Color = Color::Rgb(53, 167, 124);
+/// The now-playing title row's title part: the item's own name (episode,
+/// track, entry, ...). Its own role rather than `ACCENT`/`TEXT_FOCUS_ACCENT`,
+/// whose `Palette::Aqua` value it shares today: the two are equal today and
+/// independently editable, so a focus-accent or brand edit moves the accent
+/// alone (now-playing-media-type-titles D2).
+pub const PLAYBACK_TITLE_FG: Color = Palette::Aqua.color();
 ```
 
-Note both aliases sit *inside* a split group: `PILL_SELECTOR_OVERFLOW_FG` is
-bonded to `BG_GREEN` while `SURFACE_FOCUSED_BG` is split from it. Same value,
-three symbols, two different contracts. Read the syntax, not the hex.
+Note both former aliases sat *inside* a split group: `PILL_OVERFLOW_FG` was
+bonded to the text green while `SURFACE_FOCUSED` was split from it. Same
+value, three symbols, two different recorded contracts — and since
+`palette-enum` removed the alias tier, both are independent roles over
+`Palette::Green1` whose comments carry the difference. Read the comment, not
+the hex.
 
 Regenerate the table rather than trusting it:
 
 ```bash
-rg -o 'const (\w+): Color = Color::Rgb\(\s*(\d+),\s*(\d+),\s*(\d+)' \
-   src/app/render/theme/primitives.rs
+rg -o 'Palette::(\w+) => Color::Rgb\(\s*0x(..),\s*0x(..),\s*0x(..)' \
+   src/app/render/theme/palette.rs
 ```
 
 ## Why it matters
@@ -61,12 +74,14 @@ looking at.
 
 ## What breaks if it is violated
 
-- **Collapsing a split.** Merging `AQUA` and `PLAYBACK_TITLE` into one symbol
-  makes a brand-accent edit silently repaint the now-playing title — the exact
-  regression `now-playing-media-type-titles` D2 was written to prevent.
-- **Breaking a bond.** Replacing the `SCROLLBAR = BG_GREEN_SOFT` alias with an
-  independent literal makes a scrollbar edit stop following its source, which
-  is the opposite of what the alias declares.
+- **Collapsing a split.** Merging `ACCENT` and `PLAYBACK_TITLE_FG` into one
+  symbol makes a brand-accent edit silently repaint the now-playing title —
+  the exact regression `now-playing-media-type-titles` D2 was written to
+  prevent.
+- **Orphaning a recorded split.** Repointing one half of a documented share
+  (giving it a new variant) without deleting that group's rationale in the
+  same commit leaves a comment asserting a share that no longer exists — the
+  divergence becomes invisible again.
 - **Misreading a split as the defect.** This has happened. The `palette-enum`
   change's original proposal named the duplicate literals and their comments as
   the problem — "duplicate `Rgb` literals and primitive-to-primitive aliases
@@ -75,11 +90,11 @@ looking at.
   (`861a83fe`) once the premise was checked against the code. The duplicates
   *were* the isolation mechanism.
 
-A consequence worth stating: a uniqueness test over a closed palette
+A consequence worth stating: the uniqueness test over the closed palette
 (`assert_ne!(a.color(), b.color())`) forbids two variants at one hex. That is
 correct — real divergence means a new hex — but it means a "same value today,
-different tomorrow" placeholder cannot live in the value tier. It lives in the
-role tier, as two roles naming one value plus the comment above.
+different tomorrow" placeholder cannot live in the value tier. It lives in
+the role tier, as two roles naming one variant plus the comment above.
 
 ## How the code maintains it today
 
@@ -92,9 +107,9 @@ The enforcement that does exist is narrower:
   consumer cannot bypass the role tier.
 - The one closed surface resolver (`surface_colors`) keeps paint sites from
   naming roles for surfaces at all.
-- Once `palette-enum` lands, the `Palette` uniqueness and `docs/palette.json`
-  drift tests (`theme/palette.rs`) pin the value tier against the approved name
-  table and the docs.
+- The `Palette` uniqueness and `docs/palette.json` drift tests
+  (`theme/palette.rs`), landed by `palette-enum`, pin the value tier against
+  the approved name table and the docs.
 
 `#1e2326`'s four symbols are the live gap: nothing records whether the tab-bar
 background and the three pill-selector symbols are independent or bonded.
@@ -105,10 +120,11 @@ background and the three pill-selector symbols are independent or bonded.
    change that split them, so a reader landing on either half finds the rule.
    This is the only mechanism that has worked — treat deleting one as a
    behavioural change, not a comment cleanup.
-2. When a split genuinely diverges, give the moving symbol its new value and
+2. When a split genuinely diverges, give the moving symbol its new variant and
    delete that group's rationale in the same commit; the comment's
    disappearance is then the record that the split became real.
-3. Document `#1e2326`'s four symbols one way or the other, next time someone is
+3. Document `#1e2326`'s four symbols (`SURFACE_CHROME`, `PILL_ROW_BG`,
+   `PILL_BG`, `PILL_SELECTED_FG`) one way or the other, next time someone is
    in that file for another reason.
 4. Do not attempt a "these two must differ" test. It asserts nothing while the
    values are equal, which is their entire declared state.
@@ -117,8 +133,8 @@ background and the three pill-selector symbols are independent or bonded.
 
 - Read this file and `openspec/specs/ui-design-language/spec.md` before changing
   any symbol under `src/app/render/theme/`.
-- A duplicated literal with a comment is load-bearing. Verify the comment
-  against the change it cites before treating the duplication as cleanup.
+- A shared-variant pair's comment is load-bearing. Verify the comment against
+  the change it cites before treating the share as cleanup.
 - Line numbers in colour plans go stale fast — every migration inserts or
   removes lines above the literals, and a revert moves them back. Re-derive with
   `rg` against HEAD rather than trusting a plan, a handoff, or this file.

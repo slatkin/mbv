@@ -30,6 +30,11 @@ use palette::Palette;
 // Surfaces
 pub const SURFACE_BACKDROP: Color = Palette::Slate.color();
 pub const SURFACE_CHROME: Color = Palette::Ink.color();
+/// The focused surface's own fill; deliberately not the text-green
+/// `TEXT_ACCENT_MUTED`, whose `Palette::Green1` value it shares today: the
+/// two are equal today and independently editable, so a text-colour edit
+/// moves the text alone (and vice versa; unify-surface-colour-neutral
+/// task 4.2).
 pub const SURFACE_FOCUSED: Color = Palette::Green1.color();
 pub const SURFACE_RESTING: Color = Palette::Storm.color(); // resting-content / unfocused half
                                                            // Transitional: retired from production by task 4.2 (`SURFACE_PLAYBACK` was
@@ -73,11 +78,17 @@ pub const PILL_ROW_BG: Color = Palette::Ink.color();
 pub const PILL_BG: Color = Palette::Ink.color();
 pub const PILL_SELECTED_BG: Color = Palette::Foam.color(); // selected pill-selector surface (#3a94c5);
                                                            // shares `TEXT_METADATA`'s `Palette::Foam`
-                                                           // value today, kept separate so a
-                                                           // metadata-text edit cannot move this
-                                                           // surface fill
+                                                           // value today, kept separate from the
+                                                           // metadata text: the two are equal today
+                                                           // and independently editable, so an edit
+                                                           // to either moves it alone
 pub const PILL_FG: Color = Palette::Ash.color();
 pub const PILL_SELECTED_FG: Color = Palette::Ink.color();
+/// The pill-selector's overflow/edge accent. A former value alias of the
+/// text green (`PILL_SELECTOR_OVERFLOW_FG = BG_GREEN`), now its own role: it
+/// shares `TEXT_ACCENT_MUTED`'s `Palette::Green1` value today — the two are
+/// equal today and independently editable, so an edit to either moves it
+/// alone.
 pub const PILL_OVERFLOW_FG: Color = Palette::Green1.color();
 
 // Text: readable content foregrounds, independent of surface
@@ -97,9 +108,10 @@ pub const TEXT_ON_ACCENT: Color = Palette::Grey1.color(); // near-black text pai
 pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playing"/confirmed value text;
                                                               // deliberately not the focused surface's
                                                               // `SURFACE_FOCUSED`, whose `Palette::Green1`
-                                                              // value it shares today — a text-colour edit
-                                                              // can never move a surface appearance, and
-                                                              // vice versa (task 4.2)
+                                                              // value it shares today: the two are equal
+                                                              // today and independently editable, so a
+                                                              // text-colour edit moves the text alone
+                                                              // (unify-surface-colour-neutral task 4.2)
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, pct, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the
@@ -107,8 +119,9 @@ pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (d
 /// its ordinary foreground roles on the bar).
 pub const SELECTED_ROW_BG: Color = Palette::Slate.color(); // its own role, deliberately not
                                                            // `SURFACE_BACKDROP`, whose `Palette::Slate`
-                                                           // value it shares today, so an edit to either
-                                                           // can never move the bar
+                                                           // value it shares today: the two are equal
+                                                           // today and independently editable, so an
+                                                           // edit to either moves it alone
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours
@@ -166,22 +179,27 @@ pub const PLAYBACK_VALUE_FG: Color = Palette::Mint.color(); // title/codec value
 pub const PLAYBACK_META_FG: Color = Palette::Sage.color(); // captions/time
 /// The now-playing title row's title part: the item's own name (episode,
 /// track, entry, ...). Its own role rather than `ACCENT`/`TEXT_FOCUS_ACCENT`,
-/// whose `Palette::Aqua` value it shares today, so a focus-accent or brand
-/// edit cannot move it (now-playing-media-type-titles D2).
+/// whose `Palette::Aqua` value it shares today: the two are equal today and
+/// independently editable, so a focus-accent or brand edit moves the accent
+/// alone (now-playing-media-type-titles D2).
 pub const PLAYBACK_TITLE_FG: Color = Palette::Aqua.color();
 /// The now-playing title row's context part: the container the item came
 /// from (series, artist, show, subscription). Its own role rather than the
-/// focused-row accent, whose `Palette::Yellow` value it shares today, so an
-/// accent edit cannot move it (now-playing-media-type-titles D2).
+/// focused-row accent, whose `Palette::Yellow` value it shares today: the
+/// two are equal today and independently editable, so an accent edit moves
+/// the accent alone (now-playing-media-type-titles D2).
 pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
 
 // Progress and queue
 pub const PROGRESS_TRACK: Color = Palette::Steel.color(); // unplayed seek/progress track
 
 // Chrome
-/// Library/chrome scrollbar track/thumb; deliberately not the soft
-/// content-body surface, whose `Palette::Green2` value it shares today — a
-/// scrollbar edit cannot move that surface fill.
+/// Library/chrome scrollbar track/thumb; a former value alias of the soft
+/// content-body fill (`SCROLLBAR = BG_GREEN_SOFT`), now its own role:
+/// deliberately not the soft content-body surface, whose `Palette::Green2`
+/// value it shares today — the two are equal today and independently
+/// editable, so a scrollbar edit moves the scrollbar alone
+/// (unify-surface-colour-neutral task 4.2).
 pub const SCROLLBAR: Color = Palette::Green2.color();
 
 /// The central focus lever (design decision 8). Every panel and component
