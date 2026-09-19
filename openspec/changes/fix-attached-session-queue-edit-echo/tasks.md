@@ -16,4 +16,4 @@
 ## 4. Verification
 
 - [x] 4.1 `cargo nextest run -p mbv` green; `cargo clippy --workspace --all-targets -- -D warnings` and `cargo fmt --all -- --check` clean.
-- [ ] 4.2 Manual check (user, stay-alive + attached Emby session): load playlist B over A, play a mid-video through the session, remove/reorder/append in the queue — queue keeps showing B, no "slot not found" toast.
+- [x] 4.2 Manual check (user, stay-alive + attached Emby session): load playlist B over A, play a mid-video through the session, remove/reorder/append in the queue — queue keeps showing B, no "slot not found" toast.
