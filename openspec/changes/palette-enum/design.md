@@ -205,6 +205,110 @@ $ cargo nextest run -p mbv spike_serde_json_probe
 and an in-code `ALL` snapshot test with manual JSON regeneration (serde_json
 fallback) are both off the table.
 
+## Parity proof (task 4.2, 2026-09-19)
+
+Two proofs, both green, run at `b0497a2d` (post task 4.1).
+
+**(a) Literal-set comparison against base `69344aff` — 29 = 29, zero differences.**
+
+```text
+$ git show 69344aff:src/app/render/theme/primitives.rs \
+    | rg -o 'Rgb\([^)]*\)' | sort -u
+Rgb(108, 108, 108)
+Rgb(108, 118, 108)
+Rgb(131, 192, 146)
+Rgb(133, 146, 137)
+Rgb(147, 178, 89)
+Rgb(158, 158, 158)
+Rgb(167, 192, 128)
+Rgb(190, 197, 178)
+Rgb(214, 153, 182)
+Rgb(219, 188, 127)
+Rgb(222, 160, 0)
+Rgb(229, 126, 128)
+Rgb(229, 152, 117)
+Rgb(230, 230, 230)
+Rgb(250, 237, 205)
+Rgb(253, 246, 227)
+Rgb(26, 26, 26)
+Rgb(30, 35, 38)
+Rgb(45, 53, 59)
+Rgb(51, 60, 67)
+Rgb(53, 167, 124)
+Rgb(58, 148, 197)
+Rgb(60, 66, 74)
+Rgb(60, 72, 65)
+Rgb(63, 63, 63)
+Rgb(70, 84, 95)
+Rgb(72, 88, 78)
+Rgb(73, 81, 86)
+Rgb(83, 83, 83)
+
+$ rg -o 'Color::Rgb\(0x.., 0x.., 0x..\)' src/app/render/theme/palette.rs | sort -u
+Color::Rgb(0x1a, 0x1a, 0x1a)
+Color::Rgb(0x1e, 0x23, 0x26)
+Color::Rgb(0x2d, 0x35, 0x3b)
+Color::Rgb(0x33, 0x3c, 0x43)
+Color::Rgb(0x35, 0xa7, 0x7c)
+Color::Rgb(0x3a, 0x94, 0xc5)
+Color::Rgb(0x3c, 0x42, 0x4a)
+Color::Rgb(0x3c, 0x48, 0x41)
+Color::Rgb(0x3f, 0x3f, 0x3f)
+Color::Rgb(0x46, 0x54, 0x5f)
+Color::Rgb(0x48, 0x58, 0x4e)
+Color::Rgb(0x49, 0x51, 0x56)
+Color::Rgb(0x53, 0x53, 0x53)
+Color::Rgb(0x6c, 0x6c, 0x6c)
+Color::Rgb(0x6c, 0x76, 0x6c)
+Color::Rgb(0x83, 0xc0, 0x92)
+Color::Rgb(0x85, 0x92, 0x89)
+Color::Rgb(0x93, 0xb2, 0x59)
+Color::Rgb(0x9e, 0x9e, 0x9e)
+Color::Rgb(0xa7, 0xc0, 0x80)
+Color::Rgb(0xbe, 0xc5, 0xb2)
+Color::Rgb(0xd6, 0x99, 0xb6)
+Color::Rgb(0xdb, 0xbc, 0x7f)
+Color::Rgb(0xde, 0xa0, 0x00)
+Color::Rgb(0xe5, 0x7e, 0x80)
+Color::Rgb(0xe5, 0x98, 0x75)
+Color::Rgb(0xe6, 0xe6, 0xe6)
+Color::Rgb(0xfa, 0xed, 0xcd)
+Color::Rgb(0xfd, 0xf6, 0xe3)
+```
+
+Normalizing both sets to `#rrggbb` and diffing:
+
+```text
+$ diff base.txt enum.txt && echo "LITERAL SETS IDENTICAL (29 = 29)"
+LITERAL SETS IDENTICAL (29 = 29)
+```
+
+**(b) Role and surface resolution against `docs/palette.json` — PASS.**
+
+A temporary `#[cfg(test)]` module (`parity_proof_task_4_2`; created for the
+run and deleted after — it appears in no commit) asserted, for each of the
+46 production roles, that the resolved `Color`, the JSON `rgb` triple and the
+JSON `hex` agree, and for each of the 34 surface rows that
+`surface_colors(s, true/false).fill` equals the row's JSON `focused`/`resting`
+hexes (`PopupDimBackdrop`'s raw `Color::Black` blend base compared as
+`#000000`):
+
+```text
+$ cargo nextest run -p mbv parity_proof_task_4_2
+        PASS [   0.038s] (1/2) mbv::bin/mbv app::render::theme::parity_proof_task_4_2::all_34_surface_rows_equal_docs_palette_json
+        PASS [   0.038s] (2/2) mbv::bin/mbv app::render::theme::parity_proof_task_4_2::all_46_production_roles_equal_docs_palette_json
+────────────
+     Summary [   0.039s] 2 tests run: 2 passed, 1725 skipped
+```
+
+`docs/palette.json` was retargeted to the variant-first structure in the same
+step: a `variants` array of the 29 `name()`/`hex()` entries in name-table
+order, role entries' `primitive` keys replaced by `variant` keys (the two
+former aliases noted in their `uses` text), and `source` pointing at
+`palette.rs` instead of the deleted `primitives.rs`. The role listing stays
+hand-maintained; the drift test `docs_palette_json_matches_the_palette`
+passes unchanged.
+
 ## History: the first section-3 attempt and why it was reverted
 
 `4e710eb4` implemented the original section 3 (roles, surfaces, and ~56 consumer
