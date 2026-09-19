@@ -3,7 +3,8 @@ mod surface;
 mod surface_resolve;
 mod surface_table;
 
-// The closed palette enum (openspec/changes/palette-enum). The role tier
+// The closed palette enum (openspec/changes/archive/2026-09-19-palette-enum).
+// The role tier
 // below derives from it; the surface tier follows in the same section.
 // `palette.rs` is private to the theme, so nothing outside `theme` can name
 // a hue directly.

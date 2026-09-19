@@ -1,4 +1,5 @@
-//! The closed palette of UI colours (openspec/changes/palette-enum).
+//! The closed palette of UI colours
+//! (openspec/changes/archive/2026-09-19-palette-enum).
 //!
 //! One meaning-free variant per distinct colour, one `Rgb` literal per
 //! variant, owned here and nowhere else in theme code. Roles (`mod.rs`)
@@ -24,7 +25,7 @@ use ratatui::style::Color;
 
 /// The 29 approved palette variants, in name-table order (hue families,
 /// dark-to-light within each family; see
-/// `openspec/changes/palette-enum/name-table.md`).
+/// `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 ///
 /// `Copy` is required: const-context indexing out of `ALL` moves the value
 /// (design.md spike outcomes, task 1.1).
@@ -171,39 +172,18 @@ impl Palette {
         }
     }
 
-    /// The variant's colour as lowercase `"#rrggbb"`. Test-only.
+    /// The variant's colour as lowercase `"#rrggbb"`, formatted from
+    /// `color()` so the two presentations cannot disagree. Test-only: the
+    /// hex form is how the name table and `docs/palette.json` spell a
+    /// variant.
     #[cfg(test)]
-    pub(in crate::app) const fn hex(self) -> &'static str {
-        match self {
-            Palette::Grey1 => "#1a1a1a",
-            Palette::Grey2 => "#3f3f3f",
-            Palette::Grey3 => "#535353",
-            Palette::Grey4 => "#6c6c6c",
-            Palette::Grey5 => "#9e9e9e",
-            Palette::Grey6 => "#e6e6e6",
-            Palette::Green1 => "#3c4841",
-            Palette::Green2 => "#48584e",
-            Palette::Green3 => "#6c766c",
-            Palette::Sage => "#859289",
-            Palette::Green => "#93b259",
-            Palette::Mint => "#83c092",
-            Palette::Iris => "#a7c080",
-            Palette::Fog => "#bec5b2",
-            Palette::Aqua => "#35a77c",
-            Palette::Ink => "#1e2326",
-            Palette::Slate => "#2d353b",
-            Palette::Storm => "#333c43",
-            Palette::Flint => "#3c424a",
-            Palette::Ash => "#495156",
-            Palette::Steel => "#46545f",
-            Palette::Foam => "#3a94c5",
-            Palette::Purple => "#d699b6",
-            Palette::Red => "#e57e80",
-            Palette::Orange => "#e59875",
-            Palette::Gold => "#dea000",
-            Palette::Yellow => "#dbbc7f",
-            Palette::Cream => "#faedcd",
-            Palette::White => "#fdf6e3",
+    pub(in crate::app) fn hex(self) -> String {
+        match self.color() {
+            Color::Rgb(r, g, b) => format!("#{r:02x}{g:02x}{b:02x}"),
+            other => panic!(
+                "palette variant {} is not an Rgb colour: {other:?}",
+                self.name()
+            ),
         }
     }
 }
@@ -217,7 +197,8 @@ mod tests {
     const PALETTE_JSON: &str = include_str!("../../../../docs/palette.json");
 
     /// Every variant appears in `ALL` exactly once, and no two variants
-    /// share a `color()` or a `hex()`.
+    /// share a `color()` — which `hex()` is now formatted from, so the
+    /// colour check covers both presentations.
     #[test]
     fn all_lists_every_variant_once_with_distinct_values() {
         assert_eq!(ALL.len(), 29, "ALL must list exactly the 29 variants");
@@ -233,13 +214,6 @@ mod tests {
                     a.color(),
                     b.color(),
                     "{:?} and {:?} share a Color value",
-                    a.name(),
-                    b.name()
-                );
-                assert_ne!(
-                    a.hex(),
-                    b.hex(),
-                    "{:?} and {:?} share a hex value",
                     a.name(),
                     b.name()
                 );
@@ -312,7 +286,7 @@ mod tests {
                 collect_json_hexes(value, &mut json_hexes);
             }
         }
-        let palette_hexes: HashSet<String> = ALL.into_iter().map(|p| p.hex().to_string()).collect();
+        let palette_hexes: HashSet<String> = ALL.into_iter().map(|p| p.hex()).collect();
         assert_eq!(
             palette_hexes, json_hexes,
             "docs/palette.json colours drifted from the Palette enum"
