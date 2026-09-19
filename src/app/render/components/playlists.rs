@@ -2,8 +2,6 @@ use super::super::super::palette;
 use super::super::super::ui_util::trunc_str;
 #[cfg(test)]
 use super::super::super::App;
-#[cfg(test)]
-use super::super::super::PLAYLISTS_PANEL_W;
 use super::chrome;
 use crate::app::render::components::modal_frame::render_modal_frame;
 use mbv_core::api::EmbyItem;
@@ -141,7 +139,7 @@ pub(in crate::app) fn render_playlists_content(
     };
     let panel = panel_area.unwrap_or(area);
     geometry.panel_area = panel;
-    let content = chrome::render_panel_shell_at(frame, panel, &title, &hint, true);
+    let content = chrome::render_panel_shell_at(frame, panel, &title, &hint);
     geometry.content_area = content;
     if playlists_open.is_some() {
         render_open_playlist_content(
@@ -366,10 +364,8 @@ impl App {
             )
         };
 
-        let content = match area {
-            Some(area) => chrome::render_panel_shell_at(f, area, &title, &hint, true),
-            None => chrome::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint),
-        };
+        let panel = area.unwrap_or_else(|| f.area());
+        let content = chrome::render_panel_shell_at(f, panel, &title, &hint);
         let ix = content.x;
         let iw = content.width as usize;
         let list_h = content.height as usize;

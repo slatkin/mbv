@@ -63,7 +63,6 @@ pub(in crate::app) fn render_settings_content(
         } else {
             "[Space]toggle [Esc]close"
         },
-        true,
     );
     geometry.content_area = content;
     geometry.cursor_lines.clear();

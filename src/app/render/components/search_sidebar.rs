@@ -48,7 +48,7 @@ pub(in crate::app) fn render_search_sidebar(
     sidebar: &mut SearchSidebar,
 ) -> SearchSidebarRenderGeometry {
     let frame = area.unwrap_or_else(|| chrome::panel_shell_rect(f.area(), SEARCH_PANEL_W));
-    let content = chrome::render_panel_shell_at(f, frame, "SEARCH", HINTS, area.is_some());
+    let content = chrome::render_panel_shell_at(f, frame, "SEARCH", HINTS);
     if content.height == 0 || content.width == 0 {
         return SearchSidebarRenderGeometry {
             frame,
