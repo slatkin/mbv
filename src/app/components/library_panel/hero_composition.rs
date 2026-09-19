@@ -64,6 +64,7 @@ pub(in crate::app) fn paint_library_hero_content(
     workspace_selector_hits: &mut HitRegions<usize>,
     workspace_selector_window: &mut PillBarWindow,
     surface: palette::Surface,
+    terminal_height: u16,
 ) -> HeroCompositionGeometry {
     let (next_row, image_box, overview) = paint_hero_pane_content(
         f,
@@ -73,6 +74,7 @@ pub(in crate::app) fn paint_library_hero_content(
         hovered_link,
         link_hits,
         surface,
+        terminal_height,
     );
     let mut geometry = HeroCompositionGeometry {
         workspace: None,

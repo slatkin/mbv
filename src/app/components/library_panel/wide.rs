@@ -307,6 +307,7 @@ pub(in crate::app) fn render_wide_skeleton(
     hovered_link: Option<usize>,
     hits: &mut SkeletonHits,
     windows: &mut SkeletonPillWindows,
+    terminal_height: u16,
 ) -> Option<WideSkeletonGeometry> {
     let WideLibraryPanes {
         hero_panel,
@@ -363,6 +364,7 @@ pub(in crate::app) fn render_wide_skeleton(
             &mut hits.workspace_selector,
             &mut windows.workspace_selector,
             crate::app::palette::Surface::HeroPane,
+            terminal_height,
         );
         geometry.workspace = composition.workspace;
         geometry.hero_image = composition.hero_image;

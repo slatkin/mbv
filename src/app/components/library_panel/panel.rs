@@ -70,6 +70,9 @@ pub struct LibraryPanel {
     /// `None` = default ratio). Forwarded into the wide skeleton's shared
     /// split; never stored clamped.
     list_pane_width: Option<u16>,
+    /// Terminal row count, pushed each sync pass: the compact hero caps
+    /// (artwork 15, overview 5) apply at 50 terminal rows or fewer.
+    terminal_height: u16,
     // The last painted frame's retained geometry (ADR 0024: the mounted
     // parent resolves only geometry it painted).
     hits: SkeletonHits,
@@ -129,6 +132,7 @@ impl LibraryPanel {
             hovered_link: None,
             painted_link_urls: Vec::new(),
             list_pane_width: None,
+            terminal_height: 0,
             hits: SkeletonHits::default(),
             pill_windows: SkeletonPillWindows::default(),
             wide_geometry: None,
@@ -205,6 +209,28 @@ impl LibraryPanel {
     /// Pushed each sync pass by the shell beside the other per-frame facts.
     pub(in crate::app) fn set_list_pane_width(&mut self, list_pane_width: Option<u16>) {
         self.list_pane_width = list_pane_width;
+    }
+
+    /// Record the terminal row count for the compact hero caps. Pushed each
+    /// sync pass by the shell beside the other per-frame facts.
+    pub(in crate::app) fn set_terminal_height(&mut self, terminal_height: u16) {
+        self.terminal_height = terminal_height;
+    }
+
+    /// The hero image box the last painted frame reserved — the Library Hero
+    /// overlay's while it is open, else the Wide Hero pane's. The shell's
+    /// image projection encodes for the box that paints.
+    pub(in crate::app) fn active_hero_image_box(&self) -> Option<(u16, u16)> {
+        let paint = if self.hero_overlay_open {
+            self.overlay_geometry
+                .as_ref()
+                .and_then(|g| g.hero.hero_image.as_ref())
+        } else {
+            self.wide_geometry
+                .as_ref()
+                .and_then(|g| g.hero_image.as_ref())
+        };
+        paint.map(|paint| (paint.area.width, paint.area.height))
     }
 
     /// Open the Library-local Hero overlay for the active Hero, retaining the

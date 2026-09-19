@@ -27,6 +27,11 @@ pub(in crate::app) struct OverviewPaint {
 
 const OVERVIEW_CREDITS_GAP_ROWS: usize = 2;
 
+/// Overview content rows a short terminal shows at most (the rest of the
+/// flow scrolls); applies at [`crate::app::components::library_panel::
+/// hero_header::HERO_SHORT_PANE_MAX_HEIGHT`] terminal rows or fewer.
+const OVERVIEW_SHORT_PANE_MAX_ROWS: u16 = 5;
+
 fn has_overview_and_credits(overview: Option<&str>, credits: Option<&[HeroCredit]>) -> bool {
     overview.is_some() && credits.is_some()
 }
@@ -38,6 +43,7 @@ pub(in crate::app) fn paint_overview_box(
     content: &HeroContent<'_>,
     scroll_offset: usize,
     pane_surface: palette::Surface,
+    terminal_height: u16,
 ) -> Option<OverviewPaint> {
     let overview = content
         .overview
@@ -73,11 +79,16 @@ pub(in crate::app) fn paint_overview_box(
     let box_y = next_row.saturating_add(1);
     let room = area.bottom().saturating_sub(box_y);
     let natural = (inner_rows.max(1) as u16).saturating_add(PANE_PAD_Y * 2);
-    let box_height = if content.workspace.is_some() {
+    let mut box_height = if content.workspace.is_some() {
         natural.min(room)
     } else {
         room
     };
+    // Short terminals give the overview at most 5 content rows; the rest of
+    // the flow scrolls (the same compact rule as the artwork caps).
+    if crate::app::components::library_panel::hero_header::short_pane(terminal_height) {
+        box_height = box_height.min(OVERVIEW_SHORT_PANE_MAX_ROWS + PANE_PAD_Y * 2);
+    }
     if box_height <= PANE_PAD_Y * 2 {
         return None;
     }

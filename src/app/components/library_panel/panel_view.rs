@@ -70,6 +70,7 @@ impl Component for LibraryPanel {
                 self.hovered_link,
                 &mut hits,
                 &mut windows,
+                self.terminal_height,
             ) {
                 // The split gesture owns the gap columns it painted: the
                 // gutter between the hero and browser panes, resolved
@@ -121,6 +122,7 @@ impl Component for LibraryPanel {
                         // The overlay's sheet is the pane fill shared content
                         // repaints behind the Hero header and overview.
                         crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE,
+                        self.terminal_height,
                     );
                     self.overlay_geometry = Some(super::OverlayGeometry {
                         pane: overlay_area,

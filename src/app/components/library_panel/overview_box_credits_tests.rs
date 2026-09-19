@@ -66,6 +66,7 @@ fn overview_credits_have_blank_row_separator_and_zebra_stripes() {
                 &content,
                 0,
                 palette::Surface::HeroPane,
+                12,
             );
         })
         .unwrap();
@@ -108,6 +109,7 @@ fn long_overview_scrolls_inside_a_short_box() {
                 &content,
                 0,
                 palette::Surface::HeroPane,
+                6,
             )
         })
         .unwrap();
@@ -137,6 +139,7 @@ fn long_overview_scrolls_inside_a_short_box() {
                 &content,
                 metrics.content_length - metrics.viewport,
                 palette::Surface::HeroPane,
+                6,
             );
         })
         .unwrap();
@@ -156,7 +159,7 @@ fn long_overview_scrolls_inside_a_short_box() {
 
 #[test]
 fn overview_separator_and_credits_scroll_as_one_flow() {
-    let credits = (0..12)
+    let credits = (0..60)
         .map(|i| HeroCredit {
             name: format!("Person {i}"),
             role: format!("Role {i}"),
@@ -173,18 +176,22 @@ fn overview_separator_and_credits_scroll_as_one_flow() {
             focused: false,
         }),
     };
+    // A tall pane (above the short-pane threshold) whose natural content
+    // exceeds its room: the short-pane 5-row overview cap must not
+    // interfere, and the Workspace sizing must force an overflow.
     let draw = |offset| {
-        let mut terminal = Terminal::new(TestBackend::new(32, 14)).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(32, 60)).unwrap();
         let mut paint = None;
         terminal
             .draw(|f| {
                 paint = paint_overview_box(
                     f,
-                    Rect::new(0, 0, 32, 14),
+                    Rect::new(0, 0, 32, 60),
                     0,
                     &content,
                     offset,
                     palette::Surface::HeroPane,
+                    60,
                 )
             })
             .unwrap();
@@ -198,16 +205,16 @@ fn overview_separator_and_credits_scroll_as_one_flow() {
         (0..32).map(|x| buffer[(x, y)].symbol()).collect::<String>()
     };
     let separator_row =
-        |buffer: &ratatui::buffer::Buffer| (2..14).find(|y| buffer[(2, *y)].symbol() == "▁");
+        |buffer: &ratatui::buffer::Buffer| (2..60).find(|y| buffer[(2, *y)].symbol() == "▁");
 
     // The flow is the overview line, the separator, the blank row and every
     // credit row — the scroll range covers all of it.
     assert_eq!(
         metrics.content_length,
-        1 + OVERVIEW_CREDITS_GAP_ROWS + 12,
+        1 + OVERVIEW_CREDITS_GAP_ROWS + 60,
         "the overview is part of the scrollable content"
     );
-    assert_eq!(metrics.viewport, 11);
+    assert_eq!(metrics.viewport, 57);
 
     // At the top the overview paints above its separator; one row of scroll
     // moves both up, so neither is pinned.
@@ -219,8 +226,8 @@ fn overview_separator_and_credits_scroll_as_one_flow() {
     // At the end of the range the overview and separator have scrolled out
     // and the table fills the box.
     assert_eq!(separator_row(&at_end), None);
-    assert!(row(&at_end, 2).contains("Person 1"));
-    assert!(row(&at_end, 12).contains("Person 11"));
+    assert!(row(&at_end, 2).contains("Person 3"));
+    assert!(row(&at_end, 58).contains("Person 59"));
 }
 
 #[test]
@@ -253,6 +260,7 @@ fn credits_scrollbar_thumb_tracks_table_offset() {
                     &content,
                     offset,
                     palette::Surface::HeroPane,
+                    14,
                 );
             })
             .unwrap();

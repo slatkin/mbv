@@ -208,6 +208,7 @@ impl App {
         workspace_present: bool,
         panel_area: ratatui::layout::Rect,
         list_pane_width: Option<u16>,
+        overlay_box: Option<(u16, u16)>,
     ) -> crate::app::components::library_panel::HeroImageState {
         use crate::app::components::library_panel::content::ArtworkSource;
         use crate::app::components::library_panel::content::HeroImageState as State;
@@ -262,8 +263,21 @@ impl App {
             use image::GenericImageView;
             Some(source_img.dimensions())
         };
-        // The Wide header is cover-fit: re-encode keyed by the box size.
-        if crate::app::render::wide_hero_fits(panel_area) {
+        // The fit rule follows the arm on every surface: Landscape artwork
+        // is cover-fit (centre-cropped, no margin) for the box that paints
+        // it — the Wide Hero pane's or the Library Hero overlay's;
+        // Portrait/Square artwork fit-resizes (the whole image, aspect
+        // preserved) through the plain protocol.
+        let landscape = artwork.painted_shape()
+            == crate::app::components::library_panel::ArtworkShape::Landscape;
+        if !landscape {
+            // Drop any stale cover crop so the plain fit protocol rebuilds.
+            if let Some(entry) = self.card_image_states.get_mut(&cache_key) {
+                if entry.cover_box.take().is_some() {
+                    entry.protocols.clear();
+                }
+            }
+        } else if crate::app::render::wide_hero_fits(panel_area) {
             if let Some(panes) = crate::app::render::arrangements::library::wide_library_panes(
                 panel_area,
                 PANE_PAD_X,
@@ -275,6 +289,7 @@ impl App {
                         panes.hero_area,
                         facts,
                         workspace_present,
+                        self.terminal_height,
                     );
                 // The optional Logo never delays the base image: it is
                 // reserved only here, once a decoded base exists to decorate,
@@ -310,6 +325,13 @@ impl App {
                 ) {
                     return State::Loading;
                 }
+            }
+        } else if let Some(box_cells) = overlay_box {
+            // The Library Hero overlay paints the same reserved-box flow; a
+            // Landscape hero there is cover-fit for the overlay's own box
+            // (its provider-link row stays plain, so no Logo).
+            if !self.ensure_hero_cover_protocol(&cache_key, box_cells, None) {
+                return State::Loading;
             }
         }
         State::Ready { cache_key, decoded }
@@ -455,9 +477,10 @@ mod tests {
                 image: State::None,
             },
         };
-        let area = ratatui::layout::Rect::new(0, 0, 113, 60);
+        // Above the short-pane threshold, so the tall-pane cap applies.
+        let area = ratatui::layout::Rect::new(0, 0, 113, 61);
         let box_cells = crate::app::components::library_panel::hero_header::hero_artwork_box(
-            area, &facts, false,
+            area, &facts, false, 61,
         );
         assert_eq!(box_cells.height, 25);
 

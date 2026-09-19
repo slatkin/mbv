@@ -419,7 +419,7 @@ fn only_wide_landscape_movie_reserves_declared_logo_not_portrait_narrow_placehol
 fn mounted_movie_hero_wheel_scrolls_overflow_and_falls_through_when_fitting() {
     let mut movie = crate::app::tests::make_item("Hero", "Movie");
     movie.image_tags.thumb = "tag".into();
-    movie.overview = "A deliberately long overview that occupies several lines in the hero box. ".repeat(8);
+    movie.overview = "A deliberately long overview that occupies several lines in the hero box. ".repeat(24);
     movie.people = (0..20)
         .map(|index| mbv_core::api::EmbyPerson {
             name: format!("Actor {index}"),

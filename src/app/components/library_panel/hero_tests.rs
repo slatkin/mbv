@@ -550,7 +550,7 @@ fn images_disabled_budgets_no_cover_fetch_for_the_episode_hero() {
     let mut app = make_app_stub();
     app.image_protocol_enabled = false;
     let area = ratatui::layout::Rect::new(0, 0, 40, 12);
-    let state = app.project_hero_image(&produced.facts, false, area, None);
+    let state = app.project_hero_image(&produced.facts, false, area, None, None);
     assert!(matches!(state, HeroImageState::None));
     assert!(app.card_image_loading.is_empty());
     assert!(

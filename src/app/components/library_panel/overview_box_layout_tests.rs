@@ -63,6 +63,7 @@ fn draw_pane(width: u16, height: u16, pane: &HeroContent<'_>) -> ratatui::buffer
                 None,
                 &mut HitRegions::new(),
                 palette::Surface::HeroPane,
+                height,
             );
         })
         .unwrap();
@@ -105,7 +106,7 @@ fn text_fg(
 fn overview_box_presents_only_with_overview_text() {
     let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
     let pane = content(ArtworkShape::Landscape);
-    let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
+    let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
     let below = Rect {
         y: artwork.bottom() + 3,
         height: AREA.bottom().saturating_sub(artwork.bottom() + 3),
@@ -172,7 +173,7 @@ fn overview_box_keeps_a_blank_hero_pane_row_above_it() {
     let buf = draw_pane(AREA.width, AREA.height, &with);
     // Start below the artwork box: the imageless placeholder shares the
     // box's resting fill, so a full-pane scan would catch row 0.
-    let artwork = hero_artwork_box(AREA, &with.facts, with.workspace.is_some());
+    let artwork = hero_artwork_box(AREA, &with.facts, with.workspace.is_some(), AREA.height);
     let box_top = (artwork.bottom()..AREA.bottom()).find(|y| buf[(AREA.x + 2, *y)].bg == box_fill);
     assert!(box_top.is_some(), "overview box paints");
     let box_top = box_top.unwrap();
@@ -200,10 +201,12 @@ fn overview_box_fills_the_pane_when_no_workspace_follows_it() {
         credits: None,
         workspace: None,
     };
-    let buf = draw_pane(AREA.width, AREA.height, &with);
+    // A tall pane: short panes cap the overview at 5 rows, so the
+    // fills-the-pane claim only holds above the short-pane threshold.
+    let buf = draw_pane(AREA.width, 51, &with);
     // The bottom-most recessed box reaches the content area's last row:
     // the hero panel's own bottom padding row sits outside `area`.
-    assert_eq!(buf[(AREA.x + 2, AREA.bottom() - 1)].bg, box_fill);
+    assert_eq!(buf[(AREA.x + 2, 51 - 1)].bg, box_fill);
 
     // With a Workspace below it the overview is no longer the bottom-most
     // box, so it stays content-sized.
@@ -219,7 +222,32 @@ fn overview_box_fills_the_pane_when_no_workspace_follows_it() {
             focused: false,
         }),
     };
-    let buf = draw_pane(AREA.width, AREA.height, &with_workspace);
+    let buf = draw_pane(AREA.width, 51, &with_workspace);
+    assert_ne!(buf[(AREA.x + 2, 51 - 1)].bg, box_fill);
+}
+
+#[test]
+fn short_pane_caps_the_overview_box_at_five_content_rows() {
+    let box_fill = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
+    let with = HeroContent {
+        facts: facts(ArtworkShape::Landscape),
+        overview: Some("A very long overview.".into()),
+        credits: None,
+        workspace: None,
+    };
+    let buf = draw_pane(AREA.width, AREA.height, &with);
+    let artwork = hero_artwork_box(AREA, &with.facts, false, AREA.height);
+    let box_rows: Vec<u16> = (artwork.bottom()..AREA.bottom())
+        .filter(|y| buf[(AREA.x + 2, *y)].bg == box_fill)
+        .collect();
+    assert!(!box_rows.is_empty(), "the overview box paints");
+    // 5 content rows plus the box's top/bottom padding.
+    assert_eq!(box_rows.len(), 5 + 2 * PANE_PAD_Y as usize);
+    // The rows below the capped box were never painted by this harness (the
+    // pane fill belongs to the panel painter); they must not carry the box.
+    let below = *box_rows.last().unwrap() + 1;
+    assert!(below < AREA.bottom(), "the cap leaves rows below the box");
+    assert_ne!(buf[(AREA.x + 2, below)].bg, box_fill);
     assert_ne!(buf[(AREA.x + 2, AREA.bottom() - 1)].bg, box_fill);
 }
 

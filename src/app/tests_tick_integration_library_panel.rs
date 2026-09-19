@@ -1089,7 +1089,7 @@ fn overlay_workspace_click_selects_and_is_claimed() {
 fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     use tuirealm::event::{Key, KeyEvent};
 
-    let mut harness = migrated_tv_with_detail(30);
+    let mut harness = migrated_tv_with_detail(40);
     drop(draw_frame_at_model_size(&mut harness));
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -1104,7 +1104,7 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
 
     // More Down steps than the Workspace box's painted rows: the viewport
     // must follow the cursor past its bottom edge.
-    for _ in 0..14 {
+    for _ in 0..29 {
         harness.inject(Event::Keyboard(KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
@@ -1114,7 +1114,7 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     let terminal = draw_frame_at_model_size(&mut harness);
     assert_eq!(
         tv_owner_of(&harness).episode_cursor(),
-        14,
+        29,
         "the cursor moved through the overflowing list"
     );
     assert!(
@@ -1123,7 +1123,7 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     );
     let buf = terminal.backend().buffer();
     assert!(
-        find_text(buf, "15. Episode 15").is_some(),
+        find_text(buf, "30. Episode 30").is_some(),
         "the cursor's row scrolled into the Workspace box"
     );
     // The viewport is the painted Workspace box's content rows: re-derive
@@ -1140,7 +1140,7 @@ fn overlay_workspace_keyboard_scroll_follows_the_cursor_with_overflow() {
     );
     assert_eq!(
         scroll,
-        14 + 1 - visible,
+        29 + 1 - visible,
         "the viewport follows the cursor: the cursor's row is the window's last row"
     );
     // The last row above the scrolled-in window has left the box. (Probing
@@ -1402,7 +1402,7 @@ fn overlay_sheet_and_workspace_box_paint_the_workspace_focus() {
 fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     use tuirealm::event::{Key, KeyEvent};
 
-    let mut harness = migrated_tv_with_detail(30);
+    let mut harness = migrated_tv_with_detail(40);
     drop(draw_frame_at_model_size(&mut harness));
     harness.inject(Event::Keyboard(KeyEvent {
         code: Key::Enter,
@@ -1419,7 +1419,7 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     // viewport, not a reset one. One notch = one cursor step (the canonical
     // wheel = Move translation); the 30 ms burst throttle collapses rapid
     // notches, so the test drives exactly one recognized gesture.
-    for _ in 0..14 {
+    for _ in 0..29 {
         harness.inject(Event::Keyboard(KeyEvent {
             code: Key::Down,
             modifiers: KeyModifiers::NONE,
@@ -1448,7 +1448,7 @@ fn overlay_workspace_wheel_scrolls_and_is_claimed() {
     )));
     assert_eq!(
         tv_owner_of(&harness).episode_cursor(),
-        15,
+        30,
         "the wheel stepped the Workspace cursor"
     );
     drop(draw_frame_at_model_size(&mut harness));

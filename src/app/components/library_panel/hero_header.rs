@@ -36,6 +36,23 @@ const HERO_ARTWORK_MAX_ROWS: u16 = 25;
 /// and a taller block reads as oversized beside the title/meta text.
 const HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS: u16 = 20;
 
+/// Panes whose *terminal* is this short (or fewer rows) use the compact caps
+/// below so the header leaves room for the text block, overview, and
+/// Workspace beneath it. Measured on the terminal, not the pane, so panel
+/// chrome does not change the decision.
+pub(in crate::app) const HERO_SHORT_PANE_MAX_HEIGHT: u16 = 50;
+
+/// The compact-cap decision, shared by the artwork box, the overview box,
+/// and the shell's image projection: the threshold is the terminal height.
+pub(in crate::app) fn short_pane(terminal_height: u16) -> bool {
+    terminal_height <= HERO_SHORT_PANE_MAX_HEIGHT
+}
+
+/// Compact caps for short panes: 15 rows for Landscape and non-landscape arms
+/// alike.
+const HERO_SHORT_LANDSCAPE_MAX_ROWS: u16 = 15;
+const HERO_SHORT_NON_LANDSCAPE_MAX_ROWS: u16 = 15;
+
 /// Minimum columns the title/meta block keeps beside a right-aligned artwork
 /// box (Portrait/Square arms).
 const HERO_MIN_TEXT_COLS: u16 = 16;
@@ -47,25 +64,42 @@ const HERO_MIN_TEXT_COLS: u16 = 16;
 /// Workspace caps the box height first (the artwork shrinks before a
 /// Workspace viewport would drop), and the Landscape box additionally
 /// shrinks before the wrapped title/meta block below it is starved out of
-/// the pane (the legacy wide Emby card's rule, now universal). All three
-/// artwork boxes are capped at 25 rows.
+/// the pane (the legacy wide Emby card's rule, now universal). Tall panes
+/// cap all three artwork boxes at 25 rows; panes 50 rows or shorter use the
+/// compact 15-row cap.
 ///
 /// One layout site: the header painter calls this and the shell projection
 /// (task 5.10) calls it with the Library panel's area, so the fetched image
-/// is always encoded for the box that paints it.
+/// is always encoded for the box that paints it. `terminal_height` is the
+/// terminal's row count: the compact caps apply at [`HERO_SHORT_PANE_MAX_HEIGHT`]
+/// terminal rows or fewer.
 pub(in crate::app) fn hero_artwork_box(
     area: Rect,
     facts: &HeroFacts,
     workspace_present: bool,
+    terminal_height: u16,
 ) -> Rect {
     let header = HeroHeader::from(facts.artwork.painted_shape());
+    // Short terminals leave room for the text block, overview, and Workspace
+    // beneath the header: compact 15-row caps at 50 rows or fewer.
+    let short = short_pane(terminal_height);
+    let landscape_cap = if short {
+        HERO_SHORT_LANDSCAPE_MAX_ROWS
+    } else {
+        HERO_ARTWORK_MAX_ROWS
+    };
+    let non_landscape_cap = if short {
+        HERO_SHORT_NON_LANDSCAPE_MAX_ROWS
+    } else {
+        HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS
+    };
     // The artwork shrinks before a Workspace viewport would drop (design D5).
     let max_h = if workspace_present {
         area.height.saturating_sub(WORKSPACE_MIN_ROWS)
     } else {
         area.height
     }
-    .min(HERO_ARTWORK_MAX_ROWS);
+    .min(landscape_cap);
     let (width, height) = match header.arm() {
         super::content::HeroHeaderArm::Landscape => {
             // 16:9 in terminal cells (cells are ~2x taller than wide).
@@ -81,10 +115,10 @@ pub(in crate::app) fn hero_artwork_box(
             (area.width, h.min(max_h).min(room_for_text))
         }
         super::content::HeroHeaderArm::Portrait => {
-            box_from_height(max_h.min(HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS), 4, 3, area)
+            box_from_height(max_h.min(non_landscape_cap), 4, 3, area)
         }
         super::content::HeroHeaderArm::Square => {
-            box_from_height(max_h.min(HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS), 2, 1, area)
+            box_from_height(max_h.min(non_landscape_cap), 2, 1, area)
         }
     };
     Rect {
@@ -139,9 +173,15 @@ pub(in crate::app) fn paint_hero_pane_content(
     hovered_link: Option<usize>,
     link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
     surface: palette::Surface,
+    terminal_height: u16,
 ) -> (u16, Option<Rect>, Option<OverviewPaint>) {
     let header = HeroHeader::from(content.facts.artwork.painted_shape());
-    let artwork = hero_artwork_box(area, &content.facts, content.workspace.is_some());
+    let artwork = hero_artwork_box(
+        area,
+        &content.facts,
+        content.workspace.is_some(),
+        terminal_height,
+    );
     let image_ready = matches!(
         content.facts.artwork.image,
         super::content::HeroImageState::Ready { .. }
@@ -177,8 +217,15 @@ pub(in crate::app) fn paint_hero_pane_content(
 
     // The overview Main content box only when overview text exists (design
     // D5); without it the Workspace moves up.
-    let overview =
-        overview_box::paint_overview_box(f, area, next_row, content, overview_scroll, surface);
+    let overview = overview_box::paint_overview_box(
+        f,
+        area,
+        next_row,
+        content,
+        overview_scroll,
+        surface,
+        terminal_height,
+    );
     let next_row = overview
         .as_ref()
         .map(|overview| overview.bottom)
@@ -287,6 +334,7 @@ mod hero_header_tests {
                     None,
                     &mut crate::app::components::mouse::hit::HitRegions::new(),
                     palette::Surface::HeroPane,
+                    height,
                 );
             })
             .unwrap();
@@ -313,9 +361,9 @@ mod hero_header_tests {
     #[test]
     fn landscape_header_paints_art_above_text() {
         let pane = content(ArtworkShape::Landscape);
-        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
-        let tall = Rect::new(0, 0, 113, 60);
-        let capped = hero_artwork_box(tall, &pane.facts, false);
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
+        let tall = Rect::new(0, 0, 113, 51);
+        let capped = hero_artwork_box(tall, &pane.facts, false, tall.height);
         assert_eq!(capped.height, HERO_ARTWORK_MAX_ROWS);
         let tall_buf = draw_pane(tall.width, tall.height, &pane);
         assert_eq!(
@@ -353,11 +401,11 @@ mod hero_header_tests {
     #[test]
     fn square_header_paints_art_right_of_text() {
         let pane = content(ArtworkShape::Square);
-        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
         // A pane wide enough that the row cap, not the text column minimum, is
         // the binding constraint.
-        let tall = Rect::new(0, 0, 100, 60);
-        let capped = hero_artwork_box(tall, &pane.facts, false);
+        let tall = Rect::new(0, 0, 100, 51);
+        let capped = hero_artwork_box(tall, &pane.facts, false, tall.height);
         assert_eq!(capped.height, HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS);
         let tall_buf = draw_pane(tall.width, tall.height, &pane);
         assert_eq!(
@@ -365,7 +413,7 @@ mod hero_header_tests {
             placeholder_fill()
         );
         assert_eq!(
-            hero_artwork_box(Rect::new(0, 0, 60, 20), &pane.facts, true).height,
+            hero_artwork_box(Rect::new(0, 0, 60, 20), &pane.facts, true, 20).height,
             14
         );
         let buf = draw_pane(AREA.width, AREA.height, &pane);
@@ -389,9 +437,9 @@ mod hero_header_tests {
     #[test]
     fn portrait_header_paints_art_right_of_text() {
         let pane = content(ArtworkShape::Portrait);
-        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
-        let tall = Rect::new(0, 0, 60, 60);
-        let capped = hero_artwork_box(tall, &pane.facts, false);
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
+        let tall = Rect::new(0, 0, 60, 51);
+        let capped = hero_artwork_box(tall, &pane.facts, false, tall.height);
         assert_eq!(capped.height, HERO_NON_LANDSCAPE_ARTWORK_MAX_ROWS);
         let tall_buf = draw_pane(tall.width, tall.height, &pane);
         assert_eq!(
@@ -399,7 +447,7 @@ mod hero_header_tests {
             placeholder_fill()
         );
         assert_eq!(
-            hero_artwork_box(Rect::new(0, 0, 60, 20), &pane.facts, true).height,
+            hero_artwork_box(Rect::new(0, 0, 60, 20), &pane.facts, true, 20).height,
             14
         );
         let buf = draw_pane(AREA.width, AREA.height, &pane);
@@ -445,7 +493,7 @@ mod hero_header_tests {
     #[test]
     fn landscape_declared_series_with_a_portrait_poster_paints_text_beside_art() {
         let pane = with_decoded_image(ArtworkShape::Landscape, (200, 300));
-        let artwork = hero_artwork_box(AREA, &pane.facts, false);
+        let artwork = hero_artwork_box(AREA, &pane.facts, false, AREA.height);
         // Right-aligned side-by-side box, never the full content width.
         assert_eq!(artwork.right(), AREA.right(), "art is right-aligned");
         assert!(
@@ -472,7 +520,7 @@ mod hero_header_tests {
     #[test]
     fn landscape_declared_series_with_a_landscape_thumb_keeps_art_above_text() {
         let pane = with_decoded_image(ArtworkShape::Landscape, (1600, 900));
-        let artwork = hero_artwork_box(AREA, &pane.facts, false);
+        let artwork = hero_artwork_box(AREA, &pane.facts, false, AREA.height);
         assert_eq!(artwork.x, AREA.x);
         assert_eq!(artwork.width, AREA.width);
         let buf = draw_pane(AREA.width, AREA.height, &pane);
@@ -489,7 +537,7 @@ mod hero_header_tests {
     #[test]
     fn square_policy_with_square_art_keeps_text_beside_art() {
         let pane = with_decoded_image(ArtworkShape::Square, (500, 500));
-        let artwork = hero_artwork_box(AREA, &pane.facts, false);
+        let artwork = hero_artwork_box(AREA, &pane.facts, false, AREA.height);
         assert_eq!(artwork.right(), AREA.right());
         assert!(
             artwork.width < AREA.width,
@@ -524,7 +572,7 @@ mod hero_header_tests {
             credits: None,
             workspace: None,
         };
-        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
         let buf = draw_pane(AREA.width, AREA.height, &pane);
         // Title first, then one row per meta row; row n uses role n % 3.
         for (index, expected) in palette::HERO_META_ROLES.iter().cycle().take(4).enumerate() {
@@ -550,7 +598,7 @@ mod hero_header_tests {
             credits: None,
             workspace: None,
         };
-        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some());
+        let artwork = hero_artwork_box(AREA, &pane.facts, pane.workspace.is_some(), AREA.height);
         let buf = draw_pane(AREA.width, AREA.height, &pane);
         let row_y = |index: u16| artwork.bottom() + 2 + index;
         assert_eq!(
@@ -574,7 +622,8 @@ mod hero_header_tests {
     fn artwork_shrinks_before_a_workspace_viewport_drops() {
         let free = content(ArtworkShape::Landscape);
         let small = Rect::new(0, 0, 60, 14);
-        let without_workspace = hero_artwork_box(small, &free.facts, free.workspace.is_some());
+        let without_workspace =
+            hero_artwork_box(small, &free.facts, free.workspace.is_some(), small.height);
         let mut workspace_list = NoopList;
         let constrained = HeroContent {
             facts: facts(ArtworkShape::Landscape),
@@ -587,8 +636,12 @@ mod hero_header_tests {
                 focused: false,
             }),
         };
-        let with_workspace =
-            hero_artwork_box(small, &constrained.facts, constrained.workspace.is_some());
+        let with_workspace = hero_artwork_box(
+            small,
+            &constrained.facts,
+            constrained.workspace.is_some(),
+            small.height,
+        );
         // The landscape box no longer fills the pane even without a
         // Workspace: it leaves room for the wrapped title/meta rows below
         // it, and a present Workspace caps it further so the Workspace
@@ -606,7 +659,7 @@ mod hero_header_tests {
         // fill the whole pane and leave the title/meta block no rows.
         let pane = content(ArtworkShape::Landscape);
         let small = Rect::new(0, 0, 113, 19);
-        let artwork = hero_artwork_box(small, &pane.facts, pane.workspace.is_some());
+        let artwork = hero_artwork_box(small, &pane.facts, pane.workspace.is_some(), small.height);
         assert!(
             artwork.height < small.height,
             "artwork leaves room for the text block below it"
@@ -620,6 +673,25 @@ mod hero_header_tests {
         };
         assert!(text_in(&buf, below, "Dune"));
         assert!(text_in(&buf, below, "2021"));
+    }
+
+    #[test]
+    fn short_pane_uses_compact_caps() {
+        let landscape = content(ArtworkShape::Landscape);
+        assert_eq!(
+            hero_artwork_box(Rect::new(0, 0, 113, 50), &landscape.facts, false, 50).height,
+            HERO_SHORT_LANDSCAPE_MAX_ROWS
+        );
+        let square = content(ArtworkShape::Square);
+        assert_eq!(
+            hero_artwork_box(Rect::new(0, 0, 100, 50), &square.facts, false, 50).height,
+            HERO_SHORT_NON_LANDSCAPE_MAX_ROWS
+        );
+        let portrait = content(ArtworkShape::Portrait);
+        assert_eq!(
+            hero_artwork_box(Rect::new(0, 0, 60, 50), &portrait.facts, false, 50).height,
+            HERO_SHORT_NON_LANDSCAPE_MAX_ROWS
+        );
     }
 
     #[test]

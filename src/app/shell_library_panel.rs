@@ -258,6 +258,7 @@ impl Model {
         panel.set_active(active);
         panel.sync_overlay_state();
         panel.set_list_pane_width(list_pane_width);
+        panel.set_terminal_height(self.app.terminal_height);
         panel.sync_mouse_eligibility(mouse_eligible);
     }
 
@@ -354,9 +355,18 @@ impl Model {
                 }
             }
         };
-        let state = self
-            .app
-            .project_hero_image(&hero_data.facts, false, area, list_pane_width);
+        let overlay_box = self
+            .application
+            .get_component(&ComponentId::Library)
+            .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+            .and_then(LibraryPanel::active_hero_image_box);
+        let state = self.app.project_hero_image(
+            &hero_data.facts,
+            false,
+            area,
+            list_pane_width,
+            overlay_box,
+        );
         if let Some(panel) = self
             .application
             .get_component_mut(&ComponentId::Library)

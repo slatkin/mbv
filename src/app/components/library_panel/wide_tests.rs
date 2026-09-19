@@ -95,6 +95,7 @@ fn draw_skeleton(
                 None,
                 &mut hits,
                 &mut windows,
+                80, // tall terminal: the short-pane caps must not skew the skeleton tests
             );
         })
         .unwrap();
@@ -986,6 +987,7 @@ fn sub_breakpoint_area_paints_nothing() {
                 None,
                 &mut hits,
                 &mut windows,
+                80, // tall terminal: the short-pane caps must not skew the skeleton tests
             );
         })
         .unwrap();
