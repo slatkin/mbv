@@ -393,7 +393,8 @@ fn dispatch_slot_jump(
                 transition_request_id,
                 transition_generation,
             );
-            player.send_command(t.into_jump());
+            let resume_ticks = crate::player::resume_ticks_for_slot(queue, transition_target);
+            player.send_command(t.into_jump(resume_ticks));
         }
         crate::playback_transition::DispatchDecision::Queued { superseded } => {
             log::info!(
@@ -465,7 +466,8 @@ fn settle_and_redispatch(
     );
     owner.queued_transition_origin = None;
     if let Some(next) = dispatch_next {
-        player.send_command(next.into_jump());
+        let resume_ticks = crate::player::resume_ticks_for_slot(&owner.core.queue, next.target);
+        player.send_command(next.into_jump(resume_ticks));
     }
 }
 
@@ -511,7 +513,8 @@ fn expire_and_redispatch(
         }
     }
     if let Some(next) = dispatch_next {
-        player.send_command(next.into_jump());
+        let resume_ticks = crate::player::resume_ticks_for_slot(&owner.core.queue, next.target);
+        player.send_command(next.into_jump(resume_ticks));
     }
     // Abandoning / promoting a transition changed desired state; republish.
     broadcast_queue_state(

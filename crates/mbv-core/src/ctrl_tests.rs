@@ -680,6 +680,7 @@ fn local_only_command_is_refused_without_delivery_or_termination() {
         slot_id: crate::playback_queue::QueueSlotId::from_raw(3),
         request_id: 9,
         generation: 9,
+        resume_ticks: None,
     };
 
     // The transport refuses to encode it, returning the command.
@@ -699,6 +700,7 @@ fn local_only_command_is_refused_without_delivery_or_termination() {
         slot_id: crate::playback_queue::QueueSlotId::from_raw(3),
         request_id: 9,
         generation: 9,
+        resume_ticks: None,
     }));
     assert!(
         cmd_rx.try_recv().is_err(),

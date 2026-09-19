@@ -395,6 +395,7 @@ impl PlaybackRun {
         self.tracks_initialized = false;
         self.forced_slot_id = None;
         self.forced_transition = None;
+        self.forced_resume_ticks = None;
         self.reset_next_up_state();
         self.stopped_event_sent = false;
         self.mark_played_id = None;
@@ -635,6 +636,7 @@ impl PlaybackRun {
             current_idx: start_idx,
             forced_slot_id: None,
             forced_transition: None,
+            forced_resume_ticks: None,
             stop_slot: None,
             stop_runtime: None,
             quit_at: None,

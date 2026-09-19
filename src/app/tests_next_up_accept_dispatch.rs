@@ -112,7 +112,7 @@ fn expire_dispatches_the_promoted_transition_unchanged() {
 
     assert!(matches!(
         commands.try_recv().expect("the promoted transition must be dispatched"),
-        mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation }
+        mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation, .. }
             if slot_id == slot_b && request_id == request_id_b && generation == generation_b
     ));
     assert!(commands.try_recv().is_err());
@@ -149,7 +149,7 @@ fn settle_dispatches_the_promoted_transition_unchanged() {
 
     assert!(matches!(
         commands.try_recv().expect("the promoted transition must be dispatched"),
-        mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation }
+        mbv_core::player::PlayerCommand::JumpTo { slot_id, request_id, generation, .. }
             if slot_id == slot_b && request_id == request_id_b && generation == generation_b
     ));
     assert!(commands.try_recv().is_err());

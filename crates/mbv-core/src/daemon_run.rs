@@ -429,9 +429,28 @@ pub fn run_with_options(
             }
             DaemonEvent::Player(pe @ PlayerEvent::TrackCompleted {
                 slot_id,
+                position_ticks,
+                played,
                 consume,
                 ..
             }) => {
+                // The canonical queue must record this occurrence's real
+                // position before it is consumed/broadcast — otherwise every
+                // client resync (including the very next TrackChanged) rebuilds
+                // from the slot's stale submission-time position, silently
+                // reverting whatever progress the just-finished play recorded.
+                if let Some(slot) = owner.core.queue.slot(slot_id) {
+                    // Only record meaningful progress (>= 30s) for video;
+                    // audio and startup noise keep the prior stored value.
+                    let position = if played {
+                        0
+                    } else if position_ticks >= 300_000_000 && !slot.item.is_audio() {
+                        position_ticks
+                    } else {
+                        slot.item.playback_position_ticks()
+                    };
+                    owner.core.apply_completion_progress(slot_id, position, played);
+                }
                 let (consume_videos, consume_audio) = {
                     let cfg = client.lock().unwrap();
                     (cfg.config.consume_videos, cfg.config.consume_audio)
@@ -457,6 +476,27 @@ pub fn run_with_options(
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Player(pe) => {
+                if let PlayerEvent::Stopped {
+                    slot_id: Some(slot_id),
+                    position_ticks,
+                    played,
+                    ..
+                } = &pe
+                {
+                    // Same reasoning as the TrackCompleted arm: record real
+                    // progress on the canonical queue before it is broadcast,
+                    // or the next resync reverts a fully-stopped item to 0.
+                    if let Some(slot) = owner.core.queue.slot(*slot_id) {
+                        let position = if *played {
+                            0
+                        } else if *position_ticks > 0 && !slot.item.is_audio() {
+                            *position_ticks
+                        } else {
+                            slot.item.playback_position_ticks()
+                        };
+                        owner.core.apply_completion_progress(*slot_id, position, *played);
+                    }
+                }
                 if let PlayerEvent::PausedChanged(paused) = &pe {
                     if let Some((connection_id, request_id, generation)) = owner.intents
                         .current

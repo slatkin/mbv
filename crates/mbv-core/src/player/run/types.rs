@@ -28,6 +28,13 @@ struct PlaybackRun {
     /// tagged with the `(request_id, generation)` it satisfies (design D4).
     /// Cleared in lockstep with `forced_slot_id`.
     forced_transition: Option<crate::playback_transition::Transition>,
+    /// Resume position for the target of an in-flight explicit jump on the
+    /// playlist (non-active-file) path. mpv only honors a playlist entry's
+    /// baked `start=` option the first time that entry loads; navigating back
+    /// to it via `playlist-pos` reopens it from `start=` again, discarding
+    /// whatever was watched in this session. Taken and applied as an absolute
+    /// seek on the target's first `PlaybackRestart` (see `on_playback_restart`).
+    forced_resume_ticks: Option<i64>,
     /// Slot identity captured at the moment a stop/quit is first observed, so a
     /// `QueueMove`/`QueueRemove` applied before the deferred `Stopped` emit
     /// (shutdown / quit-timeout paths) cannot change which occurrence the event

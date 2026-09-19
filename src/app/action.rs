@@ -151,7 +151,11 @@ impl App {
                 .player
                 .queue_play_slot(mbv_core::ctrl::slot_id_to_u64(transition.target));
         }
-        self.player.send_command(transition.into_jump())
+        let resume_ticks = mbv_core::player::resume_ticks_for_slot(
+            &self.playback_queue().queue,
+            transition.target,
+        );
+        self.player.send_command(transition.into_jump(resume_ticks))
     }
 
     /// Request a jump to an existing canonical slot: the fresh-jump seam.

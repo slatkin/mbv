@@ -67,6 +67,19 @@ impl PlayerOwnerState {
         Some((index, resolved))
     }
 
+    /// Apply a completed/stopped occurrence's resolved position to the
+    /// canonical queue, so the owner's own queue — and every broadcast built
+    /// from it — reflects real progress instead of the slot's submission-time
+    /// position. Callers resolve the meaningful-progress gate before calling.
+    pub fn apply_completion_progress(
+        &mut self,
+        slot_id: QueueSlotId,
+        position_ticks: i64,
+        played: bool,
+    ) {
+        let _ = self.queue.apply_progress(slot_id, position_ticks, played);
+    }
+
     /// Consume a completed slot in the owner's canonical queue when the
     /// completion event and the configured per-kind policy both allow it.
     /// Returns `true` only when a slot was actually removed.
@@ -177,5 +190,62 @@ mod tests {
                 dispatch_next: Some(queued),
             }
         );
+    }
+
+    fn item(id: &str) -> crate::api::EmbyItem {
+        crate::api::EmbyItem {
+            id: id.to_string(),
+            name: format!("Item {id}"),
+            item_type: "Episode".to_string(),
+            is_folder: false,
+            media_type: "Video".to_string(),
+            collection_type: String::new(),
+            runtime_ticks: 100 * crate::api::TICKS_PER_SECOND,
+            played: false,
+            playback_position_ticks: 0,
+            series_id: String::new(),
+            series_name: String::new(),
+            album_id: String::new(),
+            album: String::new(),
+            index_number: 0,
+            parent_index_number: 0,
+            unplayed_item_count: 0,
+            path: String::new(),
+            artist: String::new(),
+            sort_name: String::new(),
+            production_year: 0,
+            end_year: 0,
+            overview: String::new(),
+            premiere_date: String::new(),
+            date_added: String::new(),
+            total_count: 0,
+            container: String::new(),
+            video_info: String::new(),
+            audio_info: String::new(),
+            genres: Vec::new(),
+            people: Vec::new(),
+            external_urls: Vec::new(),
+            playlist_item_id: String::new(),
+            image_tags: Default::default(),
+        }
+    }
+
+    // Regression: the daemon used to drop TrackCompleted/Stopped position and
+    // played state on the floor instead of applying it to the canonical
+    // queue, so the very next broadcast reverted a stopped item's progress
+    // back to its submission-time position (0, for a freshly queued item).
+    #[test]
+    fn apply_completion_progress_advances_canonical_queue_and_revision() {
+        let queue = PlaybackQueue::from_items(vec![item("a")], Some(0));
+        let slot_id = queue.slots()[0].slot_id;
+        let before_revision = queue.revision();
+        let mut owner = PlayerOwnerState::new(queue, crate::config::QueueSource::default());
+
+        let watched_ticks = 86 * crate::api::TICKS_PER_SECOND;
+        owner.apply_completion_progress(slot_id, watched_ticks, false);
+
+        let slot = owner.queue.slot(slot_id).expect("slot still present");
+        assert_eq!(slot.item.playback_position_ticks(), watched_ticks);
+        assert!(owner.queue.revision() != before_revision);
     }
 }

@@ -14,8 +14,8 @@ use crate::api::{EmbyClient, EmbyItem, TICKS_PER_SECOND};
 use crate::id_types::{EmbySessionId, ItemId, MediaSourceId};
 use crate::playback_execution_sequence::{ExecSlot, ExecutionSequence};
 #[cfg(test)]
-use crate::playback_queue::{PlaybackQueue, QueueMutationResult};
-use crate::playback_queue::{QueueItem, QueueSlotId};
+use crate::playback_queue::QueueMutationResult;
+use crate::playback_queue::{PlaybackQueue, QueueItem, QueueSlotId};
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,
@@ -35,7 +35,12 @@ fn mpv_title_opt(title: &str) -> String {
     format!("force-media-title=%{}%{}", title.len(), title)
 }
 
-fn resume_start_pos(item: &QueueItem) -> f64 {
+/// The resume position mpv should start `item` from, per the same per-kind
+/// gate `mpv_load_opts` bakes into a fresh `loadfile`'s `start=` option.
+/// Reused by the daemon's slot-jump dispatch to re-seek a re-visited entry —
+/// `loadfile`'s baked `start=` only applies the first time an entry loads, so
+/// a later `playlist-pos` jump back to it needs this recomputed explicitly.
+pub(crate) fn resume_start_pos(item: &QueueItem) -> f64 {
     match item {
         QueueItem::Emby(emby) if !emby.is_audio() && emby.should_resume() => emby.resume_seconds(),
         QueueItem::Emby(_) => 0.0,
@@ -64,6 +69,16 @@ fn resume_start_pos(item: &QueueItem) -> f64 {
             }
         }
     }
+}
+
+/// The resume position, in ticks, for a slot-jump target — `resume_start_pos`
+/// evaluated against the canonical queue's current item for `slot_id`, so
+/// progress recorded since the queue was submitted is honored. `None` when
+/// the slot is gone or the item should not resume.
+pub fn resume_ticks_for_slot(queue: &PlaybackQueue, slot_id: QueueSlotId) -> Option<i64> {
+    let slot = queue.slot(slot_id)?;
+    let seconds = resume_start_pos(&slot.item);
+    (seconds > 0.0).then_some((seconds * TICKS_PER_SECOND as f64) as i64)
 }
 
 fn mpv_load_opts(item: &QueueItem) -> String {

@@ -672,6 +672,7 @@ fn active_file_jump_to_observed_slot_advances_when_the_run_confirms_via_track_ch
             slot_id,
             request_id,
             generation,
+            ..
         } => {
             assert_eq!(slot_id, slot_b, "the jump targets the next slot");
             (request_id, generation)

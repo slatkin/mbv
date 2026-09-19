@@ -307,6 +307,16 @@ pub enum PlayerCommand {
         slot_id: QueueSlotId,
         request_id: crate::ctrl::PlaybackRequestId,
         generation: crate::ctrl::PlaybackGeneration,
+        /// Resume position for the target slot, resolved by the sender from
+        /// the canonical queue at dispatch time. On the playlist (non-active-
+        /// file) path, mpv only honors a playlist entry's baked `start=`
+        /// option the first time it loads, so re-selecting an
+        /// already-played-partway entry needs an explicit re-seek; this
+        /// carries the value for it. `#[serde(default)]` even though this
+        /// command never crosses the ctrl wire (see below), for consistency
+        /// with the rest of this enum's evolution.
+        #[serde(default)]
+        resume_ticks: Option<i64>,
     },
     /// Relative single-step forward nav; carries no request identity (design D4:
     /// relative nav correlates like natural advancement, not a repeated target).

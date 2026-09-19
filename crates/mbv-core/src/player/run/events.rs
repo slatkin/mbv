@@ -268,6 +268,19 @@ impl PlaybackRun {
             }
             auto_select_tracks(mpv, &self.status, &prefs);
             self.tracks_initialized = true;
+            // A re-visited playlist entry only honors its baked `start=`
+            // option the first time it ever loads; mpv reopens it from
+            // scratch on a later `playlist-pos` jump, discarding whatever was
+            // watched in this session. `forced_resume_ticks` (armed by the
+            // JumpTo handler from the canonical queue's current position)
+            // repairs that with an explicit seek now that the entry is
+            // actually loaded and seekable.
+            if let Some(ticks) = self.forced_resume_ticks.take() {
+                let seconds = ticks as f64 / TICKS_PER_SECOND as f64;
+                if let Err(e) = mpv.command("seek", &[&seconds.to_string(), "absolute"]) {
+                    log::warn!(target: "player", "resume re-seek to {seconds}s failed: {}", mpv_err_str(&e));
+                }
+            }
             if let Some(item) = self.active_item().cloned() {
                 if let Some(emby) = item.as_emby() {
                     send_ep_info(mpv, emby);

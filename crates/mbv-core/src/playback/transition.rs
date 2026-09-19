@@ -41,11 +41,15 @@ impl Transition {
 
     /// The in-process `JumpTo` command that dispatches this transition to the
     /// Playback run, carrying its correlated request identity (design D4).
-    pub fn into_jump(self) -> crate::player::PlayerCommand {
+    /// `resume_ticks` is the target slot's resume position, resolved by the
+    /// caller from the canonical queue at dispatch time (the Playback run's
+    /// own queue mirror is not kept current with in-session progress).
+    pub fn into_jump(self, resume_ticks: Option<i64>) -> crate::player::PlayerCommand {
         crate::player::PlayerCommand::JumpTo {
             slot_id: self.target,
             request_id: self.request_id,
             generation: self.generation,
+            resume_ticks,
         }
     }
 }

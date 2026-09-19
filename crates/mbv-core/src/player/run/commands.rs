@@ -34,6 +34,7 @@ impl PlaybackRun {
                 slot_id,
                 request_id,
                 generation,
+                resume_ticks,
             } => {
                 // Resolve the owner-assigned slot to this run's mpv-local
                 // ordinal; a stale slot (gone here) is rejected, never
@@ -66,9 +67,11 @@ impl PlaybackRun {
                 // mpv playlist indices are adapter coordinates; pin the
                 // target slot identity before asking mpv to move.
                 self.forced_slot_id = Some(slot_id);
+                self.forced_resume_ticks = resume_ticks;
                 if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
                     self.forced_slot_id = None;
                     self.forced_transition = None;
+                    self.forced_resume_ticks = None;
                     log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
                 } else {
                     log::info!(
