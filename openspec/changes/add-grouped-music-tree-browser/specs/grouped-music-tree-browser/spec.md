@@ -25,7 +25,7 @@ The tree SHALL have one owner for its selected node, expansion, viewport, multi-
 - **AND** that root does not request artist artwork
 
 ### Requirement: Artist roots and album leaves have distinct navigation
-Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right SHALL expand a focused artist root. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
+Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right SHALL expand a focused artist root. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior; when filtering is active, it SHALL first dismiss the filter and focus the album in the unfiltered tree before enabling album-track selection. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
 
 #### Scenario: Collapse removes descendants from navigation
 - **WHEN** the user collapses a focused artist root
@@ -39,6 +39,11 @@ Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. 
 #### Scenario: Album activation is preserved
 - **WHEN** the user presses Enter on an album leaf
 - **THEN** the existing album Hero and album-track Workspace behavior is invoked
+
+#### Scenario: Filtered album activation dismisses filtering
+- **WHEN** the user presses Enter on an album leaf while Grouped Music filtering is active
+- **THEN** filtering closes and the unfiltered tree focuses that album
+- **AND** the existing album-track selection behavior is enabled
 
 ### Requirement: Artist actions resolve visible album descendants
 Play, enqueue, shuffle, and context actions invoked on an artist root SHALL resolve to that root's visible album leaves in settled display order. While no filter is active, all settled child albums are visible regardless of expansion. While a filter is active, only matching visible child albums are in scope. Artist identities SHALL never be emitted as playback, queue, or context effect targets.
@@ -85,7 +90,7 @@ The mounted Music destination SHALL remain the sole event boundary. Keyboard pre
 - **THEN** prior row geometry claims no pointer target
 
 ### Requirement: The integrated tree meets mbv visual contracts
-The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. It SHALL use semantic theme roles and SHALL preserve the canonical selected-row bar, distinct artist and album hierarchy, group-relative zebra treatment, release-year metadata, focused-title marquee behavior, scrollbar behavior, and readable indentation and expand/collapse glyphs at representative Wide and non-Wide widths. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
+The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. It SHALL use semantic theme roles and SHALL preserve the canonical selected-row bar, distinct artist and album hierarchy, group-relative zebra treatment, release-year metadata, focused-title marquee behavior, scrollbar behavior, and readable indentation and expand/collapse glyphs at representative Wide and non-Wide widths. Album leaves SHALL obtain semantic state through the canonical music collapse and SHALL remain visually unplayed with no played or resume decoration; artist roots SHALL likewise use ordinary grouping semantics. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
 
 The change SHALL be accepted only after automated checks and live user review of representative Wide, Narrow, Mini, and Library Hero overlay behavior. If the dependency's supported rendering and style extension points cannot satisfy these contracts, the dependency SHALL be removed and this change SHALL not merge; a parallel bespoke tree renderer is not an acceptance fallback.
 
@@ -93,6 +98,10 @@ The change SHALL be accepted only after automated checks and live user review of
 - **WHEN** the Library panel is focused and the tree paints its selected artist root or album leaf
 - **THEN** the selected-row bar spans the full row and overrides zebra treatment
 - **AND** no destination-defined raw colour or marker substitutes for it
+
+#### Scenario: Music playback history does not decorate tree rows
+- **WHEN** an artist root or album leaf is painted and its underlying Music data carries played or resume fields
+- **THEN** the tree paints ordinary Music row semantics without played or resume decoration
 
 #### Scenario: User rejects the customization
 - **WHEN** automated checks pass but live review finds the hierarchy, focus, metadata, marquee, scrollbar, or narrow-width treatment unacceptable

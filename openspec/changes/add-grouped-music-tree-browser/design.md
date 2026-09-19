@@ -1,6 +1,6 @@
 ## Context
 
-See `proposal.md` for motivation. Grouped Music currently derives an atomically published `GroupedAlbumCatalog`, flattens it to `[Heading, Spacer, Item…]`, and projects the album flow through `MediaListCarrier<String>`. `MusicContent` owns album and track interaction but is already 756 lines, near the 800-line pre-push gate. The shell owns album-track fetching, image effects, and projection into the component.
+See `proposal.md` for motivation. Grouped Music currently derives an atomically published `GroupedAlbumCatalog`, flattens it to `[Heading, Spacer, Item…]`, and projects the album flow through `MediaListCarrier<String>`. `MusicContent` owns album and track interaction but is already 756 lines, so adding the tree there would worsen an already large orchestration module. The shell owns album-track fetching, image effects, and projection into the component.
 
 `tui-treelistview` 0.2.2 matches mbv's Ratatui 0.30 generation. Its useful boundary is the combination of `TreeModel`, `TreeQuery`, `TreeListViewState`, current-render hit testing, label/column renderers, and style configuration. Its optional keymap is incompatible with mbv's single Keyboard Router and will remain disabled. Its nodes use compact copyable IDs while mbv's stable domain targets are owned strings.
 
@@ -13,12 +13,12 @@ The existing contracts conflict with the new surface in deliberate, narrow ways:
 - Keep one tree state owner across Wide, Narrow, Mini, and Library Hero overlay composition.
 - Use the dependency's supported model/query/state/rendering seams rather than reimplementing its projection.
 - Preserve mbv's Panel, Keyboard Router, mouse, semantic-theme, selected-row, and typed-effect boundaries.
-- Keep new tree code outside `music_content.rs` so the existing file does not cross the 800-line gate.
+- Keep new tree code outside `music_content.rs` so the existing orchestration module does not grow further.
 - Make dependency rejection cheap and complete if final customization review fails.
 
 **Non-Goals:**
 
-- A generic `TreeMediaList`, recursive browsing, lazy child loading, tree editing, persisted expansion, or migration of another destination.
+- A generic `TreeMediaList`, recursive browsing, lazy child loading, tree editing, on-disk persistence of expansion, or migration of another destination.
 - Replacing canonical `MediaList` in either album-track or artist-track Workspaces.
 - Relevance sorting, a full-library Grouped Music search, preloading every artist's tracks, or a bespoke renderer parallel to `TreeListView`.
 - Changing the shared Panel geometry, breakpoints, or Service/Player authority.
@@ -48,7 +48,7 @@ usize NodeId -> MusicNode::Artist(ArtistKey) | MusicNode::Album(AlbumTarget)
 MusicNodeKey -> usize NodeId
 ```
 
-`ArtistKey` is either a stable Emby artist item ID or a deterministic fallback grouping key. The parser retains the first applicable `ArtistItems` name/ID pair associated with the displayed album artist; the settled catalog carries both display text and this identity. `ArtistItems` IDs from album/item payloads are the sole stable artist ID space used for `ArtistIds` item queries and `/Items/{id}/Images`; IDs obtained from an `/Artists` listing SHALL never be mixed into these keys. If no ID exists, the fallback key derives from the settled grouping identity, not display position. Equal names with different IDs remain separate roots.
+`ArtistKey` is either a stable Emby artist item ID or a deterministic fallback grouping key. Relevant Music album/item requests explicitly include `ArtistItems` in their `Fields`, and the parser retains its name/ID pairs. A pair is applicable only when its trimmed name case-insensitively equals the settled displayed album artist; no arbitrary first pair is chosen for multi-artist or `Various Artists` albums. If no pair matches, the album uses fallback identity. The settled catalog carries both display text and the resolved identity. `ArtistItems` IDs from album/item payloads are the sole stable artist ID space used for `ArtistIds` item queries and `/Items/{id}/Images`; IDs obtained from an `/Artists` listing SHALL never be mixed into these keys. The fallback key derives from the settled grouping identity, not display position. Equal names with different IDs remain separate roots.
 
 IDs are interned by semantic key, survive ordinary catalog replacement, and are not reused for a different key during the owner's lifetime. Removed entries are tombstoned or omitted from the model while preserving their interned mapping; the arena resets only when the retained Music destination changes identity. This favors simple, collision-free continuity over speculative compaction.
 
@@ -94,7 +94,7 @@ Alternative rejected: storing selected artist IDs. Their meaning changes with fi
 
 ### 7. Add artist detail without giving the component Service authority
 
-Before tree implementation, extend the Emby item projection to retain artist name/ID pairs and establish the `mbv-core` Audio-by-artist operation using `ArtistIds=<ArtistItems id>`, `IncludeItemTypes=Audio`, and `Recursive=true`. Verify once against the configured live Emby Service that album payloads include `ArtistItems` alongside the existing requested fields and that the query returns that artist's tracks; automated coverage remains hermetic. Add a shell-owned artist detail cache keyed by Service generation and stable artist ID. On artist focus:
+Before tree implementation, request and retain artist name/ID pairs in the Emby item projection and establish the `mbv-core` Audio-by-artist operation using `ArtistIds=<ArtistItems id>`, `IncludeItemTypes=Audio`, and `Recursive=true`. Automated coverage proves request-field construction, parsing, query construction, and unsupported/error propagation hermetically. A terminal manual check records whether the configured live Emby Service returns `ArtistItems` and supports that query, but implementation proceeds fallback-safe either way. Add a shell-owned artist detail cache keyed by Service generation and stable artist ID. On artist focus:
 
 - `MusicContent` immediately projects name, in-scope album count, and year span from the settled tree;
 - it emits typed requests for missing artist artwork and tracks;
@@ -108,7 +108,7 @@ Alternative rejected: name-based Service lookup, which conflates equal artist na
 
 ### 8. Use the stock tree rendering pipeline as the dependency gate
 
-Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` (or the exact equivalent in the locked 0.2.2 API) to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. Style values are resolved from existing semantic theme policies inside the owning render layer; the destination does not pass raw colours.
+Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` (or the exact equivalent in the locked 0.2.2 API) to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. Style values are resolved from existing semantic theme policies inside the owning render layer; the destination does not pass raw colours. Album leaves use `MediaSemanticState::from_emby`, whose music collapse keeps them `Ordinary`; the label renderer SHALL NOT re-derive played or resume decoration from raw `EmbyItem` fields. Artist roots are likewise ordinary grouping rows.
 
 The tree remains in the Library panel's existing browser slot. The panel owns placement and fill; the tree painter owns paint-local row geometry. No screen module calls Ratatui or splits layout, and no base frame paints underneath. Marquee timing reuses the existing title-marquee primitive if the label-renderer seam permits it.
 
@@ -130,17 +130,17 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 - **[Crate rendering seams cannot reproduce mbv's surface]** → Keep customization inside supported crate interfaces, run focused visual evidence before final acceptance, and remove the dependency/change if live review fails; do not add a parallel renderer.
 - **[The locked crate API differs from the evaluated surface]** → Pin the exact compatible release, compile a minimal adapter first, and map names to the locked API without changing ownership decisions.
 - **[The dependency is immature and release history is volatile]** → Version 0.2.2 is a single-maintainer crate with low adoption, no GitHub releases, and two recent yanked releases; keep the integration destination-local, pin exactly, and retain dependency rejection as the acceptance outcome.
-- **[Artist identity is absent or ambiguous]** → Prefer `ArtistItems` stable IDs, retain equal-name groups separately, and use a deterministic fallback key only when identity is absent; never perform effect lookup by name.
+- **[Artist identity is absent, ambiguous, or omitted by a Service]** → Request `ArtistItems` explicitly, accept only a name-matching pair, retain equal-name groups separately, and use a deterministic fallback key when no match exists; never perform effect lookup by name. Unsupported artist-ID queries propagate to the shell's per-album aggregation fallback.
 - **[Artist completions paint beneath a new selection]** → Key requests and visible application by destination, Service generation, settled revision, and artist ID; cache valid data separately from presentation.
 - **[Filtering and marks expose hidden actions]** → Intersect tree multi-selection with the visible album projection whenever a debounced filter revision applies, and materialize every root action from that same projection.
 - **[Node arena grows during a long retained session]** → Reset it when destination identity changes; accept monotonic growth within one retained destination rather than risk ID reuse. Revisit compaction only if measured catalog churn makes it material.
-- **[`music_content.rs` exceeds the repository gate]** → Put model, filter, identity arena, and rendering adapter in destination-specific sibling modules; keep `MusicContent` to orchestration and typed translation.
+- **[`music_content.rs` becomes harder to maintain]** → Put model, filter, identity arena, and rendering adapter in destination-specific sibling modules; keep `MusicContent` to orchestration and typed translation.
 - **[Concurrent page-navigation change claims Grouped Music]** → Its canonical Heading behavior can land in either order; this change removes the Music album flow from `MediaList`, so no destination branch or ordering dependency is needed.
 
 ## Migration Plan
 
 1. Add the locked dependency and destination-specific adapter with no optional keymap.
-2. Retain `ArtistItems` identity in parsed music data, add the Audio-by-artist client operation, and complete the one-time live Emby mapping check before tree implementation.
+2. Request and retain `ArtistItems` identity in parsed music data and add the fallback-safe Audio-by-artist client operation; defer the advisory live Emby mapping check to terminal acceptance.
 3. Settle the verified identity into stable tree keys.
 4. Replace only the Grouped Music album carrier with the tree owner; keep both track Workspaces canonical.
 5. Add local filtering, root action materialization, multi-selection, and current-frame mouse handling.
