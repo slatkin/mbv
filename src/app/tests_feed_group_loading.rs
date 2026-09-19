@@ -311,7 +311,7 @@ fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
-        fetched_rows: 0,
+            fetched_rows: 1,
             parent_id: "lib-youtube".into(),
             title: "YouTube".into(),
             items: vec![folder],

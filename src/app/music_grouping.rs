@@ -161,7 +161,7 @@ impl App {
         if !self.is_music_group_view(lib_idx) {
             return;
         }
-        let (to_fetch, level_request): (Vec<String>, Option<(String, Vec<EmbyItem>)>) = {
+        let (needs_fetch, level_request): (bool, Option<(String, Vec<EmbyItem>)>) = {
             let lib = &mut self.libs[lib_idx];
             let Some(level) = lib.nav_stack.last_mut() else {
                 return;
@@ -229,11 +229,11 @@ impl App {
                     },
                 }
             }
-            let to_fetch = candidate.unresolved.iter().cloned().collect();
+            let needs_fetch = !candidate.unresolved.is_empty();
             state.candidate = Some(candidate);
-            (to_fetch, level_request)
+            (needs_fetch, level_request)
         };
-        if to_fetch.is_empty() {
+        if !needs_fetch {
             self.commit_music_grouping_candidate(lib_idx);
             return;
         }

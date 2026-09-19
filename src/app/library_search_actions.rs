@@ -239,7 +239,7 @@ impl App {
         if lvl.loading {
             return;
         }
-        if lvl.is_fully_loaded() || lvl.fetched_rows >= lvl.total_count {
+        if lvl.is_fully_loaded() {
             return;
         }
         // The root folder listing of a feed-home-video library isn't scrolled by

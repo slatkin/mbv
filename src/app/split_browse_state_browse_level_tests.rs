@@ -88,6 +88,24 @@ fn restored_fetched_rows_uses_persisted_value_or_item_count() {
 }
 
 #[test]
+fn grouped_music_level_is_fully_loaded_by_consumed_server_rows() {
+    let mut level = movie_level(make_items(1), 2, 0);
+    level.item_types = Some("Audio".into());
+    level.fetched_rows = 2;
+
+    assert!(level.is_fully_loaded());
+}
+
+#[test]
+fn grouped_music_level_is_not_fully_loaded_before_all_server_rows_are_consumed() {
+    let mut level = movie_level(make_items(1), 2, 0);
+    level.item_types = Some("Audio".into());
+    level.fetched_rows = 1;
+
+    assert!(!level.is_fully_loaded());
+}
+
+#[test]
 fn go_back_reanchors_parent_cursor_onto_the_popped_child_folder() {
     let mut app = make_app_stub();
     app.tab = TabSelection::EmbyLibrary(0);

@@ -103,10 +103,9 @@ pub(super) struct BrowseLevel {
 }
 
 impl BrowseLevel {
-    /// Whether every item reported by the server for this level has been
-    /// fetched into `items` (i.e. pagination is complete).
+    /// Whether every server row for this level has been consumed.
     pub(super) fn is_fully_loaded(&self) -> bool {
-        self.items.len() >= self.total_count
+        self.fetched_rows >= self.total_count
     }
 
     #[cfg(test)]
