@@ -190,11 +190,17 @@ impl Model {
                 .mount(id.clone(), Box::new(LibraryPanel::new()), vec![])
                 .expect("mount LibraryPanel");
         }
-        // Embedded owners are installed/projected after the panel is mounted
-        // so the first painted frame has a current owner and geometry.
-        self.push_active_emby_library_owner_content();
-        self.push_music_workspace_content();
+        // Content normally arrives at its event writers. Seed only a newly
+        // visited Emby owner after mounting; re-projecting every tick clones
+        // and groups the whole library during each live resize.
         let active = self.active_library_key();
+        if active
+            .as_ref()
+            .is_some_and(|key| !self.library_panel_has_owner(key))
+        {
+            self.push_active_emby_library_owner_content();
+            self.push_music_workspace_content();
+        }
         // Register the Books owner as part of panel/catalog reconciliation,
         // not from the Books content projection. A newly active Books tab is
         // then populated by this discrete registration hand-off.
