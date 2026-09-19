@@ -170,16 +170,11 @@ fn landscape_grid_columns(width: u16) -> Option<(u16, u16)> {
 /// text-starvation cap matches what the painter actually paints below it.
 fn landscape_text_rows(width: u16, facts: &HeroFacts) -> u16 {
     if landscape_grid_columns(width).is_some() {
-        let entries = std::iter::once(&facts.title)
-            .chain(facts.meta_rows.iter())
-            .filter(|line| !line.is_empty())
-            .count();
-        entries.div_ceil(2) as u16
+        facts.live_entries().count().div_ceil(2) as u16
     } else {
         let wrap_width = (width as usize).saturating_sub(1).max(1);
-        std::iter::once(&facts.title)
-            .chain(facts.meta_rows.iter())
-            .filter(|line| !line.is_empty())
+        facts
+            .live_entries()
             .map(|line| textwrap::wrap(line, wrap_width).len() as u16)
             .sum()
     }

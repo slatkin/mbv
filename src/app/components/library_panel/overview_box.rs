@@ -353,10 +353,7 @@ pub(in crate::app) fn overlay_links(
     };
     let wrap = (area.width as usize).saturating_sub(1).max(1);
     let mut y = area.y;
-    for line in std::iter::once(&facts.title)
-        .chain(facts.meta_rows.iter())
-        .take(index + 2)
-    {
+    for line in facts.entries().take(index + 2) {
         let lines = textwrap::wrap(line, wrap);
         if line == &joined {
             if lines.len() != 1 {
@@ -399,8 +396,9 @@ pub(in crate::app) fn overlay_links_grid(
     let Some(index) = facts.meta_rows.iter().position(|row| row == &joined) else {
         return;
     };
-    let pos = std::iter::once(&facts.title)
-        .chain(facts.meta_rows.iter().take(index + 1))
+    let pos = facts
+        .entries()
+        .take(index + 2)
         .filter(|line| !line.is_empty())
         .count()
         .saturating_sub(1);

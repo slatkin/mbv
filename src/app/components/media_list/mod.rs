@@ -182,28 +182,35 @@ impl MediaSemanticState {
     /// actually playing shows state, and the Queue paints that one as
     /// `NowPlaying` itself.
     pub fn from_emby(item: &EmbyItem) -> Self {
-        if item.is_music() {
-            Self::Ordinary
-        } else {
-            Self::from_progress(
-                item.played,
-                item.playback_position_ticks,
-                item.runtime_ticks,
-            )
-        }
+        Self::music_or_progress(
+            item.is_music(),
+            item.played,
+            item.playback_position_ticks,
+            item.runtime_ticks,
+        )
     }
 
     /// [`Self::from_emby`] for a queue item: the same rule over the item's
     /// own stored facts.
     pub fn from_queue_item(item: &QueueItem) -> Self {
-        if item.is_music() {
+        Self::music_or_progress(
+            item.is_music(),
+            item.played(),
+            item.playback_position_ticks(),
+            item.runtime_ticks(),
+        )
+    }
+
+    fn music_or_progress(
+        is_music: bool,
+        played: bool,
+        position_ticks: i64,
+        runtime_ticks: i64,
+    ) -> Self {
+        if is_music {
             Self::Ordinary
         } else {
-            Self::from_progress(
-                item.played(),
-                item.playback_position_ticks(),
-                item.runtime_ticks(),
-            )
+            Self::from_progress(played, position_ticks, runtime_ticks)
         }
     }
 }

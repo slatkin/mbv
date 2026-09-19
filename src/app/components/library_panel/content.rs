@@ -123,6 +123,20 @@ pub(in crate::app) struct HeroFacts {
     pub artwork: HeroArtwork,
 }
 
+impl HeroFacts {
+    /// Title followed by meta rows, in display order — the raw entry
+    /// sequence the Landscape two-column grid packs and positions against
+    /// (`hero_header.rs`, `overview_box.rs`).
+    pub(in crate::app) fn entries(&self) -> impl Iterator<Item = &String> {
+        std::iter::once(&self.title).chain(self.meta_rows.iter())
+    }
+
+    /// [`Self::entries`] with empty rows skipped.
+    pub(in crate::app) fn live_entries(&self) -> impl Iterator<Item = &String> {
+        self.entries().filter(|line| !line.is_empty())
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(in crate::app) struct HeroLink {
     pub name: String,
