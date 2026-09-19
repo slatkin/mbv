@@ -11,6 +11,14 @@
 //! `color()`; `ALL`, `name()` and `hex()` are test-only (the uniqueness and
 //! `docs/palette.json` drift tests below) and are `#[cfg(test)]`-gated —
 //! structurally, never `#[allow(dead_code)]`.
+//!
+//! Known residual `Color::Rgb` literals outside this enum (task 4.1), none
+//! of them palette colours: `components/backdrop.rs`'s dim arithmetic, which
+//! halves whatever cell colour it finds, and buffer assertions in
+//! `components/library_hero_overlay.rs` and `components/media_list.rs`
+//! (overlay/chrome and zebra-row background expectations pinned by hex;
+//! `media_list.rs:413,478` at the time of `palette-enum`). These stay as
+//! literals; do not migrate them to roles.
 
 use ratatui::style::Color;
 
