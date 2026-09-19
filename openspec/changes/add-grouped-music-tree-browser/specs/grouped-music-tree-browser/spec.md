@@ -5,7 +5,7 @@ Provide a shallow, directly navigable artist-and-album tree for Grouped Music, i
 ## ADDED Requirements
 
 ### Requirement: Grouped Music projects one stable shallow tree
-The Grouped Music browser SHALL present each settled artist group as a focusable artist root with its settled albums as leaf children. It SHALL preserve settled artist and album order. Artist identity SHALL use stable Service identity when available so equal display names remain distinct, and SHALL use a deterministic fallback identity when the Service supplies none. Album leaves SHALL retain their existing stable album targets.
+The Grouped Music browser SHALL present each settled artist group as a focusable artist root with its settled albums as leaf children. It SHALL preserve settled artist and album order. Artist identity SHALL use stable Service identity when available so equal display names remain distinct, and SHALL use a deterministic fallback identity when the Service supplies none. Stable artist identity SHALL come only from `ArtistItems` pairs carried on album/item payloads; IDs obtained from an `/Artists` listing SHALL NOT be mixed into artist keys, artwork requests, or artist-track queries. Album leaves SHALL retain their existing stable album targets.
 
 The tree SHALL have one owner for its selected node, expansion, viewport, multi-selection, and current-frame hit geometry. Ordinary settled-catalog replacement SHALL preserve the selected node, expansion state, and surviving multi-selection by stable identity. When the selected node survives, its prior viewport row SHALL be preserved when projection bounds permit; otherwise the viewport SHALL apply only the minimum scroll needed to keep it visible and clamp at projection bounds. A responsive presentation change SHALL reuse that owner and apply the same visibility rule rather than copying state into another control.
 
@@ -23,6 +23,11 @@ The tree SHALL have one owner for its selected node, expansion, viewport, multi-
 - **WHEN** an album has no stable artist identity from the Service
 - **THEN** it belongs to a deterministic fallback artist root that remains stable across an ordinary refresh
 - **AND** that root does not request artist artwork
+
+#### Scenario: /Artists listing IDs are not mixed into keys
+- **WHEN** an artist identity from an `/Artists` listing is available for the same display name
+- **THEN** no artist key, artwork request, or artist-track query uses that ID
+- **AND** the root's identity still comes only from `ArtistItems` or the deterministic fallback
 
 ### Requirement: Artist roots and album leaves have distinct navigation
 Up, Down, `j`, and `k` SHALL move across visible artist roots and album leaves. Right on a collapsed artist root SHALL expand it; Right on an already expanded artist root SHALL enter its artist-track Workspace, opening the Library Hero overlay first in non-Wide geometry. Left SHALL collapse a focused expanded artist root, or move a focused album leaf to its artist parent. Enter on an artist root SHALL toggle expansion. Enter on an album leaf SHALL retain the existing album activation behavior; when filtering is active, it SHALL first dismiss the filter and focus the album in the unfiltered tree before enabling album-track selection. Page navigation SHALL operate on the tree's visible-node viewport and SHALL NOT inherit Heading-based canonical-list group jumps.
