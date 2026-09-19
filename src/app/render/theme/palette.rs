@@ -7,9 +7,10 @@
 //! outside the palette (design.md, "Raw `Color::` specials stay outside
 //! the palette").
 //!
-//! Additive unit: nothing consumes `Palette` yet (section 3 migrates the
-//! roles/surfaces onto it), so the non-test build reports transient
-//! `dead_code` warnings until then.
+//! Additive unit: the roles (`mod.rs`) and the surface tier consume
+//! `color()`; `ALL`, `name()` and `hex()` are test-only (the uniqueness and
+//! `docs/palette.json` drift tests below) and are `#[cfg(test)]`-gated —
+//! structurally, never `#[allow(dead_code)]`.
 
 use ratatui::style::Color;
 
@@ -53,7 +54,9 @@ pub(in crate::app) enum Palette {
 }
 
 /// Every variant exactly once, in declaration order. The single source for
-/// the uniqueness tests and the later `docs/palette.json` viewer.
+/// the uniqueness tests and the later `docs/palette.json` viewer. Test-only:
+/// production code names variants directly, never through `ALL`.
+#[cfg(test)]
 pub(in crate::app) const ALL: [Palette; 29] = [
     Palette::Grey1,
     Palette::Grey2,
@@ -124,7 +127,8 @@ impl Palette {
     }
 
     /// The variant's PascalCase name (matches the name table and the
-    /// `name` field `docs/palette.json` gains in row 4.2).
+    /// `name` field `docs/palette.json` gains in row 4.2). Test-only.
+    #[cfg(test)]
     pub(in crate::app) const fn name(self) -> &'static str {
         match self {
             Palette::Grey1 => "Grey1",
@@ -159,7 +163,8 @@ impl Palette {
         }
     }
 
-    /// The variant's colour as lowercase `"#rrggbb"`.
+    /// The variant's colour as lowercase `"#rrggbb"`. Test-only.
+    #[cfg(test)]
     pub(in crate::app) const fn hex(self) -> &'static str {
         match self {
             Palette::Grey1 => "#1a1a1a",

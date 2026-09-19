@@ -1,5 +1,4 @@
 mod palette;
-mod primitives;
 mod surface;
 mod surface_resolve;
 mod surface_table;
@@ -23,7 +22,7 @@ use palette::Palette;
 // ---------------------------------------------------------------------------
 // Roles (openspec/changes/centralize-ui-design-language,
 // openspec/changes/enforce-mbv-ui-design-system) — the public API. A role
-// names what a colour *means*, never what hue it is. `primitives` holds the
+// names what a colour *means*, never what hue it is. `palette` holds the
 // raw constants and is private to this module, so nothing outside `theme`
 // can name a hue directly.
 // ---------------------------------------------------------------------------

@@ -16,7 +16,6 @@
 
 use super::surface::{FocusSource, Surface};
 use super::surface_table::{row, RESTING_DEVIATIONS};
-use super::*;
 use ratatui::style::Color;
 
 use super::palette::Palette;
@@ -66,6 +65,7 @@ mod tests {
 
     use super::super::surface::Level;
     use super::*;
+    use crate::app::render::theme::*;
 
     /// Every variant is placed, `ALL` has no duplicates, and every one
     /// resolves. `ALL` is generated from the same macro variant list as the
@@ -104,8 +104,8 @@ mod tests {
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
             Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::QueuePanel => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
-            Surface::MainContentBox => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
+            Surface::QueuePanel => (Palette::Green2.color(), SURFACE_BACKDROP),
+            Surface::MainContentBox => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::QueueOnlyPlaybackPanel => (SURFACE_CHROME, SURFACE_CHROME),
@@ -115,10 +115,7 @@ mod tests {
             Surface::PlaybackRecess => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::ArtworkLoadingPlaceholder => (
-                primitives::ARTWORK_LOADING_PLACEHOLDER,
-                primitives::ARTWORK_LOADING_PLACEHOLDER,
-            ),
+            Surface::ArtworkLoadingPlaceholder => (Palette::Grey2.color(), Palette::Grey2.color()),
             Surface::StatusBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::StatusBarPill => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::QueuePanelBand => (SURFACE_CHROME, SURFACE_CHROME),
@@ -229,11 +226,11 @@ mod tests {
         for surface in soft_rows {
             assert_eq!(
                 surface_colors(surface, true).fill,
-                primitives::SOFT_CONTENT_BODY_BG,
+                Palette::Green2.color(),
                 "{surface:?} focused soft fill"
             );
         }
         // The soft variant is not the default focused content body.
-        assert_ne!(primitives::SOFT_CONTENT_BODY_BG, SURFACE_FOCUSED);
+        assert_ne!(Palette::Green2.color(), SURFACE_FOCUSED);
     }
 }
