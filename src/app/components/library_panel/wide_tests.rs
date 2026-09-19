@@ -241,7 +241,7 @@ fn workspace_selector_with_active_none_paints_no_active_pill() {
             }
         }
         let cell = &buf[(rect.x + 1, rect.y)];
-        assert_eq!(cell.style().fg, Some(palette::PILL_FG));
+        assert_eq!(cell.style().fg, Some(palette::TEXT_MUTED));
     }
     // A hit test inside a painted pill still resolves its index.
     let (first_rect, first_id) = hits.workspace_selector.regions()[0];

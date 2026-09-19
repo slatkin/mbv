@@ -67,7 +67,7 @@ pub const HERO_CREDITS_NAME: Color = Palette::Yellow.color(); // credits name co
 // Accents
 pub const ACCENT: Color = Palette::Aqua.color(); // focus accent, watched, folders, Emby brand glyph
 pub const ACCENT_ACTIVE: Color = Palette::Iris.color(); // active tab, focused pill/badge text, selected-row bg
-pub const ACCENT_AUDIOBOOKSHELF: Color = Palette::Gold.color(); // audiobookshelf brand glyph
+pub const ACCENT_AUDIOBOOKSHELF: Color = Palette::Yellow.color(); // audiobookshelf brand glyph
 
 // Rules
 pub const BORDER_UNFOCUSED: Color = Palette::Grey2.color();
@@ -81,7 +81,6 @@ pub const PILL_SELECTED_BG: Color = Palette::Foam.color(); // selected pill-sele
                                                            // metadata text: the two are equal today
                                                            // and independently editable, so an edit
                                                            // to either moves it alone
-pub const PILL_FG: Color = Palette::Ash.color();
 pub const PILL_SELECTED_FG: Color = Palette::Ink.color();
 /// The pill-selector's overflow/edge accent. A former value alias of the
 /// text green (`PILL_SELECTOR_OVERFLOW_FG = BG_GREEN`), now its own role: it
@@ -98,7 +97,6 @@ pub const TEXT_MUTED: Color = Palette::Grey4.color(); // dim text, icons, unfocu
 /// row's item title; the split context keeps `SPLIT_ROW_CONTEXT_FG`). Its own
 /// role rather than the generic dim `TEXT_MUTED`, so a played row can read as
 /// watched without moving icons and unfocused chrome.
-pub const PLAYED_ROW_FG: Color = Palette::Fog.color(); // #bec5b2
 pub const TEXT_STRONG: Color = Palette::White.color(); // bold titles/headings
 pub const TEXT_EMPHASIS: Color = Palette::Cream.color(); // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = Palette::Yellow.color(); // focused-row title accent
@@ -174,8 +172,8 @@ pub const INDICATOR_RESOLUTION_FG: Color = Palette::Orange.color();
 pub const INDICATOR_AUDIO_FG: Color = Palette::Purple.color();
 
 // Playback panel
-pub const PLAYBACK_VALUE_FG: Color = Palette::Mint.color(); // title/codec value
-pub const PLAYBACK_META_FG: Color = Palette::Sage.color(); // captions/time
+pub const PLAYBACK_VALUE_FG: Color = Palette::Iris.color(); // title/codec value
+pub const PLAYBACK_META_FG: Color = Palette::Iris.color(); // captions/time
 /// The now-playing title row's title part: the item's own name (episode,
 /// track, entry, ...). Its own role rather than `ACCENT`/`TEXT_FOCUS_ACCENT`,
 /// whose `Palette::Aqua` value it shares today: the two are equal today and
@@ -190,7 +188,7 @@ pub const PLAYBACK_TITLE_FG: Color = Palette::Aqua.color();
 pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
 
 // Progress and queue
-pub const PROGRESS_TRACK: Color = Palette::Steel.color(); // unplayed seek/progress track
+pub const PROGRESS_TRACK: Color = Palette::Grey5.color(); // unplayed seek/progress track
 
 // Chrome
 /// Library/chrome scrollbar track/thumb; a former value alias of the soft

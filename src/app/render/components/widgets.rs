@@ -207,7 +207,7 @@ fn selector_pill_fg(selected: bool, hovered: bool) -> Color {
     } else if hovered {
         palette::TEXT_EMPHASIS
     } else {
-        palette::PILL_FG
+        palette::TEXT_MUTED
     }
 }
 

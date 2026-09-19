@@ -995,12 +995,10 @@ mod wide_row_regression_tests {
             .unwrap();
         let buf = terminal.backend().buffer();
         assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
-        assert_eq!(buf[(2, 1)].fg, palette::PLAYED_ROW_FG);
-        assert_ne!(
-            buf[(2, 1)].fg,
-            palette::TEXT_MUTED,
-            "a played row reads as watched, not as generic dim text"
-        );
+        assert_eq!(buf[(2, 1)].fg, palette::TEXT_MUTED);
+        // Played rows deliberately read as generic dim text (TEXT_MUTED);
+        // the former "watched, not generic dim" contract was retired
+        // 2026-09-19 when PLAYED_ROW_FG/Fog was collapsed into TEXT_MUTED.
     }
 
     /// A played split row mutes only the item title (light grey → muted)
@@ -1029,7 +1027,7 @@ mod wide_row_regression_tests {
         assert_eq!(buf[(2, 0)].fg, palette::SPLIT_ROW_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
-            palette::PLAYED_ROW_FG
+            palette::TEXT_MUTED
         );
     }
 

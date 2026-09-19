@@ -165,7 +165,7 @@ pub(in crate::app) fn render_tab_bar(
                 let style = if model.hovered == Some(position) {
                     Style::default().fg(palette::TEXT_STRONG)
                 } else {
-                    Style::default().fg(palette::PILL_FG)
+                    Style::default().fg(palette::TEXT_MUTED)
                 };
                 Line::from(Span::styled(format!("  {n}  "), style))
             };
