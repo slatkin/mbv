@@ -251,6 +251,8 @@ impl App {
             refocus_at: None,
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_levels: std::collections::HashMap::new(),
+            pending_level_artist_warmups: std::collections::VecDeque::new(),
+            level_artist_warmups_in_flight: std::collections::HashSet::new(),
             album_tracks_cache: std::collections::HashMap::new(),
             album_tracks_loading: std::collections::HashSet::new(),
             series_detail_cache: std::collections::HashMap::new(),

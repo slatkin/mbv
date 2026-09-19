@@ -645,6 +645,7 @@ impl App {
             | LibEvent::AudiobookshelfProgressAcknowledged(_)
             | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
             LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
+                let warmup_completed = self.level_artist_warmups_in_flight.remove(&level_id);
                 if artists.is_empty() {
                     // HTTP failure (or a trackless level): no fill, the level's
                     // albums resolve via the existing settle/fallback path.
@@ -666,6 +667,9 @@ impl App {
                     self.album_artist_levels
                         .insert(level_id, LevelFillState::Filled);
                 }
+                if warmup_completed {
+                    self.drain_level_artist_warmups();
+                }
             }
             LibEvent::MusicGroupWarmupListed { groups } => {
                 // One level fill per group-level child (design D5), deduped
@@ -679,7 +683,7 @@ impl App {
                 // `AlbumArtistLevelFetched`, marking the level `Failed`
                 // (retryable) with no UI error; browsing state is untouched.
                 for group in groups {
-                    self.spawn_level_artist_fetch(group.id, Vec::new());
+                    self.enqueue_level_artist_warmup(group.id);
                 }
             }
             LibEvent::NavigateTo {

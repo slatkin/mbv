@@ -488,11 +488,15 @@ fn service_reset_clears_album_artist_state() {
     app.album_artist_cache.insert("album-1".into(), "A".into());
     app.album_artist_levels
         .insert("level-1".into(), LevelFillState::Filled);
+    app.pending_level_artist_warmups.push_back("level-2".into());
+    app.level_artist_warmups_in_flight.insert("level-3".into());
 
     app.remove_emby_confirmed();
 
     assert!(app.album_artist_cache.is_empty());
     assert!(app.album_artist_levels.is_empty());
+    assert!(app.pending_level_artist_warmups.is_empty());
+    assert!(app.level_artist_warmups_in_flight.is_empty());
 }
 
 #[test]
@@ -694,6 +698,55 @@ fn failed_level_retries_on_next_candidate_creation() {
         state.candidate.is_some(),
         "candidate stays unresolved waiting for the retry's arrival"
     );
+}
+
+#[test]
+fn warmup_fan_out_stays_bounded_before_level_arrivals() {
+    let mut app = make_unopened_music_app();
+    for index in 0..6 {
+        let level_id = format!("in-flight-{index}");
+        app.album_artist_levels
+            .insert(level_id.clone(), LevelFillState::Loading);
+        app.level_artist_warmups_in_flight.insert(level_id);
+    }
+
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        groups: (0..7)
+            .map(|index| make_group_item(&format!("group-{index}"), "Group"))
+            .collect(),
+    });
+
+    assert_eq!(app.level_artist_warmups_in_flight.len(), 6);
+    assert_eq!(
+        app.pending_level_artist_warmups.len(),
+        7,
+        "warm-up levels beyond the six request slots stay queued"
+    );
+}
+
+#[test]
+fn pending_warmup_is_removed_when_candidate_wins_the_level_race() {
+    let mut app = make_music_app(vec![make_untagged_album("album-1")]);
+    app.album_artist_levels
+        .insert("group-0".into(), LevelFillState::Loading);
+    app.pending_level_artist_warmups.push_back("group-0".into());
+
+    app.spawn_level_artist_fetch("group-0".into(), Vec::new());
+
+    assert!(app.pending_level_artist_warmups.is_empty());
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Loading),
+        "the candidate observes the existing warm-up request rather than spawning"
+    );
+}
+
+#[test]
+fn warmup_group_id_matches_the_opened_level_parent_id() {
+    let group = make_group_item("group-0", "A-D");
+    let album_level = make_music_album_level(vec![make_untagged_album("album-1")]);
+
+    assert_eq!(group.id, album_level.parent_id);
 }
 
 #[test]

@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::LibEvent;
 
 fn wide_music_harness() -> (TickHarness, ComponentId) {
     let mut app = crate::app::render::make_music_group_app();
@@ -13,6 +14,33 @@ fn wide_music_harness() -> (TickHarness, ComponentId) {
     let mut harness = TickHarness::new(app);
     harness.model_mut().sync_mounted_surfaces();
     (harness, ComponentId::Library)
+}
+
+/// Warm-up arrivals use the same shell event boundary as Inline Search's
+/// other library events. This exercises `Model::handle_inline_search_lib_event`
+/// rather than calling `App::handle_lib_event` directly.
+#[test]
+fn inline_search_warmup_event_starts_level_fills_without_opening_a_view() {
+    let mut harness = TickHarness::new(crate::app::render::make_music_group_app());
+    let mut group = crate::app::tests::make_item("Alpha", "MusicArtist");
+    group.id = "group-1".into();
+    harness
+        .model_mut()
+        .handle_inline_search_lib_event(LibEvent::MusicGroupWarmupListed {
+            groups: vec![group],
+        });
+
+    // The fixture has no Emby client, so the attempted level fill reaches the
+    // terminal failure state synchronously without creating a live request.
+    assert_eq!(
+        harness.model().app.album_artist_levels.get("group-1"),
+        Some(&crate::app::app_struct::LevelFillState::Failed)
+    );
+    assert_eq!(
+        harness.model().app.libs[0].nav_stack.len(),
+        2,
+        "warm-up does not alter the existing browse stack"
+    );
 }
 
 /// The focused track-pane row, or `None` when the track pane is unfocused

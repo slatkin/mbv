@@ -417,6 +417,11 @@ pub struct App {
     /// rather than album id. Concurrent candidate creations and startup
     /// warm-up dedupe on this state.
     pub(super) album_artist_levels: std::collections::HashMap<String, LevelFillState>,
+    /// Group-level artist fills waiting for one of the bounded warm-up slots.
+    pub(super) pending_level_artist_warmups: std::collections::VecDeque<String>,
+    /// Group-level artist fills currently occupying warm-up slots. Candidate
+    /// requests share the level state but do not consume these slots.
+    pub(super) level_artist_warmups_in_flight: std::collections::HashSet<String>,
     /// Track lists for the album currently highlighted in the
     /// album-folder listing, fetched proactively so the inline album detail
     /// pane (#145) has data without requiring the user to drill in first.

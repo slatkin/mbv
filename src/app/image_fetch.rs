@@ -1,3 +1,5 @@
+const MAX_LEVEL_ARTIST_WARMUPS: usize = 6;
+
 impl App {
     /// Proactively fetches the full track list for `album_id` so the view's
     /// inline album detail pane (#145) can render it without the user
@@ -111,8 +113,9 @@ impl App {
     /// Ready, fetch each configured music library's group-level listing (its
     /// root children — the same listing the group view's first level shows)
     /// on the existing worker-thread + `lib_tx` pattern. The arrival handler
-    /// spawns one level fill per group-level child; fills dedupe through the
-    /// shared `LevelFillState::action_for` decision (design D4), so a
+    /// queues one level fill per group-level child and drains that queue
+    /// through the bounded warm-up scheduler; fills dedupe through the shared
+    /// `LevelFillState::action_for` decision (design D4), so a
     /// warm-up racing candidate creation — or a repeated Ready — does no
     /// double work. Best-effort and silent: a failed group-listing fetch
     /// names no levels, so it is a no-op; a failed per-level fill marks that
@@ -168,6 +171,52 @@ impl App {
             .collect()
     }
 
+    /// Enqueues one background album-artist request per music level for the
+    /// bounded startup warm-up. Candidate requests use
+    /// `spawn_level_artist_fetch` directly and share its level-state dedupe.
+    pub(super) fn enqueue_level_artist_warmup(&mut self, level_id: String) {
+        if matches!(
+            LevelFillState::action_for(self.album_artist_levels.get(&level_id)),
+            LevelFillAction::NoWork
+        ) || self
+            .level_artist_warmups_in_flight
+            .contains(&level_id)
+            || self
+                .pending_level_artist_warmups
+                .iter()
+                .any(|pending| pending == &level_id)
+        {
+            return;
+        }
+        self.pending_level_artist_warmups.push_back(level_id);
+        self.drain_level_artist_warmups();
+    }
+
+    /// Starts queued warm-up fills while the bounded fan-out has capacity.
+    /// `spawn_level_artist_fetch` remains the sole gate for actual requests,
+    /// so a candidate that wins a race with a pending warm-up removes the
+    /// pending duplicate and the drain skips already-loading levels.
+    pub(super) fn drain_level_artist_warmups(&mut self) {
+        while self.level_artist_warmups_in_flight.len() < MAX_LEVEL_ARTIST_WARMUPS {
+            let Some(level_id) = self.pending_level_artist_warmups.pop_front() else {
+                break;
+            };
+            if matches!(
+                LevelFillState::action_for(self.album_artist_levels.get(&level_id)),
+                LevelFillAction::NoWork
+            ) {
+                continue;
+            }
+            self.spawn_level_artist_fetch(level_id.clone(), Vec::new());
+            if matches!(
+                self.album_artist_levels.get(&level_id),
+                Some(LevelFillState::Loading)
+            ) {
+                self.level_artist_warmups_in_flight.insert(level_id);
+            }
+        }
+    }
+
     /// Spawns the one background album-artist request per music level
     /// (design D1 of `fix-music-artist-resolution-batching`): a single
     /// recursive Audio query over the whole level, bucketed per album and
@@ -185,6 +234,12 @@ impl App {
         level_id: String,
         albums: Vec<mbv_core::api::EmbyItem>,
     ) {
+        // A candidate may start a level while it is still pending in the
+        // warm-up queue. Remove that stale queue entry before the shared
+        // action gate so a failed candidate request cannot be repeated as a
+        // second warm-up request on the same level.
+        self.pending_level_artist_warmups
+            .retain(|pending| pending != &level_id);
         if matches!(
             LevelFillState::action_for(self.album_artist_levels.get(&level_id)),
             LevelFillAction::NoWork

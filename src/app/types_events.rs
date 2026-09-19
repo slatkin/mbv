@@ -130,9 +130,10 @@ pub(super) enum LibEvent {
     },
     /// Startup warm-up (design D5 of `fix-music-artist-resolution-batching`):
     /// a music library's group-level listing (its root children), fetched in
-    /// the background once the Service became Ready. The handler spawns one
-    /// level fill per listed child, deduped through the shared level-fill
-    /// state. Not presentation-affecting (no shell arm): it only mutates App
+    /// the background once the Service became Ready. The handler queues one
+    /// level fill per listed child and drains the bounded warm-up scheduler,
+    /// deduped through the shared level-fill state. Not presentation-affecting
+    /// (no shell arm): it only mutates App
     /// caches, and failures arrive as empty `AlbumArtistLevelFetched`
     /// artists that merely mark the level `Failed`.
     MusicGroupWarmupListed {

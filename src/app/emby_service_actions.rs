@@ -80,6 +80,8 @@ impl App {
         self.library_routes.clear();
         self.album_artist_cache.clear();
         self.album_artist_levels.clear();
+        self.pending_level_artist_warmups.clear();
+        self.level_artist_warmups_in_flight.clear();
         self.album_tracks_cache.clear();
         self.album_tracks_loading.clear();
         self.series_detail_cache.clear();
