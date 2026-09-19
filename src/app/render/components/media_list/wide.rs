@@ -184,11 +184,20 @@ fn grouped_member_striped<Target>(rows: &[MediaListRow<Target>], row: usize) -> 
     (row - start).is_multiple_of(2)
 }
 
-fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> Color {
+fn selected_row_surface_color(surface: SelectedRowSurface, _focused: bool) -> Color {
     // Audition: every selected row paints the opaque bar (and the scrollbar
     // column behind it), so the surface table's punch-through resolution is
-    // deliberately bypassed.
-    palette::SELECTED_ROW_BG
+    // deliberately bypassed — except the Library Hero overlay's Workspace,
+    // whose bar takes the sheet's own Ink chrome so it reads against the
+    // box's resting Slate fill.
+    match surface {
+        SelectedRowSurface::OverlaySheet => {
+            palette::surface_colors(palette::Surface::PillRow, false).fill
+        }
+        SelectedRowSurface::ListBackdrop
+        | SelectedRowSurface::OwningQueueColumn
+        | SelectedRowSurface::OwningLibraryPane => palette::SELECTED_ROW_BG,
+    }
 }
 
 /// Component-view adapter for the retained-result seam.

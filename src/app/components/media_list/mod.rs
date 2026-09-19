@@ -187,6 +187,10 @@ pub enum SelectedRowSurface {
     ListBackdrop,
     OwningQueueColumn,
     OwningLibraryPane,
+    /// The Library Hero overlay's Workspace: the bar takes the overlay
+    /// sheet's own fixed Ink chrome so it reads against the box's resting
+    /// Slate fill.
+    OverlaySheet,
 }
 
 /// Semantic paint policy for one `WideMediaList` view.
@@ -224,6 +228,14 @@ impl WideMediaListPaintPolicy {
         Self {
             focused,
             selected_surface: SelectedRowSurface::OwningLibraryPane,
+            zebra: None,
+        }
+    }
+
+    pub const fn for_overlay_workspace(focused: bool) -> Self {
+        Self {
+            focused,
+            selected_surface: SelectedRowSurface::OverlaySheet,
             zebra: None,
         }
     }

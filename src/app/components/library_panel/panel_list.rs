@@ -51,9 +51,10 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
             PanelListPaintPolicy::OverlayWorkspace { focused } => {
                 // The overlay's stripes rest at the table's fixed resting
                 // content Storm (`SidebarBody`'s row, fixed in both focus
-                // states) against the box's resting Slate fill.
+                // states) against the box's resting Slate fill, and its
+                // selected row takes the sheet's own Ink chrome.
                 self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::for_library_workspace(focused)
+                    WideMediaListPaintPolicy::for_overlay_workspace(focused)
                         .with_zebra(zebra_stripe(Surface::SidebarBody)),
                 );
             }
@@ -136,7 +137,8 @@ mod panel_list_tests {
     /// The selected-row bar is intentionally identical across both Wide
     /// arms; arm-specific stripe colours are owned by the Render Component
     /// regressions in `src/app/render/components/media_list.rs` and its
-    /// Wide-arm tests.
+    /// Wide-arm tests. The overlay Workspace's bar is the exception: it takes
+    /// the sheet's own Ink chrome instead of the shared Slate bar.
     #[test]
     fn wide_selected_rows_paint_the_bar_in_both_slots() {
         let mut carrier = MediaListCarrier::new();
@@ -170,6 +172,21 @@ mod panel_list_tests {
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
             palette::SELECTED_ROW_BG
+        );
+
+        terminal
+            .draw(|f| {
+                PanelList::set_paint_policy(
+                    &mut carrier,
+                    PanelListPaintPolicy::OverlayWorkspace { focused: true },
+                );
+                PanelList::view(&mut carrier, f, area);
+            })
+            .unwrap();
+        assert_eq!(
+            terminal.backend().buffer()[(area.x, area.y)].bg,
+            palette::PILL_ROW_BG,
+            "the overlay Workspace's selected-row bar takes the sheet's Ink chrome"
         );
     }
 

@@ -1812,11 +1812,12 @@ fn overlay_workspace_paints_its_cursor_row() {
         .and_then(|panel| panel.test_overlay_workspace_box())
         .expect("the overlay's Workspace box painted");
     // TV's Workspace carries no header row, so the only bar row inside the
-    // box's content is the cursor's own selected row.
+    // box's content is the cursor's own selected row, painted with the
+    // overlay sheet's Ink chrome (not the shared Slate bar).
     let buf = terminal.backend().buffer();
     let cursor_row = (content.top()..content.bottom()).find(|&y| {
         (content.left()..content.right())
-            .any(|x| buf[(x, y)].bg == crate::app::palette::SELECTED_ROW_BG)
+            .any(|x| buf[(x, y)].bg == crate::app::palette::PILL_ROW_BG)
     });
     assert!(
         cursor_row.is_some(),
