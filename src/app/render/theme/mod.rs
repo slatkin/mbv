@@ -89,9 +89,9 @@ pub const PILL_SELECTED_FG: Color = Palette::Ink.color();
 pub const PILL_OVERFLOW_FG: Color = Palette::Green1.color();
 
 // Text: readable content foregrounds, independent of surface
-pub const TEXT_PRIMARY: Color = Palette::Grey6.color();
-pub const TEXT_SECONDARY: Color = Palette::Grey5.color(); // paired with TEXT_PRIMARY/TEXT_STRONG
-pub const TEXT_MUTED: Color = Palette::Grey4.color(); // dim text, icons, unfocused state
+pub const TEXT_PRIMARY: Color = Palette::Grey3.color();
+pub const TEXT_SECONDARY: Color = Palette::Grey2.color(); // paired with TEXT_PRIMARY/TEXT_STRONG
+pub const TEXT_MUTED: Color = Palette::Grey2.color(); // dim text, icons, unfocused state
 /// A played media-list row's title (single-part primary, or a played split
 /// row's item title; the split context keeps `SPLIT_ROW_CONTEXT_FG`). Its own
 /// role rather than the generic dim `TEXT_MUTED`, so a played row can read as
@@ -164,7 +164,7 @@ pub const SPLIT_ROW_CONTEXT_FG: Color = Palette::Cream.color(); // soft white (#
 /// rather than `PLAYBACK_TITLE_FG`, the playback strip's own-name role:
 /// browse lists paint their split-row titles in a light grey while the strip
 /// keeps aqua.
-pub const SPLIT_ROW_TITLE_FG: Color = Palette::Grey5.color(); // light grey (#9e9e9e)
+pub const SPLIT_ROW_TITLE_FG: Color = Palette::Grey2.color(); // light grey (#9e9e9e)
 
 // Media indicators (resolution/audio glyphs)
 pub const INDICATOR_RESOLUTION_FG: Color = Palette::Orange.color();
@@ -187,7 +187,7 @@ pub const PLAYBACK_TITLE_FG: Color = Palette::Aqua.color();
 pub const PLAYBACK_CONTEXT_FG: Color = Palette::Yellow.color();
 
 // Progress and queue
-pub const PROGRESS_TRACK: Color = Palette::Grey5.color(); // unplayed seek/progress track
+pub const PROGRESS_TRACK: Color = Palette::Grey2.color(); // unplayed seek/progress track
 
 // Chrome
 /// Library/chrome scrollbar track/thumb; a former value alias of the soft
