@@ -459,9 +459,9 @@ the bar over its parity. Each arm SHALL resolve its secondary pair from the surf
 table identity of the panel body that surrounds it, never from a raw colour value:
 
 - the Browser-pane list, whose list box is filled with the `LibraryPanel` surface, SHALL stripe with
-  the `MainContentBox` pair (focused `#48584e`, unfocused `#2d353b`);
+  the `MainContentBox` pair (focused `#48584e`, unfocused `#272e33`);
 - the provider Workspace list, whose box rests at the `MainContentBox` resting fill, SHALL stripe
-  with the fixed resting-content Storm (`#333c43`) in both focus states — one unified Workspace
+  with the fixed resting-content Storm (`#2b3238`) in both focus states — one unified Workspace
   look across the Wide Hero pane and the Library Hero overlay.
 
 A stripe SHALL always resolve to a pair other than the one its own list box is filled with: a stripe

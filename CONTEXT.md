@@ -306,7 +306,11 @@ The rule deciding whether a previously watched entry should resume or start over
 When position exceeds the 6% threshold of runtime (or runtime is unknown and
 position > 0), resume starts from that position; otherwise from zero. Applies
 to Emby items, Feed entries, and Audiobookshelf episodes using the same
-threshold.
+threshold. Music (tracks, albums, artists) is fire-and-forget and never
+resumes, so `EmbyItem::is_music` / `QueueItem::is_music` items skip this rule
+entirely: `MediaSemanticState::from_emby`/`from_queue_item` always derive
+`Ordinary` for them regardless of stored played/position facts, so a finished
+or partially-played track never dims or shows a resume percentage.
 _Avoid_: continue threshold, resume percent, watched threshold
 
 **Playhead**:
