@@ -165,7 +165,10 @@ all without touching the ctrl wire shape:
 1. **Monotonic enrichment merge (restores the override's semantics).** The
    non-active merge arm never lowers a slot's stored `playback_position_ticks`
    during adoption-time enrichment: effective position is
-   `max(fetched, stored)`. This is exactly what the removed client-side
+   `max(fetched, stored)` — **except when the fetched item reports the slot as
+   played**. A fetched `played` item is authoritative (Emby zeroes ticks on
+   completion, and a reset must be able to land, including the played style),
+   so it is adopted verbatim. This is exactly what the removed client-side
    `spawn_enrich_queue_state` path did (its saved-positions overlay applied
    before merging). A genuinely newer server position still wins whenever it
    exceeds the stored value; the only loss case — Emby lagging a just-sent

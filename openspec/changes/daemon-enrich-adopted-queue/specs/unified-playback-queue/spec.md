@@ -39,5 +39,7 @@ refreshed queue to attached clients once applied.
 
 - **WHEN** the asynchronous adoption-time refresh returns UserData for an
   adopted slot whose stored position is greater than the fetched one
-- **THEN** the slot keeps its greater stored position, and a fetched position
-  greater than the stored one still updates the slot
+- **THEN** the slot keeps its greater stored position — unless the fetched
+  item reports the slot as played, in which case the fetched state is adopted
+  verbatim — and a fetched position greater than the stored one still updates
+  the slot
