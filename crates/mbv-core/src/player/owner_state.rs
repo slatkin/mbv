@@ -78,6 +78,7 @@ impl PlayerOwnerState {
         played: bool,
     ) {
         let _ = self.queue.apply_progress(slot_id, position_ticks, played);
+        let _ = self.queue.mark_progress_sync_pending(slot_id);
     }
 
     /// Consume a completed slot in the owner's canonical queue when the

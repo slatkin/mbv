@@ -293,7 +293,7 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
     let player = cold_player();
     let player_cmd_rx = player.spy_on_commands();
     let http = MockHttp::new();
-    http.respond(200, r#"{"Items":[{"Id":"adopted","Name":"adopted","Type":"Movie","MediaType":"Video"}]}"#);
+    http.fail(std::io::ErrorKind::ConnectionRefused);
     let mut client = EmbyClient::new(Config {
         server_url: "http://127.0.0.1:1".into(),
         ..Config::default()
@@ -329,7 +329,10 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
         &dummy_merged_tx,
         false,
     );
-    let _ = dummy_merged_rx.recv().unwrap();
+    assert!(
+        dummy_merged_rx.try_recv().is_err(),
+        "UnifiedAdoptQueue must return without waiting for enrichment"
+    );
     let queue = owner.core.queue;
 
     assert_eq!(queue.len(), 1);
@@ -341,61 +344,33 @@ fn unified_adopt_queue_seeds_status_without_starting_playback_when_cold() {
 #[test]
 fn adopted_queue_enrichment_updates_canonical_queue_and_broadcasts() {
     let player = cold_player();
-    let http = MockHttp::new();
-    http.respond(
-        200,
-        r#"{"Items":[{"Id":"adopted","Name":"adopted","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":40000000,"Played":false}},{"Id":"next","Name":"next","Type":"Movie","MediaType":"Video","UserData":{"PlaybackPositionTicks":20000000,"Played":false}}]}"#,
-    );
-    let mut client = EmbyClient::new(Config {
-        server_url: "http://127.0.0.1:1".into(),
-        ..Config::default()
-    })
-    .with_test_agent(http.agent());
-    client.token = "test-token".to_string();
-    client.user_id = "test-user".to_string();
-    let client = Arc::new(Mutex::new(client));
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
-    let (client_id, client_rx) = {
+    let (_client_id, client_rx) = {
         let mut clients = registry.lock().unwrap();
         connect_client(&mut clients)
     };
-    let (reply_tx, _reply_rx) = mpsc::channel();
-    let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
     let shared_queue = shared_queue_state();
-    let mut owner = DaemonPlayerOwner::default();
+    let mut owner = owner_with(
+        vec![
+            emby_qi("adopted", "Video", "Movie"),
+            emby_qi("next", "Video", "Movie"),
+        ],
+        0,
+    );
+    let adopted_slot = owner.core.queue.slots()[0].slot_id;
+    let next_slot = owner.core.queue.slots()[1].slot_id;
+    let mut adopted = item("adopted", "Video", "Movie");
+    adopted.playback_position_ticks = 40_000_000;
+    let mut next = item("next", "Video", "Movie");
+    next.playback_position_ticks = 20_000_000;
 
-    handle_ctrl(
-        CtrlCmd::UnifiedAdoptQueue {
-            items: vec![
-                emby_qi("adopted", "Video", "Movie"),
-                emby_qi("next", "Video", "Movie"),
-            ],
-            cursor: 0,
-            source: QueueSource::Remote,
-        },
-        client_id,
-        CtrlRequest {
-            reply_tx: &reply_tx,
-        },
-        &client,
-        &player,
-        false,
+    apply_queue_enriched(
+        vec![(adopted_slot, adopted), (next_slot, next)],
         &mut owner,
+        &player,
         &shared_queue,
         &registry,
-        false,
-        &merged_tx,
-        false,
     );
-
-    // Adoption publishes the persisted snapshot immediately; the enrichment
-    // event arrives separately from the background fetch.
-    let _ = recv_event(&client_rx);
-    let fetched = match merged_rx.recv().unwrap() {
-        DaemonEvent::QueueEnriched(items) => items,
-        _ => panic!("expected QueueEnriched"),
-    };
-    apply_queue_enriched(fetched, &mut owner, &player, &shared_queue, &registry);
 
     let refreshed = recv_event(&client_rx);
     let position = match refreshed {
@@ -418,6 +393,38 @@ fn adopted_queue_enrichment_updates_canonical_queue_and_broadcasts() {
 }
 
 #[test]
+fn adopted_refresh_does_not_prune_or_broadcast_after_queue_replacement() {
+    let player = cold_player();
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_client_id, client_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let shared_queue = shared_queue_state();
+    let mut owner = owner_with(vec![emby_qi("adopted", "Video", "Movie")], 0);
+    let adopted_slot = owner.core.queue.slots()[0].slot_id;
+    let mut stale = item("adopted", "Video", "Movie");
+    stale.playback_position_ticks = 40_000_000;
+
+    owner
+        .core
+        .queue
+        .replace(vec![emby_qi("replacement", "Video", "Movie")]);
+    owner.core.queue.append(emby_qi("added", "Video", "Movie"));
+
+    apply_queue_enriched(
+        vec![(adopted_slot, stale)],
+        &mut owner,
+        &player,
+        &shared_queue,
+        &registry,
+    );
+
+    assert_eq!(owner.core.queue.len(), 2);
+    assert!(client_rx.try_recv().is_err());
+}
+
+#[test]
 fn adopted_queue_refresh_does_not_overwrite_played_progress() {
     let player = cold_player();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));
@@ -426,24 +433,27 @@ fn adopted_queue_refresh_does_not_overwrite_played_progress() {
         connect_client(&mut clients)
     };
     let shared_queue = shared_queue_state();
-    let mut owner = owner_with(vec![emby_qi("played", "Video", "Movie")], 0);
+    let mut owner = owner_with(
+        vec![
+            emby_qi("played", "Video", "Movie"),
+            emby_qi("next", "Video", "Movie"),
+        ],
+        1,
+    );
     let slot_id = owner.core.queue.slots()[0].slot_id;
     owner.core.apply_completion_progress(slot_id, 9, true);
 
     let mut stale_refresh = item("played", "Video", "Movie");
     stale_refresh.playback_position_ticks = 2;
     apply_queue_enriched(
-        vec![stale_refresh],
+        vec![(slot_id, stale_refresh)],
         &mut owner,
         &player,
         &shared_queue,
         &registry,
     );
 
-    let _ = match recv_event(&client_rx) {
-        CtrlEvent::UnifiedQueueState(state) => state,
-        _ => panic!("expected refreshed queue state"),
-    };
+    assert!(client_rx.try_recv().is_err());
     let played = owner.core.queue.slots()[0].item.as_emby().unwrap();
     assert_eq!(played.playback_position_ticks, 9);
     assert!(played.played);

@@ -178,18 +178,36 @@ fn handle_ctrl(
             *source = new_source;
             broadcast_queue_state(ctrl_clients, player, shared_queue, queue, source, transitions);
 
-            let item_ids: Vec<String> = queue
+            let adopted_slots: Vec<(QueueSlotId, String)> = queue
                 .slots()
                 .iter()
-                .filter_map(|slot| slot.item.as_emby().map(|item| item.id.clone()))
+                .filter_map(|slot| {
+                    slot.item
+                        .as_emby()
+                        .map(|item| (slot.slot_id, item.id.clone()))
+                })
                 .collect();
-            if !item_ids.is_empty() {
+            if !adopted_slots.is_empty() {
+                let item_ids: Vec<String> = adopted_slots
+                    .iter()
+                    .map(|(_, item_id)| item_id.clone())
+                    .collect();
                 let tx = merged_tx.clone();
                 let lookup_client = client.lock().unwrap().clone();
                 std::thread::spawn(move || {
                     match lookup_client.get_items_by_ids(&item_ids) {
                         Ok(items) => {
-                            let _ = tx.send(DaemonEvent::QueueEnriched(items));
+                            let enriched = adopted_slots
+                                .into_iter()
+                                .filter_map(|(slot_id, item_id)| {
+                                    items
+                                        .iter()
+                                        .find(|item| item.id == item_id)
+                                        .cloned()
+                                        .map(|item| (slot_id, item))
+                                })
+                                .collect();
+                            let _ = tx.send(DaemonEvent::QueueEnriched(enriched));
                         }
                         Err(error) => {
                             log::warn!(target: "queue", "adopted queue enrichment fetch failed: {error}");

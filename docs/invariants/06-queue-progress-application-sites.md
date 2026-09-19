@@ -140,10 +140,10 @@ back to an entry regardless of what was actually watched.
    invariant exists to protect). The asymmetry itself is intentional and
    pre-existing: `TrackCompleted` fires mid-queue and needs a floor to reject
    startup noise, `Stopped` fires on a deliberate user action and records
-   whatever position that happened at, no floor. `daemon_run.rs`'s copies
-   also skip the shell's `mark_progress_sync_pending` call — harmless today
-   only because the daemon never runs `merge_refresh` against its own queue;
-   a latent trap if that ever changes.
+   whatever position that happened at, no floor. `daemon_run.rs`'s completion
+   path marks the applied progress with `mark_progress_sync_pending`, so the
+   daemon's cold-adopt refresh cannot overwrite a play-driven position while
+   the server write is still stale.
 2. **A narrow race remains:** dispatching a `JumpTo` back to an item before
    the daemon has processed that item's own preceding `TrackCompleted` reads
    the canonical queue's pre-completion value and resumes from there — the

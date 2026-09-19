@@ -540,6 +540,42 @@ impl PlaybackQueue {
         QueueMutationResult::Applied(pending)
     }
 
+    /// Applies a refresh to the specific queue slots captured before an
+    /// asynchronous adoption fetch. Unlike [`Self::merge_refresh`], this is
+    /// not a reconciliation: missing fetched items never prune the queue.
+    pub(crate) fn merge_refresh_for_slots(
+        &mut self,
+        fetched_slots: Vec<(QueueSlotId, EmbyItem)>,
+    ) -> RefreshMergeResult {
+        let mut result = RefreshMergeResult::default();
+        let mut changed = false;
+
+        for (slot_id, fetched_item) in fetched_slots {
+            let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
+                continue;
+            };
+            // A queue replacement can leave an old slot id absent or reused
+            // for another item. Never apply an old fetch to a different item.
+            if slot.item.content_id() != QueueItemContentId::Emby(fetched_item.id.clone()) {
+                continue;
+            }
+            let old_item = slot.item.clone();
+            let old_progress = slot.progress_state.clone();
+            let updated_len = result.updated_slots.len();
+            Self::merge_fetched_slot(slot, fetched_item, self.active_slot_id, &mut result);
+            if !queue_items_equal(&slot.item, &old_item) || slot.progress_state != old_progress {
+                changed = true;
+            } else {
+                result.updated_slots.truncate(updated_len);
+            }
+        }
+
+        if changed {
+            self.revision.bump();
+        }
+        result
+    }
+
     pub fn merge_refresh(&mut self, fetched_items: Vec<EmbyItem>) -> RefreshMergeResult {
         let mut fetched_by_item_id = group_fetched_items_by_item_id(fetched_items);
         let old_slots = std::mem::take(&mut self.slots);
@@ -565,7 +601,7 @@ impl PlaybackQueue {
             match fetched {
                 Some(fetched_item) => {
                     let old_item = slot.item.clone();
-                    self.merge_fetched_slot(&mut slot, fetched_item, active_slot_id, &mut result);
+                    Self::merge_fetched_slot(&mut slot, fetched_item, active_slot_id, &mut result);
                     changed |= !queue_items_equal(&slot.item, &old_item);
                     merged_slots.push(slot);
                 }
@@ -615,7 +651,6 @@ impl PlaybackQueue {
     }
 
     fn merge_fetched_slot(
-        &mut self,
         slot: &mut QueueSlot,
         fetched_item: EmbyItem,
         active_slot_id: Option<QueueSlotId>,

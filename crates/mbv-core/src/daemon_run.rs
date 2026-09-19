@@ -1,12 +1,12 @@
 fn apply_queue_enriched(
-    items: Vec<EmbyItem>,
+    items: Vec<(QueueSlotId, EmbyItem)>,
     owner: &mut DaemonPlayerOwner,
     player: &Player,
     shared_queue: &SharedQueueState,
     ctrl_clients: &ClientRegistry,
 ) {
-    let result = owner.core.queue.merge_refresh(items);
-    if !result.updated_slots.is_empty() || !result.pruned_slots.is_empty() {
+    let result = owner.core.queue.merge_refresh_for_slots(items);
+    if !result.updated_slots.is_empty() {
         broadcast_queue_state(
             ctrl_clients,
             player,
