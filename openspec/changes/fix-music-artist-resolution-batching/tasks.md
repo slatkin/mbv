@@ -8,9 +8,9 @@
 
 ## 2. Level fetch + candidate integration
 
-- [ ] 2.1 Implement `spawn_level_artist_fetch(level_id)` in src/app/image_fetch.rs: one recursive Audio request (`Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&Limit=100000`) on the existing worker-thread/`lib_tx` pattern, applying 1.1's vote per 1.2's buckets. Verify with a mock-JSON unit test of the parse+bucket+vote pipeline (no live server).
-- [ ] 2.2 Change candidate creation in src/app/music_grouping.rs to request the level fill once (deduped on `Filled`/`Loading`) instead of per-album `fetch_album_artist`; keep `SETTLE_WINDOW` and the settle/fallback contract unchanged. Verify `src/app/tests_music_grouping.rs` passes, updated so arrivals come from level events.
-- [ ] 2.3 Delete the per-album machinery: `fetch_album_artist`, `drain_album_artist_fetches`, `spawn_album_artist_fetch`, `pending_album_artist_fetches`, `MAX_ALBUM_ARTIST_FETCHES`, and `LibEvent::AlbumArtistFetched`; update remaining `album_artist_cache` readers untouched. Verify `cargo clippy --workspace --all-targets -- -D warnings` is clean and no references remain (`rg fetch_album_artist src/`).
+- [x] 2.1 Implement `spawn_level_artist_fetch(level_id)` in src/app/image_fetch.rs: one recursive Audio request (`Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&Limit=100000`) on the existing worker-thread/`lib_tx` pattern, applying 1.1's vote per 1.2's buckets. Verify with a mock-JSON unit test of the parse+bucket+vote pipeline (no live server).
+- [x] 2.2 Change candidate creation in src/app/music_grouping.rs to request the level fill once (deduped on `Filled`/`Loading`) instead of per-album `fetch_album_artist`; keep `SETTLE_WINDOW` and the settle/fallback contract unchanged. Verify `src/app/tests_music_grouping.rs` passes, updated so arrivals come from level events.
+- [x] 2.3 Delete the per-album machinery: `fetch_album_artist`, `drain_album_artist_fetches`, `spawn_album_artist_fetch`, `pending_album_artist_fetches`, `MAX_ALBUM_ARTIST_FETCHES`, and `LibEvent::AlbumArtistFetched`; update remaining `album_artist_cache` readers untouched. Verify `cargo clippy --workspace --all-targets -- -D warnings` is clean and no references remain (`rg fetch_album_artist src/`).
 
 ## 3. Startup warm-up
 
