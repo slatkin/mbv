@@ -545,10 +545,14 @@ fn bucket_tracks_by_album<'a>(
     // nested disc subfolder): their tracks belong to the in-hand album
     // whose `Path` prefixes theirs, longest match winning so a nested
     // album folder claims its own disc tracks instead of donating them to
-    // the outer album. Tracks that match nothing are dropped (design D3).
-    // Buckets are processed in first-appearance order in `tracks` so that
-    // multiple orphans merging into one album append in request order and
-    // the vote's first-seen tie-break does not depend on `HashMap` order.
+    // the outer album. Design D3's drop rule predates f4e9c44e: a bucket key
+    // is a track `ParentId` (1:1 with albums except rare nested disc folders)
+    // and `albums` is one page, so an unmatched key may be an album listed on
+    // a later page. Dropping it loses whole-level coverage and makes the
+    // empty-album-list warm-up resolve nothing; retain it as an inert cache
+    // row nothing looks up. Buckets are processed in first-appearance order
+    // in `tracks` so merged orphan tracks preserve request order and the
+    // vote's first-seen tie-break does not depend on `HashMap` order.
     let mut orphan_keys: Vec<(String, usize)> = bucket_first_seen
         .into_iter()
         .filter(|(key, _)| !album_ids.contains(key.as_str()))
@@ -556,8 +560,14 @@ fn bucket_tracks_by_album<'a>(
     orphan_keys.sort_by_key(|(_, index)| *index);
     for (key, _) in orphan_keys {
         let bucket = buckets.remove(&key).unwrap_or_default();
+        let mut unattributed = Vec::new();
         for track in bucket {
-            let _ = attribute_by_path(track, &album_paths, &mut buckets);
+            if !attribute_by_path(track, &album_paths, &mut buckets) {
+                unattributed.push(track);
+            }
+        }
+        if !unattributed.is_empty() {
+            buckets.insert(key, unattributed);
         }
     }
     buckets
@@ -707,21 +717,31 @@ mod album_artist_batch_tests {
 
     #[test]
     fn fill_requested_from_page_one_covers_later_page_albums() {
-        // An album absent from the level's in-hand listing has no matching
-        // Path prefix and is therefore dropped as an unmatched orphan (D3).
+        // Page-starvation regression: the fill is requested with only the
+        // page-1 album in hand; bucketing by `ParentId` verbatim still
+        // yields the page-2 album's artist from its tracks, so the one
+        // whole-level fill covers every album in the level no matter which
+        // page was listed when it was requested.
         let tracks = vec![
             track("alb-1", "/m/a/1.flac", Some("Alpha"), &["Alpha"]),
             track("alb-2", "/m/b/1.flac", Some("Beta"), &["Beta"]),
         ];
         let albums = vec![album("alb-1", "/m/a")];
         let artists = level_artists_from_items(&tracks, &albums);
-        assert_eq!(artists, vec![("alb-1".to_string(), "Alpha".to_string())]);
+        assert_eq!(
+            artists,
+            vec![
+                ("alb-1".to_string(), "Alpha".to_string()),
+                ("alb-2".to_string(), "Beta".to_string()),
+            ]
+        );
     }
 
     #[test]
-    fn unmatched_orphan_bucket_is_dropped_without_an_emitted_pair() {
-        // An orphan whose `Path` matches no in-hand album is dropped rather
-        // than creating an inert cache row under its non-album key.
+    fn unmatched_orphan_key_stays_as_inert_bucket() {
+        // An orphan whose `Path` matches no in-hand album keeps its own
+        // key: an inert cache row nothing looks up (a Service reset clears
+        // it); the album itself resolves via the settle/fallback path.
         let tracks = vec![
             track("disc-9", "/m/other/x/1.flac", None, &["A"]),
             track("alb-1", "/m/a/1.flac", None, &["A"]),
@@ -729,11 +749,7 @@ mod album_artist_batch_tests {
         let albums = vec![album("alb-1", "/m/a")];
         let buckets = bucket_tracks_by_album(&tracks, &albums);
         assert_eq!(buckets["alb-1"].len(), 1);
-        assert!(!buckets.contains_key("disc-9"));
-        assert_eq!(
-            level_artists_from_items(&tracks, &albums),
-            vec![("alb-1".to_string(), "A".to_string())]
-        );
+        assert_eq!(buckets["disc-9"].len(), 1);
     }
 
     #[test]
@@ -815,12 +831,11 @@ mod album_artist_batch_tests {
     #[test]
     fn sibling_prefix_does_not_catch_unrelated_orphan() {
         // Component-aligned matching: `/m/ab` must not attribute to `/m/a`.
-        // The unmatched orphan is dropped rather than emitted under its own
-        // non-album key.
+        // The unmatched orphan keeps its own (inert) key instead.
         let tracks = vec![track("disc-1", "/m/ab/1.flac", None, &["A"])];
         let albums = vec![album("alb-1", "/m/a")];
         let buckets = bucket_tracks_by_album(&tracks, &albums);
         assert!(!buckets.contains_key("alb-1"));
-        assert!(!buckets.contains_key("disc-1"));
+        assert_eq!(buckets["disc-1"].len(), 1);
     }
 }
