@@ -3,7 +3,9 @@
 ## Purpose
 
 Provide a settled, artist-grouped music album view that opens predictably and remains visually stable while metadata is resolved in the background.
+
 ## Requirements
+
 ### Requirement: Settled initial music grouping
 For a configured music library at its album level, the system SHALL publish artist headers and artist-sorted album rows only after every album in the current loaded snapshot has a terminal grouping identity. A terminal identity is either resolved artist metadata or the deterministic fallback used when metadata is unavailable.
 
@@ -95,3 +97,74 @@ The narrow hero-above-list composition and wide side-hero composition SHALL cons
 - **WHEN** either responsive composition redraws without a changed album snapshot
 - **THEN** it reuses the existing settled grouping without starting artist metadata resolution work
 
+### Requirement: Music grouping metadata is warmed at startup
+
+For a configured music library, the system SHALL begin resolving the artist
+metadata used for album grouping in the background once its Service is
+connected, without waiting for a grouped music view to be opened. Warm-up
+SHALL NOT delay application startup or the availability of any other Service
+or feature, and a warm-up failure SHALL leave ordinary grouped browsing
+usable through the existing settle-and-fallback behavior.
+
+#### Scenario: Warm-up begins after the Service connects
+
+- **WHEN** mbv has started and the music library's Service becomes connected
+- **THEN** the system begins resolving grouping artist metadata for the
+  library's music grouping levels in the background, before any grouped
+  music view is opened
+
+#### Scenario: Grouped view opens from warmed metadata
+
+- **WHEN** the user opens a grouped music album level whose background
+  metadata resolution has already completed
+- **THEN** the settled artist-grouped ordering is published without an
+  organizing wait for artist lookups
+
+#### Scenario: Warm-up is incomplete or fails
+
+- **WHEN** the user opens a grouped music album level whose background
+  metadata resolution has not completed or could not obtain metadata
+- **THEN** the level settles through the existing organizing state and
+  deterministic fallback within the grouping resolution window, and browsing
+  remains available
+
+#### Scenario: Warm-up does not gate startup
+
+- **WHEN** background grouping-metadata resolution is still running or has
+  failed
+- **THEN** the TUI, other Services, and non-music browsing remain fully
+  available and unaffected
+
+### Requirement: Grouped music levels omit folders without contents
+
+When a grouped music view lists a level's children, a folder item with no
+child items SHALL NOT be enumerated as a row of that level. Items whose
+child count is unknown SHALL be enumerated, and non-folder items SHALL
+never be treated as empty. Background artist warm-up SHALL NOT spend
+resolution work on folders that are not enumerated.
+
+#### Scenario: Empty folder is not enumerated
+
+- **WHEN** a grouped music level is listed and its children include a
+  folder with no child items (for example a `Downloads` folder at the
+  music library root)
+- **THEN** that folder does not appear as a row of the level
+
+#### Scenario: Unknown child count still enumerates
+
+- **WHEN** a grouped music level is listed and a folder item's payload
+  does not carry a child count
+- **THEN** that folder is enumerated like any other folder
+
+#### Scenario: Non-folder items are never treated as empty
+
+- **WHEN** a grouped music level is listed and a non-folder item's payload
+  carries a child count of zero
+- **THEN** that item is still enumerated
+
+#### Scenario: Warm-up skips empty folders
+
+- **WHEN** background grouping-artist warm-up lists a music library's
+  group-level children
+- **THEN** folders with no child items receive no grouping-artist
+  resolution work

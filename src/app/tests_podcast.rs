@@ -49,6 +49,7 @@ pub(super) fn add_emby_movie_library(app: &mut App) {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![make_item("Item 0", "Movie")],

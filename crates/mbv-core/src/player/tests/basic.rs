@@ -32,6 +32,7 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
         name: "Test Episode".into(),
         item_type: "Episode".into(),
         is_folder: false,
+        child_count: None,
         media_type: "Video".into(),
         collection_type: String::new(),
         runtime_ticks: 3600 * crate::api::TICKS_PER_SECOND,

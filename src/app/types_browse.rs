@@ -84,6 +84,8 @@ pub(super) struct BrowseLevel {
     pub(super) parent_id: String,
     pub(super) title: String,
     pub(super) items: Vec<EmbyItem>,
+    /// Number of server rows consumed, including rows omitted from `items`.
+    pub(super) fetched_rows: usize,
     pub(super) total_count: usize,
     pub(super) resting: BrowseResting,
     pub(super) item_types: Option<String>,
@@ -101,17 +103,33 @@ pub(super) struct BrowseLevel {
 }
 
 impl BrowseLevel {
-    /// Whether every item reported by the server for this level has been
-    /// fetched into `items` (i.e. pagination is complete).
+    /// Whether every server row for this level has been consumed.
     pub(super) fn is_fully_loaded(&self) -> bool {
-        self.items.len() >= self.total_count
+        self.fetched_rows >= self.total_count
     }
 
+    #[cfg(test)]
     pub(super) fn from_position_level(
         saved: &crate::config::LibraryPositionLevel,
         items: Vec<EmbyItem>,
         total_count: usize,
         visible_rows: usize,
+    ) -> Self {
+        Self::from_position_level_with_fetched_rows(
+            saved,
+            items,
+            total_count,
+            visible_rows,
+            saved.fetched_rows,
+        )
+    }
+
+    pub(super) fn from_position_level_with_fetched_rows(
+        saved: &crate::config::LibraryPositionLevel,
+        items: Vec<EmbyItem>,
+        total_count: usize,
+        visible_rows: usize,
+        fetched_rows: Option<usize>,
     ) -> Self {
         let cursor = saved
             .focused_item_id
@@ -122,6 +140,7 @@ impl BrowseLevel {
         Self {
             parent_id: saved.parent_id.clone(),
             title: saved.title.clone(),
+            fetched_rows: fetched_rows.unwrap_or(items.len()),
             items,
             total_count,
             resting: BrowseResting::new(cursor, scroll),
@@ -158,6 +177,7 @@ impl BrowseLevel {
             parent_id: self.parent_id.clone(),
             title: self.title.clone(),
             focused_item_id: self.items.get(resting.cursor()).map(|item| item.id.clone()),
+            fetched_rows: Some(self.fetched_rows),
             cursor_index: resting.cursor(),
             item_types: self.item_types.clone(),
             unplayed_only: self.unplayed_only,
@@ -180,6 +200,7 @@ impl BrowseLevel {
     }
 }
 
+#[cfg(test)]
 pub(super) fn restore_library_position<F>(
     saved: &crate::config::LibraryPosition,
     visible_rows: usize,
@@ -187,6 +208,22 @@ pub(super) fn restore_library_position<F>(
 ) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
 where
     F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize), String>,
+{
+    restore_library_position_with_fetched_rows(saved, visible_rows, |saved_level| {
+        fetch_level(saved_level).map(|(items, total_count)| {
+            let fetched_rows = saved_level.fetched_rows.unwrap_or(items.len());
+            (items, total_count, fetched_rows)
+        })
+    })
+}
+
+pub(super) fn restore_library_position_with_fetched_rows<F>(
+    saved: &crate::config::LibraryPosition,
+    visible_rows: usize,
+    mut fetch_level: F,
+) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
+where
+    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<EmbyItem>, usize, usize), String>,
 {
     if saved.levels.is_empty() {
         return Ok(None);
@@ -201,8 +238,14 @@ where
     let mut nav_stack = Vec::new();
 
     for (idx, saved_level) in saved.levels.iter().enumerate() {
-        let (items, total_count) = fetch_level(saved_level)?;
-        let level = BrowseLevel::from_position_level(saved_level, items, total_count, visible_rows);
+        let (items, total_count, fetched_rows) = fetch_level(saved_level)?;
+        let level = BrowseLevel::from_position_level_with_fetched_rows(
+            saved_level,
+            items,
+            total_count,
+            visible_rows,
+            Some(fetched_rows),
+        );
         let can_descend = saved
             .levels
             .get(idx + 1)

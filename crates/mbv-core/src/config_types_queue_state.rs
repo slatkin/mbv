@@ -114,6 +114,10 @@ pub struct LibraryPositionLevel {
     pub title: String,
     #[serde(default)]
     pub focused_item_id: Option<String>,
+    /// Number of server rows consumed by this level, including rows filtered
+    /// from the displayed items. `None` preserves pre-field snapshots.
+    #[serde(default)]
+    pub fetched_rows: Option<usize>,
     #[serde(default)]
     pub cursor_index: usize,
     #[serde(default)]

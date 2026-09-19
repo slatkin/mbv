@@ -255,6 +255,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: vec![group],
@@ -270,6 +271,7 @@ fn music_library_app_with_three_albums() -> crate::app::App {
                 music_grouping: None,
             },
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "group-0".into(),
                 title: "Alpha".into(),
                 items: albums,
@@ -348,6 +350,7 @@ fn music_owner_stays_installed_and_preserves_album_cursor_across_drill() {
     let mut track = make_item("Track 1", "Audio");
     track.id = "track-1".into();
     model.app.libs[0].nav_stack.push(BrowseLevel {
+        fetched_rows: 0,
         parent_id: "album-0".into(),
         title: "Tracks".into(),
         items: vec![track],

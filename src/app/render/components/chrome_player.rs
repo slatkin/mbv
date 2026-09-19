@@ -730,6 +730,25 @@ mod tests {
         }
     }
 
+    #[test]
+    fn unplayed_seekbar_uses_the_progress_track_role() {
+        let mut playback = PlaybackStripAreas::default();
+        let mut terminal = Terminal::new(TestBackend::new(4, 1)).unwrap();
+        terminal
+            .draw(|f| {
+                render_seekbar(
+                    f,
+                    Rect::new(0, 0, 4, 1),
+                    &mut playback,
+                    (0, 100, false),
+                    Color::Black,
+                )
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        assert!((0..4).all(|x| buffer[(x, 0)].fg == palette::PROGRESS_TRACK));
+    }
+
     /// The role-to-colour resolution point (task 2.3): a two-part now-playing
     /// row paints the title part's cells in the title role's fg and the
     /// context part's cells in the context role's fg, both through the

@@ -5,6 +5,7 @@ use crate::app::tests::*;
 fn library_position_snapshot_captures_path_focus_and_feed_group() {
     let mut lib = LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(3),
@@ -44,6 +45,7 @@ fn library_position_snapshot_captures_path_focus_and_feed_group() {
 #[test]
 fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
     let mut saved = crate::config::LibraryPositionLevel {
+        fetched_rows: None,
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
         focused_item_id: Some("id3".into()),
@@ -72,6 +74,27 @@ fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
 }
 
 #[test]
+fn restored_position_uses_actual_server_rows_over_stale_persisted_count() {
+    let saved = crate::config::LibraryPosition {
+        levels: vec![crate::config::LibraryPositionLevel {
+            fetched_rows: Some(100),
+            parent_id: "lib-movies".into(),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+
+    let restored = restore_library_position_with_fetched_rows(&saved, 3, |_| {
+        Ok((make_items(103), 105, 105))
+    })
+    .expect("restore result")
+    .expect("restored position");
+
+    assert_eq!(restored.1[0].fetched_rows, 105);
+    assert_eq!(restored.0.levels[0].fetched_rows, Some(105));
+}
+
+#[test]
 fn restore_library_position_keeps_saved_path_when_levels_exist() {
     let mut root_a = make_item("A", "Folder");
     root_a.id = "folder-a".into();
@@ -85,6 +108,7 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
     let saved = crate::config::LibraryPosition {
         levels: vec![
             crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
                 focused_item_id: Some("folder-b".into()),
@@ -97,6 +121,7 @@ fn restore_library_position_keeps_saved_path_when_levels_exist() {
                 library_total: Some(301),
             },
             crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "folder-b".into(),
                 title: "B".into(),
                 focused_item_id: Some("leaf-1".into()),
@@ -149,6 +174,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
     let saved = crate::config::LibraryPosition {
         levels: vec![
             crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
                 focused_item_id: Some("folder-b".into()),
@@ -161,6 +187,7 @@ fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
                 library_total: None,
             },
             crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "folder-b".into(),
                 title: "B".into(),
                 focused_item_id: Some("missing".into()),
@@ -203,6 +230,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
     let saved = crate::config::LibraryPosition {
         levels: vec![
             crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
                 focused_item_id: Some("missing-folder".into()),
@@ -215,6 +243,7 @@ fn restore_library_position_stops_at_deepest_valid_parent() {
                 library_total: None,
             },
             crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "missing-folder".into(),
                 title: "Gone".into(),
                 focused_item_id: Some("leaf-1".into()),
@@ -262,6 +291,7 @@ fn applying_library_position_preserves_persisted_feed_group_state() {
     lib.apply_library_position(
         position,
         vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(1),
@@ -297,6 +327,7 @@ fn save_default_library_position_persists_focused_item() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(3),
@@ -332,6 +363,7 @@ fn flush_library_position_persists_session_scroll_without_navigation() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(3),
@@ -366,6 +398,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(2),
@@ -386,6 +419,7 @@ fn saving_visible_library_position_keeps_hidden_library_state_entries() {
         "hidden-lib".into(),
         crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "hidden-lib".into(),
                 title: "Hidden".into(),
                 focused_item_id: Some("id0".into()),
@@ -417,6 +451,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(2),
@@ -439,6 +474,7 @@ fn refresh_lib_clears_saved_position_for_active_library() {
         0,
         crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Saved".into(),
                 focused_item_id: Some("id1".into()),
@@ -469,6 +505,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
     library.id = "lib-movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(2),
@@ -490,6 +527,7 @@ fn trigger_lib_rescan_clears_only_active_scope() {
         0,
         crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Saved".into(),
                 focused_item_id: Some("id1".into()),

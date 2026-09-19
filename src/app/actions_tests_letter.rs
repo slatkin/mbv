@@ -86,6 +86,7 @@ fn active_lib_is_tvshows_bounds_miss_returns_false() {
 /// needs to consider the library "at its top browse level".
 fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
     lib.nav_stack.push(BrowseLevel {
+        fetched_rows: 0,
         parent_id: lib.library.id.clone(),
         title: lib.library.name.clone(),
         items: make_items(item_count),
@@ -246,6 +247,7 @@ fn full_library_fetch_limit_falls_back_to_total_count_before_library_total_is_kn
 
 fn push_top_level_tv(lib: &mut LibraryTab, item_count: usize) {
     lib.nav_stack.push(BrowseLevel {
+        fetched_rows: 0,
         parent_id: lib.library.id.clone(),
         title: lib.library.name.clone(),
         items: make_items(item_count),

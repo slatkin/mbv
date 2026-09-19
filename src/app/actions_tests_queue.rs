@@ -198,6 +198,7 @@ fn enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![queued.clone()],

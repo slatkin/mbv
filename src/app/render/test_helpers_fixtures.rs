@@ -39,6 +39,7 @@ pub fn make_movie_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![focused, second],
@@ -118,6 +119,7 @@ pub fn make_music_group_app() -> App {
     app.libs.push(LibraryTab {
         nav_stack: vec![
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "lib-music".into(),
                 title: "Music".into(),
                 items: groups,
@@ -133,6 +135,7 @@ pub fn make_music_group_app() -> App {
                 music_grouping: None,
             },
             BrowseLevel {
+                fetched_rows: 0,
                 parent_id: "group-0".into(),
                 title: "Alpha".into(),
                 items: vec![album],
@@ -188,6 +191,7 @@ pub fn make_home_video_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "lib-homevideos".into(),
             title: "Home Videos".into(),
             items: vec![first, second],
@@ -219,6 +223,7 @@ pub fn make_large_movie_library_app(library_total: usize) -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: Vec::new(),

@@ -222,6 +222,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
     app.tab = TabSelection::EmbyLibrary(0);
     app.panel_focus = PanelFocus::Library;
     app.libs[0].nav_stack.push(BrowseLevel {
+        fetched_rows: 0,
         parent_id: "group-a".into(),
         title: "Group A".into(),
         items: vec![folder("artist-a", "Artist A")],
@@ -241,6 +242,7 @@ fn recursive_activation_keeps_panel_focus_and_installs_path() {
         .libraries
         .insert("music-lib".into(), default_position.clone());
     let level = BrowseLevel {
+        fetched_rows: 0,
         parent_id: "artist-c".into(),
         title: "Artist C".into(),
         items: vec![album("album-1", "Record")],

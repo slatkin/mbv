@@ -3,6 +3,7 @@ use super::types_feed::FeedHomeVideoGroup;
 use super::types_playback::{HomeContent, HomeLatestSource};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
+use mbv_core::service_runtime::SetupGeneration;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
 /// change `per-destination-item-navigation`): the Movie/generic arm keeps the
@@ -119,9 +120,26 @@ pub(super) enum LibEvent {
         all_items: Vec<EmbyItem>,
         groups: Vec<FeedHomeVideoGroup>,
     },
-    AlbumArtistFetched {
-        album_id: String,
-        artist: String,
+    /// One level-fill request resolved (design D4 of
+    /// `fix-music-artist-resolution-batching`): `artists` bulk-fills the
+    /// album-artist cache for every album bucket in the level. Empty on HTTP
+    /// failure (or a trackless level), which marks the level `Failed`; the
+    /// handler otherwise marks `Filled` on arrival.
+    AlbumArtistLevelFetched {
+        level_id: String,
+        artists: Vec<(String, String)>,
+    },
+    /// Startup warm-up (design D5 of `fix-music-artist-resolution-batching`):
+    /// a music library's group-level listing (its root children), fetched in
+    /// the background once the Service became Ready. The handler queues one
+    /// level fill per listed child and drains the bounded warm-up scheduler,
+    /// deduped through the shared level-fill state. Not presentation-affecting
+    /// (no shell arm): it only mutates App
+    /// caches, and failures arrive as empty `AlbumArtistLevelFetched`
+    /// artists that merely mark the level `Failed`.
+    MusicGroupWarmupListed {
+        generation: SetupGeneration,
+        groups: Vec<EmbyItem>,
     },
     /// Track list for the album currently highlighted in the
     /// album-folder listing, fetched proactively (#145) so the inline album

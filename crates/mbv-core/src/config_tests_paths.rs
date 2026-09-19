@@ -16,6 +16,7 @@ fn library_position_state_round_trips_by_library() {
         "lib-movies".into(),
         LibraryPosition {
             levels: vec![LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
                 focused_item_id: Some("movie-2".into()),

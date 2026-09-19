@@ -12,6 +12,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "parent".into(),
             title: "Loading".into(),
             items: vec![],
@@ -30,6 +31,7 @@ fn handle_loaded_level_replaces_the_matching_loading_level() {
     });
 
     let level = BrowseLevel {
+        fetched_rows: 0,
         parent_id: "parent".into(),
         title: "Loaded".into(),
         items: crate::app::tests::make_items(2),
@@ -69,6 +71,7 @@ fn normalize_current_browse_level_items_sorts_episode_lists() {
     library.is_folder = true;
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "series".into(),
             title: "Season 1".into(),
             items: vec![second, first],

@@ -79,8 +79,9 @@ impl App {
         self.library_route_cache.clear();
         self.library_routes.clear();
         self.album_artist_cache.clear();
-        self.album_artist_loading.clear();
-        self.pending_album_artist_fetches.clear();
+        self.album_artist_levels.clear();
+        self.pending_level_artist_warmups.clear();
+        self.level_artist_warmups_in_flight.clear();
         self.album_tracks_cache.clear();
         self.album_tracks_loading.clear();
         self.series_detail_cache.clear();
@@ -193,6 +194,9 @@ impl App {
         config.api_key.clear();
         drop(config);
         self.emby_runtime.state = ServiceState::Ready;
+        // Warm the music group levels in the background (design D5 of
+        // `fix-music-artist-resolution-batching`); never gates startup.
+        self.spawn_music_group_warmup();
         self.sync_subtitle_prefs_from_emby();
         self.flash("Emby replaced and ready".into(), ToastSeverity::Success);
     }

@@ -150,6 +150,7 @@ impl App {
                 let root = &position.levels[0];
                 let restore_feed_view = self.is_feed_home_video_library(lib_idx);
                 let placeholder = BrowseLevel {
+                    fetched_rows: 0,
                     parent_id: root.parent_id.clone(),
                     title: root.title.clone(),
                     items: Vec::new(),
@@ -226,6 +227,7 @@ impl App {
         };
         let position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+                fetched_rows: None,
                 parent_id: state.library.id.clone(),
                 title: state.library.name.clone(),
                 // The podcast tab's selection is the active pill plus the
@@ -260,6 +262,7 @@ impl App {
         };
         let position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+                fetched_rows: None,
                 parent_id: state.library.id.clone(),
                 title: state.library.name.clone(),
                 focused_item_id: state.selected_id.clone(),

@@ -16,6 +16,25 @@ pub(super) enum RevealTarget {
     Album(String),
 }
 
+pub(super) fn retain_grouped_music_items(items: &mut Vec<EmbyItem>, grouped_music: bool) {
+    if grouped_music {
+        items.retain(|item| !(item.is_folder && item.child_count == Some(0)));
+    }
+}
+
+pub(super) fn retain_grouped_music_level_items(level: &mut BrowseLevel, grouped_music: bool) {
+    let fetched_rows = level.items.len();
+    retain_grouped_music_items(&mut level.items, grouped_music);
+    level.fetched_rows = fetched_rows;
+    level.resting = BrowseResting::new(
+        level
+            .resting()
+            .cursor()
+            .min(level.items.len().saturating_sub(1)),
+        level.resting().scroll(),
+    );
+}
+
 /// D1 reveal-item table, pure over the item's own back-references and its
 /// ancestor chain (nearest→root, the `get_ancestors` order) so the table
 /// test covers the item_type → reveal mapping without a server. `ancestors`
@@ -223,6 +242,7 @@ fn build_chain_nav_stack(
         nav_stack.push(BrowseLevel {
             parent_id: parent_id.clone(),
             title: String::new(),
+            fetched_rows: items.len(),
             items,
             total_count,
             resting: BrowseResting::new(cursor, 0),
@@ -363,6 +383,7 @@ impl App {
                         parent_id: root.parent_id.clone(),
                         title: root.title.clone(),
                         items: Vec::new(),
+                        fetched_rows: 0,
                         total_count: 0,
                         resting: BrowseResting::new(0, 0),
                         item_types: root.item_types.clone(),
@@ -400,6 +421,7 @@ impl App {
                 parent_id: lib_id.clone(),
                 title: lib_name.clone(),
                 items: vec![],
+                fetched_rows: 0,
                 total_count: 0,
                 resting: BrowseResting::new(0, 0),
                 item_types: item_types.clone(),
@@ -435,41 +457,48 @@ impl App {
         };
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
-                let letter_filter = saved_level
-                    .letter_filter_index
-                    .and_then(super::render::LetterFilter::for_index);
-                let (name_ge, name_lt) = letter_filter
-                    .as_ref()
-                    .map(|f| (f.name_ge, f.name_lt))
-                    .unwrap_or((None, None));
-                let (items, total_count) = client.get_items_sorted_ranged(
-                    &saved_level.parent_id,
-                    saved_level.item_types.as_deref(),
-                    saved_level.unplayed_only,
-                    0,
-                    PAGE_SIZE,
-                    &saved_level.sort_by,
-                    &saved_level.sort_order,
-                    name_ge,
-                    name_lt,
-                )?;
-                if total_count > items.len() {
-                    client.get_items_sorted_ranged(
+            let restored = super::restore_library_position_with_fetched_rows(
+                &saved,
+                visible_rows,
+                |saved_level| {
+                    let letter_filter = saved_level
+                        .letter_filter_index
+                        .and_then(super::render::LetterFilter::for_index);
+                    let (name_ge, name_lt) = letter_filter
+                        .as_ref()
+                        .map(|f| (f.name_ge, f.name_lt))
+                        .unwrap_or((None, None));
+                    let (items, total_count) = client.get_items_sorted_ranged(
                         &saved_level.parent_id,
                         saved_level.item_types.as_deref(),
                         saved_level.unplayed_only,
                         0,
-                        total_count,
+                        PAGE_SIZE,
                         &saved_level.sort_by,
                         &saved_level.sort_order,
                         name_ge,
                         name_lt,
-                    )
-                } else {
-                    Ok((items, total_count))
-                }
-            });
+                    )?;
+                    let fetched_rows = items.len();
+                    if total_count > fetched_rows {
+                        let (items, total_count) = client.get_items_sorted_ranged(
+                            &saved_level.parent_id,
+                            saved_level.item_types.as_deref(),
+                            saved_level.unplayed_only,
+                            0,
+                            total_count,
+                            &saved_level.sort_by,
+                            &saved_level.sort_order,
+                            name_ge,
+                            name_lt,
+                        )?;
+                        let fetched_rows = items.len();
+                        Ok((items, total_count, fetched_rows))
+                    } else {
+                        Ok((items, total_count, fetched_rows))
+                    }
+                },
+            );
             match restored {
                 Ok(Some((position, nav_stack))) => {
                     let _ = tx.send(LibEvent::RestoreLibraryPosition {
@@ -580,6 +609,7 @@ impl App {
                 &sort_order,
             ) {
                 Ok((items, total_count)) => {
+                    let fetched_rows = items.len();
                     log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} thread_total={}ms first3={:?}",
                         items.len(),
                         spawn_started.elapsed().as_millis(),
@@ -591,6 +621,7 @@ impl App {
                             parent_id,
                             title,
                             items,
+                            fetched_rows,
                             total_count,
                             resting: BrowseResting::new(0, 0),
                             item_types,
@@ -716,13 +747,13 @@ impl App {
             Some(l) => l,
             None => return,
         };
-        // `lvl.is_fully_loaded()` compares `items.len()` against
-        // `lvl.total_count` -- with a letter-range pill active, that count
-        // is the FILTERED range's total, not the whole library's, so a
-        // fully-loaded small range (e.g. 40 items in `A–C`) would wrongly
-        // read as "nothing more to prefetch". `all_items` backs whole-library
-        // search (see `input.rs`'s `/` handler and `spawn_search_items_load`
-        // below), so it must never be satisfied by just the active range.
+        // `lvl.is_fully_loaded()` compares server rows consumed (`fetched_rows`)
+        // against the active range's `total_count` -- with a letter-range pill
+        // active, that count is the FILTERED range's total, not the whole
+        // library's, so a fully-loaded small range (e.g. 40 items in `A–C`)
+        // would wrongly read as "nothing more to prefetch" while `all_items`
+        // (which backs whole-library search) is still absent. `all_items` must
+        // never be satisfied by just the active range.
         if lvl.letter_filter.is_none() && lvl.is_fully_loaded() {
             return;
         }

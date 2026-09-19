@@ -28,6 +28,7 @@ fn make_drilled_library_app() -> App {
 
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: vec![movie],

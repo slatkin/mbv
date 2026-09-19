@@ -13,6 +13,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
         crate::config::LibraryPosition {
             levels: vec![
                 crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                     parent_id: "lib-movies".into(),
                     title: "Movies".into(),
                     focused_item_id: Some("folder-b".into()),
@@ -25,6 +26,7 @@ fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() 
                     library_total: Some(673),
                 },
                 crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                     parent_id: "folder-b".into(),
                     title: "Folder B".into(),
                     focused_item_id: Some("leaf-1".into()),
@@ -69,6 +71,7 @@ fn activating_saved_position_initializes_feed_home_video_state() {
         "lib-youtube".into(),
         crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-youtube".into(),
                 title: "Youtube".into(),
                 focused_item_id: None,
@@ -109,6 +112,7 @@ fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
     app.libs.push(LibraryTab::new(library));
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
             parent_id: "lib-movies".into(),
             title: "Power".into(),
             focused_item_id: Some("id1".into()),
@@ -135,6 +139,7 @@ fn ensure_lib_loaded_for_visible_library_accepts_restore_from_queue_focus() {
         requested_position: position.clone(),
         position,
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Power restored".into(),
             items: make_items(2),
@@ -169,6 +174,7 @@ fn library_tab_next_activates_saved_placeholder() {
         "lib-movies".into(),
         crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Saved".into(),
                 focused_item_id: Some("id1".into()),
@@ -207,6 +213,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
     app.libs.push(LibraryTab::new(library));
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             focused_item_id: Some("id1".into()),
@@ -225,6 +232,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
     app.tab = TabSelection::Home;
 
     let navigated = BrowseLevel {
+        fetched_rows: 0,
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
         items: make_items(5),
@@ -274,6 +282,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
         requested_position: position,
         position: crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
                 parent_id: "lib-movies".into(),
                 title: "Stale restore".into(),
                 focused_item_id: Some("id1".into()),
@@ -288,6 +297,7 @@ fn navigate_to_item_keeps_navigated_cursor_across_tab_switch() {
             ..Default::default()
         },
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Stale restore".into(),
             items: make_items(2),
@@ -325,6 +335,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
     app.libs.push(LibraryTab::new(library));
     let position = crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
             parent_id: "lib-movies".into(),
             title: "Power".into(),
             focused_item_id: Some("id1".into()),
@@ -354,6 +365,7 @@ fn library_tab_next_from_queue_focus_accepts_restore_result() {
         requested_position: position.clone(),
         position,
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Power restored".into(),
             items: make_items(2),

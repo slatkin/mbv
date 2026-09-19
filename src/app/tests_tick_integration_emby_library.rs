@@ -162,6 +162,7 @@ fn inline_search_on_movies_library_receives_the_shell_pool_push() {
             lib_idx: 0,
             parent_id: "lib-movies".into(),
             level: Box::new(crate::app::BrowseLevel {
+        fetched_rows: 0,
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
                 items: vec![
@@ -375,6 +376,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
     let mut inside = crate::app::tests::make_item("Inside", "Movie");
     inside.id = "movie-inside".into();
     app.libs[0].nav_stack.push(BrowseLevel {
+        fetched_rows: 0,
         parent_id: "folder-1".into(),
         title: "Folder".into(),
         items: vec![inside],
@@ -403,6 +405,7 @@ fn navigated_movie_reanchors_the_retained_browser_cursor() {
     let mut third = crate::app::tests::make_item("Third Movie", "Movie");
     third.id = "movie-third".into();
     let landed = BrowseLevel {
+        fetched_rows: 0,
         parent_id: "lib-movies".into(),
         title: "Movies".into(),
         items: vec![

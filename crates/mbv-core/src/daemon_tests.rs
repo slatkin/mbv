@@ -23,6 +23,7 @@ fn item(name: &str, media_type: &str, item_type: &str) -> EmbyItem {
         name: name.into(),
         item_type: item_type.into(),
         is_folder: false,
+        child_count: None,
         media_type: media_type.into(),
         collection_type: String::new(),
         runtime_ticks: 0,

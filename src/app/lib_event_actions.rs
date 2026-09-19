@@ -1,3 +1,5 @@
+use super::app_struct::LevelFillState;
+use super::types_browse::BrowseResting;
 use super::types_events::{NavigateLanding, PendingSeriesHandoff};
 use super::ui_util::sort_audio_tracks;
 use super::{
@@ -7,7 +9,18 @@ use super::{
 use mbv_core::api::EmbyItem;
 
 impl App {
-    fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
+    fn retain_grouped_music_level_items(&self, lib_idx: usize, level: &mut BrowseLevel) {
+        super::library_browse_actions::retain_grouped_music_level_items(
+            level,
+            self.is_grouped_music_library(lib_idx),
+        );
+    }
+
+    fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, mut level: BrowseLevel) {
+        // Filtering belongs at the event boundary so every level-row producer
+        // (including refresh and restore) applies the same server-row
+        // accounting invariant.
+        self.retain_grouped_music_level_items(lib_idx, &mut level);
         // The drain's own parent id tells a root load apart from a deeper
         // level's load for the pending Series landing retry below.
         let loaded_parent_id = parent_id.clone();
@@ -94,9 +107,17 @@ impl App {
         items: Vec<EmbyItem>,
         total_count: usize,
     ) {
+        let fetched_rows = items.len();
         let mut items = Some(items);
+        if let Some(items) = items.as_mut() {
+            super::library_browse_actions::retain_grouped_music_items(
+                items,
+                self.is_grouped_music_library(lib_idx),
+            );
+        }
         self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
             last.items.extend(items.take().unwrap());
+            last.fetched_rows += fetched_rows;
             last.total_count = total_count;
             last.loading = false;
         });
@@ -127,11 +148,25 @@ impl App {
             && unplayed_only;
         if !is_feed_video_refresh {
             let mut items = Some(items);
-            self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
+            let updated = self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
                 last.items = items.take().unwrap();
+                last.fetched_rows = last.items.len();
                 last.total_count = total_count;
                 last.loading = false;
             });
+            if updated {
+                let grouped_music = self.is_grouped_music_library(lib_idx);
+                if let Some(level) = self
+                    .libs
+                    .get_mut(lib_idx)
+                    .and_then(|lib| lib.nav_stack.last_mut())
+                {
+                    super::library_browse_actions::retain_grouped_music_level_items(
+                        level,
+                        grouped_music,
+                    );
+                }
+            }
         }
         self.normalize_current_browse_level_items(lib_idx);
         self.start_or_supersede_music_grouping(lib_idx);
@@ -144,10 +179,60 @@ impl App {
         lib_idx: usize,
         requested_position: crate::config::LibraryPosition,
         position: crate::config::LibraryPosition,
-        nav_stack: Vec<BrowseLevel>,
+        mut nav_stack: Vec<BrowseLevel>,
     ) {
         if self.saved_library_position(lib_idx).as_ref() != Some(&requested_position) {
             return;
+        }
+        for (index, level) in nav_stack.iter_mut().enumerate() {
+            self.retain_grouped_music_level_items(lib_idx, level);
+            if let Some(saved_level) = requested_position.levels.get(index) {
+                let cursor = saved_level
+                    .focused_item_id
+                    .as_ref()
+                    .and_then(|id| level.items.iter().position(|item| &item.id == id))
+                    .unwrap_or_else(|| {
+                        saved_level
+                            .cursor_index
+                            .min(level.items.len().saturating_sub(1))
+                    });
+                level.resting = BrowseResting::new(
+                    cursor,
+                    BrowseLevel::scroll_for_cursor(cursor, self.lib_page_size()),
+                );
+            }
+        }
+        // A saved child below a newly empty folder is no longer a reachable
+        // path. The worker may have fetched it before the boundary filter ran,
+        // so stop at the deepest retained parent.
+        let mut valid_levels = nav_stack.len().min(1);
+        while valid_levels < nav_stack.len() {
+            let parent_id = nav_stack[valid_levels].parent_id.as_str();
+            if nav_stack[valid_levels - 1]
+                .items
+                .iter()
+                .any(|item| item.id == parent_id)
+            {
+                valid_levels += 1;
+            } else {
+                break;
+            }
+        }
+        nav_stack.truncate(valid_levels);
+
+        // Rebuild the saved position from the filtered levels so a dropped
+        // empty folder cannot leave a stale focused id or server-row count.
+        let library_total = position
+            .levels
+            .first()
+            .and_then(|level| level.library_total);
+        let mut position = position;
+        position.levels = nav_stack
+            .iter()
+            .map(BrowseLevel::to_position_level)
+            .collect();
+        if let Some(root) = position.levels.first_mut() {
+            root.library_total = library_total;
         }
         // A restore an armed pending Series landing is waiting on is never
         // stale: the landing spawned it and cannot retry until it applies,
@@ -643,14 +728,54 @@ impl App {
             | LibEvent::AudiobookshelfShelfFetched { .. }
             | LibEvent::AudiobookshelfProgressAcknowledged(_)
             | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
-            LibEvent::AlbumArtistFetched { album_id, artist } => {
-                self.album_artist_loading.remove(&album_id);
-                self.album_artist_cache
-                    .insert(album_id.clone(), artist.clone());
-                self.album_artist_fetches_active =
-                    self.album_artist_fetches_active.saturating_sub(1);
-                self.drain_album_artist_fetches();
-                self.advance_music_grouping_candidates(&album_id, &artist);
+            LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
+                let warmup_completed = self.level_artist_warmups_in_flight.remove(&level_id);
+                let orphan_risk = matches!(
+                    self.album_artist_levels.get(&level_id),
+                    Some(LevelFillState::Loading { orphan_risk: true })
+                );
+                if artists.is_empty() {
+                    // HTTP failure (or a trackless level): no fill, the level's
+                    // albums resolve via the existing settle/fallback path.
+                    self.album_artist_levels
+                        .insert(level_id, LevelFillState::Failed);
+                } else {
+                    for (album_id, artist) in artists {
+                        // An empty artist is never cached: an empty cache row
+                        // is terminal for readers, and the album must stay
+                        // free to settle via the fallback path instead. It
+                        // still advances candidates (as a known-unknown) so
+                        // one arrival resolves every waiting album at once.
+                        if !artist.is_empty() {
+                            self.album_artist_cache
+                                .insert(album_id.clone(), artist.clone());
+                        }
+                        self.advance_music_grouping_candidates(&album_id, &artist);
+                    }
+                    self.album_artist_levels
+                        .insert(level_id, LevelFillState::Filled { orphan_risk });
+                }
+                if warmup_completed {
+                    self.drain_level_artist_warmups();
+                }
+            }
+            LibEvent::MusicGroupWarmupListed { generation, groups } => {
+                if !self.emby_runtime.accepts(generation) {
+                    return;
+                }
+                // One level fill per group-level child (design D5), deduped
+                // through the same `LevelFillState::action_for` decision
+                // candidate creation uses (`spawn_level_artist_fetch`'s
+                // guard). `albums` stays empty: warm-up holds only the group
+                // listing, so orphan-`Path` attribution (design D3) has no
+                // in-hand album paths. A successful warm-up is marked with
+                // orphan risk and receives one path-aware upgrade when that
+                // level is later browsed. A fill failure arrives as an empty
+                // `AlbumArtistLevelFetched`, marking the level `Failed`
+                // (retryable) with no UI error; browsing state is untouched.
+                for group in groups {
+                    self.enqueue_level_artist_warmup(group.id);
+                }
             }
             LibEvent::NavigateTo {
                 lib_idx,
@@ -658,7 +783,10 @@ impl App {
                 switch_tab,
             } => {
                 match landing {
-                    NavigateLanding::Chain { nav_stack } => {
+                    NavigateLanding::Chain { mut nav_stack } => {
+                        for level in &mut nav_stack {
+                            self.retain_grouped_music_level_items(lib_idx, level);
+                        }
                         if let Some(lib) = self.libs.get_mut(lib_idx) {
                             lib.nav_stack = nav_stack;
                             // A completed navigation IS the saved position from now on;

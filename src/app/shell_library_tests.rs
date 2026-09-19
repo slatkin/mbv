@@ -300,6 +300,7 @@ fn feed_group_picker_libraries_route_to_the_library_panel_at_every_width() {
         let mut v2 = make_item("V2", "Episode");
         v2.id = "v2".into();
         lib.nav_stack = vec![BrowseLevel {
+            fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Feed".into(),
             items: vec![folder.clone()],

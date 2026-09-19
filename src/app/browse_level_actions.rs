@@ -89,6 +89,7 @@ impl App {
             if !season_id.is_empty() {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack.push(BrowseLevel {
+                        fetched_rows: 0,
                         parent_id: season_id.clone(),
                         title: season_name.clone(),
                         items: vec![],

@@ -28,6 +28,50 @@ use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 use std::time::Instant;
 
+/// Lifecycle of the one background album-artist request per music level
+/// (design D4 of `fix-music-artist-resolution-batching`). `Failed` levels are
+/// not terminal across candidates: the next candidate creation for the level
+/// retries, and unresolved albums settle via `SETTLE_WINDOW` regardless.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LevelFillState {
+    /// A level fill is in flight. Set by `spawn_level_artist_fetch`.
+    /// `orphan_risk` is true for a warm-up fill that lacked the level's album
+    /// paths, so a later browse can perform one path-aware upgrade.
+    Loading { orphan_risk: bool },
+    /// The level's albums were bulk-filled into `album_artist_cache`.
+    /// Warm-up fills carry orphan risk because they had no album paths for
+    /// attributing nested-disc track buckets.
+    Filled { orphan_risk: bool },
+    /// The level fill failed (HTTP error or no tracks); albums resolve via
+    /// the settle/fallback path.
+    Failed,
+}
+
+/// The single "should a level fill start?" decision both fill entry points
+/// consume — `start_or_supersede_music_grouping`'s dedupe and
+/// `spawn_level_artist_fetch`'s guard — so the two interpretations of a
+/// `LevelFillState` can never diverge again.
+pub(super) enum LevelFillAction {
+    /// A fill is already in flight or has completed for this level.
+    NoWork,
+    /// No fill has run for this level, or the last one failed.
+    Request,
+}
+
+impl LevelFillState {
+    /// Unified interpretation of a level-fill state (design D4):
+    /// `Loading`/`Filled` levels do no work; a fresh or `Failed` level
+    /// (re)starts the fill.
+    pub(super) fn action_for(state: Option<&LevelFillState>) -> LevelFillAction {
+        match state {
+            Some(LevelFillState::Loading { .. }) | Some(LevelFillState::Filled { .. }) => {
+                LevelFillAction::NoWork
+            }
+            Some(LevelFillState::Failed) | None => LevelFillAction::Request,
+        }
+    }
+}
+
 pub struct App {
     /// General application configuration is independent of the optional Emby
     /// runtime. Feed management reads and mutates this context directly.
@@ -373,9 +417,17 @@ pub struct App {
     ///   `FocusLost`.
     pub(super) refocus_at: Option<Instant>,
     pub(super) album_artist_cache: std::collections::HashMap<String, String>,
-    pub(super) album_artist_loading: std::collections::HashSet<String>,
-    pub(super) pending_album_artist_fetches: std::collections::VecDeque<String>,
-    pub(super) album_artist_fetches_active: usize,
+    /// Per-level album-artist fill lifecycle (design D4 of
+    /// `fix-music-artist-resolution-batching`): one background request fills
+    /// every album bucket in a level, so the fill state is keyed by level id
+    /// rather than album id. Concurrent candidate creations and startup
+    /// warm-up dedupe on this state.
+    pub(super) album_artist_levels: std::collections::HashMap<String, LevelFillState>,
+    /// Group-level artist fills waiting for one of the bounded warm-up slots.
+    pub(super) pending_level_artist_warmups: std::collections::VecDeque<String>,
+    /// Group-level artist fills currently occupying warm-up slots. Candidate
+    /// requests share the level state but do not consume these slots.
+    pub(super) level_artist_warmups_in_flight: std::collections::HashSet<String>,
     /// Track lists for the album currently highlighted in the
     /// album-folder listing, fetched proactively so the inline album detail
     /// pane (#145) has data without requiring the user to drill in first.

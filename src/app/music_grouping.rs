@@ -1,3 +1,4 @@
+use super::app_struct::{LevelFillAction, LevelFillState};
 use crate::app::render::{parse_album_folder_name, strip_article};
 use crate::app::ui_util::natural_sort_key;
 use crate::app::App;
@@ -151,15 +152,16 @@ pub(super) fn build_grouped_album_catalog(
 impl App {
     /// Starts (or supersedes) the grouping candidate for the current music
     /// album level when its items change: on load, refresh, or page append.
-    /// Albums already carrying an artist identity (item tag, cache, or an
-    /// empty cache tombstone) are terminal up front; the rest are scheduled
-    /// for bounded artist lookups. A prior settled catalog stays visible
-    /// while the replacement resolves.
+    /// Albums already carrying an artist identity (item tag or a cached
+    /// resolved artist) are terminal up front; the rest wait on one level
+    /// fill (design D4), deduped on the level-fill state through the single
+    /// shared decision (`LevelFillState::action_for`). A prior settled
+    /// catalog stays visible while the replacement resolves.
     pub(super) fn start_or_supersede_music_grouping(&mut self, lib_idx: usize) {
         if !self.is_music_group_view(lib_idx) {
             return;
         }
-        let to_fetch: Vec<String> = {
+        let (needs_fetch, level_request): (bool, Option<(String, Vec<EmbyItem>)>) = {
             let lib = &mut self.libs[lib_idx];
             let Some(level) = lib.nav_stack.last_mut() else {
                 return;
@@ -189,16 +191,54 @@ impl App {
                     }
                 }
             }
-            let to_fetch = candidate.unresolved.iter().cloned().collect();
+            // One level fill serves every unresolved album (design D4),
+            // deduped on the level-fill state through the single shared
+            // decision (`LevelFillState::action_for`): `Loading`/`Filled`
+            // levels do no work; a fresh or `Failed` level (re)starts the
+            // fill. A candidate-driven `Filled` level with still-unresolved
+            // albums is terminal — its fill had the level's album paths —
+            // while a warm-up `Filled` level gets one path-aware upgrade.
+            let mut level_request = None;
+            if !candidate.unresolved.is_empty() {
+                let level_state = self.album_artist_levels.get(&candidate.parent_id);
+                match LevelFillState::action_for(level_state) {
+                    LevelFillAction::Request => {
+                        level_request = Some((candidate.parent_id.clone(), level.items.clone()));
+                    }
+                    LevelFillAction::NoWork => match level_state {
+                        // Warm-up had no album paths, so one browse-triggered
+                        // upgrade is needed to attribute nested-disc orphan
+                        // buckets. Keep the candidate unresolved while that
+                        // fill runs; its arrival can resolve every album.
+                        Some(LevelFillState::Filled { orphan_risk: true }) => {
+                            level_request =
+                                Some((candidate.parent_id.clone(), level.items.clone()));
+                        }
+                        // A candidate-driven fill already had the level's
+                        // album paths and is terminal, preserving the
+                        // existing immediate fallback behavior.
+                        Some(LevelFillState::Filled { orphan_risk: false }) => {
+                            candidate.unresolved.clear();
+                        }
+                        // Loading is shared with another candidate/warm-up;
+                        // Failed is unreachable under NoWork but remains
+                        // explicit for exhaustive state handling.
+                        Some(LevelFillState::Loading { .. })
+                        | Some(LevelFillState::Failed)
+                        | None => {}
+                    },
+                }
+            }
+            let needs_fetch = !candidate.unresolved.is_empty();
             state.candidate = Some(candidate);
-            to_fetch
+            (needs_fetch, level_request)
         };
-        if to_fetch.is_empty() {
+        if !needs_fetch {
             self.commit_music_grouping_candidate(lib_idx);
             return;
         }
-        for album_id in to_fetch {
-            self.fetch_album_artist(album_id);
+        if let Some((level_id, albums)) = level_request {
+            self.spawn_level_artist_fetch(level_id, albums);
         }
     }
 

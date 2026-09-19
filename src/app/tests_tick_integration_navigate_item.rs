@@ -45,6 +45,7 @@ fn app_with_mock_emby(http: &MockHttp) -> crate::app::App {
 fn tv_saved_position() -> crate::config::LibraryPosition {
     crate::config::LibraryPosition {
         levels: vec![crate::config::LibraryPositionLevel {
+        fetched_rows: None,
             parent_id: "lib-tv".into(),
             title: "TV".into(),
             focused_item_id: Some("ser0".into()),
@@ -258,6 +259,7 @@ fn deep_selection_tv_harness(http: &MockHttp, episodes_for_season_2: &[&str]) ->
     // so the fixture makes no HTTP requests and each test scripts exactly the
     // fetches its own scenario needs.
     app.libs[0].nav_stack.push(BrowseLevel {
+        fetched_rows: 0,
         parent_id: "lib-tv".into(),
         title: "TV".into(),
         items: vec![ser0, ser1.clone()],

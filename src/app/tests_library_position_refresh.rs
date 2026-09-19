@@ -11,6 +11,7 @@ fn mixed_services_app() -> App {
     library.collection_type = "movies".into();
     app.libs.push(LibraryTab {
         nav_stack: vec![BrowseLevel {
+        fetched_rows: 0,
             parent_id: "lib-movies".into(),
             title: "Movies".into(),
             items: make_items(1),
@@ -191,6 +192,7 @@ fn two_emby_libraries_app() -> App {
         let mut library = make_item(title, "CollectionFolder");
         library.id = id.into();
         let level = BrowseLevel {
+        fetched_rows: 0,
             parent_id: id.into(),
             title: title.into(),
             items: make_items(2),

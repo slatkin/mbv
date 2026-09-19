@@ -397,6 +397,7 @@ fn tv_two_level_model() -> Model {
     let mut mirror_target = crate::app::tests::make_item("S", "Season");
     mirror_target.id = "movie-focused".into();
     model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
+        fetched_rows: 0,
         parent_id: "movie-third".into(),
         title: "Seasons".into(),
         items: vec![
@@ -435,6 +436,7 @@ fn tv_season_skip_model() -> Model {
     let mut season = crate::app::tests::make_item("Season 1", "Season");
     season.id = "season-1".into();
     model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
+        fetched_rows: 0,
         parent_id: "movie-third".into(),
         title: "Seasons".into(),
         items: vec![season],
@@ -452,6 +454,7 @@ fn tv_season_skip_model() -> Model {
     let mut mirror_target = crate::app::tests::make_item("E", "Episode");
     mirror_target.id = "movie-focused".into();
     model.app.libs[0].nav_stack.push(crate::app::BrowseLevel {
+        fetched_rows: 0,
         parent_id: "season-1".into(),
         title: "Episodes".into(),
         items: vec![

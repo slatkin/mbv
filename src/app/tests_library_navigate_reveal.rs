@@ -121,6 +121,7 @@ fn app_with_loaded_tv_library() -> App {
     let mut show = make_item("The Show", "Series");
     show.id = "ser1".into();
     app.libs[0].nav_stack.push(BrowseLevel {
+        fetched_rows: 2,
         parent_id: "lib-tv".into(),
         title: "TV".into(),
         items: vec![other, show],
@@ -713,6 +714,7 @@ fn app_with_paginated_tv_library() -> App {
     let mut other = make_item("Other Show", "Series");
     other.id = "ser0".into();
     app.libs[0].nav_stack.push(BrowseLevel {
+        fetched_rows: 0,
         parent_id: "lib-tv".into(),
         title: "TV".into(),
         items: vec![other],

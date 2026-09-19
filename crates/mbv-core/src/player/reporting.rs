@@ -306,6 +306,7 @@ mod reporting_tests {
             name: "Emby".into(),
             item_type: "Movie".into(),
             is_folder: false,
+        child_count: None,
             media_type: "Video".into(),
             collection_type: String::new(),
             runtime_ticks: 1,
