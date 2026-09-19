@@ -83,6 +83,15 @@ fn library_items_request_includes_external_urls_field() {
 }
 
 #[test]
+fn continue_watching_request_enables_user_data() {
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(200, r#"{"Items":[]}"#);
+    client.get_continue_watching(10).unwrap();
+    assert!(http.requests()[0].contains("EnableUserData=true"));
+}
+
+#[test]
 fn playlist_items_request_includes_external_urls_field() {
     let (mut client, http) = mock_client(TEST_URL);
     client.user_id = "user".into();

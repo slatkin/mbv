@@ -99,9 +99,6 @@ impl App {
         self.queue_source = bootstrap.queue_source;
         self.last_played_item_id = bootstrap.last_played_item_id;
         self.last_played_completed = bootstrap.last_played_completed;
-        if !bootstrap.positions.is_empty() {
-            self.spawn_enrich_queue_state(bootstrap.positions);
-        }
         self.player_endpoint = Some(DaemonEndpoint::Local);
         debug_assert_eq!(self.player.is_remote(), self.player_endpoint.is_some());
         self.sync_subtitle_prefs_to_player();

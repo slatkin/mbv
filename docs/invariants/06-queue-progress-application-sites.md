@@ -93,11 +93,22 @@ back to an entry regardless of what was actually watched.
 
 - **Progress-application call sites:** `daemon_run.rs`'s `TrackCompleted` arm
   and the generic `Stopped`-handling arm apply to the canonical queue via
-  `PlayerOwnerState::apply_completion_progress`; `src/app/player_event.rs`'s
+  `PlayerOwnerState::apply_completion_progress`; a cold-adopt refresh writes
+  refreshed progress into that daemon queue after a persisted snapshot is
+  installed, via a non-`PlayerEvent` path (`daemon_control.rs`'s
+  `UnifiedAdoptQueue` post-adopt fetch → `DaemonEvent::QueueEnriched` →
+  `apply_queue_enriched` in `daemon_run.rs`, merged in-place by
+  `PlaybackQueue::merge_refresh_for_slots`). `src/app/player_event.rs`'s
   `Stopped`/`TrackCompleted` arms apply to the shell's own mirror; `events.rs`'s
   `on_end_file` applies to the run's own `ExecutionSequence` via
   `ExecutionSequence::apply_progress`, at the same point it computes
   `completed_pos` for that occurrence.
+- **Cold-adopt enrichment is monotonic for unplayed fetches:**
+  `PlaybackQueue::merge_fetched_slot`'s non-active arm keeps the greater of
+  fetched and stored position for an unplayed fetched item, while adopting a
+  fetched played item verbatim so a completion reset can land. This
+  type-invisible rule protects the adopted position from stale Service UserData
+  and is enforced only at that merge site.
 - **One shared write path, several independent gates.**
   `crate::playback::queue::apply_progress_to_queue_item` is the single place
   that knows how to write a position/played pair into each `QueueItem` kind;
@@ -138,10 +149,10 @@ back to an entry regardless of what was actually watched.
    invariant exists to protect). The asymmetry itself is intentional and
    pre-existing: `TrackCompleted` fires mid-queue and needs a floor to reject
    startup noise, `Stopped` fires on a deliberate user action and records
-   whatever position that happened at, no floor. `daemon_run.rs`'s copies
-   also skip the shell's `mark_progress_sync_pending` call — harmless today
-   only because the daemon never runs `merge_refresh` against its own queue;
-   a latent trap if that ever changes.
+   whatever position that happened at, no floor. `daemon_run.rs`'s completion
+   path marks the applied progress with `mark_progress_sync_pending`, so the
+   daemon's cold-adopt refresh cannot overwrite a play-driven position while
+   the server write is still stale.
 2. **A narrow race remains:** dispatching a `JumpTo` back to an item before
    the daemon has processed that item's own preceding `TrackCompleted` reads
    the canonical queue's pre-completion value and resumes from there — the

@@ -54,40 +54,6 @@ fn remote_app_starts_on_remote_queue_when_remote_queue_has_items() {
 }
 
 #[test]
-fn local_daemon_bootstrap_carries_saved_positions_for_enrichment() {
-    let items = make_items(2);
-    let mut positions = std::collections::HashMap::new();
-    positions.insert(items[0].id.clone(), 999);
-    let bootstrap = bootstrap_local_daemon_queue(
-        Vec::new(),
-        0,
-        crate::config::QueueSource::Unknown,
-        Some(crate::config::QueueState {
-            source: crate::config::QueueSource::Album,
-            items: items
-                .into_iter()
-                .map(|item| mbv_core::playback_queue::QueueItem::Emby(Box::new(item)))
-                .collect(),
-            cursor: 0,
-            last_played_content_id: None,
-            last_played_item_id: None,
-            last_played_completed: false,
-            positions: positions.clone(),
-        }),
-    );
-
-    assert_eq!(bootstrap.positions, positions);
-}
-
-#[test]
-fn local_daemon_bootstrap_has_no_positions_without_saved_state() {
-    let bootstrap =
-        bootstrap_local_daemon_queue(Vec::new(), 0, crate::config::QueueSource::Unknown, None);
-
-    assert!(bootstrap.positions.is_empty());
-}
-
-#[test]
 fn local_daemon_bootstrap_uses_restore_cursor_and_carries_last_played_state() {
     let items = make_items(3);
     let last_played_id = items[1].id.clone();

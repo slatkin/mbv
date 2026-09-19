@@ -51,6 +51,12 @@ thing that writes a correct value into the daemon's canonical queue
   dropped for the daemon-adoption path rather than threaded through the wire.
   See design.md for the reasoning.
 
+## Tasks
+
+See tasks.md. Sections 1–3 + 4.1 accepted 2026-09-19; section 5 added after
+the 4.2 live test failed — see the design.md Decisions revision (saved-positions
+override restored as a monotonic max, per user ruling and live evidence).
+
 ## Capabilities
 
 ### New Capabilities
@@ -82,3 +88,12 @@ thing that writes a correct value into the daemon's canonical queue
   no live network); update/remove client-side tests that asserted the
   now-removed post-adoption enrichment call.
 - Emby-only. No Audiobookshelf, Feed, or Cast behavior changes.
+- **Added 2026-09-19 (scope expansion, user ruling after the 4.2 live test):**
+  progress-visibility corrections in section 5 of tasks.md — (a) resume
+  percentage shows whenever `playback_position_ticks > 0` regardless of the
+  `played` flag (the played-suppression in `MediaSemanticState::from_progress`
+  was unintended migration fallout); (b) the adoption-time enrichment merge
+  never regresses a slot's stored position (monotonic max overlay, restoring
+  the semantics of the removed client-side `spawn_enrich_queue_state` path);
+  (c) `get_continue_watching` requests `EnableUserData` like its sibling
+  queries so Home Continue Watching rows carry UserData at all.
