@@ -201,8 +201,13 @@ fn media_list_selection_summary_stays_provider_neutral() {
 fn from_progress_is_the_one_state_derivation() {
     assert_eq!(
         MediaSemanticState::from_progress(true, 50, 100),
+        MediaSemanticState::active(Some(50)),
+        "a resume position yields Active even when played"
+    );
+    assert_eq!(
+        MediaSemanticState::from_progress(true, 0, 100),
         MediaSemanticState::Played,
-        "played wins over any resume position"
+        "played without a resume position yields Played"
     );
     assert_eq!(
         MediaSemanticState::from_progress(false, 25, 100),

@@ -158,17 +158,17 @@ impl MediaSemanticState {
 
     /// The one derivation every list uses to turn an item's playback facts
     /// into a row state — the canonical state/colour policy, so no
-    /// destination decides a row colour. `played` wins; a positive resume
-    /// position with a known runtime yields `Active` with the bounded
-    /// percentage (no percentage when the runtime is unknown); otherwise the
+    /// destination decides a row colour. A positive resume position yields
+    /// `Active` with the bounded percentage (no percentage when the runtime
+    /// is unknown); `played` without a position yields `Played`; otherwise the
     /// row is `Ordinary`.
     pub fn from_progress(played: bool, position_ticks: i64, runtime_ticks: i64) -> Self {
-        if played {
-            Self::Played
-        } else if position_ticks > 0 {
+        if position_ticks > 0 {
             let progress = (runtime_ticks > 0)
                 .then(|| ((position_ticks as u128 * 100) / runtime_ticks as u128).min(100) as u16);
             Self::active(progress)
+        } else if played {
+            Self::Played
         } else {
             Self::Ordinary
         }

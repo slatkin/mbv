@@ -191,6 +191,7 @@ impl EmbyClient {
         self.fetch_items(&format!("/Users/{}/Items/Resume", crate::encode_path_segment(&self.user_id)), &[
             ("UserId",     &self.user_id),
             ("Limit",      &limit),
+            ("EnableUserData", "true"),
             ("Fields",     "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,Overview,PremiereDate"),
             ("MediaTypes", "Video"),
         ])

@@ -393,6 +393,113 @@ fn adopted_queue_enrichment_updates_canonical_queue_and_broadcasts() {
 }
 
 #[test]
+fn adopted_refresh_keeps_stored_position_and_broadcasts_other_changes() {
+    let player = cold_player();
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_client_id, client_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let shared_queue = shared_queue_state();
+    let mut owner = owner_with(
+        vec![
+            emby_qi("stale", "Video", "Movie"),
+            emby_qi("newer", "Video", "Movie"),
+            emby_qi("active", "Video", "Movie"),
+        ],
+        2,
+    );
+    let stale_slot = owner.core.queue.slots()[0].slot_id;
+    let newer_slot = owner.core.queue.slots()[1].slot_id;
+    let mut stored_stale = item("stale", "Video", "Movie");
+    stored_stale.playback_position_ticks = 40_000_000;
+    let _ = owner
+        .core
+        .queue
+        .update_slot_item(stale_slot, QueueItem::Emby(Box::new(stored_stale)));
+    let mut stored_newer = item("newer", "Video", "Movie");
+    stored_newer.playback_position_ticks = 10_000_000;
+    let _ = owner
+        .core
+        .queue
+        .update_slot_item(newer_slot, QueueItem::Emby(Box::new(stored_newer)));
+
+    let stale_refresh = item("stale", "Video", "Movie");
+    let mut newer_refresh = item("newer", "Video", "Movie");
+    newer_refresh.playback_position_ticks = 20_000_000;
+    apply_queue_enriched(
+        vec![(stale_slot, stale_refresh), (newer_slot, newer_refresh)],
+        &mut owner,
+        &player,
+        &shared_queue,
+        &registry,
+    );
+
+    let _ = recv_event(&client_rx);
+    assert_eq!(
+        owner.core.queue.slots()[0]
+            .item
+            .as_emby()
+            .unwrap()
+            .playback_position_ticks,
+        40_000_000
+    );
+    assert_eq!(
+        owner.core.queue.slots()[1]
+            .item
+            .as_emby()
+            .unwrap()
+            .playback_position_ticks,
+        20_000_000
+    );
+}
+
+#[test]
+fn adopted_refresh_accepts_newer_fetched_position() {
+    let player = cold_player();
+    let registry = Arc::new(Mutex::new(CtrlClients::default()));
+    let (_client_id, client_rx) = {
+        let mut clients = registry.lock().unwrap();
+        connect_client(&mut clients)
+    };
+    let shared_queue = shared_queue_state();
+    let mut owner = owner_with(
+        vec![
+            emby_qi("stored", "Video", "Movie"),
+            emby_qi("active", "Video", "Movie"),
+        ],
+        1,
+    );
+    let stored_slot = owner.core.queue.slots()[0].slot_id;
+    let mut stored = item("stored", "Video", "Movie");
+    stored.playback_position_ticks = 10_000_000;
+    let _ = owner
+        .core
+        .queue
+        .update_slot_item(stored_slot, QueueItem::Emby(Box::new(stored)));
+    let mut fetched = item("stored", "Video", "Movie");
+    fetched.playback_position_ticks = 20_000_000;
+
+    apply_queue_enriched(
+        vec![(stored_slot, fetched)],
+        &mut owner,
+        &player,
+        &shared_queue,
+        &registry,
+    );
+
+    let _ = recv_event(&client_rx);
+    assert_eq!(
+        owner.core.queue.slots()[0]
+            .item
+            .as_emby()
+            .unwrap()
+            .playback_position_ticks,
+        20_000_000
+    );
+}
+
+#[test]
 fn adopted_refresh_does_not_prune_or_broadcast_after_queue_replacement() {
     let player = cold_player();
     let registry = Arc::new(Mutex::new(CtrlClients::default()));

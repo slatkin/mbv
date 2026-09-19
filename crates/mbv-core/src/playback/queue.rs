@@ -688,6 +688,13 @@ impl PlaybackQueue {
             return;
         }
 
+        let stored_position = slot
+            .item
+            .as_emby()
+            .map_or(0, |emby| emby.playback_position_ticks);
+        let mut fetched_item = fetched_item;
+        fetched_item.playback_position_ticks =
+            fetched_item.playback_position_ticks.max(stored_position);
         slot.item = QueueItem::Emby(Box::new(fetched_item));
         if let QueueItem::Emby(ref emby) = slot.item {
             slot.progress_state.local = SlotProgress::from_item(emby);
