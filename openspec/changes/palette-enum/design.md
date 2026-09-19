@@ -7,8 +7,9 @@ attempt: `render/theme/palette.rs` holds the landed 29-variant `Palette` enum
 with `const fn color()/name()/hex()` and `ALL`, plus its uniqueness and
 `docs/palette.json` drift tests, and has no consumers yet;
 `render/theme/primitives.rs` holds 42 `Color` consts (29 distinct literals, two
-primitive→primitive aliases); `render/theme/mod.rs` holds 51 role consts (47
-production, 4 test-only) aliasing primitives; `surface_table.rs`/
+primitive→primitive aliases); `render/theme/mod.rs` holds 51 role consts (48
+production, 3 `#[cfg(test)]`-gated) aliasing primitives, plus the test-only
+`resolve_surface_focus` fn; `surface_table.rs`/
 `surface_resolve.rs` resolve `Surface` + bool to `Color`; `src/app/palette.rs`
 re-exports roles + resolver to ~66 call-site files.
 
@@ -42,8 +43,8 @@ pub(in crate::app) const ACCENT: Color = Palette::Aqua.color();
 compile-time constant, so the role tier names a palette variant while its type is
 unchanged. What the original type-changing design bought over this: enforcement
 against a role smuggling an equal literal instead of referencing a variant. What
-it cost, measured on the reverted implementation `4e710eb4`: **476 `.color()`
-call sites** across 62 files, a frozen-file neutrality rule that could not be
+it cost, measured on the reverted implementation `4e710eb4`: **~450 `.color()`
+call sites** across the 58 files of `4e710eb4`, a frozen-file neutrality rule that could not be
 satisfied, and a surface-tier contradiction with `PopupDimBackdrop`. The
 enforcement it bought applies to one 190-line file in which every role is
 declared — reviewable by one `grep 'Rgb' theme/mod.rs` — and the implementation
@@ -87,6 +88,13 @@ Divergence is then an ordinary edit: the role that must move gets a new variant
 with its new hex. The uniqueness test forbids two variants at one hex, so a
 *duplicate-now-diverge-later* placeholder variant cannot be added — accepted:
 that is the same edit, deferred, and deferring it buys nothing.
+
+**`Palette`'s privacy is enforced by its module path, not its visibility modifier.**
+The enum's items are `pub(in crate::app)`, which reads as broader than
+`ui-design-language` req 2's "private to the theme", but `mod palette;` in
+`theme/mod.rs` is private and never re-exported, so nothing outside `theme` can
+name `Palette`. Leave it; noted so the next reader does not mistake the
+modifier for a leak.
 
 **Raw `Color::` specials stay outside the palette.**
 Black (dim blend base), White (headings), Reset (transparency) are ratatui
@@ -221,8 +229,11 @@ The three findings, recorded so they are not re-derived:
 
 Secondary corrections carried into the rewritten tasks: rows must not specify red
 intermediate states as their verification; the stray production literal is
-`chrome_tabs.rs:168` alone (`media_list.rs:420,485` are test assertions, and the
-originally-cited line numbers 413/478 were stale); `Palette::ALL`/`name()`/`hex()`
+`chrome_tabs.rs:168` alone, and `media_list.rs:413,478` are test assertions, not
+production strays as the original plan claimed. (Those two literals sat at
+420/485 while `4e710eb4` was applied; the revert removed the inserted
+`.color()` lines above them, so 413/478 is correct for this tree. Re-check the
+numbers against HEAD rather than trusting either figure.); `Palette::ALL`/`name()`/`hex()`
 are test-only and must be `#[cfg(test)]`-gated, never `#[allow(dead_code)]`, to
 survive `clippy --all-targets -D warnings`; and `docs/palette.json`'s role
 listing stays hand-maintained because no generator exists and the repo forbids

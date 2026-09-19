@@ -43,7 +43,7 @@ move the now-playing title. That intent is preserved by this change, not removed
   contract, which is the opposite of the recorded intent.
 - **Migrate the one stray production `Rgb` literal**: `chrome_tabs.rs:168`
   (`#495156`) → `palette::PILL_FG`. Test-only literals
-  (`library_hero_overlay.rs`, `media_list.rs:420,485`) are known residual — they
+  (`library_hero_overlay.rs`, `media_list.rs:413,478`) are known residual — they
   are buffer assertions, not palette colours.
 - **Tests**: palette-value uniqueness over `ALL`; `docs/palette.json` asserted
   equal to the enum's hexes (kills the drift). *(Already landed: `9b740dfb`.)*
