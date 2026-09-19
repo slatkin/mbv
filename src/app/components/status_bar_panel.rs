@@ -176,8 +176,8 @@ mod tests {
     fn status_row_paints_pills_and_retains_their_regions() {
         let (panel, buffer) = drawn_panel(
             60,
-            pill(" 60", palette::ACCENT.color()),
-            Some(pill("muted", palette::STATUS_ERROR.color())),
+            pill(" 60", palette::ACCENT),
+            Some(pill("muted", palette::STATUS_ERROR)),
         );
         let row: String = (0..60).map(|x| buffer[(x, 0)].symbol()).collect();
         assert!(row.contains(" 60"), "volume pill row: {row:?}");
@@ -219,8 +219,8 @@ mod tests {
         // and its paint truncates, as the legacy published rects did).
         let (panel, buffer) = drawn_panel(
             8,
-            pill(" 60", palette::ACCENT.color()),
-            Some(pill("muted", palette::STATUS_ERROR.color())),
+            pill(" 60", palette::ACCENT),
+            Some(pill("muted", palette::STATUS_ERROR)),
         );
         let regions = panel.regions();
         let vol = regions.volume.expect("volume fits");
@@ -234,7 +234,7 @@ mod tests {
         );
 
         // Narrower still: volume drops, and mute with it.
-        let (panel, _) = drawn_panel(4, pill(" 60", palette::ACCENT.color()), None);
+        let (panel, _) = drawn_panel(4, pill(" 60", palette::ACCENT), None);
         let regions = panel.regions();
         assert!(regions.volume.is_none(), "volume drops next");
         assert!(regions.mute.is_none());
@@ -244,7 +244,7 @@ mod tests {
     /// anywhere else on the row does not.
     #[test]
     fn scroll_on_the_volume_pill_emits_the_volume_intent() {
-        let (mut panel, _) = drawn_panel(60, pill(" 60", palette::ACCENT.color()), None);
+        let (mut panel, _) = drawn_panel(60, pill(" 60", palette::ACCENT), None);
         let vol = panel.regions().volume.expect("volume region");
         let mouse = |kind, column, row| {
             Event::Mouse(tuirealm::event::MouseEvent {
@@ -276,8 +276,8 @@ mod tests {
     fn click_on_the_mute_pill_emits_the_mute_intent() {
         let (mut panel, _) = drawn_panel(
             60,
-            pill(" 60", palette::ACCENT.color()),
-            Some(pill("muted", palette::STATUS_ERROR.color())),
+            pill(" 60", palette::ACCENT),
+            Some(pill("muted", palette::STATUS_ERROR)),
         );
         let mute = panel.regions().mute.expect("mute region");
         let mouse = Event::Mouse(tuirealm::event::MouseEvent {
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn remote_pill_region_stays_absent_without_the_session_pill() {
         let mut panel = StatusBarPanel::new();
-        let mut m = model(pill(" 60", palette::ACCENT.color()), None);
+        let mut m = model(pill(" 60", palette::ACCENT), None);
         m.show_session_pill = true;
         m.remote = pill("HOST", Color::White);
         panel.set_model(m);
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn status_row_paints_only_inside_its_placement() {
         let mut panel = StatusBarPanel::new();
-        panel.set_model(model(pill(" 60", palette::ACCENT.color()), None));
+        panel.set_model(model(pill(" 60", palette::ACCENT), None));
         let mut terminal = Terminal::new(TestBackend::new(40, 3)).unwrap();
         let placement = Rect::new(5, 2, 20, 1);
         terminal.draw(|f| panel.view(f, placement)).unwrap();

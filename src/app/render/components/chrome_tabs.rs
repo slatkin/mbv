@@ -107,7 +107,7 @@ pub(in crate::app) fn render_tab_bar(
     let (vis_start, vis_end) = visible_tab_range(&widths, model.scroll, tabs_w);
     let has_left = vis_start > 0;
     let has_right = vis_end < widths.len();
-    let ind_style = Style::default().fg(palette::TEXT_STRONG.color());
+    let ind_style = Style::default().fg(palette::TEXT_STRONG);
     let left_w: u16 = if has_left { 2 } else { 0 };
     let right_w: u16 = if has_right { 2 } else { 0 };
     if has_left {
@@ -153,17 +153,17 @@ pub(in crate::app) fn render_tab_bar(
             let position = vis_start + i;
             let line = if i == selected_tab {
                 Line::from(vec![
-                    Span::styled("▐", Style::default().fg(palette::ACCENT.color())),
+                    Span::styled("▐", Style::default().fg(palette::ACCENT)),
                     Span::styled(
                         format!(" {n}  "),
                         Style::default()
-                            .fg(palette::TEXT_STRONG.color())
+                            .fg(palette::TEXT_STRONG)
                             .add_modifier(Modifier::BOLD),
                     ),
                 ])
             } else {
                 let style = if model.hovered == Some(position) {
-                    Style::default().fg(palette::TEXT_STRONG.color())
+                    Style::default().fg(palette::TEXT_STRONG)
                 } else {
                     Style::default().fg(Color::Rgb(73, 81, 86))
                 };
@@ -186,7 +186,7 @@ pub(in crate::app) fn render_tab_bar(
     f.render_widget(
         Tabs::new(tab_titles)
             .select(usize::MAX)
-            .style(Style::default().fg(palette::TEXT_SECONDARY.color()))
+            .style(Style::default().fg(palette::TEXT_SECONDARY))
             .highlight_style(Style::default())
             .divider(Span::raw(""))
             .padding("", ""),

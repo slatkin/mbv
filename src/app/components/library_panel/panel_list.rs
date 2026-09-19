@@ -146,7 +146,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::SELECTED_ROW_BG.color()
+            palette::SELECTED_ROW_BG
         );
 
         terminal
@@ -160,7 +160,7 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::SELECTED_ROW_BG.color()
+            palette::SELECTED_ROW_BG
         );
     }
 

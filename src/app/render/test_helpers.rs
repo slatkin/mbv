@@ -105,7 +105,7 @@ pub fn render_scrollbar_column(height: u16, max_offset: usize, offset: usize) ->
             Rect::new(0, 0, 1, height),
             max_offset,
             offset,
-            palette::TEXT_METADATA.color(),
+            palette::TEXT_METADATA,
         );
     })
     .unwrap();
@@ -127,7 +127,7 @@ pub fn render_scrollbar_column_with_viewport(
             content_length,
             viewport_content_length,
             offset,
-            palette::TEXT_METADATA.color(),
+            palette::TEXT_METADATA,
         );
     })
     .unwrap();

@@ -188,7 +188,7 @@ fn playback_status_pill_follows_the_table() {
             f,
             row,
             "Title",
-            palette::TEXT_STRONG.color(),
+            palette::TEXT_STRONG,
             &mut context,
         );
         let _ = (&mut marquee, &marquee_at);

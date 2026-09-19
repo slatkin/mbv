@@ -80,7 +80,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             frame.render_widget(
                 Paragraph::new(Span::styled(
                     bar,
-                    Style::default().fg(palette::PROGRESS_TRACK.color()),
+                    Style::default().fg(palette::PROGRESS_TRACK),
                 ))
                 .style(Style::default().bg(panel_bg)),
                 seek_area,
@@ -129,7 +129,7 @@ pub(in crate::app) fn render_player_panel(frame: &mut Frame, mut ctx: PlaybackRe
             if let Some((title, _has_link)) = ctx.idle_feed_title.clone() {
                 let spans = marquee_spans(
                     &mut ctx,
-                    &[(title, palette::ACCENT.color())],
+                    &[(title, palette::ACCENT)],
                     title_area.width as usize,
                 );
                 frame.render_widget(
@@ -177,11 +177,11 @@ fn render_seekbar(
         Paragraph::new(Line::from(vec![
             Span::styled(
                 "\u{2594}".repeat(filled),
-                Style::default().fg(palette::ACCENT.color()),
+                Style::default().fg(palette::ACCENT),
             ),
             Span::styled(
                 "\u{2594}".repeat(width - filled),
-                Style::default().fg(palette::PROGRESS_TRACK.color()),
+                Style::default().fg(palette::PROGRESS_TRACK),
             ),
         ]))
         .style(Style::default().bg(panel_bg)),
@@ -202,8 +202,8 @@ fn split_title_rows(surface: palette::Surface) -> bool {
 /// role to a palette role.
 pub(in crate::app) fn title_part_fg(role: PlaybackTitlePartRole) -> Color {
     match role {
-        PlaybackTitlePartRole::Title => palette::PLAYBACK_TITLE_FG.color(),
-        PlaybackTitlePartRole::Context => palette::PLAYBACK_CONTEXT_FG.color(),
+        PlaybackTitlePartRole::Title => palette::PLAYBACK_TITLE_FG,
+        PlaybackTitlePartRole::Context => palette::PLAYBACK_CONTEXT_FG,
     }
 }
 
@@ -219,35 +219,35 @@ struct TransportGlyphs {
 
 fn control_glyphs(ctx: &PlaybackRenderContext<'_>, paused: bool) -> TransportGlyphs {
     let play = if paused {
-        (play_icon(ctx.use_nerd_fonts), palette::ACCENT.color())
+        (play_icon(ctx.use_nerd_fonts), palette::ACCENT)
     } else {
         (
             if ctx.use_nerd_fonts { "\u{f04c}" } else { "||" },
-            palette::TEXT_FOCUS_ACCENT.color(),
+            palette::TEXT_FOCUS_ACCENT,
         )
     };
     let stop = (
         if ctx.use_nerd_fonts { "\u{f04d}" } else { "X" },
         if ctx.stop_available {
-            palette::STATUS_ERROR.color()
+            palette::STATUS_ERROR
         } else {
-            palette::TEXT_MUTED.color()
+            palette::TEXT_MUTED
         },
     );
     let prev = (
         if ctx.use_nerd_fonts { "\u{f048}" } else { "<<" },
         if ctx.prev_available {
-            palette::TEXT_STRONG.color()
+            palette::TEXT_STRONG
         } else {
-            palette::TEXT_MUTED.color()
+            palette::TEXT_MUTED
         },
     );
     let next = (
         if ctx.use_nerd_fonts { "\u{f051}" } else { ">>" },
         if ctx.next_available {
-            palette::TEXT_STRONG.color()
+            palette::TEXT_STRONG
         } else {
-            palette::TEXT_MUTED.color()
+            palette::TEXT_MUTED
         },
     );
     TransportGlyphs {
@@ -354,18 +354,18 @@ fn status_pill_spans(ctx: &PlaybackRenderContext<'_>) -> Vec<Span<'static>> {
                 codec_value_next = true;
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_META_FG.color()),
+                    span.style.fg(palette::PLAYBACK_META_FG),
                 )
             } else if codec_value_next {
                 codec_value_next = false;
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_VALUE_FG.color()),
+                    span.style.fg(palette::PLAYBACK_VALUE_FG),
                 )
             } else if is_caption {
                 Span::styled(
                     span.content.to_string(),
-                    span.style.fg(palette::PLAYBACK_META_FG.color()),
+                    span.style.fg(palette::PLAYBACK_META_FG),
                 )
             } else {
                 span
@@ -465,9 +465,7 @@ fn render_queue_title_rows(
         row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
         row.push(Span::styled(
             time_text,
-            Style::default()
-                .fg(palette::PLAYBACK_META_FG.color())
-                .bg(panel_bg),
+            Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
         ));
         row.push(Span::styled(" ", Style::default().bg(panel_bg)));
         frame.render_widget(
@@ -517,9 +515,7 @@ fn render_queue_title_rows(
     row.push(Span::styled(" ".repeat(gap), Style::default().bg(panel_bg)));
     row.push(Span::styled(
         time_text,
-        Style::default()
-            .fg(palette::PLAYBACK_META_FG.color())
-            .bg(panel_bg),
+        Style::default().fg(palette::PLAYBACK_META_FG).bg(panel_bg),
     ));
     row.push(Span::styled(" ", Style::default().bg(panel_bg)));
     frame.render_widget(
@@ -619,10 +615,7 @@ pub(in crate::app) fn render_title_row(
     right.insert(0, Span::raw(" "));
     right.insert(
         0,
-        Span::styled(
-            pos_str,
-            Style::default().fg(palette::PLAYBACK_META_FG.color()),
-        ),
+        Span::styled(pos_str, Style::default().fg(palette::PLAYBACK_META_FG)),
     );
     let right_w: u16 = right.iter().map(|span| span.content.width() as u16).sum();
     let glyph_text = format!("{} ", glyphs.play.0);
@@ -782,7 +775,7 @@ mod tests {
                     f,
                     Rect::new(0, 0, 60, 1),
                     "",
-                    palette::TEXT_STRONG.color(),
+                    palette::TEXT_STRONG,
                     &mut ctx,
                 )
             })
@@ -851,7 +844,7 @@ mod tests {
                     f,
                     Rect::new(0, 0, 60, 1),
                     "T",
-                    palette::TEXT_STRONG.color(),
+                    palette::TEXT_STRONG,
                     &mut ctx,
                 )
             })
@@ -867,7 +860,7 @@ mod tests {
         );
         assert_eq!(
             buf[(prev as u16, 0)].fg,
-            palette::TEXT_STRONG.color(),
+            palette::TEXT_STRONG,
             "prev paints white: {row:?}"
         );
         // Collapse: below the buttons-fit width, prev vanishes with the rest.
@@ -900,7 +893,7 @@ mod tests {
                     f,
                     Rect::new(0, 0, 12, 1),
                     "T",
-                    palette::TEXT_STRONG.color(),
+                    palette::TEXT_STRONG,
                     &mut narrow,
                 )
             })
@@ -971,7 +964,7 @@ mod tests {
                     f,
                     Rect::new(0, 0, 60, 1),
                     "",
-                    palette::TEXT_STRONG.color(),
+                    palette::TEXT_STRONG,
                     &mut ctx,
                 )
             })
@@ -1048,7 +1041,7 @@ mod tests {
                     Rect::new(0, 1, 40, 1),
                     Some(Rect::new(0, 2, 40, 1)),
                     "",
-                    palette::TEXT_STRONG.color(),
+                    palette::TEXT_STRONG,
                     &mut ctx,
                 )
             })
@@ -1138,7 +1131,7 @@ mod tests {
                     Rect::new(0, 1, 40, 1),
                     None,
                     "Title",
-                    palette::TEXT_STRONG.color(),
+                    palette::TEXT_STRONG,
                     &mut ctx,
                 )
             })
@@ -1229,7 +1222,7 @@ mod tests {
                     f,
                     Rect::new(0, 0, 40, 1),
                     "Title",
-                    palette::TEXT_STRONG.color(),
+                    palette::TEXT_STRONG,
                     &mut ctx,
                 )
             })

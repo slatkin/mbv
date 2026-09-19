@@ -57,7 +57,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 Span::styled(
                     text.clone(),
                     Style::default()
-                        .fg(palette::TEXT_METADATA.color())
+                        .fg(palette::TEXT_METADATA)
                         .add_modifier(Modifier::BOLD),
                 ),
             ],
@@ -87,15 +87,15 @@ pub(in crate::app) fn media_list_row<Target>(
                 // A now-playing row never carries secondary (Home, the only
                 // split-row producer, emits `Ordinary` rows), so the palette
                 // below never applies to one.
-                MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS.color(), None, None),
-                MediaSemanticState::Played => (palette::PLAYED_ROW_FG.color(), None, None),
+                MediaSemanticState::Ordinary => (palette::TEXT_EMPHASIS, None, None),
+                MediaSemanticState::Played => (palette::PLAYED_ROW_FG, None, None),
                 MediaSemanticState::Active { progress } => (
-                    palette::TEXT_EMPHASIS.color(),
+                    palette::TEXT_EMPHASIS,
                     (*progress).map(|value| format!("{}%", value.percent())),
                     None,
                 ),
                 MediaSemanticState::NowPlaying { progress } => (
-                    palette::TEXT_EMPHASIS.color(),
+                    palette::TEXT_EMPHASIS,
                     (*progress).map(|value| format!("{}%", value.percent())),
                     Some("▶ "),
                 ),
@@ -110,7 +110,7 @@ pub(in crate::app) fn media_list_row<Target>(
             let mut published: Option<&str> = None;
             match trailing {
                 Some(MediaListTrailing::Year(text)) if !text.is_empty() => {
-                    trailing_pieces.push((text.clone(), palette::STATUS_AVAILABLE.color()));
+                    trailing_pieces.push((text.clone(), palette::STATUS_AVAILABLE));
                 }
                 Some(MediaListTrailing::Published(text)) if !text.is_empty() => {
                     published = Some(text.as_str());
@@ -118,7 +118,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 _ => {}
             }
             if let Some(pct) = progress {
-                trailing_pieces.push((pct, palette::TEXT_METADATA.color()));
+                trailing_pieces.push((pct, palette::TEXT_METADATA));
             }
             // `Collection` rows never show a duration, even if one is
             // projected — one enforcement point so parents can't re-diverge.
@@ -163,14 +163,14 @@ pub(in crate::app) fn media_list_row<Target>(
             // title role. (`parts` feeds the selected-row marquee path;
             // unselected split rows paint the same roles below.)
             let secondary_color = match semantic_state {
-                MediaSemanticState::Played => palette::PLAYED_ROW_FG.color(),
-                _ => palette::SPLIT_ROW_TITLE_FG.color(),
+                MediaSemanticState::Played => palette::PLAYED_ROW_FG,
+                _ => palette::SPLIT_ROW_TITLE_FG,
             };
             let parts: Vec<(String, Color)> =
                 match secondary.as_deref().filter(|sec| !sec.is_empty()) {
                     Some(sec) => vec![
-                        (primary.clone(), palette::SPLIT_ROW_CONTEXT_FG.color()),
-                        (" ".into(), palette::SPLIT_ROW_CONTEXT_FG.color()),
+                        (primary.clone(), palette::SPLIT_ROW_CONTEXT_FG),
+                        (" ".into(), palette::SPLIT_ROW_CONTEXT_FG),
                         (sec.to_owned(), secondary_color),
                     ],
                     None => vec![(primary.clone(), title_color)],
@@ -230,10 +230,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 });
             let mut spans = vec![Span::raw("  ")];
             if let Some(icon) = live_icon {
-                spans.push(Span::styled(
-                    icon,
-                    Style::default().fg(palette::ACCENT.color()),
-                ));
+                spans.push(Span::styled(icon, Style::default().fg(palette::ACCENT)));
             }
             spans.extend(title_spans);
             if !trailing_pieces.is_empty() {
@@ -253,7 +250,7 @@ pub(in crate::app) fn media_list_row<Target>(
                         trunc_str(date, DATE_GUTTER_W),
                         width = DATE_GUTTER_W
                     ),
-                    Style::default().fg(palette::ROW_DATE_FG.color()),
+                    Style::default().fg(palette::ROW_DATE_FG),
                 ));
             }
             if let Some(dur) = duration {
@@ -262,7 +259,7 @@ pub(in crate::app) fn media_list_row<Target>(
                 spans.push(Span::raw(" ".repeat(pad)));
                 spans.push(Span::styled(
                     dur.to_owned(),
-                    Style::default().fg(palette::DURATION.color()),
+                    Style::default().fg(palette::DURATION),
                 ));
             }
             // Pad the selected row's spans out to the full row width (up to

@@ -36,7 +36,7 @@ pub(in crate::app) fn render_confirm_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             message,
-            Style::default().fg(super::super::super::palette::TEXT_STRONG.color()),
+            Style::default().fg(super::super::super::palette::TEXT_STRONG),
         )),
         Rect {
             x: inner.x + 1,
@@ -48,7 +48,7 @@ pub(in crate::app) fn render_confirm_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             hint,
-            Style::default().fg(super::super::super::palette::TEXT_SECONDARY.color()),
+            Style::default().fg(super::super::super::palette::TEXT_SECONDARY),
         )),
         Rect {
             x: inner.x + 1,

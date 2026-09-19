@@ -202,14 +202,14 @@ fn paint_title_and_meta(
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
-        style: ratatui::style::Style::default().fg(palette::TEXT_HERO_TITLE.color()),
+        style: ratatui::style::Style::default().fg(palette::TEXT_HERO_TITLE),
     });
     let mut cycle = 0usize;
     for (index, row) in facts.meta_rows.iter().enumerate() {
         let fg = if facts.duration_row == Some(index) {
-            palette::DURATION.color()
+            palette::DURATION
         } else {
-            let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()].color();
+            let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()];
             cycle += 1;
             fg
         };
@@ -531,7 +531,7 @@ mod hero_header_tests {
             let y = artwork.bottom() + 2 + index as u16;
             assert_eq!(
                 buf[(AREA.x, y)].style().fg,
-                Some(expected.color()),
+                Some(*expected),
                 "meta row {index} colour"
             );
         }
@@ -555,17 +555,17 @@ mod hero_header_tests {
         let row_y = |index: u16| artwork.bottom() + 2 + index;
         assert_eq!(
             buf[(AREA.x, row_y(0))].style().fg,
-            Some(palette::HERO_META_ROLES[0].color()),
+            Some(palette::HERO_META_ROLES[0]),
             "row before the duration keeps its cycle colour"
         );
         assert_eq!(
             buf[(AREA.x, row_y(1))].style().fg,
-            Some(palette::DURATION.color()),
+            Some(palette::DURATION),
             "duration row paints the DURATION role"
         );
         assert_eq!(
             buf[(AREA.x, row_y(2))].style().fg,
-            Some(palette::HERO_META_ROLES[1].color()),
+            Some(palette::HERO_META_ROLES[1]),
             "the cycle skips the duration row"
         );
     }

@@ -83,10 +83,10 @@ fn sample_to_cell(sample: StereoSample, width: u16, height: u16) -> Option<(u16,
 
 fn point_color(sample: StereoSample) -> Color {
     match sample.left.abs().max(sample.right.abs()) * DISPLAY_GAIN {
-        amplitude if amplitude < 0.25 => palette::ACCENT.color(),
-        amplitude if amplitude < 0.5 => palette::TEXT_METADATA.color(),
-        amplitude if amplitude < 0.75 => palette::TEXT_FOCUS_ACCENT.color(),
-        _ => palette::STATUS_ERROR.color(),
+        amplitude if amplitude < 0.25 => palette::ACCENT,
+        amplitude if amplitude < 0.5 => palette::TEXT_METADATA,
+        amplitude if amplitude < 0.75 => palette::TEXT_FOCUS_ACCENT,
+        _ => palette::STATUS_ERROR,
     }
 }
 
@@ -156,10 +156,10 @@ mod tests {
     #[test]
     fn point_color_uses_amplitude_bands() {
         for (amplitude, expected) in [
-            (0.04, palette::ACCENT.color()),
-            (0.08, palette::TEXT_METADATA.color()),
-            (0.15, palette::TEXT_FOCUS_ACCENT.color()),
-            (0.25, palette::STATUS_ERROR.color()),
+            (0.04, palette::ACCENT),
+            (0.08, palette::TEXT_METADATA),
+            (0.15, palette::TEXT_FOCUS_ACCENT),
+            (0.25, palette::STATUS_ERROR),
         ] {
             assert_eq!(
                 point_color(StereoSample {
@@ -179,11 +179,7 @@ mod tests {
         let backend = TestBackend::new(20, 10);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_visualizer(
-                f,
-                Rect::default(),
-                crate::app::palette::SURFACE_BACKDROP.color(),
-            );
+            app.render_visualizer(f, Rect::default(), crate::app::palette::SURFACE_BACKDROP);
         })
         .unwrap();
     }

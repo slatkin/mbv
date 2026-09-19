@@ -23,6 +23,7 @@
 #![cfg_attr(not(test), allow(dead_code))]
 
 use super::*;
+use ratatui::style::Color;
 
 /// The nesting level of a rendered surface (design D2).
 ///
@@ -57,7 +58,7 @@ impl Level {
     /// recess, and the TV/Music pane content boxes) reads as content.
     /// `ChromeBand` and `Popup` have no focus-driven row in main; their value
     /// records the level's intent for one.
-    pub(super) const fn focused_fill(self) -> Palette {
+    pub(super) const fn focused_fill(self) -> Color {
         match self {
             Level::ColumnPane
             | Level::ContentBody
@@ -74,7 +75,7 @@ impl Level {
     /// appearance; recesses, chrome bands and popups paint their own value
     /// today (design D2: "as each surface paints today"), so they have no
     /// default to deviate from.
-    pub(super) const fn resting_default(self) -> Option<Palette> {
+    pub(super) const fn resting_default(self) -> Option<Color> {
         match self {
             Level::ColumnPane | Level::ContentBody => Some(SURFACE_RESTING),
             Level::Recess | Level::ChromeBand | Level::Popup => None,
@@ -107,11 +108,7 @@ pub(super) struct Row {
     /// `#48584e`) while focused, instead of the level's focused fill.
     pub(super) soft: bool,
     /// The value the row paints while resting: main's value for that surface.
-    /// `None` for the one raw-special row (`PopupDimBackdrop`), whose blend
-    /// base (`Color::Black`, `surface_table::DIM_BLEND_BASE`) is a ratatui
-    /// mechanic outside the palette (design.md) and therefore cannot be a
-    /// palette assignment.
-    pub(super) resting: Option<Palette>,
+    pub(super) resting: Color,
 }
 
 /// Declares the closed `Surface` set and the enumerable [`Surface::ALL`] list

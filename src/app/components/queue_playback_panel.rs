@@ -366,8 +366,7 @@ mod tests {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
         panel.transport.show_controls = true;
-        panel.transport.now_playing_title =
-            Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG.color()));
+        panel.transport.now_playing_title = Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.title_parts = Some(parts);
         panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -429,7 +428,7 @@ mod tests {
                     &top,
                     &top_fgs,
                     context,
-                    palette::PLAYBACK_CONTEXT_FG.color(),
+                    palette::PLAYBACK_CONTEXT_FG,
                     "the context part",
                 );
                 assert!(
@@ -446,7 +445,7 @@ mod tests {
                     &mid,
                     &mid_fgs,
                     title,
-                    palette::PLAYBACK_TITLE_FG.color(),
+                    palette::PLAYBACK_TITLE_FG,
                     "the title part",
                 );
                 assert!(!mid.contains(context), "the show stays on its row: {mid:?}");
@@ -454,7 +453,7 @@ mod tests {
                 let title_start = mid.find(title).unwrap();
                 assert_ne!(
                     mid_fgs[title_start - 1],
-                    palette::PLAYBACK_CONTEXT_FG.color(),
+                    palette::PLAYBACK_CONTEXT_FG,
                     "no context part beside the title: {mid:?}"
                 );
                 // The transport controls land on the band's bottom row.
@@ -472,7 +471,7 @@ mod tests {
                     &top,
                     &top_fgs,
                     title,
-                    palette::PLAYBACK_TITLE_FG.color(),
+                    palette::PLAYBACK_TITLE_FG,
                     "the title part",
                 );
                 assert!(top.contains('/'), "the time rides the title row: {top:?}");
@@ -527,8 +526,7 @@ mod tests {
     fn active_panel_paints_the_transport_its_shell_rect_names() {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.transport.now_playing_title =
-            Some(("Example".into(), palette::PLAYBACK_VALUE_FG.color()));
+        panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.show_controls = true;
         panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();
@@ -554,8 +552,7 @@ mod tests {
     fn transport_clicks_resolve_against_retained_geometry() {
         let mut panel = QueuePlaybackPanel::new();
         panel.set_header(NowPlayingStatus::Playing, "music-box".into(), false);
-        panel.transport.now_playing_title =
-            Some(("Example".into(), palette::PLAYBACK_VALUE_FG.color()));
+        panel.transport.now_playing_title = Some(("Example".into(), palette::PLAYBACK_VALUE_FG));
         panel.transport.show_controls = true;
         panel.set_transport_area(Some(Rect::new(0, 2, 40, 4)));
         let mut terminal = Terminal::new(TestBackend::new(40, 8)).unwrap();

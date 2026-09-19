@@ -55,10 +55,7 @@ pub(in crate::app) fn render_multiselect_content(
 
     let hint = "Space toggle  ·  Esc / Enter close";
     f.render_widget(
-        Paragraph::new(Span::styled(
-            hint,
-            Style::default().fg(palette::TEXT_MUTED.color()),
-        )),
+        Paragraph::new(Span::styled(hint, Style::default().fg(palette::TEXT_MUTED))),
         Rect {
             x: inner.x,
             y: inner.y,
@@ -110,14 +107,14 @@ pub(in crate::app) fn render_multiselect_content(
             let arrow = if focused { "▸ " } else { "  " };
             let check = if *is_hidden { "[x]" } else { "[ ]" };
             let check_style = if focused {
-                Style::default().fg(palette::TEXT_ACCENT_MUTED.color())
+                Style::default().fg(palette::TEXT_ACCENT_MUTED)
             } else {
-                Style::default().fg(palette::TEXT_MUTED.color())
+                Style::default().fg(palette::TEXT_MUTED)
             };
             let name_style = if focused {
-                Style::default().fg(palette::TEXT_PRIMARY.color())
+                Style::default().fg(palette::TEXT_PRIMARY)
             } else {
-                Style::default().fg(palette::TEXT_SECONDARY.color())
+                Style::default().fg(palette::TEXT_SECONDARY)
             };
             Line::from(vec![
                 Span::raw(arrow),

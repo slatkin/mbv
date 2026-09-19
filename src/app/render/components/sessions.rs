@@ -45,7 +45,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
         f.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::TEXT_SECONDARY.color()),
+                Style::default().fg(palette::TEXT_SECONDARY),
             )),
             list_area,
         );
@@ -55,7 +55,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
         f.render_widget(
             Paragraph::new(Span::styled(
                 " No sessions or cast receivers found",
-                Style::default().fg(palette::TEXT_SECONDARY.color()),
+                Style::default().fg(palette::TEXT_SECONDARY),
             )),
             list_area,
         );
@@ -83,20 +83,15 @@ pub(in crate::app) fn render_sessions_overlay_content(
 
         let selected = i == *cursor;
         let name_color = if selected {
-            palette::ACCENT_ACTIVE.color()
+            palette::ACCENT_ACTIVE
         } else {
-            palette::TEXT_PRIMARY.color()
+            palette::TEXT_PRIMARY
         };
-        let dim = Style::default().fg(palette::TEXT_MUTED.color());
+        let dim = Style::default().fg(palette::TEXT_MUTED);
 
         if selected {
             let bar: Vec<Line> = (0..CARD_H)
-                .map(|_| {
-                    Line::from(Span::styled(
-                        "▌",
-                        Style::default().fg(palette::ACCENT.color()),
-                    ))
-                })
+                .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::ACCENT))))
                 .collect();
             f.render_widget(
                 Paragraph::new(bar),
@@ -131,7 +126,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         trunc_str(&meta, text_w),
-                        dim.fg(palette::TEXT_SECONDARY.color()),
+                        dim.fg(palette::TEXT_SECONDARY),
                     )),
                     Rect {
                         x: text_x,
@@ -195,7 +190,7 @@ pub(in crate::app) fn render_sessions_overlay_content(
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         trunc_str(&meta, text_w),
-                        dim.fg(palette::TEXT_SECONDARY.color()),
+                        dim.fg(palette::TEXT_SECONDARY),
                     )),
                     Rect {
                         x: text_x,
@@ -258,12 +253,12 @@ fn render_kind_labelled_line(
         .saturating_sub(kind_tag.len())
         .saturating_sub(badge.len());
     let name_line = Line::from(vec![
-        Span::styled(kind_tag, Style::default().fg(palette::TEXT_MUTED.color())),
+        Span::styled(kind_tag, Style::default().fg(palette::TEXT_MUTED)),
         Span::styled(
             trunc_str(name, name_max),
             Style::default().fg(name_color).add_modifier(Modifier::BOLD),
         ),
-        Span::styled(badge, Style::default().fg(palette::ACCENT_ACTIVE.color())),
+        Span::styled(badge, Style::default().fg(palette::ACCENT_ACTIVE)),
     ]);
     f.render_widget(
         Paragraph::new(name_line),

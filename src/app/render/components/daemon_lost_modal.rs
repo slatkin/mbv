@@ -31,22 +31,22 @@ pub(in crate::app) fn render_daemon_lost_modal_content(
 
     let mut lines = vec![Line::from(Span::styled(
         "The local daemon connection was lost unexpectedly.",
-        Style::default().fg(palette::TEXT_STRONG.color()),
+        Style::default().fg(palette::TEXT_STRONG),
     ))];
     if let Some(title) = last_playing_title {
         lines.push(Line::from(Span::styled(
             format!("Was playing: {title}"),
-            Style::default().fg(palette::TEXT_SECONDARY.color()),
+            Style::default().fg(palette::TEXT_SECONDARY),
         )));
     }
     lines.push(Line::from(Span::styled(
         format!("Daemon log: {daemon_log_path}"),
-        Style::default().fg(palette::TEXT_SECONDARY.color()),
+        Style::default().fg(palette::TEXT_SECONDARY),
     )));
     if let Some(error) = restart_error {
         lines.push(Line::from(Span::styled(
             format!("Restart failed: {error}"),
-            Style::default().fg(palette::STATUS_ERROR.color()),
+            Style::default().fg(palette::STATUS_ERROR),
         )));
     }
     f.render_widget(
@@ -61,7 +61,7 @@ pub(in crate::app) fn render_daemon_lost_modal_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             "[R] Restart and resume    [S] Restart, don't resume    [Q] Quit",
-            Style::default().fg(palette::TEXT_EMPHASIS.color()),
+            Style::default().fg(palette::TEXT_EMPHASIS),
         )),
         Rect {
             x: inner.x + 1,

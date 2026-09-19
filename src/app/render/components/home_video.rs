@@ -91,16 +91,16 @@ pub(in crate::app::render) fn render_home_video_item(
     let tx = content_area.x + text_inset;
     let tw = (text_w as u16).saturating_sub(2 * text_inset);
     let title_color = if expanded {
-        palette::TEXT_FOCUS_ACCENT.color()
+        palette::TEXT_FOCUS_ACCENT
     } else if selected && focused {
-        palette::ACCENT_ACTIVE.color()
+        palette::ACCENT_ACTIVE
     } else if focused {
         // The unselected-unfocused title role (was the shared
         // `focused_or_subtle` helper, inlined when its last consumer became
         // test-only with the legacy painters' removal).
-        palette::TEXT_EMPHASIS.color()
+        palette::TEXT_EMPHASIS
     } else {
-        palette::TEXT_SECONDARY.color()
+        palette::TEXT_SECONDARY
     };
     let title_style = if selected && focused {
         Style::default()

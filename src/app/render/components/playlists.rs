@@ -58,7 +58,7 @@ pub(in crate::app) fn render_save_playlist_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             input_line,
-            Style::default().fg(palette::TEXT_STRONG.color()),
+            Style::default().fg(palette::TEXT_STRONG),
         )),
         Rect {
             x: inner.x + 1,
@@ -70,7 +70,7 @@ pub(in crate::app) fn render_save_playlist_content(
     f.render_widget(
         Paragraph::new(Span::styled(
             hint,
-            Style::default().fg(palette::TEXT_SECONDARY.color()),
+            Style::default().fg(palette::TEXT_SECONDARY),
         )),
         Rect {
             x: inner.x + 1,
@@ -159,7 +159,7 @@ pub(in crate::app) fn render_playlists_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::TEXT_SECONDARY.color()),
+                Style::default().fg(palette::TEXT_SECONDARY),
             )),
             content,
         );
@@ -169,7 +169,7 @@ pub(in crate::app) fn render_playlists_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " No playlists found",
-                Style::default().fg(palette::TEXT_SECONDARY.color()),
+                Style::default().fg(palette::TEXT_SECONDARY),
             )),
             content,
         );
@@ -190,11 +190,11 @@ pub(in crate::app) fn render_playlists_content(
         let selected = index == *playlists_cursor;
         let loaded = loaded_id.is_some_and(|id| id == playlist.id);
         let fg = if selected {
-            palette::ACCENT_ACTIVE.color()
+            palette::ACCENT_ACTIVE
         } else if loaded {
-            palette::TEXT_ACCENT_MUTED.color()
+            palette::TEXT_ACCENT_MUTED
         } else {
-            palette::TEXT_PRIMARY.color()
+            palette::TEXT_PRIMARY
         };
         let count = if playlist.total_count > 0 {
             format!(" ({})", playlist.total_count)
@@ -221,7 +221,7 @@ pub(in crate::app) fn render_playlists_content(
                     ),
                     Style::default().fg(fg).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(count, Style::default().fg(palette::TEXT_MUTED.color())),
+                Span::styled(count, Style::default().fg(palette::TEXT_MUTED)),
             ],
         );
         geometry.playlist_rows.push((row, index));
@@ -242,7 +242,7 @@ fn render_open_playlist_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Loading…",
-                Style::default().fg(palette::TEXT_SECONDARY.color()),
+                Style::default().fg(palette::TEXT_SECONDARY),
             )),
             content,
         );
@@ -252,7 +252,7 @@ fn render_open_playlist_content(
         frame.render_widget(
             Paragraph::new(Span::styled(
                 " Playlist is empty",
-                Style::default().fg(palette::TEXT_SECONDARY.color()),
+                Style::default().fg(palette::TEXT_SECONDARY),
             )),
             content,
         );
@@ -281,9 +281,9 @@ fn render_open_playlist_content(
         let index = *scroll + visible;
         let selected = index == *cursor;
         let fg = if selected {
-            palette::ACCENT_ACTIVE.color()
+            palette::ACCENT_ACTIVE
         } else {
-            palette::TEXT_PRIMARY.color()
+            palette::TEXT_PRIMARY
         };
         let num = format!("{:>2}. ", index + 1);
         let text_width = chrome::panel_row_text_width(content.width).saturating_sub(num.len());
@@ -313,7 +313,7 @@ fn render_open_playlist_content(
             content.width,
             selected,
             vec![
-                Span::styled(num, Style::default().fg(palette::TEXT_MUTED.color())),
+                Span::styled(num, Style::default().fg(palette::TEXT_MUTED)),
                 Span::styled(line1, Style::default().fg(fg)),
             ],
         );
@@ -323,7 +323,7 @@ fn render_open_playlist_content(
                     Span::raw(indent),
                     Span::styled(
                         trunc_str(&line2, text_width),
-                        Style::default().fg(palette::TEXT_SECONDARY.color()),
+                        Style::default().fg(palette::TEXT_SECONDARY),
                     ),
                 ])),
                 Rect {
@@ -383,7 +383,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     " Loading…",
-                    Style::default().fg(palette::TEXT_SECONDARY.color()),
+                    Style::default().fg(palette::TEXT_SECONDARY),
                 )),
                 content,
             );
@@ -393,7 +393,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     " No playlists found",
-                    Style::default().fg(palette::TEXT_SECONDARY.color()),
+                    Style::default().fg(palette::TEXT_SECONDARY),
                 )),
                 content,
             );
@@ -424,11 +424,11 @@ impl App {
             let selected = abs_idx == self.playlists_cursor;
             let is_loaded = loaded_id.map(|id| id == pl.id.as_str()).unwrap_or(false);
             let fg = if selected {
-                palette::ACCENT_ACTIVE.color()
+                palette::ACCENT_ACTIVE
             } else if is_loaded {
-                palette::TEXT_ACCENT_MUTED.color()
+                palette::TEXT_ACCENT_MUTED
             } else {
-                palette::TEXT_PRIMARY.color()
+                palette::TEXT_PRIMARY
             };
             let count_str = if pl.total_count > 0 {
                 format!(" ({})", pl.total_count)
@@ -449,7 +449,7 @@ impl App {
                         trunc_str(&pl.name, name_max),
                         Style::default().fg(fg).add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(count_str, Style::default().fg(palette::TEXT_MUTED.color())),
+                    Span::styled(count_str, Style::default().fg(palette::TEXT_MUTED)),
                 ],
             );
         }
@@ -468,7 +468,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     " Loading…",
-                    Style::default().fg(palette::TEXT_SECONDARY.color()),
+                    Style::default().fg(palette::TEXT_SECONDARY),
                 )),
                 content,
             );
@@ -478,7 +478,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     " Playlist is empty",
-                    Style::default().fg(palette::TEXT_SECONDARY.color()),
+                    Style::default().fg(palette::TEXT_SECONDARY),
                 )),
                 content,
             );
@@ -531,9 +531,9 @@ impl App {
             let abs_idx = self.playlists_open_scroll + vi;
             let selected = abs_idx == self.playlists_open_cursor;
             let fg = if selected {
-                palette::ACCENT_ACTIVE.color()
+                palette::ACCENT_ACTIVE
             } else {
-                palette::TEXT_PRIMARY.color()
+                palette::TEXT_PRIMARY
             };
             let num_str = format!("{:>2}. ", abs_idx + 1);
             let text_w = chrome::panel_row_text_width(content.width).saturating_sub(num_str.len());
@@ -556,7 +556,7 @@ impl App {
                 content.width,
                 selected,
                 vec![
-                    Span::styled(num_str, Style::default().fg(palette::TEXT_MUTED.color())),
+                    Span::styled(num_str, Style::default().fg(palette::TEXT_MUTED)),
                     Span::styled(line1, Style::default().fg(fg)),
                 ],
             );
@@ -567,7 +567,7 @@ impl App {
                         Span::raw(&indent),
                         Span::styled(
                             trunc_str(&line2, text_w),
-                            Style::default().fg(palette::TEXT_SECONDARY.color()),
+                            Style::default().fg(palette::TEXT_SECONDARY),
                         ),
                     ])),
                     Rect {

@@ -38,7 +38,7 @@ fn render_modal_frame_inner(f: &mut Frame, title: &str, w: u16, h: u16, bg: Colo
         .title(Span::styled(
             title.to_string(),
             Style::default()
-                .fg(palette::TEXT_PRIMARY.color())
+                .fg(palette::TEXT_PRIMARY)
                 .add_modifier(Modifier::BOLD),
         ))
         .title_alignment(Alignment::Center)

@@ -1,7 +1,7 @@
 // Raw colour primitives live in `render::theme` and are private to that
 // module (openspec/changes/enforce-mbv-ui-design-system step 2); this
 // re-export keeps every existing `palette::<role>` call site resolving.
-pub(in crate::app) use crate::app::render::{
+pub(crate) use crate::app::render::{
     ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, DURATION, HERO_CREDITS_NAME,
     HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR, HINT_PILL_FILLS,
     INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
@@ -14,13 +14,13 @@ pub(in crate::app) use crate::app::render::{
 
 // Hero-title role, kept off the main list above to mark it as a late addition
 // (wide + narrow hero header title).
-pub(in crate::app) use crate::app::render::TEXT_HERO_TITLE;
+pub(crate) use crate::app::render::TEXT_HERO_TITLE;
 // Task 4.2: the retired role names and the value-aliased resolver survive only
 // as test-fed re-exports — each is pinned by a frozen pre-existing test file
 // the neutrality rule forbids editing, so a minimal named re-export stays for
 // exactly those names (see the change report for the per-name reasons).
 #[cfg(test)]
-pub(in crate::app) use crate::app::render::{
+pub(crate) use crate::app::render::{
     resolve_surface_focus, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ARTWORK_PLACEHOLDER,
     SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
 };

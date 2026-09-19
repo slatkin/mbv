@@ -17,7 +17,7 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
         .draw(|f| {
             let area = Rect::new(0, 0, 20, 2);
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP.color())),
+                Block::default().style(Style::default().bg(palette::SURFACE_BACKDROP)),
                 area,
             );
             render_pill_bar(
@@ -36,9 +36,9 @@ fn pill_bar_does_not_paint_the_reserved_spacer_row() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    assert_eq!(buffer[(19, 0)].bg, palette::PILL_ROW_BG.color());
+    assert_eq!(buffer[(19, 0)].bg, palette::PILL_ROW_BG);
     for x in 0..20 {
-        assert_eq!(buffer[(x, 1)].bg, palette::SURFACE_BACKDROP.color());
+        assert_eq!(buffer[(x, 1)].bg, palette::SURFACE_BACKDROP);
     }
 }
 

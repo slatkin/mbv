@@ -666,7 +666,7 @@ impl Component for QueueComponent {
             };
             frame.render_widget(
                 Paragraph::new(self.empty_text.clone())
-                    .style(Style::default().fg(palette::TEXT_EMPHASIS.color())),
+                    .style(Style::default().fg(palette::TEXT_EMPHASIS)),
                 empty_area,
             );
         }

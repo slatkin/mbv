@@ -86,7 +86,7 @@ pub(crate) use screens::sort_filter::{
 // `theme`'s roles are re-exported here (rather than reached directly) so
 // `palette.rs` — a sibling of `render`, not a descendant — can bridge to them;
 // see `palette.rs`'s own re-export.
-pub(in crate::app) use theme::{
+pub(crate) use theme::{
     ACCENT, ACCENT_ACTIVE, ACCENT_AUDIOBOOKSHELF, BORDER_UNFOCUSED, DURATION, HERO_CREDITS_NAME,
     HERO_CREDITS_STRIPE, HERO_META_ROLES, HERO_OVERVIEW_SEPARATOR, HINT_PILL_FILLS,
     INDICATOR_AUDIO_FG, INDICATOR_RESOLUTION_FG, PILL_FG, PILL_OVERFLOW_FG, PILL_SELECTED_FG,
@@ -101,7 +101,7 @@ pub(in crate::app) use theme::{
 // the neutrality rule forbids editing, so a minimal named re-export stays for
 // exactly those names (see the change report for the per-name reasons).
 #[cfg(test)]
-pub(in crate::app) use theme::{
+pub(crate) use theme::{
     resolve_surface_focus, PILL_ROW_BG, PILL_SELECTED_BG, SURFACE_ARTWORK_PLACEHOLDER,
     SURFACE_BACKDROP, SURFACE_CHROME, SURFACE_FOCUSED, SURFACE_PLAYBACK, SURFACE_RESTING,
 };

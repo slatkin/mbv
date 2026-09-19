@@ -103,7 +103,7 @@ fn home_pill_row_and_targets_are_characterized_end_to_end() {
         .0;
     assert_eq!(
         buffer[(selected.x + 1, selected.y)].style().bg,
-        Some(palette::PILL_SELECTED_BG.color()),
+        Some(palette::PILL_SELECTED_BG),
         "selected pill appearance"
     );
     let row_text = (0..buffer.area().width)
@@ -155,7 +155,7 @@ fn wide_home_stripes_alternate_rows_with_the_selected_bar() {
     let (selected, striped) = bgs(true);
     assert_eq!(
         selected,
-        Some(palette::SELECTED_ROW_BG.color()),
+        Some(palette::SELECTED_ROW_BG),
         "the selected first row paints the bar"
     );
     assert_eq!(

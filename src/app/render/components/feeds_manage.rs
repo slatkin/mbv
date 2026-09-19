@@ -61,10 +61,7 @@ fn render_feeds_manage_list(
     );
 
     f.render_widget(
-        Paragraph::new(Span::styled(
-            hint,
-            Style::default().fg(palette::TEXT_MUTED.color()),
-        )),
+        Paragraph::new(Span::styled(hint, Style::default().fg(palette::TEXT_MUTED))),
         Rect {
             x: inner.x,
             y: inner.y,
@@ -84,7 +81,7 @@ fn render_feeds_manage_list(
         f.render_widget(
             Paragraph::new(Span::styled(
                 "No feed subscriptions yet -- press a to add",
-                Style::default().fg(palette::TEXT_SECONDARY.color()),
+                Style::default().fg(palette::TEXT_SECONDARY),
             )),
             list_area,
         );
@@ -121,10 +118,10 @@ fn render_feeds_manage_list(
             let arrow = if focused { "▸ " } else { "  " };
             let name_style = if focused {
                 Style::default()
-                    .fg(palette::TEXT_PRIMARY.color())
+                    .fg(palette::TEXT_PRIMARY)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(palette::TEXT_SECONDARY.color())
+                Style::default().fg(palette::TEXT_SECONDARY)
             };
             let kind_label = match sub.kind {
                 FeedKind::Audio => "[audio]",
@@ -136,11 +133,11 @@ fn render_feeds_manage_list(
                 Span::raw(arrow),
                 Span::styled(sub.name.clone(), name_style),
                 Span::raw(" "),
-                Span::styled(kind_label, Style::default().fg(palette::ACCENT.color())),
+                Span::styled(kind_label, Style::default().fg(palette::ACCENT)),
                 Span::raw(" "),
                 Span::styled(
                     trunc_str(&sub.url, url_max),
-                    Style::default().fg(palette::TEXT_MUTED.color()),
+                    Style::default().fg(palette::TEXT_MUTED),
                 ),
             ])
         })
@@ -176,9 +173,9 @@ fn render_feeds_manage_form(
 
     let field_style = |focused: bool| {
         if focused {
-            Style::default().fg(palette::TEXT_STRONG.color())
+            Style::default().fg(palette::TEXT_STRONG)
         } else {
-            Style::default().fg(palette::TEXT_SECONDARY.color())
+            Style::default().fg(palette::TEXT_SECONDARY)
         }
     };
     let cursor_glyph = "▏";
@@ -247,7 +244,7 @@ fn render_feeds_manage_form(
     f.render_widget(
         Paragraph::new(Span::styled(
             status,
-            Style::default().fg(palette::TEXT_MUTED.color()),
+            Style::default().fg(palette::TEXT_MUTED),
         )),
         Rect {
             x: inner.x + 1,

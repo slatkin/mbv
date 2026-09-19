@@ -138,13 +138,10 @@ fn feeds_wide_left_pane_fills_when_an_entry_is_selected() {
     let (terminal, hero) = render_feeds_panel(vec![feed_entry("entry-1", "Entry One")]);
     assert!(hero.width > 0 && hero.height > 0);
     let buffer = terminal.backend().buffer();
-    assert_eq!(
-        buffer[(hero.x, hero.y)].bg,
-        palette::SURFACE_RESTING.color()
-    );
+    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING.color()
+        palette::SURFACE_RESTING
     );
 }
 
@@ -158,13 +155,10 @@ fn feeds_wide_left_pane_fills_unconditionally_with_no_selection() {
     let (terminal, hero) = render_feeds_panel(vec![]);
     assert!(hero.width > 0 && hero.height > 0, "hero={hero:?}");
     let buffer = terminal.backend().buffer();
-    assert_eq!(
-        buffer[(hero.x, hero.y)].bg,
-        palette::SURFACE_RESTING.color()
-    );
+    assert_eq!(buffer[(hero.x, hero.y)].bg, palette::SURFACE_RESTING);
     assert_eq!(
         buffer[(hero.x, hero.bottom() - 1)].bg,
-        palette::SURFACE_RESTING.color()
+        palette::SURFACE_RESTING
     );
     assert!(buffer_to_string(&terminal).contains("Press r to load feeds"));
 }

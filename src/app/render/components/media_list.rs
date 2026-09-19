@@ -38,7 +38,7 @@ mod wide_row_regression_tests {
                     Rect::new(0, 0, 40, 2),
                     list,
                     focused,
-                    palette::SURFACE_RESTING.color(),
+                    palette::SURFACE_RESTING,
                 );
             })
             .unwrap();
@@ -166,7 +166,7 @@ mod wide_row_regression_tests {
                     Rect::new(0, 0, 20, 2),
                     &mut narrow,
                     true,
-                    palette::SURFACE_RESTING.color(),
+                    palette::SURFACE_RESTING,
                 );
             })
             .unwrap();
@@ -297,7 +297,7 @@ mod wide_row_regression_tests {
     fn selected_row_spans_full_width_with_two_col_indent() {
         const PX: u16 = 10;
         const PW: u16 = 40;
-        let selected_bg = palette::SURFACE_RESTING.color();
+        let selected_bg = palette::SURFACE_RESTING;
 
         for duration in [None, Some("1:05".to_string())] {
             let mut list: WideMediaList<String> = WideMediaList::new();
@@ -384,29 +384,22 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
 
         assert_eq!(buf[(2, 0)].symbol(), "A", "heading label at the indent");
-        assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA.color());
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA);
         assert!(buf[(2, 0)].modifier.contains(Modifier::BOLD));
 
         let year_x = 2 + "Album ".len() as u16;
         assert_eq!(buf[(year_x, 1)].symbol(), "2");
-        assert_eq!(buf[(year_x, 1)].fg, palette::STATUS_AVAILABLE.color());
+        assert_eq!(buf[(year_x, 1)].fg, palette::STATUS_AVAILABLE);
 
         let badge_x = 2 + "Resume ".len() as u16;
         assert_eq!(buf[(badge_x, 2)].symbol(), "4");
-        assert_eq!(buf[(badge_x, 2)].fg, palette::TEXT_METADATA.color());
+        assert_eq!(buf[(badge_x, 2)].fg, palette::TEXT_METADATA);
     }
 
     /// A framed parent may claim a full-width panel while reserving a
@@ -416,7 +409,7 @@ mod wide_row_regression_tests {
     #[test]
     fn zebra_stripes_are_contained_and_selected_row_still_wins() {
         let rect = Rect::new(0, 0, 32, 4);
-        let selected_bg = palette::SURFACE_RESTING.color();
+        let selected_bg = palette::SURFACE_RESTING;
         let zebra_bg = Color::Rgb(60, 72, 65);
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
@@ -492,7 +485,7 @@ mod wide_row_regression_tests {
                     rect,
                     &mut list,
                     true,
-                    palette::SURFACE_RESTING.color(),
+                    palette::SURFACE_RESTING,
                     Some(zebra_bg),
                 );
             })
@@ -500,7 +493,7 @@ mod wide_row_regression_tests {
         let buf = terminal.backend().buffer();
         assert_eq!(
             buf[(2, 0)].bg,
-            palette::SURFACE_RESTING.color(),
+            palette::SURFACE_RESTING,
             "the selected first row keeps the selected fill"
         );
         assert_eq!(buf[(29, 1)].bg, zebra_bg, "stripe reaches the content edge");
@@ -578,7 +571,7 @@ mod wide_row_regression_tests {
                 for x in 0..rect.width {
                     assert_eq!(
                         buffer[(x, y)].bg,
-                        palette::SELECTED_ROW_BG.color(),
+                        palette::SELECTED_ROW_BG,
                         "cursor row {x}"
                     );
                 }
@@ -641,11 +634,7 @@ mod wide_row_regression_tests {
         assert_eq!(buffer[(2, 1)].bg, Color::Reset, "source row 8");
         assert_eq!(buffer[(2, 2)].bg, pair.focused, "source row 9");
         // Source row 10 is the selected row: the bar overrides its stripe.
-        assert_eq!(
-            buffer[(2, 3)].bg,
-            palette::SELECTED_ROW_BG.color(),
-            "source row 10"
-        );
+        assert_eq!(buffer[(2, 3)].bg, palette::SELECTED_ROW_BG, "source row 10");
     }
 
     #[test]
@@ -676,7 +665,7 @@ mod wide_row_regression_tests {
         let buffer = terminal.backend().buffer();
         // The selected first row paints the bar; the sequence then opens on
         // the primary fill, so rows 1 and 3 carry the stripe.
-        assert_eq!(buffer[(2, 0)].bg, palette::SELECTED_ROW_BG.color());
+        assert_eq!(buffer[(2, 0)].bg, palette::SELECTED_ROW_BG);
         assert_eq!(buffer[(2, 1)].bg, pair.focused);
         assert_eq!(buffer[(2, 2)].bg, Color::Reset);
         assert_eq!(buffer[(2, 3)].bg, pair.focused);
@@ -703,14 +692,10 @@ mod wide_row_regression_tests {
             .unwrap();
         let buffer = terminal.backend().buffer();
         let cell = &buffer[(2, 1)];
-        assert_eq!(cell.fg, palette::TEXT_EMPHASIS.color());
+        assert_eq!(cell.fg, palette::TEXT_EMPHASIS);
         assert!(!cell.modifier.contains(Modifier::BOLD));
         for x in 0..rect.width {
-            assert_eq!(
-                buffer[(x, 1)].bg,
-                palette::SELECTED_ROW_BG.color(),
-                "bar at x={x}"
-            );
+            assert_eq!(buffer[(x, 1)].bg, palette::SELECTED_ROW_BG, "bar at x={x}");
         }
         assert_eq!(buffer[(2, 0)].bg, Color::Reset);
 
@@ -764,14 +749,10 @@ mod wide_row_regression_tests {
         // own first row plus the two toggled rows each fill the whole row with
         // the bar and keep their ordinary foreground.
         for y in [0, 1, 3] {
-            assert_eq!(buf[(2, y)].fg, palette::TEXT_EMPHASIS.color());
+            assert_eq!(buf[(2, y)].fg, palette::TEXT_EMPHASIS);
             assert!(!buf[(2, y)].modifier.contains(Modifier::BOLD));
             for x in 0..rect.width {
-                assert_eq!(
-                    buf[(x, y)].bg,
-                    palette::SELECTED_ROW_BG.color(),
-                    "row {y} x={x}"
-                );
+                assert_eq!(buf[(x, y)].bg, palette::SELECTED_ROW_BG, "row {y} x={x}");
             }
         }
         assert_eq!(buf[(2, 2)].bg, Color::Reset);
@@ -781,7 +762,7 @@ mod wide_row_regression_tests {
     fn distinct_claim_and_content_geometry_keeps_rows_on_the_retained_flow() {
         let claim = Rect::new(6, 0, 30, 6);
         let content = Rect::new(8, 2, 26, 2);
-        let selected_bg = palette::SURFACE_RESTING.color();
+        let selected_bg = palette::SURFACE_RESTING;
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
             item("selected", "Selected", None),
@@ -818,7 +799,7 @@ mod wide_row_regression_tests {
     #[test]
     fn painter_persists_resolved_scroll_offset_across_frames() {
         let rect = Rect::new(0, 0, 40, 4);
-        let selected_bg = palette::SURFACE_RESTING.color();
+        let selected_bg = palette::SURFACE_RESTING;
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(
             (0..12)
@@ -848,7 +829,7 @@ mod wide_row_regression_tests {
     #[test]
     fn collection_row_suppresses_projected_duration_media_row_paints_it() {
         let rect = Rect::new(0, 0, 40, 4);
-        let selected_bg = palette::SURFACE_RESTING.color();
+        let selected_bg = palette::SURFACE_RESTING;
         let dur = Some(crate::app::ui_util::fmt_duration_short(272)); // 4:32
         assert_eq!(dur.as_deref(), Some("4:32"));
         let mut list: WideMediaList<String> = WideMediaList::new();
@@ -887,7 +868,7 @@ mod wide_row_regression_tests {
         let dur_x = rect.width - 4;
         assert_eq!(
             buf[(dur_x, 1)].fg,
-            palette::DURATION.color(),
+            palette::DURATION,
             "Media duration is painted deep gold"
         );
     }
@@ -913,14 +894,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, 1)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -933,10 +907,10 @@ mod wide_row_regression_tests {
         );
         // The series title is at the 2-column quiet indent; the episode
         // title starts after it and the one separating space.
-        assert_eq!(buf[(2, 0)].fg, palette::SPLIT_ROW_CONTEXT_FG.color());
+        assert_eq!(buf[(2, 0)].fg, palette::SPLIT_ROW_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
-            palette::SPLIT_ROW_TITLE_FG.color()
+            palette::SPLIT_ROW_TITLE_FG
         );
 
         // Narrow slot on an unselected row (the selected row marquees):
@@ -967,14 +941,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -991,7 +958,7 @@ mod wide_row_regression_tests {
         );
         assert!(row_text.matches('\u{2026}').count() == 1, "{row_text:?}");
         // The truncated context part keeps the split-row context role.
-        assert_eq!(buf[(2, 1)].fg, palette::SPLIT_ROW_CONTEXT_FG.color());
+        assert_eq!(buf[(2, 1)].fg, palette::SPLIT_ROW_CONTEXT_FG);
     }
 
     /// A row with no secondary title keeps its semantic title role (soft
@@ -1023,22 +990,15 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS.color());
-        assert_eq!(buf[(2, 1)].fg, palette::PLAYED_ROW_FG.color());
+        assert_eq!(buf[(2, 0)].fg, palette::TEXT_EMPHASIS);
+        assert_eq!(buf[(2, 1)].fg, palette::PLAYED_ROW_FG);
         assert_ne!(
             buf[(2, 1)].fg,
-            palette::TEXT_MUTED.color(),
+            palette::TEXT_MUTED,
             "a played row reads as watched, not as generic dim text"
         );
     }
@@ -1062,21 +1022,14 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, 1)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
-        assert_eq!(buf[(2, 0)].fg, palette::SPLIT_ROW_CONTEXT_FG.color());
+        assert_eq!(buf[(2, 0)].fg, palette::SPLIT_ROW_CONTEXT_FG);
         assert_eq!(
             buf[(2 + "Severance ".len() as u16, 0)].fg,
-            palette::PLAYED_ROW_FG.color()
+            palette::PLAYED_ROW_FG
         );
     }
 
@@ -1109,14 +1062,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -1129,7 +1075,7 @@ mod wide_row_regression_tests {
         // The gutter is the last six columns of the row's content: the row is
         // 40 wide with a two-column right inset, so it ends at column 37.
         assert_eq!(&dated[32..38], "17 Sep", "{dated:?}");
-        assert_eq!(buf[(32, 0)].fg, palette::ROW_DATE_FG.color());
+        assert_eq!(buf[(32, 0)].fg, palette::ROW_DATE_FG);
         assert!(
             !row_text(1).contains("Sep"),
             "a row without a date paints no gutter: {:?}",
@@ -1155,14 +1101,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -1206,14 +1145,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -1278,14 +1210,7 @@ mod wide_row_regression_tests {
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
-                render_wide_media_list(
-                    f,
-                    rect,
-                    rect,
-                    &mut list,
-                    true,
-                    palette::SURFACE_RESTING.color(),
-                );
+                render_wide_media_list(f, rect, rect, &mut list, true, palette::SURFACE_RESTING);
             })
             .unwrap();
         let buf = terminal.backend().buffer();
@@ -1311,14 +1236,14 @@ mod wide_row_regression_tests {
         );
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 0)].symbol(), "2");
-        assert_eq!(buf[(duration_x, 0)].fg, palette::DURATION.color());
+        assert_eq!(buf[(duration_x, 0)].fg, palette::DURATION);
 
         let resume = row_text(1);
         assert!(resume.contains("Resume title 12%"));
         assert!(resume.contains("2:00"));
         let duration_x = rect.width - 2 - 4;
         assert_eq!(buf[(duration_x, 1)].symbol(), "2");
-        assert_eq!(buf[(duration_x, 1)].fg, palette::DURATION.color());
+        assert_eq!(buf[(duration_x, 1)].fg, palette::DURATION);
     }
 
     #[test]
@@ -1351,7 +1276,7 @@ mod wide_row_regression_tests {
                     Rect::new(0, 0, 20, 1),
                     &mut list,
                     true,
-                    palette::SURFACE_RESTING.color(),
+                    palette::SURFACE_RESTING,
                 );
             })
             .unwrap();
@@ -1386,7 +1311,7 @@ mod wide_row_regression_tests {
                     Rect::new(0, 0, 1, 1),
                     &mut list,
                     true,
-                    palette::SURFACE_RESTING.color(),
+                    palette::SURFACE_RESTING,
                 );
             })
             .unwrap();
@@ -1397,7 +1322,7 @@ mod wide_row_regression_tests {
     /// scrollbar must not shift it another column inwards.
     #[test]
     fn duration_right_inset_is_two_columns_with_and_without_scrollbar() {
-        let selected_bg = palette::SURFACE_RESTING.color();
+        let selected_bg = palette::SURFACE_RESTING;
         for (rows_count, focused) in [(3usize, false), (3, true), (12, true)] {
             let rect = Rect::new(0, 0, 40, 4);
             let mut list: WideMediaList<String> = WideMediaList::new();

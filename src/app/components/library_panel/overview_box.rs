@@ -137,7 +137,7 @@ pub(in crate::app) fn paint_overview_box(
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     line.as_ref(),
-                    Style::default().fg(palette::TEXT_EMPHASIS.color()),
+                    Style::default().fg(palette::TEXT_EMPHASIS),
                 ))),
                 Rect {
                     x: inner.x,
@@ -188,7 +188,7 @@ pub(in crate::app) fn paint_overview_box(
             inner_rows,
             viewport,
             offset,
-            palette::SCROLLBAR.color(),
+            palette::SCROLLBAR,
         );
     }
     Some(OverviewPaint {
@@ -217,7 +217,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         }
         if (row_offset + i) % 2 == 1 {
             f.render_widget(
-                Paragraph::new("").style(Style::default().bg(palette::HERO_CREDITS_STRIPE.color())),
+                Paragraph::new("").style(Style::default().bg(palette::HERO_CREDITS_STRIPE)),
                 Rect {
                     x: area.x,
                     y,
@@ -229,7 +229,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
         let name_width = role_start.saturating_sub(area.x).saturating_sub(2);
         f.render_widget(
             Paragraph::new(credit.name.as_str())
-                .style(Style::default().fg(palette::HERO_CREDITS_NAME.color())),
+                .style(Style::default().fg(palette::HERO_CREDITS_NAME)),
             Rect {
                 x: area.x,
                 y,
@@ -243,7 +243,7 @@ fn paint_credits_from(f: &mut Frame, area: Rect, credits: &[HeroCredit], row_off
             let rendered_role_width = UnicodeWidthStr::width(role.as_str()) as u16;
             let role_x = area.right().saturating_sub(rendered_role_width);
             f.render_widget(
-                Paragraph::new(role).style(Style::default().fg(palette::TEXT_EMPHASIS.color())),
+                Paragraph::new(role).style(Style::default().fg(palette::TEXT_EMPHASIS)),
                 Rect {
                     x: role_x,
                     y,
@@ -320,7 +320,7 @@ pub(in crate::app) fn overlay_links(
                             if let Some(cell) = f.buffer_mut().cell_mut((area.x + x as u16, y)) {
                                 cell.set_style(
                                     cell.style()
-                                        .fg(palette::TEXT_METADATA.color())
+                                        .fg(palette::TEXT_METADATA)
                                         .add_modifier(ratatui::style::Modifier::UNDERLINED),
                                 );
                             }

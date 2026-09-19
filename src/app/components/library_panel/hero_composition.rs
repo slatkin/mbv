@@ -113,7 +113,7 @@ fn paint_workspace_header(f: &mut Frame, content: Rect, header: &str) {
     f.render_widget(
         Paragraph::new(header).style(
             Style::default()
-                .fg(palette::TEXT_METADATA.color())
+                .fg(palette::TEXT_METADATA)
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ),
         Rect {

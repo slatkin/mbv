@@ -55,23 +55,23 @@ pub struct IndicatorData {
 impl IndicatorData {
     fn res_color(&self) -> Color {
         if self.res_dim {
-            palette::TEXT_MUTED.color()
+            palette::TEXT_MUTED
         } else {
-            palette::INDICATOR_RESOLUTION_FG.color()
+            palette::INDICATOR_RESOLUTION_FG
         }
     }
     fn audio_color(&self) -> Color {
         if self.audio_dim {
-            palette::TEXT_MUTED.color()
+            palette::TEXT_MUTED
         } else {
-            palette::INDICATOR_AUDIO_FG.color()
+            palette::INDICATOR_AUDIO_FG
         }
     }
     fn sub_color(&self) -> Color {
         if self.sub_on {
-            palette::TEXT_METADATA.color()
+            palette::TEXT_METADATA
         } else {
-            palette::TEXT_MUTED.color()
+            palette::TEXT_MUTED
         }
     }
 }
@@ -128,7 +128,7 @@ fn chip(label: &str, bg: Color) -> Span<'static> {
         format!(" {label} "),
         Style::default()
             .bg(bg)
-            .fg(palette::TEXT_ON_ACCENT.color())
+            .fg(palette::TEXT_ON_ACCENT)
             .add_modifier(Modifier::BOLD),
     )
 }
@@ -145,7 +145,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
             // Off: hollow/dim — no fill, dim text.
             out.push(Span::styled(
                 format!(" {} ", d.sub_label),
-                bold(palette::TEXT_MUTED.color()),
+                bold(palette::TEXT_MUTED),
             ));
         }
     }
@@ -154,7 +154,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
 
 // --- Legacy brackets: [FHD] [en] [CC] -----------------------------------
 fn bracket_group(label: &str, color: Color, out: &mut Vec<Span<'static>>) {
-    let b = bold(palette::TEXT_STRONG.color());
+    let b = bold(palette::TEXT_STRONG);
     out.push(Span::styled("[", b));
     out.push(Span::styled(label.to_string(), bold(color)));
     out.push(Span::styled("]", b));
@@ -197,7 +197,7 @@ fn dot_group(dot: &str, color: Color, label: &str, out: &mut Vec<Span<'static>>)
     out.push(Span::styled(dot.to_string(), Style::default().fg(color)));
     out.push(Span::styled(
         format!(" {label}"),
-        Style::default().fg(palette::TEXT_SECONDARY.color()),
+        Style::default().fg(palette::TEXT_SECONDARY),
     ));
 }
 
@@ -216,12 +216,7 @@ fn dots(d: &IndicatorData) -> Vec<Span<'static>> {
 
 // --- Pipe statusline: FHD │ en │ CC --------------------------------------
 fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
-    let sep = || {
-        Span::styled(
-            " \u{2502} ",
-            Style::default().fg(palette::BORDER_UNFOCUSED.color()),
-        )
-    };
+    let sep = || Span::styled(" \u{2502} ", Style::default().fg(palette::BORDER_UNFOCUSED));
     let mut out = vec![Span::styled(
         d.res_label.clone(),
         Style::default().fg(d.res_color()),
@@ -252,12 +247,12 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     if !d.audio_only {
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::BORDER_UNFOCUSED.color()),
+            Style::default().fg(palette::BORDER_UNFOCUSED),
         ));
         out.push(Span::styled(d.audio_label.clone(), bold(d.audio_color())));
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::BORDER_UNFOCUSED.color()),
+            Style::default().fg(palette::BORDER_UNFOCUSED),
         ));
         out.push(Span::styled(d.sub_label.clone(), bold(d.sub_color())));
     }
@@ -278,7 +273,7 @@ fn powerline(d: &IndicatorData) -> Vec<Span<'static>> {
             format!(" {label} "),
             Style::default()
                 .bg(color)
-                .fg(palette::TEXT_ON_ACCENT.color())
+                .fg(palette::TEXT_ON_ACCENT)
                 .add_modifier(Modifier::BOLD),
         ));
         // Arrow: foreground = this segment's color, background = next segment's (or none).

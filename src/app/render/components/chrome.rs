@@ -62,8 +62,8 @@ pub(in crate::app::render) fn service_state_color(
 ) -> Color {
     match state {
         mbv_core::service_runtime::ServiceState::Ready => ready,
-        mbv_core::service_runtime::ServiceState::NotConfigured => palette::TEXT_MUTED.color(),
-        _ => palette::STATUS_ERROR.color(),
+        mbv_core::service_runtime::ServiceState::NotConfigured => palette::TEXT_MUTED,
+        _ => palette::STATUS_ERROR,
     }
 }
 
@@ -154,7 +154,7 @@ pub(in crate::app) fn render_panel_shell_at(
             f.render_widget(
                 Paragraph::new(Span::styled(
                     "\u{2502}",
-                    Style::default().fg(palette::BORDER_UNFOCUSED.color()),
+                    Style::default().fg(palette::BORDER_UNFOCUSED),
                 )),
                 Rect {
                     x: sidebar.x + sidebar.width - 1,
@@ -171,7 +171,7 @@ pub(in crate::app) fn render_panel_shell_at(
         (sidebar.width.saturating_sub(1), sidebar.x)
     };
     let header_style = Style::default()
-        .fg(palette::TEXT_PRIMARY.color())
+        .fg(palette::TEXT_PRIMARY)
         .bg(band_bg)
         .add_modifier(Modifier::BOLD);
     let header_area = if style {
@@ -215,7 +215,7 @@ pub(in crate::app) fn render_panel_shell_at(
         f.render_widget(
             Paragraph::new(Span::styled(
                 "\u{2500}".repeat(inner_w as usize),
-                Style::default().fg(palette::BORDER_UNFOCUSED.color()),
+                Style::default().fg(palette::BORDER_UNFOCUSED),
             )),
             Rect {
                 x: ix,
@@ -229,7 +229,7 @@ pub(in crate::app) fn render_panel_shell_at(
     f.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             trunc_str(hints, inner_w as usize),
-            Style::default().fg(palette::TEXT_PRIMARY.color()),
+            Style::default().fg(palette::TEXT_PRIMARY),
         )]))
         .style(Style::default().bg(footer_bg)),
         Rect {
@@ -285,7 +285,7 @@ pub(in crate::app) fn render_sidebar_scrollbar(
         scroll,
         content.x.saturating_add(content.width),
         thin_vertical_thumb(GlyphSet::box_drawing()),
-        palette::SCROLLBAR.color(),
+        palette::SCROLLBAR,
     );
 }
 
@@ -306,7 +306,7 @@ pub(in crate::app) fn render_panel_row(
 ) {
     let indicator = Span::styled(
         if selected { "\u{258c}" } else { " " },
-        Style::default().fg(palette::ACCENT.color()),
+        Style::default().fg(palette::ACCENT),
     );
     let mut all = vec![indicator];
     all.extend(spans);

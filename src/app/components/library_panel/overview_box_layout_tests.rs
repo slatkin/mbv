@@ -135,7 +135,7 @@ fn overview_box_presents_only_with_overview_text() {
     // hero pane's focus (from the Workspace) never dims it.
     assert_eq!(
         text_fg(&buf, below, "A very long overview."),
-        Some(palette::TEXT_EMPHASIS.color()),
+        Some(palette::TEXT_EMPHASIS),
         "unfocused overview text"
     );
     let mut workspace_list = NoopList;
@@ -153,7 +153,7 @@ fn overview_box_presents_only_with_overview_text() {
     let buf = draw_pane(AREA.width, AREA.height, &focused);
     assert_eq!(
         text_fg(&buf, below, "A very long overview."),
-        Some(palette::TEXT_EMPHASIS.color()),
+        Some(palette::TEXT_EMPHASIS),
         "focused overview text"
     );
 }
@@ -282,10 +282,7 @@ fn hovered_link_uses_foam_underline() {
         .unwrap();
     let buffer = terminal.backend().buffer();
     for x in 0..4 {
-        assert_eq!(
-            buffer[(x, 1)].style().fg,
-            Some(palette::TEXT_METADATA.color())
-        );
+        assert_eq!(buffer[(x, 1)].style().fg, Some(palette::TEXT_METADATA));
         assert!(buffer[(x, 1)]
             .style()
             .add_modifier
