@@ -14,12 +14,19 @@
 
 #![cfg_attr(not(test), allow(dead_code))]
 
+use super::palette::Palette;
 use super::surface::{FocusSource, Surface};
-use super::surface_table::{row, RESTING_DEVIATIONS};
+use super::surface_table::{row, DIM_BLEND_BASE, RESTING_DEVIATIONS};
+#[cfg(test)]
 use super::*;
 use ratatui::style::Color;
 
 /// The resolved colour of one rendered surface for one frame.
+///
+/// The surface tier resolves in `Palette` (rows and level fills are palette
+/// assignments) and materializes to ratatui `Color` here — the theme's paint
+/// boundary — so call sites receive a `Color` ready for `.bg()`/`.fg()` and
+/// never touch the palette tier themselves.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::app) struct SurfaceColors {
     pub(in crate::app) fill: Color,
@@ -40,7 +47,7 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     // deviation. This holds it at runtime in debug builds.
     debug_assert!(
         surface.level().resting_default().is_none()
-            || surface.level().resting_default() == Some(row.resting)
+            || surface.level().resting_default() == row.resting
             || RESTING_DEVIATIONS
                 .iter()
                 .any(|(declared, _)| *declared == surface),
@@ -49,12 +56,14 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     if follow_focus {
         SurfaceColors::fill(if row.soft {
-            primitives::SOFT_CONTENT_BODY_BG
+            Palette::Green2.color()
         } else {
-            row.level.focused_fill()
+            row.level.focused_fill().color()
         })
     } else {
-        SurfaceColors::fill(row.resting)
+        // The one `None` row is `PopupDimBackdrop`, whose blend base is the
+        // raw `Color::Black` mechanic outside the palette (`DIM_BLEND_BASE`).
+        SurfaceColors::fill(row.resting.map_or(DIM_BLEND_BASE, Palette::color))
     }
 }
 
@@ -93,42 +102,41 @@ mod tests {
     /// between two rows fail. A fixed row pins the same value twice.
     fn pinned_fills(surface: Surface) -> (Color, Color) {
         match surface {
-            Surface::QueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::LibraryColumn => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::WideSplitGutter => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::HeroPane => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::SelectedRow => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
-            Surface::LibraryPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::QueuePanel => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
-            Surface::MainContentBox => (primitives::SOFT_CONTENT_BODY_BG, SURFACE_BACKDROP),
-            Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::QueueOnlyPlaybackPanel => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::SidebarBody => (SURFACE_RESTING, SURFACE_RESTING),
-            Surface::NonHeroSidebarBody => (SURFACE_SIDEBAR, SURFACE_SIDEBAR),
-            Surface::QueueCardVisualizer => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::PlaybackRecess => (SURFACE_FOCUSED, SURFACE_RESTING),
-            Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::ArtworkLoadingPlaceholder => (
-                primitives::ARTWORK_LOADING_PLACEHOLDER,
-                primitives::ARTWORK_LOADING_PLACEHOLDER,
-            ),
-            Surface::StatusBar => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::StatusBarPill => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::QueuePanelBand => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::PillRow => (PILL_ROW_BG, PILL_ROW_BG),
-            Surface::PillChip => (PILL_BG, PILL_BG),
-            Surface::PillChipSelected => (PILL_SELECTED_BG, PILL_SELECTED_BG),
-            Surface::QueueScopePillSelected => (ACCENT, ACCENT),
-            Surface::PillRowGap => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::SidebarBand => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::NonHeroSidebarBand => (SURFACE_ITEM_FOCUSED, SURFACE_ITEM_FOCUSED),
-            Surface::TabBar => (SURFACE_CHROME, SURFACE_CHROME),
-            Surface::PopupFrame => (SURFACE_FOCUSED, SURFACE_FOCUSED),
+            Surface::QueueColumn => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::LibraryColumn => (SURFACE_BACKDROP.color(), SURFACE_BACKDROP.color()),
+            Surface::WideSplitGutter => (SURFACE_BACKDROP.color(), SURFACE_BACKDROP.color()),
+            Surface::HeroPane => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::SelectedRow => (SURFACE_BACKDROP.color(), SURFACE_BACKDROP.color()),
+            Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE.color(), ACCENT_ACTIVE.color()),
+            Surface::LibraryPanel => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::QueuePanel => (Palette::Green2.color(), SURFACE_BACKDROP.color()),
+            Surface::MainContentBox => (Palette::Green2.color(), SURFACE_BACKDROP.color()),
+            Surface::InlineHero => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::PlaybackPanel => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::QueueOnlyPlaybackPanel => (SURFACE_CHROME.color(), SURFACE_CHROME.color()),
+            Surface::SidebarBody => (SURFACE_RESTING.color(), SURFACE_RESTING.color()),
+            Surface::NonHeroSidebarBody => (SURFACE_SIDEBAR.color(), SURFACE_SIDEBAR.color()),
+            Surface::QueueCardVisualizer => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::PlaybackRecess => (SURFACE_FOCUSED.color(), SURFACE_RESTING.color()),
+            Surface::PlaybackStatusPill => (SURFACE_BACKDROP.color(), SURFACE_BACKDROP.color()),
+            Surface::ArtworkPlaceholder => (SURFACE_BACKDROP.color(), SURFACE_BACKDROP.color()),
+            Surface::ArtworkLoadingPlaceholder => (Palette::Grey2.color(), Palette::Grey2.color()),
+            Surface::StatusBar => (SURFACE_CHROME.color(), SURFACE_CHROME.color()),
+            Surface::StatusBarPill => (SURFACE_CHROME.color(), SURFACE_CHROME.color()),
+            Surface::QueuePanelBand => (SURFACE_CHROME.color(), SURFACE_CHROME.color()),
+            Surface::PillRow => (PILL_ROW_BG.color(), PILL_ROW_BG.color()),
+            Surface::PillChip => (PILL_BG.color(), PILL_BG.color()),
+            Surface::PillChipSelected => (PILL_SELECTED_BG.color(), PILL_SELECTED_BG.color()),
+            Surface::QueueScopePillSelected => (ACCENT.color(), ACCENT.color()),
+            Surface::PillRowGap => (SURFACE_BACKDROP.color(), SURFACE_BACKDROP.color()),
+            Surface::SidebarBand => (SURFACE_CHROME.color(), SURFACE_CHROME.color()),
+            Surface::NonHeroSidebarBand => {
+                (SURFACE_ITEM_FOCUSED.color(), SURFACE_ITEM_FOCUSED.color())
+            }
+            Surface::TabBar => (SURFACE_CHROME.color(), SURFACE_CHROME.color()),
+            Surface::PopupFrame => (SURFACE_FOCUSED.color(), SURFACE_FOCUSED.color()),
             Surface::PopupDimBackdrop => (Color::Black, Color::Black),
         }
     }
@@ -181,15 +189,18 @@ mod tests {
             let focused = surface_colors(surface, true).fill;
             match r.level {
                 Level::ColumnPane => assert_eq!(
-                    focused, SURFACE_FOCUSED,
+                    focused,
+                    SURFACE_FOCUSED.color(),
                     "{surface:?} shares the column/pane focused fill"
                 ),
                 Level::ContentBody => assert_eq!(
-                    focused, SURFACE_FOCUSED,
+                    focused,
+                    SURFACE_FOCUSED.color(),
                     "{surface:?} shares the content-body focused fill"
                 ),
                 Level::Recess => assert_eq!(
-                    focused, SURFACE_FOCUSED,
+                    focused,
+                    SURFACE_FOCUSED.color(),
                     "{surface:?} shares the recess focused fill"
                 ),
                 Level::ChromeBand | Level::Popup => {
@@ -209,8 +220,8 @@ mod tests {
             column, content,
             "the column and content-body resting values"
         );
-        assert_eq!(column, SURFACE_BACKDROP);
-        assert_eq!(content, SURFACE_RESTING);
+        assert_eq!(column, SURFACE_BACKDROP.color());
+        assert_eq!(content, SURFACE_RESTING.color());
     }
 
     /// The soft content body is the table's one declared variant: it takes the
@@ -227,11 +238,11 @@ mod tests {
         for surface in soft_rows {
             assert_eq!(
                 surface_colors(surface, true).fill,
-                primitives::SOFT_CONTENT_BODY_BG,
+                Palette::Green2.color(),
                 "{surface:?} focused soft fill"
             );
         }
         // The soft variant is not the default focused content body.
-        assert_ne!(primitives::SOFT_CONTENT_BODY_BG, SURFACE_FOCUSED);
+        assert_ne!(Palette::Green2, SURFACE_FOCUSED);
     }
 }

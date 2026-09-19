@@ -235,13 +235,13 @@ fn workspace_selector_with_active_none_paints_no_active_pill() {
             for x in rect.left()..rect.right() {
                 assert_ne!(
                     buf[(x, y)].bg,
-                    palette::PILL_SELECTED_BG,
+                    palette::PILL_SELECTED_BG.color(),
                     "active: None must paint no active pill"
                 );
             }
         }
         let cell = &buf[(rect.x + 1, rect.y)];
-        assert_eq!(cell.style().fg, Some(palette::PILL_FG));
+        assert_eq!(cell.style().fg, Some(palette::PILL_FG.color()));
     }
     // A hit test inside a painted pill still resolves its index.
     let (first_rect, first_id) = hits.workspace_selector.regions()[0];
@@ -483,7 +483,7 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
     );
     assert_eq!(
         buf[(content_x, content_y)].style().fg,
-        Some(palette::TEXT_METADATA)
+        Some(palette::TEXT_METADATA.color())
     );
     assert_eq!(buf[(content_x, content_y)].bg, fill);
 
@@ -492,7 +492,7 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
         assert_eq!(buf[(x, content_y + 1)].symbol(), "\u{2581}");
         assert_eq!(
             buf[(x, content_y + 1)].style().fg,
-            Some(palette::HERO_OVERVIEW_SEPARATOR)
+            Some(palette::HERO_OVERVIEW_SEPARATOR.color())
         );
     }
 
@@ -646,7 +646,7 @@ fn search_results_paint_the_canonical_selected_row_bar() {
     for x in selected.left()..selected.right() {
         assert_eq!(
             focused_buf[(x, selected.y)].bg,
-            palette::SELECTED_ROW_BG,
+            palette::SELECTED_ROW_BG.color(),
             "the selected-row bar spans the full row width"
         );
     }
@@ -660,7 +660,7 @@ fn search_results_paint_the_canonical_selected_row_bar() {
     for x in selected.left()..selected.right() {
         assert_ne!(
             resting_buf[(x, selected.y)].bg,
-            palette::SELECTED_ROW_BG,
+            palette::SELECTED_ROW_BG.color(),
             "unfocused search results paint the bar nowhere on the selected row"
         );
     }

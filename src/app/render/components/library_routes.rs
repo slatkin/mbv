@@ -76,16 +76,19 @@ pub(in crate::app) fn render_library_routes_content(
                     let focused = i == model.cursor;
                     let arrow = if focused { "▸ " } else { "  " };
                     let name_style = if focused {
-                        Style::default().fg(palette::TEXT_PRIMARY)
+                        Style::default().fg(palette::TEXT_PRIMARY.color())
                     } else {
-                        Style::default().fg(palette::TEXT_SECONDARY)
+                        Style::default().fg(palette::TEXT_SECONDARY.color())
                     };
                     let value = assigned.clone().unwrap_or_else(|| "none".to_string());
                     Line::from(vec![
                         Span::raw(arrow),
                         Span::styled(name.clone(), name_style),
                         Span::raw(" -> "),
-                        Span::styled(value, Style::default().fg(palette::TEXT_ACCENT_MUTED)),
+                        Span::styled(
+                            value,
+                            Style::default().fg(palette::TEXT_ACCENT_MUTED.color()),
+                        ),
                     ])
                 })
                 .collect();
@@ -100,11 +103,11 @@ pub(in crate::app) fn render_library_routes_content(
             if devices.is_empty() {
                 lines.push(Line::from(Span::styled(
                     "No other mbv devices found right now -- make sure the",
-                    Style::default().fg(palette::TEXT_MUTED),
+                    Style::default().fg(palette::TEXT_MUTED.color()),
                 )));
                 lines.push(Line::from(Span::styled(
                     "target is running and connected.",
-                    Style::default().fg(palette::TEXT_MUTED),
+                    Style::default().fg(palette::TEXT_MUTED.color()),
                 )));
             }
             // (label, routable) -- a device without a resolvable
@@ -125,11 +128,11 @@ pub(in crate::app) fn render_library_routes_content(
                 let focused = i == model.cursor;
                 let arrow = if focused { "▸ " } else { "  " };
                 let name_style = if !routable {
-                    Style::default().fg(palette::TEXT_MUTED)
+                    Style::default().fg(palette::TEXT_MUTED.color())
                 } else if focused {
-                    Style::default().fg(palette::TEXT_PRIMARY)
+                    Style::default().fg(palette::TEXT_PRIMARY.color())
                 } else {
-                    Style::default().fg(palette::TEXT_SECONDARY)
+                    Style::default().fg(palette::TEXT_SECONDARY.color())
                 };
                 lines.push(Line::from(vec![
                     Span::raw(arrow),
@@ -158,7 +161,10 @@ pub(in crate::app) fn render_library_routes_content(
 
     let hint = "Enter select  ·  Esc back/close";
     f.render_widget(
-        Paragraph::new(Span::styled(hint, Style::default().fg(palette::TEXT_MUTED))),
+        Paragraph::new(Span::styled(
+            hint,
+            Style::default().fg(palette::TEXT_MUTED.color()),
+        )),
         Rect {
             x: inner.x,
             y: inner.y,

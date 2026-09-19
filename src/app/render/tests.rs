@@ -38,56 +38,20 @@ fn volume_pill_number_is_aqua() {
     app.ui_volume = 60;
     let spans = app.volume_status_spans();
     assert_eq!(spans[2].content.to_string(), " 60");
-    assert_eq!(spans[2].style.fg, Some(palette::ACCENT));
+    assert_eq!(spans[2].style.fg, Some(palette::ACCENT.color()));
 }
 
 #[test]
 fn emby_status_glyph_color_tracks_service_state() {
     use mbv_core::service_runtime::ServiceState;
     let color = super::components::chrome::service_state_color;
-    assert_eq!(color(ServiceState::Ready, palette::ACCENT), palette::ACCENT);
     assert_eq!(
-        color(ServiceState::NotConfigured, palette::ACCENT),
-        palette::TEXT_MUTED
-    );
-    for state in [
-        ServiceState::Connecting,
-        ServiceState::NeedsAuthentication,
-        ServiceState::Unavailable,
-    ] {
-        assert_eq!(color(state, palette::ACCENT), palette::STATUS_ERROR);
-    }
-}
-
-#[test]
-fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
-    fn color(daemon_lost: bool, on_local_daemon: bool) -> ratatui::style::Color {
-        if daemon_lost {
-            palette::TEXT_FOCUS_ACCENT
-        } else if on_local_daemon {
-            palette::STATUS_ERROR
-        } else {
-            palette::TEXT_MUTED
-        }
-    }
-    assert_eq!(color(false, false), palette::TEXT_MUTED); // not in stay-alive mode
-    assert_eq!(color(false, true), palette::STATUS_ERROR); // local daemon active
-                                                           // Daemon lost (yellow) wins over a still-pointed local target.
-    assert_eq!(color(true, true), palette::TEXT_FOCUS_ACCENT);
-    assert_eq!(color(true, false), palette::TEXT_FOCUS_ACCENT);
-}
-
-#[test]
-fn audiobookshelf_status_glyph_color_tracks_service_state() {
-    use mbv_core::service_runtime::ServiceState;
-    let color = super::components::chrome::service_state_color;
-    assert_eq!(
-        color(ServiceState::Ready, palette::ACCENT_AUDIOBOOKSHELF),
-        palette::ACCENT_AUDIOBOOKSHELF
+        color(ServiceState::Ready, palette::ACCENT.color()),
+        palette::ACCENT.color()
     );
     assert_eq!(
-        color(ServiceState::NotConfigured, palette::ACCENT_AUDIOBOOKSHELF),
-        palette::TEXT_MUTED
+        color(ServiceState::NotConfigured, palette::ACCENT.color()),
+        palette::TEXT_MUTED.color()
     );
     for state in [
         ServiceState::Connecting,
@@ -95,8 +59,53 @@ fn audiobookshelf_status_glyph_color_tracks_service_state() {
         ServiceState::Unavailable,
     ] {
         assert_eq!(
-            color(state, palette::ACCENT_AUDIOBOOKSHELF),
-            palette::STATUS_ERROR
+            color(state, palette::ACCENT.color()),
+            palette::STATUS_ERROR.color()
+        );
+    }
+}
+
+#[test]
+fn stay_alive_glyph_color_tracks_target_and_daemon_loss() {
+    fn color(daemon_lost: bool, on_local_daemon: bool) -> ratatui::style::Color {
+        if daemon_lost {
+            palette::TEXT_FOCUS_ACCENT.color()
+        } else if on_local_daemon {
+            palette::STATUS_ERROR.color()
+        } else {
+            palette::TEXT_MUTED.color()
+        }
+    }
+    assert_eq!(color(false, false), palette::TEXT_MUTED.color()); // not in stay-alive mode
+    assert_eq!(color(false, true), palette::STATUS_ERROR.color()); // local daemon active
+                                                                   // Daemon lost (yellow) wins over a still-pointed local target.
+    assert_eq!(color(true, true), palette::TEXT_FOCUS_ACCENT.color());
+    assert_eq!(color(true, false), palette::TEXT_FOCUS_ACCENT.color());
+}
+
+#[test]
+fn audiobookshelf_status_glyph_color_tracks_service_state() {
+    use mbv_core::service_runtime::ServiceState;
+    let color = super::components::chrome::service_state_color;
+    assert_eq!(
+        color(ServiceState::Ready, palette::ACCENT_AUDIOBOOKSHELF.color()),
+        palette::ACCENT_AUDIOBOOKSHELF.color()
+    );
+    assert_eq!(
+        color(
+            ServiceState::NotConfigured,
+            palette::ACCENT_AUDIOBOOKSHELF.color()
+        ),
+        palette::TEXT_MUTED.color()
+    );
+    for state in [
+        ServiceState::Connecting,
+        ServiceState::NeedsAuthentication,
+        ServiceState::Unavailable,
+    ] {
+        assert_eq!(
+            color(state, palette::ACCENT_AUDIOBOOKSHELF.color()),
+            palette::STATUS_ERROR.color()
         );
     }
 }
@@ -124,14 +133,14 @@ fn title_row_paints_the_plain_next_control() {
             &mut layout,
             1,
             true,
-            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
+            &Some(("Title".into(), palette::SURFACE_FOCUSED.color())),
             palette::SURFACE_PLAYBACK,
         );
         render_title_row(
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::SURFACE_FOCUSED,
+            palette::SURFACE_FOCUSED.color(),
             &mut context,
         );
     })
@@ -166,14 +175,14 @@ fn title_row_paints_the_nerd_font_next_control() {
             &mut layout,
             1,
             true,
-            &Some(("Title".into(), palette::SURFACE_FOCUSED)),
+            &Some(("Title".into(), palette::SURFACE_FOCUSED.color())),
             palette::SURFACE_PLAYBACK,
         );
         render_title_row(
             f,
             Rect::new(0, 0, 60, 1),
             "Title",
-            palette::SURFACE_FOCUSED,
+            palette::SURFACE_FOCUSED.color(),
             &mut context,
         );
     })
@@ -238,14 +247,14 @@ fn standard_title_row_showcases_instead_of_truncating_a_long_title() {
                 layout,
                 1,
                 true,
-                &Some((long_title.to_string(), palette::TEXT_STRONG)),
-                palette::SURFACE_CHROME,
+                &Some((long_title.to_string(), palette::TEXT_STRONG.color())),
+                palette::SURFACE_CHROME.color(),
             );
             render_title_row(
                 f,
                 Rect::new(0, 0, 30, 1),
                 long_title,
-                palette::TEXT_STRONG,
+                palette::TEXT_STRONG.color(),
                 &mut context,
             );
         })
@@ -296,14 +305,14 @@ fn queue_panel_puts_title_progress_and_time_above_the_controls_row() {
     let backend = TestBackend::new(60, 3);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        let title = Some(("Title".to_string(), palette::TEXT_STRONG));
+        let title = Some(("Title".to_string(), palette::TEXT_STRONG.color()));
         let context = app.playback_panel_context(
             Rect::new(0, 0, 60, 3),
             &mut layout,
             3,
             true,
             &title,
-            palette::SURFACE_CHROME,
+            palette::SURFACE_CHROME.color(),
         );
         render_player_panel(f, context);
     })
@@ -356,14 +365,14 @@ fn library_strip_keeps_the_single_title_row() {
     let backend = TestBackend::new(60, 3);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        let title = Some(("Title".to_string(), palette::TEXT_STRONG));
+        let title = Some(("Title".to_string(), palette::TEXT_STRONG.color()));
         let context = app.playback_panel_context(
             Rect::new(0, 0, 60, 3),
             &mut layout,
             3,
             true,
             &title,
-            palette::SURFACE_CHROME,
+            palette::SURFACE_CHROME.color(),
         );
         render_player_panel(f, context);
     })
@@ -404,14 +413,14 @@ fn queue_title_row_marquees_a_title_that_does_not_fit() {
     let backend = TestBackend::new(60, 3);
     let mut term = Terminal::new(backend).unwrap();
     term.draw(|f| {
-        let title = Some((long_title.to_string(), palette::TEXT_STRONG));
+        let title = Some((long_title.to_string(), palette::TEXT_STRONG.color()));
         let context = app.playback_panel_context(
             Rect::new(0, 0, 60, 3),
             &mut layout,
             3,
             true,
             &title,
-            palette::SURFACE_CHROME,
+            palette::SURFACE_CHROME.color(),
         );
         render_player_panel(f, context);
     })
@@ -468,7 +477,7 @@ fn idle_feed_title_marquees_instead_of_truncating() {
                     4,
                     false, // !show_controls => idle state
                     &None,
-                    palette::SURFACE_CHROME,
+                    palette::SURFACE_CHROME.color(),
                 ),
             );
         })

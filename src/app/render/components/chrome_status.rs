@@ -74,7 +74,7 @@ impl App {
         };
         let label_style = Style::default()
             .fg(if remote_on {
-                palette::ACCENT
+                palette::ACCENT.color()
             } else {
                 ratatui::style::Color::Black
             })
@@ -181,9 +181,9 @@ impl App {
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
             .fg(if on {
-                palette::TEXT_FOCUS_ACCENT
+                palette::TEXT_FOCUS_ACCENT.color()
             } else {
-                palette::TEXT_SECONDARY
+                palette::TEXT_SECONDARY.color()
             })
             .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill);
 
@@ -235,7 +235,7 @@ impl App {
                 Span::styled(
                     " UNSAVED ",
                     Style::default()
-                        .fg(palette::TEXT_FOCUS_ACCENT)
+                        .fg(palette::TEXT_FOCUS_ACCENT.color())
                         .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
                         .add_modifier(Modifier::BOLD),
                 ),
@@ -261,7 +261,7 @@ impl App {
                 Span::styled(
                     " AUTOSAVE ",
                     Style::default()
-                        .fg(palette::ACCENT)
+                        .fg(palette::ACCENT.color())
                         .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
                 ),
                 Span::styled(
@@ -294,7 +294,7 @@ impl App {
                     Span::styled(
                         "muted",
                         Style::default()
-                            .fg(palette::STATUS_ERROR)
+                            .fg(palette::STATUS_ERROR.color())
                             .bg(
                                 palette::surface_colors(palette::Surface::StatusBarPill, false)
                                     .fill,
@@ -331,7 +331,7 @@ impl App {
                 Span::styled(
                     " PREFIX ",
                     Style::default()
-                        .fg(palette::ACCENT)
+                        .fg(palette::ACCENT.color())
                         .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
                         .add_modifier(Modifier::BOLD),
                 ),
@@ -371,13 +371,13 @@ impl App {
             Span::styled(
                 icon,
                 Style::default()
-                    .fg(palette::PLAYBACK_META_FG)
+                    .fg(palette::PLAYBACK_META_FG.color())
                     .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
             ),
             Span::styled(
                 format!(" {volume}"),
                 Style::default()
-                    .fg(palette::ACCENT)
+                    .fg(palette::ACCENT.color())
                     .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill)
                     .add_modifier(Modifier::BOLD),
             ),
@@ -394,11 +394,11 @@ impl App {
             config.username.clone()
         };
         let alive_color = if self.dim_backdrop_active {
-            palette::TEXT_FOCUS_ACCENT
+            palette::TEXT_FOCUS_ACCENT.color()
         } else if self.is_local_daemon() {
-            palette::STATUS_ERROR
+            palette::STATUS_ERROR.color()
         } else {
-            palette::TEXT_MUTED
+            palette::TEXT_MUTED.color()
         };
         let mut right_spans: Vec<Span> = Vec::new();
         let source_label: Option<(String, Color)> = match &self.queue_source {
@@ -406,27 +406,27 @@ impl App {
             crate::config::QueueSource::Album
                 if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
             {
-                Some(("ALBUM".to_string(), palette::TEXT_MUTED))
+                Some(("ALBUM".to_string(), palette::TEXT_MUTED.color()))
             }
             crate::config::QueueSource::Series
                 if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
             {
-                Some(("SERIES".to_string(), palette::TEXT_MUTED))
+                Some(("SERIES".to_string(), palette::TEXT_MUTED.color()))
             }
             crate::config::QueueSource::Shuffle
                 if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
             {
-                Some(("SHUFFLE".to_string(), palette::TEXT_MUTED))
+                Some(("SHUFFLE".to_string(), palette::TEXT_MUTED.color()))
             }
             crate::config::QueueSource::Remote
                 if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
             {
-                Some(("REMOTE Q".to_string(), palette::TEXT_MUTED))
+                Some(("REMOTE Q".to_string(), palette::TEXT_MUTED.color()))
             }
             crate::config::QueueSource::Collection { collection_type }
                 if matches!(self.effective_panel_focus(), PanelFocus::Queue) =>
             {
-                Some((collection_type.to_uppercase(), palette::TEXT_MUTED))
+                Some((collection_type.to_uppercase(), palette::TEXT_MUTED.color()))
             }
             crate::config::QueueSource::Unknown => None,
             _ => None,
@@ -457,13 +457,13 @@ impl App {
             right_spans.push(Span::styled(
                 " 🯅",
                 Style::default()
-                    .fg(palette::TEXT_METADATA)
+                    .fg(palette::TEXT_METADATA.color())
                     .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
             ));
             right_spans.push(Span::styled(
                 format!(" {username} "),
                 Style::default()
-                    .fg(palette::PLAYBACK_META_FG)
+                    .fg(palette::PLAYBACK_META_FG.color())
                     .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
             ));
         }
@@ -477,7 +477,7 @@ impl App {
                 "\u{F06B4}",
                 Style::default().fg(service_state_color(
                     self.emby_runtime.state,
-                    palette::ACCENT,
+                    palette::ACCENT.color(),
                 )),
             ),
             Span::raw(" "),
@@ -485,7 +485,7 @@ impl App {
                 "\u{EDE2}",
                 Style::default().fg(service_state_color(
                     self.audiobookshelf_runtime.state,
-                    palette::ACCENT_AUDIOBOOKSHELF,
+                    palette::ACCENT_AUDIOBOOKSHELF.color(),
                 )),
             ),
             Span::raw(" "),
@@ -629,7 +629,7 @@ pub(in crate::app) fn render_status_bar(
         vec![Span::styled(
             format!("-- VISUAL ({}) --", indicator.count),
             Style::default()
-                .fg(palette::TEXT_FOCUS_ACCENT)
+                .fg(palette::TEXT_FOCUS_ACCENT.color())
                 .bg(palette::surface_colors(palette::Surface::StatusBarPill, false).fill),
         )]
     });

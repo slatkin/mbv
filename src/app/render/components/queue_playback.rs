@@ -28,9 +28,9 @@ pub(in crate::app) fn header_status_word(status: NowPlayingStatus) -> &'static s
 /// paused, muted while idle.
 fn status_color(status: NowPlayingStatus) -> ratatui::style::Color {
     match status {
-        NowPlayingStatus::Playing => palette::TEXT_METADATA,
-        NowPlayingStatus::Paused => palette::TEXT_FOCUS_ACCENT,
-        NowPlayingStatus::Idle => palette::TEXT_MUTED,
+        NowPlayingStatus::Playing => palette::TEXT_METADATA.color(),
+        NowPlayingStatus::Paused => palette::TEXT_FOCUS_ACCENT.color(),
+        NowPlayingStatus::Idle => palette::TEXT_MUTED.color(),
     }
 }
 
@@ -86,12 +86,12 @@ pub(in crate::app) fn render_playback_header(
                 .add_modifier(Modifier::BOLD),
         ));
     }
-    let host_style = Style::default().fg(palette::TEXT_MUTED).bg(bg);
+    let host_style = Style::default().fg(palette::TEXT_MUTED.color()).bg(bg);
     let hostname_style = Style::default()
         .fg(if host_is_remote {
-            palette::ACCENT
+            palette::ACCENT.color()
         } else {
-            palette::STATUS_AVAILABLE
+            palette::STATUS_AVAILABLE.color()
         })
         .bg(bg);
     if inner > 0 {
@@ -207,9 +207,10 @@ mod tests {
     fn hostname_is_green_when_local_and_aqua_when_remote() {
         // The hostname starts one cell left of the trailing pad; the `on `
         // prefix keeps the muted target style in both cases.
-        for (host_is_remote, expected) in
-            [(false, palette::STATUS_AVAILABLE), (true, palette::ACCENT)]
-        {
+        for (host_is_remote, expected) in [
+            (false, palette::STATUS_AVAILABLE.color()),
+            (true, palette::ACCENT.color()),
+        ] {
             let mut term = Terminal::new(TestBackend::new(40, 1)).unwrap();
             term.draw(|f| {
                 render_playback_header(
@@ -231,7 +232,7 @@ mod tests {
             );
             assert_eq!(
                 buf[(27, 0)].style().fg,
-                Some(palette::TEXT_MUTED),
+                Some(palette::TEXT_MUTED.color()),
                 "remote={host_is_remote}: the `on ` prefix stays muted"
             );
         }

@@ -334,7 +334,7 @@ fn exactly_one_transport_paints_per_frame_owned_by_the_expected_panel() {
         for y in 0..buf.area().height {
             for x in 0..buf.area().width {
                 let cell = &buf[(x, y)];
-                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(crate::app::palette::ACCENT)
+                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(crate::app::palette::ACCENT.color())
                 {
                     painted += 1;
                     assert!(

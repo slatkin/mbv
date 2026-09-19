@@ -318,7 +318,7 @@ mod wide_hero_hero_pane_tests {
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
-        assert_eq!(cell.bg, palette::SURFACE_RESTING);
+        assert_eq!(cell.bg, palette::SURFACE_RESTING.color());
         assert_ne!(cell.bg, palette::resolve_surface_focus(true));
     }
 

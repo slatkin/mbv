@@ -273,11 +273,11 @@ mod tests {
         let buffer = terminal.backend().buffer();
         assert_eq!(
             buffer[(unselected.x + 2, unselected.y)].fg,
-            palette::TEXT_STRONG
+            palette::TEXT_STRONG.color()
         );
         assert_eq!(
             buffer[(selected.x + 1, selected.y)].fg,
-            palette::TEXT_STRONG,
+            palette::TEXT_STRONG.color(),
             "selected styling remains unchanged when another tab is hovered"
         );
         assert!(buffer[(selected.x + 1, selected.y)]

@@ -1818,7 +1818,7 @@ fn overlay_workspace_paints_its_cursor_row() {
     let buf = terminal.backend().buffer();
     let cursor_row = (content.top()..content.bottom()).find(|&y| {
         (content.left()..content.right())
-            .any(|x| buf[(x, y)].bg == crate::app::palette::SELECTED_ROW_BG)
+            .any(|x| buf[(x, y)].bg == crate::app::palette::SELECTED_ROW_BG.color())
     });
     assert!(
         cursor_row.is_some(),

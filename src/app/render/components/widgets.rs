@@ -161,7 +161,7 @@ pub(in crate::app) fn render_block_separator(f: &mut Frame, area: Rect) {
     }
     f.render_widget(
         Paragraph::new("\u{2581}".repeat(area.width as usize))
-            .style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR)),
+            .style(Style::default().fg(palette::HERO_OVERVIEW_SEPARATOR.color())),
         Rect { height: 1, ..area },
     );
 }
@@ -203,11 +203,11 @@ pub(in crate::app) fn render_queue_panel_frame(f: &mut Frame, area: Rect, focuse
 /// letter filters, and series seasons).
 fn selector_pill_fg(selected: bool, hovered: bool) -> Color {
     if selected {
-        palette::PILL_SELECTED_FG
+        palette::PILL_SELECTED_FG.color()
     } else if hovered {
-        palette::TEXT_EMPHASIS
+        palette::TEXT_EMPHASIS.color()
     } else {
-        palette::PILL_FG
+        palette::PILL_FG.color()
     }
 }
 
@@ -438,13 +438,13 @@ pub(in crate::app) fn render_pill_bar(
             spans.push(Span::styled(
                 "  ",
                 Style::default()
-                    .fg(palette::STATUS_AVAILABLE)
+                    .fg(palette::STATUS_AVAILABLE.color())
                     .bg(palette::surface_colors(palette::Surface::PillRow, false).fill),
             ));
         } else {
             spans.push(Span::styled(
                 prefix.to_string(),
-                Style::default().fg(palette::TEXT_METADATA),
+                Style::default().fg(palette::TEXT_METADATA.color()),
             ));
         }
         x_cursor += prefix_w as u16;
@@ -453,7 +453,7 @@ pub(in crate::app) fn render_pill_bar(
         let chunk = "\u{2039} ";
         spans.push(Span::styled(
             chunk,
-            Style::default().fg(palette::PILL_OVERFLOW_FG),
+            Style::default().fg(palette::PILL_OVERFLOW_FG.color()),
         ));
         x_cursor += chunk.width() as u16;
     }
@@ -515,7 +515,7 @@ pub(in crate::app) fn render_pill_bar(
         let chunk = " \u{203a}";
         spans.push(Span::styled(
             chunk,
-            Style::default().fg(palette::PILL_OVERFLOW_FG),
+            Style::default().fg(palette::PILL_OVERFLOW_FG.color()),
         ));
         x_cursor += chunk.width() as u16;
     }
@@ -553,7 +553,8 @@ pub(in crate::app) fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&
     if hints.is_empty() {
         return;
     }
-    let fill_of = |idx: usize| palette::HINT_PILL_FILLS[idx % palette::HINT_PILL_FILLS.len()];
+    let fill_of =
+        |idx: usize| palette::HINT_PILL_FILLS[idx % palette::HINT_PILL_FILLS.len()].color();
     let widths: Vec<usize> = hints
         .iter()
         .enumerate()
@@ -589,7 +590,7 @@ pub(in crate::app) fn render_hint_pill_bar(f: &mut Frame, area: Rect, hints: &[&
         push_pill_shell(
             &mut spans,
             hint,
-            palette::TEXT_ON_ACCENT,
+            palette::TEXT_ON_ACCENT.color(),
             fill,
             0,
             leading,
@@ -619,7 +620,7 @@ pub(in crate::app) fn render_placeholder(f: &mut Frame, area: Rect, msg: &str) {
     f.render_widget(
         Paragraph::new(Span::styled(
             msg.to_string(),
-            Style::default().fg(palette::TEXT_MUTED),
+            Style::default().fg(palette::TEXT_MUTED.color()),
         )),
         area,
     );

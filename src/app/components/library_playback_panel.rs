@@ -289,7 +289,7 @@ mod tests {
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
-            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
+            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG.color())),
             title_parts: None,
             status_indicators: None,
             idle_feed_title: None,
@@ -330,7 +330,7 @@ mod tests {
             panel_focused: false,
             // The painter paints the typed parts only over an attached
             // target's plain title; the parts replace it when present.
-            now_playing_title: Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG)),
+            now_playing_title: Some(("Fallback".into(), palette::PLAYBACK_VALUE_FG.color())),
             title_parts: Some(parts),
             status_indicators: None,
             idle_feed_title: None,
@@ -395,7 +395,7 @@ mod tests {
             &text,
             &fgs,
             title,
-            palette::PLAYBACK_TITLE_FG,
+            palette::PLAYBACK_TITLE_FG.color(),
             "the title part",
         );
         match context {
@@ -424,7 +424,7 @@ mod tests {
                 for i in 0..context.chars().count() + 1 {
                     assert_eq!(
                         fgs[start + i],
-                        palette::PLAYBACK_CONTEXT_FG,
+                        palette::PLAYBACK_CONTEXT_FG.color(),
                         "the context part and the space paint in the context role: {text:?}"
                     );
                 }
@@ -437,14 +437,14 @@ mod tests {
                 if title_start > 0 {
                     assert_ne!(
                         fgs[title_start - 1],
-                        palette::PLAYBACK_CONTEXT_FG,
+                        palette::PLAYBACK_CONTEXT_FG.color(),
                         "no context part before the title: {text:?}"
                     );
                 }
                 let after = title_start + title.chars().count();
                 assert_ne!(
                     fgs[after],
-                    palette::PLAYBACK_CONTEXT_FG,
+                    palette::PLAYBACK_CONTEXT_FG.color(),
                     "no context part after the title: {text:?}"
                 );
             }
@@ -527,7 +527,7 @@ mod tests {
             show_controls: true,
             panel: palette::Surface::PlaybackPanel,
             panel_focused: false,
-            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG)),
+            now_playing_title: Some(("Example".into(), palette::PLAYBACK_VALUE_FG.color())),
             title_parts: None,
             status_indicators: None,
             idle_feed_title: None,

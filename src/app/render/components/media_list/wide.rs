@@ -149,7 +149,7 @@ pub(super) fn render_wide_media_list_with_zebra<Target: Clone + PartialEq>(
             row_paint_area,
             total_rows.saturating_sub(content_area.height as usize),
             offset,
-            palette::SCROLLBAR,
+            palette::SCROLLBAR.color(),
         );
     }
 
@@ -188,7 +188,7 @@ fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> C
     // Audition: every selected row paints the opaque bar (and the scrollbar
     // column behind it), so the surface table's punch-through resolution is
     // deliberately bypassed.
-    palette::SELECTED_ROW_BG
+    palette::SELECTED_ROW_BG.color()
 }
 
 /// Component-view adapter for the retained-result seam.

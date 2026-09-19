@@ -121,7 +121,7 @@ fn render_query_row(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
     f.render_widget(
         Paragraph::new(Span::styled(
             line,
-            Style::default().fg(palette::TEXT_EMPHASIS),
+            Style::default().fg(palette::TEXT_EMPHASIS.color()),
         )),
         area,
     );
@@ -157,11 +157,11 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) -> Vec<
         next_x += width;
         let style = if *selected {
             Style::default()
-                .fg(palette::PILL_SELECTED_FG)
+                .fg(palette::PILL_SELECTED_FG.color())
                 .bg(palette::surface_colors(palette::Surface::PillChipSelected, false).fill)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(palette::PILL_FG)
+            Style::default().fg(palette::PILL_FG.color())
         };
         spans.push(Span::styled(format!(" {label} "), style));
     }
@@ -186,9 +186,9 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec
         let abs_idx = sidebar.scroll + vi;
         let selected = abs_idx == sidebar.cursor;
         let fg = if selected {
-            palette::ACCENT_ACTIVE
+            palette::ACCENT_ACTIVE.color()
         } else {
-            palette::TEXT_PRIMARY
+            palette::TEXT_PRIMARY.color()
         };
         let badge = badge_for(&item.item_type);
         let badge_str = format!("{badge:<10} ");
@@ -204,9 +204,9 @@ fn render_results(f: &mut Frame, area: Rect, sidebar: &mut SearchSidebar) -> Vec
                 Span::styled(
                     badge_str,
                     Style::default().fg(if selected {
-                        palette::PILL_SELECTED_FG
+                        palette::PILL_SELECTED_FG.color()
                     } else {
-                        palette::ACCENT
+                        palette::ACCENT.color()
                     }),
                 ),
                 Span::styled(
@@ -234,14 +234,20 @@ fn render_empty_state(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) {
         return;
     }
     let (text, fg) = if let Some(err) = &sidebar.last_drain_error {
-        (format!("Search failed: {err}"), palette::STATUS_ERROR)
+        (
+            format!("Search failed: {err}"),
+            palette::STATUS_ERROR.color(),
+        )
     } else if !sidebar.query.is_empty() {
         (
             "No matches on the server".to_string(),
-            palette::TEXT_SECONDARY,
+            palette::TEXT_SECONDARY.color(),
         )
     } else {
-        ("Type to search".to_string(), palette::TEXT_SECONDARY)
+        (
+            "Type to search".to_string(),
+            palette::TEXT_SECONDARY.color(),
+        )
     };
     f.render_widget(
         Paragraph::new(Span::styled(

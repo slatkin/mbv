@@ -71,11 +71,11 @@ impl App {
         }
         Self::set_status_pill_style(
             &mut local_spans,
-            palette::TEXT_FOCUS_ACCENT,
+            palette::TEXT_FOCUS_ACCENT.color(),
             palette::surface_colors(palette::Surface::StatusBarPill, false).fill,
         );
         if let Some(icon) = local_spans.get_mut(1) {
-            icon.style = icon.style.fg(palette::TEXT_METADATA);
+            icon.style = icon.style.fg(palette::TEXT_METADATA.color());
         }
         Self::uppercase_status_label(&mut local_spans);
         // The column header already names the playback target (`on <host>`),
@@ -126,16 +126,16 @@ pub(in crate::app) fn render_queue_status(
             let (local_bg, local_fg, remote_bg, remote_fg) = if m.local_selected {
                 (
                     selected_bg,
-                    palette::TEXT_FOCUS_ACCENT,
+                    palette::TEXT_FOCUS_ACCENT.color(),
                     chip_bg,
-                    palette::PILL_FG,
+                    palette::PILL_FG.color(),
                 )
             } else {
                 (
                     chip_bg,
-                    palette::PILL_FG,
+                    palette::PILL_FG.color(),
                     selected_bg,
-                    palette::TEXT_FOCUS_ACCENT,
+                    palette::TEXT_FOCUS_ACCENT.color(),
                 )
             };
             let local_span = Span::styled(" \u{2302} ", Style::default().fg(local_fg).bg(local_bg));

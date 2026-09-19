@@ -71,14 +71,23 @@ fn overview_credits_have_blank_row_separator_and_zebra_stripes() {
         .unwrap();
     let buffer = terminal.backend().buffer();
     let separator = (0..12).find(|y| buffer[(2, *y)].symbol() == "▁").unwrap();
-    assert_eq!(buffer[(2, separator)].fg, palette::HERO_OVERVIEW_SEPARATOR);
+    assert_eq!(
+        buffer[(2, separator)].fg,
+        palette::HERO_OVERVIEW_SEPARATOR.color()
+    );
     assert_eq!(buffer[(2, separator + 1)].symbol(), " ");
-    let stripe = palette::HERO_CREDITS_STRIPE;
+    let stripe = palette::HERO_CREDITS_STRIPE.color();
     assert_ne!(buffer[(2, separator + 2)].bg, stripe);
     assert_eq!(buffer[(2, separator + 3)].bg, stripe);
     assert_ne!(buffer[(2, separator + 4)].bg, stripe);
-    assert_eq!(buffer[(2, separator + 2)].fg, palette::HERO_CREDITS_NAME);
-    assert_eq!(buffer[(2, separator + 3)].fg, palette::HERO_CREDITS_NAME);
+    assert_eq!(
+        buffer[(2, separator + 2)].fg,
+        palette::HERO_CREDITS_NAME.color()
+    );
+    assert_eq!(
+        buffer[(2, separator + 3)].fg,
+        palette::HERO_CREDITS_NAME.color()
+    );
 }
 
 #[test]
@@ -284,7 +293,7 @@ fn credits_zebra_stripe_follows_table_offset() {
         .unwrap();
     assert_eq!(
         terminal.backend().buffer()[(0, 0)].bg,
-        palette::HERO_CREDITS_STRIPE
+        palette::HERO_CREDITS_STRIPE.color()
     );
 }
 

@@ -35,7 +35,7 @@ fn strip_rows_are_reserved_only_in_library_only() {
         for y in 0..buf.area().height {
             for x in 0..buf.area().width {
                 let cell = &buf[(x, y)];
-                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(palette::ACCENT) {
+                if cell.symbol() == "\u{2594}" && cell.style().fg == Some(palette::ACCENT.color()) {
                     cells.push((x, y));
                 }
             }
@@ -606,7 +606,8 @@ fn local_play_selection_moves_the_playhead_on_both_surfaces_immediately() {
         let mut hits = Vec::new();
         for y in 0..buf.area().height {
             let has_icon = (0..buf.area().width).any(|x| {
-                buf[(x, y)].symbol() == "▶" && buf[(x, y)].style().fg == Some(palette::ACCENT)
+                buf[(x, y)].symbol() == "▶"
+                    && buf[(x, y)].style().fg == Some(palette::ACCENT.color())
             });
             if !has_icon {
                 continue;
@@ -725,8 +726,11 @@ fn queue_selection_paints_the_bar_without_an_outside_marker() {
     // The selected row paints the bar and keeps the ordinary emphasis title,
     // not bold.
     let title_x = box_area.x + 2;
-    assert_eq!(buf[(title_x, marker_y)].bg, palette::SELECTED_ROW_BG);
-    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS);
+    assert_eq!(
+        buf[(title_x, marker_y)].bg,
+        palette::SELECTED_ROW_BG.color()
+    );
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS.color());
     assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 
     // Without panel focus the row keeps the ordinary emphasis title and is
@@ -735,7 +739,7 @@ fn queue_selection_paints_the_bar_without_an_outside_marker() {
     app.panel_focus = crate::app::PanelFocus::Library;
     let (term, _) = render_queue_view_to_terminal(&mut app, 100, 40);
     let buf = term.backend().buffer();
-    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS);
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS.color());
     assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 }
 

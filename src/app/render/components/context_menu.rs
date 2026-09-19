@@ -30,18 +30,17 @@ pub(in crate::app) fn render_context_menu_content(
         .iter()
         .enumerate()
         .map(|(i, (label, is_selectable))| {
-            let style = if !is_selectable {
-                Style::default().fg(palette::TEXT_SECONDARY)
-            } else if i == cursor {
-                Style::default()
-                    .fg(palette::TEXT_ON_ACCENT)
-                    .bg(
+            let style =
+                if !is_selectable {
+                    Style::default().fg(palette::TEXT_SECONDARY.color())
+                } else if i == cursor {
+                    Style::default().fg(palette::TEXT_ON_ACCENT.color()).bg(
                         palette::surface_colors(palette::Surface::ContextMenuSelectedRow, false)
                             .fill,
                     )
-            } else {
-                Style::default().fg(palette::TEXT_PRIMARY)
-            };
+                } else {
+                    Style::default().fg(palette::TEXT_PRIMARY.color())
+                };
             ListItem::new(format!(" {} ", label)).style(style)
         })
         .collect();

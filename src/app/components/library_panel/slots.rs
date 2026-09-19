@@ -130,7 +130,7 @@ pub(in crate::app) fn paint_list_controls_row(
     }
     f.render_widget(
         Paragraph::new(controls.label.clone())
-            .style(Style::default().fg(palette::TEXT_SECONDARY))
+            .style(Style::default().fg(palette::TEXT_SECONDARY.color()))
             .alignment(Alignment::Right),
         Rect { height: 1, ..area },
     );
@@ -187,8 +187,8 @@ mod tests {
         let buf = terminal.backend().buffer();
         assert!(text_in(buf, bar, "Movies") && text_in(buf, bar, "TV"));
         // The active pill is the selected chip; a different chip is unselected.
-        let selected_fg = palette::PILL_SELECTED_FG;
-        let unselected_fg = palette::PILL_FG;
+        let selected_fg = palette::PILL_SELECTED_FG.color();
+        let unselected_fg = palette::PILL_FG.color();
         assert!(hits.regions().len() == 2, "both painted pills retained");
         let (active_rect, active_id) = hits.regions()[1];
         assert_eq!(active_id, 1);
@@ -245,11 +245,11 @@ mod tests {
         );
         assert_eq!(
             buf[(selected_rect.x + 1, selected_rect.y)].bg,
-            palette::PILL_SELECTED_BG
+            palette::PILL_SELECTED_BG.color()
         );
         assert_eq!(
             buf[(hovered_rect.x + 1, hovered_rect.y)].fg,
-            palette::TEXT_EMPHASIS
+            palette::TEXT_EMPHASIS.color()
         );
         assert_ne!(
             buf[(hovered_rect.x + 1, hovered_rect.y)].fg,
@@ -258,7 +258,7 @@ mod tests {
         );
         assert_eq!(
             buf[(selected_rect.x + 1, selected_rect.y)].fg,
-            palette::PILL_SELECTED_FG
+            palette::PILL_SELECTED_FG.color()
         );
     }
 
@@ -296,13 +296,13 @@ mod tests {
                 for x in rect.left()..rect.right() {
                     assert_ne!(
                         buf[(x, y)].bg,
-                        palette::PILL_SELECTED_BG,
+                        palette::PILL_SELECTED_BG.color(),
                         "active: None must paint no active pill"
                     );
                 }
             }
             let cell = &buf[(rect.x + 1, rect.y)];
-            assert_eq!(cell.style().fg, Some(palette::PILL_FG));
+            assert_eq!(cell.style().fg, Some(palette::PILL_FG.color()));
         }
     }
 

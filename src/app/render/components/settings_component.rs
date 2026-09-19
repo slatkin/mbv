@@ -83,19 +83,19 @@ pub(in crate::app) fn render_settings_content(
                             row.name.clone(),
                             if focused {
                                 Style::default()
-                                    .fg(palette::TEXT_PRIMARY)
+                                    .fg(palette::TEXT_PRIMARY.color())
                                     .add_modifier(Modifier::BOLD)
                             } else {
-                                Style::default().fg(palette::TEXT_SECONDARY)
+                                Style::default().fg(palette::TEXT_SECONDARY.color())
                             },
                         ),
                         Span::raw("  "),
                         Span::styled(
                             row.detail.clone(),
                             Style::default().fg(if row.muted {
-                                palette::TEXT_MUTED
+                                palette::TEXT_MUTED.color()
                             } else {
-                                palette::ACCENT
+                                palette::ACCENT.color()
                             }),
                         ),
                     ])
@@ -118,7 +118,7 @@ pub(in crate::app) fn render_settings_content(
                         Span::styled(
                             row.label.clone(),
                             Style::default()
-                                .fg(palette::TEXT_METADATA)
+                                .fg(palette::TEXT_METADATA.color())
                                 .add_modifier(Modifier::BOLD),
                         ),
                     ]));
@@ -129,14 +129,14 @@ pub(in crate::app) fn render_settings_content(
                         Span::styled(
                             row.label.clone(),
                             if focused {
-                                Style::default().fg(palette::TEXT_PRIMARY)
+                                Style::default().fg(palette::TEXT_PRIMARY.color())
                             } else {
-                                Style::default().fg(palette::PLAYBACK_META_FG)
+                                Style::default().fg(palette::PLAYBACK_META_FG.color())
                             },
                         ),
                         Span::styled(
                             format!("{:>width$}", row.value, width = value_width),
-                            Style::default().fg(palette::ACCENT),
+                            Style::default().fg(palette::ACCENT.color()),
                         ),
                     ]));
                 }
@@ -189,9 +189,9 @@ fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
             *label,
             Style::default()
                 .fg(if focused {
-                    palette::TEXT_METADATA
+                    palette::TEXT_METADATA.color()
                 } else {
-                    palette::TEXT_SECONDARY
+                    palette::TEXT_SECONDARY.color()
                 })
                 .add_modifier(if focused {
                     Modifier::BOLD
@@ -206,16 +206,16 @@ fn render_setup(frame: &mut Frame, content: Rect, setup: &SetupDraft) {
         };
         lines.push(Line::from(Span::styled(
             format!("  {value}{}", if focused && !busy { "▏" } else { "" }),
-            Style::default().fg(palette::TEXT_PRIMARY),
+            Style::default().fg(palette::TEXT_PRIMARY.color()),
         )));
     }
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         if busy { "Working…" } else { error },
         Style::default().fg(if busy {
-            palette::TEXT_MUTED
+            palette::TEXT_MUTED.color()
         } else {
-            palette::STATUS_ERROR
+            palette::STATUS_ERROR.color()
         }),
     )));
     frame.render_widget(Paragraph::new(lines), content);

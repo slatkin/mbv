@@ -51,7 +51,7 @@ impl Model {
                 .as_ref()
                 .and_then(|session| session.now_playing.clone())
         };
-        let now_playing_title = title.map(|title| (title, palette::PLAYBACK_VALUE_FG));
+        let now_playing_title = title.map(|title| (title, palette::PLAYBACK_VALUE_FG.color()));
         let show_controls = state.active
             || self.app.connected_session_id.is_some()
             || self.app.cast_attachment.is_some();

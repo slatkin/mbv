@@ -141,12 +141,12 @@ fn help_line(key_w: usize, key: &str, desc: &str) -> Line<'static> {
         Span::styled(
             format!("{:<kw$}", key, kw = key_w),
             Style::default()
-                .fg(palette::TEXT_PRIMARY)
+                .fg(palette::TEXT_PRIMARY.color())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             desc.to_owned(),
-            Style::default().fg(palette::TEXT_SECONDARY),
+            Style::default().fg(palette::TEXT_SECONDARY.color()),
         ),
     ])
 }
@@ -157,7 +157,7 @@ fn help_section_line(label: &'static str) -> Line<'static> {
         Span::styled(
             label.to_owned(),
             Style::default()
-                .fg(palette::TEXT_METADATA)
+                .fg(palette::TEXT_METADATA.color())
                 .add_modifier(Modifier::BOLD),
         ),
     ])

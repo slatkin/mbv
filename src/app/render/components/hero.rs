@@ -21,7 +21,7 @@ pub(in crate::app) fn render_search_box(f: &mut Frame, area: Rect, query: &str, 
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             format!(" SEARCH: {input}"),
-            Style::default().fg(palette::TEXT_PRIMARY),
+            Style::default().fg(palette::TEXT_PRIMARY.color()),
         ))),
         area,
     );
