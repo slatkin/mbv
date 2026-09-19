@@ -14,7 +14,7 @@
 
 ## 3. Startup warm-up
 
-- [ ] 3.1 After the Emby Service transitions to Ready, fetch the configured music library's group-level listing and spawn one level fill per group-level child (deduped through the level-fill state); failures mark the level `Failed` silently. Verify with unit tests (mock client): fills are requested per group child without the view being opened, duplicate warm-up/candidate requests dedupe, and failure leaves browsing state untouched.
+- [x] 3.1 After the Emby Service transitions to Ready, fetch the configured music library's group-level listing and spawn one level fill per group-level child (deduped through the level-fill state); failures mark the level `Failed` silently. Verify with unit tests (mock client): fills are requested per group child without the view being opened, duplicate warm-up/candidate requests dedupe, and failure leaves browsing state untouched.
 
 ## 4. Verification
 
