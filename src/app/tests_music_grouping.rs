@@ -426,7 +426,7 @@ fn level_event_bulk_fills_cache_and_settles_candidate() {
     let mut app = make_music_app(vec![a1, a2]);
     app.start_or_supersede_music_grouping(0);
     app.album_artist_levels
-        .insert("level-1".into(), LevelFillState::Loading);
+        .insert("level-1".into(), LevelFillState::Loading { orphan_risk: false });
 
     app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
         level_id: "level-1".into(),
@@ -438,7 +438,7 @@ fn level_event_bulk_fills_cache_and_settles_candidate() {
 
     assert_eq!(
         app.album_artist_levels.get("level-1"),
-        Some(&LevelFillState::Filled)
+        Some(&LevelFillState::Filled { orphan_risk: false })
     );
     assert_eq!(
         app.album_artist_cache.get("album-1").map(String::as_str),
@@ -468,7 +468,7 @@ fn level_event_bulk_fills_cache_and_settles_candidate() {
 fn level_event_empty_artists_marks_failed_without_filling() {
     let mut app = make_music_app(vec![]);
     app.album_artist_levels
-        .insert("level-1".into(), LevelFillState::Loading);
+        .insert("level-1".into(), LevelFillState::Loading { orphan_risk: false });
 
     app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
         level_id: "level-1".into(),
@@ -487,7 +487,7 @@ fn service_reset_clears_album_artist_state() {
     let mut app = make_music_app(vec![]);
     app.album_artist_cache.insert("album-1".into(), "A".into());
     app.album_artist_levels
-        .insert("level-1".into(), LevelFillState::Filled);
+        .insert("level-1".into(), LevelFillState::Filled { orphan_risk: false });
     app.pending_level_artist_warmups.push_back("level-2".into());
     app.level_artist_warmups_in_flight.insert("level-3".into());
 
@@ -510,7 +510,7 @@ fn level_event_empty_artist_pair_fills_only_non_empty_pair() {
     let mut app = make_music_app(vec![a1, a2]);
     app.start_or_supersede_music_grouping(0);
     app.album_artist_levels
-        .insert("group-0".into(), LevelFillState::Loading);
+        .insert("group-0".into(), LevelFillState::Loading { orphan_risk: false });
 
     app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
         level_id: "group-0".into(),
@@ -533,7 +533,7 @@ fn level_event_empty_artist_pair_fills_only_non_empty_pair() {
     );
     assert_eq!(
         app.album_artist_levels.get("group-0"),
-        Some(&LevelFillState::Filled)
+        Some(&LevelFillState::Filled { orphan_risk: false })
     );
     // The arrival still resolves every waiting album: the empty-artist
     // album settles to the folder fallback instead of the cache.
@@ -559,7 +559,7 @@ fn filled_level_with_unresolvable_albums_settles_immediately() {
     a1.artist = String::new();
     let mut app = make_music_app(vec![a1]);
     app.album_artist_levels
-        .insert("group-0".into(), LevelFillState::Filled);
+        .insert("group-0".into(), LevelFillState::Filled { orphan_risk: false });
 
     app.start_or_supersede_music_grouping(0);
 
@@ -577,6 +577,147 @@ fn filled_level_with_unresolvable_albums_settles_immediately() {
         state.settled.as_ref().unwrap().entries[0].artist,
         "Unknown Artist"
     );
+}
+
+#[test]
+fn warmup_orphan_risk_gets_one_browse_upgrade_then_stays_terminal() {
+    let mut app = make_music_app(vec![make_untagged_album("album-1")]);
+    app.album_artist_levels.insert(
+        "group-0".into(),
+        LevelFillState::Filled { orphan_risk: true },
+    );
+
+    // With the test stub's absent client, this transition proves the
+    // browse-triggered upgrade was requested rather than falling back from
+    // the warm-up Filled state.
+    app.start_or_supersede_music_grouping(0);
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Failed)
+    );
+    assert!(app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap()
+        .candidate
+        .is_some());
+
+    // Model the one upgrade's arrival with an unknown artist. It clears the
+    // orphan risk, while the waiting album takes the existing fallback path.
+    app.album_artist_levels.insert(
+        "group-0".into(),
+        LevelFillState::Loading { orphan_risk: false },
+    );
+    app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
+        level_id: "group-0".into(),
+        artists: vec![("album-1".into(), String::new())],
+    });
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Filled { orphan_risk: false })
+    );
+
+    // A later candidate does not request another fill, even though the
+    // album remains unresolved after the upgrade.
+    app.start_or_supersede_music_grouping(0);
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Filled { orphan_risk: false })
+    );
+    assert!(app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap()
+        .candidate
+        .is_none());
+}
+
+#[test]
+fn candidate_filled_level_is_terminal_without_orphan_upgrade() {
+    let mut app = make_music_app(vec![make_untagged_album("album-1")]);
+    app.album_artist_levels.insert(
+        "group-0".into(),
+        LevelFillState::Filled { orphan_risk: false },
+    );
+
+    app.start_or_supersede_music_grouping(0);
+
+    assert!(app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap()
+        .candidate
+        .is_none());
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Filled { orphan_risk: false })
+    );
+}
+
+#[test]
+fn orphan_risk_filled_level_with_no_unresolved_items_does_not_upgrade() {
+    let mut tagged = make_untagged_album("album-1");
+    tagged.artist = "Tagged Artist".into();
+    let mut app = make_music_app(vec![tagged]);
+    app.album_artist_levels.insert(
+        "group-0".into(),
+        LevelFillState::Filled { orphan_risk: true },
+    );
+
+    app.start_or_supersede_music_grouping(0);
+
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Filled { orphan_risk: true })
+    );
+    assert!(app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap()
+        .candidate
+        .is_none());
+}
+
+#[test]
+fn stale_warmup_listing_is_ignored_by_emby_generation() {
+    let mut app = make_unopened_music_app();
+    let status_before = app.status.clone();
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: mbv_core::service_runtime::SetupGeneration::new(1),
+        groups: vec![make_group_item("stale-group", "Stale")],
+    });
+
+    assert!(app.album_artist_levels.is_empty());
+    assert!(app.pending_level_artist_warmups.is_empty());
+    assert_eq!(app.status, status_before);
+    assert!(app.libs[0].nav_stack.is_empty());
+}
+
+#[test]
+fn current_generation_warmup_listing_is_accepted() {
+    let mut app = make_unopened_music_app();
+    app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: mbv_core::service_runtime::SetupGeneration::default(),
+        groups: vec![make_group_item("current-group", "Current")],
+    });
+
+    assert_eq!(
+        app.album_artist_levels.get("current-group"),
+        Some(&LevelFillState::Failed)
+    );
+    assert!(app.libs[0].nav_stack.is_empty());
 }
 
 #[test]
@@ -602,7 +743,7 @@ fn page_two_albums_resolve_from_whole_level_fill_without_new_request() {
     });
     assert_eq!(
         app.album_artist_levels.get("group-0"),
-        Some(&LevelFillState::Filled)
+        Some(&LevelFillState::Filled { orphan_risk: false })
     );
 
     // The user pages on: album-2 is appended and a new candidate is created.
@@ -635,20 +776,20 @@ fn spawn_level_fetch_dedupes_on_loading_and_filled() {
     let albums = Vec::new();
 
     app.album_artist_levels
-        .insert("group-0".into(), LevelFillState::Loading);
+        .insert("group-0".into(), LevelFillState::Loading { orphan_risk: false });
     app.spawn_level_artist_fetch("group-0".into(), albums.clone());
     assert_eq!(
         app.album_artist_levels.get("group-0"),
-        Some(&LevelFillState::Loading),
+        Some(&LevelFillState::Loading { orphan_risk: false }),
         "Loading level must not be re-requested"
     );
 
     app.album_artist_levels
-        .insert("group-0".into(), LevelFillState::Filled);
+        .insert("group-0".into(), LevelFillState::Filled { orphan_risk: false });
     app.spawn_level_artist_fetch("group-0".into(), albums);
     assert_eq!(
         app.album_artist_levels.get("group-0"),
-        Some(&LevelFillState::Filled),
+        Some(&LevelFillState::Filled { orphan_risk: false }),
         "Filled level must not be re-requested"
     );
 }
@@ -706,11 +847,12 @@ fn warmup_fan_out_stays_bounded_before_level_arrivals() {
     for index in 0..6 {
         let level_id = format!("in-flight-{index}");
         app.album_artist_levels
-            .insert(level_id.clone(), LevelFillState::Loading);
+            .insert(level_id.clone(), LevelFillState::Loading { orphan_risk: false });
         app.level_artist_warmups_in_flight.insert(level_id);
     }
 
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: Default::default(),
         groups: (0..7)
             .map(|index| make_group_item(&format!("group-{index}"), "Group"))
             .collect(),
@@ -728,7 +870,7 @@ fn warmup_fan_out_stays_bounded_before_level_arrivals() {
 fn pending_warmup_is_removed_when_candidate_wins_the_level_race() {
     let mut app = make_music_app(vec![make_untagged_album("album-1")]);
     app.album_artist_levels
-        .insert("group-0".into(), LevelFillState::Loading);
+        .insert("group-0".into(), LevelFillState::Loading { orphan_risk: false });
     app.pending_level_artist_warmups.push_back("group-0".into());
 
     app.spawn_level_artist_fetch("group-0".into(), Vec::new());
@@ -736,7 +878,7 @@ fn pending_warmup_is_removed_when_candidate_wins_the_level_race() {
     assert!(app.pending_level_artist_warmups.is_empty());
     assert_eq!(
         app.album_artist_levels.get("group-0"),
-        Some(&LevelFillState::Loading),
+        Some(&LevelFillState::Loading { orphan_risk: false }),
         "the candidate observes the existing warm-up request rather than spawning"
     );
 }
@@ -754,6 +896,7 @@ fn warmup_listing_requests_one_fill_per_group_child_without_a_view() {
     let mut app = make_unopened_music_app();
 
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: Default::default(),
         groups: vec![
             make_group_item("group-0", "A-D"),
             make_group_item("group-1", "E-H"),
@@ -799,9 +942,10 @@ fn warmup_library_selection_gates_on_group_config_and_music_collection() {
 fn warmup_dedupes_on_loading_and_filled_levels() {
     let mut app = make_unopened_music_app();
     app.album_artist_levels
-        .insert("group-0".into(), LevelFillState::Loading);
+        .insert("group-0".into(), LevelFillState::Loading { orphan_risk: false });
 
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: Default::default(),
         groups: vec![make_group_item("group-0", "A-D")],
     });
 
@@ -811,17 +955,18 @@ fn warmup_dedupes_on_loading_and_filled_levels() {
     // so `Loading` surviving proves the warm-up spawned nothing.
     assert_eq!(
         app.album_artist_levels.get("group-0"),
-        Some(&LevelFillState::Loading)
+        Some(&LevelFillState::Loading { orphan_risk: false })
     );
 
     app.album_artist_levels
-        .insert("group-1".into(), LevelFillState::Filled);
+        .insert("group-1".into(), LevelFillState::Filled { orphan_risk: false });
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: Default::default(),
         groups: vec![make_group_item("group-1", "E-H")],
     });
     assert_eq!(
         app.album_artist_levels.get("group-1"),
-        Some(&LevelFillState::Filled)
+        Some(&LevelFillState::Filled { orphan_risk: false })
     );
 }
 
@@ -831,7 +976,7 @@ fn warmup_and_candidate_share_one_fill_decision() {
     // Seed the in-flight state a real warm-up spawn marks (the stub has no
     // client, so simulate it).
     app.album_artist_levels
-        .insert("group-0".into(), LevelFillState::Loading);
+        .insert("group-0".into(), LevelFillState::Loading { orphan_risk: false });
 
     // Opening the grouped view while warm-up is in flight: the candidate
     // takes the NoWork arm and waits instead of starting a second fill.
@@ -847,11 +992,12 @@ fn warmup_and_candidate_share_one_fill_decision() {
 
     // The warm-up listing arrives too: still no second fill for the level.
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: Default::default(),
         groups: vec![make_group_item("group-0", "A-D")],
     });
     assert_eq!(
         app.album_artist_levels.get("group-0"),
-        Some(&LevelFillState::Loading)
+        Some(&LevelFillState::Loading { orphan_risk: false })
     );
 }
 
@@ -859,6 +1005,7 @@ fn warmup_and_candidate_share_one_fill_decision() {
 fn warmup_fill_failure_marks_failed_and_leaves_browsing_untouched() {
     let mut app = make_unopened_music_app();
     app.handle_lib_event(LibEvent::MusicGroupWarmupListed {
+        generation: Default::default(),
         groups: vec![make_group_item("group-0", "A-D")],
     });
     let status_before = app.status.clone();

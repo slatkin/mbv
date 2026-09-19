@@ -195,11 +195,9 @@ impl App {
             // deduped on the level-fill state through the single shared
             // decision (`LevelFillState::action_for`): `Loading`/`Filled`
             // levels do no work; a fresh or `Failed` level (re)starts the
-            // fill. A `Filled` level with still-unresolved albums is
-            // terminal — the fill already had its only chance, and it
-            // covers every album in the level by construction — so the
-            // fallback derives those now instead of waiting out
-            // `SETTLE_WINDOW`.
+            // fill. A candidate-driven `Filled` level with still-unresolved
+            // albums is terminal — its fill had the level's album paths —
+            // while a warm-up `Filled` level gets one path-aware upgrade.
             let mut level_request = None;
             if !candidate.unresolved.is_empty() {
                 let level_state = self.album_artist_levels.get(&candidate.parent_id);
@@ -207,11 +205,28 @@ impl App {
                     LevelFillAction::Request => {
                         level_request = Some((candidate.parent_id.clone(), level.items.clone()));
                     }
-                    LevelFillAction::NoWork => {
-                        if matches!(level_state, Some(LevelFillState::Filled)) {
+                    LevelFillAction::NoWork => match level_state {
+                        // Warm-up had no album paths, so one browse-triggered
+                        // upgrade is needed to attribute nested-disc orphan
+                        // buckets. Keep the candidate unresolved while that
+                        // fill runs; its arrival can resolve every album.
+                        Some(LevelFillState::Filled { orphan_risk: true }) => {
+                            level_request =
+                                Some((candidate.parent_id.clone(), level.items.clone()));
+                        }
+                        // A candidate-driven fill already had the level's
+                        // album paths and is terminal, preserving the
+                        // existing immediate fallback behavior.
+                        Some(LevelFillState::Filled { orphan_risk: false }) => {
                             candidate.unresolved.clear();
                         }
-                    }
+                        // Loading is shared with another candidate/warm-up;
+                        // Failed is unreachable under NoWork but remains
+                        // explicit for exhaustive state handling.
+                        Some(LevelFillState::Loading { .. })
+                        | Some(LevelFillState::Failed)
+                        | None => {}
+                    },
                 }
             }
             let to_fetch = candidate.unresolved.iter().cloned().collect();

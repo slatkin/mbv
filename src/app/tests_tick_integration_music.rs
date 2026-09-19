@@ -27,6 +27,7 @@ fn inline_search_warmup_event_starts_level_fills_without_opening_a_view() {
     harness
         .model_mut()
         .handle_inline_search_lib_event(LibEvent::MusicGroupWarmupListed {
+            generation: Default::default(),
             groups: vec![group],
         });
 

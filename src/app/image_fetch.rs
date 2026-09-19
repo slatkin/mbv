@@ -130,6 +130,7 @@ impl App {
             return;
         };
         let tx = self.lib_tx.clone();
+        let generation = self.emby_runtime.generation();
         std::thread::spawn(move || {
             for library_id in library_ids {
                 // The established root-children call, verbatim from the
@@ -144,7 +145,7 @@ impl App {
                     "SortName",
                     "Ascending",
                 ) {
-                    let _ = tx.send(LibEvent::MusicGroupWarmupListed { groups: items });
+                    let _ = tx.send(LibEvent::MusicGroupWarmupListed { generation, groups: items });
                 }
                 // A failed listing fetch is silent: no level ids are known,
                 // so there is nothing to mark `Failed`.
@@ -210,7 +211,7 @@ impl App {
             self.spawn_level_artist_fetch(level_id.clone(), Vec::new());
             if matches!(
                 self.album_artist_levels.get(&level_id),
-                Some(LevelFillState::Loading)
+                Some(LevelFillState::Loading { .. })
             ) {
                 self.level_artist_warmups_in_flight.insert(level_id);
             }
@@ -240,14 +241,24 @@ impl App {
         // second warm-up request on the same level.
         self.pending_level_artist_warmups
             .retain(|pending| pending != &level_id);
+        let orphan_upgrade = !albums.is_empty()
+            && matches!(
+                self.album_artist_levels.get(&level_id),
+                Some(LevelFillState::Filled { orphan_risk: true })
+            );
         if matches!(
             LevelFillState::action_for(self.album_artist_levels.get(&level_id)),
             LevelFillAction::NoWork
-        ) {
+        ) && !orphan_upgrade
+        {
             return;
         }
-        self.album_artist_levels
-            .insert(level_id.clone(), LevelFillState::Loading);
+        self.album_artist_levels.insert(
+            level_id.clone(),
+            LevelFillState::Loading {
+                orphan_risk: albums.is_empty(),
+            },
+        );
         let (server_url, token) = {
             let Some(client) = self.emby_client() else {
                 // No client: mark `Failed` so the next candidate creation

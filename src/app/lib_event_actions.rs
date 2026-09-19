@@ -646,6 +646,10 @@ impl App {
             | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
             LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
                 let warmup_completed = self.level_artist_warmups_in_flight.remove(&level_id);
+                let orphan_risk = matches!(
+                    self.album_artist_levels.get(&level_id),
+                    Some(LevelFillState::Loading { orphan_risk: true })
+                );
                 if artists.is_empty() {
                     // HTTP failure (or a trackless level): no fill, the level's
                     // albums resolve via the existing settle/fallback path.
@@ -665,21 +669,24 @@ impl App {
                         self.advance_music_grouping_candidates(&album_id, &artist);
                     }
                     self.album_artist_levels
-                        .insert(level_id, LevelFillState::Filled);
+                        .insert(level_id, LevelFillState::Filled { orphan_risk });
                 }
                 if warmup_completed {
                     self.drain_level_artist_warmups();
                 }
             }
-            LibEvent::MusicGroupWarmupListed { groups } => {
+            LibEvent::MusicGroupWarmupListed { generation, groups } => {
+                if !self.emby_runtime.accepts(generation) {
+                    return;
+                }
                 // One level fill per group-level child (design D5), deduped
                 // through the same `LevelFillState::action_for` decision
                 // candidate creation uses (`spawn_level_artist_fetch`'s
                 // guard). `albums` stays empty: warm-up holds only the group
                 // listing, so orphan-`Path` attribution (design D3) has no
-                // in-hand album paths — unmatched buckets keep their inert
-                // keys and those albums still resolve via the
-                // settle/fallback path. A fill failure arrives as an empty
+                // in-hand album paths. A successful warm-up is marked with
+                // orphan risk and receives one path-aware upgrade when that
+                // level is later browsed. A fill failure arrives as an empty
                 // `AlbumArtistLevelFetched`, marking the level `Failed`
                 // (retryable) with no UI error; browsing state is untouched.
                 for group in groups {

@@ -3,6 +3,7 @@ use super::types_feed::FeedHomeVideoGroup;
 use super::types_playback::{HomeContent, HomeLatestSource};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
+use mbv_core::service_runtime::SetupGeneration;
 
 /// Per-kind landing payload for cross-surface item navigation (design D2 of
 /// change `per-destination-item-navigation`): the Movie/generic arm keeps the
@@ -137,6 +138,7 @@ pub(super) enum LibEvent {
     /// caches, and failures arrive as empty `AlbumArtistLevelFetched`
     /// artists that merely mark the level `Failed`.
     MusicGroupWarmupListed {
+        generation: SetupGeneration,
         groups: Vec<EmbyItem>,
     },
     /// Track list for the album currently highlighted in the

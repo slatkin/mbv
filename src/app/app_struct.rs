@@ -35,9 +35,13 @@ use std::time::Instant;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum LevelFillState {
     /// A level fill is in flight. Set by `spawn_level_artist_fetch`.
-    Loading,
+    /// `orphan_risk` is true for a warm-up fill that lacked the level's album
+    /// paths, so a later browse can perform one path-aware upgrade.
+    Loading { orphan_risk: bool },
     /// The level's albums were bulk-filled into `album_artist_cache`.
-    Filled,
+    /// Warm-up fills carry orphan risk because they had no album paths for
+    /// attributing nested-disc track buckets.
+    Filled { orphan_risk: bool },
     /// The level fill failed (HTTP error or no tracks); albums resolve via
     /// the settle/fallback path.
     Failed,
@@ -60,7 +64,9 @@ impl LevelFillState {
     /// (re)starts the fill.
     pub(super) fn action_for(state: Option<&LevelFillState>) -> LevelFillAction {
         match state {
-            Some(LevelFillState::Loading) | Some(LevelFillState::Filled) => LevelFillAction::NoWork,
+            Some(LevelFillState::Loading { .. }) | Some(LevelFillState::Filled { .. }) => {
+                LevelFillAction::NoWork
+            }
             Some(LevelFillState::Failed) | None => LevelFillAction::Request,
         }
     }
