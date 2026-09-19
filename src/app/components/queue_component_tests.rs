@@ -717,16 +717,22 @@ fn queue_footer_hides_scope_pills_when_disconnected() {
 }
 
 /// A played slot in the queue projects the shared `Played` state, so the one
-/// played-row colour is used in the queue like every other list.
+/// played-row colour is used in the queue like every other list. Music is the
+/// exception: a track never carries played/resume state into its row.
 #[test]
 fn played_queue_slots_project_the_shared_played_state() {
     let mut played = crate::app::tests::make_item("finished", "Movie");
     played.played = true;
     let fresh = crate::app::tests::make_item("fresh", "Movie");
+    let mut track = crate::app::tests::make_item("album track", "Audio");
+    track.played = true;
+    track.runtime_ticks = 1000;
+    track.playback_position_ticks = 500;
     let slots = PlaybackQueue::from_queue_items(
         vec![
             QueueItem::Emby(Box::new(played)),
             QueueItem::Emby(Box::new(fresh)),
+            QueueItem::Emby(Box::new(track)),
         ],
         None,
     )
@@ -739,4 +745,9 @@ fn played_queue_slots_project_the_shared_played_state() {
     };
     assert_eq!(state(0), MediaSemanticState::Played);
     assert_eq!(state(1), MediaSemanticState::Ordinary);
+    assert_eq!(
+        state(2),
+        MediaSemanticState::Ordinary,
+        "a music track is always unplayed"
+    );
 }

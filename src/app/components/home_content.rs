@@ -229,11 +229,7 @@ impl HomeContent {
                     // and the sessions modal show one).
                     duration: None,
                     kind: MediaKind::Media,
-                    semantic_state: MediaSemanticState::from_progress(
-                        item.played(),
-                        item.playback_position_ticks(),
-                        item.runtime_ticks(),
-                    ),
+                    semantic_state: MediaSemanticState::from_queue_item(item),
                 }
             })
             .collect();
@@ -805,7 +801,8 @@ mod tests {
     }
 
     /// Home rows use the one canonical state derivation: a finished item is
-    /// `Played`, an in-progress item is `Active` with its resume percentage.
+    /// `Played`, an in-progress item is `Active` with its resume percentage,
+    /// and a music row is always `Ordinary`.
     #[test]
     fn home_rows_use_the_canonical_state_derivation() {
         let mut played = make_item("Finished Film", "Movie");
@@ -815,11 +812,17 @@ mod tests {
         in_progress.id = "in-progress".into();
         in_progress.runtime_ticks = 1000;
         in_progress.playback_position_ticks = 500;
+        let mut track = make_item("Album Track", "Audio");
+        track.id = "track".into();
+        track.played = true;
+        track.runtime_ticks = 1000;
+        track.playback_position_ticks = 500;
         let owner = owner_with_section(
             HomeLatestSource::Emby("emby".into()),
             vec![
                 QueueItem::Emby(Box::new(played)),
                 QueueItem::Emby(Box::new(in_progress)),
+                QueueItem::Emby(Box::new(track)),
             ],
             &[],
         );
@@ -833,6 +836,7 @@ mod tests {
             .collect();
         assert_eq!(states[0], MediaSemanticState::Played);
         assert_eq!(states[1], MediaSemanticState::active(Some(50)));
+        assert_eq!(states[2], MediaSemanticState::Ordinary);
     }
 
     /// Truncation is the canonical painter's contract (a split row is cut

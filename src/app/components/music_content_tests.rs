@@ -81,7 +81,7 @@ fn content_exposes_tracks_as_the_workspace() {
         .as_ref()
         .and_then(|hero| hero.workspace.as_ref())
         .and_then(|workspace| workspace.header);
-    assert_eq!(header, Some("Tracklist"));
+    assert_eq!(header, Some("TRACKLIST"));
     assert_eq!(owner.track_list.rows().len(), 1);
 }
 
@@ -178,14 +178,18 @@ fn resolved_hero_data_uses_parsed_title_year_and_cached_artist() {
     assert_eq!(data.facts.meta_rows, vec!["Folder Artist", "2024"]);
 }
 
-/// A played track projects the shared `Played` state, so every list paints the
-/// one played-row colour.
+/// Music never tracks played/progress in its rows: a played track and a
+/// half-played track both project the ordinary row (mbv never resumes a music
+/// track, so its stored position means nothing either).
 #[test]
-fn played_tracks_project_the_shared_played_state() {
+fn played_tracks_project_the_ordinary_state() {
     let mut played = make_item("Finished Track", "Audio");
     played.played = true;
+    let mut half_played = make_item("Half-Played Track", "Audio");
+    half_played.runtime_ticks = 1000;
+    half_played.playback_position_ticks = 500;
     let fresh = make_item("Fresh Track", "Audio");
-    let rows = build_track_rows(&[played, fresh]);
+    let rows = build_track_rows(&[played, half_played, fresh]);
     let states: Vec<&MediaSemanticState> = rows
         .iter()
         .map(|row| match row {
@@ -193,6 +197,7 @@ fn played_tracks_project_the_shared_played_state() {
             _ => panic!("track rows are items"),
         })
         .collect();
-    assert_eq!(states[0], &MediaSemanticState::Played);
+    assert_eq!(states[0], &MediaSemanticState::Ordinary);
     assert_eq!(states[1], &MediaSemanticState::Ordinary);
+    assert_eq!(states[2], &MediaSemanticState::Ordinary);
 }

@@ -754,7 +754,7 @@ fn queue_media_row_at(
     } else {
         // The one canonical state derivation: a played slot paints the
         // shared played colour, an in-progress slot its resume percentage.
-        MediaSemanticState::from_progress(slot.item.played(), pos_ticks, duration_ticks)
+        MediaSemanticState::from_queue_item(&slot.item)
     };
     MediaListRow::Item {
         target: slot.slot_id,

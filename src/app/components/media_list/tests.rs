@@ -228,3 +228,53 @@ fn from_progress_is_the_one_state_derivation() {
         "the percentage is bounded at 100"
     );
 }
+
+/// The item-level derivation: music (track, album, artist) never carries its
+/// stored played/resume facts into a row — music is fire-and-forget, so the
+/// row stays `Ordinary`. Every other item keeps the canonical derivation.
+#[test]
+fn item_level_derivation_makes_music_rows_ordinary() {
+    let played_music = |item_type: &str| {
+        let mut item = crate::app::tests::make_item("Music", item_type);
+        item.played = true;
+        item.runtime_ticks = 1000;
+        item.playback_position_ticks = 500;
+        item
+    };
+    for item_type in ["Audio", "MusicAlbum", "MusicArtist"] {
+        let item = played_music(item_type);
+        assert_eq!(
+            MediaSemanticState::from_emby(&item),
+            MediaSemanticState::Ordinary,
+            "a {item_type} row ignores both its played flag and its resume position"
+        );
+        assert_eq!(
+            MediaSemanticState::from_queue_item(&mbv_core::playback_queue::QueueItem::Emby(
+                Box::new(item)
+            )),
+            MediaSemanticState::Ordinary,
+            "the queue's music row is ordinary too"
+        );
+    }
+
+    let mut film = crate::app::tests::make_item("The Film", "Movie");
+    film.played = true;
+    assert_eq!(
+        MediaSemanticState::from_emby(&film),
+        MediaSemanticState::Played,
+        "non-music keeps the canonical derivation"
+    );
+    film.played = false;
+    film.runtime_ticks = 1000;
+    film.playback_position_ticks = 500;
+    assert_eq!(
+        MediaSemanticState::from_emby(&film),
+        MediaSemanticState::active(Some(50))
+    );
+    assert_eq!(
+        MediaSemanticState::from_queue_item(&mbv_core::playback_queue::QueueItem::Emby(Box::new(
+            film
+        ))),
+        MediaSemanticState::active(Some(50))
+    );
+}

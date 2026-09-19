@@ -345,6 +345,18 @@ impl QueueItem {
         }
     }
 
+    /// Whether this is a music item (see [`EmbyItem::is_music`]). Feeds and
+    /// Audiobookshelf content are not music, however audio they are: their
+    /// stored played/resume facts do reach the row.
+    pub fn is_music(&self) -> bool {
+        match self {
+            QueueItem::Emby(item) => item.is_music(),
+            QueueItem::Feed(_)
+            | QueueItem::Audiobookshelf(_)
+            | QueueItem::AudiobookshelfBook(_) => false,
+        }
+    }
+
     pub fn is_video(&self) -> bool {
         match self {
             QueueItem::Emby(item) => item.is_video(),

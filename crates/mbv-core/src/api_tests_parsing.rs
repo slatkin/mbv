@@ -537,3 +537,25 @@ fn should_resume_cases(
     item.playback_position_ticks = playback_position_ticks;
     assert_eq!(item.should_resume(), expected);
 }
+
+// ── is_music ─────────────────────────────────────────────────────────────
+
+#[rstest]
+#[case::track("Audio", true)]
+#[case::album("MusicAlbum", true)]
+#[case::artist("MusicArtist", true)]
+#[case::movie("Movie", false)]
+#[case::episode("Episode", false)]
+#[case::series("Series", false)]
+fn is_music_covers_music_item_types(#[case] item_type: &str, #[case] expected: bool) {
+    // `make_item` gives every fixture the `Video` media type, so the case
+    // table isolates the item type.
+    assert_eq!(make_item("X", item_type).is_music(), expected);
+}
+
+#[test]
+fn is_music_follows_the_media_type_of_a_non_audio_item_type() {
+    let mut item = make_item("X", "Movie");
+    item.media_type = "Audio".into();
+    assert!(item.is_music());
+}

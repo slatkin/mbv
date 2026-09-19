@@ -65,11 +65,7 @@ fn row_for(item: &EmbyItem) -> MediaListRow<String> {
             .then(|| MediaListTrailing::Year(item.production_year.to_string())),
         duration: None,
         kind: MediaKind::Collection,
-        semantic_state: MediaSemanticState::from_progress(
-            item.played,
-            item.playback_position_ticks,
-            item.runtime_ticks,
-        ),
+        semantic_state: MediaSemanticState::from_emby(item),
     }
 }
 

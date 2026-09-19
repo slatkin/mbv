@@ -102,11 +102,7 @@ fn build_episode_rows(episodes: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 trailing: None,
                 duration: None,
                 kind: MediaKind::Media,
-                semantic_state: MediaSemanticState::from_progress(
-                    episode.played,
-                    episode.playback_position_ticks,
-                    episode.runtime_ticks,
-                ),
+                semantic_state: MediaSemanticState::from_emby(episode),
             }
         })
         .collect()
@@ -206,11 +202,7 @@ impl TvContent {
                     kind: MediaKind::Collection,
                     // The one canonical state derivation; the series rail no
                     // longer diverges by geometry.
-                    semantic_state: MediaSemanticState::from_progress(
-                        item.played,
-                        item.playback_position_ticks,
-                        item.runtime_ticks,
-                    ),
+                    semantic_state: MediaSemanticState::from_emby(item),
                 }))
         });
         let rows = rows.collect::<Vec<_>>();

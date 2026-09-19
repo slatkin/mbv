@@ -323,6 +323,17 @@ impl EmbyItem {
         self.media_type == "Audio" || self.item_type == "Audio"
     }
 
+    /// Whether this is a music item: an Emby track, album or artist.
+    ///
+    /// Music is fire-and-forget in mbv — playback never resumes one
+    /// (`resume_start_pos` gates on `!is_audio`), so its stored played/resume
+    /// facts carry no meaning anywhere: a row derived from a music item is
+    /// always ordinary, and only the row that is actually playing shows
+    /// anything.
+    pub fn is_music(&self) -> bool {
+        self.item_type == "MusicAlbum" || self.item_type == "MusicArtist" || self.is_audio()
+    }
+
     pub fn is_video(&self) -> bool {
         self.media_type == "Video"
     }

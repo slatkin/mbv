@@ -76,11 +76,7 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
                 duration,
                 kind: MediaKind::Media,
                 // The one canonical state derivation.
-                semantic_state: MediaSemanticState::from_progress(
-                    track.played,
-                    track.playback_position_ticks,
-                    track.runtime_ticks,
-                ),
+                semantic_state: MediaSemanticState::from_emby(track),
             }
         })
         .collect()
@@ -347,7 +343,7 @@ impl MusicContent {
                 overview: data.overview,
                 credits: data.credits,
                 workspace: Some(Workspace {
-                    header: Some("Tracklist"),
+                    header: Some("TRACKLIST"),
                     selector: None,
                     list: &mut self.track_list,
                     focused: focused && track_focused,

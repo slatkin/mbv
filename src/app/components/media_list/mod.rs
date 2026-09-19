@@ -5,6 +5,8 @@
 
 use crate::app::components::library_panel::LibraryKey;
 use crate::app::ui_util::move_cursor;
+use mbv_core::api::EmbyItem;
+use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Color;
 use std::time::Instant;
@@ -156,12 +158,12 @@ impl MediaSemanticState {
         }
     }
 
-    /// The one derivation every list uses to turn an item's playback facts
-    /// into a row state — the canonical state/colour policy, so no
-    /// destination decides a row colour. A positive resume position yields
-    /// `Active` with the bounded percentage (no percentage when the runtime
-    /// is unknown); `played` without a position yields `Played`; otherwise the
-    /// row is `Ordinary`.
+    /// The canonical state/colour policy, so no destination decides a row
+    /// colour: a positive resume position yields `Active` with the bounded
+    /// percentage (no percentage when the runtime is unknown); `played`
+    /// without a position yields `Played`; otherwise the row is `Ordinary`.
+    /// Lists derive from an item through [`Self::from_emby`] /
+    /// [`Self::from_queue_item`], which add the music rule on top of this.
     pub fn from_progress(played: bool, position_ticks: i64, runtime_ticks: i64) -> Self {
         if position_ticks > 0 {
             let progress = (runtime_ticks > 0)
@@ -171,6 +173,37 @@ impl MediaSemanticState {
             Self::Played
         } else {
             Self::Ordinary
+        }
+    }
+
+    /// The one item-level derivation for an Emby row: a music item (track,
+    /// album, artist) is fire-and-forget, so its stored played/resume facts
+    /// are ignored and its row is always `Ordinary`. Only the row that is
+    /// actually playing shows state, and the Queue paints that one as
+    /// `NowPlaying` itself.
+    pub fn from_emby(item: &EmbyItem) -> Self {
+        if item.is_music() {
+            Self::Ordinary
+        } else {
+            Self::from_progress(
+                item.played,
+                item.playback_position_ticks,
+                item.runtime_ticks,
+            )
+        }
+    }
+
+    /// [`Self::from_emby`] for a queue item: the same rule over the item's
+    /// own stored facts.
+    pub fn from_queue_item(item: &QueueItem) -> Self {
+        if item.is_music() {
+            Self::Ordinary
+        } else {
+            Self::from_progress(
+                item.played(),
+                item.playback_position_ticks(),
+                item.runtime_ticks(),
+            )
         }
     }
 }

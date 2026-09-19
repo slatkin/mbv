@@ -723,3 +723,29 @@ fn mixed_queue_replace_preserves_item_variants() {
     assert!(matches!(queue.slots()[1].item, QueueItem::Emby(_)));
     assert!(matches!(queue.slots()[2].item, QueueItem::Feed(_)));
 }
+
+// ---------------------------------------------------------------------------
+// is_music — the fire-and-forget predicate row visuals and resume share
+// ---------------------------------------------------------------------------
+
+#[rstest::rstest]
+#[case::audio_track("Audio", "Audio", true)]
+#[case::music_album("MusicAlbum", "Audio", true)]
+#[case::music_artist("MusicArtist", "Audio", true)]
+#[case::movie("Movie", "Video", false)]
+#[case::episode("Episode", "Video", false)]
+fn is_music_covers_emby_music_types(
+    #[case] item_type: &str,
+    #[case] media_type: &str,
+    #[case] expected: bool,
+) {
+    let item = emby_item_of_type("m", item_type, media_type, "M");
+    assert_eq!(QueueItem::Emby(Box::new(item)).is_music(), expected);
+}
+
+#[test]
+fn is_music_excludes_feeds_and_audiobookshelf_however_audio_they_are() {
+    assert!(!QueueItem::Feed(feed("f1")).is_music());
+    assert!(!QueueItem::Audiobookshelf(audiobookshelf_episode("lib1", "ep1")).is_music());
+    assert!(!QueueItem::AudiobookshelfBook(audiobookshelf_book("lib1")).is_music());
+}
