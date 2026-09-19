@@ -11,6 +11,11 @@ runs Bare, via Local daemon (Stay-alive), or packaged `mbvd` Player owner.
   `openspec/specs/` = current behaviour. In-progress: read full
   `openspec/changes/<name>/`; its delta specs overlay main specs until archived;
   don't edit archived changes.
+* `docs/invariants/` = properties the code must maintain but that no type
+  enforces (why they matter, how they're upheld today, where they still
+  fail) — read before touching queue/progress/playback-lifecycle state;
+  add one when you find or fix this kind of bug rather than leaving the
+  lesson only in a commit message.
 * Durable plans in OpenSpec markdown, not chat; commit plans/specs/docs with
   code; sync applied deltas into `openspec/specs/`; archive when done.
 * Change source-of-truth types before callers; ask only about material
