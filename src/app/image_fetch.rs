@@ -111,18 +111,23 @@ impl App {
     /// recursive Audio query over the whole level, bucketed per album and
     /// majority-voted per bucket, arriving as one
     /// `LibEvent::AlbumArtistLevelFetched` that bulk-fills the cache.
-    /// Deduped on the level-fill state (design D4): `Loading`/`Filled`
-    /// levels do no work; a fresh or `Failed` level (re)starts the fill.
-    /// `albums` are the level's album items, already in hand from the level
-    /// listing; their `Path`s drive orphan-bucket attribution (design D3).
+    /// Deduped on the level-fill state (design D4) through the single
+    /// shared decision (`LevelFillState::action_for`). `albums` (the
+    /// level's album items already in hand from the listing) drive
+    /// orphan-`Path` attribution only (design D3) — bucketing itself is by
+    /// track `ParentId` verbatim, so the one fill covers every album in
+    /// the level regardless of which page was listed when it was
+    /// requested.
     pub(super) fn spawn_level_artist_fetch(
         &mut self,
         level_id: String,
         albums: Vec<mbv_core::api::EmbyItem>,
     ) {
-        match self.album_artist_levels.get(&level_id) {
-            Some(LevelFillState::Loading) | Some(LevelFillState::Filled) => return,
-            Some(LevelFillState::Failed) | None => {}
+        if matches!(
+            LevelFillState::action_for(self.album_artist_levels.get(&level_id)),
+            LevelFillAction::NoWork
+        ) {
+            return;
         }
         self.album_artist_levels
             .insert(level_id.clone(), LevelFillState::Loading);
@@ -349,11 +354,19 @@ fn path_within(path: &str, root: &str) -> bool {
 }
 
 /// Groups a level's Audio rows by the album they belong to (design D1/D3).
-/// `albums` are the album items of the level listing. A track whose
-/// `ParentId` is an album at the level attributes to it directly (the
-/// measured 1:1 case); an orphan track (e.g. a multi-disc set's nested disc
-/// subfolder) attributes to the album whose `Path` prefixes its `Path`, and
-/// is dropped when none matches — the album then resolves through the
+/// Every track with a `ParentId` is bucketed by it verbatim: bucket keys
+/// are album ids by Emby semantics, and a key need not be an album in the
+/// in-hand `albums` snapshot — level listings paginate, so a whole-level
+/// fill must also cover albums listed on pages after the one in hand when
+/// the fill was requested (they are cached under their own id and looked
+/// up when those albums' candidates run). `albums` exist here only to
+/// attribute orphan tracks: a bucket keyed by an id that is not an in-hand
+/// album (e.g. a multi-disc set's nested disc subfolder) is re-attributed
+/// to the in-hand album whose `Path` prefixes its tracks' `Path`s, longest
+/// match winning; tracks that match nothing keep their original key — an
+/// inert cache row that nothing looks up and a Service reset clears.
+/// Tracks with no `ParentId` go through the same `Path`-prefix map and are
+/// dropped when nothing matches — the album then resolves through the
 /// existing settle/fallback path. `tracks` must be in request order; each
 /// bucket preserves that order.
 fn bucket_tracks_by_album<'a>(
@@ -372,37 +385,76 @@ fn bucket_tracks_by_album<'a>(
         std::collections::HashMap::new();
     for track in tracks {
         let parent = track["ParentId"].as_str().unwrap_or("");
-        if album_ids.contains(parent) {
+        if !parent.is_empty() {
             buckets.entry(parent.to_string()).or_default().push(track);
             continue;
         }
-        // Orphan track (design D3): attribute by `Path` prefix against the
-        // album listing, else drop. A multi-disc set surfaces as several
-        // orphan tracks that all merge into their album's bucket.
-        let track_path = track["Path"].as_str().unwrap_or("");
-        // Longest matching album `Path` wins, so a nested album Path (e.g.
-        // a Deluxe-edition folder one level deeper) claims its own disc
-        // tracks instead of donating them to the outer album.
-        if let Some((album_id, _)) = album_paths
-            .iter()
-            .filter(|(_, album_path)| path_within(track_path, album_path))
-            .max_by_key(|(_, album_path)| album_path.len())
-        {
-            buckets
-                .entry((*album_id).to_string())
-                .or_default()
-                .push(track);
+        // Track without a `ParentId`: attribute by `Path` prefix against
+        // the in-hand album listing (design D3), else drop.
+        attribute_by_path(track, &album_paths, &mut buckets);
+    }
+
+    // Reattribute buckets keyed by an id that is not an in-hand album (a
+    // nested disc subfolder): their tracks belong to the in-hand album
+    // whose `Path` prefixes theirs, longest match winning so a nested
+    // album folder claims its own disc tracks instead of donating them to
+    // the outer album. Tracks that match nothing keep their original key.
+    let orphan_keys: Vec<String> = buckets
+        .keys()
+        .filter(|key| !album_ids.contains(key.as_str()))
+        .cloned()
+        .collect();
+    for key in orphan_keys {
+        let bucket = buckets.remove(&key).unwrap_or_default();
+        let mut unattributed = Vec::new();
+        for track in bucket {
+            if !attribute_by_path(track, &album_paths, &mut buckets) {
+                unattributed.push(track);
+            }
+        }
+        if !unattributed.is_empty() {
+            buckets.insert(key, unattributed);
         }
     }
     buckets
 }
 
+/// Attributes `track` to the in-hand album whose `Path` prefixes the
+/// track's `Path` (design D3), longest match winning so a nested album
+/// Path (e.g. a Deluxe-edition folder one level deeper) claims its own
+/// disc tracks instead of donating them to the outer album. Returns
+/// `false` when nothing matches. A multi-disc set surfaces as several
+/// orphan tracks that all merge into their album's bucket.
+fn attribute_by_path<'a>(
+    track: &'a serde_json::Value,
+    album_paths: &[(&str, &str)],
+    buckets: &mut std::collections::HashMap<String, Vec<&'a serde_json::Value>>,
+) -> bool {
+    let track_path = track["Path"].as_str().unwrap_or("");
+    if let Some((album_id, _)) = album_paths
+        .iter()
+        .filter(|(_, album_path)| path_within(track_path, album_path))
+        .max_by_key(|(_, album_path)| album_path.len())
+    {
+        buckets
+            .entry((*album_id).to_string())
+            .or_default()
+            .push(track);
+        true
+    } else {
+        false
+    }
+}
+
 /// Pure parse+bucket+vote pipeline behind `spawn_level_artist_fetch`
-/// (design D1–D3): buckets the level's Audio rows per album and
-/// majority-votes each bucket's artist. Albums with no resolvable artist
-/// are omitted — their slots stay free for the settle/fallback path.
-/// Deterministic: results are ordered by album id. `tracks` must be in
-/// request order.
+/// (design D1–D3): buckets the level's Audio rows per album (by track
+/// `ParentId` verbatim) and majority-votes each bucket's artist.
+/// `albums` (the listing items already in hand) drive orphan-`Path`
+/// attribution only, so the result covers every album in the level —
+/// including ones listed on pages after the page in hand when the fill
+/// was requested. Albums with no resolvable artist are omitted — their
+/// slots stay free for the settle/fallback path. Deterministic: results
+/// are ordered by album id. `tracks` must be in request order.
 fn level_artists_from_items(
     tracks: &[serde_json::Value],
     albums: &[mbv_core::api::EmbyItem],
@@ -510,15 +562,40 @@ mod album_artist_batch_tests {
     }
 
     #[test]
-    fn unmatched_orphan_bucket_dropped() {
+    fn fill_requested_from_page_one_covers_later_page_albums() {
+        // Page-starvation regression: the fill is requested with only the
+        // page-1 album in hand; bucketing by `ParentId` verbatim still
+        // yields the page-2 album's artist from its tracks, so the one
+        // whole-level fill covers every album in the level no matter which
+        // page was listed when it was requested.
+        let tracks = vec![
+            track("alb-1", "/m/a/1.flac", Some("Alpha"), &["Alpha"]),
+            track("alb-2", "/m/b/1.flac", Some("Beta"), &["Beta"]),
+        ];
+        let albums = vec![album("alb-1", "/m/a")];
+        let artists = level_artists_from_items(&tracks, &albums);
+        assert_eq!(
+            artists,
+            vec![
+                ("alb-1".to_string(), "Alpha".to_string()),
+                ("alb-2".to_string(), "Beta".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn unmatched_orphan_key_stays_as_inert_bucket() {
+        // An orphan whose `Path` matches no in-hand album keeps its own
+        // key: an inert cache row nothing looks up (a Service reset clears
+        // it); the album itself resolves via the settle/fallback path.
         let tracks = vec![
             track("disc-9", "/m/other/x/1.flac", None, &["A"]),
             track("alb-1", "/m/a/1.flac", None, &["A"]),
         ];
         let albums = vec![album("alb-1", "/m/a")];
         let buckets = bucket_tracks_by_album(&tracks, &albums);
-        assert_eq!(buckets.len(), 1);
-        assert!(buckets.contains_key("alb-1"));
+        assert_eq!(buckets["alb-1"].len(), 1);
+        assert_eq!(buckets["disc-9"].len(), 1);
     }
 
     #[test]
@@ -574,8 +651,11 @@ mod album_artist_batch_tests {
     #[test]
     fn sibling_prefix_does_not_catch_unrelated_orphan() {
         // Component-aligned matching: `/m/ab` must not attribute to `/m/a`.
+        // The unmatched orphan keeps its own (inert) key instead.
         let tracks = vec![track("disc-1", "/m/ab/1.flac", None, &["A"])];
         let albums = vec![album("alb-1", "/m/a")];
-        assert!(bucket_tracks_by_album(&tracks, &albums).is_empty());
+        let buckets = bucket_tracks_by_album(&tracks, &albums);
+        assert!(!buckets.contains_key("alb-1"));
+        assert_eq!(buckets["disc-1"].len(), 1);
     }
 }

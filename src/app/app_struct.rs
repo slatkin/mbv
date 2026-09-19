@@ -43,6 +43,29 @@ pub(super) enum LevelFillState {
     Failed,
 }
 
+/// The single "should a level fill start?" decision both fill entry points
+/// consume — `start_or_supersede_music_grouping`'s dedupe and
+/// `spawn_level_artist_fetch`'s guard — so the two interpretations of a
+/// `LevelFillState` can never diverge again.
+pub(super) enum LevelFillAction {
+    /// A fill is already in flight or has completed for this level.
+    NoWork,
+    /// No fill has run for this level, or the last one failed.
+    Request,
+}
+
+impl LevelFillState {
+    /// Unified interpretation of a level-fill state (design D4):
+    /// `Loading`/`Filled` levels do no work; a fresh or `Failed` level
+    /// (re)starts the fill.
+    pub(super) fn action_for(state: Option<&LevelFillState>) -> LevelFillAction {
+        match state {
+            Some(LevelFillState::Loading) | Some(LevelFillState::Filled) => LevelFillAction::NoWork,
+            Some(LevelFillState::Failed) | None => LevelFillAction::Request,
+        }
+    }
+}
+
 pub struct App {
     /// General application configuration is independent of the optional Emby
     /// runtime. Feed management reads and mutates this context directly.

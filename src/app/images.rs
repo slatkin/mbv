@@ -1,4 +1,4 @@
-use super::app_struct::LevelFillState;
+use super::app_struct::{LevelFillAction, LevelFillState};
 use super::{App, LibEvent, PAGE_SIZE};
 use crate::app::palette;
 use crate::app::render::components::widgets::RENDER_FILTER;

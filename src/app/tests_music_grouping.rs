@@ -551,6 +551,56 @@ fn filled_level_with_unresolvable_albums_settles_immediately() {
 }
 
 #[test]
+fn page_two_albums_resolve_from_whole_level_fill_without_new_request() {
+    // Page-starvation regression (whole-level coverage): a fill requested
+    // while only page-1 albums were listed still bulk-fills every album in
+    // the level, so a page-2 candidate resolves from the cache instead of
+    // clearing as terminal under the `Filled` state.
+    let mut a1 = make_item("Unknown Album", "MusicAlbum");
+    a1.id = "album-1".into();
+    a1.artist = String::new();
+    let mut app = make_music_app(vec![a1]);
+    app.start_or_supersede_music_grouping(0);
+
+    // One whole-level fill arrives, covering a page-2 album that was never
+    // part of the listing in hand when the fill was requested.
+    app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
+        level_id: "group-0".into(),
+        artists: vec![
+            ("album-1".into(), "Artist One".into()),
+            ("album-2".into(), "Artist Two".into()),
+        ],
+    });
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Filled)
+    );
+
+    // The user pages on: album-2 is appended and a new candidate is created.
+    let mut a2 = make_item("Other Album", "MusicAlbum");
+    a2.id = "album-2".into();
+    a2.artist = String::new();
+    if let Some(level) = app.libs[0].nav_stack.last_mut() {
+        level.items.push(a2);
+    }
+    app.start_or_supersede_music_grouping(0);
+
+    // album-2 resolved up front from the fill's cache row; the `Filled`
+    // level did not starve it into the folder fallback.
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(state.candidate.is_none());
+    let catalog = state.settled.as_ref().expect("settled catalog");
+    let pos = catalog.id_to_entry["album-2"];
+    assert_eq!(catalog.entries[pos].artist, "Artist Two");
+}
+
+#[test]
 fn spawn_level_fetch_dedupes_on_loading_and_filled() {
     let mut app = make_music_app(vec![]);
     let albums = Vec::new();

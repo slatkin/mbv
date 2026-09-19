@@ -1,4 +1,4 @@
-use super::app_struct::LevelFillState;
+use super::app_struct::{LevelFillAction, LevelFillState};
 use crate::app::render::{parse_album_folder_name, strip_article};
 use crate::app::ui_util::natural_sort_key;
 use crate::app::App;
@@ -152,10 +152,11 @@ pub(super) fn build_grouped_album_catalog(
 impl App {
     /// Starts (or supersedes) the grouping candidate for the current music
     /// album level when its items change: on load, refresh, or page append.
-    /// Albums already carrying an artist identity (item tag, cache, or an
-    /// empty cache tombstone) are terminal up front; the rest wait on one
-    /// level fill (design D4), deduped on the level-fill state. A prior
-    /// settled catalog stays visible while the replacement resolves.
+    /// Albums already carrying an artist identity (item tag or a cached
+    /// resolved artist) are terminal up front; the rest wait on one level
+    /// fill (design D4), deduped on the level-fill state through the single
+    /// shared decision (`LevelFillState::action_for`). A prior settled
+    /// catalog stays visible while the replacement resolves.
     pub(super) fn start_or_supersede_music_grouping(&mut self, lib_idx: usize) {
         if !self.is_music_group_view(lib_idx) {
             return;
@@ -191,18 +192,25 @@ impl App {
                 }
             }
             // One level fill serves every unresolved album (design D4),
-            // deduped on the level-fill state: `Loading`/`Filled` levels do
-            // no work; a fresh or `Failed` level (re)starts the fill. A
-            // `Filled` level with still-unresolved albums is terminal — the
-            // fill already had its only chance, so the fallback derives
-            // those now instead of waiting out `SETTLE_WINDOW`.
+            // deduped on the level-fill state through the single shared
+            // decision (`LevelFillState::action_for`): `Loading`/`Filled`
+            // levels do no work; a fresh or `Failed` level (re)starts the
+            // fill. A `Filled` level with still-unresolved albums is
+            // terminal — the fill already had its only chance, and it
+            // covers every album in the level by construction — so the
+            // fallback derives those now instead of waiting out
+            // `SETTLE_WINDOW`.
             let mut level_request = None;
             if !candidate.unresolved.is_empty() {
-                match self.album_artist_levels.get(&candidate.parent_id) {
-                    Some(LevelFillState::Filled) => candidate.unresolved.clear(),
-                    Some(LevelFillState::Loading) => {}
-                    Some(LevelFillState::Failed) | None => {
+                let level_state = self.album_artist_levels.get(&candidate.parent_id);
+                match LevelFillState::action_for(level_state) {
+                    LevelFillAction::Request => {
                         level_request = Some((candidate.parent_id.clone(), level.items.clone()));
+                    }
+                    LevelFillAction::NoWork => {
+                        if matches!(level_state, Some(LevelFillState::Filled)) {
+                            candidate.unresolved.clear();
+                        }
                     }
                 }
             }
