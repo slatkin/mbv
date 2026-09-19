@@ -23,7 +23,7 @@
 
 use ratatui::style::Color;
 
-/// The 29 approved palette variants, in name-table order (hue families,
+/// The 19 approved palette variants, in name-table order (hue families,
 /// dark-to-light within each family; see
 /// `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 ///
@@ -34,31 +34,19 @@ pub(in crate::app) enum Palette {
     Grey1,
     Grey2,
     Grey3,
-    Grey4,
-    Grey5,
-    Grey6,
     Green1,
     Green2,
     Green3,
-    Sage,
     Green,
-    Mint,
     Iris,
-    Fog,
     Aqua,
     Ink,
     Slate,
     Storm,
-    Flint,
-    Ash,
-    // Retained as an approved palette variant even when no semantic role uses it.
-    #[cfg_attr(not(test), expect(dead_code))]
-    Steel,
     Foam,
     Purple,
     Red,
     Orange,
-    Gold,
     Yellow,
     Cream,
     White,
@@ -68,33 +56,23 @@ pub(in crate::app) enum Palette {
 /// the uniqueness tests and the later `docs/palette.json` viewer. Test-only:
 /// production code names variants directly, never through `ALL`.
 #[cfg(test)]
-pub(in crate::app) const ALL: [Palette; 29] = [
+pub(in crate::app) const ALL: [Palette; 19] = [
     Palette::Grey1,
     Palette::Grey2,
     Palette::Grey3,
-    Palette::Grey4,
-    Palette::Grey5,
-    Palette::Grey6,
     Palette::Green1,
     Palette::Green2,
     Palette::Green3,
-    Palette::Sage,
     Palette::Green,
-    Palette::Mint,
     Palette::Iris,
-    Palette::Fog,
     Palette::Aqua,
     Palette::Ink,
     Palette::Slate,
     Palette::Storm,
-    Palette::Flint,
-    Palette::Ash,
-    Palette::Steel,
     Palette::Foam,
     Palette::Purple,
     Palette::Red,
     Palette::Orange,
-    Palette::Gold,
     Palette::Yellow,
     Palette::Cream,
     Palette::White,
@@ -106,31 +84,21 @@ impl Palette {
     pub(in crate::app) const fn color(self) -> Color {
         match self {
             Palette::Grey1 => Color::Rgb(0x1a, 0x1a, 0x1a),
-            Palette::Grey2 => Color::Rgb(0x3f, 0x3f, 0x3f),
-            Palette::Grey3 => Color::Rgb(0x53, 0x53, 0x53),
-            Palette::Grey4 => Color::Rgb(0x6c, 0x6c, 0x6c),
-            Palette::Grey5 => Color::Rgb(0x9e, 0x9e, 0x9e),
-            Palette::Grey6 => Color::Rgb(0xe6, 0xe6, 0xe6),
+            Palette::Grey2 => Color::Rgb(0x9e, 0x9e, 0x9e),
+            Palette::Grey3 => Color::Rgb(0xe6, 0xe6, 0xe6),
             Palette::Green1 => Color::Rgb(0x3c, 0x48, 0x41),
             Palette::Green2 => Color::Rgb(0x48, 0x58, 0x4e),
             Palette::Green3 => Color::Rgb(0x6c, 0x76, 0x6c),
-            Palette::Sage => Color::Rgb(0x85, 0x92, 0x89),
             Palette::Green => Color::Rgb(0x93, 0xb2, 0x59),
-            Palette::Mint => Color::Rgb(0x83, 0xc0, 0x92),
             Palette::Iris => Color::Rgb(0xa7, 0xc0, 0x80),
-            Palette::Fog => Color::Rgb(0xbe, 0xc5, 0xb2),
             Palette::Aqua => Color::Rgb(0x35, 0xa7, 0x7c),
             Palette::Ink => Color::Rgb(0x1e, 0x23, 0x26),
             Palette::Slate => Color::Rgb(0x2d, 0x35, 0x3b),
             Palette::Storm => Color::Rgb(0x33, 0x3c, 0x43),
-            Palette::Flint => Color::Rgb(0x3c, 0x42, 0x4a),
-            Palette::Ash => Color::Rgb(0x49, 0x51, 0x56),
-            Palette::Steel => Color::Rgb(0x46, 0x54, 0x5f),
             Palette::Foam => Color::Rgb(0x3a, 0x94, 0xc5),
             Palette::Purple => Color::Rgb(0xd6, 0x99, 0xb6),
             Palette::Red => Color::Rgb(0xe5, 0x7e, 0x80),
             Palette::Orange => Color::Rgb(0xe5, 0x98, 0x75),
-            Palette::Gold => Color::Rgb(0xde, 0xa0, 0x00),
             Palette::Yellow => Color::Rgb(0xdb, 0xbc, 0x7f),
             Palette::Cream => Color::Rgb(0xfa, 0xed, 0xcd),
             Palette::White => Color::Rgb(0xfd, 0xf6, 0xe3),
@@ -145,29 +113,19 @@ impl Palette {
             Palette::Grey1 => "Grey1",
             Palette::Grey2 => "Grey2",
             Palette::Grey3 => "Grey3",
-            Palette::Grey4 => "Grey4",
-            Palette::Grey5 => "Grey5",
-            Palette::Grey6 => "Grey6",
             Palette::Green1 => "Green1",
             Palette::Green2 => "Green2",
             Palette::Green3 => "Green3",
-            Palette::Sage => "Sage",
             Palette::Green => "Green",
-            Palette::Mint => "Mint",
             Palette::Iris => "Iris",
-            Palette::Fog => "Fog",
             Palette::Aqua => "Aqua",
             Palette::Ink => "Ink",
             Palette::Slate => "Slate",
             Palette::Storm => "Storm",
-            Palette::Flint => "Flint",
-            Palette::Ash => "Ash",
-            Palette::Steel => "Steel",
             Palette::Foam => "Foam",
             Palette::Purple => "Purple",
             Palette::Red => "Red",
             Palette::Orange => "Orange",
-            Palette::Gold => "Gold",
             Palette::Yellow => "Yellow",
             Palette::Cream => "Cream",
             Palette::White => "White",
@@ -203,7 +161,7 @@ mod tests {
     /// colour check covers both presentations.
     #[test]
     fn all_lists_every_variant_once_with_distinct_values() {
-        assert_eq!(ALL.len(), 29, "ALL must list exactly the 29 variants");
+        assert_eq!(ALL.len(), 19, "ALL must list exactly the 19 variants");
         let distinct: HashSet<Palette> = ALL.into_iter().collect();
         assert_eq!(
             distinct.len(),
@@ -268,7 +226,7 @@ mod tests {
     }
 
     /// Drift guard: the distinct colour values in `docs/palette.json` must
-    /// be exactly the palette's 29 `hex()` values. The `surfaces` and
+    /// be exactly the palette's 19 `hex()` values. The `surfaces` and
     /// `specials` subtrees are deliberately excluded — `surfaces` contains
     /// the `PopupDimBackdrop` `#000000` dim blend base, which is not a
     /// palette colour, and `specials` names raw `Color::` mechanics

@@ -331,11 +331,6 @@ use mbv_core::player::PlayerEvent;
 
 const PAGE_SIZE: usize = 100;
 const PREFETCH_AHEAD: usize = 25;
-const SESSIONS_PANEL_W: u16 = 40;
-const HELP_PANEL_W: u16 = 40;
-const SETTINGS_PANEL_W: u16 = 40;
-#[cfg(test)]
-const PLAYLISTS_PANEL_W: u16 = 40;
 const SEARCH_PANEL_W: u16 = 40;
 impl App {
     pub(super) fn spawn_search_sidebar_query(&self, client: EmbyClient, query: String) {

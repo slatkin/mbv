@@ -664,7 +664,7 @@ _Avoid_: one-off, special case, exception
 
 **Sidebar**:
 An anchored, full-height destination rendered at a fixed width from one edge
-of the window (code: `render_panel_shell`, whose rect is literally named
+of the window (code: `render_panel_shell_at`, whose rect is literally named
 `sidebar`) — distinct from a **popup**, a centered dimmed-backdrop overlay
 (code: `render_modal_frame`) such as the Feeds-management, multiselect,
 library-routes, save-playlist, and confirm dialogs. The four sidebars: Search

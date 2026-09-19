@@ -188,7 +188,7 @@ mod tests {
         assert!(text_in(buf, bar, "Movies") && text_in(buf, bar, "TV"));
         // The active pill is the selected chip; a different chip is unselected.
         let selected_fg = palette::PILL_SELECTED_FG;
-        let unselected_fg = palette::PILL_FG;
+        let unselected_fg = palette::TEXT_MUTED;
         assert!(hits.regions().len() == 2, "both painted pills retained");
         let (active_rect, active_id) = hits.regions()[1];
         assert_eq!(active_id, 1);
@@ -302,7 +302,7 @@ mod tests {
                 }
             }
             let cell = &buf[(rect.x + 1, rect.y)];
-            assert_eq!(cell.style().fg, Some(palette::PILL_FG));
+            assert_eq!(cell.style().fg, Some(palette::TEXT_MUTED));
         }
     }
 

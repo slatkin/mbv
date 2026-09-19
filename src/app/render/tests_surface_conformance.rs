@@ -48,7 +48,6 @@
 //! | `PlaybackPanel` | yes (Both, mini library) | `tests.rs` panel suites |
 //! | `QueueOnlyPlaybackPanel` | yes (wide QueueOnly, mini queue) | — (pinned only here at buffer level) |
 //! | `SidebarBody` | yes (expanded sidebar shell, component view) | — |
-//! | `NonHeroSidebarBody` | yes (non-hero sidebar shell, component view) | — |
 //! | `QueueCardVisualizer` | — | residual (see below): its fill is byte-identical to the containing queue column's in both bool states |
 //! | `PlaybackRecess` | yes (wide Both, both bools) | `tests.rs` panel suites |
 //! | `PlaybackStatusPill` | yes (title-row pill, component view) | — |
@@ -61,7 +60,7 @@
 //! | `PillChip` / `PillChipSelected` | — | `queue_title_characterization_tests.rs` |
 //! | `QueueScopePillSelected` | — | `components/queue_component_tests.rs` scope-pill suites |
 //! | `PillRowGap` | yes (wide music container pin) | `components/music_workspace_cursor_tests.rs` |
-//! | `SidebarBand` / `NonHeroSidebarBand` | yes (sidebar shells, component view) | — |
+//! | `SidebarBand` | yes (sidebar shells, component view) | — |
 //! | `TabBar` | yes (Both, LibraryOnly, mini library) | `tests.rs` tab-bar suites |
 //! | `PopupFrame` | yes (confirm-modal caller path) | — |
 //! | `PopupDimBackdrop` | — | residual (see below): it paints no fill of its own |
@@ -291,7 +290,6 @@ fn coverage_table_accounts_for_every_surface_row() {
         palette::Surface::PlaybackPanel,
         palette::Surface::QueueOnlyPlaybackPanel,
         palette::Surface::SidebarBody,
-        palette::Surface::NonHeroSidebarBody,
         palette::Surface::PlaybackRecess,
         palette::Surface::PlaybackStatusPill,
         palette::Surface::ArtworkPlaceholder,
@@ -304,7 +302,6 @@ fn coverage_table_accounts_for_every_surface_row() {
         palette::Surface::QueueScopePillSelected,
         palette::Surface::PillRowGap,
         palette::Surface::SidebarBand,
-        palette::Surface::NonHeroSidebarBand,
         palette::Surface::TabBar,
         palette::Surface::PopupFrame,
     ];

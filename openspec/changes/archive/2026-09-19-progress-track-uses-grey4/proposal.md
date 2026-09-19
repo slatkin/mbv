@@ -2,21 +2,23 @@
 
 ## Why
 
-The unplayed seek/progress track was resolved through the `Steel` palette value
-(`#46545f`), while the intended neutral progress-track colour is `Grey4`
-(`#6c6c6c`). The role and its buffer coverage should agree with the approved
-palette semantics.
+The unplayed seek/progress track was originally resolved through the `Steel`
+palette value (`#46545f`), while the bundled theme correction intended the
+neutral `Grey4` value (`#6c6c6c`). Main's commit `1833c13a` subsequently folded
+`Grey4` into the palette's mid grey (`#9e9e9e`) and retired `Steel`, so the
+landed role now resolves to `Palette::Grey2`.
 
 ## What Changes
 
-Record the already-landed theme correction from commit `da73732b`:
+Record the already-landed theme correction from commit `da73732b` and its
+post-merge resolution:
 
-- resolve `PROGRESS_TRACK` to `Palette::Grey4`;
-- retain `Steel` as an approved but currently unused palette variant, marked
-  dead-code-expected for future semantic use;
-- update `docs/palette.json`; and
-- cover the unplayed seekbar with a render-buffer test asserting the Grey4
-  value.
+- keep `PROGRESS_TRACK` on the neutral progress-track role, which resolves to
+  `Palette::Grey2` (the palette's mid grey, `#9e9e9e`) after main's compaction;
+- use main's compact palette and synchronized `docs/palette.json`, where
+  `Grey4` (`#6c6c6c`) was folded into the mid grey and `Steel` was retired; and
+- cover the unplayed seekbar with a render-buffer test asserting the
+  `PROGRESS_TRACK` role itself.
 
 No new capability or UI-design-language requirement is introduced. The change
 continues to satisfy the existing semantic-role and private-primitive
@@ -24,7 +26,7 @@ requirements, so this record intentionally uses `skip_specs: true`.
 
 ## Impact
 
-- `src/app/render/theme/palette.rs` (marking `Steel` as approved unused)
+- `src/app/render/theme/palette.rs` (main's compact palette, with `Steel` retired)
 - `src/app/render/theme/mod.rs`
 - `src/app/render/components/chrome_player.rs`
-- `docs/palette.json`
+- `docs/palette.json` (main's compact palette)

@@ -214,14 +214,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_RESTING,
         },
-        // The non-hero sidebar shell is its own appearance
-        // (`render/components/chrome.rs:169`).
-        Surface::NonHeroSidebarBody => Row {
-            level: Level::ContentBody,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_SIDEBAR,
-        },
         // The queue card's now-playing content is the queue column's content,
         // so it resolves the content-body pair with the queue column's focus
         // even though it sits inside the card
@@ -254,12 +246,12 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_BACKDROP,
         },
-        // Main paints the artwork-loading inset's fill (the border-grey
+        // Main paints the artwork-loading inset's fill (the muted grey
         // value): `card.rs:111`, `album_art.rs:183`, the panel inline-hero
         // painter, `home_hero_emby.rs:121,272,286`. The row resolves through
         // its own purpose-named value (`Palette::Grey2`), deliberately not
-        // the border role's `BORDER_UNFOCUSED`, whose `Palette::Grey2` value
-        // it shares today (task 4.2): a border edit can never move the fill.
+        // the text role `TEXT_MUTED`, whose `Palette::Grey2` value it shares
+        // today: a text edit can never move the fill.
         Surface::ArtworkLoadingPlaceholder => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
@@ -326,12 +318,6 @@ pub(super) const fn row(surface: Surface) -> Row {
             focus: FocusSource::Fixed,
             soft: false,
             resting: SURFACE_CHROME,
-        },
-        Surface::NonHeroSidebarBand => Row {
-            level: Level::ChromeBand,
-            focus: FocusSource::Fixed,
-            soft: false,
-            resting: SURFACE_ITEM_FOCUSED,
         },
         Surface::TabBar => Row {
             level: Level::ChromeBand,
@@ -406,11 +392,6 @@ pub(super) const RESTING_DEVIATIONS: &[(Surface, &str)] = &[
     (
         Surface::MainContentBox,
         "the pane content box's resting half has always painted the app backdrop",
-    ),
-    (
-        Surface::NonHeroSidebarBody,
-        "the non-hero sidebar shell paints `SURFACE_SIDEBAR`, not the resting \
-         content value",
     ),
 ];
 

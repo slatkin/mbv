@@ -1,4 +1,5 @@
 use super::test_helpers::buffer_to_string;
+use crate::app::palette;
 use crate::app::tests::{make_app_stub, make_item};
 use ratatui::backend::TestBackend;
 use ratatui::layout::Rect;
@@ -22,6 +23,29 @@ fn render_playlists(width: u16, height: u16, selected: bool, open: bool) -> Stri
         })
         .unwrap();
     buffer_to_string(&terminal)
+}
+
+#[test]
+fn playlists_none_fallback_paints_the_fullscreen_shell() {
+    let mut app = make_app_stub();
+    app.playlists = vec![make_item("Road Trip", "Playlist")];
+    let width = 40;
+    let height = 12;
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    terminal
+        .draw(|f| app.render_playlists_panel(f, None))
+        .unwrap();
+    let buffer = terminal.backend().buffer();
+    assert_eq!(
+        buffer[(0, 0)].bg,
+        palette::surface_colors(palette::Surface::SidebarBody, false).fill
+    );
+    assert_eq!(
+        buffer[(2, 1)].bg,
+        palette::surface_colors(palette::Surface::SidebarBand, false).fill
+    );
+    assert_eq!(buffer[(3, 1)].symbol(), "P");
+    assert_eq!(buffer[(width - 1, 2)].symbol(), " ");
 }
 
 #[test]

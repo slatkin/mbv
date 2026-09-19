@@ -1,7 +1,6 @@
 use super::super::super::palette;
 use super::super::super::panel_targets::PanelTarget;
 use super::super::super::ui_util::{fmt_duration_short, trunc_str};
-use super::super::super::SESSIONS_PANEL_W;
 use super::chrome;
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
@@ -28,13 +27,8 @@ pub(in crate::app) fn render_sessions_overlay_content(
     } else {
         "[↵]conn [r]refresh [Esc]close"
     };
-    let content = match area {
-        Some(area) => chrome::render_panel_shell_at(f, area, "REMOTE SESSIONS", footer, true),
-        None => {
-            chrome::render_panel_shell(f, f.area(), SESSIONS_PANEL_W, "REMOTE SESSIONS", footer)
-        }
-    };
-    let panel_area = area.unwrap_or_else(|| chrome::panel_shell_rect(f.area(), SESSIONS_PANEL_W));
+    let panel_area = area.unwrap_or_else(|| f.area());
+    let content = chrome::render_panel_shell_at(f, panel_area, "REMOTE SESSIONS", footer);
     let ix = content.x;
     let inner_w = content.width;
     let list_y = content.y;

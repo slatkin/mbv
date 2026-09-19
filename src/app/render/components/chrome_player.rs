@@ -746,7 +746,7 @@ mod tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        assert!((0..4).all(|x| buffer[(x, 0)].fg == Color::Rgb(108, 108, 108)));
+        assert!((0..4).all(|x| buffer[(x, 0)].fg == palette::PROGRESS_TRACK));
     }
 
     /// The role-to-colour resolution point (task 2.3): a two-part now-playing

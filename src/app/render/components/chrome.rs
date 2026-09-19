@@ -85,26 +85,6 @@ pub(in crate::app) fn panel_shell_rect(full: Rect, width: u16) -> Rect {
     }
 }
 
-pub(in crate::app) fn render_panel_shell(
-    f: &mut Frame,
-    full: Rect,
-    width: u16,
-    title: &str,
-    hints: &str,
-) -> Rect {
-    let sidebar = panel_shell_rect(full, width);
-    render_panel_shell_at(f, sidebar, title, hints, false)
-}
-
-pub(in crate::app) fn panel_content_area(sidebar: Rect) -> Rect {
-    Rect {
-        x: sidebar.x,
-        y: sidebar.y + 1,
-        width: sidebar.width.saturating_sub(1),
-        height: sidebar.height.saturating_sub(3),
-    }
-}
-
 pub(in crate::app) fn left_panel_content_area(sidebar: Rect) -> Rect {
     Rect {
         x: sidebar.x + 2,
@@ -119,119 +99,46 @@ pub(in crate::app) fn render_panel_shell_at(
     sidebar: Rect,
     title: &str,
     hints: &str,
-    style: bool,
 ) -> Rect {
     f.render_widget(Clear, sidebar);
-    // The sidebar's two declared appearances: the expanded (F1-F4) sidebar
-    // body/bands, and the non-hero sidebar shell's own pair. Fixed rows —
-    // neither follows focus.
-    let body_bg = if style {
-        palette::surface_colors(palette::Surface::SidebarBody, false).fill
-    } else {
-        palette::surface_colors(palette::Surface::NonHeroSidebarBody, false).fill
-    };
-    let band_bg = if style {
-        palette::surface_colors(palette::Surface::SidebarBand, false).fill
-    } else {
-        palette::surface_colors(palette::Surface::NonHeroSidebarBand, false).fill
-    };
+    let body_bg = palette::surface_colors(palette::Surface::SidebarBody, false).fill;
+    let band_bg = palette::surface_colors(palette::Surface::SidebarBand, false).fill;
     // Too short to fit a title row, a content row, and the 2-row footer;
     // bail out rather than let `footer_y = sidebar.y + sidebar.height - 2`
     // underflow below.
     if sidebar.height < 4 || sidebar.width == 0 {
-        return if style {
-            left_panel_content_area(sidebar)
-        } else {
-            sidebar
-        };
+        return left_panel_content_area(sidebar);
     }
     f.render_widget(
         Block::default().style(Style::default().bg(body_bg)),
         sidebar,
     );
-    if !style {
-        for row in sidebar.y..sidebar.y + sidebar.height {
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    "\u{2502}",
-                    Style::default().fg(palette::BORDER_UNFOCUSED),
-                )),
-                Rect {
-                    x: sidebar.x + sidebar.width - 1,
-                    y: row,
-                    width: 1,
-                    height: 1,
-                },
-            );
-        }
-    }
-    let (inner_w, ix) = if style {
-        (sidebar.width.saturating_sub(4), sidebar.x + 2)
-    } else {
-        (sidebar.width.saturating_sub(1), sidebar.x)
-    };
+    let inner_w = sidebar.width.saturating_sub(4);
+    let ix = sidebar.x + 2;
     let header_style = Style::default()
         .fg(palette::TEXT_PRIMARY)
         .bg(band_bg)
         .add_modifier(Modifier::BOLD);
-    let header_area = if style {
+    f.render_widget(
+        Paragraph::new(Line::from(vec![Span::styled(
+            format!(" {title}"),
+            header_style,
+        )]))
+        .style(Style::default().bg(band_bg)),
         Rect {
             x: sidebar.x + 2,
             y: sidebar.y + 1,
             width: sidebar.width.saturating_sub(4),
             height: 1,
-        }
-    } else {
-        Rect {
-            x: sidebar.x,
-            y: sidebar.y,
-            width: sidebar.width.saturating_sub(1),
-            height: 1,
-        }
-    };
-    let title_text = if style {
-        format!(" {}", title)
-    } else {
-        title.to_owned()
-    };
-    f.render_widget(
-        Paragraph::new(Line::from(vec![Span::styled(title_text, header_style)]))
-            .style(Style::default().bg(band_bg)),
-        header_area,
+        },
     );
-    if !style {
-        f.render_widget(
-            Paragraph::new(Span::raw(" ")).style(Style::default().bg(band_bg)),
-            Rect {
-                x: sidebar.x + sidebar.width - 1,
-                y: sidebar.y,
-                width: 1,
-                height: 1,
-            },
-        );
-    }
     let footer_y = sidebar.y + sidebar.height - 2;
-    if !style {
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                "\u{2500}".repeat(inner_w as usize),
-                Style::default().fg(palette::BORDER_UNFOCUSED),
-            )),
-            Rect {
-                x: ix,
-                y: footer_y,
-                width: inner_w,
-                height: 1,
-            },
-        );
-    }
-    let footer_bg = band_bg;
     f.render_widget(
         Paragraph::new(Line::from(vec![Span::styled(
             trunc_str(hints, inner_w as usize),
             Style::default().fg(palette::TEXT_PRIMARY),
         )]))
-        .style(Style::default().bg(footer_bg)),
+        .style(Style::default().bg(band_bg)),
         Rect {
             x: ix,
             y: footer_y,
@@ -239,33 +146,16 @@ pub(in crate::app) fn render_panel_shell_at(
             height: 1,
         },
     );
-    if style {
-        f.render_widget(
-            Paragraph::new(Span::raw("")).style(Style::default().bg(body_bg)),
-            Rect {
-                x: sidebar.x,
-                y: sidebar.y + sidebar.height - 1,
-                width: sidebar.width,
-                height: 1,
-            },
-        );
-    }
-    if !style {
-        f.render_widget(
-            Paragraph::new(Span::raw(" ")).style(Style::default().bg(band_bg)),
-            Rect {
-                x: sidebar.x + sidebar.width - 1,
-                y: footer_y,
-                width: 1,
-                height: 1,
-            },
-        );
-    }
-    if style {
-        left_panel_content_area(sidebar)
-    } else {
-        panel_content_area(sidebar)
-    }
+    f.render_widget(
+        Paragraph::new(Span::raw("")).style(Style::default().bg(body_bg)),
+        Rect {
+            x: sidebar.x,
+            y: sidebar.y + sidebar.height - 1,
+            width: sidebar.width,
+            height: 1,
+        },
+    );
+    left_panel_content_area(sidebar)
 }
 
 /// Overlay a thin scroll indicator on a sidebar's right border column when

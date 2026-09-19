@@ -38,10 +38,11 @@ pub struct HelpComponent {
     /// data, projected by the shell like the destination above): help's
     /// Playback rows show the chords the loaded configuration fires on.
     keybinds: Keybinds,
-    /// The area the panel was painted in during `view()`, used for mouse
-    /// hit-testing in `on()`. `None` when no panel area was provided (the
-    /// help sidebar uses the full terminal with a width constraint).
+    /// The area requested by the shell for rendering. The painted area is
+    /// retained separately because a missing request paints the full frame.
     panel_area: Option<Rect>,
+    /// The area painted by the last `view()`, used for mouse hit-testing.
+    painted_panel_area: Option<Rect>,
     content_geometry: Option<HelpRenderGeometry>,
     /// Private per-parent gesture recognition (ADR 0024, design.md D3).
     mouse_gestures: MouseGestureState,
@@ -54,6 +55,7 @@ impl HelpComponent {
             destination: HelpDestination::EmbyLibrary,
             keybinds: Keybinds::default(),
             panel_area: None,
+            painted_panel_area: None,
             content_geometry: None,
             mouse_gestures: MouseGestureState::new(),
         }
@@ -131,7 +133,10 @@ impl HelpComponent {
         }
         match self.mouse_gestures.recognize(mouse)? {
             MouseGesture::Click { at, .. } | MouseGesture::DoubleClick(at) => {
-                if self.panel_area.is_some_and(|r| r.contains(at)) {
+                if self
+                    .painted_panel_area
+                    .is_some_and(|area| area.contains(at))
+                {
                     // Click inside: swallow.
                     None
                 } else {
@@ -162,13 +167,15 @@ impl Component for HelpComponent {
     fn view(&mut self, f: &mut Frame, _area: Rect) {
         // Use the panel area set by the shell (via `set_panel_area`), not
         // the `area` parameter from TuiRealm (which is the full terminal).
-        self.content_geometry = Some(render_help_panel(
+        let geometry = render_help_panel(
             f,
             self.panel_area,
             &mut self.scroll,
             self.destination,
             &self.keybinds,
-        ));
+        );
+        self.painted_panel_area = Some(geometry.panel_area);
+        self.content_geometry = Some(geometry);
     }
 
     fn query<'a>(&'a self, _attr: Attribute) -> Option<QueryResult<'a>> {
@@ -209,6 +216,8 @@ impl AppComponent<Msg, UserEvent> for HelpComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
     use rstest::rstest;
     use tuirealm::event::{Key, KeyModifiers, MouseButton};
 
@@ -276,7 +285,10 @@ mod tests {
     #[test]
     fn mouse_scroll_moves_one_line_inside_content_and_clamps() {
         let mut comp = HelpComponent::new();
-        comp.content_geometry = Some(HelpRenderGeometry { max_scroll: 6 });
+        comp.content_geometry = Some(HelpRenderGeometry {
+            max_scroll: 6,
+            panel_area: Rect::default(),
+        });
         comp.scroll = 5;
         comp.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollDown,
@@ -308,8 +320,11 @@ mod tests {
     #[test]
     fn mouse_scroll_moves_off_panel_content() {
         let mut comp = HelpComponent::new();
-        comp.panel_area = Some(Rect::new(2, 2, 10, 4));
-        comp.content_geometry = Some(HelpRenderGeometry { max_scroll: 6 });
+        comp.painted_panel_area = Some(Rect::new(2, 2, 10, 4));
+        comp.content_geometry = Some(HelpRenderGeometry {
+            max_scroll: 6,
+            panel_area: Rect::default(),
+        });
         comp.handle_mouse(&MouseEvent {
             kind: MouseEventKind::ScrollDown,
             column: 0,
@@ -322,7 +337,7 @@ mod tests {
     #[test]
     fn mouse_double_click_outside_panel_also_dismisses() {
         let mut comp = HelpComponent::new();
-        comp.set_panel_area(Some(Rect::new(0, 0, 40, 20)));
+        comp.painted_panel_area = Some(Rect::new(0, 0, 40, 20));
         let down = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 50,
@@ -343,7 +358,7 @@ mod tests {
     #[test]
     fn mouse_click_outside_panel_dismisses() {
         let mut comp = HelpComponent::new();
-        comp.set_panel_area(Some(Rect::new(0, 0, 40, 20)));
+        comp.painted_panel_area = Some(Rect::new(0, 0, 40, 20));
         let msg = comp.handle_mouse(&MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 50,
@@ -356,7 +371,7 @@ mod tests {
     #[test]
     fn mouse_click_inside_panel_is_swallowed() {
         let mut comp = HelpComponent::new();
-        comp.set_panel_area(Some(Rect::new(0, 0, 40, 20)));
+        comp.painted_panel_area = Some(Rect::new(0, 0, 40, 20));
         let msg = comp.handle_mouse(&MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: 10,
@@ -364,6 +379,24 @@ mod tests {
             modifiers: KeyModifiers::NONE,
         });
         assert_eq!(msg, None);
+    }
+
+    #[test]
+    fn mouse_click_inside_fullscreen_fallback_is_swallowed() {
+        let mut comp = HelpComponent::new();
+        let mut terminal = Terminal::new(TestBackend::new(40, 20)).unwrap();
+        terminal
+            .draw(|frame| comp.view(frame, frame.area()))
+            .unwrap();
+        assert_eq!(
+            comp.handle_mouse(&MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column: 10,
+                row: 10,
+                modifiers: KeyModifiers::NONE,
+            }),
+            None
+        );
     }
 
     #[test]

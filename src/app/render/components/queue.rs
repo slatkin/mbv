@@ -128,12 +128,12 @@ pub(in crate::app) fn render_queue_status(
                     selected_bg,
                     palette::TEXT_FOCUS_ACCENT,
                     chip_bg,
-                    palette::PILL_FG,
+                    palette::TEXT_MUTED,
                 )
             } else {
                 (
                     chip_bg,
-                    palette::PILL_FG,
+                    palette::TEXT_MUTED,
                     selected_bg,
                     palette::TEXT_FOCUS_ACCENT,
                 )

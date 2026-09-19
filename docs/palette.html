@@ -13,16 +13,25 @@ header h1 { font-size: 16px; margin: 0; display: inline; }
 header .meta { margin-left: 12px; }
 main { padding: 16px; max-width: 1100px; margin: 0 auto; }
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #9e9e9e; margin: 24px 0 8px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
 .card { display: flex; gap: 10px; background: #1e2326; border: 1px solid #3f3f3f; border-radius: 8px; padding: 10px; }
-.swatch { width: 56px; height: 56px; border-radius: 6px; flex: none; border: 1px solid #00000066; }
 .name { font-weight: 600; font-family: monospace; font-size: 13px; }
 .hex { font-family: monospace; color: #dbbc7f; cursor: pointer; }
-.prim { font-family: monospace; font-size: 12px; color: #3a94c5; }
+.rname { font-family: monospace; font-size: 12px; color: #3a94c5; }
 .uses { color: #9e9e9e; font-size: 12.5px; margin-top: 2px; }
-.meta { font-size: 12px; color: #6c6c6c; }
-.dual { display: flex; gap: 4px; }
-.dual div { flex: 1; height: 56px; border-radius: 6px; border: 1px solid #00000066; display: flex; align-items: flex-end; justify-content: center; font: 10px monospace; padding-bottom: 2px; }
+.uses li { margin: 2px 0; }
+.uses ul { margin: 4px 0 0; padding-left: 18px; }
+.tabs { display: flex; gap: 4px; }
+.tabs button { background: #1e2326; color: #9e9e9e; border: 1px solid #3f3f3f; border-radius: 6px 6px 0 0; padding: 6px 14px; font: inherit; cursor: pointer; }
+.tabs button.active { color: #e6e6e6; border-bottom-color: #e6e6e6; }
+.tablewrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #3f3f3f; vertical-align: top; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #9e9e9e; }
+td.name, td .vname { font-family: monospace; }
+.cellsw { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.mini { width: 28px; height: 28px; border-radius: 4px; flex: none; border: 1px solid #00000066; }
+th[data-key] { cursor: pointer; white-space: nowrap; }
+.note { color: #6c6c6c; font-size: 12px; margin: 14px 0 6px; }
 </style>
 </head>
 <body>
@@ -31,12 +40,13 @@ h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: #
 <span class="meta" id="count"></span>
 </header>
 <main>
-<h2>Roles</h2><div class="grid" id="roles"></div>
-<h2>Surfaces</h2><div class="grid" id="surfaces"></div>
-<h2>Role sets &amp; specials</h2><div class="grid" id="extra"></div>
+<div class="tabs"><button id="tabbtn-surfaces" class="active">Surfaces</button><button id="tabbtn-text">Text</button><button id="tabbtn-palette">Palette</button></div>
+<section id="tab-surfaces"><div class="tablewrap"><table id="surfaces"><thead><tr><th data-key="name" data-type="str">Surface</th><th data-key="refs" data-type="num">Refs</th><th data-key="focused" data-type="str">Focused</th><th data-key="resting" data-type="str">Resting</th><th data-key="uses" data-type="str">Description</th></tr></thead><tbody></tbody></table></div><div class="note">Also painted \u2014 not Surface rows</div><div class="tablewrap"><table id="other"><thead><tr><th>Name</th><th>Colour</th><th>Description</th></tr></thead><tbody></tbody></table></div></section>
+<section id="tab-text" hidden><div class="tablewrap"><table id="roles"><thead><tr><th data-key="name" data-type="str">Role</th><th data-key="refs" data-type="num">Refs</th><th data-key="colour" data-type="str">Colour</th><th data-key="uses" data-type="str">Description</th></tr></thead><tbody></tbody></table></div></section>
+<section id="tab-palette" hidden><div class="tablewrap"><table id="variants"><thead><tr><th data-key="name" data-type="str">Variant</th><th data-key="refs" data-type="num">Refs</th><th data-key="colour" data-type="str">Colour</th><th data-key="roles" data-type="str">Roles</th></tr></thead><tbody></tbody></table></div></section>
 </main>
 <script>
-let DATA = {"generated":"2026-09-18","role_sets":{"HERO_META_ROLES":{"members":["TEXT_DETAIL_META","TEXT_METADATA","TEXT_SECONDARY"],"uses":"Hero header metadata painter: colours meta row n with HERO_META_ROLES[n % 3] (hero_header.rs). The three colours hero headers already used, defined once so destinations cannot style metadata."},"HINT_PILL_FILLS":{"members":["#3a94c5","#dbbc7f","#e59875"],"uses":"Library Hero overlay display-only hint chips, rotated by chip index (widgets.rs hint pills). Chip surfaces, not text roles, so a text-colour edit cannot move them."}},"roles":[{"hex":"#2d353b","name":"SURFACE_BACKDROP","primitive":"LIBRARY_SIDE_BG","rgb":[45,53,59],"uses":"App backdrop: library column gutter, wide split gutter, pill-row gap, playback status pill, artwork placeholder, queue panel resting box, main content-box resting half."},{"hex":"#1e2326","name":"SURFACE_CHROME","primitive":"DARK_BG","rgb":[30,35,38],"uses":"Non-focusable structural chrome: status bar, tab bar, sidebar bands, queue panel band, queue-only playback strip (both states)."},{"hex":"#3c4841","name":"SURFACE_FOCUSED","primitive":"SURFACE_FOCUSED_BG","rgb":[60,72,65],"uses":"Focused fill for ColumnPane/ContentBody/Recess levels: queue column, hero pane, library/queue/playback panels, popup frame. Own primitive so a text-green edit cannot move a surface."},{"hex":"#333c43","name":"SURFACE_RESTING","primitive":"PLAYBACK_PANEL_BG","rgb":[51,60,67],"uses":"Resting content fill: unfocused half of library/queue/playback panels, hero pane, inline hero, sidebar body, media-list selected-row default."},{"hex":"#535353","name":"SURFACE_ITEM_FOCUSED","primitive":"FOCUSED","rgb":[83,83,83],"uses":"Non-hero sidebar band fill (NonHeroSidebarBand row)."},{"hex":"#3c424a","name":"SURFACE_SIDEBAR","primitive":"PANEL_BG","rgb":[60,66,74],"uses":"Plain non-hero sidebar/panel body background (NonHeroSidebarBody row)."},{"hex":"#a7c080","name":"HERO_OVERVIEW_SEPARATOR","primitive":"IRIS","rgb":[167,192,128],"uses":"Overview/credits separator line in hero/overview painters (widgets.rs, overview_box tests)."},{"hex":"#333c43","name":"HERO_CREDITS_STRIPE","primitive":"PLAYBACK_PANEL_BG","rgb":[51,60,67],"uses":"Alternating credits-row stripe background (overview_box.rs)."},{"hex":"#dbbc7f","name":"HERO_CREDITS_NAME","primitive":"YELLOW","rgb":[219,188,127],"uses":"Credits name-column foreground (overview_box.rs)."},{"hex":"#35a77c","name":"ACCENT","primitive":"AQUA","rgb":[53,167,124],"uses":"Focus accent: watched indicators, folder/row icons, Emby brand glyph, queue scope-pill selected (Direct-remote aqua), visualizer low band, play icon, settings highlights, status-bar pill."},{"hex":"#a7c080","name":"ACCENT_ACTIVE","primitive":"IRIS","rgb":[167,192,128],"uses":"Active tab, focused pill/badge text, context-menu selected row, playlist/session selected markers, home-video secondary marker, search-sidebar marker."},{"hex":"#dea000","name":"ACCENT_AUDIOBOOKSHELF","primitive":"GOLD","rgb":[222,160,0],"uses":"Audiobookshelf brand glyph (chrome_status.rs)."},{"hex":"#3f3f3f","name":"BORDER_UNFOCUSED","primitive":"OVERLAY","rgb":[63,63,63],"uses":"Unfocused borders (chrome.rs) and indicator separators (indicators.rs)."},{"hex":"#1e2326","name":"PILL_ROW_BG","primitive":"PILL_SELECTOR_ROW_BG","rgb":[30,35,38],"uses":"Pill-selector row background (PillRow surface; scroll-pills tests)."},{"hex":"#1e2326","name":"PILL_BG","primitive":"PILL_SELECTOR_BG","rgb":[30,35,38],"uses":"Unselected pill-chip surface (PillChip surface)."},{"hex":"#3a94c5","name":"PILL_SELECTED_BG","primitive":"PILL_SELECTOR_SELECTED_BG","rgb":[58,148,197],"uses":"Selected pill-chip surface (PillChipSelected surface; slots.rs, search_sidebar.rs). Own primitive so a TEXT_METADATA edit cannot move it."},{"hex":"#495156","name":"PILL_FG","primitive":"PILL_SELECTOR_FG","rgb":[73,81,86],"uses":"Unselected pill-chip foreground text (slots.rs, widgets.rs, queue.rs, search_sidebar.rs, chrome_tabs.rs hard-codes same value)."},{"hex":"#1e2326","name":"PILL_SELECTED_FG","primitive":"PILL_SELECTOR_SELECTED_FG","rgb":[30,35,38],"uses":"Selected pill-chip foreground text on the blue fill (slots.rs, widgets.rs, search_sidebar.rs)."},{"hex":"#3c4841","name":"PILL_OVERFLOW_FG","primitive":"BG_GREEN (alias of SURFACE_FOCUSED_BG value)","rgb":[60,72,65],"uses":"Pill-selector overflow/edge accent (widgets.rs)."},{"hex":"#e6e6e6","name":"TEXT_PRIMARY","primitive":"TEXT","rgb":[230,230,230],"uses":"Primary readable content foreground."},{"hex":"#9e9e9e","name":"TEXT_SECONDARY","primitive":"SUBTLE","rgb":[158,158,158],"uses":"Secondary text; pairs with TEXT_PRIMARY/TEXT_STRONG; also HERO_META_ROLES[2]."},{"hex":"#6c6c6c","name":"TEXT_MUTED","primitive":"MUTED","rgb":[108,108,108],"uses":"Dim text, icons, unfocused state."},{"hex":"#bec5b2","name":"PLAYED_ROW_FG","primitive":"PLAYED_ROW","rgb":[190,197,178],"uses":"Played/watched media-list row title (single-part primary, or split-row item title). Reads as watched, dimmer than cream, without moving icons/chrome."},{"hex":"#fdf6e3","name":"TEXT_STRONG","primitive":"WHITE","rgb":[253,246,227],"uses":"Bold titles/headings (warm white)."},{"hex":"#faedcd","name":"TEXT_EMPHASIS","primitive":"SOFT_WHITE","rgb":[250,237,205],"uses":"Warm emphasis text: focused rows, dialogs; also the split-row context colour's backing value."},{"hex":"#dbbc7f","name":"TEXT_FOCUS_ACCENT","primitive":"YELLOW","rgb":[219,188,127],"uses":"Focused-row title accent; queue selected-scope text; paused status; home-video marker; visualizer mid band; status-bar time."},{"hex":"#dbbc7f","name":"TEXT_HERO_TITLE","primitive":"YELLOW","rgb":[219,188,127],"uses":"Hero header title (first metadata line). Same value as focus accent, separate role."},{"hex":"#1a1a1a","name":"TEXT_ON_ACCENT","primitive":"BASE","rgb":[26,26,26],"uses":"Near-black text painted on a coloured surface: context-menu selected row, indicator badges, hint pills."},{"hex":"#3c4841","name":"TEXT_ACCENT_MUTED","primitive":"BG_GREEN","rgb":[60,72,65],"uses":"Loaded/playing/confirmed value text (library_routes.rs, multiselect.rs, playlists.rs). Own primitive so a surface edit cannot move it."},{"hex":"#6c766c","name":"TEXT_DETAIL_META","primitive":"MUTED_GREEN","rgb":[108,118,108],"uses":"Detail-screen label/meta text; HERO_META_ROLES[0]."},{"hex":"#3a94c5","name":"TEXT_METADATA","primitive":"FOAM","rgb":[58,148,197],"uses":"Secondary metadata: durations, pct, badges; HERO_META_ROLES[1]."},{"hex":"#2d353b","name":"SELECTED_ROW_BG","primitive":"SELECTED_ROW_BAR","rgb":[45,53,59],"uses":"Selected-row opaque bar fill. Rows keep ordinary foreground roles on the bar. Own primitive so a library-side-bg edit cannot move the bar."},{"hex":"#e57e80","name":"STATUS_ERROR","primitive":"RED","rgb":[229,126,128],"uses":"Error status text."},{"hex":"#93b259","name":"STATUS_AVAILABLE","primitive":"GREEN","rgb":[147,178,89],"uses":"Checkmarks, available/positive metadata (queue_playback.rs)."},{"hex":"#a7c080","name":"DURATION","primitive":"IRIS","rgb":[167,192,128],"uses":"Right-aligned duration column of the Queue list only. Own role so a status-colour edit cannot move durations. Library browse rows carry no time."},{"hex":"#dbbc7f","name":"ROW_DATE_FG","primitive":"YELLOW","rgb":[219,188,127],"uses":"Right-aligned publish-date gutter of library browse rows (podcast 17 Sep gutter). A date is item metadata, not a playback time, so separate from DURATION."},{"hex":"#faedcd","name":"SPLIT_ROW_CONTEXT_FG","primitive":"SOFT_WHITE","rgb":[250,237,205],"uses":"Split media-list row primary/context part (podcast an episode came from). Soft white; the playback strip keeps gold."},{"hex":"#9e9e9e","name":"SPLIT_ROW_TITLE_FG","primitive":"SUBTLE","rgb":[158,158,158],"uses":"Split media-list row secondary/item title. Light grey; the playback strip keeps aqua."},{"hex":"#e59875","name":"INDICATOR_RESOLUTION_FG","primitive":"ORANGE","rgb":[229,152,117],"uses":"Resolution glyph foreground (indicators.rs)."},{"hex":"#d699b6","name":"INDICATOR_AUDIO_FG","primitive":"PURPLE","rgb":[214,153,182],"uses":"Audio glyph foreground (indicators.rs)."},{"hex":"#83c092","name":"PLAYBACK_VALUE_FG","primitive":"PLAYBACK_CONTENT_FG","rgb":[131,192,146],"uses":"Now-playing title/codec value."},{"hex":"#859289","name":"PLAYBACK_META_FG","primitive":"PLAYBACK_META_FG","rgb":[133,146,137],"uses":"Playback metadata captions/time."},{"hex":"#35a77c","name":"PLAYBACK_TITLE_FG","primitive":"PLAYBACK_TITLE","rgb":[53,167,124],"uses":"Now-playing title row item name. Own primitive (shares AQUA value) so a brand-aqua edit cannot move it."},{"hex":"#dbbc7f","name":"PLAYBACK_CONTEXT_FG","primitive":"PLAYBACK_CONTEXT","rgb":[219,188,127],"uses":"Now-playing title row container (series/artist/show/subscription). Own primitive (shares YELLOW value) so a focus-accent edit cannot move it."},{"hex":"#46545f","name":"PROGRESS_TRACK","primitive":"SEEK_TRACK","rgb":[70,84,95],"uses":"Unplayed seek/progress track."},{"hex":"#48584e","name":"SCROLLBAR","primitive":"SCROLLBAR (alias of BG_GREEN_SOFT value)","rgb":[72,88,78],"uses":"Library/chrome scrollbar track/thumb. Own primitive so a scrollbar edit cannot move the content-body fill."}],"source":["src/app/render/theme/primitives.rs","src/app/render/theme/mod.rs","src/app/render/theme/surface.rs","src/app/render/theme/surface_table.rs","src/app/render/theme/surface_resolve.rs"],"specials":[{"name":"Color::Black","uses":"Popup dim-backdrop blend base (backdrop.rs dims every cell halfway toward black). Not a palette fill."},{"name":"Color::White","uses":"Status-bar pills (status_bar_panel.rs), chrome_status headings. Raw ratatui named colour, not a theme role."},{"name":"Color::Reset","uses":"Transparent/unpainted cells: media-list gutters, marquee parts, card-painter tests. Means 'no fill', not a colour."}],"surfaces":[{"focused":"#3c4841","level":"ColumnPane","name":"QueueColumn","resting":"#333c43","uses":"Queue column gutter + queue boundary strip; follows queue-column focus."},{"focused":"#2d353b","level":"ColumnPane","name":"LibraryColumn","resting":"#2d353b","uses":"Library column gutter + wide Music browser container; fixed, always backdrop."},{"focused":"#2d353b","level":"ColumnPane","name":"WideSplitGutter","resting":"#2d353b","uses":"Wide hero split gap; fixed backdrop."},{"focused":"#3c4841","level":"ColumnPane","name":"HeroPane","resting":"#333c43","uses":"Wide hero right pane (ReadOnly paints resting, Workspace(held) resolves held bit)."},{"focused":"#2d353b","level":"ColumnPane","name":"SelectedRow","resting":"#2d353b","uses":"Library punch-through beneath the list panel; fixed backdrop. Kept for contract; painter now uses SELECTED_ROW_BG bar."},{"focused":"#3c4841","level":"ColumnPane","name":"SelectedRowOnQueueColumn","resting":"#333c43","uses":"Queue list selected row as hole in queue column (queue.rs policy bit). Kept for contract."},{"focused":"#3c4841","level":"ColumnPane","name":"SelectedRowOnLibraryPane","resting":"#333c43","uses":"TV episode / Music track list hole in library pane (tv_wide.rs, music_wide.rs). Kept for contract."},{"focused":"#a7c080","level":"ColumnPane","name":"ContextMenuSelectedRow","resting":"#a7c080","uses":"Popup context-menu selected row; fixed ACCENT_ACTIVE (context_menu.rs)."},{"focused":"#3c4841","level":"ContentBody","name":"LibraryPanel","resting":"#333c43","uses":"Wide-hero rail body + frame across Movies/TV/Music/ABS/Feeds/Home (browser paint, tv_wide, music_wide, feeds, home)."},{"focused":"#48584e","level":"ContentBody","name":"QueuePanel","resting":"#2d353b","soft":true,"uses":"Queue panel body (widgets.rs); soft focused variant, backdrop resting."},{"focused":"#48584e","level":"ContentBody","name":"MainContentBox","resting":"#2d353b","soft":true,"uses":"Pane content box: TV episode listing, Music track listing, generic pane inset (tv_wide, music_wide, wide_hero)."},{"focused":"#3c4841","level":"ContentBody","name":"InlineHero","resting":"#333c43","uses":"Selected row inline detail (hero.rs)."},{"focused":"#3c4841","level":"ContentBody","name":"PlaybackPanel","resting":"#333c43","uses":"Now-playing panel body (shell_playback projection, playback.rs default)."},{"focused":"#1e2326","level":"ChromeBand","name":"QueueOnlyPlaybackPanel","resting":"#1e2326","uses":"Queue-only mode playback strip (shell_draw.rs): no right column, paints chrome in both states. Mode-driven, not focus-driven."},{"focused":"#333c43","level":"ContentBody","name":"SidebarBody","resting":"#333c43","uses":"Expanded (F1-F4) sidebar body (chrome.rs); fixed resting content value."},{"focused":"#3c424a","level":"ContentBody","name":"NonHeroSidebarBody","resting":"#3c424a","uses":"Non-hero sidebar shell (chrome.rs); fixed SURFACE_SIDEBAR."},{"focused":"#3c4841","level":"ContentBody","name":"QueueCardVisualizer","resting":"#333c43","uses":"Queue card now-playing content; resolves content-body pair with queue-column focus (card.rs)."},{"focused":"#3c4841","level":"Recess","name":"PlaybackRecess","resting":"#333c43","uses":"Now-playing panel content rows via ctx.panel_bg (chrome_player.rs)."},{"focused":"#2d353b","level":"Recess","name":"PlaybackStatusPill","resting":"#2d353b","uses":"Playback status pill inset; fixed backdrop."},{"focused":"#2d353b","level":"Recess","name":"ArtworkPlaceholder","resting":"#2d353b","uses":"No-artwork surface; fixed backdrop."},{"focused":"#3f3f3f","level":"Recess","name":"ArtworkLoadingPlaceholder","resting":"#3f3f3f","uses":"Artwork-loading inset fill (card.rs, album_art.rs, hero painters). Own primitive so a border edit cannot move it."},{"focused":"#1e2326","level":"ChromeBand","name":"StatusBar","resting":"#1e2326","uses":"Status bar band (chrome_status.rs); fixed."},{"focused":"#1e2326","level":"ChromeBand","name":"StatusBarPill","resting":"#1e2326","uses":"Status bar pill inset; fixed."},{"focused":"#1e2326","level":"ChromeBand","name":"QueuePanelBand","resting":"#1e2326","uses":"Queue panel header/status band (queue.rs); fixed."},{"focused":"#1e2326","level":"ChromeBand","name":"PillRow","resting":"#1e2326","uses":"Pill selector row band; fixed PILL_ROW_BG."},{"focused":"#1e2326","level":"ChromeBand","name":"PillChip","resting":"#1e2326","uses":"Unselected pill chip; fixed PILL_BG."},{"focused":"#3a94c5","level":"ChromeBand","name":"PillChipSelected","resting":"#3a94c5","uses":"Selected library pill chip; fixed PILL_SELECTED_BG blue."},{"focused":"#35a77c","level":"ChromeBand","name":"QueueScopePillSelected","resting":"#35a77c","uses":"Queue selected scope pill; fixed ACCENT aqua = Direct-remote indicator (queue.rs), not library-pill blue."},{"focused":"#2d353b","level":"ChromeBand","name":"PillRowGap","resting":"#2d353b","uses":"Home pill-bar spacer band (home.rs); fixed backdrop."},{"focused":"#1e2326","level":"ChromeBand","name":"SidebarBand","resting":"#1e2326","uses":"Sidebar header/footer band; fixed."},{"focused":"#535353","level":"ChromeBand","name":"NonHeroSidebarBand","resting":"#535353","uses":"Non-hero sidebar band; fixed SURFACE_ITEM_FOCUSED."},{"focused":"#1e2326","level":"ChromeBand","name":"TabBar","resting":"#1e2326","uses":"Tab bar band (chrome_tabs.rs); fixed."},{"focused":"#3c4841","level":"Popup","name":"PopupFrame","resting":"#3c4841","uses":"Every modal frame background (modal_frame.rs); fixed."},{"focused":"#000000","level":"Popup","name":"PopupDimBackdrop","resting":"#000000","uses":"Dim backdrop: blends cells halfway toward black (backdrop.rs dim); row value is the blend base, not a rect fill."}]};
+let DATA = {"generated":"2026-09-19","variants":[{"hex":"#1a1a1a","name":"Grey1","rgb":[26,26,26]},{"hex":"#9e9e9e","name":"Grey2","rgb":[158,158,158]},{"hex":"#e6e6e6","name":"Grey3","rgb":[230,230,230]},{"hex":"#3c4841","name":"Green1","rgb":[60,72,65]},{"hex":"#48584e","name":"Green2","rgb":[72,88,78]},{"hex":"#6c766c","name":"Green3","rgb":[108,118,108]},{"hex":"#93b259","name":"Green","rgb":[147,178,89]},{"hex":"#a7c080","name":"Iris","rgb":[167,192,128]},{"hex":"#35a77c","name":"Aqua","rgb":[53,167,124]},{"hex":"#1e2326","name":"Ink","rgb":[30,35,38]},{"hex":"#2d353b","name":"Slate","rgb":[45,53,59]},{"hex":"#333c43","name":"Storm","rgb":[51,60,67]},{"hex":"#3a94c5","name":"Foam","rgb":[58,148,197]},{"hex":"#d699b6","name":"Purple","rgb":[214,153,182]},{"hex":"#e57e80","name":"Red","rgb":[229,126,128]},{"hex":"#e59875","name":"Orange","rgb":[229,152,117]},{"hex":"#dbbc7f","name":"Yellow","rgb":[219,188,127]},{"hex":"#faedcd","name":"Cream","rgb":[250,237,205]},{"hex":"#fdf6e3","name":"White","rgb":[253,246,227]}],"role_sets":{"HERO_META_ROLES":{"members":["TEXT_DETAIL_META","TEXT_METADATA","TEXT_SECONDARY"],"uses":"Hero header metadata painter: colours meta row n with HERO_META_ROLES[n % 3] (hero_header.rs). The three colours hero headers already used, defined once so destinations cannot style metadata."},"HINT_PILL_FILLS":{"members":["#3a94c5","#dbbc7f","#e59875"],"uses":"Library Hero overlay display-only hint chips, rotated by chip index (widgets.rs hint pills). Chip surfaces, not text roles, so a text-colour edit cannot move them."}},"roles":[{"hex":"#2d353b","name":"SURFACE_BACKDROP","rgb":[45,53,59],"uses":"App backdrop: library column gutter, wide split gutter, pill-row gap, playback status pill, artwork placeholder, queue panel resting box, main content-box resting half.","variant":"Slate"},{"hex":"#1e2326","name":"SURFACE_CHROME","rgb":[30,35,38],"uses":"Non-focusable structural chrome: status bar, tab bar, sidebar bands, queue panel band, queue-only playback strip (both states).","variant":"Ink"},{"hex":"#3c4841","name":"SURFACE_FOCUSED","rgb":[60,72,65],"uses":"Focused fill for ColumnPane/ContentBody/Recess levels: queue column, hero pane, library/queue/playback panels, popup frame. Own role over the text-green's Palette::Green1: equal today, independently editable.","variant":"Green1"},{"hex":"#333c43","name":"SURFACE_RESTING","rgb":[51,60,67],"uses":"Resting content fill: unfocused half of library/queue/playback panels, hero pane, inline hero, sidebar body, media-list selected-row default.","variant":"Storm"},{"hex":"#a7c080","name":"HERO_OVERVIEW_SEPARATOR","rgb":[167,192,128],"uses":"Overview/credits separator line in hero/overview painters (widgets.rs, overview_box tests).","variant":"Iris"},{"hex":"#333c43","name":"HERO_CREDITS_STRIPE","rgb":[51,60,67],"uses":"Alternating credits-row stripe background (overview_box.rs).","variant":"Storm"},{"hex":"#dbbc7f","name":"HERO_CREDITS_NAME","rgb":[219,188,127],"uses":"Credits name-column foreground (overview_box.rs).","variant":"Yellow"},{"hex":"#35a77c","name":"ACCENT","rgb":[53,167,124],"uses":"Focus accent: watched indicators, folder/row icons, Emby brand glyph, queue scope-pill selected (Direct-remote aqua), visualizer low band, play icon, settings highlights, status-bar pill.","variant":"Aqua"},{"hex":"#a7c080","name":"ACCENT_ACTIVE","rgb":[167,192,128],"uses":"Active tab, focused pill/badge text, context-menu selected row, playlist/session selected markers, home-video secondary marker, search-sidebar marker.","variant":"Iris"},{"hex":"#dbbc7f","name":"ACCENT_AUDIOBOOKSHELF","rgb":[219,188,127],"uses":"Audiobookshelf brand glyph (chrome_status.rs).","variant":"Yellow"},{"hex":"#1e2326","name":"PILL_ROW_BG","rgb":[30,35,38],"uses":"Pill-selector row background (PillRow surface; scroll-pills tests).","variant":"Ink"},{"hex":"#1e2326","name":"PILL_BG","rgb":[30,35,38],"uses":"Unselected pill-chip surface (PillChip surface).","variant":"Ink"},{"hex":"#3a94c5","name":"PILL_SELECTED_BG","rgb":[58,148,197],"uses":"Selected pill-chip surface (PillChipSelected surface; slots.rs, search_sidebar.rs). Own role over TEXT_METADATA's Palette::Foam: equal today, independently editable.","variant":"Foam"},{"hex":"#1e2326","name":"PILL_SELECTED_FG","rgb":[30,35,38],"uses":"Selected pill-chip foreground text on the blue fill (slots.rs, widgets.rs, search_sidebar.rs).","variant":"Ink"},{"hex":"#3c4841","name":"PILL_OVERFLOW_FG","rgb":[60,72,65],"uses":"Pill-selector overflow/edge accent (widgets.rs). Former value alias of the text green; shares TEXT_ACCENT_MUTED's Palette::Green1 today, independently editable.","variant":"Green1"},{"hex":"#e6e6e6","name":"TEXT_PRIMARY","rgb":[230,230,230],"uses":"Primary readable content foreground.","variant":"Grey3"},{"hex":"#9e9e9e","name":"TEXT_SECONDARY","rgb":[158,158,158],"uses":"Secondary text; pairs with TEXT_PRIMARY/TEXT_STRONG; also HERO_META_ROLES[2].","variant":"Grey2"},{"hex":"#9e9e9e","name":"TEXT_MUTED","rgb":[158,158,158],"uses":"Dim text, icons, unfocused state; unselected library tab and pill-chip text; played/watched media-list row titles (chrome_tabs.rs, slots.rs, widgets.rs, queue.rs, search_sidebar.rs, media_list/row.rs).","variant":"Grey2"},{"hex":"#fdf6e3","name":"TEXT_STRONG","rgb":[253,246,227],"uses":"Bold titles/headings (warm white).","variant":"White"},{"hex":"#faedcd","name":"TEXT_EMPHASIS","rgb":[250,237,205],"uses":"Warm emphasis text: focused rows, dialogs; also the split-row context colour's backing value.","variant":"Cream"},{"hex":"#dbbc7f","name":"TEXT_FOCUS_ACCENT","rgb":[219,188,127],"uses":"Focused-row title accent; queue selected-scope text; paused status; home-video marker; visualizer mid band; status-bar time.","variant":"Yellow"},{"hex":"#dbbc7f","name":"TEXT_HERO_TITLE","rgb":[219,188,127],"uses":"Hero header title (first metadata line). Same value as focus accent, separate role.","variant":"Yellow"},{"hex":"#1a1a1a","name":"TEXT_ON_ACCENT","rgb":[26,26,26],"uses":"Near-black text painted on a coloured surface: context-menu selected row, indicator badges, hint pills.","variant":"Grey1"},{"hex":"#3c4841","name":"TEXT_ACCENT_MUTED","rgb":[60,72,65],"uses":"Loaded/playing/confirmed value text (library_routes.rs, multiselect.rs, playlists.rs). Own role over SURFACE_FOCUSED's Palette::Green1: equal today, independently editable.","variant":"Green1"},{"hex":"#6c766c","name":"TEXT_DETAIL_META","rgb":[108,118,108],"uses":"Detail-screen label/meta text; HERO_META_ROLES[0].","variant":"Green3"},{"hex":"#3a94c5","name":"TEXT_METADATA","rgb":[58,148,197],"uses":"Secondary metadata: durations, pct, badges; HERO_META_ROLES[1].","variant":"Foam"},{"hex":"#2d353b","name":"SELECTED_ROW_BG","rgb":[45,53,59],"uses":"Selected-row opaque bar fill. Rows keep ordinary foreground roles on the bar. Own role over SURFACE_BACKDROP's Palette::Slate: equal today, independently editable.","variant":"Slate"},{"hex":"#e57e80","name":"STATUS_ERROR","rgb":[229,126,128],"uses":"Error status text.","variant":"Red"},{"hex":"#93b259","name":"STATUS_AVAILABLE","rgb":[147,178,89],"uses":"Checkmarks, available/positive metadata (queue_playback.rs).","variant":"Green"},{"hex":"#a7c080","name":"DURATION","rgb":[167,192,128],"uses":"Right-aligned duration column of the Queue list only. Own role so a status-colour edit cannot move durations. Library browse rows carry no time.","variant":"Iris"},{"hex":"#dbbc7f","name":"ROW_DATE_FG","rgb":[219,188,127],"uses":"Right-aligned publish-date gutter of library browse rows (podcast 17 Sep gutter). A date is item metadata, not a playback time, so separate from DURATION.","variant":"Yellow"},{"hex":"#faedcd","name":"SPLIT_ROW_CONTEXT_FG","rgb":[250,237,205],"uses":"Split media-list row primary/context part (podcast an episode came from). Soft white; the playback strip keeps gold.","variant":"Cream"},{"hex":"#9e9e9e","name":"SPLIT_ROW_TITLE_FG","rgb":[158,158,158],"uses":"Split media-list row secondary/item title. Light grey; the playback strip keeps aqua.","variant":"Grey2"},{"hex":"#e59875","name":"INDICATOR_RESOLUTION_FG","rgb":[229,152,117],"uses":"Resolution glyph foreground (indicators.rs).","variant":"Orange"},{"hex":"#d699b6","name":"INDICATOR_AUDIO_FG","rgb":[214,153,182],"uses":"Audio glyph foreground (indicators.rs).","variant":"Purple"},{"hex":"#a7c080","name":"PLAYBACK_VALUE_FG","rgb":[167,192,128],"uses":"Now-playing title/codec value.","variant":"Iris"},{"hex":"#a7c080","name":"PLAYBACK_META_FG","rgb":[167,192,128],"uses":"Playback metadata captions/time.","variant":"Iris"},{"hex":"#35a77c","name":"PLAYBACK_TITLE_FG","rgb":[53,167,124],"uses":"Now-playing title row item name. Own role over ACCENT's Palette::Aqua: equal today, independently editable (now-playing-media-type-titles D2).","variant":"Aqua"},{"hex":"#dbbc7f","name":"PLAYBACK_CONTEXT_FG","rgb":[219,188,127],"uses":"Now-playing title row container (series/artist/show/subscription). Own role over the focused-row accent's Palette::Yellow: equal today, independently editable (now-playing-media-type-titles D2).","variant":"Yellow"},{"hex":"#9e9e9e","name":"PROGRESS_TRACK","rgb":[158,158,158],"uses":"Unplayed seek/progress track.","variant":"Grey2"},{"hex":"#48584e","name":"SCROLLBAR","rgb":[72,88,78],"uses":"Library/chrome scrollbar track/thumb. Former value alias of the soft content-body fill; shares its Palette::Green2 today, independently editable.","variant":"Green2"}],"source":["src/app/render/theme/palette.rs","src/app/render/theme/mod.rs","src/app/render/theme/surface.rs","src/app/render/theme/surface_table.rs","src/app/render/theme/surface_resolve.rs"],"specials":[{"name":"Color::Black","uses":"Popup dim-backdrop blend base (backdrop.rs dims every cell halfway toward black). Not a palette fill."},{"name":"Color::White","uses":"Status-bar pills (status_bar_panel.rs), chrome_status headings. Raw ratatui named colour, not a theme role."},{"name":"Color::Reset","uses":"Transparent/unpainted cells: media-list gutters, marquee parts, card-painter tests. Means 'no fill', not a colour."}],"surfaces":[{"focused":"#3c4841","level":"ColumnPane","name":"QueueColumn","resting":"#333c43","uses":"Queue column gutter + queue boundary strip; follows queue-column focus."},{"focused":"#2d353b","level":"ColumnPane","name":"LibraryColumn","resting":"#2d353b","uses":"Library column gutter + wide Music browser container; fixed, always backdrop."},{"focused":"#2d353b","level":"ColumnPane","name":"WideSplitGutter","resting":"#2d353b","uses":"Wide hero split gap; fixed backdrop."},{"focused":"#3c4841","level":"ColumnPane","name":"HeroPane","resting":"#333c43","uses":"Wide hero right pane (ReadOnly paints resting, Workspace(held) resolves held bit)."},{"focused":"#2d353b","level":"ColumnPane","name":"SelectedRow","resting":"#2d353b","uses":"Library punch-through beneath the list panel; fixed backdrop. Kept for contract; painter now uses SELECTED_ROW_BG bar."},{"focused":"#3c4841","level":"ColumnPane","name":"SelectedRowOnQueueColumn","resting":"#333c43","uses":"Queue list selected row as hole in queue column (queue.rs policy bit). Kept for contract."},{"focused":"#3c4841","level":"ColumnPane","name":"SelectedRowOnLibraryPane","resting":"#333c43","uses":"TV episode / Music track list hole in library pane (tv_wide.rs, music_wide.rs). Kept for contract."},{"focused":"#a7c080","level":"ColumnPane","name":"ContextMenuSelectedRow","resting":"#a7c080","uses":"Popup context-menu selected row; fixed ACCENT_ACTIVE (context_menu.rs)."},{"focused":"#3c4841","level":"ContentBody","name":"LibraryPanel","resting":"#333c43","uses":"Wide-hero rail body + frame across Movies/TV/Music/ABS/Feeds/Home (browser paint, tv_wide, music_wide, feeds, home)."},{"focused":"#48584e","level":"ContentBody","name":"QueuePanel","resting":"#2d353b","soft":true,"uses":"Queue panel body (widgets.rs); soft focused variant, backdrop resting."},{"focused":"#48584e","level":"ContentBody","name":"MainContentBox","resting":"#2d353b","soft":true,"uses":"Pane content box: TV episode listing, Music track listing, generic pane inset (tv_wide, music_wide, wide_hero)."},{"focused":"#3c4841","level":"ContentBody","name":"InlineHero","resting":"#333c43","uses":"Selected row inline detail (hero.rs)."},{"focused":"#3c4841","level":"ContentBody","name":"PlaybackPanel","resting":"#333c43","uses":"Now-playing panel body (shell_playback projection, playback.rs default)."},{"focused":"#1e2326","level":"ChromeBand","name":"QueueOnlyPlaybackPanel","resting":"#1e2326","uses":"Queue-only mode playback strip (shell_draw.rs): no right column, paints chrome in both states. Mode-driven, not focus-driven."},{"focused":"#333c43","level":"ContentBody","name":"SidebarBody","resting":"#333c43","uses":"Expanded (F1-F4) sidebar body (chrome.rs); fixed resting content value."},{"focused":"#3c4841","level":"ContentBody","name":"QueueCardVisualizer","resting":"#333c43","uses":"Queue card now-playing content; resolves content-body pair with queue-column focus (card.rs)."},{"focused":"#3c4841","level":"Recess","name":"PlaybackRecess","resting":"#333c43","uses":"Now-playing panel content rows via ctx.panel_bg (chrome_player.rs)."},{"focused":"#2d353b","level":"Recess","name":"PlaybackStatusPill","resting":"#2d353b","uses":"Playback status pill inset; fixed backdrop."},{"focused":"#2d353b","level":"Recess","name":"ArtworkPlaceholder","resting":"#2d353b","uses":"No-artwork surface; fixed backdrop."},{"focused":"#9e9e9e","level":"Recess","name":"ArtworkLoadingPlaceholder","resting":"#9e9e9e","uses":"Artwork-loading inset fill (card.rs, album_art.rs, hero painters). Own value over TEXT_MUTED's Palette::Grey2: equal today, independently editable."},{"focused":"#1e2326","level":"ChromeBand","name":"StatusBar","resting":"#1e2326","uses":"Status bar band (chrome_status.rs); fixed."},{"focused":"#1e2326","level":"ChromeBand","name":"StatusBarPill","resting":"#1e2326","uses":"Status bar pill inset; fixed."},{"focused":"#1e2326","level":"ChromeBand","name":"QueuePanelBand","resting":"#1e2326","uses":"Queue panel header/status band (queue.rs); fixed."},{"focused":"#1e2326","level":"ChromeBand","name":"PillRow","resting":"#1e2326","uses":"Pill selector row band; fixed PILL_ROW_BG."},{"focused":"#1e2326","level":"ChromeBand","name":"PillChip","resting":"#1e2326","uses":"Unselected pill chip; fixed PILL_BG."},{"focused":"#3a94c5","level":"ChromeBand","name":"PillChipSelected","resting":"#3a94c5","uses":"Selected library pill chip; fixed PILL_SELECTED_BG blue."},{"focused":"#35a77c","level":"ChromeBand","name":"QueueScopePillSelected","resting":"#35a77c","uses":"Queue selected scope pill; fixed ACCENT aqua = Direct-remote indicator (queue.rs), not library-pill blue."},{"focused":"#2d353b","level":"ChromeBand","name":"PillRowGap","resting":"#2d353b","uses":"Home pill-bar spacer band (home.rs); fixed backdrop."},{"focused":"#1e2326","level":"ChromeBand","name":"SidebarBand","resting":"#1e2326","uses":"Sidebar header/footer band; fixed."},{"focused":"#1e2326","level":"ChromeBand","name":"TabBar","resting":"#1e2326","uses":"Tab bar band (chrome_tabs.rs); fixed."},{"focused":"#3c4841","level":"Popup","name":"PopupFrame","resting":"#3c4841","uses":"Every modal frame background (modal_frame.rs); fixed."},{"focused":"#000000","level":"Popup","name":"PopupDimBackdrop","resting":"#000000","uses":"Dim backdrop: blends cells halfway toward black (backdrop.rs dim); row value is the blend base, not a rect fill."}]};
 function div(cls, text) {
   const el = document.createElement('div');
   if (cls) el.className = cls;
@@ -44,96 +54,272 @@ function div(cls, text) {
   return el;
 }
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
-function roleCard(r) {
-  const el = div('card');
-  const sw = div('swatch');
-  sw.style.background = r.hex;
-  sw.title = r.hex;
-  const body = div();
-  body.appendChild(div('name', r.name));
-  const row = div();
-  const hex = document.createElement('span');
-  hex.className = 'hex';
-  hex.textContent = r.hex;
-  hex.title = 'click to copy';
-  hex.dataset.hex = r.hex;
-  const prim = document.createElement('span');
-  prim.className = 'prim';
-  prim.textContent = ' ' + r.primitive;
-  row.appendChild(hex);
-  row.appendChild(prim);
-  body.appendChild(row);
-  body.appendChild(div('uses', r.uses));
-  el.appendChild(sw);
-  el.appendChild(body);
-  return el;
+let sortKeyV = 'name', sortTypeV = 'str', sortDirV = 1;
+function variantKey(v, key) {
+  const roles = (DATA.roles || []).filter(r => r.variant === v.name);
+  if (key === 'refs') return roles.length;
+  if (key === 'colour') return v.hex;
+  if (key === 'roles') return roles.map(r => r.name).join(',');
+  return v.name;
 }
-function surfaceCard(s) {
-  const el = div('card');
-  const wrap = div();
-  wrap.style.cssText = 'flex:none;width:56px';
-  const dual = div('dual');
-  const f = div(null, 'F');
-  f.style.background = s.focused;
-  f.title = 'focused ' + s.focused;
-  const rst = div(null, 'R');
-  rst.style.background = s.resting;
-  rst.title = 'resting ' + s.resting;
-  dual.appendChild(f);
-  dual.appendChild(rst);
-  wrap.appendChild(dual);
-  const body = div();
-  body.appendChild(div('name', s.name));
-  body.appendChild(div('meta', s.level + (s.soft ? ' \u00b7 soft' : '') + ' \u00b7 F ' + s.focused + ' \u00b7 R ' + s.resting));
-  body.appendChild(div('uses', s.uses));
-  el.appendChild(wrap);
-  el.appendChild(body);
-  return el;
-}
-function roleSetCard(name, rs) {
-  const el = div('card');
-  const wrap = div();
-  wrap.style.cssText = 'flex:none;width:56px';
-  const row = div();
-  row.style.cssText = 'display:flex;gap:2px';
-  for (const m of rs.members) {
-    const role = (DATA.roles || []).find(r => r.name === m);
-    const chip = div();
-    chip.style.cssText = 'flex:1;height:28px;background:' + (role ? role.hex : (/^#/.test(m) ? m : '#333')) + ';border-radius:4px';
-    chip.title = m;
-    row.appendChild(chip);
+function renderVariants() {
+  const tb = document.querySelector('#variants tbody');
+  clear(tb);
+  const rows = (DATA.variants || []).slice().sort((a, b) => {
+    const ka = variantKey(a, sortKeyV), kb = variantKey(b, sortKeyV);
+    const c = sortTypeV === 'num' ? ka - kb : String(ka).localeCompare(String(kb));
+    return c * sortDirV || String(a.name).localeCompare(String(b.name));
+  });
+  for (const v of rows) {
+    const roles = (DATA.roles || []).filter(r => r.variant === v.name);
+    const tr = document.createElement('tr');
+    const nm = document.createElement('td');
+    nm.className = 'name';
+    nm.textContent = v.name;
+    tr.appendChild(nm);
+    const rc = document.createElement('td');
+    rc.textContent = roles.length;
+    tr.appendChild(rc);
+    const td = document.createElement('td');
+    const wrap = div('cellsw');
+    const sw = div('mini');
+    sw.style.background = v.hex;
+    sw.title = v.hex;
+    wrap.appendChild(sw);
+    const hx = document.createElement('span');
+    hx.className = 'hex';
+    hx.textContent = v.hex;
+    hx.title = 'click to copy';
+    hx.dataset.hex = v.hex;
+    wrap.appendChild(hx);
+    td.appendChild(wrap);
+    tr.appendChild(td);
+    const d = document.createElement('td');
+    d.className = 'uses';
+    if (roles.length) {
+      for (const r of roles) {
+        const line = div();
+        const rn = document.createElement('span');
+        rn.className = 'rname';
+        rn.textContent = r.name;
+        line.appendChild(rn);
+        line.appendChild(document.createTextNode(' — ' + r.uses));
+        d.appendChild(line);
+      }
+    } else {
+      d.textContent = 'No roles derive from this variant.';
+    }
+    tr.appendChild(d);
+    tb.appendChild(tr);
   }
-  wrap.appendChild(row);
-  const body = div();
-  body.appendChild(div('name', name));
-  body.appendChild(div('meta', rs.members.join(' \u00b7 ')));
-  body.appendChild(div('uses', rs.uses));
-  el.appendChild(wrap);
-  el.appendChild(body);
-  return el;
+}
+function updateSortIndicatorsV() {
+  document.querySelectorAll('#variants th[data-key]').forEach(th => {
+    th.textContent = th.dataset.label + (th.dataset.key === sortKeyV ? (sortDirV === 1 ? ' ▲' : ' ▼') : '');
+  });
+}
+function variantName(hex) {
+  const v = (DATA.variants || []).find(v => v.hex.toLowerCase() === String(hex).toLowerCase());
+  return v ? v.name : null;
+}
+function surfaceCell(hex) {
+  const td = document.createElement('td');
+  const wrap = div('cellsw');
+  const sw = div('mini');
+  sw.style.background = hex;
+  sw.title = hex;
+  wrap.appendChild(sw);
+  const label = div();
+  const vn = variantName(hex);
+  if (vn) {
+    const s = document.createElement('span');
+    s.className = 'vname';
+    s.textContent = vn;
+    label.appendChild(s);
+    label.appendChild(document.createElement('br'));
+  }
+  const hx = document.createElement('span');
+  hx.className = 'hex';
+  hx.textContent = hex;
+  hx.title = 'click to copy';
+  hx.dataset.hex = hex;
+  label.appendChild(hx);
+  wrap.appendChild(label);
+  td.appendChild(wrap);
+  return td;
+}
+let REFS = {"QueueColumn":48,"LibraryColumn":21,"WideSplitGutter":7,"HeroPane":44,"SelectedRow":9,"SelectedRowOnQueueColumn":7,"SelectedRowOnLibraryPane":6,"ContextMenuSelectedRow":8,"LibraryPanel":308,"QueuePanel":16,"MainContentBox":40,"InlineHero":9,"PlaybackPanel":19,"QueueOnlyPlaybackPanel":22,"SidebarBody":7,"QueueCardVisualizer":7,"PlaybackRecess":5,"PlaybackStatusPill":11,"ArtworkPlaceholder":7,"ArtworkLoadingPlaceholder":8,"StatusBar":19,"StatusBarPill":35,"QueuePanelBand":7,"PillRow":19,"PillChip":10,"PillChipSelected":8,"QueueScopePillSelected":6,"PillRowGap":15,"SidebarBand":7,"TabBar":9,"PopupFrame":14,"PopupDimBackdrop":7};
+let sortKey = 'name', sortType = 'str', sortDir = 1;
+function surfaceKey(s, key) {
+  if (key === 'refs') return REFS[s.name] || 0;
+  if (key === 'focused') return variantName(s.focused) || s.focused;
+  if (key === 'resting') return variantName(s.resting) || s.resting;
+  if (key === 'uses') return s.uses;
+  return s.name;
+}
+function renderSurfaces() {
+  const tb = document.querySelector('#surfaces tbody');
+  clear(tb);
+  const rows = (DATA.surfaces || []).slice().sort((a, b) => {
+    const ka = surfaceKey(a, sortKey), kb = surfaceKey(b, sortKey);
+    const c = sortType === 'num' ? ka - kb : String(ka).localeCompare(String(kb));
+    return c * sortDir || String(a.name).localeCompare(String(b.name));
+  });
+  for (const s of rows) {
+    const tr = document.createElement('tr');
+    const nm = document.createElement('td');
+    nm.className = 'name';
+    nm.textContent = s.name;
+    tr.appendChild(nm);
+    const rc = document.createElement('td');
+    rc.textContent = REFS[s.name] || 0;
+    tr.appendChild(rc);
+    tr.appendChild(surfaceCell(s.focused));
+    tr.appendChild(surfaceCell(s.resting));
+    const d = document.createElement('td');
+    d.className = 'uses';
+    d.textContent = (s.level ? s.level + (s.soft ? ' \u00b7 soft' : '') + ' \u2014 ' : '') + s.uses;
+    tr.appendChild(d);
+    tb.appendChild(tr);
+  }
+}
+function showTab(which) {
+  for (const t of ['surfaces', 'palette', 'text']) {
+    document.getElementById('tab-' + t).hidden = which !== t;
+    document.getElementById('tabbtn-' + t).classList.toggle('active', which === t);
+  }
+}
+let ROLE_REFS = {"SURFACE_BACKDROP":28,"SURFACE_CHROME":23,"SURFACE_FOCUSED":27,"SURFACE_RESTING":56,"HERO_OVERVIEW_SEPARATOR":6,"HERO_CREDITS_STRIPE":6,"HERO_CREDITS_NAME":6,"ACCENT":42,"ACCENT_ACTIVE":15,"ACCENT_AUDIOBOOKSHELF":8,"PILL_ROW_BG":6,"PILL_BG":3,"PILL_SELECTED_BG":9,"PILL_SELECTED_FG":8,"PILL_OVERFLOW_FG":5,"TEXT_PRIMARY":23,"TEXT_SECONDARY":39,"TEXT_MUTED":62,"TEXT_STRONG":31,"TEXT_EMPHASIS":22,"TEXT_FOCUS_ACCENT":19,"TEXT_HERO_TITLE":5,"TEXT_ON_ACCENT":7,"TEXT_ACCENT_MUTED":9,"TEXT_DETAIL_META":2,"TEXT_METADATA":26,"SELECTED_ROW_BG":18,"STATUS_ERROR":19,"STATUS_AVAILABLE":10,"DURATION":18,"ROW_DATE_FG":6,"SPLIT_ROW_CONTEXT_FG":11,"SPLIT_ROW_TITLE_FG":6,"INDICATOR_RESOLUTION_FG":4,"INDICATOR_AUDIO_FG":4,"PLAYBACK_VALUE_FG":11,"PLAYBACK_META_FG":11,"PLAYBACK_TITLE_FG":9,"PLAYBACK_CONTEXT_FG":11,"PROGRESS_TRACK":5,"SCROLLBAR":9};
+let sortKeyT = 'name', sortTypeT = 'str', sortDirT = 1;
+function roleKey(r, key) {
+  if (key === 'refs') return ROLE_REFS[r.name] || 0;
+  if (key === 'colour') return r.variant || r.hex;
+  if (key === 'uses') return r.uses;
+  return r.name;
+}
+function renderRoles() {
+  const tb = document.querySelector('#roles tbody');
+  clear(tb);
+  const rows = (DATA.roles || []).slice().sort((a, b) => {
+    const ka = roleKey(a, sortKeyT), kb = roleKey(b, sortKeyT);
+    const c = sortTypeT === 'num' ? ka - kb : String(ka).localeCompare(String(kb));
+    return c * sortDirT || String(a.name).localeCompare(String(b.name));
+  });
+  for (const r of rows) {
+    const tr = document.createElement('tr');
+    const nm = document.createElement('td');
+    nm.className = 'name';
+    nm.textContent = r.name;
+    tr.appendChild(nm);
+    const rc = document.createElement('td');
+    rc.textContent = ROLE_REFS[r.name] || 0;
+    tr.appendChild(rc);
+    tr.appendChild(surfaceCell(r.hex));
+    const d = document.createElement('td');
+    d.className = 'uses';
+    d.textContent = r.uses;
+    tr.appendChild(d);
+    tb.appendChild(tr);
+  }
+}
+function updateSortIndicatorsT() {
+  document.querySelectorAll('#roles th[data-key]').forEach(th => {
+    th.textContent = th.dataset.label + (th.dataset.key === sortKeyT ? (sortDirT === 1 ? ' \u25b2' : ' \u25bc') : '');
+  });
+}
+function otherRow(name, css, label, desc) {
+  const tr = document.createElement('tr');
+  const nm = document.createElement('td');
+  nm.className = 'name';
+  nm.textContent = name;
+  tr.appendChild(nm);
+  const td = document.createElement('td');
+  const wrap = div('cellsw');
+  const sw = div('mini');
+  sw.style.background = css;
+  sw.title = label;
+  wrap.appendChild(sw);
+  const lb = div();
+  const vn = variantName(label);
+  if (vn) {
+    const s = document.createElement('span');
+    s.className = 'vname';
+    s.textContent = vn;
+    lb.appendChild(s);
+    lb.appendChild(document.createElement('br'));
+  }
+  const hx = document.createElement('span');
+  hx.className = 'hex';
+  hx.textContent = label;
+  hx.title = 'click to copy';
+  hx.dataset.hex = label;
+  lb.appendChild(hx);
+  wrap.appendChild(lb);
+  td.appendChild(wrap);
+  tr.appendChild(td);
+  const d = document.createElement('td');
+  d.className = 'uses';
+  d.textContent = desc;
+  tr.appendChild(d);
+  return tr;
+}
+function renderOther() {
+  const tb = document.querySelector('#other tbody');
+  clear(tb);
+  const fills = (DATA.role_sets && DATA.role_sets.HINT_PILL_FILLS) || {members: []};
+  fills.members.forEach((m, i) => {
+    tb.appendChild(otherRow('HINT_PILL_FILLS[' + i + ']', m, m, 'Library Hero overlay hint-chip fill, rotated by chip index (widgets.rs). A chip surface, not a text role.'));
+  });
+  tb.appendChild(otherRow('Color::White', 'white', 'named white', 'Status-bar pills (status_bar_panel.rs), chrome_status headings. Raw named colour, not a theme role.'));
+  tb.appendChild(otherRow('Color::Black', 'black', 'named black', 'chrome_status paint, popup dim-blend base (backdrop.rs dims toward black). Raw named colour.'));
+  tb.appendChild(otherRow('Color::Reset', 'transparent', 'no fill', 'Transparent/unpainted cells: media-list gutters, marquee parts. Means no fill, not a colour.'));
 }
 function renderAll() {
-const roles = document.getElementById('roles'), surfaces = document.getElementById('surfaces'), extra = document.getElementById('extra');
-clear(roles); clear(surfaces); clear(extra);
-let n = 0;
-for (const r of DATA.roles) { roles.appendChild(roleCard(r)); n++; }
-for (const s of DATA.surfaces) { surfaces.appendChild(surfaceCard(s)); n++; }
-for (const [name, rs] of Object.entries(DATA.role_sets || {})) { extra.appendChild(roleSetCard(name, rs)); n++; }
-for (const s of DATA.specials || []) {
-  const el = div('card');
-  const body = div();
-  body.appendChild(div('name', s.name));
-  body.appendChild(div('uses', s.uses));
-  el.appendChild(body);
-  extra.appendChild(el);
-  n++;
-}
-document.getElementById('count').textContent = n + ' colours \u00b7 generated ' + DATA.generated + (DATA.live ? ' \u00b7 live from palette.json' : '');
+  renderVariants();
+  renderSurfaces();
+  renderRoles();
+  renderOther();
+  document.getElementById('count').textContent = DATA.variants.length + ' colours \u00b7 ' + (DATA.surfaces || []).length + ' surfaces \u00b7 ' + (DATA.roles || []).length + ' roles \u00b7 generated ' + DATA.generated;
 }
 renderAll();
-fetch('./palette.json').then(r => { if (!r.ok) throw 0; return r.json(); }).then(d => {
-  if (JSON.stringify(d) !== JSON.stringify(DATA)) { DATA = Object.assign(d, { live: true }); renderAll(); }
-}).catch(() => {});
+document.getElementById('tabbtn-palette').addEventListener('click', () => showTab('palette'));
+document.getElementById('tabbtn-surfaces').addEventListener('click', () => showTab('surfaces'));
+function updateSortIndicators() {
+  document.querySelectorAll('#surfaces th[data-key]').forEach(th => {
+    th.textContent = th.dataset.label + (th.dataset.key === sortKey ? (sortDir === 1 ? ' \u25b2' : ' \u25bc') : '');
+  });
+}
+document.querySelectorAll('#surfaces th[data-key]').forEach(th => {
+  th.dataset.label = th.textContent;
+  th.addEventListener('click', () => {
+    const k = th.dataset.key;
+    if (sortKey === k) { sortDir = -sortDir; } else { sortKey = k; sortType = th.dataset.type; sortDir = 1; }
+    updateSortIndicators();
+    renderSurfaces();
+  });
+});
+updateSortIndicators();
+document.getElementById('tabbtn-text').addEventListener('click', () => showTab('text'));
+document.querySelectorAll('#roles th[data-key]').forEach(th => {
+  th.dataset.label = th.textContent;
+  th.addEventListener('click', () => {
+    const k = th.dataset.key;
+    if (sortKeyT === k) { sortDirT = -sortDirT; } else { sortKeyT = k; sortTypeT = th.dataset.type; sortDirT = 1; }
+    updateSortIndicatorsT();
+    renderRoles();
+  });
+});
+updateSortIndicatorsT();
+document.querySelectorAll('#variants th[data-key]').forEach(th => {
+  th.dataset.label = th.textContent;
+  th.addEventListener('click', () => {
+    const k = th.dataset.key;
+    if (sortKeyV === k) { sortDirV = -sortDirV; } else { sortKeyV = k; sortTypeV = th.dataset.type; sortDirV = 1; }
+    updateSortIndicatorsV();
+    renderVariants();
+  });
+});
+updateSortIndicatorsV();
 document.addEventListener('click', e => {
   const t = e.target.closest('.hex');
   if (t && navigator.clipboard) navigator.clipboard.writeText(t.dataset.hex);

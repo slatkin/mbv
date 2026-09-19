@@ -151,7 +151,6 @@ declare_surfaces!(
     // a focus-driven one (see `surface_table`'s row doc).
     QueueOnlyPlaybackPanel,
     SidebarBody,
-    NonHeroSidebarBody,
     // The queue card's now-playing content: an inset by geography, but it
     // resolves the content-body pair (design D2 row shape).
     QueueCardVisualizer,
@@ -174,7 +173,6 @@ declare_surfaces!(
     QueueScopePillSelected,
     PillRowGap,
     SidebarBand,
-    NonHeroSidebarBand,
     TabBar,
     // --- popup: an overlay frame and its dim backdrop ---
     PopupFrame,

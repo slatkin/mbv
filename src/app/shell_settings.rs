@@ -2,9 +2,9 @@ use super::components::{
     ComponentId, PopupId, ServiceRequest, ServiceRow, SettingsComponent, SettingsIntent,
     SettingsRow, SettingsSnapshot, SetupDraft,
 };
+use super::settings;
 use super::shell::Model;
 use super::types_settings::{SettingsDestination, SERVICE_ENTRIES, SETTING_SECTIONS};
-use super::{settings, SETTINGS_PANEL_W};
 use mbv_core::keybinds::{KeybindAction, KEYBIND_ACTIONS, KEY_SECTIONS};
 use ratatui::layout::Rect;
 
@@ -129,7 +129,7 @@ impl Model {
                 Rect {
                     x: 0,
                     y: 0,
-                    width: SETTINGS_PANEL_W.min(self.app.terminal_width),
+                    width: self.app.terminal_width,
                     height: self.app.terminal_height,
                 }
             },

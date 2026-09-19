@@ -1,5 +1,4 @@
 use super::super::super::palette;
-use super::super::super::HELP_PANEL_W;
 use super::chrome;
 use crate::app::{PanelFocus, TabSelection};
 use mbv_core::keybinds::{action_by_id, KeyGate, KeySection, Keybinds, KEYBIND_ACTIONS};
@@ -358,6 +357,7 @@ fn build_help_sections(
 // `pub(in crate::app)` so the Interactive Component can call it.
 pub(in crate::app) struct HelpRenderGeometry {
     pub max_scroll: u16,
+    pub panel_area: ratatui::layout::Rect,
 }
 
 /// The rendered Playback section's row texts (padded key column + label),
@@ -404,22 +404,9 @@ pub(in crate::app) fn render_help_panel(
     dest: HelpDestination,
     keybinds: &Keybinds,
 ) -> HelpRenderGeometry {
-    let content = match area {
-        Some(area) => chrome::render_panel_shell_at(
-            f,
-            area,
-            "KEYBOARD SHORTCUTS",
-            "[↑↓]scroll [Esc]close",
-            true,
-        ),
-        None => chrome::render_panel_shell(
-            f,
-            f.area(),
-            HELP_PANEL_W,
-            "KEYBOARD SHORTCUTS",
-            "[↑↓]scroll [Esc]close",
-        ),
-    };
+    let panel_area = area.unwrap_or_else(|| f.area());
+    let content =
+        chrome::render_panel_shell_at(f, panel_area, "KEYBOARD SHORTCUTS", "[↑↓]scroll [Esc]close");
     let key_w = 16usize;
 
     let mut sections: [Option<Vec<Line<'static>>>; 7] = std::array::from_fn(|_| None);
@@ -441,7 +428,10 @@ pub(in crate::app) fn render_help_panel(
     *scroll = (*scroll).min(max_scroll);
     f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content);
     chrome::render_sidebar_scrollbar(f, content, total, *scroll as usize);
-    HelpRenderGeometry { max_scroll }
+    HelpRenderGeometry {
+        max_scroll,
+        panel_area,
+    }
 }
 
 #[cfg(test)]

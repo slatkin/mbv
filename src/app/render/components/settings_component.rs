@@ -1,6 +1,6 @@
 use crate::app::components::settings::{ServiceRow, SettingsRow, SetupDraft};
+use crate::app::palette;
 use crate::app::types_settings::SettingsDestination;
-use crate::app::{palette, SETTINGS_PANEL_W};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -33,15 +33,7 @@ pub(in crate::app) fn render_settings_content(
     model: SettingsRenderModel<'_>,
     geometry: &mut SettingsRenderGeometry,
 ) {
-    let panel_area = if area.width > 0 {
-        area
-    } else {
-        Rect {
-            width: SETTINGS_PANEL_W.min(frame.area().width),
-            height: frame.area().height,
-            ..frame.area()
-        }
-    };
+    let panel_area = area;
     geometry.panel_area = panel_area;
     let content = crate::app::render::render_panel_shell_at(
         frame,
@@ -63,7 +55,6 @@ pub(in crate::app) fn render_settings_content(
         } else {
             "[Space]toggle [Esc]close"
         },
-        true,
     );
     geometry.content_area = content;
     geometry.cursor_lines.clear();

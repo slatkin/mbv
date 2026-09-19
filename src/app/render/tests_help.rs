@@ -1,4 +1,5 @@
 use super::test_helpers::buffer_to_string;
+use crate::app::palette;
 use crate::app::render::components::help::{
     global_help_rows, help_destination, playback_help_rows, render_help_panel, HelpDestination,
 };
@@ -23,6 +24,39 @@ fn render_help(width: u16, height: u16, scroll: u16) -> String {
         })
         .unwrap();
     buffer_to_string(&terminal)
+}
+
+#[test]
+fn help_none_fallback_paints_the_fullscreen_shell() {
+    let width = 40;
+    let height = 12;
+    let mut scroll = 0;
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+    let mut geometry = None;
+    terminal
+        .draw(|f| {
+            geometry = Some(render_help_panel(
+                f,
+                None,
+                &mut scroll,
+                HelpDestination::EmbyLibrary,
+                &Keybinds::default(),
+            ));
+        })
+        .unwrap();
+    let geometry = geometry.expect("help renderer returns geometry");
+    let buffer = terminal.backend().buffer();
+    assert_eq!(geometry.panel_area, Rect::new(0, 0, width, height));
+    assert_eq!(
+        buffer[(0, 0)].bg,
+        palette::surface_colors(palette::Surface::SidebarBody, false).fill
+    );
+    assert_eq!(
+        buffer[(2, 1)].bg,
+        palette::surface_colors(palette::Surface::SidebarBand, false).fill
+    );
+    assert_eq!(buffer[(3, 1)].symbol(), "K");
+    assert_eq!(buffer[(width - 1, 2)].symbol(), " ");
 }
 
 #[test]

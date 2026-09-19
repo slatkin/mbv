@@ -105,55 +105,32 @@ fn inline_hero_follows_the_table() {
     }
 }
 
-/// `unify-surface-colour-neutral` 4.1: the two sidebar shells pin the body
-/// and band rows — the expanded (F1-F4) pair and the non-hero pair.
+/// `unify-surface-colour-neutral` 4.1: the sidebar shell pins its body and
+/// band rows to the shared surface table.
 #[test]
-fn sidebar_shells_follow_the_table() {
+fn sidebar_shell_follows_the_table() {
     let sidebar = Rect::new(2, 2, 24, 12);
-    for (style, body_surface, band_surface, label) in [
-        (
-            true,
-            palette::Surface::SidebarBody,
-            palette::Surface::SidebarBand,
-            "expanded sidebar",
-        ),
-        (
-            false,
-            palette::Surface::NonHeroSidebarBody,
-            palette::Surface::NonHeroSidebarBand,
-            "non-hero sidebar",
-        ),
-    ] {
-        let buffer = rendered(|f| {
-            super::components::chrome::render_panel_shell_at(f, sidebar, "Panel", "hints", style);
-        });
-        // The band: the header row paints the band value over the body.
-        let band_cell = if style {
-            Rect::new(sidebar.x + 2, sidebar.y + 1, 1, 1)
-        } else {
-            Rect::new(sidebar.x, sidebar.y, 1, 1)
-        };
-        expect_fixed(&buffer, &format!("{label}/band"), band_surface, band_cell);
-        let footer_cell = if style {
-            Rect::new(sidebar.x + 2, sidebar.bottom() - 2, 1, 1)
-        } else {
-            Rect::new(sidebar.x, sidebar.bottom() - 2, 1, 1)
-        };
-        expect_fixed(
-            &buffer,
-            &format!("{label}/footer band"),
-            band_surface,
-            footer_cell,
-        );
-        // The body: a cell below the header and above the footer, clear of
-        // the non-hero variant's right border column.
-        let body_cell = if style {
-            Rect::new(sidebar.x + 2, sidebar.y + 4, 1, 1)
-        } else {
-            Rect::new(sidebar.x + 1, sidebar.y + 2, 1, 1)
-        };
-        expect_fixed(&buffer, &format!("{label}/body"), body_surface, body_cell);
-    }
+    let buffer = rendered(|f| {
+        super::components::chrome::render_panel_shell_at(f, sidebar, "Panel", "hints");
+    });
+    expect_fixed(
+        &buffer,
+        "sidebar/band",
+        palette::Surface::SidebarBand,
+        Rect::new(sidebar.x + 2, sidebar.y + 1, 1, 1),
+    );
+    expect_fixed(
+        &buffer,
+        "sidebar/footer band",
+        palette::Surface::SidebarBand,
+        Rect::new(sidebar.x + 2, sidebar.bottom() - 2, 1, 1),
+    );
+    expect_fixed(
+        &buffer,
+        "sidebar/body",
+        palette::Surface::SidebarBody,
+        Rect::new(sidebar.x + 2, sidebar.y + 4, 1, 1),
+    );
 }
 
 /// `unify-surface-colour-neutral` 4.1: the now-playing title row's status

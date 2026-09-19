@@ -48,7 +48,7 @@ pub(in crate::app) fn render_search_sidebar(
     sidebar: &mut SearchSidebar,
 ) -> SearchSidebarRenderGeometry {
     let frame = area.unwrap_or_else(|| chrome::panel_shell_rect(f.area(), SEARCH_PANEL_W));
-    let content = chrome::render_panel_shell_at(f, frame, "SEARCH", HINTS, area.is_some());
+    let content = chrome::render_panel_shell_at(f, frame, "SEARCH", HINTS);
     if content.height == 0 || content.width == 0 {
         return SearchSidebarRenderGeometry {
             frame,
@@ -161,7 +161,7 @@ fn render_type_chips(f: &mut Frame, area: Rect, sidebar: &SearchSidebar) -> Vec<
                 .bg(palette::surface_colors(palette::Surface::PillChipSelected, false).fill)
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(palette::PILL_FG)
+            Style::default().fg(palette::TEXT_MUTED)
         };
         spans.push(Span::styled(format!(" {label} "), style));
     }
