@@ -266,6 +266,12 @@ pub(in crate::app) enum PanelListPaintPolicy {
     /// marquee, and scrollbar, and is independent of whether the containing
     /// Hero pane resolves the box body's own focused fill.
     WideWorkspace { focused: bool },
+    /// The Library Hero overlay's Workspace presentation: the same selected
+    /// row and cursor rules as `WideWorkspace`, but its zebra stripes rest at
+    /// the fixed `SURFACE_RESTING` Storm in both focus states, matching the
+    /// box's resting Slate fill (the overlay never paints the soft focus
+    /// fill on the box).
+    OverlayWorkspace { focused: bool },
 }
 
 /// Object-safe view over one canonical media-list presentation flow

@@ -1314,8 +1314,8 @@ fn non_wide_saved_geometry_agrees_with_the_painted_frame() {
 /// half of the same resolution is pinned by
 /// `wide_tests::unfocused_workspace_hero_renders_resting_surfaces`.
 #[test]
-fn overlay_sheet_and_workspace_box_paint_the_workspace_focus() {
-    use crate::app::palette::{surface_colors, Surface};
+fn overlay_sheet_and_workspace_box_rest_at_the_hero_box_slate() {
+    use crate::app::palette::{surface_colors, SURFACE_RESTING, Surface};
     use tuirealm::event::{Key, KeyEvent};
 
     let mut harness = migrated_tv_with_detail(6);
@@ -1344,10 +1344,11 @@ fn overlay_sheet_and_workspace_box_paint_the_workspace_focus() {
         "the overlay sheet carries the PillRow surface"
     );
 
-    // The Workspace box takes the focused `MainContentBox` fill while the
-    // Workspace holds focus. A whole-box "no resting cell" scan is no longer
-    // expressible: the selected row's bar shares the resting fill's value, so
-    // the box body's focused fill is proven on its own padding row below.
+    // The Workspace box rests at the hero boxes' own Slate while the
+    // Workspace holds focus, and the list's rows stripe with the fixed
+    // resting content Storm. A whole-box "no resting cell" scan is no
+    // longer expressible: the selected row's bar shares the resting fill's
+    // value, so the box body's fill is proven on its own padding row below.
     let (box_panel, _) = panel_of(&harness)
         .and_then(|panel| panel.test_overlay_workspace_box())
         .expect("the overlay's Workspace box painted");
@@ -1355,26 +1356,23 @@ fn overlay_sheet_and_workspace_box_paint_the_workspace_focus() {
     let focused_body = surface_colors(Surface::MainContentBox, true).fill;
     assert_ne!(resting_body, focused_body);
 
-    // The box's body row carries the focused `MainContentBox` fill and the
-    // list's rows stripe with the Workspace's own focused `LibraryPanel`
-    // fill.
+    // The box's body row rests at the hero boxes' Slate even while the
+    // Workspace holds focus.
     assert_eq!(
         buf[(box_panel.x + 1, box_panel.bottom() - 1)].bg,
-        focused_body,
-        "the box's padding row carries the focused MainContentBox body"
+        resting_body,
+        "the box's padding row rests at the hero boxes' Slate while the Workspace holds focus"
     );
-    let focused_stripe = surface_colors(Surface::LibraryPanel, true).fill;
     let striped = (box_panel.top()..box_panel.bottom()).any(|y| {
-        (box_panel.left()..box_panel.right()).any(|x| buf[(x, y)].bg == focused_stripe)
+        (box_panel.left()..box_panel.right()).any(|x| buf[(x, y)].bg == SURFACE_RESTING)
     });
     assert!(
         striped,
-        "the Workspace box stripes its rows with the Workspace's focused LibraryPanel fill"
+        "the Workspace box stripes its rows with the fixed resting content Storm"
     );
 
-    // The Queue column taking focus drops the same box to the resting fill
-    // while the overlay stays open: the box follows the Workspace's focus, not
-    // the overlay's existence.
+    // The Queue column taking focus leaves the same box at the resting
+    // Slate: the overlay's Workspace box never takes a focused fill.
     harness.model_mut().app.panel_mode = PanelMode::Both;
     harness.model_mut().app.terminal_width = 100;
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
@@ -1392,7 +1390,7 @@ fn overlay_sheet_and_workspace_box_paint_the_workspace_focus() {
     assert_eq!(
         terminal.backend().buffer()[(box_panel.x + 1, box_panel.bottom() - 1)].bg,
         resting_body,
-        "an unfocused Workspace box rests while the Queue holds focus"
+        "the Workspace box rests at the same Slate while the Queue holds focus"
     );
 }
 

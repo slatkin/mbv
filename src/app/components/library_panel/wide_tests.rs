@@ -323,6 +323,61 @@ fn focused_workspace_hero_pane_stays_resting() {
     );
 }
 
+/// The Library Hero overlay's Workspace box rests at the hero boxes' own
+/// Slate in both focus states, matching the Main content box beside it; the
+/// Wide Workspace's focus-following soft fill is owned by
+/// `focused_workspace_hero_pane_stays_resting`.
+#[test]
+fn overlay_workspace_box_rests_at_the_hero_box_slate() {
+    let sheet = crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE;
+    for focused in [true, false] {
+        let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
+        let mut hero = HeroContent {
+            facts: hero_facts("Series"),
+            overview: None,
+            credits: None,
+            workspace: Some(Workspace {
+                header: None,
+                selector: None,
+                list: &mut workspace_list,
+                focused,
+            }),
+        };
+        let mut hits = SkeletonHits::default();
+        let mut windows = SkeletonPillWindows::default();
+        let mut geometry: Option<
+            crate::app::components::library_panel::hero_composition::HeroCompositionGeometry,
+        > = None;
+        let mut terminal = Terminal::new(TestBackend::new(AREA.width, AREA.height)).unwrap();
+        terminal
+            .draw(|f| {
+                geometry = Some(paint_library_hero_content(
+                    f,
+                    AREA,
+                    &mut hero,
+                    0,
+                    None,
+                    &mut hits.links,
+                    &mut hits.workspace_selector,
+                    &mut windows.workspace_selector,
+                    sheet,
+                    80, // tall terminal: the short-pane caps must not skew the geometry
+                ));
+            })
+            .unwrap();
+        let buf = terminal.backend().buffer().clone();
+        let (box_panel, _box_content) = geometry
+            .expect("hero content painted")
+            .workspace
+            .expect("workspace box painted");
+        assert_eq!(
+            buf[(box_panel.x, box_panel.y)].bg,
+            palette::surface_colors(palette::Surface::MainContentBox, false).fill,
+            "overlay workspace box fill, focused={focused}"
+        );
+    }
+}
+
 #[test]
 fn browser_focused_list_carries_the_focus_green() {
     let mut list = StubList::with_rows(vec!["Alpha"]);

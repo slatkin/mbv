@@ -48,6 +48,15 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
                         .with_zebra(zebra_stripe(Surface::LibraryPanel)),
                 );
             }
+            PanelListPaintPolicy::OverlayWorkspace { focused } => {
+                // The overlay's stripes rest at the table's fixed resting
+                // content Storm (`SidebarBody`'s row, fixed in both focus
+                // states) against the box's resting Slate fill.
+                self.wide_mut().set_paint_policy(
+                    WideMediaListPaintPolicy::for_library_workspace(focused)
+                        .with_zebra(zebra_stripe(Surface::SidebarBody)),
+                );
+            }
         }
     }
 
@@ -162,6 +171,39 @@ mod panel_list_tests {
             terminal.backend().buffer()[(area.x, area.y)].bg,
             palette::SELECTED_ROW_BG
         );
+    }
+
+    /// The overlay Workspace's zebra stripes rest at the fixed resting
+    /// content Storm in both focus states, matching the box's resting Slate
+    /// fill; the stripe painter itself is owned by the media-list
+    /// regressions.
+    #[test]
+    fn overlay_workspace_stripes_zebra_rows_with_the_resting_storm() {
+        let mut carrier = MediaListCarrier::new();
+        carrier.set_content(vec![item("a"), item("b")]);
+        let area = Rect::new(0, 0, 20, 2);
+        let mut terminal = Terminal::new(TestBackend::new(24, 4)).unwrap();
+
+        for focused in [true, false] {
+            terminal
+                .draw(|f| {
+                    PanelList::set_paint_policy(
+                        &mut carrier,
+                        PanelListPaintPolicy::OverlayWorkspace { focused },
+                    );
+                    PanelList::view(&mut carrier, f, area);
+                })
+                .unwrap();
+            let buf = terminal.backend().buffer();
+            // The ungrouped alternation opens on the box fill, so row 1
+            // carries the stripe; the 2-column quiet indent keeps the parent
+            // background, so the stripe is read from the title column.
+            assert_eq!(
+                buf[(area.x + 2, area.y + 1)].bg,
+                palette::SURFACE_RESTING,
+                "striped row, focused={focused}"
+            );
+        }
     }
 
     /// The canonical-list contract, driven through the panel's object-safe
