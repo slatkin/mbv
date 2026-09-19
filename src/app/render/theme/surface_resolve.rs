@@ -119,7 +119,7 @@ mod tests {
             Surface::PlaybackRecess => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),
-            Surface::ArtworkLoadingPlaceholder => (Palette::Grey2.color(), Palette::Grey2.color()),
+            Surface::ArtworkLoadingPlaceholder => (Palette::Grey4.color(), Palette::Grey4.color()),
             Surface::StatusBar => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::StatusBarPill => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::QueuePanelBand => (SURFACE_CHROME, SURFACE_CHROME),

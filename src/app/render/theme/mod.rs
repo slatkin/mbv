@@ -70,7 +70,6 @@ pub const ACCENT_ACTIVE: Color = Palette::Iris.color(); // active tab, focused p
 pub const ACCENT_AUDIOBOOKSHELF: Color = Palette::Yellow.color(); // audiobookshelf brand glyph
 
 // Rules
-pub const BORDER_UNFOCUSED: Color = Palette::Grey2.color();
 
 // Pill selector (renamed without value changes)
 pub const PILL_ROW_BG: Color = Palette::Ink.color();

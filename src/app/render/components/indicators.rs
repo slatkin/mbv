@@ -216,7 +216,7 @@ fn dots(d: &IndicatorData) -> Vec<Span<'static>> {
 
 // --- Pipe statusline: FHD │ en │ CC --------------------------------------
 fn pipes(d: &IndicatorData) -> Vec<Span<'static>> {
-    let sep = || Span::styled(" \u{2502} ", Style::default().fg(palette::BORDER_UNFOCUSED));
+    let sep = || Span::styled(" \u{2502} ", Style::default().fg(palette::TEXT_MUTED));
     let mut out = vec![Span::styled(
         d.res_label.clone(),
         Style::default().fg(d.res_color()),
@@ -247,12 +247,12 @@ fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     if !d.audio_only {
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::BORDER_UNFOCUSED),
+            Style::default().fg(palette::TEXT_MUTED),
         ));
         out.push(Span::styled(d.audio_label.clone(), bold(d.audio_color())));
         out.push(Span::styled(
             " ⧸ ",
-            Style::default().fg(palette::BORDER_UNFOCUSED),
+            Style::default().fg(palette::TEXT_MUTED),
         ));
         out.push(Span::styled(d.sub_label.clone(), bold(d.sub_color())));
     }

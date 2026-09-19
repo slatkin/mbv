@@ -23,7 +23,7 @@
 
 use ratatui::style::Color;
 
-/// The 21 approved palette variants, in name-table order (hue families,
+/// The 20 approved palette variants, in name-table order (hue families,
 /// dark-to-light within each family; see
 /// `openspec/changes/archive/2026-09-19-palette-enum/name-table.md`).
 ///
@@ -32,7 +32,6 @@ use ratatui::style::Color;
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub(in crate::app) enum Palette {
     Grey1,
-    Grey2,
     Grey4,
     Grey5,
     Grey6,
@@ -58,9 +57,8 @@ pub(in crate::app) enum Palette {
 /// the uniqueness tests and the later `docs/palette.json` viewer. Test-only:
 /// production code names variants directly, never through `ALL`.
 #[cfg(test)]
-pub(in crate::app) const ALL: [Palette; 21] = [
+pub(in crate::app) const ALL: [Palette; 20] = [
     Palette::Grey1,
-    Palette::Grey2,
     Palette::Grey4,
     Palette::Grey5,
     Palette::Grey6,
@@ -88,7 +86,6 @@ impl Palette {
     pub(in crate::app) const fn color(self) -> Color {
         match self {
             Palette::Grey1 => Color::Rgb(0x1a, 0x1a, 0x1a),
-            Palette::Grey2 => Color::Rgb(0x3f, 0x3f, 0x3f),
             Palette::Grey4 => Color::Rgb(0x6c, 0x6c, 0x6c),
             Palette::Grey5 => Color::Rgb(0x9e, 0x9e, 0x9e),
             Palette::Grey6 => Color::Rgb(0xe6, 0xe6, 0xe6),
@@ -117,7 +114,6 @@ impl Palette {
     pub(in crate::app) const fn name(self) -> &'static str {
         match self {
             Palette::Grey1 => "Grey1",
-            Palette::Grey2 => "Grey2",
             Palette::Grey4 => "Grey4",
             Palette::Grey5 => "Grey5",
             Palette::Grey6 => "Grey6",
@@ -169,7 +165,7 @@ mod tests {
     /// colour check covers both presentations.
     #[test]
     fn all_lists_every_variant_once_with_distinct_values() {
-        assert_eq!(ALL.len(), 21, "ALL must list exactly the 21 variants");
+        assert_eq!(ALL.len(), 20, "ALL must list exactly the 20 variants");
         let distinct: HashSet<Palette> = ALL.into_iter().collect();
         assert_eq!(
             distinct.len(),
@@ -234,7 +230,7 @@ mod tests {
     }
 
     /// Drift guard: the distinct colour values in `docs/palette.json` must
-    /// be exactly the palette's 21 `hex()` values. The `surfaces` and
+    /// be exactly the palette's 20 `hex()` values. The `surfaces` and
     /// `specials` subtrees are deliberately excluded — `surfaces` contains
     /// the `PopupDimBackdrop` `#000000` dim blend base, which is not a
     /// palette colour, and `specials` names raw `Color::` mechanics

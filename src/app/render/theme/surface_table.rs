@@ -246,17 +246,17 @@ pub(super) const fn row(surface: Surface) -> Row {
             soft: false,
             resting: SURFACE_BACKDROP,
         },
-        // Main paints the artwork-loading inset's fill (the border-grey
+        // Main paints the artwork-loading inset's fill (the muted grey
         // value): `card.rs:111`, `album_art.rs:183`, the panel inline-hero
         // painter, `home_hero_emby.rs:121,272,286`. The row resolves through
-        // its own purpose-named value (`Palette::Grey2`), deliberately not
-        // the border role's `BORDER_UNFOCUSED`, whose `Palette::Grey2` value
-        // it shares today (task 4.2): a border edit can never move the fill.
+        // its own purpose-named value (`Palette::Grey4`), deliberately not
+        // the text role `TEXT_MUTED`, whose `Palette::Grey4` value it shares
+        // today: a text edit can never move the fill.
         Surface::ArtworkLoadingPlaceholder => Row {
             level: Level::Recess,
             focus: FocusSource::Fixed,
             soft: false,
-            resting: Palette::Grey2.color(),
+            resting: Palette::Grey4.color(),
         },
         // --- chrome band ---
         Surface::StatusBar => Row {
