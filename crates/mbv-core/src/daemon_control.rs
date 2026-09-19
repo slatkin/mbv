@@ -197,14 +197,12 @@ fn handle_ctrl(
                 std::thread::spawn(move || {
                     match lookup_client.get_items_by_ids(&item_ids) {
                         Ok(items) => {
+                            let items_by_id: std::collections::HashMap<String, EmbyItem> =
+                                items.into_iter().map(|item| (item.id.clone(), item)).collect();
                             let enriched = adopted_slots
                                 .into_iter()
                                 .filter_map(|(slot_id, item_id)| {
-                                    items
-                                        .iter()
-                                        .find(|item| item.id == item_id)
-                                        .cloned()
-                                        .map(|item| (slot_id, item))
+                                    items_by_id.get(&item_id).cloned().map(|item| (slot_id, item))
                                 })
                                 .collect();
                             let _ = tx.send(DaemonEvent::QueueEnriched(enriched));

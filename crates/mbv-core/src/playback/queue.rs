@@ -652,7 +652,7 @@ impl PlaybackQueue {
 
     fn merge_fetched_slot(
         slot: &mut QueueSlot,
-        fetched_item: EmbyItem,
+        mut fetched_item: EmbyItem,
         active_slot_id: Option<QueueSlotId>,
         result: &mut RefreshMergeResult,
     ) {
@@ -692,7 +692,6 @@ impl PlaybackQueue {
             .item
             .as_emby()
             .map_or(0, |emby| emby.playback_position_ticks);
-        let mut fetched_item = fetched_item;
         if !fetched_item.played {
             fetched_item.playback_position_ticks =
                 fetched_item.playback_position_ticks.max(stored_position);
