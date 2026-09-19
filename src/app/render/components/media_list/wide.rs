@@ -187,16 +187,17 @@ fn grouped_member_striped<Target>(rows: &[MediaListRow<Target>], row: usize) -> 
 fn selected_row_surface_color(surface: SelectedRowSurface, _focused: bool) -> Color {
     // Audition: every selected row paints the opaque bar (and the scrollbar
     // column behind it), so the surface table's punch-through resolution is
-    // deliberately bypassed — except the Library Hero overlay's Workspace,
-    // whose bar takes the sheet's own Ink chrome so it reads against the
-    // box's resting Slate fill.
+    // deliberately bypassed. The unified library Workspace look — both the
+    // Wide Hero pane and the Library Hero overlay — takes the sheet's own
+    // Ink chrome so the bar reads against the box's resting Slate fill; the
+    // other arms keep the shared Slate bar.
     match surface {
-        SelectedRowSurface::OverlaySheet => {
+        SelectedRowSurface::OwningLibraryPane => {
             palette::surface_colors(palette::Surface::PillRow, false).fill
         }
-        SelectedRowSurface::ListBackdrop
-        | SelectedRowSurface::OwningQueueColumn
-        | SelectedRowSurface::OwningLibraryPane => palette::SELECTED_ROW_BG,
+        SelectedRowSurface::ListBackdrop | SelectedRowSurface::OwningQueueColumn => {
+            palette::SELECTED_ROW_BG
+        }
     }
 }
 

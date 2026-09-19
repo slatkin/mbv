@@ -638,7 +638,7 @@ mod wide_row_regression_tests {
     }
 
     #[test]
-    fn library_wide_workspace_stripes_with_library_panel_pair() {
+    fn library_wide_workspace_stripes_with_the_fixed_resting_storm() {
         let rect = Rect::new(0, 0, 40, 4);
         let mut list = WideMediaList::new();
         list.set_content(vec![
@@ -647,10 +647,13 @@ mod wide_row_regression_tests {
             item("three", "Three", None),
             item("four", "Four", None),
         ]);
-        let pair = stripe(palette::Surface::LibraryPanel);
+        // The unified Workspace stripe: the fixed resting-content Storm, the
+        // same fill in both focus states (SidebarBody's fixed row).
+        let pair = stripe(palette::Surface::SidebarBody);
         let other = stripe(palette::Surface::MainContentBox);
         assert_ne!(pair.focused, other.focused);
         assert_ne!(pair.unfocused, other.unfocused);
+        assert_eq!(pair.focused, pair.unfocused);
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {
@@ -663,9 +666,10 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        // The selected first row paints the bar; the sequence then opens on
-        // the primary fill, so rows 1 and 3 carry the stripe.
-        assert_eq!(buffer[(2, 0)].bg, palette::SELECTED_ROW_BG);
+        // The selected first row paints the Workspace's sheet-Ink bar; the
+        // sequence then opens on the primary fill, so rows 1 and 3 carry the
+        // stripe.
+        assert_eq!(buffer[(2, 0)].bg, palette::PILL_ROW_BG);
         assert_eq!(buffer[(2, 1)].bg, pair.focused);
         assert_eq!(buffer[(2, 2)].bg, Color::Reset);
         assert_eq!(buffer[(2, 3)].bg, pair.focused);

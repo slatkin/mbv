@@ -460,8 +460,9 @@ table identity of the panel body that surrounds it, never from a raw colour valu
 
 - the Browser-pane list, whose list box is filled with the `LibraryPanel` surface, SHALL stripe with
   the `MainContentBox` pair (focused `#48584e`, unfocused `#2d353b`);
-- the provider Workspace list, whose box is filled with the `MainContentBox` surface, SHALL stripe
-  with the `LibraryPanel` pair (focused `#3c4841`, unfocused `#333c43`).
+- the provider Workspace list, whose box rests at the `MainContentBox` resting fill, SHALL stripe
+  with the fixed resting-content Storm (`#333c43`) in both focus states — one unified Workspace
+  look across the Wide Hero pane and the Library Hero overlay.
 
 A stripe SHALL always resolve to a pair other than the one its own list box is filled with: a stripe
 whose colours equal its panel body's paints no visible alternation. Zebra striping SHALL remain a
@@ -474,11 +475,11 @@ list.
 - **THEN** the 2nd, 4th, and 6th visible rows carry the `MainContentBox` focused fill
 - **AND** the remaining visible rows carry no secondary background
 
-#### Scenario: Workspace list stripes with the library-panel pair
+#### Scenario: Workspace list stripes with the fixed resting Storm
 
-- **WHEN** a provider Workspace Wide list renders focused
-- **THEN** the striped positions carry the `LibraryPanel` focused fill
-- **AND** that fill differs from the `MainContentBox` fill the Workspace box is painted with
+- **WHEN** a provider Workspace list renders, in either focus state or either geometry
+- **THEN** the striped positions carry the fixed resting-content Storm fill
+- **AND** that fill differs from the `MainContentBox` resting fill the Workspace box is painted with
 
 #### Scenario: A stripe never equals its own panel body
 

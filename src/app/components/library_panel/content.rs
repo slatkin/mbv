@@ -260,18 +260,13 @@ pub(in crate::app) enum PanelListPaintPolicy {
     /// The Wide browser presentation's policy: focus only. Selected rows use
     /// the list backdrop surface.
     Wide { focused: bool },
-    /// The Wide library Workspace presentation. Its selected row belongs to
-    /// the owning library pane surface rather than the list backdrop. The
-    /// focus bit is the Workspace's own: it drives the list's cursor emphasis,
-    /// marquee, and scrollbar, and is independent of whether the containing
-    /// Hero pane resolves the box body's own focused fill.
+    /// The library Workspace presentation — one unified look in both the
+    /// Wide Hero pane and the Library Hero overlay: the selected row takes
+    /// the sheet chrome Ink bar, the box rests at Slate, and the zebra
+    /// stripes rest at the fixed resting-content Storm in both focus states.
+    /// The focus bit is the Workspace's own: it drives the list's cursor
+    /// emphasis, marquee, and scrollbar.
     WideWorkspace { focused: bool },
-    /// The Library Hero overlay's Workspace presentation: the same selected
-    /// row and cursor rules as `WideWorkspace`, but its zebra stripes rest at
-    /// the fixed `SURFACE_RESTING` Storm in both focus states, matching the
-    /// box's resting Slate fill (the overlay never paints the soft focus
-    /// fill on the box).
-    OverlayWorkspace { focused: bool },
 }
 
 /// Object-safe view over one canonical media-list presentation flow

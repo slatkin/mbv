@@ -43,18 +43,13 @@ impl<Target: Clone + PartialEq> PanelList for MediaListCarrier<Target> {
                 );
             }
             PanelListPaintPolicy::WideWorkspace { focused } => {
+                // The Workspace's unified look in both geometries: stripes
+                // rest at the table's fixed resting content Storm
+                // (`SidebarBody`'s row, fixed in both focus states) against
+                // the box's resting Slate fill, and the selected row takes
+                // the sheet's own Ink chrome.
                 self.wide_mut().set_paint_policy(
                     WideMediaListPaintPolicy::for_library_workspace(focused)
-                        .with_zebra(zebra_stripe(Surface::LibraryPanel)),
-                );
-            }
-            PanelListPaintPolicy::OverlayWorkspace { focused } => {
-                // The overlay's stripes rest at the table's fixed resting
-                // content Storm (`SidebarBody`'s row, fixed in both focus
-                // states) against the box's resting Slate fill, and its
-                // selected row takes the sheet's own Ink chrome.
-                self.wide_mut().set_paint_policy(
-                    WideMediaListPaintPolicy::for_overlay_workspace(focused)
                         .with_zebra(zebra_stripe(Surface::SidebarBody)),
                 );
             }
@@ -134,11 +129,12 @@ mod panel_list_tests {
         }
     }
 
-    /// The selected-row bar is intentionally identical across both Wide
+    /// The selected-row bar is intentionally identical across the browser
     /// arms; arm-specific stripe colours are owned by the Render Component
     /// regressions in `src/app/render/components/media_list.rs` and its
-    /// Wide-arm tests. The overlay Workspace's bar is the exception: it takes
-    /// the sheet's own Ink chrome instead of the shared Slate bar.
+    /// Wide-arm tests. The Workspace arm is the exception: its bar takes the
+    /// sheet's Ink chrome instead of the shared Slate bar, unified across
+    /// the Wide Hero pane and the Library Hero overlay.
     #[test]
     fn wide_selected_rows_paint_the_bar_in_both_slots() {
         let mut carrier = MediaListCarrier::new();
@@ -171,31 +167,17 @@ mod panel_list_tests {
             .unwrap();
         assert_eq!(
             terminal.backend().buffer()[(area.x, area.y)].bg,
-            palette::SELECTED_ROW_BG
-        );
-
-        terminal
-            .draw(|f| {
-                PanelList::set_paint_policy(
-                    &mut carrier,
-                    PanelListPaintPolicy::OverlayWorkspace { focused: true },
-                );
-                PanelList::view(&mut carrier, f, area);
-            })
-            .unwrap();
-        assert_eq!(
-            terminal.backend().buffer()[(area.x, area.y)].bg,
             palette::PILL_ROW_BG,
-            "the overlay Workspace's selected-row bar takes the sheet's Ink chrome"
+            "the Workspace's selected-row bar takes the sheet's Ink chrome"
         );
     }
 
-    /// The overlay Workspace's zebra stripes rest at the fixed resting
-    /// content Storm in both focus states, matching the box's resting Slate
-    /// fill; the stripe painter itself is owned by the media-list
+    /// The Workspace's zebra stripes rest at the fixed resting content Storm
+    /// in both focus states and both geometries, matching the box's resting
+    /// Slate fill; the stripe painter itself is owned by the media-list
     /// regressions.
     #[test]
-    fn overlay_workspace_stripes_zebra_rows_with_the_resting_storm() {
+    fn workspace_stripes_zebra_rows_with_the_resting_storm() {
         let mut carrier = MediaListCarrier::new();
         carrier.set_content(vec![item("a"), item("b")]);
         let area = Rect::new(0, 0, 20, 2);
@@ -206,7 +188,7 @@ mod panel_list_tests {
                 .draw(|f| {
                     PanelList::set_paint_policy(
                         &mut carrier,
-                        PanelListPaintPolicy::OverlayWorkspace { focused },
+                        PanelListPaintPolicy::WideWorkspace { focused },
                     );
                     PanelList::view(&mut carrier, f, area);
                 })

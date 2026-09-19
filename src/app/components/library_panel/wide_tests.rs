@@ -282,10 +282,11 @@ fn focused_workspace_hero_pane_stays_resting() {
         palette::surface_colors(palette::Surface::HeroPane, false).fill
     );
     let (box_panel, box_content) = geo.workspace.expect("workspace box painted");
-    // Accent-soft box surface while the workspace list holds focus.
+    // The Workspace box rests at the hero boxes' Slate even while its list
+    // holds focus: the unified Workspace look has no focused soft fill.
     assert_eq!(
         buf[(box_panel.x, box_panel.y)].bg,
-        palette::surface_colors(palette::Surface::MainContentBox, true).fill
+        palette::surface_colors(palette::Surface::MainContentBox, false).fill
     );
     // The workspace list is viewed into the box's content rect.
     assert_eq!(workspace_list.painted, Some(box_content));

@@ -92,8 +92,6 @@ pub(in crate::app) fn paint_library_hero_content(
             centered: true,
         });
     }
-    let overlay_sheet =
-        surface == crate::app::render::components::library_hero_overlay::OVERLAY_SHEET_SURFACE;
     if let Some(workspace) = hero.workspace.as_mut() {
         // `next_row` is the first unpainted row. The shared placement helper
         // reserves WORKSPACE_GAP_ROWS above the box, leaving the required
@@ -107,7 +105,6 @@ pub(in crate::app) fn paint_library_hero_content(
                 workspace,
                 workspace_selector_hits,
                 workspace_selector_window,
-                overlay_sheet,
             ));
         }
     }
@@ -152,7 +149,6 @@ fn paint_workspace_box(
     workspace: &mut Workspace<'_>,
     hits: &mut HitRegions<usize>,
     window: &mut PillBarWindow,
-    overlay_sheet: bool,
 ) -> (Rect, Rect) {
     // The box's own body fill and the list's cursor emphasis both resolve the
     // Workspace's own focus: the box is the focused Workspace's surface, and a
@@ -183,14 +179,9 @@ fn paint_workspace_box(
         };
     }
     let panel = box_area;
-    // The Library Hero overlay's Workspace box rests at the hero boxes' own
-    // Slate in both focus states, matching the Main content box beside it;
-    // the Wide Workspace keeps its focus-following soft fill.
-    let background = palette::surface_colors(
-        palette::Surface::MainContentBox,
-        box_focused && !overlay_sheet,
-    )
-    .fill;
+    // The Workspace box rests at the hero boxes' own Slate in both focus
+    // states and both geometries — one unified look, no focused soft fill.
+    let background = palette::surface_colors(palette::Surface::MainContentBox, false).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         panel,
@@ -208,16 +199,11 @@ fn paint_workspace_box(
         _ => content,
     };
     // The list's cursor emphasis, marquee, and scrollbar follow the same bit.
-    let policy = if overlay_sheet {
-        PanelListPaintPolicy::OverlayWorkspace {
+    workspace
+        .list
+        .set_paint_policy(PanelListPaintPolicy::WideWorkspace {
             focused: box_focused,
-        }
-    } else {
-        PanelListPaintPolicy::WideWorkspace {
-            focused: box_focused,
-        }
-    };
-    workspace.list.set_paint_policy(policy);
+        });
     workspace
         .list
         .set_geometry(full_width_claim(panel, content), content);
