@@ -123,6 +123,17 @@ pub(super) enum LibEvent {
         album_id: String,
         artist: String,
     },
+    /// One level-fill request resolved (design D4 of
+    /// `fix-music-artist-resolution-batching`): `artists` bulk-fills the
+    /// album-artist cache for every album bucket in the level. Empty on HTTP
+    /// failure (or a trackless level), which marks the level `Failed`.
+    /// AlbumArtistLevelFetched` marks `Failed` or `Filled` on arrival; the
+    /// producing worker thread is the level fetch (task 2.1, not wired yet).
+    #[allow(dead_code)]
+    AlbumArtistLevelFetched {
+        level_id: String,
+        artists: Vec<(String, String)>,
+    },
     /// Track list for the album currently highlighted in the
     /// album-folder listing, fetched proactively (#145) so the inline album
     /// detail pane has data without a nav_stack drilldown.

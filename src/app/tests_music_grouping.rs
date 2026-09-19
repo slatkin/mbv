@@ -1,5 +1,7 @@
+use super::app_struct::LevelFillState;
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist};
 use super::tests::{make_app_stub, make_item};
+use super::types_events::LibEvent;
 use super::{BrowseLevel, LibraryTab, TabSelection};
 use crate::app::types_browse::BrowseResting;
 use mbv_core::api::EmbyItem;
@@ -386,4 +388,89 @@ fn commit_anchors_cursor_to_selected_album() {
         cursor_id, "album-2",
         "cursor should be anchored to the previously selected album"
     );
+}
+
+#[test]
+fn level_event_bulk_fills_cache_and_settles_candidate() {
+    let mut a1 = make_item("Unknown Album", "MusicAlbum");
+    a1.id = "album-1".into();
+    a1.artist = String::new();
+    let mut a2 = make_item("Other Album", "MusicAlbum");
+    a2.id = "album-2".into();
+    a2.artist = String::new();
+    let mut app = make_music_app(vec![a1, a2]);
+    app.start_or_supersede_music_grouping(0);
+    app.album_artist_levels
+        .insert("level-1".into(), LevelFillState::Loading);
+
+    app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
+        level_id: "level-1".into(),
+        artists: vec![
+            ("album-1".into(), "Artist One".into()),
+            ("album-2".into(), "Artist Two".into()),
+        ],
+    });
+
+    assert_eq!(
+        app.album_artist_levels.get("level-1"),
+        Some(&LevelFillState::Filled)
+    );
+    assert_eq!(
+        app.album_artist_cache.get("album-1").map(String::as_str),
+        Some("Artist One")
+    );
+    assert_eq!(
+        app.album_artist_cache.get("album-2").map(String::as_str),
+        Some("Artist Two")
+    );
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(
+        state.candidate.is_none(),
+        "arrival resolves every waiting album at once"
+    );
+    let catalog = state.settled.as_ref().expect("settled catalog");
+    assert_eq!(catalog.entries[0].artist, "Artist One");
+    assert_eq!(catalog.entries[1].artist, "Artist Two");
+}
+
+#[test]
+fn level_event_empty_artists_marks_failed_without_filling() {
+    let mut app = make_music_app(vec![]);
+    app.album_artist_levels
+        .insert("level-1".into(), LevelFillState::Loading);
+
+    app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
+        level_id: "level-1".into(),
+        artists: vec![],
+    });
+
+    assert_eq!(
+        app.album_artist_levels.get("level-1"),
+        Some(&LevelFillState::Failed)
+    );
+    assert!(app.album_artist_cache.is_empty());
+}
+
+#[test]
+fn service_reset_clears_album_artist_state() {
+    let mut app = make_music_app(vec![]);
+    app.album_artist_cache.insert("album-1".into(), "A".into());
+    app.album_artist_levels
+        .insert("level-1".into(), LevelFillState::Filled);
+    app.album_artist_fetch_inflight.insert("album-2".into());
+    app.pending_album_artist_fetches
+        .push_back("album-3".into());
+
+    app.remove_emby_confirmed();
+
+    assert!(app.album_artist_cache.is_empty());
+    assert!(app.album_artist_levels.is_empty());
+    assert!(app.album_artist_fetch_inflight.is_empty());
+    assert!(app.pending_album_artist_fetches.is_empty());
 }

@@ -1,3 +1,4 @@
+use super::app_struct::LevelFillState;
 use super::types_events::{NavigateLanding, PendingSeriesHandoff};
 use super::ui_util::sort_audio_tracks;
 use super::{
@@ -644,13 +645,29 @@ impl App {
             | LibEvent::AudiobookshelfProgressAcknowledged(_)
             | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
             LibEvent::AlbumArtistFetched { album_id, artist } => {
-                self.album_artist_loading.remove(&album_id);
+                self.album_artist_fetch_inflight.remove(&album_id);
                 self.album_artist_cache
                     .insert(album_id.clone(), artist.clone());
                 self.album_artist_fetches_active =
                     self.album_artist_fetches_active.saturating_sub(1);
                 self.drain_album_artist_fetches();
                 self.advance_music_grouping_candidates(&album_id, &artist);
+            }
+            LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
+                if artists.is_empty() {
+                    // HTTP failure (or a trackless level): no fill, the level's
+                    // albums resolve via the existing settle/fallback path.
+                    self.album_artist_levels
+                        .insert(level_id, LevelFillState::Failed);
+                } else {
+                    for (album_id, artist) in artists {
+                        self.album_artist_cache
+                            .insert(album_id.clone(), artist.clone());
+                        self.advance_music_grouping_candidates(&album_id, &artist);
+                    }
+                    self.album_artist_levels
+                        .insert(level_id, LevelFillState::Filled);
+                }
             }
             LibEvent::NavigateTo {
                 lib_idx,

@@ -289,7 +289,8 @@ pub(crate) fn make_app_stub() -> App {
         // input_music_track_focus_tests.
         refocus_at: Some(Instant::now() - Duration::from_secs(5)),
         album_artist_cache: std::collections::HashMap::new(),
-        album_artist_loading: std::collections::HashSet::new(),
+        album_artist_levels: std::collections::HashMap::new(),
+        album_artist_fetch_inflight: std::collections::HashSet::new(),
         pending_album_artist_fetches: std::collections::VecDeque::new(),
         album_artist_fetches_active: 0,
         album_tracks_cache: std::collections::HashMap::new(),

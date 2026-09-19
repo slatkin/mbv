@@ -28,6 +28,23 @@ use ratatui_image::picker::Picker;
 use std::sync::mpsc;
 use std::time::Instant;
 
+/// Lifecycle of the one background album-artist request per music level
+/// (design D4 of `fix-music-artist-resolution-batching`). `Failed` levels are
+/// not terminal across candidates: the next candidate creation for the level
+/// retries, and unresolved albums settle via `SETTLE_WINDOW` regardless.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LevelFillState {
+    /// A level fill is in flight. Set by the level fetch spawn (task 2.1;
+    /// until then nothing constructs it).
+    #[allow(dead_code)]
+    Loading,
+    /// The level's albums were bulk-filled into `album_artist_cache`.
+    Filled,
+    /// The level fill failed (HTTP error or no tracks); albums resolve via
+    /// the settle/fallback path.
+    Failed,
+}
+
 pub struct App {
     /// General application configuration is independent of the optional Emby
     /// runtime. Feed management reads and mutates this context directly.
@@ -373,7 +390,16 @@ pub struct App {
     ///   `FocusLost`.
     pub(super) refocus_at: Option<Instant>,
     pub(super) album_artist_cache: std::collections::HashMap<String, String>,
-    pub(super) album_artist_loading: std::collections::HashSet<String>,
+    /// Per-level album-artist fill lifecycle (design D4 of
+    /// `fix-music-artist-resolution-batching`): one background request fills
+    /// every album bucket in a level, so the fill state is keyed by level id
+    /// rather than album id. Concurrent candidate creations and startup
+    /// warm-up dedupe on this state.
+    pub(super) album_artist_levels: std::collections::HashMap<String, LevelFillState>,
+    /// Legacy per-album in-flight set for the per-album artist fetch
+    /// machinery (`fetch_album_artist` & co); removed with that machinery in
+    /// task 2.3. Not the level-fill state — see `album_artist_levels`.
+    pub(super) album_artist_fetch_inflight: std::collections::HashSet<String>,
     pub(super) pending_album_artist_fetches: std::collections::VecDeque<String>,
     pub(super) album_artist_fetches_active: usize,
     /// Track lists for the album currently highlighted in the
