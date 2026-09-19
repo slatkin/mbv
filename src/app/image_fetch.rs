@@ -106,40 +106,32 @@ impl App {
         });
     }
 
-    pub(super) fn fetch_album_artist(&mut self, album_id: String) {
-        if self.album_artist_fetch_inflight.contains(&album_id)
-            || self.album_artist_cache.contains_key(&album_id)
-        {
-            return;
+    /// Spawns the one background album-artist request per music level
+    /// (design D1 of `fix-music-artist-resolution-batching`): a single
+    /// recursive Audio query over the whole level, bucketed per album and
+    /// majority-voted per bucket, arriving as one
+    /// `LibEvent::AlbumArtistLevelFetched` that bulk-fills the cache.
+    /// Deduped on the level-fill state (design D4): `Loading`/`Filled`
+    /// levels do no work; a fresh or `Failed` level (re)starts the fill.
+    /// `albums` are the level's album items, already in hand from the level
+    /// listing; their `Path`s drive orphan-bucket attribution (design D3).
+    pub(super) fn spawn_level_artist_fetch(
+        &mut self,
+        level_id: String,
+        albums: Vec<mbv_core::api::EmbyItem>,
+    ) {
+        match self.album_artist_levels.get(&level_id) {
+            Some(LevelFillState::Loading) | Some(LevelFillState::Filled) => return,
+            Some(LevelFillState::Failed) | None => {}
         }
-        self.album_artist_fetch_inflight.insert(album_id.clone());
-        if self.album_artist_fetches_active >= MAX_ALBUM_ARTIST_FETCHES {
-            // Queue instead of dropping: a slot will pick it up on completion.
-            self.pending_album_artist_fetches.push_back(album_id);
-            return;
-        }
-        self.spawn_album_artist_fetch(album_id);
-    }
-
-    /// Spawn queued album-artist fetches until the in-flight limit is reached.
-    /// Called whenever an in-flight fetch completes and frees a slot (see the
-    /// `LibEvent::AlbumArtistFetched` handler in `actions.rs`).
-    pub(super) fn drain_album_artist_fetches(&mut self) {
-        while self.album_artist_fetches_active < MAX_ALBUM_ARTIST_FETCHES {
-            let Some(album_id) = self.pending_album_artist_fetches.pop_front() else {
-                break;
-            };
-            self.spawn_album_artist_fetch(album_id);
-        }
-    }
-
-    fn spawn_album_artist_fetch(&mut self, album_id: String) {
-        self.album_artist_fetches_active += 1;
+        self.album_artist_levels
+            .insert(level_id.clone(), LevelFillState::Loading);
         let (server_url, token) = {
             let Some(client) = self.emby_client() else {
-                self.album_artist_fetch_inflight.remove(&album_id);
-                self.album_artist_fetches_active =
-                    self.album_artist_fetches_active.saturating_sub(1);
+                // No client: mark `Failed` so the next candidate creation
+                // retries instead of waiting on a fill that can never start.
+                self.album_artist_levels
+                    .insert(level_id, LevelFillState::Failed);
                 return;
             };
             let c = client.lock().unwrap();
@@ -148,8 +140,8 @@ impl App {
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let url = format!(
-                "{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=5&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Fields=AlbumArtist,Artists&api_key={}",
-                server_url, album_id, token
+                "{}/Items?ParentId={}&IncludeItemTypes=Audio&Recursive=true&Fields=AlbumArtist,Artists,ParentId,Path&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Limit=100000&api_key={}",
+                server_url, level_id, token
             );
             let items: Vec<serde_json::Value> = super::feed_parse::tls_agent(None)
                 .get(&url)
@@ -159,12 +151,8 @@ impl App {
                 .and_then(|v| v["Items"].as_array().cloned())
                 .unwrap_or_default();
 
-            // Majority vote over up to 5 tracks' AlbumArtist (falling back to
-            // Artists[0] per-track), so one outlier/mistagged track can't poison
-            // the whole album's displayed artist.
-            let artist = vote_album_artist(&items).unwrap_or_default();
-
-            let _ = tx.send(LibEvent::AlbumArtistFetched { album_id, artist });
+            let artists = level_artists_from_items(&items, &albums);
+            let _ = tx.send(LibEvent::AlbumArtistLevelFetched { level_id, artists });
         });
     }
 
@@ -328,9 +316,11 @@ fn track_artist_candidate(track: &serde_json::Value) -> Option<String> {
 /// (`SortBy=ParentIndexNumber,IndexNumber`). Empty candidates are skipped and
 /// the first-seen artist wins ties. `None` when no sampled track yields a
 /// candidate.
-fn vote_album_artist(tracks: &[serde_json::Value]) -> Option<String> {
+fn vote_album_artist<'a>(
+    tracks: impl IntoIterator<Item = &'a serde_json::Value>,
+) -> Option<String> {
     let mut counts: Vec<(String, usize)> = Vec::new();
-    for track in tracks.iter().take(ALBUM_ARTIST_VOTE_SAMPLE) {
+    for track in tracks.into_iter().take(ALBUM_ARTIST_VOTE_SAMPLE) {
         let Some(candidate) = track_artist_candidate(track) else {
             continue;
         };
@@ -351,7 +341,6 @@ fn vote_album_artist(tracks: &[serde_json::Value]) -> Option<String> {
 
 /// True when `path` is `root` itself or lies underneath it — a
 /// component-aligned prefix, so `/a/ab/1.flac` never attributes to `/a/a`.
-#[allow(dead_code)] // applied by the level fetch (task 2.1, not wired yet)
 fn path_within(path: &str, root: &str) -> bool {
     path.starts_with(root)
         && (path.len() == root.len()
@@ -367,7 +356,6 @@ fn path_within(path: &str, root: &str) -> bool {
 /// is dropped when none matches — the album then resolves through the
 /// existing settle/fallback path. `tracks` must be in request order; each
 /// bucket preserves that order.
-#[allow(dead_code)] // applied by the level fetch (task 2.1, not wired yet)
 fn bucket_tracks_by_album<'a>(
     tracks: &'a [serde_json::Value],
     albums: &[mbv_core::api::EmbyItem],
@@ -392,9 +380,13 @@ fn bucket_tracks_by_album<'a>(
         // album listing, else drop. A multi-disc set surfaces as several
         // orphan tracks that all merge into their album's bucket.
         let track_path = track["Path"].as_str().unwrap_or("");
+        // Longest matching album `Path` wins, so a nested album Path (e.g.
+        // a Deluxe-edition folder one level deeper) claims its own disc
+        // tracks instead of donating them to the outer album.
         if let Some((album_id, _)) = album_paths
             .iter()
-            .find(|(_, album_path)| path_within(track_path, album_path))
+            .filter(|(_, album_path)| path_within(track_path, album_path))
+            .max_by_key(|(_, album_path)| album_path.len())
         {
             buckets
                 .entry((*album_id).to_string())
@@ -403,6 +395,26 @@ fn bucket_tracks_by_album<'a>(
         }
     }
     buckets
+}
+
+/// Pure parse+bucket+vote pipeline behind `spawn_level_artist_fetch`
+/// (design D1–D3): buckets the level's Audio rows per album and
+/// majority-votes each bucket's artist. Albums with no resolvable artist
+/// are omitted — their slots stay free for the settle/fallback path.
+/// Deterministic: results are ordered by album id. `tracks` must be in
+/// request order.
+fn level_artists_from_items(
+    tracks: &[serde_json::Value],
+    albums: &[mbv_core::api::EmbyItem],
+) -> Vec<(String, String)> {
+    let mut artists: Vec<(String, String)> = bucket_tracks_by_album(tracks, albums)
+        .into_iter()
+        .filter_map(|(album_id, bucket)| {
+            vote_album_artist(bucket.iter().copied()).map(|artist| (album_id, artist))
+        })
+        .collect();
+    artists.sort_by(|a, b| a.0.cmp(&b.0));
+    artists
 }
 
 #[cfg(test)]
@@ -507,6 +519,56 @@ mod album_artist_batch_tests {
         let buckets = bucket_tracks_by_album(&tracks, &albums);
         assert_eq!(buckets.len(), 1);
         assert!(buckets.contains_key("alb-1"));
+    }
+
+    #[test]
+    fn nested_album_path_claims_its_orphan_tracks() {
+        // A nested album Path (Deluxe edition one level deeper) must win the
+        // longest-prefix attribution over its outer album.
+        let tracks = vec![
+            track("disc-1", "/m/a/Deluxe/1.flac", None, &["A"]),
+            track("disc-9", "/m/a/1.flac", None, &["A"]),
+        ];
+        let albums = vec![album("alb-outer", "/m/a"), album("alb-deluxe", "/m/a/Deluxe")];
+        let buckets = bucket_tracks_by_album(&tracks, &albums);
+        assert_eq!(buckets["alb-deluxe"].len(), 1);
+        assert_eq!(buckets["alb-deluxe"][0]["Path"], "/m/a/Deluxe/1.flac");
+        assert_eq!(buckets["alb-outer"].len(), 1);
+        assert_eq!(buckets["alb-outer"][0]["Path"], "/m/a/1.flac");
+    }
+
+    #[test]
+    fn level_pipeline_buckets_votes_and_orders_deterministically() {
+        // Mock JSON shaped like the level request's `Items` array: two
+        // 1:1 album buckets plus a multi-disc orphan bucket, exercising the
+        // full parse+bucket+vote pipeline without a live server.
+        let tracks = vec![
+            track("alb-b", "/m/b/2.flac", Some("Beta"), &["Beta"]),
+            track("disc-1", "/m/a/Disc 1/1.flac", Some("Alpha"), &["Alpha"]),
+            track("disc-2", "/m/a/Disc 2/1.flac", Some("Wrong"), &["Wrong"]),
+            track("disc-2", "/m/a/Disc 2/2.flac", Some("Alpha"), &["Alpha"]),
+            track("alb-b", "/m/b/1.flac", Some("Alpha"), &["Beta"]),
+            track("alb-c", "/m/c/1.flac", Some(""), &[""]),
+        ];
+        let albums = vec![album("alb-a", "/m/a"), album("alb-b", "/m/b")];
+        let artists = level_artists_from_items(&tracks, &albums);
+        // `alb-c`'s bucket yields no candidate and is omitted entirely;
+        // `alb-a`'s orphan bucket majority-votes to Alpha despite the outlier.
+        assert_eq!(
+            artists,
+            vec![
+                ("alb-a".to_string(), "Alpha".to_string()),
+                ("alb-b".to_string(), "Beta".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn level_pipeline_empty_tracks_yield_empty_artists() {
+        // HTTP failure surfaces as an empty `Items` array upstream; the
+        // pipeline must return no artists so the level marks `Failed`.
+        let albums = vec![album("alb-a", "/m/a")];
+        assert!(level_artists_from_items(&[], &albums).is_empty());
     }
 
     #[test]

@@ -119,17 +119,11 @@ pub(super) enum LibEvent {
         all_items: Vec<EmbyItem>,
         groups: Vec<FeedHomeVideoGroup>,
     },
-    AlbumArtistFetched {
-        album_id: String,
-        artist: String,
-    },
     /// One level-fill request resolved (design D4 of
     /// `fix-music-artist-resolution-batching`): `artists` bulk-fills the
     /// album-artist cache for every album bucket in the level. Empty on HTTP
-    /// failure (or a trackless level), which marks the level `Failed`.
-    /// AlbumArtistLevelFetched` marks `Failed` or `Filled` on arrival; the
-    /// producing worker thread is the level fetch (task 2.1, not wired yet).
-    #[allow(dead_code)]
+    /// failure (or a trackless level), which marks the level `Failed`; the
+    /// handler otherwise marks `Filled` on arrival.
     AlbumArtistLevelFetched {
         level_id: String,
         artists: Vec<(String, String)>,

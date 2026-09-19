@@ -463,14 +463,160 @@ fn service_reset_clears_album_artist_state() {
     app.album_artist_cache.insert("album-1".into(), "A".into());
     app.album_artist_levels
         .insert("level-1".into(), LevelFillState::Filled);
-    app.album_artist_fetch_inflight.insert("album-2".into());
-    app.pending_album_artist_fetches
-        .push_back("album-3".into());
 
     app.remove_emby_confirmed();
 
     assert!(app.album_artist_cache.is_empty());
     assert!(app.album_artist_levels.is_empty());
-    assert!(app.album_artist_fetch_inflight.is_empty());
-    assert!(app.pending_album_artist_fetches.is_empty());
+}
+
+#[test]
+fn level_event_empty_artist_pair_fills_only_non_empty_pair() {
+    let mut a1 = make_item("Unknown Album", "MusicAlbum");
+    a1.id = "album-1".into();
+    a1.artist = String::new();
+    let mut a2 = make_item("Other Album", "MusicAlbum");
+    a2.id = "album-2".into();
+    a2.artist = String::new();
+    let mut app = make_music_app(vec![a1, a2]);
+    app.start_or_supersede_music_grouping(0);
+    app.album_artist_levels
+        .insert("group-0".into(), LevelFillState::Loading);
+
+    app.handle_lib_event(LibEvent::AlbumArtistLevelFetched {
+        level_id: "group-0".into(),
+        artists: vec![
+            ("album-1".into(), String::new()),
+            ("album-2".into(), "Artist Two".into()),
+        ],
+    });
+
+    // The empty-artist pair must not poison the cache with an empty
+    // tombstone; only the non-empty pair fills.
+    assert_eq!(
+        app.album_artist_cache.get("album-1"),
+        None,
+        "empty artist must not be cached"
+    );
+    assert_eq!(
+        app.album_artist_cache.get("album-2").map(String::as_str),
+        Some("Artist Two")
+    );
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Filled)
+    );
+    // The arrival still resolves every waiting album: the empty-artist
+    // album settles to the folder fallback instead of the cache.
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(state.candidate.is_none());
+    let catalog = state.settled.as_ref().expect("settled catalog");
+    assert_eq!(catalog.entries[0].album_id, "album-2");
+    assert_eq!(catalog.entries[0].artist, "Artist Two");
+    assert_eq!(catalog.entries[1].album_id, "album-1");
+    assert_eq!(catalog.entries[1].artist, "Unknown Artist");
+}
+
+#[test]
+fn filled_level_with_unresolvable_albums_settles_immediately() {
+    let mut a1 = make_item("Unknown Album", "MusicAlbum");
+    a1.id = "album-1".into();
+    a1.artist = String::new();
+    let mut app = make_music_app(vec![a1]);
+    app.album_artist_levels
+        .insert("group-0".into(), LevelFillState::Filled);
+
+    app.start_or_supersede_music_grouping(0);
+
+    // The fill already had its chance: the album is terminal via the
+    // fallback, with no candidate left waiting on `SETTLE_WINDOW`.
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(state.candidate.is_none());
+    assert_eq!(
+        state.settled.as_ref().unwrap().entries[0].artist,
+        "Unknown Artist"
+    );
+}
+
+#[test]
+fn spawn_level_fetch_dedupes_on_loading_and_filled() {
+    let mut app = make_music_app(vec![]);
+    let albums = Vec::new();
+
+    app.album_artist_levels
+        .insert("group-0".into(), LevelFillState::Loading);
+    app.spawn_level_artist_fetch("group-0".into(), albums.clone());
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Loading),
+        "Loading level must not be re-requested"
+    );
+
+    app.album_artist_levels
+        .insert("group-0".into(), LevelFillState::Filled);
+    app.spawn_level_artist_fetch("group-0".into(), albums);
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Filled),
+        "Filled level must not be re-requested"
+    );
+}
+
+#[test]
+fn spawn_level_fetch_without_client_marks_failed_for_retry() {
+    let mut app = make_music_app(vec![]); // stub has no Emby client
+
+    app.spawn_level_artist_fetch("group-0".into(), Vec::new());
+
+    // `Failed` (not a stuck `Loading`): the next candidate creation for
+    // the level retries, per design D4.
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Failed)
+    );
+}
+
+#[test]
+fn failed_level_retries_on_next_candidate_creation() {
+    let mut a1 = make_item("Unknown Album", "MusicAlbum");
+    a1.id = "album-1".into();
+    a1.artist = String::new();
+    let mut app = make_music_app(vec![a1]);
+
+    app.start_or_supersede_music_grouping(0);
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Failed),
+        "no-client stub fails the fill attempt"
+    );
+
+    app.start_or_supersede_music_grouping(0);
+    assert_eq!(
+        app.album_artist_levels.get("group-0"),
+        Some(&LevelFillState::Failed),
+        "Failed level was retried (and failed again without a client)"
+    );
+    let state = app.libs[0]
+        .nav_stack
+        .last()
+        .unwrap()
+        .music_grouping
+        .as_ref()
+        .unwrap();
+    assert!(
+        state.candidate.is_some(),
+        "candidate stays unresolved waiting for the retry's arrival"
+    );
 }

@@ -1,3 +1,4 @@
+use super::app_struct::LevelFillState;
 use super::{App, LibEvent, PAGE_SIZE};
 use crate::app::palette;
 use crate::app::render::components::widgets::RENDER_FILTER;
@@ -81,7 +82,6 @@ pub(in crate::app) fn series_image_cache_key(item_id: &str, image_types: &[&str]
 }
 
 const MAX_IMAGE_FETCHES: usize = 6;
-const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
 /// Cache key under which the bundled queue card placeholder is stored in
 /// `card_image_states`. Never touches `card_image_loading`, so it never triggers

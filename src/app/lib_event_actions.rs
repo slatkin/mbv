@@ -644,15 +644,6 @@ impl App {
             | LibEvent::AudiobookshelfShelfFetched { .. }
             | LibEvent::AudiobookshelfProgressAcknowledged(_)
             | LibEvent::AudiobookshelfBookProgressAcknowledged(_) => unreachable!(),
-            LibEvent::AlbumArtistFetched { album_id, artist } => {
-                self.album_artist_fetch_inflight.remove(&album_id);
-                self.album_artist_cache
-                    .insert(album_id.clone(), artist.clone());
-                self.album_artist_fetches_active =
-                    self.album_artist_fetches_active.saturating_sub(1);
-                self.drain_album_artist_fetches();
-                self.advance_music_grouping_candidates(&album_id, &artist);
-            }
             LibEvent::AlbumArtistLevelFetched { level_id, artists } => {
                 if artists.is_empty() {
                     // HTTP failure (or a trackless level): no fill, the level's
@@ -661,8 +652,15 @@ impl App {
                         .insert(level_id, LevelFillState::Failed);
                 } else {
                     for (album_id, artist) in artists {
-                        self.album_artist_cache
-                            .insert(album_id.clone(), artist.clone());
+                        // An empty artist is never cached: an empty cache row
+                        // is terminal for readers, and the album must stay
+                        // free to settle via the fallback path instead. It
+                        // still advances candidates (as a known-unknown) so
+                        // one arrival resolves every waiting album at once.
+                        if !artist.is_empty() {
+                            self.album_artist_cache
+                                .insert(album_id.clone(), artist.clone());
+                        }
                         self.advance_music_grouping_candidates(&album_id, &artist);
                     }
                     self.album_artist_levels

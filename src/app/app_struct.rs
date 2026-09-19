@@ -34,9 +34,7 @@ use std::time::Instant;
 /// retries, and unresolved albums settle via `SETTLE_WINDOW` regardless.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum LevelFillState {
-    /// A level fill is in flight. Set by the level fetch spawn (task 2.1;
-    /// until then nothing constructs it).
-    #[allow(dead_code)]
+    /// A level fill is in flight. Set by `spawn_level_artist_fetch`.
     Loading,
     /// The level's albums were bulk-filled into `album_artist_cache`.
     Filled,
@@ -396,12 +394,6 @@ pub struct App {
     /// rather than album id. Concurrent candidate creations and startup
     /// warm-up dedupe on this state.
     pub(super) album_artist_levels: std::collections::HashMap<String, LevelFillState>,
-    /// Legacy per-album in-flight set for the per-album artist fetch
-    /// machinery (`fetch_album_artist` & co); removed with that machinery in
-    /// task 2.3. Not the level-fill state — see `album_artist_levels`.
-    pub(super) album_artist_fetch_inflight: std::collections::HashSet<String>,
-    pub(super) pending_album_artist_fetches: std::collections::VecDeque<String>,
-    pub(super) album_artist_fetches_active: usize,
     /// Track lists for the album currently highlighted in the
     /// album-folder listing, fetched proactively so the inline album detail
     /// pane (#145) has data without requiring the user to drill in first.
