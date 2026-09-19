@@ -129,10 +129,19 @@ back to an entry regardless of what was actually watched.
 
 1. **The meaningful-progress gate is triplicated by hand** (`daemon_run.rs`
    x2, `player_event.rs` x2) with no shared function and no compiler check
-   that a future edit to one copy keeps the others in step. `daemon_run.rs`'s
-   copies also skip the shell's `mark_progress_sync_pending` call — harmless
-   today only because the daemon never runs `merge_refresh` against its own
-   queue; a latent trap if that ever changes.
+   that a future edit to one copy keeps the others in step. Only the
+   `TrackCompleted` pair's *threshold* is shared today
+   (`crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS`, extracted after a
+   review caught a comment on the `Stopped` arm falsely claiming "same
+   reasoning as `TrackCompleted`" — a stray `Stopped`-carries-a-floor edit
+   would have silently regressed resume accuracy for exactly the case this
+   invariant exists to protect). The asymmetry itself is intentional and
+   pre-existing: `TrackCompleted` fires mid-queue and needs a floor to reject
+   startup noise, `Stopped` fires on a deliberate user action and records
+   whatever position that happened at, no floor. `daemon_run.rs`'s copies
+   also skip the shell's `mark_progress_sync_pending` call — harmless today
+   only because the daemon never runs `merge_refresh` against its own queue;
+   a latent trap if that ever changes.
 2. **A narrow race remains:** dispatching a `JumpTo` back to an item before
    the daemon has processed that item's own preceding `TrackCompleted` reads
    the canonical queue's pre-completion value and resumes from there — the
@@ -147,9 +156,12 @@ back to an entry regardless of what was actually watched.
 
 ## Cheapest strengthening (not done here)
 
-- Lift the meaningful-progress gate into one `pub` function in `mbv-core`
-  that both `daemon_run.rs` and `src/app/player_event.rs` call, so the
-  daemon and the shell cannot drift on what counts as "worth recording."
+- Lift each gate's *full logic* (not just its threshold constant) into one
+  `pub` function per event kind in `mbv-core` that both `daemon_run.rs` and
+  `src/app/player_event.rs` call, so the daemon and the shell cannot drift on
+  what counts as "worth recording" — today only the `TrackCompleted` pair's
+  numeric floor is shared; the branching itself is still copy-pasted four
+  times.
 - Reconsider whether `ExecutionSequence` needs to carry progress at all:
   `step_to_index` is the one remaining place that trusts the run's own copy
   for a progress decision; everywhere else (`JumpTo`) now gets its resume

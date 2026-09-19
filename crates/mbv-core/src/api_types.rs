@@ -8,6 +8,15 @@ pub const TICKS_PER_SECOND: i64 = 10_000_000;
 /// position qualifies for resume. Exactly this percent qualifies.
 pub const RESUME_THRESHOLD_PERCENT: i64 = 6;
 
+/// Minimum video position, in ticks, worth recording as a `TrackCompleted`
+/// occurrence's resume point — below this, the position is more likely
+/// startup noise than a real watch, so the slot's prior stored position is
+/// kept instead. Shared by the daemon's and the shell's own `TrackCompleted`
+/// gates so the two processes cannot drift on the threshold value itself
+/// (the surrounding gate logic is still duplicated by hand; see
+/// `docs/invariants/06-queue-progress-application-sites.md`).
+pub const MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS: i64 = 30 * TICKS_PER_SECOND;
+
 /// Shared resume-eligibility predicate used by both Emby items and feed
 /// entries. A positive saved position with unknown runtime (`runtime_ticks
 /// <= 0`) is always resumable. Zero and negative positions never qualify.

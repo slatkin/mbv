@@ -440,11 +440,13 @@ pub fn run_with_options(
                 // from the slot's stale submission-time position, silently
                 // reverting whatever progress the just-finished play recorded.
                 if let Some(slot) = owner.core.queue.slot(slot_id) {
-                    // Only record meaningful progress (>= 30s) for video;
-                    // audio and startup noise keep the prior stored value.
+                    // Only record meaningful progress for video; audio and
+                    // startup noise keep the prior stored value.
                     let position = if played {
                         0
-                    } else if position_ticks >= 300_000_000 && !slot.item.is_audio() {
+                    } else if position_ticks >= crate::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
+                        && !slot.item.is_audio()
+                    {
                         position_ticks
                     } else {
                         slot.item.playback_position_ticks()
@@ -483,9 +485,15 @@ pub fn run_with_options(
                     ..
                 } = &pe
                 {
-                    // Same reasoning as the TrackCompleted arm: record real
-                    // progress on the canonical queue before it is broadcast,
-                    // or the next resync reverts a fully-stopped item to 0.
+                    // Record real progress on the canonical queue before it is
+                    // broadcast, or the next resync reverts a fully-stopped
+                    // item to 0. Unlike TrackCompleted's gate above, a real
+                    // Stopped carries no minimum-progress floor — mirrors the
+                    // shell's own pre-existing Stopped handling
+                    // (`src/app/player_event.rs`), on the reasoning that an
+                    // explicit stop is a deliberate action worth recording at
+                    // whatever position it happened, not a mid-queue
+                    // transition noisy enough to need a floor.
                     if let Some(slot) = owner.core.queue.slot(*slot_id) {
                         let position = if *played {
                             0

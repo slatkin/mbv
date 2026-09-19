@@ -216,9 +216,11 @@ impl App {
                 let position = if played {
                     0
                 } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
-                    // Only record meaningful progress (≥ 30 s) for video;
-                    // audio and startup noise keep the prior value.
-                    if position_ticks >= 300_000_000 && !slot.item.is_audio() {
+                    // Only record meaningful progress for video; audio and
+                    // startup noise keep the prior value.
+                    if position_ticks >= mbv_core::api::MEANINGFUL_TRACK_COMPLETED_PROGRESS_TICKS
+                        && !slot.item.is_audio()
+                    {
                         position_ticks
                     } else {
                         slot.item.playback_position_ticks()
