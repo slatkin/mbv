@@ -360,6 +360,17 @@ _Avoid_: wide media row, wide_media_row
 The non-selectable Heading row labelling a group of media-list Item rows (artist, feed age bucket, letter or surname bucket, season). Painted bold in the FOAM metadata role; unlike a media-list Item row it keeps the surface fill and never paints the selected-row bar. It is a visual label, never a selection or action target, and it takes its own place in the zebra alternation.
 _Avoid_: artist header, group title, section label
 
+**Artist root**:
+The SELECTABLE tree root row representing one artist in the Grouped Music
+browser (`grouped-music-tree-browser`). It is focusable, expandable/collapsible,
+carries stable Service artist identity (or a deterministic fallback), and is the
+source for artist detail (Hero/Workspace, artwork, artist tracks). It is never
+played as a target itself — actions on it walk its settled album leaves. Distinct
+from `Group heading`, which is a non-selectable visual label elsewhere in the
+canonical lists; do not conflate the two, and do not call the artist root a
+"group", "heading", or "section".
+_Avoid_: artist heading, artist group, artist header, group heading (for the root)
+
 **Inline Search**:
 A library-scoped search capability embedded in the selected searchable Emby destination. The destination owns the local search control, session, query, result selection, painting, and keyboard/mouse interpretation; the shell owns full-library fetches, recursive album indexing, stale-completion guards, navigation effects, and activation effects. EmbyLibraryContent, MusicContent, or TvContent is the sole owner and painter for the current presentation; TV transfers one snapshot between Narrow and Wide, while an ordinary tab change dismisses search. It is distinct from the cross-library **Search sidebar**.
 _Avoid_: global search, Search sidebar, search overlay
