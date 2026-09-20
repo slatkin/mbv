@@ -564,7 +564,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     // Focused single selection of Beta's first member: the bar spans
     // the whole content row (the scrollbar column keeps the parent
     // background) and overrides the zebra stripe, and the title keeps the
-    // ordinary emphasis foreground with no bold modifier.
+    // ordinary primary foreground with no bold modifier.
     browser.select_index(MUSIC_TREE_BETA_LEAF_0);
     let term = music_tree_frame(
         &mut browser,
@@ -582,7 +582,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
         );
     }
     let title_x = list_area.x + 6;
-    assert_eq!(buf[(title_x, selected_y)].fg, palette::TEXT_EMPHASIS);
+    assert_eq!(buf[(title_x, selected_y)].fg, palette::TEXT_PRIMARY);
     assert!(
         !buf[(title_x, selected_y)].modifier.contains(Modifier::BOLD),
         "the selected title is not bold"
@@ -780,11 +780,11 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
         Some('…'),
         "the yeared title truncates before the gutter: {yeared_row:?}"
     );
-    assert_eq!(buf[(4, 1)].fg, palette::TEXT_EMPHASIS, "leaf title role");
+    assert_eq!(buf[(4, 1)].fg, palette::TEXT_PRIMARY, "leaf title role");
     assert_eq!(
         buf[(gutter as u16 - 1, 1)].fg,
-        palette::TEXT_EMPHASIS,
-        "an ordinary album leaf keeps the emphasis role"
+        palette::TEXT_PRIMARY,
+        "an ordinary album leaf keeps the primary role"
     );
     assert_eq!(
         buf[(gutter as u16 + 4, 1)].fg,

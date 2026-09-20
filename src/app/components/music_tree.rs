@@ -510,8 +510,8 @@ fn glyph_prefix_width(level: usize) -> usize {
 /// (level, tail stack, expansion glyph selection, mark state, selected bit)
 /// and composes the label line through `tree_label_line`, then applies mbv's
 /// semantic roles: hierarchy glyphs in the muted role, artist roots in the
-/// metadata role, album leaves in the emphasis role, marks in the positive
-/// status role, the top-level group zebra fill on the whole cell, and the
+/// metadata role, ordinary album leaves in the primary role, marks in the
+/// positive status role, the top-level group zebra fill on the whole cell, and the
 /// focused selected row's marquee window computed for this frame.
 struct MusicTreeLabelRenderer<'a> {
     tree_col_width: u16,
@@ -652,7 +652,7 @@ fn name_role(
         TreeMarkState::Unmarked if level == 0 => palette::MUSIC_HEADER,
         TreeMarkState::Unmarked => model
             .semantic_state_of(id)
-            .map_or(palette::TEXT_EMPHASIS, semantic_role),
+            .map_or(palette::TEXT_PRIMARY, semantic_role),
     }
 }
 
@@ -662,7 +662,7 @@ fn name_role(
 /// tree paints no progress slot).
 fn semantic_role(state: &MediaSemanticState) -> ratatui::style::Color {
     match state {
-        MediaSemanticState::Ordinary => palette::TEXT_EMPHASIS,
+        MediaSemanticState::Ordinary => palette::TEXT_PRIMARY,
         MediaSemanticState::Played => palette::TEXT_MUTED,
         MediaSemanticState::Active { .. } | MediaSemanticState::NowPlaying { .. } => {
             palette::TEXT_EMPHASIS
