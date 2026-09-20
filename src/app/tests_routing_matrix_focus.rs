@@ -72,3 +72,66 @@ fn lib_key_ctrl_catchall_swallows_unmapped_chord() {
         "an unmapped Ctrl chord under Library focus must be swallowed (no queue undo)"
     );
 }
+
+/// Grouped Music's tree navigation chords are leaf-local: the router claims
+/// none of them and keeps its panel precedence. Up/Down/Home/End/PageUp/
+/// PageDown always reach the focused leaf; Right does too while the Library
+/// panel holds focus; Left is only the Both-layout panel command, so the
+/// Library-only layout is where the tree's Left (parent/collapse) is reachable.
+#[test]
+fn library_focus_tree_navigation_chords_stay_leaf_local() {
+    let leaf = Some(Msg::Shell(ShellRequest::MusicGroupSwitch { delta: 1 }));
+    for code in [
+        KeyCode::Up,
+        KeyCode::Down,
+        KeyCode::Home,
+        KeyCode::End,
+        KeyCode::PageUp,
+        KeyCode::PageDown,
+    ] {
+        let out = fold_tick(
+            leaf.clone(),
+            key(code),
+            Some(ComponentId::Library),
+            idle_snapshot(),
+        );
+        assert_eq!(out.len(), 1, "{code:?} must reach the focused Music leaf");
+    }
+
+    let right = fold_tick(
+        leaf.clone(),
+        key(KeyCode::Right),
+        Some(ComponentId::Library),
+        idle_snapshot(),
+    );
+    assert_eq!(
+        right.len(),
+        1,
+        "plain Right under Library focus reaches the tree (no panel_right)"
+    );
+
+    let left_both = fold_tick(
+        leaf.clone(),
+        key(KeyCode::Left),
+        Some(ComponentId::Library),
+        idle_snapshot(),
+    );
+    assert!(
+        left_both.is_empty(),
+        "the Both-layout Left stays the panel command, not the tree's"
+    );
+
+    let mut library_only = idle_snapshot();
+    library_only.panel_mode = crate::app::types_settings::PanelMode::LibraryOnly;
+    let left_only = fold_tick(
+        leaf,
+        key(KeyCode::Left),
+        Some(ComponentId::Library),
+        library_only,
+    );
+    assert_eq!(
+        left_only.len(),
+        1,
+        "the Library-only layout lets the tree's Left reach the leaf"
+    );
+}

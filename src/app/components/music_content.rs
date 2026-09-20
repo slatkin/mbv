@@ -284,6 +284,10 @@ impl MusicContent {
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
         let cursor = cursor.min(self.context.album_targets.len().saturating_sub(1));
         if let Some(target) = self.context.album_targets.get(cursor).cloned() {
+            // The persisted offset is a flat-flow row (artist row + leaves),
+            // not a tree projection row: the tree owner translates it so an
+            // interleaved artist root can never anchor the viewport to the
+            // wrong album.
             self.browser.anchor_album_target(&target, scroll);
         }
     }
@@ -569,6 +573,16 @@ impl LibraryContentOwner for MusicContent {
                     track,
                 }))
             }
+            // An artist root is a grouping row, not an album: Enter toggles its
+            // persistent expansion (task 2.4). This must precede the
+            // inline-track-focus arm so a root focus can never focus a stale
+            // track pane left over from a previous album.
+            Key::Enter if self.browser.selected_is_artist() => {
+                if let Some(root) = self.browser.selected_id() {
+                    self.browser.toggle_root(root);
+                }
+                None
+            }
             Key::Enter if self.track_list.rows().is_empty() => self
                 .selected_item()
                 .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
@@ -726,6 +740,40 @@ impl LibraryContentOwner for MusicContent {
             }
             Key::PageUp => self.page_album(-1, AlbumCursorKind::Page),
             Key::PageDown => self.page_album(1, AlbumCursorKind::Page),
+            // Left/Right are the tree's parent/child movement (task 2.4):
+            // Right expands a collapsed artist root; Left collapses a focused
+            // expanded root or returns a leaf to its artist parent. These fire
+            // only when the track pane does not hold local focus, and only
+            // after the router's fall-through — in the Both layout the central
+            // `panel_left` precedence still claims plain Left before the tree
+            // ever sees it. Right on an already expanded root (the artist
+            // Workspace entry) is task 6.4 and stays unhandled here.
+            Key::Left if !self.track_focused => {
+                if self.browser.selected_is_artist() {
+                    if let Some(root) = self.browser.selected_id() {
+                        if self.browser.root_is_expanded(root) {
+                            self.browser.collapse_root(root);
+                        }
+                    }
+                    None
+                } else if self.browser.move_to_parent() {
+                    // The parent is an artist root, so no album selection
+                    // crosses: artist focus never overwrites album persistence.
+                    self.album_selection_request(AlbumCursorKind::Move)
+                } else {
+                    None
+                }
+            }
+            Key::Right if !self.track_focused => {
+                if self.browser.selected_is_artist() {
+                    if let Some(root) = self.browser.selected_id() {
+                        if !self.browser.root_is_expanded(root) {
+                            self.browser.expand_root(root);
+                        }
+                    }
+                }
+                None
+            }
             _ => None,
         }
     }

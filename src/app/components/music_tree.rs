@@ -439,9 +439,11 @@ impl MusicTreeModel {
 }
 
 /// The Grouped Music tree browser: one `TreeListViewState` owner over the
-/// destination-local model, painted through the crate's widget. The spike
-/// scope keeps the query unfiltered and unsorted (settled order);
-/// `TreeQuery` remains the seam the later filter session plugs into.
+/// destination-local model, painted through the crate's widget. The query
+/// stays unfiltered and unsorted (settled order) until the filter session
+/// lands; `TreeQuery` remains that seam. Task 2.4 maps the destination's local
+/// chords (visible-node movement, Home/End, paging, parent/child, root
+/// expansion) onto this owner's operations; the crate keymap stays disabled.
 pub(in crate::app) struct MusicTreeBrowser {
     model: MusicTreeModel,
     query: TreeQuery,
@@ -507,9 +509,79 @@ impl MusicTreeBrowser {
         self.state.ensure_projection(&self.model, &self.query);
     }
 
+    /// Collapses an artist root (task 2.4 Left): its leaves leave the visible
+    /// projection while the selection stays on the root, and the crate's
+    /// projection rebuild re-arms the viewport visibility rule.
+    pub(in crate::app) fn collapse_root(&mut self, root: usize) {
+        self.state.set_expanded(root, None, false);
+        self.state.ensure_projection(&self.model, &self.query);
+    }
+
+    /// Toggles an artist root's persistent expansion (task 2.4 Enter). This is
+    /// the tree's own expansion, never the filter-forced projection state.
+    pub(in crate::app) fn toggle_root(&mut self, root: usize) {
+        if self.state.node_is_expanded(root, None) {
+            self.collapse_root(root);
+        } else {
+            self.expand_root(root);
+        }
+    }
+
+    /// Moves the selection to the visible parent: an album leaf's artist root
+    /// (task 2.4 Left). Returns false for an artist root, which has no parent
+    /// to move to. The crate's selection change re-arms the viewport
+    /// visibility rule.
+    pub(in crate::app) fn move_to_parent(&mut self) -> bool {
+        self.state.select_parent()
+    }
+
     /// Whether an artist root is persistently expanded.
     pub(in crate::app) fn root_is_expanded(&self, root: usize) -> bool {
         self.state.node_is_expanded(root, None)
+    }
+
+    /// The projection row for a persisted expanded-flow offset. The persisted
+    /// offset is a row in the settled flat flow (one artist row per group
+    /// followed by its leaves in settled order). The tree's projection
+    /// interleaves those same rows but hides collapsed leaves, so walk the
+    /// fully-expanded settled order and return the first node at or after
+    /// `offset` that is currently visible: a hidden leaf rounds forward to the
+    /// next visible node instead of anchoring the viewport to an unrelated row.
+    fn projection_row_for_flow_offset(&self, offset: usize) -> Option<usize> {
+        let mut position = 0;
+        for &root in &self.model.roots {
+            if position >= offset {
+                if let Some(row) = self.state.visible_index_of(root) {
+                    return Some(row);
+                }
+            }
+            position += 1;
+            for &leaf in &self.model.children[root] {
+                if position >= offset {
+                    if let Some(row) = self.state.visible_index_of(leaf) {
+                        return Some(row);
+                    }
+                }
+                position += 1;
+            }
+        }
+        None
+    }
+
+    /// Anchors the shell's persisted album position: selects the album leaf,
+    /// translates the persisted flat-flow offset into the current projection,
+    /// and re-arms the visibility rule so the next view keeps the selection
+    /// visible (design D3). The offset must never be applied as a raw
+    /// projection row: the tree interleaves artist roots with album leaves.
+    pub(in crate::app) fn anchor_album_target(&mut self, target: &str, row: usize) -> bool {
+        if !self.select_album_target(target) {
+            return false;
+        }
+        if let Some(translated) = self.projection_row_for_flow_offset(row) {
+            self.state.set_offset(translated);
+        }
+        self.rearm_selection_visibility();
+        true
     }
 
     /// Selects a node by stable identity, loading its ancestor path, and arms
@@ -626,19 +698,6 @@ impl MusicTreeBrowser {
             return false;
         };
         self.state.select_by_id(&self.model, &self.query, id)
-    }
-
-    /// Anchors the shell's persisted album position: selects the album leaf and
-    /// keeps the owner's viewport at the requested row, then re-arms the
-    /// visibility rule so the next view applies only the minimum scroll needed
-    /// to keep the selection visible (`re_anchor`/design D3).
-    pub(in crate::app) fn anchor_album_target(&mut self, target: &str, row: usize) -> bool {
-        if !self.select_album_target(target) {
-            return false;
-        }
-        self.state.set_offset(row);
-        self.rearm_selection_visibility();
-        true
     }
 
     /// The current visible projection's album targets: `Some(target)` per album

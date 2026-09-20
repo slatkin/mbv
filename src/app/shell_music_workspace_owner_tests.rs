@@ -626,14 +626,16 @@ fn period_and_slash_keys_use_the_owners_own_selection() {
     assert_eq!(message, Some(Msg::Shell(ShellRequest::OpenInlineSearch)));
 }
 
-/// Grouped Music paints one album per row; horizontal keys are unclaimed so
-/// the central router keeps precedence over them.
+/// `h`/`l` are not tree chords: Grouped Music maps only the arrow chords
+/// (Left/Right) to parent/child movement, and the central router may still
+/// claim Left ahead of the leaf (the Both-layout `panel_left`). This pins that
+/// no extra letter alias leaks into the tree.
 #[test]
-fn horizontal_keys_fall_through_unclaimed() {
+fn horizontal_letter_aliases_fall_through_unclaimed() {
     let mut model = Model::new(make_music_group_app());
     model.app.panel_focus = PanelFocus::Library;
     model.sync_mounted_surfaces();
-    for code in [Key::Left, Key::Right, Key::Char('h'), Key::Char('l')] {
+    for code in [Key::Char('h'), Key::Char('l')] {
         let message = model.test_music_owner_mut().on_key(&KeyEvent {
             code,
             modifiers: KeyModifiers::NONE,
