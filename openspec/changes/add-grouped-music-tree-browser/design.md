@@ -14,7 +14,7 @@ The existing contracts conflict with the new surface in deliberate, narrow ways:
 - Use the dependency's supported model/query/state/rendering seams rather than reimplementing its projection.
 - Preserve mbv's Panel, Keyboard Router, mouse, semantic-theme, selected-row, and typed-effect boundaries.
 - Keep new tree code outside `music_content.rs` so the existing orchestration module does not grow further.
-- Make dependency rejection cheap and complete if final customization review fails.
+- Keep dependency rejection cheap and complete if the tree's core behavior or ownership proves impossible, without treating visual differences or rough visual edges as failure.
 
 **Non-Goals:**
 
@@ -112,9 +112,9 @@ Every new artist-artwork and artist-track request and completion is a typed boun
 
 Alternative rejected: name-based Service lookup, which conflates equal artist names. Alternative rejected: preloading all artist tracks during grouping warm-up, which couples browsing readiness to an unbounded fetch.
 
-### D8. Use the stock tree rendering pipeline as the dependency gate
+### D8. Use the stock tree rendering pipeline
 
-Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` from the exact locked 0.2.2 API to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. The crate's published metadata declares Ratatui 0.30.2 compatibility, and its API documentation exposes these seams plus latest-render hit testing ([docs.rs](https://docs.rs/tui-treelistview/0.2.2/tui_treelistview/), [lib.rs](https://lib.rs/crates/tui-treelistview)). Task 1.1 is a hard go/no-go gate: before the tree owner or artist features are built, a one-frame adapter spike SHALL paint the existing Wide and smallest supported non-Wide fixtures and prove the full-row bar, group-relative zebra, scrollbar, focused marquee, and clipping through supported seams. If it does not compile, any required seam is absent, or that buffer evidence fails, stop and reject the dependency.
+Use `TreeListView` with `TreeLabelRenderer`, `TreeColumnSet`, and `TreeListViewStyle` from the exact locked 0.2.2 API to express hierarchy glyphs, artist/album labels, year metadata, selected-row treatment, marks, scrollbar, and horizontal bounds. The crate's published metadata declares Ratatui 0.30.2 compatibility, and its API documentation exposes these seams plus latest-render hit testing ([docs.rs](https://docs.rs/tui-treelistview/0.2.2/tui_treelistview/), [lib.rs](https://lib.rs/crates/tui-treelistview)). Task 1.1 is a hard stop: before the tree owner or artist features are built, one adapter frame SHALL paint the existing Wide and smallest supported non-Wide fixtures and prove the tree's own row treatment, hierarchy glyphs, zebra rhythm, scrollbar, focused marquee, clipping, latest-render hit testing, and aggregate marks through the crate's supported model/state/renderer/style seams. If it does not compile, or the tree's core model, state, or hit testing cannot be driven through those interfaces, stop and reject the dependency.
 
 Style values are resolved from existing semantic theme policies inside the owning render layer; the destination does not pass raw colours. Album leaves use `MediaSemanticState::from_emby`, whose music collapse keeps them `Ordinary`; the label renderer SHALL NOT re-derive played or resume decoration from raw `EmbyItem` fields. Artist roots are likewise ordinary grouping rows.
 
@@ -122,7 +122,7 @@ Tree album years follow the canonical single metadata-gutter contract introduced
 
 The tree remains in the Library panel's existing browser slot. The panel owns placement and fill; the tree painter owns paint-local row geometry. No screen module calls Ratatui or splits layout, and no base frame paints underneath. Marquee timing reuses the existing title-marquee primitive if the label-renderer seam permits it.
 
-The implementation is not allowed to bypass a missing extension point with a second projection or bespoke tree widget. After focused buffer/component/integration checks and full gates pass, live review covers Wide, Narrow, Mini, and Library Hero overlay states, including the smallest supported non-Wide Library-panel width. Failure of hierarchy readability, selected-row treatment, zebra behavior, metadata, marquee, scrollbar, or narrow-width behavior rejects and removes the dependency.
+The implementation is not allowed to bypass a missing extension point with a second projection or bespoke tree widget. After focused buffer/component/integration checks and full gates pass, live review covers Wide, Narrow, Mini, and Library Hero overlay states, including the smallest supported non-Wide Library-panel width. Live review judges the tree against its own tree-specific contract — readable hierarchy and expansion state, a clear focused-node treatment within the supplied browser rectangle, usable metadata, marquee, scrollbar, and narrow-width handling — and not against canonical-list parity. Two differences are intentional and documented: the crate paints its scrollbar whenever content overflows, with no focus gate reachable through a supported interface, and the tree's selected-row treatment is bounded by the browser rectangle it paints into rather than extending to the panel edge. Rough visual edges are expected and are worked out during the end-of-implementation manual PoC evaluation. The dependency is removed only if the tree's core behavior or ownership cannot be delivered through the crate's supported interfaces, never because its visuals differ from canonical lists or are initially unpolished, and never by hand-writing a parallel renderer.
 
 ### D9. Preserve test ownership and use the smallest durable evidence
 
@@ -137,9 +137,9 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 
 ## Risks / Trade-offs
 
-- **[Crate rendering seams cannot reproduce mbv's surface]** → Keep customization inside supported crate interfaces, run focused visual evidence before final acceptance, and remove the dependency/change if live review fails; do not add a parallel renderer.
+- **[Crate visuals differ from the canonical flat lists]** → Accept the tree as its own presentation (selection extent, zebra rhythm, scrollbar focus behavior), keep customization inside the crate's supported interfaces, and treat rough visual edges as PoC-evaluation work rather than gate failures; remove the dependency only if core behavior or ownership is impossible, never by adding a parallel renderer.
 - **[The locked crate API differs from the evaluated surface]** → Pin 0.2.2 exactly, make the minimal adapter a hard stop, and reject the dependency rather than guessing equivalent APIs.
-- **[The dependency has limited adoption and a short release history]** → Current registry metadata shows one owner, low download volume, and two yanked earlier versions ([lib.rs](https://lib.rs/crates/tui-treelistview), [crates.io API](https://crates.io/api/v1/crates/tui-treelistview)); keep the integration destination-local, pin exactly, and retain dependency rejection as the acceptance outcome.
+- **[The dependency has limited adoption and a short release history]** → Current registry metadata shows one owner, low download volume, and two yanked earlier versions ([lib.rs](https://lib.rs/crates/tui-treelistview), [crates.io API](https://crates.io/api/v1/crates/tui-treelistview)); keep the integration destination-local, pin exactly, and retain dependency rejection for the case where the tree's core behavior proves impossible.
 - **[Artist identity is absent, ambiguous, or omitted by a Service]** → Request `ArtistItems` explicitly, accept only a name-matching pair, retain equal-name groups separately, and use a deterministic fallback key when no match exists; never perform effect lookup by name. Unsupported artist-ID queries propagate to the shell's per-album aggregation fallback.
 - **[Artist completions paint beneath a new selection]** → Key requests and visible application by destination, Service generation, settled revision, and artist ID; cache valid data separately from presentation.
 - **[Filtering and marks expose hidden actions]** → Intersect tree multi-selection with the visible album projection whenever a debounced filter revision applies, and materialize every root action from that same projection.
@@ -157,6 +157,6 @@ Existing tests are adapted or replaced rather than duplicated. No snapshot suite
 5. Add local filtering, root action materialization, multi-selection, and current-frame mouse handling.
 6. Add shell-owned lazy artist detail/artwork/track projection with stale guards.
 7. Complete focused automated evidence, repository checks, and live user review in Wide, Narrow, Mini, and Library Hero overlay Panel states.
-8. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.
+8. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection of the dependency's core capability, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.
 
 Rollback is a normal revert: no persisted tree state, protocol, queue schema, or config migration is introduced.

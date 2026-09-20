@@ -99,21 +99,21 @@ The mounted Music destination SHALL remain the sole event boundary. Keyboard pre
 - **WHEN** tree content or geometry is configured for a new frame before that frame finishes rendering
 - **THEN** prior row geometry claims no pointer target
 
-### Requirement: The integrated tree meets mbv visual contracts
-The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. At the repository's existing Wide geometry fixture and smallest supported non-Wide Library-panel fixture, it SHALL use semantic theme roles and preserve the canonical selected-row bar, distinct artist and album hierarchy, group-relative zebra treatment, release-year metadata when it fits, focused-title marquee behavior, and scrollbar behavior. Every visible node row SHALL retain its hierarchy/expansion glyph and at least one title cell; narrower content SHALL truncate or marquee rather than overrun the browser rectangle. Album leaves SHALL obtain semantic state through the canonical music collapse and SHALL remain visually unplayed with no played or resume decoration; artist roots SHALL likewise use ordinary grouping semantics. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
+### Requirement: The integrated tree presents a coherent tree-specific surface
+The Grouped Music tree SHALL paint once in the Library panel browser slot at every Panel mode. At the repository's existing Wide geometry fixture and smallest supported non-Wide Library-panel fixture, it SHALL use semantic theme roles and present a readable, intentional tree surface: a distinguishable artist and album hierarchy with visible expansion state, a clear focused-node treatment inside the browser rectangle it is supplied, group-relative zebra rhythm, release-year metadata when it fits, focused-title marquee behavior, and a usable scrollbar. The tree's selected-row extent, zebra rhythm, and scrollbar focus behavior are its own and need not match the canonical flat media lists. Every visible node row SHALL retain its hierarchy/expansion glyph and at least one title cell; narrower content SHALL truncate or marquee rather than overrun the browser rectangle. Album leaves SHALL obtain semantic state through the canonical music collapse and SHALL remain visually unplayed with no played or resume decoration; artist roots SHALL likewise use ordinary grouping semantics. No base frame, fallback media list, or second tree painter SHALL underpaint or overpaint its rows.
 
-The change SHALL be accepted only after automated checks at the existing Wide and smallest supported non-Wide Library-panel fixtures and live user review in Wide, Narrow, Mini, and Library Hero overlay states. If the dependency's supported rendering and style extension points cannot satisfy these contracts, the dependency SHALL be removed and this change SHALL not merge; a parallel bespoke tree renderer is not an acceptance fallback.
+The change SHALL be accepted only after automated checks at the existing Wide and smallest supported non-Wide Library-panel fixtures and the end-of-implementation manual PoC evaluation across Wide, Narrow, Mini, and Library Hero overlay states. That evaluation is where residual visual roughness is worked out. Review findings are fixed against this tree-specific contract. The dependency SHALL be removed and this change SHALL not merge only if the tree's core behavior or ownership cannot be delivered through the crate's supported interfaces; a parallel bespoke tree renderer is not an acceptance fallback at any point.
 
-#### Scenario: Focused node uses the selected-row bar
+#### Scenario: Focused node carries the tree's selected-row treatment
 - **WHEN** the Library panel is focused and the tree paints its selected artist root or album leaf
-- **THEN** the selected-row bar spans the full row and overrides zebra treatment
-- **AND** no destination-defined raw colour or marker substitutes for it
+- **THEN** that node paints the tree's focused-node treatment across the browser rectangle, overriding its zebra treatment
+- **AND** no destination-defined raw colour or marker substitutes for a theme role or the treatment
 
 #### Scenario: Music playback history does not decorate tree rows
 - **WHEN** an artist root or album leaf is painted and its underlying Music data carries played or resume fields
 - **THEN** the tree paints ordinary Music row semantics without played or resume decoration
 
-#### Scenario: User rejects the customization
-- **WHEN** automated checks pass but live review finds the hierarchy, focus, metadata, marquee, scrollbar, or narrow-width treatment unacceptable
-- **THEN** the slice is not accepted
-- **AND** the implementation removes the dependency rather than merging a bespoke parallel renderer
+#### Scenario: PoC evaluation finds rough edges
+- **WHEN** automated checks pass and the end-of-implementation manual PoC evaluation finds visual roughness in the tree's hierarchy, focused-node treatment, metadata, marquee, scrollbar, or narrow-width handling
+- **THEN** that roughness is worked out against this tree-specific contract
+- **AND** only a defect that the crate's supported interfaces cannot address removes the dependency rather than merging a bespoke parallel renderer

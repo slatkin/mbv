@@ -77,7 +77,7 @@ Grouped Music SHALL retain and filter its shallow artist/album tree in the same 
 
 #### Scenario: Selected search results use the canonical selected-row bar
 - **WHEN** search results or a filtered Grouped Music tree are painted with the Library panel focused
-- **THEN** the selected row or node paints the canonical selected-row bar
+- **THEN** the selected flat result row paints the canonical selected-row bar, while the selected tree node paints the tree's own focused-node treatment
 - **AND** an unfocused result control paints no cursor bar
 
 #### Scenario: Empty results while the corpus loads
