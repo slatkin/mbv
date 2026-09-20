@@ -760,8 +760,9 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         ))) if items.len() == 1 && items[0].id == "a-0" && (x, y) == (album_0_at.x, album_0_at.y)
     ));
 
-    // A right-click on an artist root resolves its ordered album descendants,
-    // never the grouping root itself.
+    // A right-click on an artist root inside a marked tree selection acts on
+    // that selection, not on every descendant of the root. The grouping root
+    // itself never crosses the effect boundary.
     assert!(matches!(
         owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(
             root_at
@@ -769,9 +770,8 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
         Some(Msg::Shell(ShellRequest::RowContextMenu(
             crate::app::types_context_menu::ContextMenuTargets::Emby(items),
             Some((x, y)),
-        ))) if items.len() == 2
-            && items.iter().map(|item| item.id.as_str()).collect::<Vec<_>>()
-                == vec!["a-0", "a-1"]
+        ))) if items.len() == 1
+            && items[0].id == "a-0"
             && (x, y) == (root_at.x, root_at.y)
     ));
     assert!(owner.browser.selected_is_artist());
@@ -784,6 +784,41 @@ fn tree_pointer_gestures_resolve_latest_artist_and_album_rows() {
     assert_eq!(
         owner.browser.selected_album_targets_in_display_order(),
         vec!["a-0".to_string(), "a-1".to_string()]
+    );
+}
+
+#[test]
+fn tree_context_click_outside_selection_clears_only_tree_marks() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0"]), ("Beta", &["b-0"])]);
+    owner.expand_all_tree_roots();
+    let area = Rect::new(0, 0, 48, 8);
+    paint_tree(&mut owner, area);
+    let a0 = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
+        .expect("first album")
+        .id();
+    let b0 = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| owner.browser.target_of(node.id()) == Some("b-0"))
+        .expect("second album")
+        .id();
+    owner.browser.set_marked(a0, true);
+    let b0_at = tree_point(&owner, area, b0);
+    assert!(matches!(
+        owner.on_slot_event(LibrarySlotEvent::List(MediaListSurfaceInput::ContextClick(b0_at))),
+        Some(Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            _,
+        ))) if items.len() == 1 && items[0].id == "b-0"
+    ));
+    assert!(
+        owner.browser.selected_album_targets().is_empty(),
+        "a context click outside the marked set clears only this tree"
     );
 }
 

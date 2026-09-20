@@ -558,9 +558,40 @@ impl MusicContent {
         Some((items, unresolved_targets))
     }
 
+    /// Resolves marked tree album leaves in settled display order. This is the
+    /// multi-selection boundary: the tree owns membership and the content
+    /// owner only translates stable album targets to the current snapshot.
+    fn selected_tree_items(&self) -> Option<(Vec<EmbyItem>, Vec<String>)> {
+        let targets = self.browser.selected_album_targets_in_display_order();
+        if targets.is_empty() {
+            return None;
+        }
+        let mut items = Vec::with_capacity(targets.len());
+        let mut unresolved_targets = Vec::new();
+        for target in targets {
+            let Some(index) = self
+                .context
+                .album_targets
+                .iter()
+                .position(|candidate| candidate == &target)
+            else {
+                unresolved_targets.push(target);
+                continue;
+            };
+            let Some(item) = self.context.list.items.get(index) else {
+                unresolved_targets.push(target);
+                continue;
+            };
+            items.push(item.clone());
+        }
+        Some((items, unresolved_targets))
+    }
+
     fn artist_action(&self, action: MusicTreeAction) -> Option<Msg> {
         let origin = self.selection_origin.clone()?;
-        let (items, unresolved_targets) = self.selected_artist_items()?;
+        let (items, unresolved_targets) = self
+            .selected_tree_items()
+            .or_else(|| self.selected_artist_items())?;
         if items.is_empty() && unresolved_targets.is_empty() {
             return None;
         }
@@ -966,16 +997,22 @@ impl LibraryContentOwner for MusicContent {
         &mut self,
         origin: crate::app::components::media_list::SelectionOrigin,
     ) {
-        // The panel's active-owner projection records this identity for the
-        // task-4.3 status/bulk-action wiring. Direct artist actions carry it,
-        // but the shell does not consume it until that task lands.
+        // The panel's active-owner projection records the stable identity
+        // used by both the status pill and bulk-action clear routing. Direct
+        // tree actions carry the same identity without exposing membership.
         self.selection_origin = Some(origin);
     }
 
     fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
-        // The tree has no Visual-mode multi-selection yet (task 4.2/4.3); the
-        // status projection is reconnected with the tree's selection model.
-        None
+        // The tree keeps membership locally; expose only the same read-only
+        // count/origin projection used by every canonical list. Music rows
+        // never inspect played/unplayed state here.
+        self.selection_origin.clone().map(|origin| {
+            crate::app::components::media_list::SelectionSummary {
+                count: self.browser.selected_album_targets().len(),
+                origin,
+            }
+        })
     }
 
     fn content(&mut self) -> LibraryPanelContent<'_> {

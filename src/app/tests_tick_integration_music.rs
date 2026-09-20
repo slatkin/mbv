@@ -780,6 +780,174 @@ fn music_panel_mut(harness: &mut TickHarness) -> &mut crate::app::components::li
         .expect("LibraryPanel")
 }
 
+/// The tree's summary, context origin, and capability gate all cross the
+/// mounted composition path: modified clicks mutate the owner, the status
+/// projection observes only its count, and folder albums cannot manufacture
+/// context actions merely because they were selected.
+#[test]
+fn grouped_music_tree_selection_projects_status_and_context_origin() {
+    let mut app = crate::app::render::make_music_group_app();
+    let mut second = crate::app::tests::make_item("Second Album", "MusicAlbum");
+    second.id = "album-2".into();
+    second.artist = "Alpha".into();
+    second.is_folder = true;
+    app.libs[0].nav_stack[1].items[0].is_folder = true;
+    app.libs[0].nav_stack[1].items.push(second);
+    app.terminal_width = 100;
+    app.terminal_height = 30;
+    app.panel_focus = PanelFocus::Library;
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    draw_music_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+
+    let album_points = {
+        let music = harness.model().test_music_owner();
+        ["album-1", "album-2"].map(|target| {
+            let node = music
+                .browser
+                .projected_nodes()
+                .iter()
+                .find(|node| music.browser.target_of(node.id()) == Some(target))
+                .expect("painted album node");
+            let row = music.browser.row_rect_for(node.id()).expect("painted album row");
+            (row.x, row.y)
+        })
+    };
+    let click = |column, row, modifiers| Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column,
+        row,
+        modifiers,
+    });
+    for (column, row) in album_points {
+        harness.inject(click(
+            column,
+            row,
+            KeyModifiers::CONTROL,
+        ));
+        let outcome = harness.step();
+        let (mut music_resize, mut tv_resize) = (false, false);
+        for message in outcome.messages {
+            harness
+                .model_mut()
+                .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+        }
+        harness.model_mut().sync_mounted_surfaces();
+    }
+
+    assert_eq!(
+        harness.model().test_music_owner().browser.selected_album_targets_in_display_order(),
+        vec!["album-1".to_string(), "album-2".to_string()]
+    );
+    assert_eq!(
+        harness.model().visual_selection,
+        Some((PanelFocus::Library, 2)),
+        "status projection carries the tree count, not tree membership"
+    );
+
+    let right = Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Right),
+        column: album_points[0].0,
+        row: album_points[0].1,
+        modifiers: KeyModifiers::NONE,
+    });
+    harness.inject(right);
+    let outcome = harness.step();
+    let context_items = outcome.messages.iter().find_map(|message| match message {
+        Msg::Shell(ShellRequest::RowContextMenu(
+            crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+            _,
+        )) => Some(items),
+        _ => None,
+    });
+    assert_eq!(
+        context_items
+            .expect("tree selection reaches the existing bulk path")
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["album-1", "album-2"]
+    );
+    let (mut music_resize, mut tv_resize) = (false, false);
+    for message in outcome.messages {
+        harness
+            .model_mut()
+            .handle_terminal_message(message, &mut music_resize, &mut tv_resize);
+    }
+    assert_eq!(
+        harness.model().context_menu_origin,
+        Some(crate::app::components::media_list::SelectionOrigin::Library(
+            crate::app::components::media_list::LibrarySelectionOrigin::Service(
+                crate::app::components::library_panel::owner::LibraryKey::Service {
+                    service: mbv_core::config::ServiceKind::Emby,
+                    library_id: "lib-music".into(),
+                    kind: crate::app::components::library_panel::owner::LibraryKind::Music,
+                },
+            ),
+        )),
+        "bulk context captures the originating library identity"
+    );
+    assert_eq!(
+        harness.model().visual_selection,
+        Some((PanelFocus::Library, 2)),
+        "folder-gated albums do not bypass capability intersection"
+    );
+
+    // The status projection has a clickable clear affordance; exercise its
+    // captured-origin contract through the same shell request the mounted
+    // panel emits (the status component's pointer-delivery coverage is shared
+    // with the other library destinations).
+    draw_music_frame(&mut harness);
+    harness.model_mut().sync_mounted_surfaces();
+    assert!(harness
+        .model()
+        .application
+        .get_component(&ComponentId::StatusBarPanel)
+        .and_then(|component| {
+            component
+                .as_any()
+                .downcast_ref::<crate::app::components::StatusBarPanel>()
+        })
+        .and_then(|panel| panel.regions().visual_clear)
+        .is_some());
+    let origin = crate::app::components::media_list::SelectionOrigin::Library(
+        crate::app::components::media_list::LibrarySelectionOrigin::Service(
+            crate::app::components::library_panel::owner::LibraryKey::Service {
+                service: mbv_core::config::ServiceKind::Emby,
+                library_id: "lib-music".into(),
+                kind: crate::app::components::library_panel::owner::LibraryKind::Music,
+            },
+        ),
+    );
+    let wrong_origin = crate::app::components::media_list::SelectionOrigin::Library(
+        crate::app::components::media_list::LibrarySelectionOrigin::Home,
+    );
+    let (mut music_resize, mut tv_resize) = (false, false);
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(ShellRequest::ClearMultiSelection(wrong_origin)),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert_eq!(
+        harness.model().test_music_owner().browser.selected_album_targets().len(),
+        2,
+        "a clear for another Library origin cannot clear the tree"
+    );
+    harness.model_mut().handle_terminal_message(
+        Msg::Shell(ShellRequest::ClearMultiSelection(origin)),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+    assert!(harness
+        .model()
+        .test_music_owner()
+        .browser
+        .selected_album_targets()
+        .is_empty());
+}
+
 /// Inject one key through the real router, dispatch every surviving message
 /// through the shell, and re-run the production sync pass.
 fn tick_key(harness: &mut TickHarness, code: Key) {

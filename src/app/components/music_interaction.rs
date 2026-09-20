@@ -139,8 +139,34 @@ impl MusicContent {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (_id, index) = self.browser.hit_node(at)?;
+                            let (id, index) = self.browser.hit_node(at)?;
+                            let marked = self.browser.selected_album_targets_in_display_order();
+                            let clicked_marked = if let Some(target) = self.browser.target_of(id) {
+                                marked.iter().any(|selected| selected == target)
+                            } else if self.browser.model_is_artist(id) {
+                                self.browser
+                                    .artist_album_targets(id)
+                                    .into_iter()
+                                    .any(|target| marked.iter().any(|selected| selected == &target))
+                            } else {
+                                false
+                            };
                             self.browser.select_index(index);
+                            if !marked.is_empty() && clicked_marked {
+                                let (items, unresolved_targets) = self.selected_tree_items()?;
+                                if items.is_empty() && unresolved_targets.is_empty() {
+                                    return None;
+                                }
+                                return Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                    crate::app::types_context_menu::ContextMenuTargets::Emby(items),
+                                    Some((at.x, at.y)),
+                                )));
+                            }
+
+                            // A context click outside the marked set has the
+                            // canonical list semantics: clear only this tree
+                            // selection and open the ordinary single/root menu.
+                            self.browser.clear_marks();
                             if self.browser.selected_is_artist() {
                                 let (items, _unresolved_targets) = self.selected_artist_items()?;
                                 if items.is_empty() {

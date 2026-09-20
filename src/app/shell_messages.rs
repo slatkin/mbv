@@ -151,11 +151,13 @@ impl Model {
                     ShellRequest::MusicArtistAction {
                         action,
                         items,
-                        origin: _origin,
+                        origin,
                         unresolved_targets,
                     } => {
-                        // `origin` is recorded for task 4.3's status/bulk-action
-                        // wiring; it is intentionally not consumed here.
+                        // Artist actions use the same stable origin as the
+                        // status/bulk-selection path. Clearing through that
+                        // identity keeps Queue or another Library owner from
+                        // losing its independent selection.
                         // Album rows are folders, so Play and Shuffle must first
                         // compose their playable descendants in tree order and
                         // submit one replacement. Enqueue intentionally keeps
@@ -183,6 +185,10 @@ impl Model {
                                 }
                             }
                         }
+                        // A tree-originated multi-selection action consumes
+                        // only the selection that produced it. The clear is
+                        // harmless for an ordinary unmarked artist action.
+                        self.clear_multi_selection_from_origin(origin);
                         if unresolved_targets.is_empty() {
                             if !had_items {
                                 self.app.flash(

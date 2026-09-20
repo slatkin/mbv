@@ -1189,9 +1189,24 @@ impl MusicTreeBrowser {
 
     /// The album leaf's stable target (the identity that crosses to the
     /// shell); artist roots have none.
-    #[cfg(test)]
     pub(in crate::app) fn target_of(&self, id: usize) -> Option<&str> {
         self.model.target_of(id)
+    }
+
+    /// Whether a hit-tested node is an artist root. This keeps context
+    /// resolution on the tree owner rather than exposing its model to the
+    /// mounted destination.
+    pub(in crate::app) fn model_is_artist(&self, id: usize) -> bool {
+        self.model.is_artist(id)
+    }
+
+    /// Resolves an artist root's currently visible album descendants in tree
+    /// order for context-hit membership checks.
+    pub(in crate::app) fn artist_album_targets(&self, root: usize) -> Vec<String> {
+        self.visible_album_ids(root)
+            .into_iter()
+            .filter_map(|id| self.model.target_of(id).map(str::to_owned))
+            .collect()
     }
 
     /// Scrolls the viewport without changing selection (the crate's own
