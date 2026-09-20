@@ -67,3 +67,19 @@ None.
   relative to the list ("top of the right-hand list rail", "above the browser").
   `library-panel` is the geometry authority; those descriptions remain accurate
   as to *which pills appear* and are not re-litigated here.
+- **Reconciling the "no full-width area above the browser" prohibitions**:
+  `library-list-hero/spec.md` ("No presentation SHALL reserve a separate
+  full-width area above the browser") and `right-panel-arrangements/spec.md`
+  ("no separate hero area is reserved above the browser") sit in the paragraphs
+  governing the **non-Wide inline hero / detail block**: they forbid placing the
+  *selected item's hero/detail* in a reserved band above the browser (it must be
+  a row replacement in non-Wide, beside the list in Wide). This change reserves a
+  full-width band for the **Selector row (pills)**, not a hero/detail area, and
+  only in Wide — the hero stays beside the browser. The prohibitions are not
+  contradicted, so those specs get no delta. (The Narrow Selector row is already
+  full-width above the browser today, confirming the clauses target the hero, not
+  the selector.)
+- **Optional-slot example scenario**: the `library-panel` "optional slot renders
+  absent identically" scenario used List-controls absence as its example; with
+  that row removed it is re-anchored to Workspace absence, which is the same
+  behavior on a slot that still exists.
