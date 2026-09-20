@@ -149,6 +149,62 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
 /// summary and artwork — name, in-scope album count, year span, and the
 /// stable-ID artwork source — with the projected groups as its Workspace.
 #[test]
+fn album_tracks_survive_an_artist_detail_push_for_another_album() {
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut album_track = make_item("Fetched Album Track", "Audio");
+    album_track.id = "album-track".into();
+    album_track.album_id = "a-0".into();
+    let mut owner = tree_owner_with_tracks(
+        &[("Alpha", &["a-0", "a-1"])],
+        Some(vec![album_track.clone()]),
+    );
+    owner.browser.select_first_visible();
+    let artist_target = owner.artist_detail_target().expect("artist root selected");
+    let mut artist_track = make_item("Artist Detail Track", "Audio");
+    artist_track.id = "artist-track".into();
+    artist_track.album_id = "a-1".into();
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target: artist_target,
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 2,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: vec![ArtistTrackGroup {
+            album_id: "a-1".into(),
+            album_title: "a-1".into(),
+            tracks: vec![artist_track],
+        }],
+        artwork: HeroImageState::None,
+        artwork_cache_key: None,
+    });
+
+    owner.set_content(ctx);
+
+    assert_eq!(
+        owner.tree_tracks.get("a-0").map(Vec::as_slice),
+        Some([album_track].as_slice()),
+        "the prior per-album fetch remains projected"
+    );
+    assert_eq!(
+        owner
+            .tree_tracks
+            .get("a-1")
+            .map(Vec::as_slice)
+            .map(|tracks| tracks[0].id.as_str()),
+        Some("artist-track"),
+        "artist detail tracks are merged into the existing projection"
+    );
+}
+
+#[test]
 fn artist_root_hero_uses_the_projected_summary_and_artwork() {
     use crate::app::components::library_panel::content::ArtworkSource;
     use crate::app::music_artist_detail::{

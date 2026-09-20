@@ -62,12 +62,12 @@ fn music_tree_row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -
     (x0..x1).map(|x| buf[(x, y)].symbol().to_string()).collect()
 }
 
-/// The tree's hierarchy/branch/state glyphs (the crate's ASCII set).
+/// Grouped Music deliberately paints no hierarchy or expansion symbols.
 fn music_tree_hierarchy_glyph(c: char) -> bool {
     matches!(c, '>' | 'v' | '*' | '?' | '~' | '|' | '-' | '`')
 }
 
-/// Every visible node row keeps a hierarchy glyph and at least one title cell
+/// Every visible node row keeps its title, uses only plain-space indentation,
 /// and paints nothing past the browser rect (the tree's row contract).
 fn assert_music_tree_row_within(
     term: &Terminal<TestBackend>,
@@ -77,12 +77,11 @@ fn assert_music_tree_row_within(
 ) {
     let row = music_tree_row_text(term, row_y, list_area.x, list_area.right());
     assert!(
-        row.chars().any(music_tree_hierarchy_glyph),
-        "row keeps a hierarchy glyph: {row:?}"
+        !row.chars().any(music_tree_hierarchy_glyph),
+        "row paints no hierarchy or expansion symbols: {row:?}"
     );
     assert!(
-        row.chars()
-            .any(|c| !c.is_whitespace() && !music_tree_hierarchy_glyph(c) && c != '…'),
+        row.chars().any(|c| !c.is_whitespace() && c != '…'),
         "row keeps at least one title cell: {row:?}"
     );
     let outside = music_tree_row_text(term, row_y, list_area.right(), frame_width);
@@ -99,7 +98,8 @@ fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::s
 /// The zebra fill the tree resolves for its rows: the canonical grouped
 /// list's fixed resting-content Storm in both focus states.
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
-    palette::surface_colors(palette::Surface::SidebarBody, focused).fill
+    let _ = focused;
+    palette::MUSIC_TREE_ZEBRA
 }
 
 /// The long album's node id, found by its title in the arena (its settled

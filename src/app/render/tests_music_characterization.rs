@@ -123,12 +123,12 @@ fn music_tree_row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -
     (x0..x1).map(|x| buf[(x, y)].symbol().to_string()).collect()
 }
 
-/// The tree's hierarchy/branch/state glyphs (the crate's ASCII set).
+/// Grouped Music deliberately paints no hierarchy or expansion symbols.
 fn music_tree_hierarchy_glyph(c: char) -> bool {
     matches!(c, '>' | 'v' | '*' | '?' | '~' | '|' | '-' | '`')
 }
 
-/// Every visible node row keeps a hierarchy glyph and at least one title cell
+/// Every visible node row keeps its title, uses only plain-space indentation,
 /// and paints nothing past the browser rect (the tree's row contract).
 fn assert_music_tree_row_within(
     term: &Terminal<TestBackend>,
@@ -138,12 +138,11 @@ fn assert_music_tree_row_within(
 ) {
     let row = music_tree_row_text(term, row_y, list_area.x, list_area.right());
     assert!(
-        row.chars().any(music_tree_hierarchy_glyph),
-        "row keeps a hierarchy glyph: {row:?}"
+        !row.chars().any(music_tree_hierarchy_glyph),
+        "row paints no hierarchy or expansion symbols: {row:?}"
     );
     assert!(
-        row.chars()
-            .any(|c| !c.is_whitespace() && !music_tree_hierarchy_glyph(c) && c != '…'),
+        row.chars().any(|c| !c.is_whitespace() && c != '…'),
         "row keeps at least one title cell: {row:?}"
     );
     let outside = music_tree_row_text(term, row_y, list_area.right(), frame_width);
@@ -166,7 +165,8 @@ fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::s
 /// The zebra fill the tree resolves for its rows: the canonical grouped
 /// list's fixed resting-content Storm in both focus states.
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
-    palette::surface_colors(palette::Surface::SidebarBody, focused).fill
+    let _ = focused;
+    palette::MUSIC_TREE_ZEBRA
 }
 
 /// The long album's node id, found by its title in the arena (its settled
@@ -225,8 +225,8 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let buf = term.backend().buffer();
     assert_eq!(browser.offset(), 0, "a top selection needs no scroll");
 
-    // The selected artist root keeps its hierarchy glyph and at least one
-    // title cell and paints nothing past the browser rect.
+    // The selected artist root keeps its title and paints nothing past the
+    // browser rect.
     assert_music_tree_row_within(&term, list_area.y, list_area, MUSIC_TREE_WIDE_WIDTH);
     // The overflowing projection's scrollbar takes the `SCROLLBAR` role; the
     // crate exposes no scrollbar style field, so the block style's foreground
@@ -407,9 +407,9 @@ fn wide_music_tree_marquee_scrolls_the_focused_selected_title() {
     browser.select_index(long_row);
 
     // The marquee window strips to the row's name slot (after the hierarchy
-    // glyph prefix the crate composes).
+    // plain-space indentation the crate composes).
     fn name_slot(row: &str) -> &str {
-        row.split_once("* ").map(|(_, rest)| rest).unwrap_or(row)
+        row.trim_start()
     }
 
     // Hold phase: the window rests on the title's beginning — no ellipsis.
@@ -653,23 +653,22 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     // title using the full width (no gutter reserved).
     let root_row = &rows[0];
     assert!(
-        root_row.starts_with('v'),
-        "the expanded root keeps its state glyph: {root_row:?}"
+        root_row.starts_with(GUTTER_ARTIST.chars().next().unwrap()),
+        "the expanded root starts directly with its title: {root_row:?}"
     );
     assert_eq!(
         root_row.chars().last(),
         Some('…'),
         "the root title reaches the last column (no gutter): {root_row:?}"
     );
-    assert_eq!(buf[(0, 0)].fg, palette::TEXT_MUTED, "root state glyph role");
-    assert_eq!(buf[(2, 0)].fg, palette::TEXT_METADATA, "root title role");
+    assert_eq!(buf[(0, 0)].fg, palette::MUSIC_HEADER, "root title role");
 
     // Year-bearing leaf: the title stops before the gutter, and the year
     // right-aligns in the fixed six-column `STATUS_AVAILABLE` cell.
     let yeared_row = &rows[1];
     assert!(
-        yeared_row.starts_with("|-- * "),
-        "the leaf keeps its guides and state glyph: {yeared_row:?}"
+        yeared_row.starts_with("    "),
+        "the leaf keeps plain-space indentation: {yeared_row:?}"
     );
     assert_eq!(
         music_tree_row_slice(yeared_row, gutter, 6),
@@ -681,7 +680,7 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
         Some('…'),
         "the yeared title truncates before the gutter: {yeared_row:?}"
     );
-    assert_eq!(buf[(4, 1)].fg, palette::TEXT_MUTED, "leaf state glyph role");
+    assert_eq!(buf[(4, 1)].fg, palette::TEXT_EMPHASIS, "leaf title role");
     assert_eq!(
         buf[(gutter as u16 - 1, 1)].fg,
         palette::TEXT_EMPHASIS,
@@ -713,12 +712,12 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     );
 }
 
-/// The tree always uses ASCII expansion and hierarchy glyphs regardless of
-/// the global Nerd Font display setting used by other surfaces.
+/// The tree never paints expansion or hierarchy symbols, regardless of the
+/// global Nerd Font display setting used by other surfaces.
 #[test]
-fn music_tree_uses_ascii_glyphs_in_every_state() {
+fn music_tree_uses_plain_indentation_in_every_state() {
     const WIDTH: u16 = 40;
-    const ASCII_LEAF_PREFIX: &str = "|-- * ";
+    const PLAIN_LEAF_PREFIX: &str = "    ";
 
     let area = Rect::new(0, 0, WIDTH, 3);
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
@@ -731,15 +730,19 @@ fn music_tree_uses_ascii_glyphs_in_every_state() {
 
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let collapsed_root_row = music_tree_row_text(&term, 0, 0, WIDTH);
-    assert_eq!(collapsed_root_row.chars().next(), Some('>'));
+    assert_eq!(collapsed_root_row.chars().next(), Some('T'));
 
     browser.expand_root(root);
     assert_eq!(browser.projection_len(), 3);
     let term = music_tree_frame(&mut browser, area, WIDTH, 3);
     let root_row = music_tree_row_text(&term, 0, 0, WIDTH);
-    assert_eq!(root_row.chars().next(), Some('v'));
+    assert_eq!(root_row.chars().next(), Some('T'));
     let leaf_row = music_tree_row_text(&term, 1, 0, WIDTH);
-    assert!(leaf_row.starts_with(ASCII_LEAF_PREFIX), "{leaf_row:?}");
+    assert!(leaf_row.starts_with(PLAIN_LEAF_PREFIX), "{leaf_row:?}");
+    assert!(
+        !leaf_row.chars().any(music_tree_hierarchy_glyph),
+        "{leaf_row:?}"
+    );
 }
 
 /// A controlled two-album corpus whose titles both overflow a narrow row, so
@@ -788,7 +791,7 @@ fn music_tree_title_clock_resets_when_the_selection_changes() {
     let second = browser.projected_nodes()[2].id();
 
     fn name_slot(row: &str) -> &str {
-        row.split_once("* ").map(|(_, rest)| rest).unwrap_or(row)
+        row.trim_start()
     }
 
     // Select the first title and inject a mid-scroll clock: its window has

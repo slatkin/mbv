@@ -235,8 +235,18 @@ pub(in crate::app) fn paint_hero_pane_content(
     let grid = (header.arm() == super::content::HeroHeaderArm::Landscape)
         .then(|| landscape_grid_columns(text_area.width))
         .flatten();
-    let mut next_row =
-        paint_title_and_meta(f, text_area, &content.facts, hovered_link, link_hits, grid);
+    let mut next_row = paint_title_and_meta(
+        f,
+        text_area,
+        &content.facts,
+        content
+            .workspace
+            .as_ref()
+            .is_some_and(|workspace| workspace.header == Some("TRACKLIST")),
+        hovered_link,
+        link_hits,
+        grid,
+    );
     // The header's painted bottom edge includes a right-side artwork box the
     // text block may not reach.
     if header.arm() != super::content::HeroHeaderArm::Landscape {
@@ -275,6 +285,7 @@ fn paint_title_and_meta(
     f: &mut Frame,
     area: Rect,
     facts: &HeroFacts,
+    music: bool,
     hovered_link: Option<usize>,
     link_hits: &mut crate::app::components::mouse::hit::HitRegions<usize>,
     grid: Option<(u16, u16)>,
@@ -282,14 +293,22 @@ fn paint_title_and_meta(
     let mut lines: Vec<WrappedHeroLine<'_>> = Vec::with_capacity(1 + facts.meta_rows.len());
     lines.push(WrappedHeroLine {
         text: &facts.title,
-        style: ratatui::style::Style::default().fg(palette::TEXT_HERO_TITLE),
+        style: ratatui::style::Style::default().fg(if music {
+            palette::MUSIC_HEADER
+        } else {
+            palette::TEXT_HERO_TITLE
+        }),
     });
     let mut cycle = 0usize;
     for (index, row) in facts.meta_rows.iter().enumerate() {
         let fg = if facts.duration_row == Some(index) {
             palette::DURATION
         } else {
-            let fg = palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()];
+            let fg = if music && cycle == 0 {
+                palette::MUSIC_HEADER
+            } else {
+                palette::HERO_META_ROLES[cycle % palette::HERO_META_ROLES.len()]
+            };
             cycle += 1;
             fg
         };

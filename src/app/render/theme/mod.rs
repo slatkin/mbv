@@ -100,6 +100,8 @@ pub const TEXT_STRONG: Color = Palette::White.color(); // bold titles/headings
 pub const TEXT_EMPHASIS: Color = Palette::Cream.color(); // warm emphasis text (focused rows, dialogs)
 pub const TEXT_FOCUS_ACCENT: Color = Palette::Yellow.color(); // focused-row title accent
 pub const TEXT_HERO_TITLE: Color = Palette::Yellow.color(); // hero header title (the first metadata line)
+/// Grouped Music's artist/album and section-header text.
+pub const MUSIC_HEADER: Color = Palette::Clay.color();
 pub const TEXT_ON_ACCENT: Color = Palette::Grey1.color(); // near-black text painted on a colored surface
 pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playing"/confirmed value text;
                                                               // deliberately not the focused surface's
@@ -118,6 +120,10 @@ pub const SELECTED_ROW_BG: Color = Palette::Slate.color(); // its own role, deli
                                                            // value it shares today: the two are equal
                                                            // today and independently editable, so an
                                                            // edit to either moves it alone
+
+/// Grouped Music's secondary tree-row fill. Kept as a role so the tree
+/// renderer never owns a raw colour or a destination-specific surface choice.
+pub const MUSIC_TREE_ZEBRA: Color = Palette::Green2.color();
 
 // Hero header metadata cycling roles (task 5.5, design D5): the one title/meta
 // painter colours meta row *n* with `HERO_META_ROLES[n % 3]` — the three colours

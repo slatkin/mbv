@@ -49,7 +49,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::app::components::media_list::MediaSemanticState;
 use crate::app::music_grouping::ArtistKey;
-use crate::app::palette::{self, Surface};
+use crate::app::palette;
 use crate::app::render::components::marquee::marquee_spans;
 use crate::app::ui_util::trunc_str;
 
@@ -482,14 +482,15 @@ impl TreeFilter<MusicTreeModel> for MusicTreeFilter {
     }
 }
 
-/// Width of the hierarchy guides + expansion glyph prefix `tree_label_line`
-/// paints before a row's name: `level` three-column guides, then one
-/// separator, the one-column state glyph, and one separator.
+/// Width of the plain-space indentation + separator prefix
+/// `tree_label_line` paints before a row's name. Roots have no prefix; nested
+/// rows have one three-column space span per level and one separator before
+/// the title. The state glyph is intentionally empty.
 fn glyph_prefix_width(level: usize) -> usize {
     if level == 0 {
-        2
+        0
     } else {
-        3 * level + 3
+        3 * level + 1
     }
 }
 
@@ -622,7 +623,7 @@ fn name_role(
     match mark {
         TreeMarkState::Marked => palette::STATUS_AVAILABLE,
         TreeMarkState::Partial => palette::TEXT_ACCENT_MUTED,
-        TreeMarkState::Unmarked if level == 0 => palette::TEXT_METADATA,
+        TreeMarkState::Unmarked if level == 0 => palette::MUSIC_HEADER,
         TreeMarkState::Unmarked => model
             .semantic_state_of(id)
             .map_or(palette::TEXT_EMPHASIS, semantic_role),
@@ -683,6 +684,7 @@ impl MusicTreeBrowser {
             TreeRevision::INITIAL,
         );
         let mut state = TreeListViewState::with_capacity(model.size_hint());
+        state.set_draw_lines(false);
         state.ensure_projection(&model, &query);
         state.select_index((!state.is_empty()).then_some(0));
         Self {
@@ -1309,7 +1311,7 @@ impl MusicTreeBrowser {
             )
         });
 
-        let zebra_fill = palette::surface_colors(Surface::SidebarBody, *focused).fill;
+        let zebra_fill = palette::MUSIC_TREE_ZEBRA;
         let label = MusicTreeLabelRenderer {
             tree_col_width,
             zebra_fill,
@@ -1347,10 +1349,21 @@ fn rearm_selection_visibility_for(state: &mut TreeListViewState<usize>) {
     }
 }
 
-/// The tree's glyph set. Every row and both focus states paint through the
-/// ASCII set, so the tree never requires Unicode or Nerd Font support.
+/// The tree's glyph set. Grouped Music deliberately has no symbols: levels
+/// remain readable through plain-space indentation alone.
 fn tree_glyphs() -> TreeGlyphs<'static> {
-    TreeGlyphs::ascii()
+    TreeGlyphs {
+        indent: "   ",
+        branch_last: "",
+        branch: "",
+        vert: "",
+        empty: "   ",
+        leaf: "",
+        expanded: "",
+        collapsed: "",
+        unloaded: "",
+        loading: "",
+    }
 }
 
 /// The tree's visual configuration through `TreeListViewStyle`: no border,

@@ -420,7 +420,6 @@ impl MusicContent {
         }
         if let Some(detail) = self.current_artist_detail() {
             let groups = detail.track_groups.clone();
-            self.tree_tracks.clear();
             for group in groups {
                 for (index, album) in self.context.list.items.iter().enumerate() {
                     if album.id == group.album_id {

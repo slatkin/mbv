@@ -115,7 +115,11 @@ fn paint_workspace_header(f: &mut Frame, content: Rect, header: &str) {
     f.render_widget(
         Paragraph::new(header).style(
             Style::default()
-                .fg(palette::TEXT_METADATA)
+                .fg(if header == "TRACKLIST" {
+                    palette::MUSIC_HEADER
+                } else {
+                    palette::TEXT_METADATA
+                })
                 .add_modifier(ratatui::style::Modifier::BOLD),
         ),
         Rect {
