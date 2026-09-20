@@ -862,7 +862,6 @@ pub(in crate::app) struct MusicTreeBrowser {
     filter_anchor: Option<usize>,
     filter_query: String,
     search_bar_query: String,
-    search_bar_loading: bool,
     /// The parent-owned claim and row-flow rectangles. The canonical media
     /// list uses the claim width for rows and the scrollbar while retaining
     /// the content height for viewport metrics; the tree follows that same
@@ -907,7 +906,6 @@ impl MusicTreeBrowser {
             filter_anchor: None,
             filter_query: String::new(),
             search_bar_query: String::new(),
-            search_bar_loading: false,
             marquee_key: String::new(),
             marquee_started: Instant::now(),
             configured_geometry: None,
@@ -965,15 +963,14 @@ impl MusicTreeBrowser {
         self.focused = focused;
     }
 
-    pub(in crate::app) fn set_search_bar(&mut self, query: &str, loading: bool) {
+    pub(in crate::app) fn set_search_bar(&mut self, query: &str) {
         self.search_bar_query.clear();
         self.search_bar_query.push_str(query);
-        self.search_bar_loading = loading;
     }
 
     pub(in crate::app) fn search_bar(&self) -> Option<(String, bool)> {
         self.filter_active
-            .then(|| (self.search_bar_query.clone(), self.search_bar_loading))
+            .then(|| (self.search_bar_query.clone(), false))
     }
 
     pub(in crate::app) fn open_filter(&mut self) {

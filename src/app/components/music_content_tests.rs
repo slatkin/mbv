@@ -946,6 +946,29 @@ fn tree_context_click_outside_selection_clears_only_tree_marks() {
 }
 
 #[test]
+fn clearing_grouped_music_marks_removes_the_selection_summary() {
+    let mut owner = tree_owner(&[("Alpha", &["a-0"])]);
+    owner.set_selection_origin(crate::app::components::media_list::SelectionOrigin::Queue);
+    owner.expand_all_tree_roots();
+    let album = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .find(|node| owner.browser.target_of(node.id()) == Some("a-0"))
+        .expect("album leaf")
+        .id();
+
+    owner.browser.set_marked(album, true);
+    assert_eq!(
+        owner.selection_summary().map(|summary| summary.count),
+        Some(1)
+    );
+
+    owner.clear_selection();
+    assert_eq!(owner.selection_summary(), None);
+}
+
+#[test]
 fn home_end_and_page_move_over_the_tree_visible_nodes() {
     let mut owner = tree_owner(&[
         ("Alpha", &["a-0", "a-1", "a-2"]),

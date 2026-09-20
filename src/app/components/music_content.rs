@@ -1078,8 +1078,7 @@ impl MusicContent {
                 }),
             }
         });
-        self.browser
-            .set_search_bar(self.inline_search.query(), false);
+        self.browser.set_search_bar(self.inline_search.query());
         let selector = (!self.context.groups.is_empty()).then(|| SelectorRow {
             pills: self
                 .context
@@ -1182,12 +1181,10 @@ impl LibraryContentOwner for MusicContent {
         // The tree keeps membership locally; expose only the same read-only
         // count/origin projection used by every canonical list. Music rows
         // never inspect played/unplayed state here.
-        self.selection_origin.clone().map(|origin| {
-            crate::app::components::media_list::SelectionSummary {
-                count: self.browser.selected_album_targets().len(),
-                origin,
-            }
-        })
+        let count = self.browser.selected_album_targets().len();
+        let origin = self.selection_origin.clone()?;
+        (count > 0)
+            .then_some(crate::app::components::media_list::SelectionSummary { count, origin })
     }
 
     fn content(&mut self) -> LibraryPanelContent<'_> {

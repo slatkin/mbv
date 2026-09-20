@@ -186,6 +186,57 @@ fn ctrl_a_on_inline_search_result_enqueues_that_result_through_live_tick() {
     );
 }
 
+/// A shell clock tick must invoke the destination host's debounce callback,
+/// not merely clear the shared editor's deadline. The future clock is injected
+/// directly; the test never waits for wall-clock time.
+#[test]
+fn inline_search_debounce_applies_grouped_music_filter_through_shell_host() {
+    let mut app = crate::app::render::make_music_group_app();
+    let mut second_album = crate::app::tests::make_item("Second Album", "MusicAlbum");
+    second_album.id = "album-2".into();
+    second_album.artist = "Alpha".into();
+    app.libs[0]
+        .nav_stack
+        .last_mut()
+        .expect("music album level")
+        .items
+        .push(second_album);
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+
+    harness.inject(key(Key::Char('/')));
+    harness.step();
+    assert!(harness.model().active_inline_search_is_open());
+
+    for character in "second".chars() {
+        harness.inject(key(Key::Char(character)));
+        harness.step();
+    }
+    assert_eq!(
+        harness.model().test_music_owner().inline_search().query(),
+        "second"
+    );
+    assert!(
+        harness
+            .model_mut()
+            .tick_inline_search_clock(Instant::now() + Duration::from_millis(301)),
+        "the injected clock fires the pending debounce"
+    );
+
+    let owner = harness.model().test_music_owner();
+    let titles: Vec<&str> = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .map(|node| owner.browser.title_of(node.id()))
+        .collect();
+    assert_eq!(
+        titles,
+        ["Alpha", "Second Album"],
+        "the shell debounce callback applies the query to the retained tree"
+    );
+}
+
 fn album_row(id: &str, name: &str) -> mbv_core::api::EmbyItem {
     let mut album = crate::app::tests::make_item(name, "MusicAlbum");
     album.id = id.into();
