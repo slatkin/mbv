@@ -220,18 +220,23 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
         MUSIC_TREE_NON_WIDE_HEIGHT,
     );
 
-    // The Alpha phase alternates from its first member.
+    // The Alpha header establishes one band for the whole expanded group.
     let fill = music_tree_zebra_fill(true);
     let probe_x = list_area.x + 10;
     assert_eq!(
+        music_tree_row_bg(&term, probe_x, list_area.y),
+        palette::SELECTED_ROW_BG,
+        "the selected Alpha header keeps its selection bar"
+    );
+    assert_eq!(
         music_tree_row_bg(&term, probe_x, list_area.y + 1),
         fill,
-        "Alpha leaf 0 stripes"
+        "Alpha leaf 0 shares the header band"
     );
-    assert_ne!(
+    assert_eq!(
         music_tree_row_bg(&term, probe_x, list_area.y + 2),
         fill,
-        "Alpha leaf 1 rests"
+        "Alpha leaf 1 shares the header band"
     );
 
     // Latest-render hit testing resolves the painted second row (frame A is
@@ -283,7 +288,7 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     );
 
     // Frame B: the second Beta leaf's bar spans the narrower full row, and
-    // Beta's first leaf stripes again above it.
+    // Beta's first leaf keeps the neighbouring group's unstriped band.
     browser.select_index(MUSIC_TREE_BETA_LEAF_1);
     let term = music_tree_frame(
         &mut browser,
@@ -303,14 +308,14 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
             "selected-row bar reaches column {x}"
         );
     }
-    assert_eq!(
+    assert_ne!(
         music_tree_row_bg(
             &term,
             probe_x,
             music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0)
         ),
         fill,
-        "Beta leaf 0 stripes again"
+        "Beta leaf 0 keeps the neighbouring group's unstriped band"
     );
 
     // Stale geometry cannot claim input: an empty-area render invalidates the
@@ -341,5 +346,62 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     assert_eq!(
         browser.mark_state(MUSIC_TREE_BETA_ROOT),
         TreeMarkState::Marked
+    );
+}
+
+#[test]
+fn music_tree_panel_inset_keeps_rows_inside_claim_and_scrollbar_at_claim_edge() {
+    let mut model = mounted_model_at(
+        make_music_tree_group_app(),
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
+    );
+    let _ = draw_mounted_frame(
+        &mut model,
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
+    );
+    let content = mounted_music_narrow_geometry(&model).list_area;
+    let claim = Rect {
+        x: content.x.saturating_sub(2),
+        width: content.width.saturating_add(4),
+        ..content
+    };
+    assert!(claim.right() <= MUSIC_TREE_NON_WIDE_WIDTH);
+
+    let mut browser = mounted_music_tree_browser(&model);
+    browser.expand_root(MUSIC_TREE_ALPHA_ROOT);
+    browser.expand_root(MUSIC_TREE_BETA_ROOT);
+    browser.select_index(MUSIC_TREE_ALPHA_ROOT);
+    browser.set_geometry(claim, content);
+    let term = music_tree_frame(
+        &mut browser,
+        content,
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
+    );
+    let row = music_tree_row_text(&term, content.y, claim.x, claim.right());
+    assert!(row[..2].chars().all(char::is_whitespace));
+    assert!(
+        row.chars()
+            .nth(2)
+            .is_some_and(|character| !character.is_whitespace()),
+        "tree title starts at the panel's two-column inset: {row:?}"
+    );
+
+    // The row content leaves the right inset clear; the shared scrollbar stays
+    // at the full-width claim edge rather than moving into the inset.
+    assert_eq!(
+        term.backend().buffer()[(claim.right() - 2, content.y)].symbol(),
+        " "
+    );
+    let scrollbar_x = if claim.right() < MUSIC_TREE_NON_WIDE_WIDTH {
+        claim.right()
+    } else {
+        claim.right().saturating_sub(1)
+    };
+    assert_eq!(
+        term.backend().buffer()[(scrollbar_x, content.y + 1)].fg,
+        palette::SCROLLBAR
     );
 }

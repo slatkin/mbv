@@ -233,8 +233,8 @@ fn music_tree_projection_row_of(browser: &MusicTreeBrowser, id: usize) -> usize 
 
 /// The tree's row contracts at the Wide Library-panel fixture, painted through
 /// the crate's supported model/state/renderer/style seams: the full-row
-/// selected bar, group-relative zebra, scrollbar, clipping with the fixed year
-/// gutter, latest-render hit testing, and aggregate marks.
+/// selected bar, header-group zebra bands, scrollbar, clipping with the fixed
+/// year gutter, latest-render hit testing, and aggregate marks.
 #[test]
 fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let mut model = mounted_model_at(
@@ -286,20 +286,25 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         "the crate's scrollbar takes the SCROLLBAR role"
     );
 
-    // Group-relative zebra: each group's first member takes the secondary
-    // fill, every second member reverts, and the phase resets across the
-    // group boundary (Beta's first leaf stripes again after Alpha's 41).
+    // Header-group zebra: the Alpha header and every expanded descendant
+    // share one continuous band; the adjacent Beta group takes the opposite
+    // phase.
     let fill = music_tree_zebra_fill(true);
     let probe_x = list_area.x + 10;
     assert_eq!(
+        music_tree_row_bg(&term, probe_x, list_area.y),
+        palette::SELECTED_ROW_BG,
+        "the selected Alpha header keeps its selection bar"
+    );
+    assert_eq!(
         music_tree_row_bg(&term, probe_x, list_area.y + 1),
         fill,
-        "Alpha leaf 0 stripes"
+        "Alpha leaf 0 shares the header band"
     );
-    assert_ne!(
+    assert_eq!(
         music_tree_row_bg(&term, probe_x, list_area.y + 2),
         fill,
-        "Alpha leaf 1 rests"
+        "Alpha leaf 1 shares the header band"
     );
 
     // The shared scrollbar matches the canonical widget exactly; the crate's
@@ -361,8 +366,8 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     assert_music_tree_row_within(&term, long_y, list_area, MUSIC_TREE_WIDE_WIDTH);
 
     // Frame B: selecting the second Beta leaf scrolls it into view; its bar
-    // spans the full row and overrides the zebra, and Beta's first leaf
-    // stripes again above it (the group-relative reset).
+    // spans the full row and overrides the group band, while Beta's first leaf
+    // keeps the neighbouring unstriped phase.
     browser.select_index(MUSIC_TREE_BETA_LEAF_1);
     let term = music_tree_frame(
         &mut browser,
@@ -380,14 +385,14 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
             "selected-row bar reaches column {x}"
         );
     }
-    assert_eq!(
+    assert_ne!(
         music_tree_row_bg(
             &term,
             probe_x,
             music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0)
         ),
         fill,
-        "Beta leaf 0 stripes again"
+        "Beta leaf 0 keeps the neighbouring unstriped phase"
     );
     assert_ne!(palette::SELECTED_ROW_BG, fill);
 
@@ -549,7 +554,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     let zebra = music_tree_zebra_fill(true);
     assert_ne!(palette::SELECTED_ROW_BG, zebra, "the bar is not the stripe");
 
-    // Focused single selection of Beta's striped first member: the bar spans
+    // Focused single selection of Beta's first member: the bar spans
     // the whole content row (the scrollbar column keeps the parent
     // background) and overrides the zebra stripe, and the title keeps the
     // ordinary emphasis foreground with no bold modifier.
@@ -576,20 +581,29 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
         "the selected title is not bold"
     );
 
-    // The artist root above the selection is the Heading-equivalent grouping
-    // row: it keeps the surface fill, never the stripe and never the bar.
-    let root_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_ROOT);
-    let root_bg = music_tree_row_bg(&term, list_area.x + 10, root_y);
-    assert_ne!(root_bg, zebra, "the artist root is not striped");
-    assert_ne!(
-        root_bg,
-        palette::SELECTED_ROW_BG,
-        "the artist root has no bar"
+    // Artist roots are Heading-equivalent grouping rows and carry their own
+    // group's band. Paint the Alpha header at the top so this assertion does
+    // not depend on the selected Beta leaf's scrolled viewport.
+    browser.select_index(MUSIC_TREE_ALPHA_ROOT);
+    browser.scroll_to(0);
+    browser.set_focused(false);
+    let term = music_tree_frame(
+        &mut browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
+    );
+    assert_eq!(
+        music_tree_row_bg(&term, list_area.x + 10, list_area.y),
+        music_tree_zebra_fill(false),
+        "the Alpha header is striped"
     );
 
-    // Unfocused: the cursor row paints no bar. Its stripe still alternates,
-    // but settles from the focused Green2 fill to the resting Storm fill.
+    // Unfocused: the cursor row paints no bar; the focused Alpha band settles
+    // from the focused Green2 fill to the resting Storm fill.
     browser.set_focused(false);
+    browser.select_index(MUSIC_TREE_ALPHA_ROOT + 1);
+    browser.scroll_to(0);
     let unfocused_zebra = music_tree_zebra_fill(false);
     let term = music_tree_frame(
         &mut browser,
@@ -597,7 +611,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
         MUSIC_TREE_WIDE_WIDTH,
         MUSIC_TREE_WIDE_HEIGHT,
     );
-    let cursor_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_BETA_LEAF_0);
+    let cursor_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_ALPHA_ROOT + 1);
     assert_ne!(
         term.backend().buffer()[(title_x, cursor_y)].bg,
         palette::SELECTED_ROW_BG,

@@ -138,9 +138,10 @@ pub(in crate::app) struct MusicTreeModel {
     /// Per node id: its artist root's settled child leaves. Album nodes and
     /// tombstoned artist roots carry an empty child list.
     children: Vec<Vec<usize>>,
-    /// Per album node: its index within its artist group's settled order
-    /// (the group-relative zebra phase). `usize::MAX` for artist roots.
-    leaf_position: Vec<usize>,
+    /// Per node: its top-level artist group's settled order (the group zebra
+    /// phase). Descendant albums and tracks share their root's phase;
+    /// `usize::MAX` marks a tombstone.
+    root_position: Vec<usize>,
     revision: TreeRevision,
 }
 
@@ -151,7 +152,7 @@ impl MusicTreeModel {
             intern: HashMap::new(),
             roots: Vec::new(),
             children: Vec::new(),
-            leaf_position: Vec::new(),
+            root_position: Vec::new(),
             revision: TreeRevision::INITIAL,
         }
     }
@@ -184,7 +185,6 @@ impl MusicTreeModel {
     ) {
         let mut next_roots = Vec::new();
         let mut next_children: HashMap<usize, Vec<usize>> = HashMap::new();
-        let mut next_leaf_position: HashMap<usize, usize> = HashMap::new();
         let mut display_changed = false;
         let mut root_of_key: HashMap<ArtistKey, usize> = HashMap::new();
 
@@ -206,9 +206,7 @@ impl MusicTreeModel {
                 &entry.semantic_state,
                 &mut display_changed,
             );
-            let position = next_children.entry(root).or_default().len();
             next_children.entry(root).or_default().push(leaf);
-            next_leaf_position.insert(leaf, position);
             let track_ids = tracks_by_album
                 .get(&entry.target)
                 .into_iter()
@@ -222,15 +220,21 @@ impl MusicTreeModel {
         for (root, leaves) in next_children {
             children[root] = leaves;
         }
-        let mut leaf_position = vec![usize::MAX; self.nodes.len()];
-        for (leaf, position) in next_leaf_position {
-            leaf_position[leaf] = position;
+        let mut root_position = vec![usize::MAX; self.nodes.len()];
+        for (position, &root) in next_roots.iter().enumerate() {
+            root_position[root] = position;
+            for &leaf in &children[root] {
+                root_position[leaf] = position;
+                for &track in &children[leaf] {
+                    root_position[track] = position;
+                }
+            }
         }
 
         let changed = display_changed || self.roots != next_roots || self.children != children;
         self.roots = next_roots;
         self.children = children;
-        self.leaf_position = leaf_position;
+        self.root_position = root_position;
         if changed {
             self.revision.advance();
         }
@@ -244,7 +248,7 @@ impl MusicTreeModel {
         self.intern.clear();
         self.roots.clear();
         self.children.clear();
-        self.leaf_position.clear();
+        self.root_position.clear();
         self.revision = TreeRevision::INITIAL;
     }
 
@@ -436,11 +440,13 @@ impl MusicTreeModel {
         }
     }
 
-    /// The node's group-relative zebra phase: album leaves alternate from the
-    /// secondary fill at their group's first member (the canonical grouped
-    /// list's `grouped_member_striped` rule); artist roots never stripe.
+    /// The node's top-level group zebra phase. The header and every visible
+    /// descendant deliberately share one band, so expanding a group does not
+    /// introduce row-based colour changes.
     pub(in crate::app) fn is_striped(&self, id: usize) -> bool {
-        self.leaf_position[id] != usize::MAX && self.leaf_position[id].is_multiple_of(2)
+        self.root_position
+            .get(id)
+            .is_some_and(|position| *position != usize::MAX && position.is_multiple_of(2))
     }
 }
 
@@ -500,7 +506,7 @@ fn glyph_prefix_width(level: usize) -> usize {
 /// and composes the label line through `tree_label_line`, then applies mbv's
 /// semantic roles: hierarchy glyphs in the muted role, artist roots in the
 /// metadata role, album leaves in the emphasis role, marks in the positive
-/// status role, the group-relative zebra fill on the whole cell, and the
+/// status role, the top-level group zebra fill on the whole cell, and the
 /// focused selected row's marquee window computed for this frame.
 struct MusicTreeLabelRenderer<'a> {
     tree_col_width: u16,
@@ -588,10 +594,10 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
 
         // The row's fill: a multi-selected album leaf paints the selected-row
         // bar (the style half of the canonical multi-selection contract; task
-        // 4.2 drives the marks), overriding its zebra stripe; otherwise a
-        // grouped member stripes by its group-relative phase and an artist
-        // root keeps the surface fill. The focused selected row's bar comes
-        // from the crate's `highlight_style`, applied after this cell.
+        // 4.2 drives the marks), overriding its group band; otherwise the
+        // header and every descendant share their top-level group's phase. The
+        // focused selected row's bar comes from the crate's `highlight_style`,
+        // applied after this cell.
         let mut style = Style::default();
         if multi_select_bar(model, id, context.node.mark) {
             style = style.bg(palette::SELECTED_ROW_BG);
@@ -1269,11 +1275,17 @@ impl MusicTreeBrowser {
             ..
         } = self;
         let (claim_rect, content_rect) = configured_geometry.unwrap_or((area, area));
+        // The panel's claim keeps selected-row ownership and the shared
+        // scrollbar at the canonical full-width position. The tree rows
+        // themselves use the panel's two-column inset on both sides; the
+        // right-hand gap is kept clear while the scrollbar remains at the
+        // claim edge.
         let paint_area = Rect {
             y: content_rect.y,
             height: content_rect.height,
             ..claim_rect
         };
+        let row_area = content_rect;
 
         state.ensure_projection(model, query);
         // A geometry change re-applies the viewport visibility rule to this
@@ -1298,13 +1310,13 @@ impl MusicTreeBrowser {
         // lands outside the painted content. Budget labels from that same
         // resolved cell width, after removing the crate-owned scrollbar.
         let overflow = state.visible_len() > content_rect.height as usize;
-        let tree_area = if overflow && paint_area.right() < frame.area().right() {
+        let tree_area = if overflow && row_area.right() < frame.area().right() {
             Rect {
-                width: paint_area.width.saturating_add(1),
-                ..paint_area
+                width: row_area.width.saturating_add(1),
+                ..row_area
             }
         } else {
-            paint_area
+            row_area
         };
         let tree_col_width = tree_area.width.saturating_sub(u16::from(overflow));
 
