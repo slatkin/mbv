@@ -9,6 +9,7 @@ use ratatui::backend::TestBackend;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Modifier;
 use ratatui::Terminal;
+use rstest::rstest;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
 use crate::app::components::media_list::MediaSemanticState;
@@ -712,6 +713,61 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     assert!(
         !rows.iter().any(|row| row.contains('%')),
         "music tree rows never paint resume progress"
+    );
+}
+
+/// The `use_nerd_fonts` display setting alone selects the expansion glyph pair
+/// this painter renders: the Nerd Font angles when on, the crate's Unicode set
+/// when off. Every other glyph — the album leaf's state glyph and the
+/// hierarchy guides — keeps the crate's Unicode default in both states.
+#[rstest]
+#[case(false, '▼', '▶')]
+#[case(true, '\u{f0d7}', '\u{f0da}')]
+fn music_tree_expansion_glyphs_follow_the_nerd_font_setting(
+    #[case] use_nerd_fonts: bool,
+    #[case] expanded: char,
+    #[case] collapsed: char,
+) {
+    const WIDTH: u16 = 40;
+    const UNICODE_LEAF_PREFIX: &str = "├── • ";
+
+    let area = Rect::new(0, 0, WIDTH, 3);
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
+    browser.set_use_nerd_fonts(use_nerd_fonts);
+    // Unfocused so no row marquees and the root's state glyph stays the first
+    // painted cell.
+    browser.set_focused(false);
+    let root = browser.projected_nodes()[0].id();
+    assert!(
+        browser.target_of(root).is_none(),
+        "level 0 is the artist root"
+    );
+
+    // A collapsed artist root paints the collapsed glyph.
+    let term = music_tree_frame(&mut browser, area, WIDTH, 3);
+    let collapsed_root_row = music_tree_row_text(&term, 0, 0, WIDTH);
+    assert_eq!(
+        collapsed_root_row.chars().next(),
+        Some(collapsed),
+        "collapsed root glyph (use_nerd_fonts={use_nerd_fonts}): {collapsed_root_row:?}"
+    );
+
+    // An expanded artist root paints the expanded glyph, and its album leaf
+    // keeps the crate's Unicode guides and leaf glyph.
+    browser.expand_root(root);
+    assert_eq!(browser.projection_len(), 3);
+    let term = music_tree_frame(&mut browser, area, WIDTH, 3);
+    let root_row = music_tree_row_text(&term, 0, 0, WIDTH);
+    assert_eq!(
+        root_row.chars().next(),
+        Some(expanded),
+        "expanded root glyph (use_nerd_fonts={use_nerd_fonts}): {root_row:?}"
+    );
+    let leaf_row = music_tree_row_text(&term, 1, 0, WIDTH);
+    assert!(
+        leaf_row.starts_with(UNICODE_LEAF_PREFIX),
+        "the album leaf keeps the crate's guides and leaf glyph \
+         (use_nerd_fonts={use_nerd_fonts}): {leaf_row:?}"
     );
 }
 

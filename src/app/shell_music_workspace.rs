@@ -218,6 +218,7 @@ impl Model {
         let wide = self.app.is_right_panel_wide();
         let request = self.music_track_focus_request.take();
         let focused = matches!(self.app.effective_panel_focus(), super::PanelFocus::Library);
+        let use_nerd_fonts = self.app.use_nerd_fonts;
         // Activation can outrun the album's track fetch (its tracks are not
         // yet cached when the one-shot Enter request is consumed): the
         // closure only reaches the owner, so it reports back whether the
@@ -230,6 +231,7 @@ impl Model {
                     owner.re_anchor(c, s);
                 }
                 owner.set_focused(focused);
+                owner.set_use_nerd_fonts(use_nerd_fonts);
                 owner.set_inline_track_focus_enabled(wide);
                 match request {
                     Some(MusicTrackFocusRequest::Clear) => {
@@ -359,6 +361,26 @@ mod tests {
             model.app.album_tracks_loading.contains("album-1"),
             "the selected album's tracks must be fetched"
         );
+    }
+
+    /// The display setting rides the same one-way sync projection as focus and
+    /// the breakpoint: the owner's tree reports exactly the `App` flag after
+    /// the sync pass (the browser's own view test pins the painted glyphs).
+    #[test]
+    fn sync_projects_use_nerd_fonts_into_the_music_tree_owner() {
+        for use_nerd_fonts in [false, true] {
+            let mut app = make_music_group_app();
+            app.use_nerd_fonts = use_nerd_fonts;
+            app.emby_runtime = ready_emby_runtime();
+            let mut model = Model::new(app);
+
+            model.sync_mounted_surfaces();
+            assert_eq!(
+                model.test_music_owner().browser.use_nerd_fonts_for_test(),
+                use_nerd_fonts,
+                "the sync pass projects App's Nerd Font setting into the tree"
+            );
+        }
     }
 
     /// A settled one-album catalog whose only album carries a Service

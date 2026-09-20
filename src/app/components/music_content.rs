@@ -368,6 +368,12 @@ impl MusicContent {
         self.context.focused = focused;
     }
 
+    /// The shell's display-setting projection: the tree browser resolves its
+    /// expansion glyphs from this on the next view.
+    pub(in crate::app) fn set_use_nerd_fonts(&mut self, use_nerd_fonts: bool) {
+        self.browser.set_use_nerd_fonts(use_nerd_fonts);
+    }
+
     /// The album-selection persistence request after a local tree move (design
     /// D3 step 5): emitted only when the resolved selected album changed, and
     /// never when an artist root receives focus — artist focus does not
