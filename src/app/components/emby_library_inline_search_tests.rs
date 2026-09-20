@@ -30,7 +30,6 @@ fn owner_push(items: Vec<mbv_core::api::EmbyItem>) -> BrowserOwnerPush {
         letter_filter: None,
         loading: false,
         group_pills: false,
-        home_video: false,
         show_letter_pills: false,
         feed_groups: Vec::new(),
         feed_group_cursor: 0,

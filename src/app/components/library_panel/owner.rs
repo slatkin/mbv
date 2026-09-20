@@ -103,8 +103,6 @@ pub enum LibraryKey {
 pub(in crate::app) enum LibrarySlotEvent {
     /// A Selector-row pill was picked (its painted index).
     SelectorPicked(usize),
-    /// A List-controls pill was picked.
-    ControlPicked(usize),
     /// A Workspace selector pill was picked.
     WorkspaceSelectorPicked(usize),
     /// An already-normalized row-local input for the active owner's list.

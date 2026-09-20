@@ -140,6 +140,66 @@ fn split_drag_is_live_only_and_tracks_press_drag_release() {
 }
 
 #[test]
+fn split_drag_ignores_the_selector_band() {
+    let mut app = make_movie_app();
+    app.panel_mode = PanelMode::LibraryOnly;
+    app.panel_focus = PanelFocus::Library;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    draw(&mut harness);
+
+    let (gap, origin, content_width) = split(&harness);
+    let band_bottom = harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .and_then(|component| component.as_any().downcast_ref::<LibraryPanel>())
+        .and_then(|panel| panel.test_wide_geometry())
+        .map(|geometry| geometry.hero.y)
+        .expect("the Wide skeleton paints a content band below the Selector band");
+    assert_eq!(gap.y, band_bottom);
+    assert!(band_bottom >= 2);
+    assert!(gap.x >= 5);
+
+    // Both the pill and spacer rows are in the panel's painted area, but not
+    // in the split gap. A drag starting in either row must not arm the split.
+    for row in [band_bottom - 2, band_bottom - 1] {
+        harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, row));
+        assert!(!harness.step().raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::ResizeListPaneLive(_))
+        )));
+        harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x - 5, row));
+        assert!(!harness.step().raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::ResizeListPaneLive(_))
+        )));
+        harness.inject(mouse(MouseEventKind::Up(MouseButton::Left), gap.x - 5, row));
+        assert!(!harness.step().raw_messages.iter().any(|message| matches!(
+            message,
+            Msg::Shell(ShellRequest::ResizeListPaneLive(_))
+        )));
+    }
+
+    // A drag starting in the content band still owns the split and resolves
+    // its live width through the mounted panel's subscription.
+    harness.inject(mouse(MouseEventKind::Down(MouseButton::Left), gap.x, gap.y));
+    assert!(!harness.step().raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::ResizeListPaneLive(_))
+    )));
+    harness.inject(mouse(MouseEventKind::Drag(MouseButton::Left), gap.x - 5, gap.y));
+    let expected = crate::app::list_pane_width::normalize_list_pane_width(
+        Some(origin - (gap.x - 5)), content_width,
+    )
+    .expect("content-band drag resolves a valid width");
+    assert!(harness.step().raw_messages.iter().any(|message| matches!(
+        message,
+        Msg::Shell(ShellRequest::ResizeListPaneLive(width)) if *width == expected
+    )));
+}
+
+#[test]
 fn split_drag_is_suppressed_and_reset_when_panel_loses_eligibility() {
     let mut app = make_movie_app();
     app.panel_mode = PanelMode::LibraryOnly;

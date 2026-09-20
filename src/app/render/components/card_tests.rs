@@ -327,9 +327,53 @@ fn selected_visualizer_reserves_geometry_without_fetching_artwork() {
         .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
     assert_eq!(
         term.backend().buffer()[(0, 0)].style().bg,
-        Some(crate::app::palette::resolve_surface_focus(false)),
+        Some(crate::app::palette::SURFACE_CHROME),
         "an empty selected visualizer must still paint its reserved card"
     );
+}
+
+/// The visualizer background is the playback panel's own band value in every
+/// focus state, so switching `v` (or moving panel focus) never repaints the
+/// reserved slot in a fill the panel around it does not have.
+#[test]
+fn selected_visualizer_background_is_the_panel_band_under_either_focus() {
+    for focus in [PanelFocus::Library, PanelFocus::Queue] {
+        let mut app = make_queue_app(3, 2);
+        app.panel_focus = focus;
+        app.visualizer_enabled = true;
+        app.visualizer_window.samples = vec![crate::app::visualizer_worker::StereoSample {
+            left: 1.0,
+            right: 1.0,
+        }];
+        app.refresh_queue_card_image();
+
+        let backend = TestBackend::new(30, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut reserved = (0u16, 0u16);
+        term.draw(|f| {
+            let (h, w, _) = app.render_queue_playback_slot(f, Rect::new(0, 0, 30, 20), false);
+            reserved = (h, w);
+        })
+        .unwrap();
+        let (h, w) = reserved;
+
+        let buffer = term.backend().buffer();
+        for y in 0..h {
+            for x in 0..w {
+                assert_eq!(
+                    buffer[(x, y)].style().bg,
+                    Some(crate::app::palette::SURFACE_CHROME),
+                    "visualizer cell ({x},{y}) must carry the panel band fill at {focus:?}"
+                );
+            }
+        }
+        // A zero-area reservation would make the loop below vacuous; the
+        // reserved rect's exact size is its own test's claim.
+        assert!(
+            h > 0 && w > 0,
+            "the visualizer must reserve a rect, got ({h},{w})"
+        );
+    }
 }
 
 #[test]

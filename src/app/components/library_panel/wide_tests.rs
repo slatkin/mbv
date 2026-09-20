@@ -4,8 +4,7 @@ use ratatui::layout::Rect;
 
 use crate::app::components::inline_search::{InlineSearch, SearchPool};
 use crate::app::components::library_panel::content::{
-    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, ListControls, PanelList, SelectorRow,
-    Workspace,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, PanelList, SelectorRow, Workspace,
 };
 use crate::app::render::arrangements::library::wide_library_panes;
 use ratatui::backend::TestBackend;
@@ -107,8 +106,13 @@ fn draw_skeleton(
 }
 
 fn browser_pane(area: Rect) -> crate::app::render::arrangements::wide_hero::WideHeroBrowserPane {
+    use crate::app::render::arrangements::wide_hero::WideHeroBrowserPane;
     let panes = wide_library_panes(area, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
-    wide_hero_browser_pane(panes.browser_panel, panes.browser_area)
+    WideHeroBrowserPane {
+        pills_area: panes.pills_area,
+        spacer_area: panes.spacer_area,
+        list_panel: panes.browser_panel,
+    }
 }
 
 #[test]
@@ -119,7 +123,6 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
             pills: vec!["All".into()],
             active: Some(0),
         }),
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
@@ -169,9 +172,8 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
     // matching the Workspace box's own bottom padding.
     assert_eq!(geo.list_area.bottom(), geo.list_panel.bottom() - 1);
 
-    // No controls row content: the row is absent and the list box starts
-    // exactly where the shared browser-pane primitive places it.
-    assert!(geo.controls.is_none());
+    // The absence of a secondary row and the list-box start are owned by
+    // `selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve`.
     assert_eq!(geo.list_panel.y, browser_pane(AREA).list_panel.y);
     // The list box is bordered: the fill runs under the row flow.
     assert_eq!(
@@ -180,34 +182,104 @@ fn read_only_hero_renders_resting_with_selector_and_list() {
     );
 }
 
+/// Task 1.3 (D2): the Wide skeleton hands the band-reduced content area to the
+/// hero painter, so the hero pane's fill starts below the full-width Selector
+/// band instead of at the raw panel top.
 #[test]
-fn list_controls_row_moves_the_list_box_down_one_row() {
+fn hero_pane_starts_below_the_full_width_selector_band() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
     let mut content = LibraryPanelContent {
-        selector: None,
-        controls: Some(ListControls {
-            label: "17 items".into(),
+        selector: Some(SelectorRow {
+            pills: vec!["All".into()],
+            active: Some(0),
         }),
         list: ListSlot::Media(&mut list),
         hero: None,
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
-    let pane = browser_pane(AREA);
-    let controls = geo.controls.expect("controls row reserved");
-    assert!(text_in(&buf, controls, "17 items"));
-    // Relational: the controls row occupies the pane's first list row and
-    // the list box starts directly below it.
-    assert_eq!(controls.y, pane.list_panel.y);
-    assert_eq!(geo.list_panel.y, controls.bottom());
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    // Component-layer claim: the hero's own painted surface starts exactly at
+    // the band's bottom, and the spacer row above it is not hero fill. The
+    // band's full-width placement is the arrangement claim owned by
+    // `library.rs::band_carve_keeps_the_breakpoint_and_pushes_both_panes_below_it`.
+    assert_eq!(geo.hero.y, panes.spacer_area.bottom());
+    assert_ne!(
+        buf[(geo.hero.x, panes.spacer_area.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill,
+        "the spacer row above the hero is not hero fill"
+    );
+    assert_eq!(
+        buf[(geo.hero.x, geo.hero.y)].bg,
+        palette::surface_colors(palette::Surface::HeroPane, false).fill
+    );
 }
 
+/// Task 2.1 (D3/D5): the Wide Selector band's pill row spans the panel's full
+/// width across both panes, and the Browser list box carries no internal pill
+/// reserve — its fill starts at the Browser pane's own top and reaches the
+/// panel border.
+#[test]
+fn selector_band_spans_both_panes_and_the_list_box_has_no_pill_reserve() {
+    let mut list = StubList::with_rows(vec!["Alpha"]);
+    let mut content = LibraryPanelContent {
+        selector: Some(SelectorRow {
+            pills: vec!["All".into()],
+            active: Some(0),
+        }),
+        list: ListSlot::Media(&mut list),
+        hero: Some(HeroContent {
+            facts: hero_facts("Dune"),
+            overview: None,
+            credits: None,
+            workspace: None,
+        }),
+    };
+    let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let pill_row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
+
+    // The pill row starts flush at the panel's left edge and its own surface
+    // reaches the panel's right edge, i.e. across the hero/browser gap into
+    // the Browser pane.
+    assert_eq!(geo.selector_bar.x, AREA.x);
+    assert_eq!(geo.selector_bar.right(), panes.pills_area.right());
+    assert!(panes.browser_panel.x > panes.hero_panel.right());
+    assert_eq!(
+        buf[(geo.selector_bar.x, geo.selector_bar.y)].bg,
+        pill_row_bg
+    );
+    assert_eq!(
+        buf[(panes.browser_panel.x, geo.selector_bar.y)].bg,
+        pill_row_bg,
+        "the pill row paints across the Browser pane too"
+    );
+    // The pill row's surface covers the panel's left edge column.
+    assert_eq!(buf[(AREA.x, geo.selector_bar.y)].bg, pill_row_bg);
+
+    // No internal pill reserve in the Wide path (D3): the list box starts at
+    // the Browser pane's own top (already below the band) and its fill
+    // reaches the pane's bottom border.
+    assert_eq!(geo.list_panel.y, panes.browser_panel.y);
+    assert_eq!(geo.list_panel.bottom(), panes.browser_panel.bottom());
+    assert_eq!(geo.list_panel.right(), AREA.right());
+    let list_bg = palette::surface_colors(palette::Surface::LibraryPanel, false).fill;
+    assert_eq!(buf[(geo.list_panel.x, geo.list_panel.y)].bg, list_bg);
+    assert_eq!(
+        buf[(geo.list_panel.x, geo.list_panel.bottom() - 1)].bg,
+        list_bg,
+        "the list-box fill reaches the Browser pane's border"
+    );
+}
+
+// The former List-controls-row painter test was removed with the deleted
+// slot; the shared skeleton test above owns the surviving no-secondary-row
+// contract.
 #[test]
 fn workspace_selector_with_active_none_paints_no_active_pill() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
     let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
@@ -259,7 +331,6 @@ fn focused_workspace_hero_pane_stays_resting() {
     let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
@@ -299,7 +370,6 @@ fn focused_workspace_hero_pane_stays_resting() {
     let mut focused_workspace_list = StubList::with_rows(vec!["Ep 1"]);
     let mut focused_content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut focused_list),
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
@@ -385,7 +455,6 @@ fn browser_focused_list_carries_the_focus_green() {
     let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
@@ -423,7 +492,6 @@ fn unfocused_workspace_hero_renders_resting_surfaces() {
     let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Series"),
@@ -455,7 +523,6 @@ fn workspace_box_sits_one_blank_row_below_the_hero_content() {
     let mut workspace_list = StubList::with_rows(vec!["Ep 1"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
@@ -507,7 +574,6 @@ fn workspace_header_paints_title_separator_and_blank_row_above_the_list() {
     let mut workspace_list = StubList::with_rows(vec!["Track 1"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Album"),
@@ -578,7 +644,6 @@ fn ready_hero_reports_the_reserved_image_box_inside_the_hero_area() {
     };
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts,
@@ -606,7 +671,6 @@ fn overview_box_fills_the_hero_pane_when_there_is_no_workspace() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
@@ -645,7 +709,6 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
             pills: vec!["All".into()],
             active: Some(0),
         }),
-        controls: None,
         list: ListSlot::Search(&mut search),
         hero: Some(HeroContent {
             facts: hero_facts("Dune"),
@@ -655,6 +718,8 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
         }),
     };
     let (buf, geo, _hits) = draw_skeleton(&mut content, false);
+    let panes = wide_library_panes(AREA, PANE_PAD_X, PANE_PAD_Y, None).expect("wide area");
+    let pill_row_bg = palette::surface_colors(palette::Surface::PillRow, false).fill;
 
     // The search box occupies the Selector row's place: query text in the
     // bar rect, and no selector pill painted there instead.
@@ -663,6 +728,11 @@ fn active_search_takes_the_selector_row_and_the_list_box() {
     assert!(
         !text_in(&buf, geo.selector_bar, "\u{25e2}"),
         "no selector pill under the search box"
+    );
+    assert_eq!(
+        buf[(panes.browser_panel.x, geo.selector_bar.y)].bg,
+        pill_row_bg,
+        "the pill row paints across the Browser pane too"
     );
     // The results occupy the list box through the canonical fixed-row
     // presentation; the carrier retained the row-flow rect the skeleton
@@ -691,7 +761,6 @@ fn search_results_paint_the_canonical_selected_row_bar() {
     search.restore_query("a".into());
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Search(&mut search),
         hero: None,
     };
@@ -736,7 +805,6 @@ fn search_result_rows_paint_no_zebra() {
     search.restore_query("a".into());
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Search(&mut search),
         hero: None,
     };
@@ -761,7 +829,6 @@ fn zero_row_search_paints_the_placeholder_strings_and_no_anchor() {
     let content = |search: &mut InlineSearch| {
         let mut content = LibraryPanelContent {
             selector: None,
-            controls: None,
             list: ListSlot::Search(search),
             hero: None,
         };
@@ -809,7 +876,6 @@ fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
     {
         let mut content = LibraryPanelContent {
             selector: None,
-            controls: None,
             list: ListSlot::Search(&mut search),
             hero: None,
         };
@@ -833,7 +899,6 @@ fn presentation_transition_keeps_one_search_owner_across_wide_and_narrow() {
     {
         let mut content = LibraryPanelContent {
             selector: None,
-            controls: None,
             list: ListSlot::Search(&mut search),
             hero: None,
         };
@@ -934,7 +999,6 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
                 pills: vec!["All".into()],
                 active: Some(0),
             }),
-            controls: None,
             list: ListSlot::Search(&mut search),
             hero: None,
         };
@@ -959,7 +1023,6 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
             pills: vec!["All".into()],
             active: Some(0),
         }),
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: None,
     };
@@ -989,7 +1052,6 @@ fn closed_search_paints_no_search_surface_and_no_hit_geometry() {
 fn empty_list_slot_paints_its_placeholder_in_the_list_box() {
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Empty {
             loading: false,
             text: "Nothing here".into(),
@@ -1004,7 +1066,6 @@ fn empty_list_slot_paints_its_placeholder_in_the_list_box() {
 fn empty_loading_list_slot_paints_the_loading_placeholder() {
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Empty {
             loading: true,
             text: String::new(),
@@ -1020,7 +1081,6 @@ fn sub_breakpoint_area_paints_nothing() {
     let mut list = StubList::with_rows(vec!["Alpha"]);
     let mut content = LibraryPanelContent {
         selector: None,
-        controls: None,
         list: ListSlot::Media(&mut list),
         hero: None,
     };

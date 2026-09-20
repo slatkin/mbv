@@ -652,9 +652,6 @@ impl LibraryPanel {
         if let Some(&index) = self.hits.selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::SelectorPicked(index));
         }
-        if let Some(&index) = self.hits.controls.resolve(at) {
-            return self.slot_event(LibrarySlotEvent::ControlPicked(index));
-        }
         if let Some(&index) = self.hits.workspace_selector.resolve(at) {
             return self.slot_event(LibrarySlotEvent::WorkspaceSelectorPicked(index));
         }

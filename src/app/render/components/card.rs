@@ -2,7 +2,7 @@ use super::widgets::RENDER_FILTER;
 use crate::app::images::{
     audiobookshelf_book_cover_cache_key, audiobookshelf_cover_cache_key, QUEUE_CARD_PLACEHOLDER_KEY,
 };
-use crate::app::{palette, App, PanelFocus};
+use crate::app::{palette, App};
 use mbv_core::api::EmbyItem;
 use mbv_core::playback_queue::QueueItem;
 use ratatui::layout::Rect;
@@ -230,11 +230,9 @@ impl App {
             area,
             left_align,
         );
-        let bg = palette::surface_colors(
-            palette::Surface::QueueCardVisualizer,
-            matches!(self.effective_panel_focus(), PanelFocus::Queue),
-        )
-        .fill;
+        // The row is fixed (it paints the playback panel's band), so the
+        // focus bit is not read; the literal keeps that visible at the site.
+        let bg = palette::surface_colors(palette::Surface::QueueCardVisualizer, false).fill;
         self.render_visualizer(f, rect, bg);
         (rect.height, rect.width, false)
     }

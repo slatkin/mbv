@@ -382,7 +382,6 @@ impl TvContent {
         };
         LibraryPanelContent {
             selector,
-            controls: None,
             list,
             hero,
         }

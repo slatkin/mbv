@@ -506,7 +506,6 @@ impl MusicContent {
         };
         LibraryPanelContent {
             selector,
-            controls: None,
             list,
             hero,
         }

@@ -19,6 +19,10 @@ fn home_video_library_is_never_album_folders_and_renders_via_original_list_path(
         "expected the embedded EmbyLibraryContent owner to paint the home-video list:\n{out}"
     );
     assert!(
+        !out.contains("2 items"),
+        "the removed home-video item count must not paint:\n{out}"
+    );
+    assert!(
         model.app.album_tracks_cache.is_empty(),
         "home-video rendering must never touch the album-tracks cache added by #145"
     );

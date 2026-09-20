@@ -25,6 +25,11 @@ pub(in crate::app) const WIDE_HERO_PANE_GAP: u16 = 2;
 const WIDE_HERO_PILLS_ROW_HEIGHT: u16 = 1;
 /// Blank rows below the pill row before the list starts.
 const WIDE_HERO_PILLS_GAP_ROWS: u16 = 1;
+/// Height of the full-width Selector band the Wide Library panel reserves
+/// above both of its panes: the pill row plus its spacer row. One definition
+/// of the band height (design D7); `arrangements/library.rs` carves it.
+pub(in crate::app) const WIDE_HERO_PILL_BAND_HEIGHT: u16 =
+    WIDE_HERO_PILLS_ROW_HEIGHT + WIDE_HERO_PILLS_GAP_ROWS;
 
 /// Symmetric interior padding shared by every Wide hero surface's panes
 /// (hero content, list panel, recessed boxes). One definition; surfaces that
@@ -53,27 +58,32 @@ pub(in crate::app) struct WideHeroPanes {
     pub hero: Rect,
 }
 
-/// Whether `content_area` fits the Wide hero two-pane presentation (the
-/// shared breakpoint predicate). Callers that only need the breakpoint use
-/// this; geometry is only ever produced by [`wide_hero_presentation`], which
-/// takes the split override, so a breakpoint check can never bypass it.
-pub(in crate::app) fn wide_hero_fits(content_area: Rect) -> bool {
-    content_area.width >= crate::app::TWO_COLUMN_THRESHOLD
-        && content_area.height.saturating_sub(1) >= WIDE_HERO_MIN_AREA_HEIGHT
+/// Whether `area` fits the Wide hero two-pane presentation (the shared
+/// breakpoint predicate). Callers evaluate it on the **uncarved** panel area:
+/// the Wide Library panel then carves its full-width Selector band off and
+/// splits the reduced content area, so the decision cannot shift by the band
+/// height (design D1).
+pub(in crate::app) fn wide_hero_fits(area: Rect) -> bool {
+    area.width >= crate::app::TWO_COLUMN_THRESHOLD
+        && area.height.saturating_sub(1) >= WIDE_HERO_MIN_AREA_HEIGHT
 }
 
+/// Produces the Wide hero pane geometry for `content_area` by semantic role.
+///
+/// Split-only, deliberately: the caller has already decided the breakpoint
+/// with [`wide_hero_fits`] on the uncarved area and may be passing the
+/// band-reduced content area here, so re-running the fits check would reject
+/// short-but-valid content areas and strand a stale frame (design D1/D2).
 pub(in crate::app::render) fn wide_hero_presentation(
     content_area: Rect,
     override_width: Option<u16>,
-) -> Option<WideHeroPanes> {
+) -> WideHeroPanes {
     // The panes tile `content_area` exactly. The status bar's own band is
     // already excluded by `chrome_geometry` before the Library panel sees its
     // placement, so reserving a second row here only left a stray blank row
     // under the panel's bottom spacer.
-    wide_hero_fits(content_area).then(|| {
-        let (browser, hero) = wide_hero_split(content_area, override_width);
-        WideHeroPanes { browser, hero }
-    })
+    let (browser, hero) = wide_hero_split(content_area, override_width);
+    WideHeroPanes { browser, hero }
 }
 
 #[cfg(test)]
@@ -95,7 +105,7 @@ mod tests {
         let WideHeroPanes {
             hero: left,
             browser: right,
-        } = wide_hero_presentation(area, None).expect("wide area");
+        } = wide_hero_presentation(area, None);
         assert_eq!(left.height, area.height);
         assert_eq!(right.height, area.height);
         assert_eq!(left.bottom(), area.bottom());
@@ -226,7 +236,7 @@ pub(in crate::app) struct PillBarAreas {
 /// Places the shared one-row pill bar, its one-row parent-background spacer,
 /// and the content below them.
 pub(in crate::app) fn pill_bar_areas(area: Rect) -> PillBarAreas {
-    let reserved = WIDE_HERO_PILLS_ROW_HEIGHT + WIDE_HERO_PILLS_GAP_ROWS;
+    let reserved = WIDE_HERO_PILL_BAND_HEIGHT;
     PillBarAreas {
         pills_area: Rect {
             height: WIDE_HERO_PILLS_ROW_HEIGHT.min(area.height),
@@ -270,22 +280,24 @@ pub(in crate::app) fn wide_hero_browser_pane(
 /// Takes `content_area` rather than a pane rect so a caller has nothing to
 /// hand in but the rect the arrangement already consumes -- it cannot supply
 /// a mutated hero pane rect. `wide_hero_presentation` is pure and cheap, so
-/// recomputing it here costs nothing.
+/// recomputing it here costs nothing. It is split-only: `content_area` may
+/// already be the band-reduced area, so this painter must not re-run the
+/// Wide/Narrow breakpoint (design D1/D2).
 pub(in crate::app) fn wide_hero_hero_pane(
     f: &mut Frame,
     content_area: Rect,
     focused: bool,
     override_width: Option<u16>,
-) -> Option<Rect> {
+) -> Rect {
     let WideHeroPanes {
         hero: hero_panel, ..
-    } = wide_hero_presentation(content_area, override_width)?;
+    } = wide_hero_presentation(content_area, override_width);
     let background = palette::surface_colors(palette::Surface::HeroPane, focused).fill;
     f.render_widget(
         Block::default().style(Style::default().bg(background)),
         hero_panel,
     );
-    Some(padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y))
+    padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y)
 }
 
 #[cfg(test)]
@@ -310,10 +322,10 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         let WideHeroPanes {
             hero: left_panel, ..
-        } = wide_hero_presentation(area, None).expect("wide fits");
+        } = wide_hero_presentation(area, None);
         terminal
             .draw(|f| {
-                let returned = wide_hero_hero_pane(f, area, false, None).expect("wide fits");
+                let returned = wide_hero_hero_pane(f, area, false, None);
                 assert_eq!(returned, padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y));
             })
             .unwrap();
@@ -328,11 +340,11 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         let WideHeroPanes {
             hero: left_panel, ..
-        } = wide_hero_presentation(area, None).expect("wide fits");
+        } = wide_hero_presentation(area, None);
         let expected = padded_rect(left_panel, PANE_PAD_X, PANE_PAD_Y);
         terminal
             .draw(|f| {
-                let returned = wide_hero_hero_pane(f, area, true, None).expect("wide fits");
+                let returned = wide_hero_hero_pane(f, area, true, None);
                 assert_eq!(returned.x, left_panel.x + PANE_PAD_X);
                 assert_eq!(returned.y, left_panel.y + PANE_PAD_Y);
                 assert_eq!(returned, expected);
@@ -344,33 +356,52 @@ mod wide_hero_hero_pane_tests {
         let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
         terminal
             .draw(|f| {
-                wide_hero_hero_pane(f, area, false, None).expect("wide fits");
+                wide_hero_hero_pane(f, area, false, None);
             })
             .unwrap();
         let cell = &terminal.backend().buffer()[(left_panel.x, left_panel.y)];
         assert_eq!(cell.bg, palette::resolve_surface_focus(false));
     }
 
+    /// The hero painter is split-only (design D1): it must paint whatever
+    /// `content_area` it is given, including one that no longer passes
+    /// `wide_hero_fits` once the Selector band has been carved out, so
+    /// short-but-Wide panels do not strand a stale frame. The Wide/Narrow
+    /// decision is `wide_hero_fits` at `wide_library_panes`/`panel_view`;
+    /// `library::tests::band_carve_keeps_the_breakpoint_and_pushes_both_panes_below_it`
+    /// owns that breakpoint assertion.
     #[test]
-    fn sub_breakpoint_content_area_returns_none_without_painting() {
-        let area = Rect {
-            x: 0,
-            y: 0,
-            width: crate::app::TWO_COLUMN_THRESHOLD - 1,
-            height: 20,
+    fn hero_pane_splits_a_band_reduced_content_area_without_re_gating() {
+        // Raw height 7 is the shortest Wide area; carving the two-row band
+        // leaves a five-row content area that no longer fits.
+        let raw = Rect {
+            x: 3,
+            y: 2,
+            width: crate::app::TWO_COLUMN_THRESHOLD,
+            height: WIDE_HERO_MIN_AREA_HEIGHT + 1,
         };
-        let mut terminal = Terminal::new(TestBackend::new(area.right(), area.bottom())).unwrap();
+        assert!(wide_hero_fits(raw), "raw height 7 is Wide");
+        let content_area = pill_bar_areas(raw).content_area;
+        assert!(
+            !wide_hero_fits(content_area),
+            "the carved content area is below the breakpoint"
+        );
+        let WideHeroPanes {
+            hero: hero_panel, ..
+        } = wide_hero_presentation(content_area, None);
+        let mut terminal = Terminal::new(TestBackend::new(raw.right(), raw.bottom())).unwrap();
         terminal
             .draw(|f| {
-                assert_eq!(wide_hero_hero_pane(f, area, false, None), None);
+                assert_eq!(
+                    wide_hero_hero_pane(f, content_area, false, None),
+                    padded_rect(hero_panel, PANE_PAD_X, PANE_PAD_Y)
+                );
             })
             .unwrap();
-        let buffer = terminal.backend().buffer();
-        for y in 0..area.height {
-            for x in 0..area.width {
-                assert_eq!(buffer[(x, y)].bg, ratatui::style::Color::Reset);
-            }
-        }
+        assert_eq!(
+            terminal.backend().buffer()[(hero_panel.x, hero_panel.y)].bg,
+            palette::SURFACE_RESTING
+        );
     }
 }
 

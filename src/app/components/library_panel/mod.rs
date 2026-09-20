@@ -26,8 +26,8 @@ pub mod wide;
 #[allow(unused_imports)]
 pub(in crate::app) use content::{
     ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroCredit, HeroFacts, HeroHeader,
-    HeroImageState, HeroLink, LibraryPanelContent, ListControls, ListSlot, PanelHeroImagePaint,
-    PanelList, SelectorRow, Workspace,
+    HeroImageState, HeroLink, LibraryPanelContent, ListSlot, PanelHeroImagePaint, PanelList,
+    SelectorRow, Workspace,
 };
 #[allow(unused_imports)]
 pub(in crate::app) use hero::{
@@ -44,6 +44,6 @@ pub use owner::{LibraryKey, LibraryKind};
 #[allow(unused_imports)]
 pub(in crate::app) use panel::LibraryPanel;
 #[allow(unused_imports)]
-pub(in crate::app) use slots::{paint_list_controls_row, paint_pill_row_gap, paint_selector_row};
+pub(in crate::app) use slots::{paint_pill_row_gap, paint_selector_row};
 #[allow(unused_imports)]
 pub(in crate::app) use wide::{render_wide_skeleton, SkeletonHits, WideSkeletonGeometry};

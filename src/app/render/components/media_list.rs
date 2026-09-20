@@ -667,10 +667,10 @@ mod wide_row_regression_tests {
             })
             .unwrap();
         let buffer = terminal.backend().buffer();
-        // The selected first row paints the Workspace's sheet-Ink bar; the
-        // sequence then opens on the primary fill, so rows 1 and 3 carry the
-        // stripe.
-        assert_eq!(buffer[(2, 0)].bg, palette::PILL_ROW_BG);
+        // The selected first row paints the focused Workspace's Iris bar;
+        // the sequence then opens on the primary fill, so rows 1 and 3
+        // carry the stripe.
+        assert_eq!(buffer[(2, 0)].bg, palette::ACCENT_ACTIVE);
         assert_eq!(buffer[(2, 1)].bg, pair.focused);
         assert_eq!(buffer[(2, 2)].bg, Color::Reset);
         assert_eq!(buffer[(2, 3)].bg, pair.focused);

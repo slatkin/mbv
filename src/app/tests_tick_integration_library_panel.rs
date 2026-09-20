@@ -108,7 +108,6 @@ impl LibraryContentOwner for FixtureOwner {
                 pills: vec!["All".into(), "New".into()],
                 active: Some(0),
             }),
-            controls: None,
             list: ListSlot::Media(&mut self.carrier),
             hero: Some(HeroContent {
                 facts: HeroFacts {
@@ -799,13 +798,25 @@ fn mounted_narrow_activation_opens_overlay_for_leaf_and_workspace() {
     assert!(panel_of(&harness)
         .and_then(|panel| panel.test_overlay_geometry())
         .is_some());
+    // The 30-row overlay leaves the Workspace one content row: the landscape
+    // grid packs the Dune/2021 title/meta entries into a single row, the
+    // Workspace box takes the remaining rows, and the cursor on the second
+    // track clamps the viewport scroll to 1 so it stays visible.
+    let (_, workspace_content) = panel_of(&harness)
+        .and_then(|panel| panel.test_overlay_workspace_box())
+        .expect("the overlay's Workspace box painted");
+    assert_eq!(
+        workspace_content.height,
+        1,
+        "the Workspace viewport holds a single row"
+    );
     assert_eq!(
         harness
             .model()
             .library_owner::<FixtureOwner>(&home_key())
             .unwrap()
             .workspace_state(),
-        (1, 0, Some("track two".into()))
+        (1, 1, Some("track two".into()))
     );
 }
 
@@ -833,12 +844,16 @@ fn mounted_queue_action_preserves_unfocused_library_overlay() {
         .library_owner_mut::<FixtureOwner>(&home_key())
         .expect("fixture owner installed")
         .focus_hero_workspace();
+    // Baseline the painted steady state: the first draw clamps the
+    // Workspace viewport scroll to the cursor (the 1-row viewport keeps
+    // row 1 visible), so the Queue round trip below proves input
+    // preservation rather than re-proving the paint clamp.
+    drop(draw_frame(&mut harness));
     let workspace_state = harness
         .model()
         .library_owner::<FixtureOwner>(&home_key())
         .unwrap()
         .workspace_state();
-    drop(draw_frame(&mut harness));
     harness.model_mut().app.panel_focus = PanelFocus::Queue;
     harness.model_mut().sync_mounted_surfaces();
     assert_eq!(harness.model().application.focus(), Some(&ComponentId::Queue));
@@ -1788,8 +1803,9 @@ mod tests_tick_integration_library_panel_hero;
 
 /// The overlay's focused Workspace paints its cursor: every row of the
 /// canonical list that holds focus resolves the list's own focused emphasis
-/// (the selected row's bold title), and the Workspace box's own body fill
-/// follows the Workspace's focus as the Wide Hero pane's does.
+/// (the selected row's bold title), and the selected row paints the focused
+/// Iris bar while the Workspace box itself rests at Slate like the Wide Hero
+/// pane's does.
 #[test]
 fn overlay_workspace_paints_its_cursor_row() {
     use tuirealm::event::{Key, KeyEvent};
@@ -1813,11 +1829,11 @@ fn overlay_workspace_paints_its_cursor_row() {
         .expect("the overlay's Workspace box painted");
     // TV's Workspace carries no header row, so the only bar row inside the
     // box's content is the cursor's own selected row, painted with the
-    // overlay sheet's Ink chrome (not the shared Slate bar).
+    // focused Iris bar (not the shared Slate bar, nor the unfocused Ink).
     let buf = terminal.backend().buffer();
     let cursor_row = (content.top()..content.bottom()).find(|&y| {
         (content.left()..content.right())
-            .any(|x| buf[(x, y)].bg == crate::app::palette::PILL_ROW_BG)
+            .any(|x| buf[(x, y)].bg == crate::app::palette::ACCENT_ACTIVE)
     });
     assert!(
         cursor_row.is_some(),

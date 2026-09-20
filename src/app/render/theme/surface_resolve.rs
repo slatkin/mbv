@@ -115,7 +115,7 @@ mod tests {
             Surface::PlaybackPanel => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::QueueOnlyPlaybackPanel => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::SidebarBody => (SURFACE_RESTING, SURFACE_RESTING),
-            Surface::QueueCardVisualizer => (SURFACE_FOCUSED, SURFACE_RESTING),
+            Surface::QueueCardVisualizer => (SURFACE_CHROME, SURFACE_CHROME),
             Surface::PlaybackRecess => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::PlaybackStatusPill => (SURFACE_BACKDROP, SURFACE_BACKDROP),
             Surface::ArtworkPlaceholder => (SURFACE_BACKDROP, SURFACE_BACKDROP),

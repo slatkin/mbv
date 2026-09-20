@@ -67,6 +67,8 @@ Do not tag it there. Report that the branch must be merged into `main` before
 the tag is created, and keep release publishing separate from unrelated PR
 work.
 
+Never wait for the release github action to complete as part of this process.
+
 ## Retagging
 
 Treat deletion of a published tag as destructive. Only do it when the user
