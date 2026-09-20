@@ -209,7 +209,7 @@ fn assert_music_tree_scrollbar_matches_shared(
 }
 
 /// The zebra fill the tree resolves for its rows: the focused Green2 fill
-/// settles to the resting-content Storm when focus moves elsewhere.
+/// settles to the tree's `#272e33` fill when focus moves elsewhere.
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
     palette::music_tree_zebra(focused)
 }
@@ -607,7 +607,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     );
 
     // Unfocused: the cursor row paints no bar; the focused Alpha band settles
-    // from the focused Green2 fill to the resting Storm fill.
+    // from the focused Green2 fill to the tree's `#272e33` fill.
     browser.set_focused(false);
     browser.select_index(MUSIC_TREE_ALPHA_ROOT + 1);
     browser.scroll_to(0);
@@ -619,13 +619,15 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
         MUSIC_TREE_WIDE_HEIGHT,
     );
     let cursor_y = music_tree_row_y(&browser, list_area, MUSIC_TREE_ALPHA_ROOT + 1);
-    assert_ne!(
-        term.backend().buffer()[(title_x, cursor_y)].bg,
-        palette::SELECTED_ROW_BG,
-        "an unfocused tree paints no bar for its cursor row"
-    );
+    // The unfocused tree's zebra intentionally shares the selected-row bar's
+    // `#272e33` value; the focus-gated bar policy is not distinguishable by
+    // background colour alone.
     assert_ne!(unfocused_zebra, zebra, "focus changes the zebra role");
-    assert_eq!(music_tree_row_bg(&term, title_x, cursor_y), unfocused_zebra);
+    assert_eq!(
+        music_tree_row_bg(&term, title_x, cursor_y),
+        unfocused_zebra,
+        "an unfocused cursor row keeps the tree's unfocused zebra fill"
+    );
     let scrollbar_x = if list_area.right() < MUSIC_TREE_WIDE_WIDTH {
         list_area.right()
     } else {

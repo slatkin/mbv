@@ -125,12 +125,12 @@ pub const SELECTED_ROW_BG: Color = Palette::Slate.color(); // its own role, deli
 /// Grouped Music's secondary tree-row fill. Kept as a role so the tree
 /// renderer never owns a raw colour or a destination-specific surface choice.
 /// The zebra is brighter while the tree has focus and settles to the content
-/// surface's Storm value when focus moves elsewhere.
+/// tree-specific `#272e33` fill when focus moves elsewhere.
 pub fn music_tree_zebra(focused: bool) -> Color {
     if focused {
         Palette::Green2.color()
     } else {
-        Palette::Storm.color()
+        Palette::Slate.color()
     }
 }
 

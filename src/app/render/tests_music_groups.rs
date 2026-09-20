@@ -139,7 +139,7 @@ fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::s
 }
 
 /// The zebra fill the tree resolves for its rows: the focused Green2 fill
-/// settles to the resting-content Storm when focus moves elsewhere.
+/// settles to the tree's `#272e33` fill when focus moves elsewhere.
 fn music_tree_zebra_fill(focused: bool) -> ratatui::style::Color {
     palette::music_tree_zebra(focused)
 }
