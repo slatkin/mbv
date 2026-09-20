@@ -103,7 +103,7 @@ impl Palette {
             Palette::Red => Color::Rgb(0xe5, 0x7e, 0x80),
             Palette::Orange => Color::Rgb(0xe5, 0x98, 0x75),
             Palette::Clay => Color::Rgb(0xdd, 0x9a, 0x78),
-            Palette::Yellow => Color::Rgb(0xe6, 0xb7, 0x68),
+            Palette::Yellow => Color::Rgb(0xdb, 0xbc, 0x7f),
             Palette::Cream => Color::Rgb(0xfa, 0xed, 0xcd),
             Palette::White => Color::Rgb(0xfd, 0xf6, 0xe3),
         }
@@ -193,6 +193,11 @@ mod tests {
     fn palette_rgb_table_tracks_the_green_shift() {
         assert_eq!(Palette::Green1.color(), Color::Rgb(0x2e, 0x38, 0x3c));
         assert_eq!(Palette::Green2.color(), Color::Rgb(0x37, 0x41, 0x45));
+    }
+
+    #[test]
+    fn palette_rgb_table_tracks_the_yellow_decision() {
+        assert_eq!(Palette::Yellow.color(), Color::Rgb(0xdb, 0xbc, 0x7f));
     }
 
     /// Collects every `#rrggbb` string and every `[r, g, b]` triple from a
