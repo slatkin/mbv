@@ -701,12 +701,21 @@ impl App {
                 album_id,
                 mut tracks,
             } => {
+                // A fallback artist fetch frees its bounded slot here, and the
+                // drain arms the next in-scope album so rows keep appearing
+                // progressively; selection-driven fetches share the cache but
+                // hold no slot.
+                let fallback_completed =
+                    self.artist_album_track_fetches_in_flight.remove(&album_id);
                 self.album_tracks_loading.remove(&album_id);
                 // The cache is also the cursor's source of truth while the
                 // album is open, so normalize it once before rendering or
                 // resolving the focused track for playback.
                 sort_audio_tracks(&mut tracks);
                 self.album_tracks_cache.insert(album_id, tracks);
+                if fallback_completed {
+                    self.drain_artist_album_track_fetches();
+                }
             }
             LibEvent::ArtistTracksFetched {
                 destination,

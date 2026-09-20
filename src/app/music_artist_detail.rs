@@ -26,6 +26,12 @@ use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::sort_audio_tracks;
 use crate::app::{App, LibEvent};
 
+/// At most this many fallback artist per-album track fetches run at once. A
+/// fallback root's scope can be the whole settled catalog, so arming every
+/// album on focus would issue one request per album in one burst; the queue
+/// arms the bound and each arrival frees a slot for the next album.
+const MAX_ARTIST_FALLBACK_TRACK_FETCHES: usize = 6;
+
 /// The cache identity of one artist-detail query. Every axis is part of the
 /// identity so a late response from a replaced browse snapshot, a re-settled
 /// catalog, or a Service re-setup can never become the Workspace for the new
@@ -213,9 +219,15 @@ fn current_album_ids(
         .collect()
 }
 
-fn track_matches_album(track: &EmbyItem, album_id: &str, album_title: &str) -> bool {
-    track.album_id == album_id
-        || (track.album_id.is_empty() && !track.album.is_empty() && track.album == album_title)
+/// Whether one artist-track result belongs to the settled album carrying
+/// `album_id`. Only the Service album ID may match: the `ArtistIds` Audio
+/// query this cache holds is user-scoped and never requests `AlbumId`, so a
+/// track with no album ID is a live payload shape, and a title match would
+/// admit another same-titled album's tracks as playable rows. A track the
+/// Service omitted an album ID for can still reach the Workspace through the
+/// fallback path's per-album fetches, which carry real album IDs.
+pub(super) fn track_matches_album(track: &EmbyItem, album_id: &str) -> bool {
+    !album_id.is_empty() && track.album_id == album_id
 }
 
 impl App {
@@ -235,19 +247,20 @@ impl App {
     /// Start the verified `ArtistIds` Audio query (task 1.4's client
     /// operation). A fallback artist has no provider identity, so this arm
     /// deliberately starts no artist query and instead arms the already-
-    /// supported per-album fetches the fallback aggregates from.
+    /// supported per-album fetches the fallback aggregates from, through the
+    /// bounded fallback queue rather than one request per in-scope album.
     pub(super) fn request_artist_tracks(
         &mut self,
         destination: LibraryKey,
         target: MusicArtistTarget,
     ) {
         let Some(artist_id) = target.artist_id.clone() else {
-            for album_target in target.album_targets.iter() {
-                let album_id = target_album_id(album_target).to_string();
-                if !album_id.is_empty() {
-                    self.fetch_album_tracks(album_id);
-                }
-            }
+            let album_ids = target
+                .album_targets
+                .iter()
+                .map(|album_target| target_album_id(album_target).to_string())
+                .collect();
+            self.enqueue_artist_album_tracks(album_ids);
             return;
         };
 
@@ -288,6 +301,51 @@ impl App {
                 result,
             });
         });
+    }
+
+    /// Queue the fallback aggregation's per-album fetches (design D7). The
+    /// aggregation source stays the existing per-album cache, but a fallback
+    /// root's scope can cover the whole settled catalog, so arming every album
+    /// at once would flood the Service. Albums already cached or already armed
+    /// are skipped, repeats dedupe against the pending queue, and the drain
+    /// runs at most `MAX_ARTIST_FALLBACK_TRACK_FETCHES` at a time; each
+    /// arrival arms the next album, so rows appear progressively from cache.
+    pub(super) fn enqueue_artist_album_tracks(&mut self, album_ids: Vec<String>) {
+        for album_id in album_ids {
+            if album_id.is_empty()
+                || self.album_tracks_cache.contains_key(&album_id)
+                || self.album_tracks_loading.contains(&album_id)
+                || self
+                    .pending_artist_album_track_fetches
+                    .iter()
+                    .any(|pending| pending == &album_id)
+            {
+                continue;
+            }
+            self.pending_artist_album_track_fetches.push_back(album_id);
+        }
+        self.drain_artist_album_track_fetches();
+    }
+
+    /// Starts queued fallback fetches while the bounded fan-out has capacity.
+    /// `fetch_album_tracks` remains the sole gate for the actual request, so
+    /// an album the selection path already armed is skipped without consuming
+    /// a slot, and a request that could not start never occupies one.
+    pub(super) fn drain_artist_album_track_fetches(&mut self) {
+        while self.artist_album_track_fetches_in_flight.len() < MAX_ARTIST_FALLBACK_TRACK_FETCHES {
+            let Some(album_id) = self.pending_artist_album_track_fetches.pop_front() else {
+                break;
+            };
+            if self.album_tracks_cache.contains_key(&album_id)
+                || self.album_tracks_loading.contains(&album_id)
+            {
+                continue;
+            }
+            self.fetch_album_tracks(album_id.clone());
+            if self.album_tracks_loading.contains(&album_id) {
+                self.artist_album_track_fetches_in_flight.insert(album_id);
+            }
+        }
     }
 
     /// Artist artwork uses the existing image/cache worker, addressed by the
@@ -393,11 +451,11 @@ impl App {
                     },
                 );
                 // The documented fallback for an unavailable artist-ID query
-                // is the per-album aggregation; arm those fetches for the
-                // root's still-current in-scope albums.
-                for album_id in scoped_album_ids(self, &destination, revision, &artist_id) {
-                    self.fetch_album_tracks(album_id);
-                }
+                // is the per-album aggregation; queue those fetches for the
+                // root's still-current in-scope albums behind the bounded
+                // fan-out rather than arming them all at once.
+                let album_ids = scoped_album_ids(self, &destination, revision, &artist_id);
+                self.enqueue_artist_album_tracks(album_ids);
             }
         }
     }
@@ -489,7 +547,7 @@ impl App {
                 artist_cache
                     .unwrap_or_default()
                     .iter()
-                    .filter(|track| track_matches_album(track, album_id, album_title))
+                    .filter(|track| track_matches_album(track, album_id))
                     .cloned()
                     .collect()
             };
@@ -565,6 +623,22 @@ mod tests {
         }
     }
 
+    /// A configured-but-unroutable client: the loading reservation
+    /// `fetch_album_tracks`/`fetch_card_image` performs happens synchronously
+    /// before the doomed network attempt, so it is observable immediately
+    /// without a live server.
+    fn unroutable_emby_runtime() -> mbv_core::service_runtime::EmbyRuntime {
+        let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
+        client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
+            server_url: "http://127.0.0.1:1".into(),
+            user_id: "user-id".into(),
+            token: "token".into(),
+        });
+        mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(std::sync::Mutex::new(
+            client,
+        )))
+    }
+
     /// A settled one-album catalog whose only album carries a Service
     /// (`ArtistItems`) artist identity at revision 7.
     fn settled_artist_app() -> (App, MusicWideRenderCtx, MusicArtistTarget, LibraryKey) {
@@ -633,12 +707,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn artist_groups_follow_settled_album_order_with_duplicate_album_titles() {
+    /// `settled_artist_app` plus a second in-scope album under the same
+    /// display title but its own Service identity: the leaf targets
+    /// (`id\0index`) and the Service album IDs keep the two groups distinct.
+    fn duplicate_title_artist_app() -> (App, MusicWideRenderCtx, MusicArtistTarget, LibraryKey) {
         let (mut app, _context, mut target, destination) = settled_artist_app();
-        // A second album with the same display title but its own Service
-        // identity: the leaf targets (`id\0index`) and the Service album IDs
-        // keep the two groups distinct.
         let mut second = make_item("First Album", "MusicAlbum");
         second.id = "album-2".into();
         second.artist = "Alpha".into();
@@ -664,6 +737,12 @@ mod tests {
         }
         let context = app.wide_music_render_ctx(0, None);
         target.album_targets = context.album_targets.clone();
+        (app, context, target, destination)
+    }
+
+    #[test]
+    fn artist_groups_follow_settled_album_order_with_duplicate_album_titles() {
+        let (mut app, context, target, destination) = duplicate_title_artist_app();
         let mut track_a = make_item("Song", "Audio");
         track_a.id = "track-a".into();
         track_a.album_id = "album-1".into();
@@ -701,6 +780,52 @@ mod tests {
         assert_eq!(detail.track_groups[1].tracks[0].id, "track-b");
     }
 
+    /// The `ArtistIds` Audio query is user-scoped and omits `AlbumId`, so a
+    /// track with an empty album ID and a matching album title is a live
+    /// payload shape. Two in-scope albums can share that title: a title match
+    /// would put one album's track in both groups and admit a foreign album's
+    /// track as a playable row. Only Service album ID membership may project
+    /// an artist-track row.
+    #[test]
+    fn empty_album_id_artist_tracks_never_cross_into_same_titled_groups() {
+        let (mut app, context, target, destination) = duplicate_title_artist_app();
+        let mut track_a = make_item("Song", "Audio");
+        track_a.id = "track-a".into();
+        track_a.album_id = "album-1".into();
+        let mut track_b = make_item("Song", "Audio");
+        track_b.id = "track-b".into();
+        track_b.album_id = "album-2".into();
+        // `make_item` leaves `album_id` empty: the live payload shape that a
+        // title match would admit into both same-titled groups.
+        let mut anonymous = make_item("Song", "Audio");
+        anonymous.id = "track-no-album".into();
+        anonymous.album = "First Album".into();
+        let key = app
+            .artist_detail_key(&destination, &target)
+            .expect("artist ID key");
+        app.artist_detail_cache.insert(
+            key,
+            ArtistDetailCacheEntry {
+                tracks: vec![anonymous, track_a, track_b],
+                failed: false,
+            },
+        );
+
+        let projected = app.project_music_artist_detail(&destination, context, target);
+        let detail = projected.artist_detail.expect("artist detail");
+        let groups: Vec<Vec<&str>> = detail
+            .track_groups
+            .iter()
+            .map(|group| group.tracks.iter().map(|track| track.id.as_str()).collect())
+            .collect();
+        assert_eq!(
+            groups,
+            vec![vec!["track-a"], vec!["track-b"]],
+            "each same-titled album keeps only its own ID-matched track, and \
+             the empty-album-ID track is never projected"
+        );
+    }
+
     #[test]
     fn fallback_artist_aggregates_album_cache_without_artist_artwork() {
         let (mut app, context, _, destination) = settled_artist_app();
@@ -724,6 +849,85 @@ mod tests {
         assert!(detail.artwork_cache_key.is_none());
     }
 
+    /// A cached fallback album projects immediately and is never re-armed: the
+    /// bounded queue skips cached albums before consuming a slot, so the
+    /// projection aggregates existing per-album results without a fetch.
+    #[test]
+    fn fallback_artist_projects_cached_albums_without_arming_a_fetch() {
+        let (mut app, context, _, destination) = settled_artist_app();
+        app.emby_runtime = unroutable_emby_runtime();
+        let mut track = make_item("Cached", "Audio");
+        track.id = "cached-track".into();
+        track.album_id = "album-1".into();
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+        let target = MusicArtistTarget {
+            artist_id: None,
+            artist_name: "Alpha".into(),
+            album_targets: vec![context.album_targets[0].clone()],
+            revision: 7,
+        };
+
+        app.request_artist_tracks(destination.clone(), target.clone());
+        assert!(
+            app.album_tracks_loading.is_empty(),
+            "a cached album is projected from cache, never re-armed"
+        );
+
+        let projected = app.project_music_artist_detail(&destination, context, target);
+        let detail = projected.artist_detail.expect("fallback detail");
+        assert_eq!(detail.track_groups[0].tracks[0].id, "cached-track");
+    }
+
+    /// A fallback root's scope can be the whole settled catalog, so one focus
+    /// must not arm one fetch per in-scope album. The queue arms the bound and
+    /// each arrival frees exactly one slot for the next album, so rows keep
+    /// appearing progressively instead of flooding the Service.
+    #[test]
+    fn fallback_artist_scope_arms_only_the_bounded_fetch_window() {
+        let (mut app, _context, _target, destination) = settled_artist_app();
+        app.emby_runtime = unroutable_emby_runtime();
+        let target = MusicArtistTarget {
+            artist_id: None,
+            artist_name: "Alpha".into(),
+            album_targets: (1..=8).map(|index| format!("album-{index}")).collect(),
+            revision: 7,
+        };
+
+        app.request_artist_tracks(destination, target);
+
+        assert_eq!(
+            app.album_tracks_loading.len(),
+            MAX_ARTIST_FALLBACK_TRACK_FETCHES,
+            "one fallback focus arms at most the bounded fetch window"
+        );
+        assert_eq!(
+            app.pending_artist_album_track_fetches.len(),
+            8 - MAX_ARTIST_FALLBACK_TRACK_FETCHES,
+            "the rest of the scope waits for a slot"
+        );
+
+        app.handle_lib_event(LibEvent::AlbumTracksFetched {
+            album_id: "album-1".into(),
+            tracks: Vec::new(),
+        });
+
+        assert!(app.album_tracks_cache.contains_key("album-1"));
+        assert_eq!(
+            app.album_tracks_loading.len(),
+            MAX_ARTIST_FALLBACK_TRACK_FETCHES,
+            "the arrival frees exactly one slot and the drain refills it"
+        );
+        assert!(
+            app.album_tracks_loading
+                .contains(&format!("album-{}", MAX_ARTIST_FALLBACK_TRACK_FETCHES + 1)),
+            "the next waiting album takes the freed slot"
+        );
+        assert_eq!(
+            app.pending_artist_album_track_fetches.len(),
+            8 - MAX_ARTIST_FALLBACK_TRACK_FETCHES - 1
+        );
+    }
+
     #[test]
     fn loading_artist_result_projects_no_partial_album_rows() {
         let (mut app, context, target, destination) = settled_artist_app();
@@ -742,17 +946,7 @@ mod tests {
     fn ready_artist_artwork_rearms_after_its_bitmap_is_evicted() {
         let (mut app, _context, target, destination) = settled_artist_app();
         app.image_protocol_enabled = true;
-        // A configured-but-unroutable client: a re-armed fetch's loading
-        // reservation is observable synchronously without a live server.
-        let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
-        client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
-            server_url: "http://127.0.0.1:1".into(),
-            user_id: "user-id".into(),
-            token: "token".into(),
-        });
-        app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-            std::sync::Mutex::new(client),
-        ));
+        app.emby_runtime = unroutable_emby_runtime();
         let key = app
             .artist_detail_key(&destination, &target)
             .expect("artist ID key");
@@ -829,17 +1023,7 @@ mod tests {
     #[test]
     fn failed_artist_query_falls_back_to_per_album_fetches() {
         let (mut app, _context, _target, destination) = settled_artist_app();
-        // A configured-but-unroutable client: `fetch_album_tracks`'s loading
-        // reservation is observable immediately after the arming call.
-        let mut client = mbv_core::api::EmbyClient::new(crate::config::Config::default());
-        client.apply_credential_exchange(&mbv_core::api::EmbyCredentialExchange {
-            server_url: "http://127.0.0.1:1".into(),
-            user_id: "user-id".into(),
-            token: "token".into(),
-        });
-        app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(std::sync::Arc::new(
-            std::sync::Mutex::new(client),
-        ));
+        app.emby_runtime = unroutable_emby_runtime();
         let generation = app.emby_runtime.generation();
         app.handle_artist_tracks_fetched(
             destination.clone(),
