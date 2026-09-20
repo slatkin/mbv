@@ -411,7 +411,7 @@ mod wide_row_regression_tests {
     fn zebra_stripes_are_contained_and_selected_row_still_wins() {
         let rect = Rect::new(0, 0, 32, 4);
         let selected_bg = palette::SURFACE_RESTING;
-        let zebra_bg = Color::Rgb(60, 72, 65);
+        let zebra_bg = palette::SURFACE_FOCUSED;
         let mut list: WideMediaList<String> = WideMediaList::new();
         list.set_content(vec![
             item("one", "One", None),
@@ -476,7 +476,7 @@ mod wide_row_regression_tests {
                 semantic_state: MediaSemanticState::Ordinary,
             },
         ]);
-        let zebra_bg = Color::Rgb(60, 72, 65);
+        let zebra_bg = palette::SURFACE_FOCUSED;
         let mut terminal = Terminal::new(TestBackend::new(rect.width, rect.height)).unwrap();
         terminal
             .draw(|f| {

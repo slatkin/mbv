@@ -3,7 +3,6 @@ use crate::app::palette;
 use crate::app::tests::make_session;
 use crate::App;
 use ratatui::layout::Rect;
-use ratatui::style::Color;
 use ratatui::style::Modifier;
 
 /// Task 4.1 (D10): the right column reserves the playback strip's
@@ -150,7 +149,7 @@ fn queue_only_renders_queue_focused_when_queue_holds_focus() {
         let cell = &buf[(queue.x + 4, layout.content_area.y + 1)];
         assert_eq!(
             cell.style().bg,
-            Some(Color::from_u32(0x003c4841)),
+            Some(palette::surface_colors(palette::Surface::QueueColumn, true).fill),
             "queue-only with queue focus at width {width} must use the focused zebra stripe, got {:?}",
             cell.style().bg
         );
@@ -191,7 +190,7 @@ fn both_mode_focused_queue_keeps_focused_styling() {
     let cell = &buf[(layout.content_area.x + 2, layout.content_area.y + 1)];
     assert_eq!(
         cell.style().bg,
-        Some(Color::from_u32(0x003c4841)),
+        Some(palette::surface_colors(palette::Surface::QueueColumn, true).fill),
         "focused queue in both mode must paint the focused zebra stripe, got {:?}",
         cell.style().bg
     );
