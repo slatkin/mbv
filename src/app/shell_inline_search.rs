@@ -80,6 +80,14 @@ impl Model {
         if !has_session {
             return;
         }
+        if self
+            .active_inline_search_session_ref()
+            .is_some_and(|host| host.uses_local_filter())
+        {
+            // Grouped Music keeps the tree as the sole browser owner. Its
+            // InlineSearch is only the shared editor/debounce/bar projection.
+            return;
+        }
         // Loading is a started query's outstanding corpus load: an empty
         // query has nothing to load for (the fetch is deferred to the first
         // keystroke), and the corpus source depends on the flat/recursive
@@ -134,6 +142,12 @@ impl Model {
         let TabSelection::EmbyLibrary(index) = self.app.tab else {
             return;
         };
+        if self
+            .active_inline_search_session_ref()
+            .is_some_and(|host| host.uses_local_filter())
+        {
+            return;
+        }
         if self.app.recursive_album_search_enabled(index) {
             self.app.start_album_index(index, false);
         } else if self.inline_search_needs_full_load(index) {
@@ -151,6 +165,9 @@ impl Model {
         let mut changed = false;
         self.with_active_inline_search_host(|host| {
             changed = host.inline_search_mut().handle_clock(now);
+            if changed {
+                host.inline_search_debounced();
+            }
         });
         changed
     }

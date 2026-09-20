@@ -25,6 +25,54 @@ fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
 }
 
 #[test]
+fn grouped_music_filter_keeps_the_tree_panel_owner_and_uses_the_shared_query_editor() {
+    let mut first = make_item("First Album", "Folder");
+    first.id = "album-1".into();
+    let mut second = make_item("Second Album", "Folder");
+    second.id = "album-2".into();
+    let mut owner = MusicContent::new();
+    owner.set_content(MusicWideRenderCtx::new(
+        LibraryListRenderCtx::from_items(vec![first, second], 0),
+        None,
+        String::new(),
+        Vec::new(),
+        0,
+        vec![
+            ("Artist".into(), "2001".into(), "First Album".into()),
+            ("Artist".into(), "2002".into(), "Second Album".into()),
+        ],
+        vec![
+            crate::app::music_grouping::ArtistKey::Fallback("Artist".into()),
+            crate::app::music_grouping::ArtistKey::Fallback("Artist".into()),
+        ],
+        vec![0, 1],
+        None,
+    ));
+
+    let slash = KeyEvent {
+        code: Key::Char('/'),
+        modifiers: KeyModifiers::NONE,
+    };
+    assert!(owner.on_key(&slash).is_some());
+    assert!(owner.inline_search.is_active());
+    assert!(owner.browser.filter_active());
+    owner.inline_search.restore_query("Second".into());
+    owner
+        .browser
+        .apply_filter_query(owner.inline_search.query());
+    let content = owner.content();
+    assert!(matches!(content.list, ListSlot::Media(_)));
+    drop(content);
+    let titles: Vec<&str> = owner
+        .browser
+        .projected_nodes()
+        .iter()
+        .map(|node| owner.browser.title_of(node.id()))
+        .collect();
+    assert_eq!(titles, ["Artist", "Second Album"]);
+}
+
+#[test]
 fn tree_entries_ignore_played_album_state_but_keep_live_progress() {
     let mut played = make_item("Album", "Folder");
     played.played = true;

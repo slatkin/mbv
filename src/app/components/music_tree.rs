@@ -34,6 +34,9 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
+use fuzzy_matcher::skim::SkimMatcherV2;
+use fuzzy_matcher::FuzzyMatcher;
+
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Style;
@@ -113,6 +116,7 @@ enum MusicNode {
         name: String,
     },
     Album {
+        artist: String,
         title: String,
         year: Option<String>,
         target: String,
@@ -202,6 +206,7 @@ impl MusicTreeModel {
                 }
             };
             let leaf = self.intern_album(
+                &entry.artist,
                 &entry.target,
                 &entry.title,
                 entry.year.as_deref(),
@@ -307,6 +312,7 @@ impl MusicTreeModel {
 
     fn intern_album(
         &mut self,
+        artist: &str,
         target: &str,
         title: &str,
         year: Option<&str>,
@@ -323,16 +329,19 @@ impl MusicTreeModel {
         let node_key = MusicNodeKey::Album(target.to_string());
         if let Some(id) = self.intern.get(&node_key).copied() {
             if let Some(MusicNode::Album {
+                artist: existing_artist,
                 title: existing_title,
                 year: existing_year,
                 semantic_state: existing_state,
                 ..
             }) = self.nodes.get_mut(id)
             {
-                if existing_title != title
+                if existing_artist != artist
+                    || existing_title != title
                     || existing_year.as_deref() != year
                     || existing_state != &semantic_state
                 {
+                    *existing_artist = artist.to_string();
                     *existing_title = title.to_string();
                     *existing_year = year.map(str::to_string);
                     *existing_state = semantic_state;
@@ -343,6 +352,7 @@ impl MusicTreeModel {
         }
         let id = self.nodes.len();
         self.nodes.push(MusicNode::Album {
+            artist: artist.to_string(),
             title: title.to_string(),
             year: year.map(str::to_string),
             target: target.to_string(),
@@ -443,6 +453,23 @@ impl MusicTreeModel {
     /// The album leaf's playback-live semantic state; artist roots are
     /// ordinary grouping rows and carry none. Played/unplayed is normalized
     /// away before a state reaches the arena.
+    pub(in crate::app) fn search_text_of(&self, id: usize) -> Option<String> {
+        match self.nodes.get(id) {
+            Some(MusicNode::Album {
+                artist,
+                title,
+                year,
+                ..
+            }) => Some(format!(
+                "{} {} {}",
+                artist,
+                title,
+                year.as_deref().unwrap_or_default()
+            )),
+            _ => None,
+        }
+    }
+
     pub(in crate::app) fn semantic_state_of(&self, id: usize) -> Option<&MediaSemanticState> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { semantic_state, .. }) => Some(semantic_state),
@@ -494,8 +521,16 @@ struct MusicTreeFilter {
 }
 
 impl TreeFilter<MusicTreeModel> for MusicTreeFilter {
-    fn is_match(&self, _model: &MusicTreeModel, id: usize) -> bool {
-        self.matching.contains(&id)
+    fn is_match(&self, model: &MusicTreeModel, id: usize) -> bool {
+        if self.matching.contains(&id) {
+            return true;
+        }
+        // Track rows follow the visibility of their matching album. They do
+        // not have independent searchable text or a second filter corpus.
+        model
+            .album_target_of(id)
+            .and_then(|target| model.node_id(&MusicNodeKey::Album(target.to_string())))
+            .is_some_and(|album| self.matching.contains(&album))
     }
 }
 
@@ -752,6 +787,14 @@ pub(in crate::app) struct MusicTreeBrowser {
     focused: bool,
     marquee_key: String,
     marquee_started: Instant,
+    /// Whether this retained owner has an open local Grouped Music filter
+    /// session. This is distinct from the tree query: an empty query shows
+    /// the complete tree but remains a filter session for input/prefetch.
+    filter_active: bool,
+    filter_anchor: Option<usize>,
+    filter_query: String,
+    search_bar_query: String,
+    search_bar_loading: bool,
     /// The parent-owned claim and row-flow rectangles. The canonical media
     /// list uses the claim width for rows and the scrollbar while retaining
     /// the content height for viewport metrics; the tree follows that same
@@ -792,6 +835,11 @@ impl MusicTreeBrowser {
             state,
             track_items: HashMap::new(),
             focused: true,
+            filter_active: false,
+            filter_anchor: None,
+            filter_query: String::new(),
+            search_bar_query: String::new(),
+            search_bar_loading: false,
             marquee_key: String::new(),
             marquee_started: Instant::now(),
             configured_geometry: None,
@@ -822,6 +870,10 @@ impl MusicTreeBrowser {
         });
         let rebuilt = self.state.ensure_projection(&self.model, &self.query);
         self.sync_manual_marks();
+        if self.filter_active {
+            let query = self.filter_query.clone();
+            self.apply_filter_query(&query);
+        }
         if rebuilt {
             // The crate's hit map belongs to the completed frame, not to the
             // newly reconciled projection. Do not let a settled content push
@@ -843,6 +895,68 @@ impl MusicTreeBrowser {
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    pub(in crate::app) fn set_search_bar(&mut self, query: &str, loading: bool) {
+        self.search_bar_query.clear();
+        self.search_bar_query.push_str(query);
+        self.search_bar_loading = loading;
+    }
+
+    pub(in crate::app) fn search_bar(&self) -> Option<(String, bool)> {
+        self.filter_active
+            .then(|| (self.search_bar_query.clone(), self.search_bar_loading))
+    }
+
+    pub(in crate::app) fn open_filter(&mut self) {
+        if !self.filter_active {
+            self.filter_anchor = self.selected_id();
+            self.filter_active = true;
+        }
+        self.filter_query.clear();
+        self.set_filter_matches(None);
+    }
+
+    pub(in crate::app) fn close_filter(&mut self) {
+        let anchor = self.filter_anchor.take();
+        self.filter_active = false;
+        self.filter_query.clear();
+        self.set_filter_matches(None);
+        if let Some(anchor) = anchor {
+            let _ = self.state.select_by_id(&self.model, &self.query, anchor);
+            self.rearm_selection_visibility();
+        }
+        self.invalidate();
+    }
+
+    pub(in crate::app) fn filter_active(&self) -> bool {
+        self.filter_active
+    }
+
+    pub(in crate::app) fn apply_filter_query(&mut self, query: &str) {
+        if !self.filter_active {
+            return;
+        }
+        self.filter_query.clear();
+        self.filter_query.push_str(query);
+        if query.is_empty() {
+            self.set_filter_matches(None);
+            return;
+        }
+        let matcher = SkimMatcherV2::default().ignore_case();
+        let matching: Vec<usize> = self
+            .model
+            .roots
+            .iter()
+            .flat_map(|root| self.model.children[*root].iter())
+            .copied()
+            .filter(|id| {
+                self.model
+                    .search_text_of(*id)
+                    .is_some_and(|text| matcher.fuzzy_match(&text, query).is_some())
+            })
+            .collect();
+        self.set_filter_matches(Some(&matching));
     }
 
     pub(in crate::app) fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
@@ -1284,7 +1398,7 @@ impl MusicTreeBrowser {
     /// projection), when an artist root is focused (the shipped suppression),
     /// or when the window has no album leaf.
     pub(in crate::app) fn neighbour_prefetch_targets(&self) -> Option<Vec<String>> {
-        if !self.paint_complete || self.selected_is_artist() {
+        if !self.paint_complete || self.selected_is_artist() || self.filter_active {
             return None;
         }
         let nodes = self.state.projection().nodes();

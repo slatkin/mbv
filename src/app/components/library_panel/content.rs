@@ -323,6 +323,13 @@ pub(in crate::app) trait PanelList {
         let _ = point;
         false
     }
+
+    /// Returns the destination-owned search bar projection, when the list
+    /// remains the browser owner during an in-place search session.
+    #[allow(dead_code)]
+    fn search_bar(&self) -> Option<(String, bool)> {
+        None
+    }
 }
 
 /// The hero image paint the panel retained from one view (task 5.10, design

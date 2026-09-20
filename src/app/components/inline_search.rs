@@ -231,6 +231,16 @@ impl InlineSearch {
         self.results.rows().len()
     }
 
+    /// Whether a host explicitly supplied a flat corpus. Grouped Music keeps
+    /// this false in production; the compatibility distinction lets focused
+    /// harnesses exercise the old activation path without changing painting.
+    pub(in crate::app) fn has_pool_entries(&self) -> bool {
+        match &self.pool {
+            SearchPool::Items(items) => !items.is_empty(),
+            SearchPool::Albums(entries) => !entries.is_empty(),
+        }
+    }
+
     /// Replaces the candidate pool and re-scores the current query. The
     /// carrier's ordinary refresh rule preserves the selected stable target
     /// when it is still present and clamps otherwise (design.md D2: a pool
@@ -414,6 +424,17 @@ impl Default for InlineSearch {
 pub(in crate::app) trait InlineSearchHost {
     fn inline_search(&self) -> &InlineSearch;
     fn inline_search_mut(&mut self) -> &mut InlineSearch;
+
+    /// Grouped Music keeps its tree as the browser owner. Such a host uses
+    /// this shared control only for query editing, debounce, and the bar; it
+    /// must not receive a flat corpus or start a library fetch.
+    fn uses_local_filter(&self) -> bool {
+        false
+    }
+
+    /// Apply a query after the shared debounce fires. The host owns only its
+    /// destination-specific projection; the query editor remains this type.
+    fn inline_search_debounced(&mut self) {}
     fn selected_inline_search_item(&self) -> Option<mbv_core::api::EmbyItem> {
         self.inline_search().selected_item()
     }

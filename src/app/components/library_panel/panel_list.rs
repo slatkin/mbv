@@ -153,6 +153,10 @@ impl PanelList for MusicTreeBrowser {
     fn claims_point(&self, point: Position) -> bool {
         MusicTreeBrowser::claims_point(self, point)
     }
+
+    fn search_bar(&self) -> Option<(String, bool)> {
+        MusicTreeBrowser::search_bar(self)
+    }
 }
 
 #[cfg(test)]

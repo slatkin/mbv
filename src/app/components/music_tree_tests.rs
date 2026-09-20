@@ -799,6 +799,108 @@ fn modified_selection_keeps_added_order_and_derives_artist_tri_state() {
 }
 
 #[test]
+fn fuzzy_filter_uses_composite_text_and_preserves_settled_order() {
+    let entries = vec![
+        entry(
+            "Alpha Artist",
+            ArtistKey::Service("alpha".into()),
+            "Quiet Record",
+            "album-1",
+            "2001",
+        ),
+        entry(
+            "Alpha Artist",
+            ArtistKey::Service("alpha".into()),
+            "Loud Record",
+            "album-2",
+            "2002",
+        ),
+        entry(
+            "Beta Artist",
+            ArtistKey::Service("beta".into()),
+            "Other Record",
+            "album-3",
+            "2003",
+        ),
+    ];
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
+    let alpha = browser.projected_nodes().first().expect("root").id();
+    browser.collapse_root(alpha);
+    browser.open_filter();
+    browser.apply_filter_query("2002");
+
+    let visible: Vec<&str> = browser
+        .projected_nodes()
+        .iter()
+        .map(|node| browser.title_of(node.id()))
+        .collect();
+    assert_eq!(visible, ["Alpha Artist", "Loud Record"]);
+
+    browser.apply_filter_query("does-not-match");
+    assert!(browser.projected_nodes().is_empty());
+    browser.apply_filter_query("");
+    assert_eq!(
+        browser.projected_nodes().len(),
+        2,
+        "empty query restores the tree"
+    );
+}
+
+#[test]
+fn filter_session_restores_anchor_expansion_and_hidden_marks() {
+    let entries = vec![alpha("album-1", "First"), alpha("album-2", "Second")];
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
+    let root = browser.projected_nodes()[0].id();
+    browser.expand_root(root);
+    let album_2 = browser.projected_nodes()[2].id();
+    browser.select_id(album_2);
+    browser.set_marked(album_2, true);
+    browser.collapse_root(root);
+    browser.select_id(root);
+
+    browser.open_filter();
+    browser.apply_filter_query("First");
+    assert_eq!(browser.projected_nodes().len(), 2);
+    assert!(browser.selected_id().is_some());
+    assert!(
+        browser.selected_album_targets().is_empty(),
+        "hidden marks are masked"
+    );
+
+    browser.close_filter();
+    assert_eq!(browser.selected_id(), Some(root));
+    assert!(
+        !browser.root_is_expanded(root),
+        "forced expansion is not persistent"
+    );
+    assert_eq!(browser.selected_album_targets(), vec!["album-2"]);
+}
+
+#[test]
+fn matching_album_keeps_cached_track_children_in_the_filtered_projection() {
+    let entries = vec![alpha("album-1", "First")];
+    let mut model = MusicTreeModel::new();
+    let mut tracks = HashMap::new();
+    tracks.insert(
+        "album-1".into(),
+        vec![MusicTreeTrack {
+            target: "track-1".into(),
+            title: "Track".into(),
+        }],
+    );
+    model.reconcile_with_tracks(&entries, &tracks);
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.open_filter();
+    browser.apply_filter_query("First");
+    let titles: Vec<&str> = browser
+        .projected_nodes()
+        .iter()
+        .map(|node| browser.title_of(node.id()))
+        .collect();
+    assert_eq!(titles, ["Alpha", "First", "Track"]);
+}
+
+#[test]
 fn filtered_artist_toggle_masks_hidden_marks_without_losing_them() {
     let model = MusicTreeModel::from_entries(&base_entries());
     let alpha_root = artist_id(&model, ArtistKey::Service("artist-alpha".into())).expect("root");

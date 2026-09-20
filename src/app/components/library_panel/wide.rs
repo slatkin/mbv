@@ -120,7 +120,11 @@ pub(in crate::app) fn paint_browser_pane(
     // a SelectorRow — while a search is active the box takes the bar's rect
     // (spec: the Selector row's place is reserved for the search box) and
     // the spacer keeps the reserved gap.
-    let searching = matches!(content.list, ListSlot::Search(_));
+    let searching = match &content.list {
+        ListSlot::Search(_) => true,
+        ListSlot::Media(list) => list.search_bar().is_some(),
+        ListSlot::Empty { .. } => false,
+    };
     match (&content.selector, searching) {
         (Some(selector), false) => {
             paint_selector_row(
@@ -212,6 +216,9 @@ pub(in crate::app) fn paint_browser_pane(
             }
         }
         ListSlot::Media(list) => {
+            if let Some((query, loading)) = list.search_bar() {
+                render_search_box(f, pane.pills_area, &query, loading);
+            }
             // The panel drives the viewport clamp and the paint policy
             // (design D3): the slot fixes focus and the list-backdrop
             // selected row (design D6).

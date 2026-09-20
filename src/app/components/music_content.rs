@@ -897,6 +897,125 @@ impl MusicContent {
         self.hero_image = state;
     }
 
+    fn on_filter_key(&mut self, key: &KeyEvent) -> Option<Msg> {
+        if key.modifiers.contains(KeyModifiers::CONTROL) {
+            if self.selected_is_artist() {
+                return match key.code {
+                    Key::Char('p') => self.artist_action(MusicTreeAction::Play),
+                    Key::Char('a') => self.artist_action(MusicTreeAction::Enqueue),
+                    Key::Char('s') => self.artist_action(MusicTreeAction::Shuffle),
+                    _ => None,
+                };
+            }
+            let item = self.selected_item();
+            return match key.code {
+                Key::Char('p') => {
+                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryPlay { item }))
+                }
+                Key::Char('a') => {
+                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryEnqueue { item }))
+                }
+                Key::Char('s') => {
+                    item.map(|item| Msg::Shell(ShellRequest::EmbyLibraryShuffle { item }))
+                }
+                _ => None,
+            };
+        }
+        match key.code {
+            Key::Esc => {
+                self.inline_search.close();
+                self.browser.close_filter();
+                None
+            }
+            Key::Backspace => {
+                let action = self.inline_search.handle_key(key);
+                if matches!(
+                    action,
+                    Some(super::inline_search::InlineSearchAction::Dismiss)
+                ) {
+                    self.inline_search.close();
+                    self.browser.close_filter();
+                } else if self.inline_search.query().is_empty() {
+                    self.browser.apply_filter_query("");
+                }
+                None
+            }
+            Key::Char(_) => {
+                let _ = self.inline_search.handle_key(key);
+                None
+            }
+            Key::Up => self.move_album(-1, AlbumCursorKind::Move),
+            Key::Down => self.move_album(1, AlbumCursorKind::Move),
+            Key::PageUp => self.page_album(-1, AlbumCursorKind::Page),
+            Key::PageDown => self.page_album(1, AlbumCursorKind::Page),
+            Key::Home => {
+                self.browser.select_first_visible();
+                self.album_selection_request(AlbumCursorKind::Jump)
+            }
+            Key::End => {
+                self.browser.select_last_visible();
+                self.album_selection_request(AlbumCursorKind::Jump)
+            }
+            Key::Left if self.browser.selected_is_artist() => {
+                if let Some(root) = self.browser.selected_id() {
+                    if self.browser.root_is_expanded(root) {
+                        self.browser.collapse_root(root);
+                    }
+                }
+                None
+            }
+            Key::Left => {
+                self.browser.move_to_parent();
+                self.album_selection_request(AlbumCursorKind::Move)
+            }
+            Key::Right if self.browser.selected_is_artist() => {
+                let root = self.browser.selected_id()?;
+                if !self.browser.root_is_expanded(root) {
+                    self.browser.expand_root(root);
+                    None
+                } else {
+                    self.artist_detail_target()
+                        .map(|target| Msg::Shell(ShellRequest::MusicArtistActivate { target }))
+                }
+            }
+            Key::Right => {
+                if let Some(id) = self.browser.selected_id() {
+                    self.browser.expand_node(id);
+                }
+                None
+            }
+            Key::Enter if self.browser.selected_is_artist() => {
+                if let Some(root) = self.browser.selected_id() {
+                    self.browser.toggle_root(root);
+                }
+                None
+            }
+            Key::Enter if self.browser.selected_is_track() => {
+                let (album_id, track) = self.selected_tree_track()?;
+                Some(Msg::Shell(ShellRequest::MusicTrackActivate {
+                    album_id,
+                    track,
+                }))
+            }
+            Key::Enter => {
+                let target = self.browser.selected_album_target()?.to_string();
+                let item = self.selected_item()?;
+                self.inline_search.close();
+                self.browser.close_filter();
+                self.browser.select_album_target(&target);
+                if self.track_list.rows().is_empty() {
+                    Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                } else if self.inline_track_focus_enabled {
+                    self.enter_track_focus();
+                    None
+                } else {
+                    Some(Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                }
+            }
+            _ => None,
+        }
+    }
+
     pub(in crate::app) fn panel_content(&mut self) -> LibraryPanelContent<'_> {
         // The Workspace and the Hero must describe the same tree selection:
         // reconcile the rows before building either, so a local move between
@@ -922,6 +1041,8 @@ impl MusicContent {
                 }),
             }
         });
+        self.browser
+            .set_search_bar(self.inline_search.query(), false);
         let selector = (!self.context.groups.is_empty()).then(|| SelectorRow {
             pills: self
                 .context
@@ -931,16 +1052,10 @@ impl MusicContent {
                 .collect(),
             active: Some(self.context.group_cursor),
         });
-        let list = if self.inline_search.is_active() {
-            // Search owns the result geometry for this frame; invalidate the
-            // tree browser so stale rail hits cannot survive a search
-            // transition (the tree rides `ListSlot::Media` again after the
-            // Grouped Music filter session lands in task 5.2).
-            self.browser.invalidate();
-            ListSlot::Search(&mut self.inline_search)
-        } else {
-            ListSlot::Media(&mut self.browser)
-        };
+        // Grouped Music keeps the tree as the browser owner while the shared
+        // Inline Search control supplies only the query editor/debounce and
+        // the panel's one-row search-bar projection.
+        let list = ListSlot::Media(&mut self.browser);
         LibraryPanelContent {
             selector,
             list,
@@ -961,6 +1076,29 @@ impl InlineSearchHost for MusicContent {
     }
     fn inline_search_mut(&mut self) -> &mut InlineSearch {
         &mut self.inline_search
+    }
+
+    fn uses_local_filter(&self) -> bool {
+        true
+    }
+
+    fn open_inline_search(&mut self) {
+        if !self.inline_search.is_active() {
+            self.inline_search.open();
+            self.browser.open_filter();
+        }
+    }
+
+    fn close_inline_search(&mut self) {
+        if self.inline_search.is_active() {
+            self.inline_search.close();
+            self.browser.close_filter();
+        }
+    }
+
+    fn inline_search_debounced(&mut self) {
+        let query = self.inline_search.query().to_string();
+        self.browser.apply_filter_query(&query);
     }
 }
 
@@ -1025,6 +1163,16 @@ impl LibraryContentOwner for MusicContent {
 
     fn on_key(&mut self, key: &KeyEvent) -> Option<Msg> {
         if self.inline_search.is_active() {
+            // The production Grouped Music session never populates the flat
+            // carrier. Keep the legacy host hook usable for focused harnesses
+            // that explicitly seed that carrier while exercising unrelated
+            // activation plumbing; the panel still always paints the tree.
+            if self.browser.filter_active()
+                && !self.inline_search.has_pool_entries()
+                && self.inline_search.results_len() == 0
+            {
+                return self.on_filter_key(key);
+            }
             if key.modifiers.contains(KeyModifiers::CONTROL) {
                 if let Some(item) = self.inline_search.selected_item() {
                     let request = match key.code {
@@ -1035,6 +1183,7 @@ impl LibraryContentOwner for MusicContent {
                     };
                     if let Some(request) = request {
                         self.inline_search.close();
+                        self.browser.close_filter();
                         return Some(Msg::Shell(request));
                     }
                 }
@@ -1048,6 +1197,7 @@ impl LibraryContentOwner for MusicContent {
                 }
                 Some(super::inline_search::InlineSearchAction::Dismiss) => {
                     self.inline_search.close();
+                    self.browser.close_filter();
                     None
                 }
                 Some(super::inline_search::InlineSearchAction::QueryStarted) => {
@@ -1179,7 +1329,10 @@ impl LibraryContentOwner for MusicContent {
                 None
             }
             Key::Char('/') => {
-                self.inline_search.open();
+                if !self.inline_search.is_active() {
+                    self.inline_search.open();
+                    self.browser.open_filter();
+                }
                 Some(Msg::Shell(ShellRequest::OpenInlineSearch))
             }
             // Context menu: the focused track's own menu while the track
