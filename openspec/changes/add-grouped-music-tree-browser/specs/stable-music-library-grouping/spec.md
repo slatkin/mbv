@@ -1,7 +1,7 @@
 ## MODIFIED Requirements
 
 ### Requirement: Grouped-view continuity
-When a settled grouped snapshot is replaced, the system SHALL preserve the current artist-root or album-leaf selection by stable identity when that node remains present. It SHALL preserve surviving artist expansion state. When the selected node survives, the viewport SHALL retain its prior screen row when projection bounds permit; otherwise it SHALL scroll only enough to keep the node visible and clamp at projection bounds. Artist roots SHALL remain stable grouping and action targets across the replacement.
+When a settled grouped snapshot is replaced, the system SHALL preserve the current artist-root or album-leaf selection by stable identity when that node remains present. It SHALL preserve surviving artist expansion and multi-selection state. When the selected node survives, the viewport SHALL retain its prior screen row when projection bounds permit; otherwise it SHALL scroll only enough to keep the node visible and clamp at projection bounds. Artist roots SHALL remain stable grouping and action targets across the replacement.
 
 #### Scenario: Selected album survives a replacement
 - **WHEN** a replacement snapshot contains the album leaf selected in the prior snapshot
@@ -42,7 +42,7 @@ The non-Wide and Wide compositions SHALL consume the same settled grouped snapsh
 
 #### Scenario: Grouped Music crosses the responsive breakpoint
 - **WHEN** terminal resizing switches grouped Music between its non-Wide and Wide compositions
-- **THEN** the same settled grouping, selected tree node, and expansion state remain in use
+- **THEN** the same settled grouping, selected tree node, expansion state, and multi-selection remain in use
 - **AND** the active tree viewport is clamped around that selection
 
 #### Scenario: Responsive composition redraws

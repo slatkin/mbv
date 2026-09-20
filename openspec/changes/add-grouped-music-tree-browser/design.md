@@ -82,8 +82,6 @@ The active `group-aware-page-navigation` change remains unchanged for canonical 
 
 ### D5. Implement tree-local fuzzy filtering, not a second InlineSearch result owner
 
-DEFERRED from this PoC (user decision 2026-09-20): the destination-specific tree filter session, its `SkimMatcherV2` integration, and the `MusicContent::panel_content` `ListSlot::Search` removal all ship later; Grouped Music keeps today's pre-change Inline Search carrier behavior unchanged until this is revisited after PoC acceptance. The analysis below is retained as the plan for that deferred work.
-
 Reuse `SkimMatcherV2` and the existing 300 ms duration without creating a second text-input owner. `MusicContent.inline_search` remains the sole query editor, debounce clock, open/close state, and source for the Library panel's one-row search-bar projection. Its `InlineSearchHost` integration drains a debounced Grouped Music query into a small destination-specific tree filter session, which owns only the applied matching node IDs, forced expansion, and pre-filter anchor. Grouped Music removes the `ListSlot::Search` swap in `MusicContent::panel_content`; the tree remains the browser content in `ListSlot::Media` while the panel paints the existing bar in the reserved Selector-row rect. No `InlineSearch` result `MediaListCarrier` is constructed or queried for Grouped Music, and no new `ListSlot` variant is added: the tree owner implements the object-safe `PanelList` surface exactly like every other browser control. Its implementation maps `clamp_viewport` to the tree viewport visibility rule, `set_paint_policy` to the tree style's focused bit and selected-row surface, `view` to the crate widget render with retained hit geometry, `set_geometry` to the tree's browser claim/content rects, `selected_row_rect` to the latest-render selected node row, and `claims_point` to the latest-render hit map. Typed artist/album target resolution stays on the tree owner's own surface, never on the erased `PanelList` trait.
 
 Each album leaf has precomputed searchable text containing artist, album title, and year. On debounce expiry, the filter records the matching album node IDs; the tree query retains ancestors and force-expands matching paths while leaving persistent expansion untouched. Scores are discarded after match/no-match classification, preserving settled order.
@@ -96,9 +94,7 @@ Alternative rejected: adapting the current `InlineSearch` carrier. Its flat resu
 
 Artist roots never cross the shell as playable targets. For play, enqueue, shuffle, and context requests, the tree owner walks the root's settled child leaves and returns ordered album targets. Expansion does not affect action scope. An active filter restricts the walk to matching visible leaves.
 
-The multi-selection design (descoped, see below) was modified-click only: Ctrl+Click toggles album leaves, and artist-root toggles apply mark operations to the same visible child leaves. Aggregate root state is derived from child marks. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
-
-No multi-selection UI ships in this PoC (user decision 2026-09-20): modified-click toggles, root tri-state marks, selection summaries, and bulk-action wiring are skipped, alongside the already-descoped Visual mode and range selection. The tree retains only its single selected node. Revisit after PoC acceptance if wanted.
+Root multi-selection is modified-click only: Ctrl+Click toggles album leaves, and artist-root toggles apply mark operations to the same visible child leaves. Aggregate root state is derived from child marks. The component emits existing ordered album-target intents with a stable tree-origin identity, allowing existing effect materialization and context capability intersection to remain downstream.
 
 Alternative rejected: storing selected artist IDs. Their meaning changes with filtering and would force the shell to re-resolve component-local scope.
 
@@ -114,7 +110,7 @@ Before tree implementation, request and retain artist name/ID pairs in the Emby 
 - the shell fetches the artist's Audio items once by artist ID, caches the result, and projects only tracks whose album IDs are in the root's current in-scope album set;
 - the Workspace groups tracks by settled album order, then disc/track order, as canonical `Heading` plus track `Item` rows.
 
-Every new artist-artwork and artist-track request and completion is a typed boundary variant with an exhaustive shell dispatch arm; unsupported fallback roots are handled explicitly rather than hidden by wildcard matching. Completion identity includes the Library destination key, Service setup generation, artist ID, and settled catalog revision. A valid result may populate the cache after focus moves, but only a completion matching the current destination, generation, revision, and focused artist is pushed into the visible Hero/Workspace. Query changes re-project the cached artist tracks against the new in-scope album set without refetching (deferred with the D5 filtering deferral — without a filter, the in-scope album set is the full settled set and does not change). Fallback roots show summary and grouped tracks derivable from their album IDs but make no artist-ID artwork request; where an artist-ID query is unavailable, the shell aggregates existing per-album track fetches rather than matching by artist name.
+Every new artist-artwork and artist-track request and completion is a typed boundary variant with an exhaustive shell dispatch arm; unsupported fallback roots are handled explicitly rather than hidden by wildcard matching. Completion identity includes the Library destination key, Service setup generation, artist ID, and settled catalog revision. A valid result may populate the cache after focus moves, but only a completion matching the current destination, generation, revision, and focused artist is pushed into the visible Hero/Workspace. Query changes re-project the cached artist tracks against the new in-scope album set without refetching. Fallback roots show summary and grouped tracks derivable from their album IDs but make no artist-ID artwork request; where an artist-ID query is unavailable, the shell aggregates existing per-album track fetches rather than matching by artist name.
 
 Alternative rejected: name-based Service lookup, which conflates equal artist names. Alternative rejected: preloading all artist tracks during grouping warm-up, which couples browsing readiness to an unbounded fetch.
 
@@ -135,7 +131,7 @@ The implementation is not allowed to bypass a missing extension point with a sec
 Tests are added only where they protect realistic failures:
 
 - pure model/filter cases: stable-ID reconciliation, ancestor retention, stable ordering, filter restoration, and visible-descendant materialization;
-- Interactive Component cases: expansion/navigation, typed album intents, viewport continuity, and latest-frame hit resolution;
+- Interactive Component cases: expansion/navigation, typed album intents, multi-selection aggregate state, viewport continuity, and latest-frame hit resolution;
 - Render Component/buffer cases: semantic row differences, full-row selection, zebra reset, metadata/marquee bounds, scrollbar, and narrow clipping;
 - mounted tick/mouse cases: one painter, routing/focus, responsive owner reuse, latest-frame delivery, and stale artist completion rejection.
 
@@ -154,6 +150,7 @@ Alternative rejected: removing the Hero/Workspace track projection once tracks l
 - **[The dependency has limited adoption and a short release history]** → Current registry metadata shows one owner, low download volume, and two yanked earlier versions ([lib.rs](https://lib.rs/crates/tui-treelistview), [crates.io API](https://crates.io/api/v1/crates/tui-treelistview)); keep the integration destination-local, pin exactly, and retain dependency rejection for the case where the tree's core behavior proves impossible.
 - **[Artist identity is absent, ambiguous, or omitted by a Service]** → Request `ArtistItems` explicitly, accept only a name-matching pair, retain equal-name groups separately, and use a deterministic fallback key when no match exists; never perform effect lookup by name. Unsupported artist-ID queries propagate to the shell's per-album aggregation fallback.
 - **[Artist completions paint beneath a new selection]** → Key requests and visible application by destination, Service generation, settled revision, and artist ID; cache valid data separately from presentation.
+- **[Filtering and marks expose hidden actions]** → Intersect tree multi-selection with the visible album projection whenever a debounced filter revision applies, and materialize every root action from that same projection.
 - **[Node arena grows during a long retained session]** → Reset it when destination identity changes; accept monotonic growth within one retained destination rather than risk ID reuse. Revisit compaction only if measured catalog churn makes it material.
 - **[`music_content.rs` becomes harder to maintain]** → Put model, filter, identity arena, and rendering adapter in destination-specific sibling modules; keep `MusicContent` to orchestration and typed translation.
 - **[Concurrent page-navigation change claims Grouped Music]** → Its canonical Heading behavior can land in either order; this change removes the Music album flow from `MediaList`, so no destination branch or ordering dependency is needed.
@@ -165,7 +162,7 @@ Alternative rejected: removing the Hero/Workspace track projection once tracks l
 2. Request and retain `ArtistItems` identity in parsed music data and add the fallback-safe Audio-by-artist client operation; defer the advisory live Emby mapping check to terminal acceptance.
 3. Settle the verified identity into stable tree keys.
 4. Replace only the Grouped Music album carrier with the tree owner; keep both track Workspaces canonical.
-5. Add root action materialization and current-frame mouse handling (the local filtering of this step is deferred from the PoC; see D5).
+5. Add local filtering, root action materialization, and current-frame mouse handling.
 6. Add shell-owned lazy artist detail/artwork/track projection with stale guards.
 7. Complete focused automated evidence, repository checks, and live user review in Wide, Narrow, Mini, and Library Hero overlay Panel states.
 8. On acceptance, update `CONTEXT.md` with the new artist-root term and sync the delta specs. On rejection of the dependency's core capability, remove the dependency and all tree-specific production changes; do not retain an alternate implementation from this change.
