@@ -18,7 +18,6 @@ use mbv_core::api::EmbyItem;
 use mbv_core::config::ServiceKind;
 use mbv_core::service_runtime::SetupGeneration;
 
-use crate::app::components::library_panel::content::HeroImageState;
 use crate::app::components::library_panel::{LibraryKey, LibraryKind};
 use crate::app::components::msg::MusicArtistTarget;
 use crate::app::music_grouping::ArtistKey;
@@ -92,8 +91,10 @@ pub(super) struct ArtistTrackGroup {
 }
 
 /// The shell-owned projection for one focused artist root. Its summary facts
-/// and artwork feed the Music Hero's artist arm and its grouped rows the
-/// canonical track Workspace (`MusicContent`, task 6.4).
+/// and grouped rows feed the Music Hero and canonical track Workspace
+/// (`MusicContent`, task 6.4). The legacy typed artist-artwork cache remains
+/// retained for its completion machinery, but the Hero image source is now the
+/// selected album's existing artwork path.
 #[derive(Clone)]
 pub(super) struct ArtistDetailProjection {
     pub(super) target: MusicArtistTarget,
@@ -101,11 +102,6 @@ pub(super) struct ArtistDetailProjection {
     /// album count, and year span.
     pub(super) summary: ArtistSummary,
     pub(super) track_groups: Vec<ArtistTrackGroup>,
-    /// Projected artwork state (task 6.2) painted by the Hero's artist arm.
-    pub(super) artwork: HeroImageState,
-    /// The artist's typed image cache key; with a stable artist ID it builds
-    /// the Hero's artwork source (task 6.4), and a fallback root has none.
-    pub(super) artwork_cache_key: Option<String>,
 }
 
 pub(super) fn artist_artwork_cache_key(
@@ -492,7 +488,8 @@ impl App {
     /// Project one artist root into the existing Music context (tasks 6.2/6.3).
     /// The context still contains the complete settled album tree; only the
     /// artist detail is added, so the tree remains the sole browser owner and
-    /// the task-6.4 content switch reads one field.
+    /// the task-6.4 content switch reads one field. Album artwork is resolved
+    /// later by MusicContent from the selected artist album/track group.
     pub(super) fn project_music_artist_detail(
         &self,
         destination: &LibraryKey,
@@ -559,32 +556,6 @@ impl App {
             }
         }
 
-        let (artwork, artwork_cache_key) =
-            if let Some(key) = self.artist_detail_key(destination, &target) {
-                let cache_key =
-                    artist_artwork_cache_key(&key.destination, key.generation, &key.artist_id);
-                let state = match self.artist_artwork_status.get(&key) {
-                    Some(ArtistArtworkStatus::Loading) => HeroImageState::Loading,
-                    Some(ArtistArtworkStatus::None) | None => HeroImageState::None,
-                    Some(ArtistArtworkStatus::Ready) => self
-                        .card_image_states
-                        .get(&cache_key)
-                        .and_then(|entry| {
-                            entry.img.as_ref().map(|image| {
-                                use image::GenericImageView;
-                                HeroImageState::Ready {
-                                    cache_key: cache_key.clone(),
-                                    decoded: Some(image.dimensions()),
-                                }
-                            })
-                        })
-                        .unwrap_or(HeroImageState::None),
-                };
-                (state, Some(cache_key))
-            } else {
-                (HeroImageState::None, None)
-            };
-
         // The artist push addresses no album: the Workspace rows and Hero
         // come from the projection below, and the album snapshot's own
         // selected album/track cache go quiet while an artist root is
@@ -595,8 +566,6 @@ impl App {
             target,
             summary,
             track_groups,
-            artwork,
-            artwork_cache_key,
         });
         context
     }
@@ -605,7 +574,6 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::components::library_panel::content::HeroImageState as State;
     use crate::app::music_grouping::{build_grouped_album_catalog, MusicGroupingState};
     use crate::app::render::make_music_group_app;
     use crate::app::render::MusicWideRenderCtx;
@@ -843,8 +811,6 @@ mod tests {
         assert_eq!(detail.summary.album_count, 1);
         assert_eq!(detail.summary.name, "Alpha");
         assert_eq!(detail.track_groups[0].tracks[0].id, "fallback-track");
-        assert_eq!(detail.artwork, State::None);
-        assert!(detail.artwork_cache_key.is_none());
     }
 
     /// A cached fallback album projects immediately and is never re-armed: the

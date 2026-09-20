@@ -12,10 +12,10 @@ use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use super::inline_search::{InlineSearch, InlineSearchHost};
 use super::library_panel::content::{
-    ArtworkShape, ArtworkSource, HeroArtwork, HeroContent, HeroFacts, HeroImageState,
-    LibraryPanelContent, ListSlot, SelectorRow, Workspace,
+    ArtworkShape, HeroArtwork, HeroContent, HeroFacts, HeroImageState, LibraryPanelContent,
+    ListSlot, SelectorRow, Workspace,
 };
-use super::library_panel::hero::hero_content_music_album;
+use super::library_panel::hero::{hero_content_music_album, music_album_artwork};
 use super::library_panel::owner::{LibraryContentOwner, LibrarySlotEvent};
 use super::library_panel::HeroContentData;
 use super::media_list::{
@@ -120,12 +120,15 @@ enum WorkspaceOwner {
 }
 
 /// The focused artist root's Hero content (task 6.4, design D7): settled
-/// summary facts plus the projected artwork state. An ID-backed root's
-/// artwork source carries the typed artist cache key so the panel's hero
-/// projection walks the existing image boundary; a fallback root has no
-/// source and paints the shared no-artwork placeholder.
+/// summary facts plus the selected album's projected artwork state. Artist
+/// artwork is deliberately not part of this producer: the first settled
+/// album supplies the default image, and a selected artist track supplies its
+/// own album image through the same `music_album_artwork` source used by the
+/// album Hero and neighbour prefetch.
 fn artist_hero_data(
     detail: &crate::app::music_artist_detail::ArtistDetailProjection,
+    mut artwork: HeroArtwork,
+    image: HeroImageState,
 ) -> HeroContentData {
     let summary = &detail.summary;
     let mut meta_rows = vec![format!(
@@ -136,29 +139,14 @@ fn artist_hero_data(
     if let Some(span) = summary.year_span() {
         meta_rows.push(span);
     }
+    artwork.image = image;
     HeroContentData {
         facts: HeroFacts {
             title: summary.name.clone(),
             meta_rows,
             duration_row: None,
             links: Vec::new(),
-            artwork: HeroArtwork {
-                shape: ArtworkShape::Square,
-                source: detail.artwork_cache_key.as_ref().and_then(|cache_key| {
-                    detail
-                        .target
-                        .artist_id
-                        .as_ref()
-                        .map(|artist_id| ArtworkSource::Emby {
-                            item_id: artist_id.clone(),
-                            series_id: String::new(),
-                            image_types: vec!["Primary".into()],
-                            cache_key: cache_key.clone(),
-                        })
-                }),
-                decoration: None,
-                image: detail.artwork.clone(),
-            },
+            artwork,
         },
         overview: None,
         credits: None,
@@ -854,6 +842,54 @@ impl MusicContent {
         self.workspace_track_item(target)
     }
 
+    /// Select the album whose existing artwork path supplies an artist Hero.
+    /// The tree's selected track wins; otherwise the first settled artist
+    /// group is the stable default. The album item lookup preserves the exact
+    /// `music_album_artwork` source/cache convention used by album Heroes and
+    /// neighbour prefetch.
+    fn artist_hero_artwork(
+        &self,
+        detail: &crate::app::music_artist_detail::ArtistDetailProjection,
+    ) -> HeroArtwork {
+        let album_id = self
+            .selected_tree_track()
+            .map(|(album_id, _)| album_id)
+            .or_else(|| {
+                self.artist_workspace_focused()
+                    .then(|| self.focused_track_album_id())
+                    .flatten()
+            })
+            .or_else(|| {
+                detail
+                    .track_groups
+                    .first()
+                    .map(|group| group.album_id.clone())
+            })
+            .or_else(|| {
+                detail
+                    .target
+                    .album_targets
+                    .first()
+                    .map(|target| target.split('\0').next().unwrap_or(target).to_string())
+            });
+
+        album_id
+            .and_then(|album_id| {
+                self.context
+                    .list
+                    .items
+                    .iter()
+                    .find(|item| item.id == album_id)
+            })
+            .map(music_album_artwork)
+            .unwrap_or(HeroArtwork {
+                shape: ArtworkShape::Square,
+                source: None,
+                decoration: None,
+                image: HeroImageState::None,
+            })
+    }
+
     /// The Hero pane's content for the tree's current selection, or `None`
     /// when nothing hero-bearing resolves. Both arms read the one snapshot
     /// the current selection owns (task 6.4), so the Hero title and its
@@ -864,7 +900,8 @@ impl MusicContent {
     /// supplies one).
     fn resolved_hero_data(&self) -> Option<HeroContentData> {
         if let Some(detail) = self.current_artist_detail() {
-            return Some(artist_hero_data(detail));
+            let artwork = self.artist_hero_artwork(detail);
+            return Some(artist_hero_data(detail, artwork, self.hero_image.clone()));
         }
         if self.browser.selected_is_artist() {
             return None;

@@ -193,8 +193,6 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
             album_title: "Album".into(),
             tracks: vec![first.clone(), second.clone()],
         }],
-        artwork: HeroImageState::None,
-        artwork_cache_key: None,
     };
     let mut ctx = owner.context.clone();
     ctx.selected_album = None;
@@ -217,8 +215,9 @@ fn artist_tracks_project_heading_rows_into_the_same_workspace_carrier() {
 }
 
 /// Task 6.4 (design D7): an artist root's Hero content is the shell-projected
-/// summary and artwork — name, in-scope album count, year span, and the
-/// stable-ID artwork source — with the projected groups as its Workspace.
+/// summary and album artwork — name, in-scope album count, year span, and the
+/// first settled album's existing artwork source — with the projected groups
+/// as its Workspace.
 #[test]
 fn album_tracks_survive_an_artist_detail_push_for_another_album() {
     use crate::app::music_artist_detail::{
@@ -253,8 +252,6 @@ fn album_tracks_survive_an_artist_detail_push_for_another_album() {
             album_title: "a-1".into(),
             tracks: vec![artist_track],
         }],
-        artwork: HeroImageState::None,
-        artwork_cache_key: None,
     });
 
     owner.set_content(ctx);
@@ -288,7 +285,7 @@ fn artist_root_hero_uses_the_projected_summary_and_artwork() {
     let mut track = make_item("Track One", "Audio");
     track.id = "alpha-track-1".into();
     track.album_id = "a-0".into();
-    let cache_key = "artist:1:music-library:artist-Alpha:Primary".to_string();
+    let cache_key = "a-0:P".to_string();
     let mut ctx = owner.context.clone();
     ctx.selected_album = None;
     ctx.album_tracks = None;
@@ -305,10 +302,9 @@ fn artist_root_hero_uses_the_projected_summary_and_artwork() {
             album_title: "a-0".into(),
             tracks: vec![track],
         }],
-        artwork: HeroImageState::Loading,
-        artwork_cache_key: Some(cache_key.clone()),
     });
     owner.set_content(ctx);
+    owner.set_hero_image(HeroImageState::Loading);
 
     {
         let content = owner.content();
@@ -330,8 +326,8 @@ fn artist_root_hero_uses_the_projected_summary_and_artwork() {
                 cache_key: key,
                 ..
             }) => {
-                assert_eq!(item_id, "artist-Alpha");
-                assert_eq!(image_types, &vec!["Primary".to_string()]);
+                assert_eq!(item_id, "a-0");
+                assert_eq!(image_types, &vec!["AudioChild".to_string()]);
                 assert_eq!(key, &cache_key);
             }
             other => panic!("expected the artist artwork source, got {other:?}"),
@@ -347,11 +343,85 @@ fn artist_root_hero_uses_the_projected_summary_and_artwork() {
     ));
 }
 
-/// Task 6.4 (design D7): a fallback artist root has no stable Service ID, so
-/// its Hero keeps the summary facts with the explicit no-artwork
-/// presentation (no borrowed album image) and its projected rows.
 #[test]
-fn fallback_artist_hero_uses_the_no_artwork_presentation() {
+fn artist_hero_switches_to_the_selected_track_album_artwork() {
+    use crate::app::components::library_panel::content::ArtworkSource;
+    use crate::app::music_artist_detail::{
+        ArtistDetailProjection, ArtistSummary, ArtistTrackGroup,
+    };
+
+    let mut owner = tree_owner(&[("Alpha", &["a-0", "a-1"])]);
+    press(&mut owner, Key::Home);
+    let target = owner.artist_detail_target().expect("artist root selected");
+    let mut first = make_item("First Track", "Audio");
+    first.id = "track-a-0".into();
+    first.album_id = "a-0".into();
+    let mut second = make_item("Second Track", "Audio");
+    second.id = "track-a-1".into();
+    second.album_id = "a-1".into();
+    let mut ctx = owner.context.clone();
+    ctx.selected_album = None;
+    ctx.album_tracks = None;
+    ctx.artist_detail = Some(ArtistDetailProjection {
+        target,
+        summary: ArtistSummary {
+            name: "Alpha".into(),
+            album_count: 2,
+            year_start: None,
+            year_end: None,
+        },
+        track_groups: vec![
+            ArtistTrackGroup {
+                album_id: "a-0".into(),
+                album_title: "a-0".into(),
+                tracks: vec![first],
+            },
+            ArtistTrackGroup {
+                album_id: "a-1".into(),
+                album_title: "a-1".into(),
+                tracks: vec![second],
+            },
+        ],
+    });
+    owner.set_content(ctx);
+    owner.expand_all_tree_roots();
+    owner.set_hero_image(HeroImageState::Loading);
+
+    let album_a0 = owner.browser.projected_nodes()[1].id();
+    owner.browser.expand_node(album_a0);
+    owner.browser.select_index(2);
+    assert_eq!(
+        owner.browser.selected_track_identity(),
+        Some(("a-0", "track-a-0"))
+    );
+    let first_source = owner.hero_data().expect("artist hero").facts.artwork.source;
+    assert!(matches!(
+        first_source,
+        Some(ArtworkSource::Emby { item_id, cache_key, .. })
+            if item_id == "a-0" && cache_key == "a-0:P"
+    ));
+
+    let album_a1 = owner.browser.projected_nodes()[3].id();
+    owner.browser.expand_node(album_a1);
+    owner.browser.select_index(4);
+    assert_eq!(
+        owner.browser.selected_track_identity(),
+        Some(("a-1", "track-a-1"))
+    );
+    let second_source = owner.hero_data().expect("artist hero").facts.artwork.source;
+    assert!(matches!(
+        second_source,
+        Some(ArtworkSource::Emby { item_id, cache_key, .. })
+            if item_id == "a-1" && cache_key == "a-1:P"
+    ));
+}
+
+/// An artist root without a Service ID still uses the settled album's
+/// artwork. The image source is album-scoped, so no artist-ID artwork request
+/// is needed for either identity form.
+#[test]
+fn fallback_artist_hero_uses_the_first_album_artwork() {
+    use crate::app::components::library_panel::content::ArtworkSource;
     use crate::app::music_artist_detail::{ArtistDetailProjection, ArtistSummary};
 
     let mut owner = MusicContent::new();
@@ -371,8 +441,6 @@ fn fallback_artist_hero_uses_the_no_artwork_presentation() {
             year_end: Some(2024),
         },
         track_groups: Vec::new(),
-        artwork: HeroImageState::None,
-        artwork_cache_key: None,
     });
     owner.set_content(ctx);
 
@@ -383,10 +451,19 @@ fn fallback_artist_hero_uses_the_no_artwork_presentation() {
         hero.facts.meta_rows,
         vec!["1 album".to_string(), "2024".to_string()]
     );
-    assert!(
-        hero.facts.artwork.source.is_none(),
-        "no borrowed artwork source"
-    );
+    match hero.facts.artwork.source.as_ref() {
+        Some(ArtworkSource::Emby {
+            item_id,
+            image_types,
+            cache_key,
+            ..
+        }) => {
+            assert_eq!(item_id, "id");
+            assert_eq!(image_types, &vec!["AudioChild".to_string()]);
+            assert_eq!(cache_key, "id:P");
+        }
+        other => panic!("expected the first album artwork source, got {other:?}"),
+    }
     assert_eq!(hero.facts.artwork.image, HeroImageState::None);
 }
 
@@ -425,8 +502,6 @@ fn a_stale_artist_detail_never_paints_under_the_new_root() {
             album_title: "b-0".into(),
             tracks: vec![track.clone()],
         }],
-        artwork: HeroImageState::None,
-        artwork_cache_key: None,
     });
     owner.set_content(ctx);
 
@@ -1041,8 +1116,6 @@ fn artist_workspace_owner() -> MusicContent {
                 tracks: vec![second],
             },
         ],
-        artwork: HeroImageState::None,
-        artwork_cache_key: None,
     };
     let mut ctx = owner.context.clone();
     ctx.selected_album = None;
@@ -1288,8 +1361,6 @@ fn wide_right_waits_for_the_artist_rows_before_taking_the_pane_focus() {
             year_end: None,
         },
         track_groups: Vec::new(),
-        artwork: HeroImageState::None,
-        artwork_cache_key: None,
     });
     owner.set_content(ctx);
     assert_eq!(press(&mut owner, Key::Right), None);
@@ -1316,8 +1387,6 @@ fn wide_right_waits_for_the_artist_rows_before_taking_the_pane_focus() {
             album_title: "a-0".into(),
             tracks: vec![track],
         }],
-        artwork: HeroImageState::None,
-        artwork_cache_key: None,
     });
     owner.set_content(ctx);
     assert!(owner.track_focused(), "the armed entry takes the focus");
