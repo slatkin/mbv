@@ -43,6 +43,10 @@ mbv-core = { path = "crates/mbv-core", features = ["test-support"] }
 ratatui = "0.30"
 crossterm = "0.29"
 tuirealm = "4.1"
+# Grouped Music tree browser (task 1.1): exactly locked 0.2.2, no optional
+# `keymap` feature (mbv's Keyboard Router owns all key resolution) and no
+# `serde`.
+tui-treelistview = { version = "=0.2.2", default-features = false }
 ureq.workspace = true
 native-tls.workspace = true
 serde.workspace = true
