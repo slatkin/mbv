@@ -5,7 +5,7 @@ use crate::app::components::music_tree::MusicTreeBrowser;
 use crate::app::components::ComponentId;
 use crate::app::shell::Model;
 use ratatui::backend::TestBackend;
-use ratatui::layout::Position;
+use ratatui::layout::{Position, Rect};
 use ratatui::Terminal;
 use tui_treelistview::{TreeHit, TreeMarkState};
 
@@ -62,13 +62,47 @@ fn music_tree_row_text(term: &Terminal<TestBackend>, y: u16, x0: u16, x1: u16) -
     (x0..x1).map(|x| buf[(x, y)].symbol().to_string()).collect()
 }
 
+fn assert_music_tree_scrollbar_matches_shared(
+    term: &Terminal<TestBackend>,
+    browser: &MusicTreeBrowser,
+    area: Rect,
+    width: u16,
+    height: u16,
+) {
+    let mut expected = Terminal::new(TestBackend::new(width, height)).unwrap();
+    expected
+        .draw(|frame| {
+            crate::app::render::components::widgets::render_right_scrollbar_with_viewport(
+                frame,
+                area,
+                browser.projection_len(),
+                area.height as usize,
+                browser.offset(),
+                palette::SCROLLBAR,
+            );
+        })
+        .unwrap();
+    let scrollbar_x = if area.right() < width {
+        area.right()
+    } else {
+        area.right().saturating_sub(1)
+    };
+    for y in area.y..area.bottom() {
+        let actual = &term.backend().buffer()[(scrollbar_x, y)];
+        let shared = &expected.backend().buffer()[(scrollbar_x, y)];
+        assert_eq!(actual.symbol(), shared.symbol(), "scrollbar glyph at y={y}");
+        assert_eq!(actual.fg, shared.fg, "scrollbar foreground at y={y}");
+    }
+}
+
 /// Grouped Music deliberately paints no hierarchy or expansion symbols.
 fn music_tree_hierarchy_glyph(c: char) -> bool {
     matches!(c, '>' | 'v' | '*' | '?' | '~' | '|' | '-' | '`')
 }
 
-/// Every visible node row keeps its title, uses only plain-space indentation,
-/// and paints nothing past the browser rect (the tree's row contract).
+/// Every visible node row keeps its title and uses only plain-space indentation.
+/// The shared scrollbar is allowed in the same outside-column position used by
+/// the canonical list painter.
 fn assert_music_tree_row_within(
     term: &Terminal<TestBackend>,
     row_y: u16,
@@ -84,11 +118,20 @@ fn assert_music_tree_row_within(
         row.chars().any(|c| !c.is_whitespace() && c != '…'),
         "row keeps at least one title cell: {row:?}"
     );
-    let outside = music_tree_row_text(term, row_y, list_area.right(), frame_width);
-    assert!(
-        outside.chars().all(|c| c == ' '),
-        "nothing overruns the browser rect: {outside:?}"
-    );
+    let scrollbar_x = if list_area.right() < frame_width {
+        list_area.right()
+    } else {
+        list_area.right().saturating_sub(1)
+    };
+    for x in list_area.right()..frame_width {
+        if x != scrollbar_x {
+            assert_eq!(
+                term.backend().buffer()[(x, row_y)].symbol(),
+                " ",
+                "only the shared scrollbar may occupy the outside column"
+            );
+        }
+    }
 }
 
 fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::style::Color {
@@ -140,6 +183,11 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
         list_area.width > 10 && list_area.height > 4,
         "non-Wide browser rect reserved"
     );
+    let scrollbar_x = if list_area.right() < MUSIC_TREE_NON_WIDE_WIDTH {
+        list_area.right()
+    } else {
+        list_area.right().saturating_sub(1)
+    };
 
     let mut browser = mounted_music_tree_browser(&model);
     browser.expand_root(MUSIC_TREE_ALPHA_ROOT);
@@ -160,9 +208,16 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let buf = term.backend().buffer();
     assert_music_tree_row_within(&term, list_area.y, list_area, MUSIC_TREE_NON_WIDE_WIDTH);
     assert_eq!(
-        buf[(list_area.right() - 1, list_area.y + 1)].fg,
+        buf[(scrollbar_x, list_area.y + 1)].fg,
         palette::SCROLLBAR,
-        "the narrow scrollbar takes the SCROLLBAR role"
+        "the shared scrollbar takes the SCROLLBAR role"
+    );
+    assert_music_tree_scrollbar_matches_shared(
+        &term,
+        &browser,
+        list_area,
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
     );
 
     // The Alpha phase alternates from its first member.
@@ -216,16 +271,16 @@ fn non_wide_music_tree_rows_paint_the_grouped_row_contracts() {
         MUSIC_TREE_LONG_TITLE_YEAR.to_string(),
         "year right-aligned in the fixed gutter"
     );
-    let outside: String =
-        music_tree_row_text(&term, long_y, list_area.right(), MUSIC_TREE_NON_WIDE_WIDTH);
-    assert!(
-        outside.chars().all(|c| c == ' '),
-        "nothing overruns the browser rect: '{outside}'"
-    );
     assert_music_tree_row_within(&term, long_y, list_area, MUSIC_TREE_NON_WIDE_WIDTH);
 
-    // Scrollbar on the overflowing projection.
-    assert_ne!(buf[(list_area.right() - 1, list_area.y + 1)].symbol(), " ");
+    // Scrollbar on the overflowing projection remains the shared painter.
+    assert_music_tree_scrollbar_matches_shared(
+        &term,
+        &browser,
+        list_area,
+        MUSIC_TREE_NON_WIDE_WIDTH,
+        MUSIC_TREE_NON_WIDE_HEIGHT,
+    );
 
     // Frame B: the second Beta leaf's bar spans the narrower full row, and
     // Beta's first leaf stripes again above it.

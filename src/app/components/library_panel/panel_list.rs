@@ -140,12 +140,10 @@ impl PanelList for MusicTreeBrowser {
     }
 
     fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
-        // The tree paints and hit-tests the single content rect it is viewed
-        // into; the wider claim rect only extends the canonical selected-row
-        // bar, which the tree's own painter owns (task 3.2). Configuring the
-        // slot invalidates the prior frame's retained geometry.
-        let _ = (claim_rect, content_rect);
-        self.invalidate();
+        // Match the canonical list's claim/content split: the tree uses the
+        // claim width for its rows and shared scrollbar, while the content
+        // height remains its viewport metric.
+        MusicTreeBrowser::set_geometry(self, claim_rect, content_rect);
     }
 
     fn selected_row_rect(&self) -> Option<Rect> {

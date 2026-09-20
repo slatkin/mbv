@@ -128,8 +128,9 @@ fn music_tree_hierarchy_glyph(c: char) -> bool {
     matches!(c, '>' | 'v' | '*' | '?' | '~' | '|' | '-' | '`')
 }
 
-/// Every visible node row keeps its title, uses only plain-space indentation,
-/// and paints nothing past the browser rect (the tree's row contract).
+/// Every visible node row keeps its title and uses only plain-space indentation.
+/// The shared scrollbar is allowed in the same outside-column position used by
+/// the canonical list painter.
 fn assert_music_tree_row_within(
     term: &Terminal<TestBackend>,
     row_y: u16,
@@ -145,11 +146,20 @@ fn assert_music_tree_row_within(
         row.chars().any(|c| !c.is_whitespace() && c != '…'),
         "row keeps at least one title cell: {row:?}"
     );
-    let outside = music_tree_row_text(term, row_y, list_area.right(), frame_width);
-    assert!(
-        outside.chars().all(|c| c == ' '),
-        "nothing overruns the browser rect: {outside:?}"
-    );
+    let scrollbar_x = if list_area.right() < frame_width {
+        list_area.right()
+    } else {
+        list_area.right().saturating_sub(1)
+    };
+    for x in list_area.right()..frame_width {
+        if x != scrollbar_x {
+            assert_eq!(
+                term.backend().buffer()[(x, row_y)].symbol(),
+                " ",
+                "only the shared scrollbar may occupy the outside column"
+            );
+        }
+    }
 }
 
 /// A character-column slice of a row (glyphs are single-width, so char index
@@ -160,6 +170,42 @@ fn music_tree_row_slice(row: &str, start: usize, len: usize) -> String {
 
 fn music_tree_row_bg(term: &Terminal<TestBackend>, x: u16, y: u16) -> ratatui::style::Color {
     term.backend().buffer()[(x, y)].bg
+}
+
+/// The tree and canonical list use the same scrollbar painter, position, and
+/// metrics. Rendering the shared widget separately makes this a focused buffer
+/// contract rather than a glyph-only assertion.
+fn assert_music_tree_scrollbar_matches_shared(
+    term: &Terminal<TestBackend>,
+    browser: &MusicTreeBrowser,
+    area: Rect,
+    width: u16,
+    height: u16,
+) {
+    let mut expected = Terminal::new(TestBackend::new(width, height)).unwrap();
+    expected
+        .draw(|frame| {
+            crate::app::render::components::widgets::render_right_scrollbar_with_viewport(
+                frame,
+                area,
+                browser.projection_len(),
+                area.height as usize,
+                browser.offset(),
+                palette::SCROLLBAR,
+            );
+        })
+        .unwrap();
+    let scrollbar_x = if area.right() < width {
+        area.right()
+    } else {
+        area.right().saturating_sub(1)
+    };
+    for y in area.y..area.bottom() {
+        let actual = &term.backend().buffer()[(scrollbar_x, y)];
+        let shared = &expected.backend().buffer()[(scrollbar_x, y)];
+        assert_eq!(actual.symbol(), shared.symbol(), "scrollbar glyph at y={y}");
+        assert_eq!(actual.fg, shared.fg, "scrollbar foreground at y={y}");
+    }
 }
 
 /// The zebra fill the tree resolves for its rows: the focused Green2 fill
@@ -202,6 +248,11 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         list_area.width > 10 && list_area.height > 4,
         "wide browser rect reserved"
     );
+    let scrollbar_x = if list_area.right() < MUSIC_TREE_WIDE_WIDTH {
+        list_area.right()
+    } else {
+        list_area.right().saturating_sub(1)
+    };
 
     let mut browser = mounted_music_tree_browser(&model);
     browser.expand_root(MUSIC_TREE_ALPHA_ROOT);
@@ -224,14 +275,10 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     let buf = term.backend().buffer();
     assert_eq!(browser.offset(), 0, "a top selection needs no scroll");
 
-    // The selected artist root keeps its title and paints nothing past the
-    // browser rect.
+    // The selected artist root keeps its title, and the scrollbar follows the
+    // canonical list's outside-column placement.
     assert_music_tree_row_within(&term, list_area.y, list_area, MUSIC_TREE_WIDE_WIDTH);
-    // The overflowing projection's scrollbar takes the `SCROLLBAR` role; the
-    // crate exposes no scrollbar style field, so the block style's foreground
-    // (applied to the whole browser area) is what its unstyled scrollbar
-    // inherits.
-    let scrollbar_cell = &buf[(list_area.right() - 1, list_area.y + 1)];
+    let scrollbar_cell = &buf[(scrollbar_x, list_area.y + 1)];
     assert_ne!(scrollbar_cell.symbol(), " ");
     assert_eq!(
         scrollbar_cell.fg,
@@ -255,12 +302,14 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         "Alpha leaf 1 rests"
     );
 
-    // Scrollbar: the overflowing projection paints the crate's vertical
-    // scrollbar in the column right of the table.
-    assert_ne!(
-        buf[(list_area.right() - 1, list_area.y + 1)].symbol(),
-        " ",
-        "vertical scrollbar painted"
+    // The shared scrollbar matches the canonical widget exactly; the crate's
+    // default scrollbar does not remain in the tree column.
+    assert_music_tree_scrollbar_matches_shared(
+        &term,
+        &browser,
+        list_area,
+        MUSIC_TREE_WIDE_WIDTH,
+        MUSIC_TREE_WIDE_HEIGHT,
     );
 
     // Latest-render hit testing: the painted second row (frame A is at the
@@ -276,7 +325,7 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
     }
     assert!(matches!(
         browser.hit_test(Position {
-            x: list_area.right() - 1,
+            x: scrollbar_x,
             y: list_area.y + 1
         }),
         Some(TreeHit::VerticalScrollbar)
@@ -556,6 +605,18 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
     );
     assert_ne!(unfocused_zebra, zebra, "focus changes the zebra role");
     assert_eq!(music_tree_row_bg(&term, title_x, cursor_y), unfocused_zebra);
+    let scrollbar_x = if list_area.right() < MUSIC_TREE_WIDE_WIDTH {
+        list_area.right()
+    } else {
+        list_area.right().saturating_sub(1)
+    };
+    for y in list_area.y..list_area.bottom() {
+        assert_eq!(
+            term.backend().buffer()[(scrollbar_x, y)].symbol(),
+            " ",
+            "unfocused tree has no scrollbar glyph"
+        );
+    }
 
     // Unfocused multi-selection: with the cursor moved off the marked album
     // leaf, the mark alone paints the bar across its whole row, again

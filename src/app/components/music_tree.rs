@@ -34,6 +34,7 @@
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
+use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::Style;
 use ratatui::text::Span;
@@ -662,6 +663,11 @@ pub(in crate::app) struct MusicTreeBrowser {
     focused: bool,
     marquee_key: String,
     marquee_started: Instant,
+    /// The parent-owned claim and row-flow rectangles. The canonical media
+    /// list uses the claim width for rows and the scrollbar while retaining
+    /// the content height for viewport metrics; the tree follows that same
+    /// geometry without creating a second presentation owner.
+    configured_geometry: Option<(Rect, Rect)>,
     /// The rect of the latest frame, so a geometry change re-applies the
     /// viewport visibility rule to this same owner (design D3/D4) instead of
     /// leaving the selection outside a newly clamped viewport.
@@ -695,6 +701,7 @@ impl MusicTreeBrowser {
             focused: true,
             marquee_key: String::new(),
             marquee_started: Instant::now(),
+            configured_geometry: None,
             last_area: None,
             last_reported_album: None,
             paint_complete: false,
@@ -735,6 +742,12 @@ impl MusicTreeBrowser {
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
         self.focused = focused;
+    }
+
+    pub(in crate::app) fn set_geometry(&mut self, claim_rect: Rect, content_rect: Rect) {
+        self.configured_geometry = Some((claim_rect, content_rect));
+        self.last_area = None;
+        self.invalidate();
     }
 
     pub(in crate::app) fn expand_root(&mut self, root: usize) {
@@ -1251,9 +1264,16 @@ impl MusicTreeBrowser {
             focused,
             marquee_key,
             marquee_started,
+            configured_geometry,
             last_area,
             ..
         } = self;
+        let (claim_rect, content_rect) = configured_geometry.unwrap_or((area, area));
+        let paint_area = Rect {
+            y: content_rect.y,
+            height: content_rect.height,
+            ..claim_rect
+        };
 
         state.ensure_projection(model, query);
         // A geometry change re-applies the viewport visibility rule to this
@@ -1262,7 +1282,7 @@ impl MusicTreeBrowser {
         // new height instead of leaving the selection outside a clamped
         // viewport. A settled-content change already re-arms through
         // `reconcile`, and a no-op frame does not touch the offset.
-        if *last_area != Some(area) {
+        if *last_area != Some(content_rect) {
             // Re-arm the selected row's visibility for the new height without
             // touching expansion. The crate only arms its `KeepInView` rule
             // when the selection actually changes, so clear and restore the
@@ -1270,15 +1290,15 @@ impl MusicTreeBrowser {
             // used here because their `expand_to` would promote filter-forced
             // expansion into persistent expansion on every resize (D5).
             rearm_selection_visibility_for(state);
-            *last_area = Some(area);
+            *last_area = Some(content_rect);
         }
         // Mirror the crate's resolved layout for this fixed configuration so
         // the renderer can budget titles before the widget renders: the
         // vertical scrollbar takes one column when the projection overflows,
         // and the primary tree column takes every remaining column (the
         // six-column year gutter is painted inside it, per row).
-        let overflow = usize::from(state.visible_len() > area.height as usize);
-        let tree_col_width = area.width.saturating_sub(overflow as u16);
+        let overflow = usize::from(state.visible_len() > content_rect.height as usize);
+        let tree_col_width = paint_area.width.saturating_sub(overflow as u16);
 
         // The focused selected row's marquee window, computed once per frame
         // through the shared marquee primitive (design D8). The clock keys on
@@ -1334,7 +1354,71 @@ impl MusicTreeBrowser {
 
         let widget = TreeListView::new(model, query, &label, &columns, tree_style(*focused))
             .glyphs(tree_glyphs());
-        StatefulWidget::render(widget, area, frame.buffer_mut(), state);
+
+        // `tui-treelistview` 0.2.2 has no scrollbar policy or scrollbar style
+        // seam: an overflowing render always appends Ratatui's default
+        // scrollbar inside the supplied area. Render into a cloned buffer and
+        // omit that one crate-owned column, then paint the app's shared
+        // scrollbar in its normal position. Extending the widget area by one
+        // column when there is room makes the crate's table occupy the same
+        // content width as the other library lists while its discarded
+        // scrollbar lands exactly where the shared scrollbar does. At the
+        // frame edge both widgets necessarily use the final content column.
+        let overflow = state.visible_len() > content_rect.height as usize;
+        let tree_area = if overflow && paint_area.right() < frame.area().right() {
+            Rect {
+                width: paint_area.width.saturating_add(1),
+                ..paint_area
+            }
+        } else {
+            paint_area
+        };
+        let mut tree_buffer = Buffer::empty(tree_area);
+        {
+            let target = frame.buffer_mut();
+            for y in tree_area.y..tree_area.bottom() {
+                for x in tree_area.x..tree_area.right() {
+                    if let (Some(source), Some(destination)) = (
+                        target.cell(Position { x, y }),
+                        tree_buffer.cell_mut(Position { x, y }),
+                    ) {
+                        destination.clone_from(source);
+                    }
+                }
+            }
+        }
+        StatefulWidget::render(widget, tree_area, &mut tree_buffer, state);
+        let crate_scrollbar_x = overflow.then(|| tree_area.right().saturating_sub(1));
+        {
+            let target = frame.buffer_mut();
+            for y in paint_area.y..paint_area.bottom() {
+                for x in paint_area.x..paint_area.right() {
+                    if crate_scrollbar_x == Some(x) {
+                        continue;
+                    }
+                    if let (Some(source), Some(destination)) = (
+                        tree_buffer.cell(Position { x, y }),
+                        target.cell_mut(Position { x, y }),
+                    ) {
+                        destination.clone_from(source);
+                    }
+                }
+            }
+        }
+        // The crate scrollbar has been discarded above. The shared helper is
+        // focus-gated exactly like the canonical media-list painter, so an
+        // unfocused tree has no scrollbar rather than retaining a second
+        // crate-default indicator.
+        if *focused {
+            crate::app::render::components::widgets::render_right_scrollbar_with_viewport(
+                frame,
+                paint_area,
+                state.visible_len(),
+                content_rect.height as usize,
+                state.offset(),
+                palette::SCROLLBAR,
+            );
+        }
         self.paint_complete = true;
     }
 }
@@ -1371,15 +1455,13 @@ fn tree_glyphs() -> TreeGlyphs<'static> {
 /// selected row paints the canonical `SELECTED_ROW_BG` bar across the whole
 /// row (the crate applies it after row cells, so it overrides the zebra);
 /// hierarchy guides take the muted role via `line_style` and the aggregate
-/// mark states take the positive/muted-accent roles. The block style carries
-/// the `SCROLLBAR` foreground because the crate paints its scrollbar with an
-/// unstyled `Scrollbar::default()` and exposes no scrollbar style field: the
-/// block style is applied to the whole browser area first, so the scrollbar
-/// glyphs inherit it. The buffer cases pin that inheritance.
+/// mark states take the positive/muted-accent roles. The crate's
+/// unconfigurable scrollbar is discarded by `view`; the shared application
+/// scrollbar is painted after the tree with the canonical role and glyph set.
 fn tree_style(focused: bool) -> tui_treelistview::TreeListViewStyle<'static> {
     use tui_treelistview::{TreeHorizontalScroll, TreeListViewStyle, TreeRowRendering};
     TreeListViewStyle {
-        block_style: Style::default().fg(palette::SCROLLBAR),
+        block_style: Style::default(),
         highlight_style: if focused {
             Style::default().bg(palette::SELECTED_ROW_BG)
         } else {
