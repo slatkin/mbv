@@ -605,12 +605,6 @@ impl LibraryContentOwner for MusicContent {
                 None => None,
             };
         }
-        // Grouped Music keeps Visual mode inside its tree owner. The status
-        // projection and bulk-action request are deliberately left to row
-        // 4.3; this path only mutates/claims destination-local state.
-        if !self.track_focused && self.browser.handle_visual_key(key) {
-            return None;
-        }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Music is focused.
         if key.modifiers.contains(KeyModifiers::CONTROL) && !self.track_focused {
@@ -871,7 +865,6 @@ impl LibraryContentOwner for MusicContent {
 
     fn on_key_result(&mut self, key: &KeyEvent) -> LeafKeyResult {
         let active = self.inline_search.is_active();
-        let visual_claimed = !self.track_focused && self.browser.visual_key_claimed(key);
         match self.on_key(key) {
             Some(message) => LeafKeyResult::Consumed(Some(message)),
             None if (active
@@ -886,7 +879,6 @@ impl LibraryContentOwner for MusicContent {
                         | Key::Right
                         | Key::Char(_)
                 ))
-                || visual_claimed
                 || (self.track_focused
                     && matches!(
                         key.code,

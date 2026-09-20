@@ -44,7 +44,6 @@ use tui_treelistview::{
     TreeListView, TreeListViewState, TreeMarkState, TreeModel, TreeQuery, TreeRevision,
     TreeRowContext,
 };
-use tuirealm::event::{Key, KeyEvent, KeyModifiers};
 
 use unicode_width::UnicodeWidthStr;
 
@@ -121,11 +120,6 @@ pub(in crate::app) struct MusicTreeModel {
     /// (the group-relative zebra phase). `usize::MAX` for artist roots.
     leaf_position: Vec<usize>,
     revision: TreeRevision,
-    /// Temporary child projection used only while the crate recomputes its
-    /// aggregate mark cache for an active filter. It is cleared immediately
-    /// afterward, so the settled model and tree projection always use the full
-    /// child lists.
-    mark_children: Option<Vec<Vec<usize>>>,
 }
 
 impl MusicTreeModel {
@@ -137,7 +131,6 @@ impl MusicTreeModel {
             children: Vec::new(),
             leaf_position: Vec::new(),
             revision: TreeRevision::INITIAL,
-            mark_children: None,
         }
     }
 
@@ -213,7 +206,6 @@ impl MusicTreeModel {
         self.children.clear();
         self.leaf_position.clear();
         self.revision = TreeRevision::INITIAL;
-        self.mark_children = None;
     }
 
     /// Interns (or refreshes the display name of) one artist root.
@@ -351,18 +343,6 @@ impl MusicTreeModel {
     pub(in crate::app) fn is_striped(&self, id: usize) -> bool {
         self.leaf_position[id] != usize::MAX && self.leaf_position[id].is_multiple_of(2)
     }
-
-    fn set_mark_children(&mut self, children: Vec<(usize, Vec<usize>)>) {
-        let mut scoped = vec![Vec::new(); self.nodes.len()];
-        for (root, leaves) in children {
-            scoped[root] = leaves;
-        }
-        self.mark_children = Some(scoped);
-    }
-
-    fn clear_mark_children(&mut self) {
-        self.mark_children = None;
-    }
 }
 
 impl TreeModel for MusicTreeModel {
@@ -374,10 +354,7 @@ impl TreeModel for MusicTreeModel {
 
     fn children(&self, id: usize) -> TreeChildren<'_, usize> {
         match &self.nodes[id] {
-            MusicNode::Artist { .. } => self.mark_children.as_ref().map_or_else(
-                || TreeChildren::Loaded(&self.children[id]),
-                |children| TreeChildren::Loaded(&children[id]),
-            ),
+            MusicNode::Artist { .. } => TreeChildren::Loaded(&self.children[id]),
             MusicNode::Album { .. } => TreeChildren::Leaf,
         }
     }
@@ -591,13 +568,6 @@ pub(in crate::app) struct MusicTreeBrowser {
     /// panel's `set_paint_policy`/`set_geometry`/`clamp_viewport` invalidate
     /// it before the next view, so a skipped frame claims no point).
     paint_complete: bool,
-    /// The album leaf from which keyboard/Shift range extension starts.
-    visual_anchor: Option<usize>,
-    /// Membership frozen by the last toggle/Visual-mode entry. A range is the
-    /// union of this set and the visible album leaves between the anchor and
-    /// its endpoint, matching canonical MediaList range semantics.
-    frozen_marks: HashSet<usize>,
-    visual_mode: bool,
 }
 
 impl MusicTreeBrowser {
@@ -620,9 +590,6 @@ impl MusicTreeBrowser {
             last_area: None,
             last_reported_album: None,
             paint_complete: false,
-            visual_anchor: None,
-            frozen_marks: HashSet::new(),
-            visual_mode: false,
         }
     }
 
@@ -637,25 +604,8 @@ impl MusicTreeBrowser {
     /// leaves the cached projection, offset, and arming untouched.
     pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) -> bool {
         self.model.reconcile(entries);
-        let active_album_ids: HashSet<usize> = entries
-            .iter()
-            .filter_map(|entry| {
-                self.model
-                    .node_id(&MusicNodeKey::Album(entry.target.clone()))
-            })
-            .collect();
-        for id in self.state.manual_marked_ids().collect::<Vec<_>>() {
-            if !active_album_ids.contains(&id) {
-                self.state.set_marked(id, false);
-            }
-        }
-        self.frozen_marks.retain(|id| active_album_ids.contains(id));
-        self.visual_anchor = self
-            .visual_anchor
-            .filter(|id| active_album_ids.contains(id));
         let rebuilt = self.state.ensure_projection(&self.model, &self.query);
-        self.sync_mark_states();
-        self.visual_mode = self.has_visible_marks();
+        self.state.ensure_mark_states(&self.model);
         if rebuilt {
             // The crate's hit map belongs to the completed frame, not to the
             // newly reconciled projection. Do not let a settled content push
@@ -663,87 +613,6 @@ impl MusicTreeBrowser {
             self.invalidate();
         }
         rebuilt
-    }
-
-    fn filter_active(&self) -> bool {
-        !matches!(self.query.filter_config(), TreeFilterConfig::Disabled)
-    }
-
-    /// Current settled album leaves, independent of persistent expansion. This
-    /// is the unfiltered Visual-mode scope; a collapsed root still retains
-    /// marks on its settled children, just as a collapsed canonical list
-    /// retains its row membership.
-    fn active_album_ids(&self) -> Vec<usize> {
-        self.model
-            .roots
-            .iter()
-            .flat_map(|root| self.model.children[*root].iter().copied())
-            .collect()
-    }
-
-    /// Album leaves in the current tree projection. Filtering is the only
-    /// projection that masks stored marks; persistent expansion controls the
-    /// rows a range can walk, but does not delete membership.
-    fn visible_album_ids(&self) -> Vec<usize> {
-        self.state
-            .projection()
-            .nodes()
-            .iter()
-            .filter_map(|node| self.model.target_of(node.id()).map(|_| node.id()))
-            .collect()
-    }
-
-    /// Album leaves painted beneath one artist root. Root toggles and ranges
-    /// use this projection so filtered descendants cannot be marked by an
-    /// operation on their visible ancestor.
-    fn visible_children_of(&self, root: usize) -> Vec<usize> {
-        self.state
-            .projection()
-            .nodes()
-            .iter()
-            .filter(|node| node.parent() == Some(root))
-            .filter_map(|node| self.model.target_of(node.id()).map(|_| node.id()))
-            .collect()
-    }
-
-    /// Recomputes the crate-owned aggregate mark cache. The crate remains the
-    /// sole membership owner, including marks hidden by a filter. During this
-    /// short recomputation only, the model exposes each root's visible child
-    /// leaves to the crate's postorder aggregation; the settled model and the
-    /// normal tree projection continue to use the full child lists.
-    fn sync_mark_states(&mut self) {
-        let stored: Vec<usize> = self.state.manual_marked_ids().collect();
-        // Clearing and restoring the same stable IDs advances the crate's
-        // manual-mark revision when membership exists, forcing aggregate
-        // recomputation after a filter projection changes without maintaining
-        // a second membership authority in this owner.
-        if !stored.is_empty() {
-            self.state.clear_marks();
-            for id in stored {
-                self.state.set_marked(id, true);
-            }
-        }
-
-        if self.filter_active() {
-            let children = self
-                .model
-                .roots
-                .iter()
-                .map(|&root| (root, self.visible_children_of(root)))
-                .collect();
-            self.model.set_mark_children(children);
-        }
-        self.state.ensure_mark_states(&self.model);
-        self.model.clear_mark_children();
-    }
-
-    fn has_visible_marks(&self) -> bool {
-        let scope = if self.filter_active() {
-            self.visible_album_ids()
-        } else {
-            self.active_album_ids()
-        };
-        scope.iter().any(|id| self.state.is_manually_marked(*id))
     }
 
     pub(in crate::app) fn set_focused(&mut self, focused: bool) {
@@ -846,16 +715,6 @@ impl MusicTreeBrowser {
         self.state.select_index(Some(index));
     }
 
-    /// Selects a node already resolved from the latest painted projection.
-    /// Selection alone does not invalidate row geometry, so a continuing
-    /// pointer gesture may resolve another row from that same completed frame.
-    pub(in crate::app) fn select_visible_id(&mut self, id: usize) -> bool {
-        let Some(index) = self.state.visible_index_of(id) else {
-            return false;
-        };
-        self.state.select_index(Some(index))
-    }
-
     /// The selected node's stable arena id.
     pub(in crate::app) fn selected_id(&self) -> Option<usize> {
         self.state.selected_id()
@@ -919,8 +778,7 @@ impl MusicTreeBrowser {
             None => TreeFilterConfig::Disabled,
         });
         self.state.ensure_projection(&self.model, &self.query);
-        self.sync_mark_states();
-        self.visual_mode = self.has_visible_marks();
+        self.state.ensure_mark_states(&self.model);
         self.invalidate();
     }
 
@@ -946,221 +804,17 @@ impl MusicTreeBrowser {
     }
 
     /// Stores a mark on an album leaf. Artist roots derive their aggregate
-    /// state from child leaves and are never stored mark targets (design D6).
-    /// Membership remains in the crate's `TreeListViewState`; only the range
-    /// anchor/frozen snapshot lives on this destination owner.
+    /// state from child leaves and are never stored as mark targets (design
+    /// D6), so marking one is a no-op.
     pub(in crate::app) fn set_marked(&mut self, id: usize, marked: bool) -> bool {
-        if !self.active_album_ids().contains(&id) {
+        if self.model.target_of(id).is_none() {
             return false;
         }
         let changed = self.state.set_marked(id, marked);
         if changed {
-            self.frozen_marks = self.state.manual_marked_ids().collect();
-            self.visual_anchor = Some(id);
-            self.visual_mode = self.has_visible_marks();
-            self.sync_mark_states();
+            self.state.ensure_mark_states(&self.model);
         }
         changed
-    }
-
-    /// Whether the visible tree has an active Visual-mode membership. Stored
-    /// marks hidden by a filter remain in the crate state but do not keep the
-    /// filtered tree in Visual mode.
-    pub(in crate::app) fn is_visual_mode(&self) -> bool {
-        self.visual_mode && self.has_visible_marks()
-    }
-
-    /// Album targets in the owner-local selection order. The unfiltered scope
-    /// follows settled artist/album order even when roots are collapsed;
-    /// filtering narrows it to the current visible album projection.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(in crate::app) fn marked_album_targets(&self) -> Vec<String> {
-        let ids = if self.filter_active() {
-            self.visible_album_ids()
-        } else {
-            self.active_album_ids()
-        };
-        ids.into_iter()
-            .filter(|id| self.state.is_manually_marked(*id))
-            .filter_map(|id| self.model.target_of(id).map(str::to_owned))
-            .collect()
-    }
-
-    /// Selects a plain-click target and exits Visual mode. The click is still
-    /// resolved against the latest tree frame by the caller; this method only
-    /// mutates the owner after that resolution.
-    pub(in crate::app) fn select_click(&mut self, id: usize) -> bool {
-        self.clear_marks();
-        self.select_visible_id(id)
-    }
-
-    /// Applies a Ctrl/Visual toggle to one visible tree node. Album leaves are
-    /// toggled individually; an artist root toggles exactly its visible child
-    /// leaves and never stores the root identity. The pre-toggle cursor leaf is
-    /// seeded on the first album toggle, matching canonical MediaList Ctrl
-    /// semantics without seeding a different artist when a root is clicked.
-    pub(in crate::app) fn toggle_node(&mut self, id: usize) -> bool {
-        let Some(_) = self.model.nodes.get(id) else {
-            return false;
-        };
-        if !self.model.is_artist(id) && !self.active_album_ids().contains(&id) {
-            return false;
-        }
-
-        if self.model.is_artist(id) {
-            let children = self.visible_children_of(id);
-            let all_marked = !children.is_empty()
-                && children
-                    .iter()
-                    .all(|child| self.state.is_manually_marked(*child));
-            for child in children {
-                self.state.set_marked(child, !all_marked);
-            }
-            self.visual_anchor = self
-                .visible_children_of(id)
-                .first()
-                .copied()
-                .or(self.visual_anchor);
-        } else {
-            let Some(current) = self
-                .selected_id()
-                .filter(|current| self.model.target_of(*current).is_some())
-            else {
-                self.state.set_marked(id, true);
-                self.visual_anchor = Some(id);
-                self.frozen_marks = self.state.manual_marked_ids().collect();
-                self.visual_mode = self.has_visible_marks();
-                self.sync_mark_states();
-                let _ = self.select_visible_id(id);
-                return true;
-            };
-            let had_visible_marks = self.has_visible_marks();
-            let seeded_current = !had_visible_marks
-                && !self.state.is_manually_marked(current)
-                && self.state.set_marked(current, true);
-            if !(seeded_current && current == id) && !self.state.set_marked(id, true) {
-                self.state.set_marked(id, false);
-            }
-            self.visual_anchor = Some(id);
-        }
-
-        self.frozen_marks = self.state.manual_marked_ids().collect();
-        self.visual_mode = self.has_visible_marks();
-        self.sync_mark_states();
-        let _ = self.select_visible_id(id);
-        true
-    }
-
-    /// Extends the selection from the stable Visual anchor to an album leaf in
-    /// the current visible projection. Artist roots are selectable rows but
-    /// are never range endpoints or membership identities.
-    pub(in crate::app) fn range_to(&mut self, id: usize) -> bool {
-        let Some(_) = self.model.target_of(id) else {
-            return self.select_visible_id(id);
-        };
-        let visible = self.visible_album_ids();
-        let Some(end) = visible.iter().position(|candidate| *candidate == id) else {
-            return self.select_visible_id(id);
-        };
-        let anchor = self
-            .visual_anchor
-            .filter(|anchor| visible.contains(anchor))
-            .or_else(|| {
-                self.selected_album_target()
-                    .filter(|selected| {
-                        visible
-                            .iter()
-                            .any(|id| self.model.target_of(*id) == Some(*selected))
-                    })
-                    .and_then(|selected| {
-                        self.model
-                            .node_id(&MusicNodeKey::Album(selected.to_string()))
-                    })
-            })
-            .unwrap_or(id);
-        let Some(start) = visible.iter().position(|candidate| *candidate == anchor) else {
-            return self.select_visible_id(id);
-        };
-        let (lo, hi) = if start <= end {
-            (start, end)
-        } else {
-            (end, start)
-        };
-        let visible_set: HashSet<usize> = visible.iter().copied().collect();
-        let active_set: HashSet<usize> = self.active_album_ids().into_iter().collect();
-        let stored: HashSet<usize> = self.state.manual_marked_ids().collect();
-        let mut next: HashSet<usize> = stored
-            .iter()
-            .copied()
-            .filter(|candidate| active_set.contains(candidate) && !visible_set.contains(candidate))
-            .collect();
-        next.extend(
-            self.frozen_marks.iter().copied().filter(|candidate| {
-                active_set.contains(candidate) && visible_set.contains(candidate)
-            }),
-        );
-        next.extend(visible[lo..=hi].iter().copied());
-        self.state.clear_marks();
-        for candidate in next {
-            self.state.set_marked(candidate, true);
-        }
-        self.visual_anchor = Some(anchor);
-        self.visual_mode = self.has_visible_marks();
-        self.sync_mark_states();
-        let _ = self.select_visible_id(id);
-        true
-    }
-
-    /// Handles the destination-local Visual-mode chords. This deliberately
-    /// emits no status/bulk-action request; row 4.3 owns that boundary. A
-    /// `true` result only says that the focused Music owner consumed the local
-    /// chord after mutating its own tree state.
-    pub(in crate::app) fn handle_visual_key(&mut self, key: &KeyEvent) -> bool {
-        let starts =
-            matches!(key.code, Key::Char('v' | 'V')) && key.modifiers == KeyModifiers::SHIFT;
-        if starts {
-            let Some(selected) = self.selected_id() else {
-                return false;
-            };
-            if !self.is_visual_mode() {
-                return self.toggle_node(selected);
-            }
-            self.visual_anchor = self.range_anchor_for(selected);
-            self.frozen_marks = self.state.manual_marked_ids().collect();
-            return true;
-        }
-        if !self.is_visual_mode() || !key.modifiers.is_empty() {
-            return false;
-        }
-        match key.code {
-            Key::Esc => {
-                self.clear_marks();
-                true
-            }
-            Key::Char(' ') => self
-                .selected_id()
-                .is_some_and(|selected| self.toggle_node(selected)),
-            _ => false,
-        }
-    }
-
-    /// Whether `on_key_result` should claim a Visual chord even though the
-    /// local mutation emits no shell request.
-    pub(in crate::app) fn visual_key_claimed(&self, key: &KeyEvent) -> bool {
-        let starts =
-            matches!(key.code, Key::Char('v' | 'V')) && key.modifiers == KeyModifiers::SHIFT;
-        let continues = self.is_visual_mode()
-            && key.modifiers.is_empty()
-            && matches!(key.code, Key::Esc | Key::Char(' '));
-        self.selected_id().is_some() && (starts || continues)
-    }
-
-    fn range_anchor_for(&self, selected: usize) -> Option<usize> {
-        if self.model.target_of(selected).is_some() {
-            Some(selected)
-        } else {
-            self.visible_children_of(selected).first().copied()
-        }
     }
 
     pub(in crate::app) fn mark_state(&self, id: usize) -> TreeMarkState {
@@ -1260,14 +914,10 @@ impl MusicTreeBrowser {
     }
 
     /// Clears every stored album mark and refreshes the derived aggregate
-    /// state (destination-switch selection clear). Queue ownership is wholly
-    /// separate; this only mutates the Grouped Music tree owner.
+    /// state (destination-switch selection clear).
     pub(in crate::app) fn clear_marks(&mut self) {
         self.state.clear_marks();
-        self.frozen_marks.clear();
-        self.visual_anchor = None;
-        self.visual_mode = false;
-        self.sync_mark_states();
+        self.state.ensure_mark_states(&self.model);
     }
 
     /// Latest-completed-render hit resolution: the node id and its projection
@@ -1281,19 +931,8 @@ impl MusicTreeBrowser {
         }
     }
 
-    fn extend_current_visual_range(&mut self) {
-        let Some(selected) = self.selected_id() else {
-            return;
-        };
-        if self.model.target_of(selected).is_some() {
-            let _ = self.range_to(selected);
-        }
-    }
-
     /// Moves the selection `delta` visible rows (the tree's own visible-node
-    /// movement), clamped at the projection bounds by the crate. While Visual
-    /// mode is active, movement extends the anchored album range and skips
-    /// artist roots.
+    /// movement), clamped at the projection bounds by the crate.
     pub(in crate::app) fn move_selection(&mut self, delta: i64) {
         for _ in 0..delta.unsigned_abs() {
             let _ = if delta < 0 {
@@ -1301,9 +940,6 @@ impl MusicTreeBrowser {
             } else {
                 self.state.select_next()
             };
-            if self.is_visual_mode() {
-                self.extend_current_visual_range();
-            }
         }
     }
 
@@ -1315,16 +951,10 @@ impl MusicTreeBrowser {
 
     pub(in crate::app) fn select_first_visible(&mut self) {
         let _ = self.state.select_first();
-        if self.is_visual_mode() {
-            self.extend_current_visual_range();
-        }
     }
 
     pub(in crate::app) fn select_last_visible(&mut self) {
         let _ = self.state.select_last();
-        if self.is_visual_mode() {
-            self.extend_current_visual_range();
-        }
     }
 
     fn row_rect_for_index(&self, index: usize) -> Option<Rect> {

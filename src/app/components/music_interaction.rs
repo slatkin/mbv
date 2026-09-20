@@ -108,36 +108,22 @@ impl MusicContent {
                             self.browser.move_selection(delta);
                             self.album_selection_request(AlbumCursorKind::Move)
                         }
-                        MediaListSurfaceInput::Click(at) => {
+                        MediaListSurfaceInput::Click(at)
+                        | MediaListSurfaceInput::ToggleClick(at)
+                        | MediaListSurfaceInput::RangeClick(at) => {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (id, _) = self.browser.hit_node(at)?;
-                            self.browser.select_click(id);
-                            self.album_selection_request(AlbumCursorKind::Move)
-                        }
-                        MediaListSurfaceInput::ToggleClick(at) => {
-                            if !self.browser.claims_point(at) {
-                                return None;
-                            }
-                            let (id, _) = self.browser.hit_node(at)?;
-                            self.browser.toggle_node(id);
-                            self.album_selection_request(AlbumCursorKind::Move)
-                        }
-                        MediaListSurfaceInput::RangeClick(at) => {
-                            if !self.browser.claims_point(at) {
-                                return None;
-                            }
-                            let (id, _) = self.browser.hit_node(at)?;
-                            self.browser.range_to(id);
+                            let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.select_index(index);
                             self.album_selection_request(AlbumCursorKind::Move)
                         }
                         MediaListSurfaceInput::DoubleClick(at) => {
                             if !self.browser.claims_point(at) {
                                 return None;
                             }
-                            let (id, _) = self.browser.hit_node(at)?;
-                            self.browser.select_visible_id(id);
+                            let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.select_index(index);
                             self.selected_item()
                                 .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
                         }
