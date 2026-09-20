@@ -50,10 +50,9 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
     let follow_focus = focused && row.focus != FocusSource::Fixed;
     if follow_focus {
         SurfaceColors::fill(if surface == Surface::LibraryPanel {
-            // The focused Library panel deliberately keeps the Slate sheet
-            // rather than adopting the focused column fill; the unfocused
-            // value remains the surface table's resting value below.
-            Palette::Slate.color()
+            // The focused Library panel uses the Green2 content-body sheet;
+            // its resting arm remains the Slate value from the surface table.
+            Palette::Green2.color()
         } else if row.soft {
             // The soft content-body surface fill: its own value, not the
             // scrollbar's `SCROLLBAR`, whose `Palette::Green2` value it
@@ -65,7 +64,11 @@ pub(in crate::app) fn surface_colors(surface: Surface, focused: bool) -> Surface
             row.level.focused_fill()
         })
     } else {
-        SurfaceColors::fill(row.resting)
+        SurfaceColors::fill(if surface == Surface::LibraryPanel {
+            Palette::Slate.color()
+        } else {
+            row.resting
+        })
     }
 }
 
@@ -113,7 +116,7 @@ mod tests {
             Surface::SelectedRowOnQueueColumn => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::SelectedRowOnLibraryPane => (SURFACE_FOCUSED, SURFACE_RESTING),
             Surface::ContextMenuSelectedRow => (ACCENT_ACTIVE, ACCENT_ACTIVE),
-            Surface::LibraryPanel => (Palette::Slate.color(), SURFACE_RESTING),
+            Surface::LibraryPanel => (Palette::Green2.color(), Palette::Slate.color()),
             Surface::QueuePanel => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::MainContentBox => (Palette::Green2.color(), SURFACE_BACKDROP),
             Surface::InlineHero => (SURFACE_FOCUSED, SURFACE_RESTING),
@@ -193,7 +196,7 @@ mod tests {
                 ),
                 Level::ContentBody => {
                     if surface == Surface::LibraryPanel {
-                        assert_eq!(focused, Palette::Slate.color());
+                        assert_eq!(focused, Palette::Green2.color());
                     } else {
                         assert_eq!(
                             focused, SURFACE_FOCUSED,
@@ -213,17 +216,12 @@ mod tests {
             }
         }
 
-        // A declared column deviation (the library column's backdrop) differs
-        // from a content body's resting value. The two levels' declared
-        // *defaults* coincide, so this pins the visible difference.
+        // The library column and panel both rest at Slate, while their
+        // focused arms remain distinct surface roles.
         let column = surface_colors(Surface::LibraryColumn, false).fill;
         let content = surface_colors(Surface::LibraryPanel, false).fill;
-        assert_ne!(
-            column, content,
-            "the column and content-body resting values"
-        );
-        assert_eq!(column, SURFACE_BACKDROP);
-        assert_eq!(content, SURFACE_RESTING);
+        assert_eq!(column, Palette::Slate.color());
+        assert_eq!(content, Palette::Slate.color());
     }
 
     /// The soft content body is the table's one declared variant: it takes the
