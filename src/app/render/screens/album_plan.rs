@@ -1,5 +1,5 @@
 use crate::app::music_grouping::{
-    derive_album_artist, derive_album_display_name, GroupedAlbumCatalog,
+    derive_album_artist, derive_album_display_name, ArtistKey, GroupedAlbumCatalog,
 };
 use crate::app::render::{natural_sort_key, strip_article};
 use std::collections::HashMap;
@@ -12,6 +12,30 @@ pub(crate) fn sorted_group_album_order(album_info: &[(String, String, String)]) 
     let mut order: Vec<usize> = (0..album_info.len()).collect();
     order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
     order
+}
+
+/// Builds the stable artist identity for every album (parallel to
+/// `group_album_info`, design D2 of `add-grouped-music-tree-browser`): the
+/// settled catalog's resolved identity when available, otherwise the
+/// deterministic fallback key over the synchronous best-effort artist chain.
+/// The Grouped Music tree owner is the only consumer.
+pub(in crate::app::render) fn group_album_artist_keys(
+    album_artist_cache: &HashMap<String, String>,
+    albums: &[mbv_core::api::EmbyItem],
+    catalog: Option<&GroupedAlbumCatalog>,
+) -> Vec<ArtistKey> {
+    match catalog {
+        Some(cat) => (0..albums.len())
+            .map(|i| {
+                let pos = cat.index_to_entry.get(&i).copied().unwrap_or(0);
+                cat.entries[pos].artist_key.clone()
+            })
+            .collect(),
+        None => albums
+            .iter()
+            .map(|item| ArtistKey::Fallback(resolve_group_album_artist(album_artist_cache, item)))
+            .collect(),
+    }
 }
 
 /// Resolves the display artist for an album item in the grouped music views

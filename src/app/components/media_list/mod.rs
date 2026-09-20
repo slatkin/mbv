@@ -57,12 +57,6 @@ impl<Target> RowGeometry<Target> {
         self.selected_row
     }
 
-    /// Stable targets parallel to the flow rows.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn targets(&self) -> impl Iterator<Item = Option<&Target>> {
-        self.rows.iter().map(|row| row.target.as_ref())
-    }
-
     /// The selected row's absolute one-line rectangle when it is visible.
     pub fn selected_row_rect(&self, area: Rect) -> Option<Rect> {
         let row = self.selected_row?;

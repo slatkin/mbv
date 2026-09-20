@@ -142,11 +142,19 @@ impl Model {
             })
             .or_else(|| resting.map(|r| r.0));
         let context = self.app.wide_music_render_ctx(index, cursor);
-        if let Some(album) = context.selected_album.as_ref() {
-            if !self.app.album_tracks_cache.contains_key(&album.id)
-                && !self.app.album_tracks_loading.contains(&album.id)
-            {
-                self.app.fetch_album_tracks(album.id.clone());
+        // Grouped Music's album-track fetch follows the tree owner's resolved
+        // album selection: an artist-root focus has no album, so no album-track
+        // fetch starts for it (the artist-track request is a later row).
+        let owner_selection_is_artist = self
+            .music_owner()
+            .is_some_and(MusicContent::selected_is_artist);
+        if !owner_selection_is_artist {
+            if let Some(album) = context.selected_album.as_ref() {
+                if !self.app.album_tracks_cache.contains_key(&album.id)
+                    && !self.app.album_tracks_loading.contains(&album.id)
+                {
+                    self.app.fetch_album_tracks(album.id.clone());
+                }
             }
         }
         let reanchor = std::mem::take(&mut self.music_workspace_reanchor)

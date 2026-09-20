@@ -22,6 +22,7 @@ use super::media_list::{
 };
 use super::msg::{AlbumCursorKind, Msg, ShellRequest};
 use super::msg::{LeafKeyResult, TerminalObserverEvent};
+use super::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::render::MusicWideRenderCtx;
 use crate::app::ui_util::trunc_str;
 
@@ -82,12 +83,17 @@ fn build_track_rows(tracks: &[EmbyItem]) -> Vec<MediaListRow<String>> {
         .collect()
 }
 
-/// The plain Music content owner. Its list controls retain cursor, scroll,
-/// selected targets, and track focus locally; shell pushes replace only the
-/// content snapshot and never mirror those interaction values.
+/// The plain Music content owner. Its tree browser owns the Grouped Music
+/// album selection, expansion, viewport, and marks (one owner across Wide,
+/// Narrow, and Mini); the track `MediaList` carrier retains its Workspace
+/// cursor/scroll/selection locally. Shell pushes replace only the content
+/// snapshot and never mirror those interaction values.
 pub struct MusicContent {
     pub(in crate::app) context: MusicWideRenderCtx,
-    pub(in crate::app) carrier: MediaListCarrier<String>,
+    /// The Grouped Music browser: the destination-local shallow tree (task
+    /// 2.3). It is the only browser owner and painter — the parallel flat album
+    /// carrier and its row projection are gone.
+    pub(in crate::app) browser: MusicTreeBrowser,
     pub(in crate::app) track_list: MediaListCarrier<String>,
     pub(in crate::app) track_focused: bool,
     /// Whether this frame's geometry hosts the inline track list (the Wide
@@ -115,9 +121,10 @@ impl MusicContent {
                 0,
                 Vec::new(),
                 Vec::new(),
+                Vec::new(),
                 None,
             ),
-            carrier: MediaListCarrier::new(),
+            browser: MusicTreeBrowser::new(MusicTreeModel::new()),
             track_list: MediaListCarrier::new(),
             track_focused: false,
             inline_track_focus_enabled: false,
@@ -148,9 +155,28 @@ impl MusicContent {
         self.context = context;
         self.context.focused = focused;
 
-        let album_rows = self.context.grouped_rows();
-        if self.carrier.rows() != album_rows.as_slice() {
-            self.carrier.set_content(album_rows);
+        let album_rows = self.tree_entries();
+        self.browser.reconcile(&album_rows);
+        // A fresh owner (or a destination whose tree has no selection yet)
+        // adopts the shell's projected album position once. Later pushes never
+        // re-point the tree — the tree owns selection, and an explicit shell
+        // re-anchor request (`re_anchor`) adopts a navigated position.
+        if !self.browser.has_selection() {
+            let adopted = self
+                .context
+                .selected_album
+                .as_ref()
+                .and_then(|album| {
+                    self.context
+                        .list
+                        .items
+                        .iter()
+                        .position(|item| item.id == album.id)
+                })
+                .and_then(|position| self.context.album_targets.get(position).cloned());
+            if let Some(target) = adopted {
+                self.browser.select_album_target(&target);
+            }
         }
         let track_rows = build_track_rows(self.context.album_tracks.as_deref().unwrap_or_default());
         // The overlay's Workspace can outrun the album's track fetch: the open
@@ -170,17 +196,47 @@ impl MusicContent {
         }
     }
 
-    pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
+    /// The settled album projection the tree owner reconciles: one entry per
+    /// album in settled order, carrying the stable album target, the settled
+    /// display text, and the album's stable artist identity (design D2/D3).
+    fn tree_entries(&self) -> Vec<MusicTreeEntry> {
         self.context
-            .list
-            .items
-            .get(self.selected_album_index())
-            .cloned()
+            .album_order
+            .iter()
+            .filter_map(|&index| {
+                let (artist, year, name) = self.context.album_info.get(index)?;
+                let artist_key = self.context.album_artist_keys.get(index)?.clone();
+                let target = self.context.album_targets.get(index)?;
+                Some(MusicTreeEntry {
+                    artist: artist.clone(),
+                    artist_key,
+                    title: name.clone(),
+                    year: (!year.is_empty()).then(|| year.clone()),
+                    target: target.clone(),
+                })
+            })
+            .collect()
+    }
+
+    pub(in crate::app) fn selected_item(&self) -> Option<EmbyItem> {
+        let target = self.browser.selected_album_target()?;
+        let index = self
+            .context
+            .album_targets
+            .iter()
+            .position(|candidate| candidate == target)?;
+        self.context.list.items.get(index).cloned()
+    }
+
+    /// Whether the tree's focused node is an artist root (task 2.2: an artist
+    /// focus resolves to no album and never writes album persistence).
+    pub(in crate::app) fn selected_is_artist(&self) -> bool {
+        self.browser.selected_is_artist()
     }
 
     fn selected_album_index(&self) -> usize {
-        self.carrier
-            .selected_target()
+        self.browser
+            .selected_album_target()
             .and_then(|target| {
                 self.context
                     .album_targets
@@ -194,33 +250,41 @@ impl MusicContent {
         self.context.focused = focused;
     }
 
-    /// Move the shared album owner through the common delegation seam
-    /// (design.md D3) and report the resulting selection as the shell's
-    /// `MusicAlbumCursor` request; the owner stays authoritative for the
-    /// selected album and scroll.
-    fn move_album(&mut self, input: MediaListSurfaceInput, kind: AlbumCursorKind) -> Option<Msg> {
-        self.carrier.delegate_operation(
-            input
-                .into_operation(None)
-                .expect("resolved media-list pointer target"),
-        );
-        let target = self.carrier.selected_target()?;
+    /// The album-selection persistence request after a local tree move (design
+    /// D3 step 5): emitted only when the resolved selected album changed, and
+    /// never when an artist root receives focus — artist focus does not
+    /// overwrite album persistence with an artist target.
+    fn album_selection_request(&mut self, kind: AlbumCursorKind) -> Option<Msg> {
+        let target = self.browser.take_album_selection_change()?;
         let index = self
             .context
             .album_targets
             .iter()
-            .position(|candidate| candidate == target)?;
+            .position(|candidate| *candidate == target)?;
         Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
             target: index,
             kind,
         }))
     }
 
+    /// Moves the tree owner's selection by `delta` visible rows and reports the
+    /// resolved album-selection change.
+    fn move_album(&mut self, delta: i64, kind: AlbumCursorKind) -> Option<Msg> {
+        self.browser.move_selection(delta);
+        self.album_selection_request(kind)
+    }
+
+    /// Moves the tree owner's selection one viewport page and reports the
+    /// resolved album-selection change.
+    fn page_album(&mut self, delta: i64, kind: AlbumCursorKind) -> Option<Msg> {
+        self.browser.page_selection(delta);
+        self.album_selection_request(kind)
+    }
+
     pub(in crate::app) fn re_anchor(&mut self, cursor: usize, scroll: usize) {
-        let cursor = cursor.min(self.context.list.item_count().saturating_sub(1));
+        let cursor = cursor.min(self.context.album_targets.len().saturating_sub(1));
         if let Some(target) = self.context.album_targets.get(cursor).cloned() {
-            self.carrier.select_target(&target);
-            self.carrier.set_scroll(scroll);
+            self.browser.anchor_album_target(&target, scroll);
         }
     }
 
@@ -254,16 +318,23 @@ impl MusicContent {
     }
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_scroll(&self) -> usize {
-        self.carrier.scroll()
+        self.browser.offset()
     }
     pub(in crate::app) fn track_focused(&self) -> bool {
         self.track_focused
     }
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {
-        (0..self.carrier.current_flow_len().unwrap_or(0))
-            .map(|row| self.carrier.current_flow_target_at(row).flatten().cloned())
-            .collect()
+        // The tree's visible-node row flow: one entry per projected node, an
+        // album target for leaves and `None` for artist roots.
+        self.browser.projected_targets()
+    }
+
+    /// Expands every artist root (test fixture for the tree's settled visible
+    /// album order).
+    #[cfg(test)]
+    pub(in crate::app) fn expand_all_tree_roots(&mut self) {
+        self.browser.expand_all_roots();
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -361,12 +432,13 @@ impl MusicContent {
         });
         let list = if self.inline_search.is_active() {
             // Search owns the result geometry for this frame; invalidate the
-            // ordinary album presentation so stale rail hits cannot survive
-            // a search transition.
-            self.carrier.invalidate_paint();
+            // tree browser so stale rail hits cannot survive a search
+            // transition (the tree rides `ListSlot::Media` again after the
+            // Grouped Music filter session lands in task 5.2).
+            self.browser.invalidate();
             ListSlot::Search(&mut self.inline_search)
         } else {
-            ListSlot::Media(&mut self.carrier)
+            ListSlot::Media(&mut self.browser)
         };
         LibraryPanelContent {
             selector,
@@ -394,7 +466,10 @@ impl InlineSearchHost for MusicContent {
 
 impl LibraryContentOwner for MusicContent {
     fn clear_selection(&mut self) {
-        self.carrier.clear_owner_selection();
+        // The tree's multi-selection is task 4.2 scope; the destination switch
+        // clears the browser's stored marks so no stale selection mark
+        // survives into a new destination.
+        self.browser.clear_marks();
     }
 
     fn hero_overlay_target_available(&mut self) -> bool {
@@ -411,13 +486,16 @@ impl LibraryContentOwner for MusicContent {
 
     fn set_selection_origin(
         &mut self,
-        origin: crate::app::components::media_list::SelectionOrigin,
+        _origin: crate::app::components::media_list::SelectionOrigin,
     ) {
-        self.carrier.set_selection_origin(origin);
+        // The tree has no Visual-mode selection origin yet; task 4.2 reconnects
+        // the tree's multi-selection to the shared origin projection.
     }
 
     fn selection_summary(&self) -> Option<crate::app::components::media_list::SelectionSummary> {
-        Some(self.carrier.selection_summary())
+        // The tree has no Visual-mode multi-selection yet (task 4.2/4.3); the
+        // status projection is reconnected with the tree's selection model.
+        None
     }
 
     fn content(&mut self) -> LibraryPanelContent<'_> {
@@ -460,11 +538,6 @@ impl LibraryContentOwner for MusicContent {
                 }
                 None => None,
             };
-        }
-        if self.carrier.handle_visual_key(key).is_some() {
-            return Some(Msg::Shell(ShellRequest::SelectionProjection(
-                self.carrier.selection_summary(),
-            )));
         }
         // The LibraryPanel is the framework focus boundary; reaching this
         // method already proves Music is focused.
@@ -612,41 +685,17 @@ impl LibraryContentOwner for MusicContent {
                     _ => None,
                 }
             }
-            Key::Char('.') => match self
-                .carrier
-                .delegate_operation(
-                    MediaListSurfaceInput::Context
-                        .into_operation(None)
-                        .expect("resolved media-list pointer target"),
-                )
-                .external_intent
-            {
-                Some(RowIntent::ContextSelection(targets)) => {
-                    Some(Msg::Shell(ShellRequest::RowContextMenu(
-                        crate::app::types_context_menu::ContextMenuTargets::Emby(
-                            targets
-                                .into_iter()
-                                .filter_map(|target| {
-                                    self.context
-                                        .list
-                                        .items
-                                        .iter()
-                                        .find(|item| item.id == target)
-                                        .cloned()
-                                })
-                                .collect(),
-                        ),
-                        None,
-                    )))
-                }
-                Some(RowIntent::Context(_target)) => self.selected_item().map(|item| {
+            Key::Char('.') => {
+                // The tree's focused album leaf resolves the generic library
+                // context menu; an artist root has no album to contextualize
+                // (artist-root materialization is task 4.1 scope).
+                self.selected_item().map(|item| {
                     Msg::Shell(ShellRequest::RowContextMenu(
                         crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
                         None,
                     ))
-                }),
-                _ => None,
-            },
+                })
+            }
             Key::Char('r')
                 if !self.track_focused
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -662,17 +711,21 @@ impl LibraryContentOwner for MusicContent {
             }
             // Album-level navigation (unfocused track pane): the earlier
             // `self.track_focused` arms above take precedence while the
-            // track pane holds local focus.
-            Key::Up | Key::Char('k') => {
-                self.move_album(MediaListSurfaceInput::Move(-1), AlbumCursorKind::Move)
+            // track pane holds local focus. The one tree owner supplies the
+            // visible-node movement; a resolved album selection crosses as
+            // the existing `MusicAlbumCursor` request.
+            Key::Up | Key::Char('k') => self.move_album(-1, AlbumCursorKind::Move),
+            Key::Down | Key::Char('j') => self.move_album(1, AlbumCursorKind::Move),
+            Key::Home => {
+                self.browser.select_first_visible();
+                self.album_selection_request(AlbumCursorKind::Jump)
             }
-            Key::Down | Key::Char('j') => {
-                self.move_album(MediaListSurfaceInput::Move(1), AlbumCursorKind::Move)
+            Key::End => {
+                self.browser.select_last_visible();
+                self.album_selection_request(AlbumCursorKind::Jump)
             }
-            Key::Home => self.move_album(MediaListSurfaceInput::First, AlbumCursorKind::Jump),
-            Key::End => self.move_album(MediaListSurfaceInput::Last, AlbumCursorKind::Jump),
-            Key::PageUp => self.move_album(MediaListSurfaceInput::Page(-1), AlbumCursorKind::Page),
-            Key::PageDown => self.move_album(MediaListSurfaceInput::Page(1), AlbumCursorKind::Page),
+            Key::PageUp => self.page_album(-1, AlbumCursorKind::Page),
+            Key::PageDown => self.page_album(1, AlbumCursorKind::Page),
             _ => None,
         }
     }

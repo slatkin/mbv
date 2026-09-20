@@ -16,6 +16,9 @@ fn context(album: EmbyItem, overview: &str) -> MusicWideRenderCtx {
         vec![make_item("Artist", "MusicArtist")],
         0,
         vec![("Artist".into(), "2024".into(), "Album".into())],
+        vec![crate::app::music_grouping::ArtistKey::Fallback(
+            "Artist".into(),
+        )],
         vec![0],
         None,
     )
@@ -122,10 +125,9 @@ fn album_wheel_emits_cursor_for_owner_target_and_noop_for_unknown_target() {
     owner.set_content(context(make_item("Album", "MusicAlbum"), "overview"));
 
     let area = Rect::new(0, 0, 30, 1);
-    owner.carrier.wide_mut().set_geometry(area, area);
     let mut terminal = Terminal::new(TestBackend::new(30, 1)).unwrap();
     terminal
-        .draw(|frame| owner.carrier.wide_mut().view(frame, area))
+        .draw(|frame| owner.browser.view(frame, area))
         .unwrap();
 
     let event = LibrarySlotEvent::List(MediaListSurfaceInput::Wheel {

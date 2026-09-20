@@ -523,11 +523,14 @@ fn down_and_page_down_move_the_album_cursor_and_shell_applies_it() {
     );
 }
 
-/// The album cursor moves by the same sorted display order the panel paints
-/// (design D3), never raw insertion order, even before any frame has been
-/// drawn.
+/// The settled display order (design D3), never raw insertion order, drives the
+/// tree's album leaves: every album leaf projects in `album_order`, so the
+/// adopted album is display-order[0]. Down moves the one tree owner across
+/// visible nodes; from that album leaf the next visible node is the next artist
+/// root, which resolves to no album and emits no cursor intent. (The full
+/// keyboard movement contract — expansion, parent/child, paging — is task 2.4's.)
 #[test]
-fn down_key_moves_by_display_order_not_raw_insertion_order() {
+fn down_key_moves_visible_nodes_in_settled_display_order() {
     let mut model = Model::new(make_music_group_app());
     // Raw insertion order [0 "First Album", 1 "Zebra Album", 2 "Mango
     // Album"] sorts (by artist, stable within an artist) to display order
@@ -547,19 +550,37 @@ fn down_key_moves_by_display_order_not_raw_insertion_order() {
     let order = model.app.wide_music_render_ctx(0, None).album_order.clone();
     assert_eq!(order, vec![0, 2, 1], "display order must differ from raw");
 
+    // The tree paints its album leaves in settled display order: expanding the
+    // roots projects exactly `[album_order[0], album_order[1], album_order[2]]`,
+    // never the raw insertion order.
+    model.test_music_owner_mut().expand_all_tree_roots();
+    let owner = model.test_music_owner();
+    let projected: Vec<String> = owner.album_flow_targets().into_iter().flatten().collect();
+    let expected: Vec<String> = order
+        .iter()
+        .map(|&index| owner.context.album_targets[index].clone())
+        .collect();
+    assert_eq!(
+        projected, expected,
+        "the tree's album leaves follow settled display order, not raw insertion order"
+    );
+    assert_eq!(
+        owner.selected_item().map(|item| item.id),
+        Some(owner.context.album_targets[order[0]].clone()),
+        "the adopted album is display-order[0]"
+    );
+
+    // Down from that album leaf reaches the next visible node — the Bravo
+    // artist root — which resolves to no album, so no cursor intent is emitted
+    // (an artist root is never an album effect target).
     let message = model.test_music_owner_mut().on_key(&KeyEvent {
         code: Key::Down,
         modifiers: KeyModifiers::NONE,
     });
-    let target = match message {
-        Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-            target,
-            kind: AlbumCursorKind::Move,
-        })) => target,
-        other => panic!("Down must emit an album cursor intent, got {other:?}"),
-    };
-    assert_eq!(target, order[1]);
-    assert_ne!(target, 1, "must not fall through to raw-index navigation");
+    assert!(
+        message.is_none(),
+        "an artist root resolves to no album cursor intent, got {message:?}"
+    );
 }
 
 // ── Keyboard: shortcuts reuse the component's own selection ──────────────

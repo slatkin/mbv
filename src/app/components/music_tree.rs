@@ -457,6 +457,10 @@ pub(in crate::app) struct MusicTreeBrowser {
     /// persistence (design D3 step 5). An artist-root focus resolves to no
     /// album and never clears or overwrites it.
     last_reported_album: Option<String>,
+    /// Whether the latest `view` completed and retained hit geometry (the
+    /// panel's `set_paint_policy`/`set_geometry`/`clamp_viewport` invalidate
+    /// it before the next view, so a skipped frame claims no point).
+    paint_complete: bool,
 }
 
 impl MusicTreeBrowser {
@@ -474,6 +478,7 @@ impl MusicTreeBrowser {
             marquee_started: Instant::now(),
             last_area: None,
             last_reported_album: None,
+            paint_complete: false,
         }
     }
 
@@ -590,6 +595,164 @@ impl MusicTreeBrowser {
         self.state.set_offset(offset);
     }
 
+    /// Expands every artist root (component-test fixture for the tree's
+    /// settled visible album order).
+    #[cfg(test)]
+    pub(in crate::app) fn expand_all_roots(&mut self) {
+        let _ = self.state.expand_all(&self.model);
+        self.state.ensure_projection(&self.model, &self.query);
+    }
+
+    /// Whether the selected node is an artist root (task 2.3: an artist focus
+    /// resolves to no album, so callers never treat it as a selectable album).
+    pub(in crate::app) fn selected_is_artist(&self) -> bool {
+        self.state
+            .selected_id()
+            .is_some_and(|id| self.model.is_artist(id))
+    }
+
+    /// Whether the owner has any selected node (the shell projection adopts
+    /// its album position only into a selection-less tree, task 2.3).
+    pub(in crate::app) fn has_selection(&self) -> bool {
+        self.state.selected_id().is_some()
+    }
+
+    /// Selects the album leaf with `target`, loading its ancestor path so it
+    /// becomes visible, and arms the viewport visibility rule (task 2.3: the
+    /// tree replaces the album carrier for the shell's selected-album
+    /// projection).
+    pub(in crate::app) fn select_album_target(&mut self, target: &str) -> bool {
+        let Some(id) = self.model.node_id(&MusicNodeKey::Album(target.to_string())) else {
+            return false;
+        };
+        self.state.select_by_id(&self.model, &self.query, id)
+    }
+
+    /// Anchors the shell's persisted album position: selects the album leaf and
+    /// keeps the owner's viewport at the requested row, then re-arms the
+    /// visibility rule so the next view applies only the minimum scroll needed
+    /// to keep the selection visible (`re_anchor`/design D3).
+    pub(in crate::app) fn anchor_album_target(&mut self, target: &str, row: usize) -> bool {
+        if !self.select_album_target(target) {
+            return false;
+        }
+        self.state.set_offset(row);
+        self.rearm_selection_visibility();
+        true
+    }
+
+    /// The current visible projection's album targets: `Some(target)` per album
+    /// leaf, `None` per artist root (the tree's row flow, replacing the removed
+    /// flat album carrier's `album_flow_targets`).
+    pub(in crate::app) fn projected_targets(&self) -> Vec<Option<String>> {
+        self.state
+            .projection()
+            .nodes()
+            .iter()
+            .map(|node| self.model.target_of(node.id()).map(str::to_owned))
+            .collect()
+    }
+
+    /// Invalidates the retained paint geometry: until the next view completes
+    /// the owner claims no point (the canonical latest-render contract).
+    pub(in crate::app) fn invalidate(&mut self) {
+        self.paint_complete = false;
+    }
+
+    /// Clamps the viewport to a painted height without transferring owner state,
+    /// then re-arms the selected node's visibility: the panel's per-frame
+    /// `PanelList` viewport clamp for this owner. The crate re-applies the
+    /// minimum scroll during the next render.
+    pub(in crate::app) fn clamp_viewport_to(&mut self, viewport_height: usize) {
+        self.invalidate();
+        let max = self
+            .state
+            .visible_len()
+            .saturating_sub(viewport_height.max(1));
+        self.state.set_offset(self.state.offset().min(max));
+        self.rearm_selection_visibility();
+    }
+
+    /// Clears every stored album mark and refreshes the derived aggregate
+    /// state (destination-switch selection clear).
+    pub(in crate::app) fn clear_marks(&mut self) {
+        self.state.clear_marks();
+        self.state.ensure_mark_states(&self.model);
+    }
+
+    /// Latest-completed-render hit resolution: the node id and its projection
+    /// row for the row under `at`, if any.
+    pub(in crate::app) fn hit_node(&self, at: Position) -> Option<(usize, usize)> {
+        match self.state.hit_test(at)? {
+            TreeHit::Row { id, index, .. } => Some((id, index)),
+            TreeHit::Header { .. } | TreeHit::VerticalScrollbar | TreeHit::HorizontalScrollbar => {
+                None
+            }
+        }
+    }
+
+    /// Moves the selection `delta` visible rows (the tree's own visible-node
+    /// movement), clamped at the projection bounds by the crate.
+    pub(in crate::app) fn move_selection(&mut self, delta: i64) {
+        for _ in 0..delta.unsigned_abs() {
+            let _ = if delta < 0 {
+                self.state.select_prev()
+            } else {
+                self.state.select_next()
+            };
+        }
+    }
+
+    /// Moves the selection one viewport page (the shared media list's five-row
+    /// page stride), keeping the tree's own visible-node movement.
+    pub(in crate::app) fn page_selection(&mut self, delta: i64) {
+        self.move_selection(delta.saturating_mul(5));
+    }
+
+    pub(in crate::app) fn select_first_visible(&mut self) {
+        let _ = self.state.select_first();
+    }
+
+    pub(in crate::app) fn select_last_visible(&mut self) {
+        let _ = self.state.select_last();
+    }
+
+    /// The selected row's one-line rect from the latest completed view, when
+    /// the node is visible (the panel's retained selected-row geometry).
+    pub(in crate::app) fn selected_row_rect(&self) -> Option<Rect> {
+        if !self.paint_complete {
+            return None;
+        }
+        let area = self.last_area?;
+        let row = self
+            .state
+            .selected_index()?
+            .checked_sub(self.state.offset())?;
+        if row as u16 >= area.height {
+            return None;
+        }
+        Some(Rect {
+            x: area.x,
+            y: area.y.saturating_add(row as u16),
+            width: area.width,
+            height: 1,
+        })
+    }
+
+    /// Whether the latest completed view's retained geometry claims `at`.
+    pub(in crate::app) fn claims_point(&self, at: Position) -> bool {
+        self.paint_complete && self.state.hit_test(at).is_some()
+    }
+
+    /// Arms the crate's `KeepInView` rule for the current selection without
+    /// touching expansion (design D3/D4: a geometry or viewport change re-arms
+    /// the same owner's visibility rule). Deliberately not `select_by_id`,
+    /// whose `expand_to` would promote filter-forced expansion into persistent
+    /// expansion on every resize (D5).
+    fn rearm_selection_visibility(&mut self) {
+        rearm_selection_visibility_for(&mut self.state);
+    }
+
     pub(in crate::app) fn hit_test(&self, position: Position) -> Option<TreeHit<usize>> {
         self.state.hit_test(position)
     }
@@ -644,10 +807,7 @@ impl MusicTreeBrowser {
             // current projection row; `select_id`/`select_by_id` must not be
             // used here because their `expand_to` would promote filter-forced
             // expansion into persistent expansion on every resize (D5).
-            if let Some(index) = state.selected_index() {
-                state.select_index(None);
-                state.select_index(Some(index));
-            }
+            rearm_selection_visibility_for(state);
             *last_area = Some(area);
         }
         // Mirror the crate's resolved layout for this fixed configuration so
@@ -715,6 +875,17 @@ impl MusicTreeBrowser {
 
         let widget = TreeListView::new(model, query, &label, &columns, tree_style(*focused));
         StatefulWidget::render(widget, area, frame.buffer_mut(), state);
+        self.paint_complete = true;
+    }
+}
+
+/// Arms the crate's `KeepInView` rule for the current selection without
+/// touching expansion: the crate only arms when the selection changes, so
+/// clear and restore the current projection row.
+fn rearm_selection_visibility_for(state: &mut TreeListViewState<usize>) {
+    if let Some(index) = state.selected_index() {
+        state.select_index(None);
+        state.select_index(Some(index));
     }
 }
 

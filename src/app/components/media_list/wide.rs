@@ -123,21 +123,6 @@ impl<Target> WideMediaList<Target> {
             .and_then(|paint| paint.selected_row_rect)
     }
 
-    /// Number of rows in the complete flow retained by the current view.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_flow_len(&self) -> Option<usize> {
-        self.paint.as_ref().map(|paint| paint.row_geometry.len())
-    }
-
-    /// Display-row offset and target retained by the current view.
-    /// The current frame's selected-row rectangle, if it is visible.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub fn current_flow_target_at(&self, row: usize) -> Option<Option<&Target>> {
-        self.paint
-            .as_ref()
-            .map(|paint| paint.row_geometry.targets().nth(row).flatten())
-    }
-
     #[cfg_attr(not(test), allow(dead_code))]
     pub fn current_flow_offset(&self) -> Option<usize> {
         self.paint.as_ref().map(|paint| paint.row_geometry.offset())

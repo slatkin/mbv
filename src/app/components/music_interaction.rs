@@ -102,47 +102,46 @@ impl MusicContent {
                 } else {
                     match input {
                         MediaListSurfaceInput::Wheel { at, delta } => {
-                            if self.carrier.claims_current_point(at) {
-                                self.carrier.delegate_operation(MediaListSurfaceInput::Wheel { at, delta }.into_operation(None).expect("resolved media-list pointer target"));
-                                let target = self.carrier.selected_target()?;
-                                let index = self
-                                    .context
-                                    .album_targets
-                                    .iter()
-                                    .position(|candidate| candidate == target)?;
-                                Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                                    target: index,
-                                    kind: AlbumCursorKind::Move,
-                                }))
-                            } else {
-                                None
+                            if !self.browser.claims_point(at) {
+                                return None;
                             }
+                            self.browser.move_selection(delta);
+                            self.album_selection_request(AlbumCursorKind::Move)
                         }
-                        MediaListSurfaceInput::Click(at) | MediaListSurfaceInput::ToggleClick(at) | MediaListSurfaceInput::RangeClick(at) => {
-                            let target = self.carrier.resolve_current_point(at)?.clone();
-                            self.carrier.delegate_operation(input.into_operation(Some(target)).expect("resolved media-list pointer target"));
-                            let _ = ();
-                            Some(Msg::Shell(ShellRequest::MusicAlbumCursor {
-                                target: self.selected_album_index(),
-                                kind: AlbumCursorKind::Move,
-                            }))
+                        MediaListSurfaceInput::Click(at)
+                        | MediaListSurfaceInput::ToggleClick(at)
+                        | MediaListSurfaceInput::RangeClick(at) => {
+                            if !self.browser.claims_point(at) {
+                                return None;
+                            }
+                            let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.select_index(index);
+                            self.album_selection_request(AlbumCursorKind::Move)
                         }
-                        MediaListSurfaceInput::DoubleClick(_) => self
-                            .selected_item()
-                            .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item })),
+                        MediaListSurfaceInput::DoubleClick(at) => {
+                            if !self.browser.claims_point(at) {
+                                return None;
+                            }
+                            let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.select_index(index);
+                            self.selected_item()
+                                .map(|item| Msg::Shell(ShellRequest::MusicAlbumActivate { item }))
+                        }
                         MediaListSurfaceInput::ContextClick(at) => {
-                            let target = self.carrier.resolve_current_point(at)?.clone();
-                            let outcome = self.carrier.delegate_operation(input.into_operation(Some(target.clone())).expect("resolved media-list pointer target"));
-                            let _ = ();
-                            let items = match outcome.external_intent {
-                                Some(RowIntent::ContextSelection(targets)) => targets
-                                    .into_iter()
-                                    .filter_map(|target| self.context.list.items.iter().find(|item| item.id == target).cloned())
-                                    .collect(),
-                                _ => vec![self.selected_item()?],
-                            };
-                            Some(Msg::Shell(ShellRequest::RowContextMenu(crate::app::types_context_menu::ContextMenuTargets::Emby(items), Some((at.x, at.y)))))
-                        },
+                            if !self.browser.claims_point(at) {
+                                return None;
+                            }
+                            let (_id, index) = self.browser.hit_node(at)?;
+                            self.browser.select_index(index);
+                            // An artist root has no album to contextualize
+                            // (task 4.1 scope); a focused album leaf resolves
+                            // its generic library context menu.
+                            let item = self.selected_item()?;
+                            Some(Msg::Shell(ShellRequest::RowContextMenu(
+                                crate::app::types_context_menu::ContextMenuTargets::Emby(vec![item]),
+                                Some((at.x, at.y)),
+                            )))
+                        }
                         _ => None,
                     }
                 }
@@ -191,13 +190,7 @@ impl MusicContent {
                             .iter()
                             .find(|track| &track.id == track_target)
                             .cloned()?;
-                        let album_target = self.carrier.selected_target()?;
-                        let album_index = self
-                            .context
-                            .album_targets
-                            .iter()
-                            .position(|candidate| candidate == album_target)?;
-                        let album = self.context.list.items.get(album_index)?;
+                        let album = self.selected_item()?;
                         Some(Msg::Shell(ShellRequest::MusicTrackActivate {
                             album_id: album.id.clone(),
                             track,

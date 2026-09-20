@@ -745,3 +745,166 @@ fn navigated_track_selection_waits_for_the_album_tracks() {
     );
     assert!(harness.model().pending_music_track_selection.is_none());
 }
+
+// ── Task 2.3: the tree is the one Grouped Music browser owner and painter ──
+
+fn music_panel(harness: &TickHarness) -> &crate::app::components::library_panel::LibraryPanel {
+    harness
+        .model()
+        .application
+        .get_component(&ComponentId::Library)
+        .expect("library panel mounted")
+        .as_any()
+        .downcast_ref::<crate::app::components::library_panel::LibraryPanel>()
+        .expect("LibraryPanel")
+}
+
+/// Draw one frame at the model's own terminal size (the live paint path).
+fn draw_music_frame(harness: &mut TickHarness) {
+    let width = harness.model().app.terminal_width;
+    let height = harness.model().app.terminal_height;
+    let mut terminal = Terminal::new(TestBackend::new(width, height)).expect("test terminal");
+    terminal
+        .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
+        .expect("music frame");
+}
+
+/// The mounted Music app at one Panel-mode fixture, drawn once.
+fn mounted_music_at(width: u16, height: u16) -> (TickHarness, ComponentId) {
+    let mut app = crate::app::render::make_music_group_app();
+    app.terminal_width = width;
+    app.terminal_height = height;
+    app.panel_focus = PanelFocus::Library;
+    app.mini_view_focus = PanelFocus::Library;
+    // A single-panel fixture keeps the Library panel's own area the test input
+    // at every breakpoint instead of a split whose pane size is an arrangement
+    // fact.
+    app.panel_mode = PanelMode::LibraryOnly;
+    let mut harness = TickHarness::new(app);
+    harness.model_mut().sync_mounted_surfaces();
+    draw_music_frame(&mut harness);
+    (harness, ComponentId::Library)
+}
+
+/// Task 2.3: at every Panel mode the Grouped Music browser's one owner and
+/// painter is the destination-local tree. The Library panel's browser slot
+/// drives it through the object-safe `PanelList` surface, so the panel's
+/// retained browser geometry *is* the tree's own latest-render geometry and the
+/// tree's own hit map claims the row it painted. The removed parallel flat album
+/// carrier has no field, painter, or point-resolution path left to run here.
+#[test]
+fn grouped_music_browser_has_one_tree_owner_and_painter_in_every_panel_mode() {
+    for (width, height) in [(160, 40), (81, 30), (60, 30)] {
+        let (harness, id) = mounted_music_at(width, height);
+        let owner = music_workspace(&harness, &id);
+
+        // The panel drove exactly one skeleton this frame (Wide xor Narrow),
+        // and its browser slot's selected row is the tree's own retained row.
+        let panel = music_panel(&harness);
+        let (wide, narrow) = (
+            panel.test_wide_geometry(),
+            panel.test_narrow_geometry(),
+        );
+        assert!(
+            wide.is_some() ^ narrow.is_some(),
+            "{width}x{height}: exactly one Library skeleton painted a browser slot"
+        );
+        let browser = wide.or(narrow).expect("a browser slot painted");
+        let tree_selected = owner.browser.selected_row_rect();
+        assert!(
+            tree_selected.is_some(),
+            "{width}x{height}: the tree retained its selected row"
+        );
+        assert_eq!(
+            browser.selected, tree_selected,
+            "{width}x{height}: the panel's browser geometry is the tree's latest-render row"
+        );
+
+        // The tree's own hit map — not a second carrier — claims the row it
+        // painted, and the panel's browser list rect contains that row.
+        let row = tree_selected.expect("tree selected row");
+        let position = ratatui::layout::Position {
+            x: row.x,
+            y: row.y,
+        };
+        assert!(
+            owner.browser.claims_point(position),
+            "{width}x{height}: the tree claims the row it painted"
+        );
+        assert!(
+            browser.list_area.contains(position),
+            "{width}x{height}: the painted row sits in the browser slot"
+        );
+
+        // The projected browser flow is the tree's artist-root/album-leaf
+        // model: an artist root row and at least one album leaf row. The
+        // removed flat album carrier projected no focusable artist root.
+        let targets = owner.album_flow_targets();
+        assert!(
+            targets.iter().any(Option::is_none),
+            "{width}x{height}: the tree projects an artist root row"
+        );
+        assert!(
+            targets.iter().any(Option::is_some),
+            "{width}x{height}: the tree projects album leaf rows"
+        );
+    }
+}
+
+/// Task 2.3 / design D3: a responsive Panel-mode change reuses the *same* tree
+/// owner instead of copying its selection into another control. The selected
+/// album and the projected row flow survive Wide -> Mini -> Wide unchanged.
+#[test]
+fn grouped_music_browser_reuses_one_tree_owner_across_panel_modes() {
+    let (mut harness, id) = mounted_music_at(160, 40);
+    let selected = music_workspace(&harness, &id)
+        .browser
+        .selected_album_target()
+        .map(str::to_owned);
+    assert!(
+        selected.is_some(),
+        "the tree adopted the shell's projected album"
+    );
+    let wide_flow = music_workspace(&harness, &id).album_flow_targets();
+
+    // Shrink to Mini (single panel, narrow skeleton): the same owner, no
+    // re-adoption, same visible projection.
+    harness.model_mut().app.terminal_width = 60;
+    harness.model_mut().sync_mounted_surfaces();
+    draw_music_frame(&mut harness);
+    assert!(
+        music_panel(&harness).test_narrow_geometry().is_some(),
+        "Mini painted the narrow skeleton"
+    );
+    let mini = music_workspace(&harness, &id);
+    assert_eq!(
+        mini.browser.selected_album_target().map(str::to_owned),
+        selected,
+        "the responsive change keeps the tree's selected album"
+    );
+    assert_eq!(
+        mini.album_flow_targets(),
+        wide_flow,
+        "the responsive change keeps the tree's visible projection"
+    );
+
+    // Grow back to Wide: still the same owner and selection.
+    harness.model_mut().app.terminal_width = 160;
+    harness.model_mut().sync_mounted_surfaces();
+    draw_music_frame(&mut harness);
+    assert!(
+        music_panel(&harness).test_wide_geometry().is_some(),
+        "Wide painted the wide skeleton"
+    );
+    let wide = music_workspace(&harness, &id);
+    assert_eq!(
+        wide.browser.selected_album_target().map(str::to_owned),
+        selected,
+        "the tree's selection survives the full round trip"
+    );
+    assert_eq!(
+        wide.album_flow_targets(),
+        wide_flow,
+        "the tree's visible projection survives the full round trip"
+    );
+}

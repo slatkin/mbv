@@ -203,7 +203,11 @@ fn music_wide_album_and_group_pill_use_their_own_retained_geometry() {
         .draw(|frame| harness.model_mut().draw_frame(frame, false, false))
         .unwrap();
     harness.model_mut().sync_mounted_surfaces();
-    let album = harness.model().test_music_owner().carrier.current_selected_row_rect()
+    let album = harness
+        .model()
+        .test_music_owner()
+        .browser
+        .selected_row_rect()
         .expect("Wide album control retained its selected row");
     let panel = harness.model().application.get_component(&ComponentId::Library)
         .and_then(|component| component.as_any().downcast_ref::<crate::app::components::library_panel::LibraryPanel>())
