@@ -697,7 +697,7 @@ mod wide_row_regression_tests {
             .unwrap();
         let buffer = terminal.backend().buffer();
         let cell = &buffer[(2, 1)];
-        assert_eq!(cell.fg, palette::TEXT_EMPHASIS);
+        assert_eq!(cell.fg, palette::SELECTED_ROW_FG);
         assert!(!cell.modifier.contains(Modifier::BOLD));
         for x in 0..rect.width {
             assert_eq!(buffer[(x, 1)].bg, palette::SELECTED_ROW_BG, "bar at x={x}");
@@ -752,9 +752,9 @@ mod wide_row_regression_tests {
         let buf = terminal.backend().buffer();
         // The list is unfocused, so only the selected rows paint: the cursor's
         // own first row plus the two toggled rows each fill the whole row with
-        // the bar and keep their ordinary foreground.
+        // the canonical bar and selected-row foreground.
         for y in [0, 1, 3] {
-            assert_eq!(buf[(2, y)].fg, palette::TEXT_EMPHASIS);
+            assert_eq!(buf[(2, y)].fg, palette::SELECTED_ROW_FG);
             assert!(!buf[(2, y)].modifier.contains(Modifier::BOLD));
             for x in 0..rect.width {
                 assert_eq!(buf[(x, y)].bg, palette::SELECTED_ROW_BG, "row {y} x={x}");

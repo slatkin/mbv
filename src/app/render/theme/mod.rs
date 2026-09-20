@@ -114,13 +114,11 @@ pub const TEXT_ACCENT_MUTED: Color = Palette::Green1.color(); // "loaded"/"playi
 pub const TEXT_DETAIL_META: Color = Palette::Green3.color(); // detail-screen label/meta text
 pub const TEXT_METADATA: Color = Palette::Foam.color(); // secondary metadata (durations, pct, badges)
 /// Selected-row bar fill (audition: an opaque full-width bar replaces the
-/// punch-through and the gutter-accent-only title treatment; the row keeps
-/// its ordinary foreground roles on the bar).
-pub const SELECTED_ROW_BG: Color = Palette::Slate.color(); // its own role, deliberately not
-                                                           // `SURFACE_BACKDROP`, whose `Palette::Slate`
-                                                           // value it shares today: the two are equal
-                                                           // today and independently editable, so an
-                                                           // edit to either moves it alone
+/// punch-through and the gutter-accent-only title treatment).
+pub const SELECTED_ROW_BG: Color = Palette::Iris.color();
+/// Selected-row text on the Iris bar. Its own role keeps the bar's foreground
+/// independent from the ordinary title and metadata hierarchy.
+pub const SELECTED_ROW_FG: Color = Palette::Ink.color();
 
 /// Grouped Music's secondary tree-row fill. Kept as a role so the tree
 /// renderer never owns a raw colour or a destination-specific surface choice.

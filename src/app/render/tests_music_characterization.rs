@@ -585,7 +585,7 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
         );
     }
     let title_x = list_area.x + 6;
-    assert_eq!(buf[(title_x, selected_y)].fg, palette::TEXT_FOCUS_ACCENT);
+    assert_eq!(buf[(title_x, selected_y)].fg, palette::SELECTED_ROW_FG);
     assert!(
         !buf[(title_x, selected_y)].modifier.contains(Modifier::BOLD),
         "the selected title is not bold"
@@ -664,6 +664,11 @@ fn wide_music_tree_selected_and_multi_selected_rows_paint_the_bar() {
             "multi-selected bar reaches column {x}"
         );
     }
+    assert_eq!(
+        buf[(title_x, marked_y)].fg,
+        palette::SELECTED_ROW_FG,
+        "multi-selected text uses the selected-row foreground"
+    );
     assert_ne!(
         buf[(
             title_x,

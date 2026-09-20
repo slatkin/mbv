@@ -21,8 +21,9 @@ use unicode_width::UnicodeWidthStr;
 /// focused list paints it across the whole row, overriding its zebra stripe
 /// and the two-column gutters; callers resolve it to the `SELECTED_ROW_BG`
 /// role, and the surface table's owning-surface identity no longer changes the
-/// row's appearance. Every span keeps the ordinary unselected foreground role,
-/// so the bar introduces no bold title and no accent title colour.
+/// row's appearance. Canonical Iris bars use the selected-row Ink foreground,
+/// so the bar introduces no bold title or ordinary title-role colour; a
+/// now-playing marker retains its live-playback accent.
 ///
 /// `alternate_bg` is the row's position in the list's zebra alternation. It
 /// paints every row type — selectable items, group headings and the blank
@@ -33,7 +34,8 @@ use unicode_width::UnicodeWidthStr;
 /// Row geometry: the title text is indented 2 columns in — a 2-column quiet
 /// indent — so the title lands at column 2 of the panel; the selected row's
 /// background fills the whole row via `List`'s row-style fill and bleeds to
-/// both panel edges.
+/// both panel edges. Canonical selected bars use the selected-row foreground
+/// role for their text; a now-playing marker retains its live-playback accent.
 pub(in crate::app) fn media_list_row<Target>(
     row: &MediaListRow<Target>,
     selected: bool,
@@ -273,12 +275,18 @@ pub(in crate::app) fn media_list_row<Target>(
             if !paint_selected {
                 spans = stripe_spans(spans, alternate_bg, content_w);
             }
-            // The focused Workspace bar is Iris: override every span to the
-            // near-black on-accent text so the ordinary light roles stay
-            // legible on it. Dark bars keep their roles.
-            if paint_selected && selected_bg == palette::ACCENT_ACTIVE {
-                for span in spans.iter_mut() {
-                    span.style.fg = Some(palette::TEXT_ON_ACCENT);
+            // Canonical selected bars are Iris: use the dedicated Ink
+            // foreground rather than allowing ordinary title/metadata roles
+            // to compete with the selection. The live-playback marker remains
+            // Aqua so a selected now-playing row keeps its state distinction.
+            if paint_selected {
+                if let Some(fg) = selected_row_foreground(selected_bg) {
+                    for (index, span) in spans.iter_mut().enumerate() {
+                        if live_icon.is_some() && index == 1 {
+                            continue;
+                        }
+                        span.style.fg = Some(fg);
+                    }
                 }
             }
             // Gutter-accent selection keeps the row background unchanged.
@@ -289,6 +297,10 @@ pub(in crate::app) fn media_list_row<Target>(
             })
         }
     }
+}
+
+fn selected_row_foreground(selected_bg: Color) -> Option<Color> {
+    (selected_bg == palette::SELECTED_ROW_BG).then_some(palette::SELECTED_ROW_FG)
 }
 
 /// Columns the row's right inset reserves inside `inner_width`.

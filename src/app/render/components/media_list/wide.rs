@@ -184,21 +184,11 @@ fn grouped_member_striped<Target>(rows: &[MediaListRow<Target>], row: usize) -> 
     (row - start).is_multiple_of(2)
 }
 
-fn selected_row_surface_color(surface: SelectedRowSurface, focused: bool) -> Color {
-    // Audition: every selected row paints the opaque bar (and the scrollbar
-    // column behind it), so the surface table's punch-through resolution is
-    // deliberately bypassed. The library Workspace bar follows the
-    // Workspace's focus: Iris while focused (it only paints while focused);
-    // the sheet's Ink otherwise. The other arms keep the shared Slate bar.
-    match surface {
-        SelectedRowSurface::OwningLibraryPane if focused => palette::ACCENT_ACTIVE,
-        SelectedRowSurface::OwningLibraryPane => {
-            palette::surface_colors(palette::Surface::PillRow, false).fill
-        }
-        SelectedRowSurface::ListBackdrop | SelectedRowSurface::OwningQueueColumn => {
-            palette::SELECTED_ROW_BG
-        }
-    }
+fn selected_row_surface_color(_surface: SelectedRowSurface, _focused: bool) -> Color {
+    // Every selected row paints the same opaque Iris bar, regardless of the
+    // owning tab or whether the selected row is a focused cursor or a
+    // multi-selected row.
+    palette::SELECTED_ROW_BG
 }
 
 /// Component-view adapter for the retained-result seam.

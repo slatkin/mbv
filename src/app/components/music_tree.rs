@@ -555,7 +555,8 @@ fn glyph_prefix_width(level: usize) -> usize {
 /// cream role, ordinary album leaves in the level-one accent role, track rows
 /// in the level-two error role, marks in the positive status role, the top-level
 /// group zebra fill on the whole cell, and the
-/// focused selected row's marquee window computed for this frame.
+/// focused selected row's marquee window computed for this frame. Canonical
+/// selected bars resolve their text to the selected-row Ink role.
 struct MusicTreeLabelRenderer<'a> {
     tree_col_width: u16,
     left_text_inset: usize,
@@ -676,11 +677,18 @@ impl TreeLabelRenderer<MusicTreeModel> for MusicTreeLabelRenderer<'_> {
         // bar (the style half of the canonical multi-selection contract; task
         // 4.2 drives the marks), overriding its group band; otherwise the
         // header and every descendant share their top-level group's phase. The
-        // focused selected row's bar comes from the crate's `highlight_style`,
-        // applied after this cell.
+        // selected bar also resolves its text to Ink; the focused selected
+        // row's equivalent highlight comes from the crate's `highlight_style`.
+        if multi_select_bar(model, id, mark) {
+            for span in line.spans.iter_mut().skip(composed) {
+                span.style = span.style.fg(palette::SELECTED_ROW_FG);
+            }
+        }
         let mut style = Style::default();
         if multi_select_bar(model, id, mark) {
-            style = style.bg(palette::SELECTED_ROW_BG);
+            style = style
+                .bg(palette::SELECTED_ROW_BG)
+                .fg(palette::SELECTED_ROW_FG);
         } else if model.is_striped(id) {
             style = style.bg(self.zebra_fill);
         }
@@ -1855,7 +1863,8 @@ fn tree_glyphs() -> TreeGlyphs<'static> {
 /// The tree's visual configuration through `TreeListViewStyle`: no border,
 /// no header, no highlight symbol, no horizontal scroll; the focused
 /// selected row paints the canonical `SELECTED_ROW_BG` bar across the whole
-/// row (the crate applies it after row cells, so it overrides the zebra);
+/// row with the selected-row `SELECTED_ROW_FG` text role (the crate applies it
+/// after row cells, so it overrides the zebra and ordinary title roles);
 /// hierarchy guides take the muted role via `line_style` and the aggregate
 /// mark states take the positive/muted-accent roles. The crate's
 /// unconfigurable scrollbar is discarded by `view`; the shared application
@@ -1865,7 +1874,9 @@ fn tree_style(focused: bool) -> tui_treelistview::TreeListViewStyle<'static> {
     TreeListViewStyle {
         block_style: Style::default(),
         highlight_style: if focused {
-            Style::default().bg(palette::SELECTED_ROW_BG)
+            Style::default()
+                .bg(palette::SELECTED_ROW_BG)
+                .fg(palette::SELECTED_ROW_FG)
         } else {
             Style::default()
         },

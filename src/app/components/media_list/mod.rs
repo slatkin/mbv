@@ -212,17 +212,15 @@ impl MediaSemanticState {
 /// Which semantic surface should receive the selected-row treatment.
 ///
 /// The policy is deliberately closed: callers choose a named surface identity,
-/// never a raw Ratatui style or colour. An owning-surface selected row
-/// resolves its containing column's focus pair, so the caller names which
-/// column it sits in; the painter maps each variant to the table's declared
-/// selected-row identity.
+/// never a raw Ratatui style or colour. The painter retains the identity for
+/// composition policy while every selected row resolves to the canonical
+/// selected-row bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SelectedRowSurface {
     ListBackdrop,
     OwningQueueColumn,
     /// The library Workspace (Wide Hero pane and Library Hero overlay — one
-    /// unified look): the bar takes the sheet's own fixed Ink chrome so it
-    /// reads against the box's resting Slate fill.
+    /// unified look), retained as a closed owning-surface identity.
     OwningLibraryPane,
 }
 

@@ -721,11 +721,11 @@ fn queue_selection_paints_the_bar_without_an_outside_marker() {
         " ",
         "no marker may paint outside the box edge"
     );
-    // The selected row paints the bar and keeps the ordinary emphasis title,
+    // The selected row paints the Iris bar with the selected-row Ink title,
     // not bold.
     let title_x = box_area.x + 2;
     assert_eq!(buf[(title_x, marker_y)].bg, palette::SELECTED_ROW_BG);
-    assert_eq!(buf[(title_x, marker_y)].fg, palette::TEXT_EMPHASIS);
+    assert_eq!(buf[(title_x, marker_y)].fg, palette::SELECTED_ROW_FG);
     assert!(!buf[(title_x, marker_y)].modifier.contains(Modifier::BOLD));
 
     // Without panel focus the row keeps the ordinary emphasis title and is
