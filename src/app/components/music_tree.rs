@@ -25,6 +25,7 @@
 //! tree column takes every remaining column and the vertical scrollbar takes
 //! exactly one column when the projection overflows.
 
+use std::collections::HashMap;
 use std::time::Instant;
 
 use ratatui::layout::{Position, Rect};
@@ -37,6 +38,7 @@ use tui_treelistview::{
     TreeMarkState, TreeModel, TreeQuery, TreeRevision, TreeRowContext,
 };
 
+use crate::app::music_grouping::ArtistKey;
 use crate::app::palette::{self, Surface};
 use crate::app::render::components::marquee::marquee_spans;
 use crate::app::ui_util::trunc_str;
@@ -46,17 +48,33 @@ use crate::app::ui_util::trunc_str;
 /// column interface).
 pub(in crate::app) const YEAR_GUTTER_WIDTH: u16 = 6;
 
+/// The stable semantic identity one arena node is interned by (design D2).
+/// Artist roots intern by the settled catalog's `ArtistKey` — the resolved
+/// `ArtistItems` identity or the deterministic fallback grouping key — so
+/// equal display names with distinct Service identities stay separate roots.
+/// Album leaves intern by the stable album target the shell already keys
+/// albums by. Neither key is ever a projection row position.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(in crate::app) enum MusicNodeKey {
+    Artist(ArtistKey),
+    Album(String),
+}
+
 /// One settled album leaf's domain projection: the stable target the shell
-/// already keys albums by, plus the display text the row paints.
+/// already keys albums by, plus its settled artist identity and the display
+/// text the row paints.
 pub(in crate::app) struct MusicTreeEntry {
     pub(in crate::app) artist: String,
+    pub(in crate::app) artist_key: ArtistKey,
     pub(in crate::app) title: String,
     pub(in crate::app) year: Option<String>,
     pub(in crate::app) target: String,
 }
 
-pub(in crate::app) enum MusicNode {
+enum MusicNode {
     Artist {
+        /// The node's own settled identity (node-to-domain translation, D2).
+        key: ArtistKey,
         name: String,
     },
     Album {
@@ -67,13 +85,19 @@ pub(in crate::app) enum MusicNode {
 }
 
 /// The destination-local node arena behind the crate's `TreeModel` (design
-/// D2's shape, spike-scoped): consecutive equal artists in settled entry
-/// order form one artist root; each album becomes its leaf child. Ids are
-/// arena indexes into a monotonic Vec, so they are stable and never reused
-/// while the model lives.
+/// D2). Node ids are arena indexes into a monotonic, append-only `Vec`:
+/// interned by semantic key, stable across ordinary settled-catalog
+/// replacement, and never reused for a different key during the owner's
+/// lifetime. Entries removed by a replacement leave the root/child
+/// projection (tombstoned) while their interned mapping is retained; the
+/// arena resets only when the retained Music destination changes identity
+/// (`reset`).
 pub(in crate::app) struct MusicTreeModel {
     nodes: Vec<MusicNode>,
+    intern: HashMap<MusicNodeKey, usize>,
     roots: Vec<usize>,
+    /// Per node id: its artist root's settled child leaves. Album nodes and
+    /// tombstoned artist roots carry an empty child list.
     children: Vec<Vec<usize>>,
     /// Per album node: its index within its artist group's settled order
     /// (the group-relative zebra phase). `usize::MAX` for artist roots.
@@ -82,54 +106,185 @@ pub(in crate::app) struct MusicTreeModel {
 }
 
 impl MusicTreeModel {
-    /// Groups settled entries by consecutive artist, preserving settled
-    /// order for both roots and leaves.
-    pub(in crate::app) fn from_entries(entries: &[MusicTreeEntry]) -> Self {
-        let mut nodes = Vec::new();
-        let mut roots = Vec::new();
-        let mut children = Vec::new();
-        let mut leaf_position = Vec::new();
-
-        let mut current_artist: Option<String> = None;
-        let mut current_root: Option<usize> = None;
-        let mut leaf_count = 0usize;
-        for entry in entries {
-            if current_artist.as_deref() != Some(entry.artist.as_str()) {
-                let id = nodes.len();
-                nodes.push(MusicNode::Artist {
-                    name: entry.artist.clone(),
-                });
-                children.push(Vec::new());
-                leaf_position.push(usize::MAX);
-                roots.push(id);
-                current_artist = Some(entry.artist.clone());
-                current_root = Some(id);
-                leaf_count = 0;
-            }
-            let id = nodes.len();
-            nodes.push(MusicNode::Album {
-                title: entry.title.clone(),
-                year: entry.year.clone(),
-                target: entry.target.clone(),
-            });
-            children.push(Vec::new());
-            leaf_position.push(leaf_count);
-            leaf_count += 1;
-            children[current_root.expect("artist root interned before its album")].push(id);
-        }
-
+    pub(in crate::app) fn new() -> Self {
         Self {
-            nodes,
-            roots,
-            children,
-            leaf_position,
+            nodes: Vec::new(),
+            intern: HashMap::new(),
+            roots: Vec::new(),
+            children: Vec::new(),
+            leaf_position: Vec::new(),
             revision: TreeRevision::INITIAL,
         }
     }
 
+    /// A model over one settled entry set, for callers that do not keep an
+    /// incremental owner.
+    pub(in crate::app) fn from_entries(entries: &[MusicTreeEntry]) -> Self {
+        let mut model = Self::new();
+        model.reconcile(entries);
+        model
+    }
+
+    /// Reconciles the arena with one settled catalog (design D2/D3): intern
+    /// artist roots and album leaves in settled order, then atomically
+    /// replace the root/child projection, bumping the model revision only
+    /// when the settled content actually changed. Settled entries sharing
+    /// one `ArtistKey` form one artist root, with roots in first-occurrence
+    /// order and leaves in settled order.
+    pub(in crate::app) fn reconcile(&mut self, entries: &[MusicTreeEntry]) {
+        let mut next_roots = Vec::new();
+        let mut next_children: HashMap<usize, Vec<usize>> = HashMap::new();
+        let mut next_leaf_position: HashMap<usize, usize> = HashMap::new();
+        let mut display_changed = false;
+        let mut root_of_key: HashMap<ArtistKey, usize> = HashMap::new();
+
+        for entry in entries {
+            let root = match root_of_key.get(&entry.artist_key) {
+                Some(&root) => root,
+                None => {
+                    let root =
+                        self.intern_artist(&entry.artist_key, &entry.artist, &mut display_changed);
+                    root_of_key.insert(entry.artist_key.clone(), root);
+                    next_roots.push(root);
+                    root
+                }
+            };
+            let leaf = self.intern_album(
+                &entry.target,
+                &entry.title,
+                entry.year.as_deref(),
+                &mut display_changed,
+            );
+            let siblings = next_children.entry(root).or_default();
+            siblings.push(leaf);
+            next_leaf_position.insert(leaf, siblings.len() - 1);
+        }
+
+        let mut children = vec![Vec::new(); self.nodes.len()];
+        for (root, leaves) in next_children {
+            children[root] = leaves;
+        }
+        let mut leaf_position = vec![usize::MAX; self.nodes.len()];
+        for (leaf, position) in next_leaf_position {
+            leaf_position[leaf] = position;
+        }
+
+        let changed = display_changed || self.roots != next_roots || self.children != children;
+        self.roots = next_roots;
+        self.children = children;
+        self.leaf_position = leaf_position;
+        if changed {
+            self.revision.advance();
+        }
+    }
+
+    /// Clears the arena for a new destination identity (design D2): the
+    /// intern space restarts, so no stale mapping survives a destination
+    /// change.
+    pub(in crate::app) fn reset(&mut self) {
+        self.nodes.clear();
+        self.intern.clear();
+        self.roots.clear();
+        self.children.clear();
+        self.leaf_position.clear();
+        self.revision = TreeRevision::INITIAL;
+    }
+
+    /// Interns (or refreshes the display name of) one artist root.
+    fn intern_artist(&mut self, key: &ArtistKey, name: &str, display_changed: &mut bool) -> usize {
+        let node_key = MusicNodeKey::Artist(key.clone());
+        if let Some(id) = self.intern.get(&node_key).copied() {
+            if let Some(MusicNode::Artist { name: existing, .. }) = self.nodes.get_mut(id) {
+                if existing != name {
+                    *existing = name.to_string();
+                    *display_changed = true;
+                }
+            }
+            return id;
+        }
+        let id = self.nodes.len();
+        self.nodes.push(MusicNode::Artist {
+            key: key.clone(),
+            name: name.to_string(),
+        });
+        self.intern.insert(node_key, id);
+        id
+    }
+
+    /// Interns (or refreshes the display data of) one album leaf.
+    fn intern_album(
+        &mut self,
+        target: &str,
+        title: &str,
+        year: Option<&str>,
+        display_changed: &mut bool,
+    ) -> usize {
+        let node_key = MusicNodeKey::Album(target.to_string());
+        if let Some(id) = self.intern.get(&node_key).copied() {
+            if let Some(MusicNode::Album {
+                title: existing_title,
+                year: existing_year,
+                ..
+            }) = self.nodes.get_mut(id)
+            {
+                if existing_title != title || existing_year.as_deref() != year {
+                    *existing_title = title.to_string();
+                    *existing_year = year.map(str::to_string);
+                    *display_changed = true;
+                }
+            }
+            return id;
+        }
+        let id = self.nodes.len();
+        self.nodes.push(MusicNode::Album {
+            title: title.to_string(),
+            year: year.map(str::to_string),
+            target: target.to_string(),
+        });
+        self.intern.insert(node_key, id);
+        id
+    }
+
+    /// The interned node id for a semantic key, if any.
+    pub(in crate::app) fn node_id(&self, key: &MusicNodeKey) -> Option<usize> {
+        self.intern.get(key).copied()
+    }
+
+    /// Whether the node is an artist root.
+    pub(in crate::app) fn is_artist(&self, id: usize) -> bool {
+        matches!(self.nodes.get(id), Some(MusicNode::Artist { .. }))
+    }
+
+    /// The artist root's settled identity (node-to-domain translation, D2);
+    /// album leaves have none.
+    pub(in crate::app) fn artist_key_of(&self, id: usize) -> Option<&ArtistKey> {
+        match self.nodes.get(id) {
+            Some(MusicNode::Artist { key, .. }) => Some(key),
+            _ => None,
+        }
+    }
+
+    /// The model's current revision value.
+    #[cfg(test)]
+    pub(in crate::app) fn revision_value(&self) -> u64 {
+        self.revision.get()
+    }
+
+    /// The settled child album ids of an artist root.
+    #[cfg(test)]
+    pub(in crate::app) fn children_of(&self, id: usize) -> Vec<usize> {
+        self.children[id].clone()
+    }
+
+    /// The projected artist root ids in settled order.
+    #[cfg(test)]
+    pub(in crate::app) fn root_ids(&self) -> Vec<usize> {
+        self.roots.clone()
+    }
+
     pub(in crate::app) fn title_of(&self, id: usize) -> &str {
         match &self.nodes[id] {
-            MusicNode::Artist { name } => name,
+            MusicNode::Artist { name, .. } => name,
             MusicNode::Album { title, .. } => title,
         }
     }
@@ -485,3 +640,7 @@ fn tree_style(focused: bool) -> tui_treelistview::TreeListViewStyle<'static> {
         ..tui_treelistview::TreeListViewStyle::default()
     }
 }
+
+#[cfg(test)]
+#[path = "music_tree_tests.rs"]
+mod tests;

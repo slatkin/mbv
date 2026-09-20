@@ -19,6 +19,7 @@ use super::*;
 use crate::app::components::library_panel::{LibraryPanel, WideSkeletonGeometry};
 use crate::app::components::music_tree::{MusicTreeBrowser, MusicTreeEntry, MusicTreeModel};
 use crate::app::components::ComponentId;
+use crate::app::music_grouping::ArtistKey;
 use crate::app::shell::Model;
 use crate::app::tests::make_item;
 use crate::app::PanelFocus;
@@ -87,6 +88,11 @@ fn spike_browser(model: &Model) -> MusicTreeBrowser {
             let (artist, year, name) = &ctx.album_info[index];
             MusicTreeEntry {
                 artist: artist.clone(),
+                // The spike fixture's settled order groups each artist's
+                // albums consecutively, so the deterministic fallback key
+                // reproduces the same roots as the real `ArtistItems`
+                // identity would (task 2.3 wires the settled keys in).
+                artist_key: ArtistKey::Fallback(artist.clone()),
                 title: name.clone(),
                 year: (!year.is_empty()).then(|| year.clone()),
                 target: ctx.album_targets[index].clone(),
