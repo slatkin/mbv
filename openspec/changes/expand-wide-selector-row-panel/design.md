@@ -14,7 +14,7 @@ Constraints that shape the approach:
   `wide_hero_presentation` (`wide_hero.rs:65`) internally calls
   `wide_hero_fits(content_area)` and returns `None` when it fails. Callers gate
   on `wide_hero_fits(raw_area)` *before* calling it: `panel_view.rs:61` and
-  `images.rs:280`. If the pill band is carved off before the fits check runs, the
+  `src/app/images.rs:280`. If the pill band is carved off before the fits check runs, the
   outer gate (on the raw area) and the inner check (on the reduced area) disagree
   by the band height — see D1.
 - **`wide_hero_hero_pane` recomputes from the raw `area`.** It does not receive
@@ -57,7 +57,7 @@ split-only helper. `wide_hero_presentation`'s embedded fits check must run on th
 uncarved area, and the split must be reachable without re-running fits on the
 reduced area (otherwise heights 7–8 pass the outer gate but fail the inner one,
 painting nothing and stranding a stale frame). Callers that gate externally
-(`panel_view.rs:61`, `images.rs:280`) keep gating on `wide_hero_fits(raw_area)`,
+(`panel_view.rs:61`, `src/app/images.rs:280`) keep gating on `wide_hero_fits(raw_area)`,
 which stays consistent with the inner decision.
 
 - **Alternative — carve before the fits check:** rejected. It moves the Wide
@@ -121,7 +121,7 @@ never acted on and is removed wholesale rather than left as a dead exhaustive ar
 - Push: `home_video` field/push/use (`emby_library_content.rs`) and its
   computation/push (`shell_emby_library_content.rs`). **Keep**
   `is_home_video_view` (`lib_cursor_actions.rs`) — used by `music_actions.rs:164`
-  and `tests_non_music.rs:13`. `home_video` (controls label) and `feed_home_video`
+  and `src/app/render/tests_non_music.rs:13`. `home_video` (controls label) and `feed_home_video`
   (feed grouping) are distinct; do not touch the latter.
 - Vocabulary: remove the "List controls row" definition from `CONTEXT.md` and
   strike it from the "Library panel" definition's slot list.

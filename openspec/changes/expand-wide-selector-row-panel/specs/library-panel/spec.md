@@ -19,6 +19,13 @@ The full-width band SHALL be independent of the Hero/Browser split drag-resize:
 the draggable gap between the two panes SHALL cover only the content area below
 the band, never the pill row or the spacer row.
 
+This full-width band is the Selector row (pills), NOT a hero or detail area. The
+prohibitions on reserving a full-width area above the browser
+(`library-list-hero`, `right-panel-arrangements`) govern the selected item's
+hero/detail block, which SHALL continue to render beside the browser in Wide and
+as an in-flow row replacement in non-Wide; they do not constrain the Selector
+row's placement.
+
 In non-Wide geometry the panel is a single full-width pane, and the Selector row
 SHALL span that pane's width, followed by its spacer row.
 
