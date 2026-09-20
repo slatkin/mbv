@@ -349,8 +349,8 @@ fn wide_music_tree_rows_paint_the_grouped_row_contracts() {
         long_row_text.contains('\u{2026}'),
         "long title truncates: {long_row_text}"
     );
-    let gutter_start = table_right - crate::app::components::music_tree::YEAR_GUTTER_WIDTH;
-    let gutter_text: String = music_tree_row_text(&term, long_y, gutter_start, table_right)
+    let gutter_start = list_area.right() - crate::app::components::music_tree::YEAR_GUTTER_WIDTH;
+    let gutter_text: String = music_tree_row_text(&term, long_y, gutter_start, list_area.right())
         .trim()
         .to_string();
     assert_eq!(
@@ -687,6 +687,7 @@ fn gutter_entries() -> Vec<MusicTreeEntry> {
 #[test]
 fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     const WIDTH: u16 = 40;
+    const FRAME_WIDTH: u16 = WIDTH + 4;
     let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
     let root = browser.projected_nodes()[0].id();
     assert!(
@@ -700,8 +701,17 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     browser.set_focused(false);
 
     let area = Rect::new(0, 0, WIDTH, 3);
-    let term = music_tree_frame(&mut browser, area, WIDTH, 3);
+    let term = music_tree_frame(&mut browser, area, FRAME_WIDTH, 3);
     let buf = term.backend().buffer();
+    for y in 0..area.height {
+        for x in area.right()..FRAME_WIDTH {
+            assert_eq!(
+                buf[(x, y)].symbol(),
+                " ",
+                "no-overflow tree paints no scrollbar gutter"
+            );
+        }
+    }
 
     // Three rows in three lines never overflow, so no scrollbar takes a
     // column: the tree column is the full browser width and the gutter is its
@@ -776,6 +786,41 @@ fn music_tree_year_gutter_is_reserved_only_on_the_album_that_carries_a_year() {
     assert!(
         !rows.iter().any(|row| row.contains('%')),
         "music tree rows never paint resume progress"
+    );
+}
+
+/// When overflow has room for the scrollbar outside the claimed area, the
+/// crate's extra render column must not reduce the tree cell's label budget.
+/// This keeps the year gutter and marquee aligned with the canonical lists.
+#[test]
+fn music_tree_overflow_with_room_keeps_cell_budget_aligned() {
+    const WIDTH: u16 = 40;
+    const FRAME_WIDTH: u16 = WIDTH + 4;
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&gutter_entries()));
+    let root = browser.projected_nodes()[0].id();
+    browser.expand_root(root);
+    browser.select_index(1);
+    browser.set_marquee_clock_for_test(GUTTER_YEARED, 0);
+
+    let area = Rect::new(0, 0, WIDTH, 2);
+    let term = music_tree_frame(&mut browser, area, FRAME_WIDTH, area.height);
+    let row = music_tree_row_text(&term, 1, 0, WIDTH);
+
+    assert_eq!(row.chars().take(4).collect::<String>(), "    ");
+    assert_eq!(
+        row.chars().skip(4).take(30).collect::<String>(),
+        GUTTER_YEARED.chars().take(30).collect::<String>(),
+        "marquee receives the full tree-cell budget before the year gutter"
+    );
+    assert_eq!(
+        row.chars().skip((WIDTH - 6) as usize).collect::<String>(),
+        format!("{GUTTER_YEAR:>6}"),
+        "year remains right-aligned at the claimed area's edge"
+    );
+    assert_eq!(
+        term.backend().buffer()[(WIDTH, 1)].fg,
+        palette::SCROLLBAR,
+        "overflow scrollbar remains just outside the claimed area"
     );
 }
 

@@ -1292,13 +1292,21 @@ impl MusicTreeBrowser {
             rearm_selection_visibility_for(state);
             *last_area = Some(content_rect);
         }
-        // Mirror the crate's resolved layout for this fixed configuration so
-        // the renderer can budget titles before the widget renders: the
-        // vertical scrollbar takes one column when the projection overflows,
-        // and the primary tree column takes every remaining column (the
-        // six-column year gutter is painted inside it, per row).
-        let overflow = usize::from(state.visible_len() > content_rect.height as usize);
-        let tree_col_width = paint_area.width.saturating_sub(overflow as u16);
+        // `tui-treelistview` resolves the primary column inside `tree_area`,
+        // not `paint_area`: when overflow has room beyond the claimed area,
+        // the adapter gives the crate one extra column so its own scrollbar
+        // lands outside the painted content. Budget labels from that same
+        // resolved cell width, after removing the crate-owned scrollbar.
+        let overflow = state.visible_len() > content_rect.height as usize;
+        let tree_area = if overflow && paint_area.right() < frame.area().right() {
+            Rect {
+                width: paint_area.width.saturating_add(1),
+                ..paint_area
+            }
+        } else {
+            paint_area
+        };
+        let tree_col_width = tree_area.width.saturating_sub(u16::from(overflow));
 
         // The focused selected row's marquee window, computed once per frame
         // through the shared marquee primitive (design D8). The clock keys on
@@ -1364,15 +1372,6 @@ impl MusicTreeBrowser {
         // content width as the other library lists while its discarded
         // scrollbar lands exactly where the shared scrollbar does. At the
         // frame edge both widgets necessarily use the final content column.
-        let overflow = state.visible_len() > content_rect.height as usize;
-        let tree_area = if overflow && paint_area.right() < frame.area().right() {
-            Rect {
-                width: paint_area.width.saturating_add(1),
-                ..paint_area
-            }
-        } else {
-            paint_area
-        };
         let mut tree_buffer = Buffer::empty(tree_area);
         {
             let target = frame.buffer_mut();
@@ -1409,7 +1408,7 @@ impl MusicTreeBrowser {
         // focus-gated exactly like the canonical media-list painter, so an
         // unfocused tree has no scrollbar rather than retaining a second
         // crate-default indicator.
-        if *focused {
+        if *focused && overflow {
             crate::app::render::components::widgets::render_right_scrollbar_with_viewport(
                 frame,
                 paint_area,
