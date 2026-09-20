@@ -29,8 +29,8 @@ Decision trace: D4, D8, D9.
 Decision trace: D6, D9.
 
 - [x] 4.1 Resolve focused artist play, enqueue, shuffle, and context intents to ordered album targets, independent of expansion and restricted to matching leaves while filtered; verify collapsed, expanded, filtered, and equal-name artist cases emit album identities only with `cargo nextest run -p mbv`.
-- [ ] 4.2 Implement modified-click multi-selection so Ctrl+Click toggles album leaves and artist toggles affect visible descendant albums and roots derive tri-state marks; verify ordered membership, Partial/Marked state, filtering, and Queue-selection isolation with focused `cargo nextest run -p mbv` cases.
-- [ ] 4.3 Connect tree selection summaries and context-origin identity to the existing status and bulk-action paths, preserving capability intersection and clear-only-origin behavior; verify one mounted status/action integration case with `cargo nextest run -p mbv`.
+- [x] 4.2 Implement modified-click multi-selection so Ctrl+Click toggles album leaves and artist toggles affect visible descendant albums and roots derive tri-state marks; verify ordered membership, Partial/Marked state, filtering, and Queue-selection isolation with focused `cargo nextest run -p mbv` cases.
+- [x] 4.3 Connect tree selection summaries and context-origin identity to the existing status and bulk-action paths, preserving capability intersection and clear-only-origin behavior; verify one mounted status/action integration case with `cargo nextest run -p mbv`.
 
 ## 5. In-place fuzzy filtering
 
