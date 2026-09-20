@@ -225,6 +225,29 @@ impl App {
         });
     }
 
+    /// Arm the next source page when a focused Grouped Music artist has a
+    /// child album near the loaded edge. The tree owns artist/album selection;
+    /// the shell resolves these stable album targets back to its browse level
+    /// here, so no component cursor or source-row index crosses the boundary.
+    pub(in crate::app) fn maybe_fetch_next_page_for_music_artist(
+        &mut self,
+        lib_idx: usize,
+        album_targets: &[String],
+    ) {
+        let cursor = {
+            let Some(level) = self.libs.get(lib_idx).and_then(|lib| lib.nav_stack.last()) else {
+                return;
+            };
+            album_targets
+                .iter()
+                .filter_map(|target| level.items.iter().position(|item| item.id == *target))
+                .max()
+        };
+        if let Some(cursor) = cursor {
+            self.maybe_fetch_next_page(lib_idx, cursor);
+        }
+    }
+
     /// Check whether another page should be fetched for the level at the top
     /// of `lib_idx`'s nav stack, and spawn it. `cursor` is the resolved
     /// position to threshold against (the caller's live/resting cursor) —

@@ -88,6 +88,17 @@ impl Model {
                         self.app.prefetch_neighbour_album_art(&targets);
                     }
                     ShellRequest::MusicArtistTracks { target } => {
+                        // Artist-root movement is the Grouped Music browser's
+                        // source-pagination signal. Resolve the stable album
+                        // targets against App-owned browse rows and arm only
+                        // when one is near the loaded edge; expansion is not a
+                        // prerequisite for loading the next artist page.
+                        if let Some(lib_idx) = self.app.tab.emby_library_index() {
+                            self.app.maybe_fetch_next_page_for_music_artist(
+                                lib_idx,
+                                &target.album_targets,
+                            );
+                        }
                         // Design D7 (tasks 6.1/6.2): one focus transition
                         // requests both concerns. The track request arms the
                         // artist query/fallback here; the artwork half

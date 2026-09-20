@@ -1,7 +1,7 @@
 use super::app_struct::LevelFillState;
 use super::library_browse_actions::retain_grouped_music_items;
 use super::music_grouping::{build_grouped_album_catalog, derive_album_artist, ArtistKey};
-use super::tests::{make_app_stub, make_item};
+use super::tests::{make_app_stub, make_item, make_items};
 use super::types_events::LibEvent;
 use super::{BrowseLevel, LibraryTab, TabSelection};
 use crate::app::types_browse::BrowseResting;
@@ -205,6 +205,33 @@ fn make_music_app(albums: Vec<EmbyItem>) -> super::App {
         ..make_music_library_tab()
     });
     app
+}
+
+#[test]
+fn focused_artist_arms_next_page_from_child_proximity_without_expansion() {
+    let mut app = make_music_app(make_items(30));
+    let level = app.libs[0].nav_stack.last_mut().unwrap();
+    level.fetched_rows = 30;
+    level.total_count = 100;
+
+    app.maybe_fetch_next_page_for_music_artist(0, &["id4".into()]);
+    assert!(!app.libs[0].nav_stack.last().unwrap().loading);
+
+    // The artist root remains collapsed: its last loaded album is still the
+    // stable target that arms the ordinary source-page prefetch threshold.
+    app.maybe_fetch_next_page_for_music_artist(0, &["id29".into()]);
+    assert!(app.libs[0].nav_stack.last().unwrap().loading);
+}
+
+#[test]
+fn focused_artist_with_no_loaded_child_does_not_arm_a_page() {
+    let mut app = make_music_app(make_items(30));
+    let level = app.libs[0].nav_stack.last_mut().unwrap();
+    level.fetched_rows = 30;
+    level.total_count = 100;
+
+    app.maybe_fetch_next_page_for_music_artist(0, &["not-loaded".into()]);
+    assert!(!app.libs[0].nav_stack.last().unwrap().loading);
 }
 
 #[test]
