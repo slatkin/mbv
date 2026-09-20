@@ -187,8 +187,12 @@ pub struct MusicContent {
     /// A Wide artist-Workspace entry armed before the artist's track rows
     /// arrived: Right on an expanded root takes the pane's focus as soon as
     /// the resolved root's rows land (the overlay path re-focuses on arrival
-    /// through its own open-transition bit).
-    pending_artist_workspace_focus: bool,
+    /// through its own open-transition bit). The entry carries the root the
+    /// user pressed Right on: it fires only for that root's own rows and dies
+    /// when the tree selection leaves the root or the geometry stops hosting
+    /// the inline pane, so a later push for another root can never take the
+    /// cursor under a selection the user never entered.
+    pending_artist_workspace_focus: Option<MusicArtistTarget>,
     /// The artist identity last carried to the shell on a typed
     /// artist-track request (design D7). Moving onto a different root emits;
     /// returning to the last reported one relies on the shell's projection
@@ -227,7 +231,7 @@ impl MusicContent {
             track_focused: false,
             inline_track_focus_enabled: false,
             track_rows_owner: None,
-            pending_artist_workspace_focus: false,
+            pending_artist_workspace_focus: None,
             last_artist_request: None,
             inline_search: InlineSearch::new(),
             // There is no honest library identity before the panel's first
@@ -344,18 +348,39 @@ impl MusicContent {
         if owner_changed {
             self.track_list.select_first();
         }
-        if self.pending_artist_workspace_focus {
-            if matches!(&owner, Some(WorkspaceOwner::Artist(_)))
-                && !self.track_list.rows().is_empty()
-            {
-                self.pending_artist_workspace_focus = false;
-                self.enter_track_focus();
-            } else if !matches!(&owner, Some(WorkspaceOwner::Artist(_))) {
-                self.pending_artist_workspace_focus = false;
+        if let Some(pending) = self.pending_artist_workspace_focus.clone() {
+            let owner_matches = matches!(&owner, Some(WorkspaceOwner::Artist(resolved)) if resolved.same_source(&pending));
+            if owner_matches {
+                // The armed root's own rows landed: take the cursor once.
+                if !self.track_list.rows().is_empty() {
+                    self.pending_artist_workspace_focus = None;
+                    self.enter_track_focus();
+                }
+            } else if owner.is_some() {
+                // The resolved Workspace belongs to another root or to an
+                // album leaf: the selection left the armed root, so the
+                // entry is void and no later push may take the cursor.
+                self.pending_artist_workspace_focus = None;
             }
         }
         self.track_rows_owner = owner;
         arrived
+    }
+
+    /// Voids the armed Wide artist-Workspace entry when the tree selection no
+    /// longer resolves to the root that was armed (task 6.4): the entry may
+    /// only take the cursor for the root the user pressed Right on.
+    fn void_artist_workspace_focus_off_root(&mut self) {
+        let still_on_root = self
+            .pending_artist_workspace_focus
+            .as_ref()
+            .is_some_and(|pending| {
+                self.artist_detail_target()
+                    .is_some_and(|target| target.same_source(pending))
+            });
+        if self.pending_artist_workspace_focus.is_some() && !still_on_root {
+            self.pending_artist_workspace_focus = None;
+        }
     }
 
     /// The settled album projection the tree owner reconciles: one entry per
@@ -490,6 +515,9 @@ impl MusicContent {
     /// never when an artist root receives focus — artist focus does not
     /// overwrite album persistence with an artist target.
     fn album_selection_request(&mut self, kind: AlbumCursorKind) -> Option<Msg> {
+        // Every local tree movement resolves here after the move: a selection
+        // that left the armed root voids its Wide Workspace entry.
+        self.void_artist_workspace_focus_off_root();
         if let Some(target) = self.browser.take_album_selection_change() {
             self.last_artist_request = None;
             let index = self
@@ -541,6 +569,9 @@ impl MusicContent {
             // wrong album.
             self.browser.anchor_album_target(&target, scroll);
         }
+        // A re-anchor is a discrete navigation transition: a cursor that no
+        // longer rests on the armed root voids its Wide Workspace entry.
+        self.void_artist_workspace_focus_off_root();
     }
 
     pub(in crate::app) fn set_inline_track_focus_enabled(&mut self, enabled: bool) {
@@ -548,6 +579,12 @@ impl MusicContent {
         // the inline track list, so the Enter chord must not silently focus a
         // narrow track pane nothing paints.
         self.inline_track_focus_enabled = enabled;
+        if !enabled {
+            // The armed Wide entry belongs to the inline pane: a geometry
+            // that no longer hosts it voids the entry, so no later push or
+            // draw can take the focus on a narrow pane nothing paints.
+            self.pending_artist_workspace_focus = None;
+        }
         // An ordinary Narrow push clears the pre-overlay surface's track
         // focus (design D5), but must not wipe the open Library Hero
         // overlay's Workspace focus. Explicit shell clears are separate
@@ -571,7 +608,10 @@ impl MusicContent {
     fn enter_artist_workspace_focus(&mut self) {
         self.enter_track_focus();
         if !self.track_focused {
-            self.pending_artist_workspace_focus = true;
+            // Arm with the focused root's resolved identity (design D7): the
+            // entry may only take the cursor when the landing rows belong to
+            // this same root.
+            self.pending_artist_workspace_focus = self.artist_detail_target();
         }
     }
     pub(in crate::app) fn clear_track_focus(&mut self) {
@@ -587,6 +627,13 @@ impl MusicContent {
     }
     pub(in crate::app) fn track_focused(&self) -> bool {
         self.track_focused
+    }
+    /// Whether a Wide artist-Workspace entry is currently armed (task 6.4
+    /// tests: the armed entry is invisible state, so its void points assert
+    /// through this accessor).
+    #[cfg(test)]
+    pub(in crate::app) fn pending_artist_workspace_focus_for_test(&self) -> bool {
+        self.pending_artist_workspace_focus.is_some()
     }
     #[cfg_attr(not(test), allow(dead_code))]
     pub(in crate::app) fn album_flow_targets(&self) -> Vec<Option<String>> {

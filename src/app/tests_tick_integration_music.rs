@@ -1230,6 +1230,185 @@ fn artist_and_album_hero_workspaces_switch_atomically_in_wide() {
     );
 }
 
+/// A two-root Grouped Music app (Alpha over `album-1`, Beta over two albums)
+/// with no cached track rows anywhere: every artist Workspace entry arms with
+/// its rows still in flight, so the arrival path is observable hermetically.
+fn two_artist_app() -> crate::app::App {
+    let mut app = crate::app::render::make_music_group_app();
+    let level = app.libs[0].nav_stack.last_mut().expect("album level");
+    for (name, id) in [("Beta Session", "album-beta-1"), ("Beta Nights", "album-beta-2")] {
+        let mut album = crate::app::tests::make_item(name, "MusicAlbum");
+        album.id = id.into();
+        album.artist = "Beta".into();
+        level.items.push(album);
+    }
+    level.total_count = level.items.len();
+    app
+}
+
+/// Deposits one cached track for `album_id` (the fallback artist Workspace's
+/// aggregation source) and re-projects the workspace: the rows "arrive".
+fn arrive_album_tracks(harness: &mut TickHarness, album_id: &str, track_id: &str) {
+    let mut track = crate::app::tests::make_item(track_id, "Audio");
+    track.album_id = album_id.into();
+    harness
+        .model_mut()
+        .app
+        .album_tracks_cache
+        .insert(album_id.to_string(), vec![track]);
+    harness.model_mut().push_music_workspace_content();
+    harness.model_mut().sync_mounted_surfaces();
+}
+
+/// Task 6.4: a Wide artist-Workspace entry armed before the rows arrived
+/// takes the cursor when its own root's rows land — and only then.
+#[test]
+fn armed_artist_workspace_entry_takes_the_cursor_when_its_own_rows_arrive() {
+    let (mut harness, _id) = mounted_music_app_at(two_artist_app(), 160, 40);
+    tick_key(&mut harness, Key::Left);
+    assert!(harness.model().test_music_owner().selected_is_artist());
+
+    // Right on the expanded root with no rows: the entry arms, the cursor
+    // stays with the tree.
+    tick_key(&mut harness, Key::Right);
+    assert!(
+        !harness.model().test_music_owner().track_focused(),
+        "an armed entry does not take the cursor before its rows arrive"
+    );
+    assert!(
+        harness
+            .model()
+            .test_music_owner()
+            .pending_artist_workspace_focus_for_test(),
+        "the entry is armed for the focused root"
+    );
+
+    // The armed root's own rows land: the entry takes the cursor once.
+    arrive_album_tracks(&mut harness, "album-1", "alpha-track-1");
+    assert!(
+        harness.model().test_music_owner().track_focused(),
+        "the armed entry takes the cursor when its own root's rows arrive"
+    );
+    assert_eq!(
+        harness.model().test_music_owner().track_list.rows().len(),
+        2,
+        "the focused Workspace holds the armed root's own heading and track"
+    );
+}
+
+/// Task 6.4: the armed entry carries the root it was armed on. A push for
+/// another root never takes the cursor, returning to the armed root does not
+/// resurrect the voided entry, and a fresh Right enters the Workspace again.
+#[test]
+fn armed_artist_workspace_entry_does_not_seize_focus_for_another_root() {
+    let (mut harness, _id) = mounted_music_app_at(two_artist_app(), 160, 40);
+    tick_key(&mut harness, Key::Left);
+    tick_key(&mut harness, Key::Right);
+    assert!(
+        !harness.model().test_music_owner().track_focused(),
+        "the entry is armed on the Alpha root with no rows"
+    );
+
+    // The selection leaves Alpha for the Beta root; the entry voids with it,
+    // and Beta's rows then land.
+    tick_key(&mut harness, Key::End);
+    tick_key(&mut harness, Key::Left);
+    assert!(
+        !harness
+            .model()
+            .test_music_owner()
+            .pending_artist_workspace_focus_for_test(),
+        "leaving the armed root voids the entry"
+    );
+    assert_eq!(
+        harness
+            .model()
+            .test_music_owner()
+            .artist_detail_target()
+            .map(|target| target.artist_name),
+        Some("Beta".to_string()),
+        "the selection moved to the Beta root"
+    );
+    arrive_album_tracks(&mut harness, "album-beta-1", "beta-track-1");
+    assert!(
+        !harness.model().test_music_owner().track_focused(),
+        "another root's arriving rows never take the cursor"
+    );
+
+    // Back on Alpha, its rows arrive too: the voided entry stays dead.
+    tick_key(&mut harness, Key::Home);
+    assert!(harness.model().test_music_owner().selected_is_artist());
+    arrive_album_tracks(&mut harness, "album-1", "alpha-track-1");
+    assert!(
+        !harness.model().test_music_owner().track_focused(),
+        "returning to the armed root does not resurrect the voided entry"
+    );
+
+    // A fresh Right on the same root enters its now-resident Workspace.
+    tick_key(&mut harness, Key::Right);
+    assert!(
+        harness.model().test_music_owner().track_focused(),
+        "a fresh Right enters the artist Workspace"
+    );
+}
+
+/// Task 6.4: the armed entry belongs to the Wide inline pane. A Narrow
+/// transition voids it: arriving rows never take the cursor on the narrow
+/// pane nothing paints, and the entry stays dead when the Wide pane returns
+/// — a fresh Right is required to enter the Workspace again.
+#[test]
+fn armed_artist_workspace_entry_is_voided_by_a_narrow_transition() {
+    let (mut harness, _id) = mounted_music_app_at(two_artist_app(), 160, 40);
+    tick_key(&mut harness, Key::Left);
+    tick_key(&mut harness, Key::Right);
+    assert!(!harness.model().test_music_owner().track_focused());
+
+    // Wide -> Narrow: the same owner survives, the inline pane does not, and
+    // the armed entry is cleared with it.
+    harness.model_mut().app.terminal_width = 60;
+    harness.model_mut().sync_mounted_surfaces();
+    draw_music_frame(&mut harness);
+    assert!(
+        music_panel(&harness).test_narrow_geometry().is_some(),
+        "the transition painted the narrow skeleton"
+    );
+    assert!(
+        !harness
+            .model()
+            .test_music_owner()
+            .pending_artist_workspace_focus_for_test(),
+        "the Narrow transition clears the armed Wide entry"
+    );
+
+    // The armed root's rows land while Narrow, then a frame draws: neither
+    // the push nor the draw may take the cursor on the pane nothing paints.
+    arrive_album_tracks(&mut harness, "album-1", "alpha-track-1");
+    draw_music_frame(&mut harness);
+    assert!(
+        !harness.model().test_music_owner().track_focused(),
+        "a voided entry never re-seizes the focus on the narrow pane"
+    );
+
+    // Back to Wide: the entry was voided by the transition, so even its own
+    // now-resident rows do not take the cursor without a fresh Right.
+    harness.model_mut().app.terminal_width = 160;
+    harness.model_mut().sync_mounted_surfaces();
+    draw_music_frame(&mut harness);
+    assert!(
+        music_panel(&harness).test_wide_geometry().is_some(),
+        "the return painted the wide skeleton"
+    );
+    assert!(
+        !harness.model().test_music_owner().track_focused(),
+        "the entry voided by the Narrow transition stays dead in Wide"
+    );
+    tick_key(&mut harness, Key::Right);
+    assert!(
+        harness.model().test_music_owner().track_focused(),
+        "a fresh Right still enters the now-resident artist Workspace"
+    );
+}
+
 /// Task 6.5 (design D4): the tree resolves the neighbour window from its
 /// completed paint and emits the typed payload in visible order in both
 /// presentations; the shell re-resolves no cursor.
