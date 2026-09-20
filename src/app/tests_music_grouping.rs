@@ -1,11 +1,12 @@
 use super::app_struct::LevelFillState;
 use super::library_browse_actions::retain_grouped_music_items;
-use super::music_grouping::{build_grouped_album_catalog, derive_album_artist};
+use super::music_grouping::{build_grouped_album_catalog, derive_album_artist, ArtistKey};
 use super::tests::{make_app_stub, make_item};
 use super::types_events::LibEvent;
 use super::{BrowseLevel, LibraryTab, TabSelection};
 use crate::app::types_browse::BrowseResting;
 use mbv_core::api::EmbyItem;
+use serde_json::json;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use rstest::rstest;
@@ -459,6 +460,107 @@ fn catalog_preserves_artist_identity_across_settle() {
     assert_eq!(catalog.entries.len(), 2);
     assert_eq!(catalog.entries[0].artist, "Alpha");
     assert_eq!(catalog.entries[1].artist, "Beta");
+}
+
+// ── Artist identity through the settled catalog (task 1.3) ──────────────
+
+#[rstest]
+#[case::matched_pair_resolves_service_identity(
+    json!([{"name": "Alpha", "id": "artist-1"}]),
+    "Alpha",
+    ArtistKey::Service("artist-1".into())
+)]
+#[case::absent_artist_items_falls_back_to_display_artist(
+    json!(null),
+    "Alpha",
+    ArtistKey::Fallback("Alpha".into())
+)]
+#[case::unmatched_pairs_fall_back_to_display_artist(
+    json!([{"name": "Beta", "id": "artist-2"}]),
+    "Alpha",
+    ArtistKey::Fallback("Alpha".into())
+)]
+#[case::ambiguous_equal_name_pairs_fall_back_to_display_artist(
+    json!([{"name": "Alpha", "id": "artist-1"}, {"name": "Alpha", "id": "artist-2"}]),
+    "Alpha",
+    ArtistKey::Fallback("Alpha".into())
+)]
+fn catalog_artist_key_cases(
+    #[case] artist_items: serde_json::Value,
+    #[case] display_artist: &str,
+    #[case] expected: ArtistKey,
+) {
+    let mut album = make_item("Album", "MusicAlbum");
+    album.id = "album-1".into();
+    album.artist = display_artist.into();
+    if !artist_items.is_null() {
+        album.artist_items = serde_json::from_value(artist_items).unwrap();
+    }
+    let resolved: HashMap<String, String> = HashMap::new();
+    let catalog = build_grouped_album_catalog(&[album], &resolved);
+    assert_eq!(catalog.entries[0].artist_key, expected);
+}
+
+#[test]
+fn equal_display_names_with_distinct_ids_stay_separate() {
+    let mut a1 = make_item("Greatest Hits", "MusicAlbum");
+    a1.id = "album-1".into();
+    a1.artist = "Alpha".into();
+    a1.artist_items = vec![mbv_core::api::EmbyArtistRef {
+        name: "Alpha".into(),
+        id: "artist-1".into(),
+    }];
+    let mut a2 = make_item("Greatest Hits", "MusicAlbum");
+    a2.id = "album-2".into();
+    a2.artist = "Alpha".into();
+    a2.artist_items = vec![mbv_core::api::EmbyArtistRef {
+        name: "Alpha".into(),
+        id: "artist-2".into(),
+    }];
+
+    let resolved: HashMap<String, String> = HashMap::new();
+    let catalog = build_grouped_album_catalog(&[a1, a2], &resolved);
+
+    let keys: Vec<_> = catalog.entries.iter().map(|e| &e.artist_key).collect();
+    assert_ne!(
+        keys[0], keys[1],
+        "equal display names with distinct valid IDs must stay separate"
+    );
+    assert_eq!(keys[0], &ArtistKey::Service("artist-1".into()));
+    assert_eq!(keys[1], &ArtistKey::Service("artist-2".into()));
+}
+
+#[test]
+fn fallback_keys_are_stable_across_rebuilds_and_input_order() {
+    let mut a1 = make_item("Bravo Album", "MusicAlbum");
+    a1.id = "album-1".into();
+    a1.artist = "Bravo".into();
+    let mut a2 = make_item("Alpha Album", "MusicAlbum");
+    a2.id = "album-2".into();
+    a2.artist = "Alpha".into();
+
+    let resolved: HashMap<String, String> = HashMap::new();
+    let forward = build_grouped_album_catalog(&[a1.clone(), a2.clone()], &resolved);
+    let reversed = build_grouped_album_catalog(&[a2.clone(), a1.clone()], &resolved);
+    let again = build_grouped_album_catalog(&[a1, a2], &resolved);
+
+    let key_of = |catalog: &super::music_grouping::GroupedAlbumCatalog, album_id: &str| {
+        catalog.entries[catalog.id_to_entry[album_id]].artist_key.clone()
+    };
+    for album_id in ["album-1", "album-2"] {
+        assert_eq!(key_of(&forward, album_id), key_of(&reversed, album_id));
+        assert_eq!(key_of(&forward, album_id), key_of(&again, album_id));
+    }
+    // The fallback derives from the settled grouping identity (the display
+    // artist), never from display position.
+    assert_eq!(
+        key_of(&forward, "album-1"),
+        ArtistKey::Fallback("Bravo".into())
+    );
+    assert_eq!(
+        key_of(&forward, "album-2"),
+        ArtistKey::Fallback("Alpha".into())
+    );
 }
 
 #[test]

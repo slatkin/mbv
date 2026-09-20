@@ -47,6 +47,7 @@ fn make_media_item(id: &str) -> crate::api::EmbyItem {
         unplayed_item_count: 0,
         path: String::new(),
         artist: String::new(),
+        artist_items: Vec::new(),
         sort_name: String::new(),
         production_year: 0,
         end_year: 0,

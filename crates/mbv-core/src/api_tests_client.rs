@@ -83,6 +83,54 @@ fn library_items_request_includes_external_urls_field() {
 }
 
 #[test]
+fn library_items_request_includes_artist_items_field() {
+    // Task 1.2: the Music album/item browse request must explicitly ask for
+    // `ArtistItems` so parsed items retain stable artist identity pairs.
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(200, r#"{"Items":[],"TotalRecordCount":0}"#);
+    client
+        .get_items_sorted("library", Some("MusicAlbum"), false, 0, 10, "SortName", "Ascending")
+        .unwrap();
+    let request = &http.requests()[0];
+    assert!(request.contains("Fields="));
+    assert!(request.contains("ArtistItems"));
+}
+
+#[test]
+fn artist_audio_tracks_request_uses_artist_ids_query() {
+    // Task 1.4: the only artist-track query mbv issues. The path stays on
+    // the user-items endpoint and the ID enters solely as `ArtistIds`;
+    // mbv has no `/Artists` listing request anywhere to source IDs from.
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(
+        200,
+        r#"{"Items":[{"Id":"track-1","Name":"Song One","Type":"Audio","MediaType":"Audio"},{"Id":"track-2","Name":"Song Two","Type":"Audio","MediaType":"Audio"}],"TotalRecordCount":2}"#,
+    );
+    let tracks = client.get_artist_audio_tracks("artist-9").unwrap();
+    let request = &http.requests()[0];
+    assert!(request.starts_with("GET /Users/user/Items?"));
+    assert!(request.contains("ArtistIds=artist-9"));
+    assert!(request.contains("IncludeItemTypes=Audio"));
+    assert!(request.contains("Recursive=true"));
+    assert!(!request.contains("/Artists"));
+    assert_eq!(tracks.len(), 2);
+    assert_eq!(tracks[0].id, "track-1");
+    assert_eq!(tracks[1].name, "Song Two");
+}
+
+#[test]
+fn artist_audio_tracks_error_propagates() {
+    // Unsupported or rejected artist-ID queries surface as Err so the
+    // caller falls back to per-album aggregation (design D7).
+    let (mut client, http) = mock_client(TEST_URL);
+    client.user_id = "user".into();
+    http.respond(500, r#"{"error":"unsupported"}"#);
+    assert!(client.get_artist_audio_tracks("artist-9").is_err());
+}
+
+#[test]
 fn continue_watching_request_enables_user_data() {
     let (mut client, http) = mock_client(TEST_URL);
     client.user_id = "user".into();
