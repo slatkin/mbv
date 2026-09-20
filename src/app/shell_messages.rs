@@ -103,25 +103,32 @@ impl Model {
                     } => {
                         // `origin` is recorded for task 4.3's status/bulk-action
                         // wiring; it is intentionally not consumed here.
-                        // Album rows are folders, so never submit them through
-                        // flat PlaySelection/ShuffleSelection. Re-enter the
-                        // existing per-album browser effects instead: those
-                        // paths expand each folder before owner admission.
+                        // Album rows are folders, so Play and Shuffle must first
+                        // compose their playable descendants in tree order and
+                        // submit one replacement. Enqueue intentionally keeps
+                        // the existing per-album append path.
                         self.app.set_panel_focus(crate::app::PanelFocus::Library);
                         let had_items = !items.is_empty();
-                        for item in items {
-                            let request = match action {
-                                crate::app::components::msg::MusicTreeAction::Play => {
-                                    ShellRequest::EmbyLibraryPlay { item }
+                        match action {
+                            crate::app::components::msg::MusicTreeAction::Play
+                            | crate::app::components::msg::MusicTreeAction::Shuffle => {
+                                if had_items {
+                                    self.app.play_music_albums(
+                                        items,
+                                        matches!(
+                                            action,
+                                            crate::app::components::msg::MusicTreeAction::Shuffle
+                                        ),
+                                    );
                                 }
-                                crate::app::components::msg::MusicTreeAction::Enqueue => {
-                                    ShellRequest::EmbyLibraryEnqueue { item }
+                            }
+                            crate::app::components::msg::MusicTreeAction::Enqueue => {
+                                for item in items {
+                                    self.handle_emby_library_request(
+                                        ShellRequest::EmbyLibraryEnqueue { item },
+                                    );
                                 }
-                                crate::app::components::msg::MusicTreeAction::Shuffle => {
-                                    ShellRequest::EmbyLibraryShuffle { item }
-                                }
-                            };
-                            self.handle_emby_library_request(request);
+                            }
                         }
                         if unresolved_targets.is_empty() {
                             if !had_items {

@@ -1,8 +1,15 @@
 use super::*;
+use crate::app::components::media_list::SelectionOrigin;
+use crate::app::components::msg::{MusicTreeAction, ShellRequest};
 use crate::app::images::CachedImage;
-use crate::app::tests::make_app_stub;
-use crate::app::PanelFocus;
+use crate::app::tests::{
+    install_test_emby, make_app_stub, make_item, make_remote_app_stub_with_cmd_rx,
+};
+use crate::app::{LibraryTab, PanelFocus, TabSelection};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::api::EmbyItem;
+use mbv_core::mock_http::MockHttp;
+use std::sync::{Arc, Mutex};
 
 #[test]
 fn loaded_keys_override_reaches_the_model() {
@@ -251,4 +258,170 @@ fn terminal_focus_observer_preserves_refocus_side_effects() {
         &mut tv_resize,
     );
     assert!(model.app.refocus_at.is_none());
+}
+
+fn music_album(id: &str) -> EmbyItem {
+    let mut item = make_item(id, "Folder");
+    item.id = id.into();
+    item.is_folder = true;
+    item.media_type = "Audio".into();
+    item
+}
+
+fn respond_with_tracks(http: &MockHttp, tracks: &[(&str, &str)]) {
+    let items: Vec<_> = tracks
+        .iter()
+        .map(|(id, sort_name)| {
+            serde_json::json!({
+                "Id": id,
+                "Name": id,
+                "Type": "Audio",
+                "MediaType": "Audio",
+                "SortName": sort_name,
+            })
+        })
+        .collect();
+    http.respond(200, &serde_json::json!({ "Items": items }).to_string());
+}
+
+fn mocked_music_action_model(
+    http: &MockHttp,
+) -> (Model, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+    let (mut app, command_rx) = make_remote_app_stub_with_cmd_rx(Vec::new(), Vec::new());
+    let mut config = app.config.lock().unwrap().clone();
+    config.server_url = "http://127.0.0.1:1".into();
+    install_test_emby(&mut app, config);
+    let client = app
+        .emby_runtime
+        .client
+        .as_ref()
+        .expect("test Emby client")
+        .lock()
+        .unwrap()
+        .clone()
+        .with_test_agent(http.agent());
+    app.emby_runtime = mbv_core::service_runtime::EmbyRuntime::ready(Arc::new(Mutex::new(client)));
+
+    let mut library = make_item("Music", "CollectionFolder");
+    library.id = "music-library".into();
+    library.collection_type = "music".into();
+    library.is_folder = true;
+    app.libs.push(LibraryTab::new(library));
+    // Keep Model::new on Home so mounting does not start an unrelated browse;
+    // the shell action below still exercises the active Emby-library route.
+    let mut model = Model::new(app);
+    model.app.tab = TabSelection::EmbyLibrary(0);
+    while command_rx.try_recv().is_ok() {}
+    (model, command_rx)
+}
+
+fn dispatch_music_artist_action(model: &mut Model, action: MusicTreeAction, items: Vec<EmbyItem>) {
+    let mut music_resize = false;
+    let mut tv_resize = false;
+    model.handle_terminal_message(
+        Msg::Shell(ShellRequest::MusicArtistAction {
+            action,
+            items,
+            origin: SelectionOrigin::Queue,
+            unresolved_targets: Vec::new(),
+        }),
+        &mut music_resize,
+        &mut tv_resize,
+    );
+}
+
+fn replacement_command_ids(
+    command_rx: &std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>,
+) -> Vec<Vec<String>> {
+    command_rx
+        .try_iter()
+        .filter_map(|command| match command {
+            mbv_core::ctrl::CtrlCmd::UnifiedQueueReplace { slots, .. } => Some(
+                slots
+                    .into_iter()
+                    .map(|slot| slot.item.id().to_string())
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn music_artist_play_replaces_once_with_ordered_album_tracks() {
+    let http = MockHttp::new();
+    respond_with_tracks(&http, &[("a-track-2", "02"), ("a-track-1", "01")]);
+    respond_with_tracks(&http, &[("b-track-1", "01")]);
+    let (mut model, command_rx) = mocked_music_action_model(&http);
+
+    dispatch_music_artist_action(
+        &mut model,
+        MusicTreeAction::Play,
+        vec![music_album("album-a"), music_album("album-b")],
+    );
+
+    assert_eq!(
+        replacement_command_ids(&command_rx),
+        vec![vec![
+            "a-track-1".to_string(),
+            "a-track-2".to_string(),
+            "b-track-1".to_string(),
+        ]]
+    );
+    assert_eq!(model.app.effective_panel_focus(), PanelFocus::Library);
+    assert_eq!(http.request_count(), 2);
+}
+
+#[test]
+fn music_artist_shuffle_replaces_once_with_all_album_tracks() {
+    let http = MockHttp::new();
+    respond_with_tracks(&http, &[("a-track-1", "01")]);
+    respond_with_tracks(&http, &[("b-track-1", "01"), ("b-track-2", "02")]);
+    let (mut model, command_rx) = mocked_music_action_model(&http);
+
+    dispatch_music_artist_action(
+        &mut model,
+        MusicTreeAction::Shuffle,
+        vec![music_album("album-a"), music_album("album-b")],
+    );
+
+    let mut ids = replacement_command_ids(&command_rx);
+    assert_eq!(ids.len(), 1);
+    ids[0].sort();
+    assert_eq!(
+        ids[0],
+        vec![
+            "a-track-1".to_string(),
+            "b-track-1".to_string(),
+            "b-track-2".to_string(),
+        ]
+    );
+    assert_eq!(model.app.queue_source, crate::config::QueueSource::Shuffle);
+    assert_eq!(model.app.effective_panel_focus(), PanelFocus::Library);
+    assert_eq!(http.request_count(), 2);
+}
+
+#[test]
+fn music_artist_enqueue_keeps_ordered_per_album_appends() {
+    let http = MockHttp::new();
+    respond_with_tracks(&http, &[("a-track-1", "01")]);
+    respond_with_tracks(&http, &[("b-track-2", "02"), ("b-track-1", "01")]);
+    let (mut model, command_rx) = mocked_music_action_model(&http);
+
+    dispatch_music_artist_action(
+        &mut model,
+        MusicTreeAction::Enqueue,
+        vec![music_album("album-a"), music_album("album-b")],
+    );
+
+    let ids: Vec<_> = model
+        .app
+        .displayed_queue()
+        .all_queue_items()
+        .into_iter()
+        .map(|item| item.id().to_string())
+        .collect();
+    assert_eq!(ids, vec!["a-track-1", "b-track-1", "b-track-2"]);
+    assert!(replacement_command_ids(&command_rx).is_empty());
+    assert_eq!(http.request_count(), 2);
 }

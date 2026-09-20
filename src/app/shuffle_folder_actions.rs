@@ -4,6 +4,11 @@ use super::{App, PanelFocus};
 use mbv_core::api::EmbyItem;
 use rand::seq::SliceRandom;
 
+fn sort_playable_items(items: &mut Vec<EmbyItem>) {
+    items.retain(|item| !item.is_folder);
+    items.sort_by_key(|item| natural_sort_key(item.sort_key()));
+}
+
 impl App {
     /// Shuffle from the generic Emby browser's component-resolved selected
     /// item (task 5.3d, Emby browser shuffle decoupling). `EmbyLibraryContent`
@@ -49,6 +54,61 @@ impl App {
         self.shuffle_folder(lib_idx, &parent_id);
     }
 
+    /// Expands the focused artist's ordered album leaves into one playable
+    /// sequence. Each album is normalized with the same non-folder filtering
+    /// and natural track ordering as the existing folder effects; concatenating
+    /// those results preserves album/tree order without replacing the queue per
+    /// album.
+    pub(super) fn play_music_albums(&mut self, albums: Vec<EmbyItem>, shuffle: bool) {
+        let Some(client) = self.emby_client() else {
+            self.flash(
+                "Emby is unavailable".into(),
+                super::notify_actions::ToastSeverity::Warning,
+            );
+            return;
+        };
+        let client = client.lock().unwrap();
+        let mut items = Vec::new();
+        for album in albums {
+            match client.get_all_playable_recursive(&album.id) {
+                Ok(mut album_items) => {
+                    sort_playable_items(&mut album_items);
+                    items.extend(album_items);
+                }
+                Err(e) => {
+                    drop(client);
+                    self.flash(format!("Couldn't load folder: {e}"), ToastSeverity::Error);
+                    return;
+                }
+            }
+        }
+        drop(client);
+        if items.is_empty() {
+            self.flash(
+                if shuffle {
+                    "Nothing to shuffle"
+                } else {
+                    "Nothing to play"
+                }
+                .into(),
+                ToastSeverity::Error,
+            );
+            return;
+        }
+        let source = if shuffle {
+            items.shuffle(&mut rand::rng());
+            crate::config::QueueSource::Shuffle
+        } else {
+            crate::config::QueueSource::Unknown
+        };
+        // Keep the Library focused: `play_items_routed` only moves focus when
+        // the caller is not already in the Library panel. Save once after the
+        // single composed replacement and playback submission.
+        self.replace_playback_queue(items.clone(), 0);
+        self.play_items_routed(items, 0, source);
+        self.save_queue_state();
+    }
+
     pub(super) fn play_folder(&mut self, folder_id: &str) {
         let Some(client) = self.emby_client() else {
             self.flash(
@@ -60,8 +120,7 @@ impl App {
         let client = client.lock().unwrap();
         match client.get_all_playable_recursive(folder_id) {
             Ok(mut items) => {
-                items.retain(|i| !i.is_folder);
-                items.sort_by_key(|a| natural_sort_key(a.sort_key()));
+                sort_playable_items(&mut items);
                 if items.is_empty() {
                     drop(client);
                     self.flash("Nothing to play".into(), ToastSeverity::Error);
