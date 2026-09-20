@@ -35,7 +35,6 @@ use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use fuzzy_matcher::skim::SkimMatcherV2;
-use fuzzy_matcher::FuzzyMatcher;
 
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};
@@ -452,26 +451,27 @@ impl MusicTreeModel {
         }
     }
 
-    /// The album leaf's playback-live semantic state; artist roots are
-    /// ordinary grouping rows and carry none. Played/unplayed is normalized
-    /// away before a state reaches the arena.
+    /// The node's own searchable text for the inline filter. Every level
+    /// matches on its own identity alone — an artist root on its name, an
+    /// album leaf on its title and year, a cached track on its title — so a
+    /// match never drags a sibling or a deeper row in: an album no longer
+    /// matches through its artist's name, and a track no longer matches
+    /// through its album's.
     pub(in crate::app) fn search_text_of(&self, id: usize) -> Option<String> {
         match self.nodes.get(id) {
-            Some(MusicNode::Album {
-                artist,
-                title,
-                year,
-                ..
-            }) => Some(format!(
-                "{} {} {}",
-                artist,
-                title,
-                year.as_deref().unwrap_or_default()
-            )),
-            _ => None,
+            Some(MusicNode::Artist { name, .. }) => Some(name.clone()),
+            Some(MusicNode::Album { title, year, .. }) => {
+                Some(format!("{} {}", title, year.as_deref().unwrap_or_default()))
+            }
+            Some(MusicNode::Track { title, .. }) => Some(title.clone()),
+            None => None,
         }
     }
 
+    /// The album leaf's playback-live semantic state; artist roots are
+    /// ordinary grouping rows and carry none, and a cached track reports its
+    /// album's through the label renderer's own parent lookup. Played/unplayed
+    /// is normalized away before a state reaches the arena.
     pub(in crate::app) fn semantic_state_of(&self, id: usize) -> Option<&MediaSemanticState> {
         match self.nodes.get(id) {
             Some(MusicNode::Album { semantic_state, .. }) => Some(semantic_state),
@@ -524,15 +524,12 @@ struct MusicTreeFilter {
 
 impl TreeFilter<MusicTreeModel> for MusicTreeFilter {
     fn is_match(&self, model: &MusicTreeModel, id: usize) -> bool {
-        if self.matching.contains(&id) {
-            return true;
-        }
-        // Track rows follow the visibility of their matching album. They do
-        // not have independent searchable text or a second filter corpus.
-        model
-            .album_target_of(id)
-            .and_then(|target| model.node_id(&MusicNodeKey::Album(target.to_string())))
-            .is_some_and(|album| self.matching.contains(&album))
+        let _ = model;
+        // A filtered tree shows each match's own row and the ancestors needed
+        // to reach it, and nothing below the match's level: a matched album no
+        // longer drags its whole track list into the projection, so a track row
+        // appears only while the query is off.
+        self.matching.contains(&id)
     }
 }
 
@@ -1015,16 +1012,17 @@ impl MusicTreeBrowser {
             return;
         }
         let matcher = SkimMatcherV2::default().ignore_case();
-        let matching: Vec<usize> = self
-            .model
-            .roots
-            .iter()
-            .flat_map(|root| self.model.children[*root].iter())
-            .copied()
+        // Every level is searched against its own text: an artist name
+        // surfaces the artist root, an album title (or year) its album leaf,
+        // and a track title its cached track — each with only the ancestors
+        // the projection needs to reach it. The shared word-local rule keeps
+        // each query word inside one word of the row's text, so a query can no
+        // longer be spelled out of letters taken from different words.
+        let matching: Vec<usize> = (0..self.model.size_hint())
             .filter(|id| {
-                self.model
-                    .search_text_of(*id)
-                    .is_some_and(|text| matcher.fuzzy_match(&text, query).is_some())
+                self.model.search_text_of(*id).is_some_and(|text| {
+                    crate::app::fuzzy_match::word_match_score(&matcher, &text, query).is_some()
+                })
             })
             .collect();
         self.set_filter_matches(Some(&matching));

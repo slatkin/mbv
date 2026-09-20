@@ -24,6 +24,7 @@ mod feed_parse;
 mod feed_parse_date;
 mod feed_tab_actions;
 mod feeds_manage_actions;
+mod fuzzy_match;
 mod home_actions;
 pub(crate) mod images;
 mod input;

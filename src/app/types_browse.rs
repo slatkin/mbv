@@ -18,7 +18,9 @@ impl AlbumSearchEntry {
     /// The one label contract shared by the album index builder and the
     /// `NavigateLanding::Album` landing: ancestor names root→album, the
     /// album's `display_name()` last, joined with `" / "`; `search_text`
-    /// mirrors the label so search matches what row rendering shows.
+    /// mirrors the label so search matches what row rendering shows. The
+    /// shared word-local search rule keeps each query word inside one of the
+    /// label's words, so the chain never matches as a single string.
     pub(super) fn from_chain(album: EmbyItem, ancestors: Vec<AlbumPathPart>) -> Self {
         let display_label = ancestors
             .iter()

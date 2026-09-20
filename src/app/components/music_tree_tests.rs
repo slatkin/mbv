@@ -799,6 +799,124 @@ fn modified_selection_keeps_added_order_and_derives_artist_tri_state() {
 }
 
 #[test]
+fn filter_matches_each_level_on_its_own_text_and_hides_everything_below_it() {
+    // "Devil" is in both the artist's name and one album title: each is its
+    // own match at its own level, and neither drags the artist's other albums
+    // or the album's tracks in.
+    let entries = vec![
+        entry(
+            "Devil Band",
+            ArtistKey::Service("artist-devil".into()),
+            "Devil Soup",
+            "album-1",
+            "2001",
+        ),
+        entry(
+            "Devil Band",
+            ArtistKey::Service("artist-devil".into()),
+            "Cake",
+            "album-2",
+            "2002",
+        ),
+        entry(
+            "Other Band",
+            ArtistKey::Service("artist-other".into()),
+            "Devil Cake",
+            "album-3",
+            "2003",
+        ),
+    ];
+    let mut model = MusicTreeModel::new();
+    let mut tracks = HashMap::new();
+    tracks.insert(
+        "album-1".into(),
+        vec![
+            MusicTreeTrack {
+                target: "track-1".into(),
+                title: "Track One".into(),
+            },
+            MusicTreeTrack {
+                target: "track-2".into(),
+                title: "Devil Track".into(),
+            },
+        ],
+    );
+    model.reconcile_with_tracks(&entries, &tracks);
+    let mut browser = MusicTreeBrowser::new(model);
+    browser.open_filter();
+
+    let visible = |browser: &MusicTreeBrowser| -> Vec<String> {
+        browser
+            .projected_nodes()
+            .iter()
+            .map(|node| browser.title_of(node.id()).to_string())
+            .collect()
+    };
+
+    // The artist name matches the root alone: the sibling albums that shared
+    // the name are gone, and so is every track below the matching album.
+    browser.apply_filter_query("Devil Band");
+    assert_eq!(visible(&browser), ["Devil Band"]);
+
+    // An album-title match shows the artist path and that album, never the
+    // artist's other albums.
+    browser.apply_filter_query("Cake");
+    assert_eq!(
+        visible(&browser),
+        ["Devil Band", "Cake", "Other Band", "Devil Cake"]
+    );
+
+    browser.apply_filter_query("Devil Soup");
+    assert_eq!(visible(&browser), ["Devil Band", "Devil Soup"]);
+
+    // A track-title match shows its own path down to the track, with no
+    // sibling track and no sibling album.
+    browser.apply_filter_query("Devil Track");
+    assert_eq!(
+        visible(&browser),
+        ["Devil Band", "Devil Soup", "Devil Track"]
+    );
+
+    browser.apply_filter_query("Track One");
+    assert_eq!(visible(&browser), ["Devil Band", "Devil Soup", "Track One"]);
+}
+
+/// The reported case, on the tree's own corpus: an album whose name is the
+/// whole phrase. No separator is involved, so "devil" could only come from
+/// single letters taken from different words of that name. The shared
+/// word-local rule rejects it, while the name's real words still find the
+/// album.
+#[test]
+fn filter_rejects_a_scatter_through_one_albums_name() {
+    let entries = vec![entry(
+        "The Velvet Underground",
+        ArtistKey::Service("artist-vu".into()),
+        "The Velvet Underground Live With Lou Reed",
+        "album-vu",
+        "1974",
+    )];
+    let mut browser = MusicTreeBrowser::new(MusicTreeModel::from_entries(&entries));
+    browser.open_filter();
+
+    browser.apply_filter_query("devil");
+    assert!(browser.projected_nodes().is_empty(), "scatter must not hit");
+
+    browser.apply_filter_query("velvet");
+    let visible: Vec<String> = browser
+        .projected_nodes()
+        .iter()
+        .map(|node| browser.title_of(node.id()).to_string())
+        .collect();
+    assert_eq!(
+        visible,
+        [
+            "The Velvet Underground",
+            "The Velvet Underground Live With Lou Reed"
+        ]
+    );
+}
+
+#[test]
 fn fuzzy_filter_uses_composite_text_and_preserves_settled_order() {
     let entries = vec![
         entry(
@@ -876,8 +994,10 @@ fn filter_session_restores_anchor_expansion_and_hidden_marks() {
     assert_eq!(browser.selected_album_targets(), vec!["album-2"]);
 }
 
+/// A matched album shows down to its own level: its artist path and the album
+/// itself, never the cached tracks below it, which did not match.
 #[test]
-fn matching_album_keeps_cached_track_children_in_the_filtered_projection() {
+fn matching_album_hides_cached_track_children_in_the_filtered_projection() {
     let entries = vec![alpha("album-1", "First")];
     let mut model = MusicTreeModel::new();
     let mut tracks = HashMap::new();
@@ -897,7 +1017,7 @@ fn matching_album_keeps_cached_track_children_in_the_filtered_projection() {
         .iter()
         .map(|node| browser.title_of(node.id()))
         .collect();
-    assert_eq!(titles, ["Alpha", "First", "Track"]);
+    assert_eq!(titles, ["Alpha", "First"]);
 }
 
 #[test]
